@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
-import { AlertTriangle, Check, Loader2, Minimize2, PenLine, Pencil, RotateCw, ShieldAlert, Trash2, Upload, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Loader2,
+  Minimize2,
+  PenLine,
+  Pencil,
+  RotateCw,
+  ShieldAlert,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import {
   useActiveFloorElements,
   useActiveFloorOpenings,
@@ -50,10 +65,18 @@ const BASE_ELEMENT_SCALE = 0.7;
  *  `elementScale * BASE_ELEMENT_SCALE` przekazywane do DesignCanvas. */
 const DEFAULT_ELEMENT_SCALE = 1;
 
-/** Szerokość pasa przy krawędzi okna, który w pełnym ekranie wysuwa schowany pasek.
- *  14 px, a nie 1–2: przy szybkim ruchu myszy kursor przeskakuje między klatkami
- *  kilka pikseli i cieńszy pas dawał się „przestrzelić" bez efektu. */
-const PAS_WYZWALAJACY = 14;
+/**
+ * Szerokość pasa przy krawędzi okna, który w pełnym ekranie wysuwa schowany pasek —
+ * i zarazem szerokość widocznego uchwytu, który ten pas zapowiada.
+ *
+ * Te dwie wartości MUSZĄ być równe. Gdyby uchwyt był szerszy od pasa, najechanie na
+ * jego zewnętrzną część nic by nie robiło: użytkownik celuje w widoczny element,
+ * a ten milczy — najgorszy możliwy rodzaj kontrolki.
+ *
+ * 24 px, a nie 1–2: przy szybkim ruchu myszy kursor przeskakuje między klatkami
+ * kilka pikseli i cieńszy pas dawał się „przestrzelić" bez efektu.
+ */
+const PAS_WYZWALAJACY = 24;
 
 const ROOM_MODES: { id: RoomDrawMode; label: string; hint: string }[] = [
   { id: "prostokat", label: "Prostokąt", hint: "przytrzymaj lewy przycisk i przeciągnij" },
@@ -165,6 +188,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [chromeGora, setChromeGora] = useState(false);
   const [chromeLewo, setChromeLewo] = useState(false);
   const [chromeDol, setChromeDol] = useState(false);
+  const pelnyEkranRef = useRef<HTMLDivElement>(null);
   const gornyPasekRef = useRef<HTMLDivElement>(null);
   const lewaKartaRef = useRef<HTMLDivElement>(null);
   const dolnyPasekRef = useRef<HTMLDivElement>(null);
@@ -235,14 +259,20 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const obsluzRuchMyszy = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>) => {
       if (!pelnyEkran) return;
-      const x = e.clientX;
-      const y = e.clientY;
+      // Progi liczone względem KONTENERA, nie okna. Kontener nie zawsze pokrywa się
+      // z oknem co do piksela, a uchwyty są pozycjonowane właśnie w nim — liczenie
+      // od `window.innerHeight` rozjeżdżało próg z widocznym uchwytem o tyle, o ile
+      // kontener jest przesunięty. Efekt: najechanie na uchwyt nic nie robi.
+      const ramka = pelnyEkranRef.current?.getBoundingClientRect();
+      if (!ramka) return;
+      const x = e.clientX - ramka.left;
+      const y = e.clientY - ramka.top;
       const szerLewej = lewaKartaRef.current?.offsetWidth ?? 0;
       const wysGornej = gornyPasekRef.current?.offsetHeight ?? 0;
       const wysDolnej = dolnyPasekRef.current?.offsetHeight ?? 0;
       setChromeLewo(x <= (chromeLewo ? szerLewej : PAS_WYZWALAJACY));
       setChromeGora(y <= (chromeGora ? wysGornej : PAS_WYZWALAJACY));
-      setChromeDol(y >= window.innerHeight - (chromeDol ? wysDolnej : PAS_WYZWALAJACY));
+      setChromeDol(y >= ramka.height - (chromeDol ? wysDolnej : PAS_WYZWALAJACY));
     },
     [pelnyEkran, chromeLewo, chromeGora, chromeDol],
   );
@@ -778,7 +808,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           przycięciu albo pominięciu edytor wraca w całości. */}
       {wgrywanie.stan !== "przycinanie" && (
         <div
-          className={pelnyEkran ? "fixed inset-0 z-40 overflow-hidden bg-[#EEF2F6]" : "space-y-4"}
+          ref={pelnyEkranRef}
+          // `space-y-1.5`, nie `space-y-4`: pasek kontrolek ma stać tuż nad płótnem,
+          // bo do niego się odnosi. Szeroki odstęp robił z niego osobną wysepkę.
+          className={pelnyEkran ? "fixed inset-0 z-40 overflow-hidden bg-[#EEF2F6]" : "space-y-1.5"}
           onMouseMove={pelnyEkran ? obsluzRuchMyszy : undefined}
           onMouseLeave={pelnyEkran ? schowajChrome : undefined}
         >
@@ -840,9 +873,15 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       <div
         className={
           pelnyEkran
-            ? "absolute left-1/2 top-3 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-border bg-white/95 px-2.5 py-1.5 shadow-lg backdrop-blur empty:hidden"
-            : "flex flex-wrap items-center gap-3"
+            ? "absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-border bg-white/95 px-2.5 py-1.5 shadow-lg backdrop-blur transition-[top] duration-200 empty:hidden"
+            // `empty:hidden` także w zwykłym widoku: bez tego pusty rząd o zerowej
+            // wysokości i tak zbierał margines z obu stron i wstawiał 32 px pustki
+            // między pasek a płótno.
+            : "flex flex-wrap items-center gap-3 empty:hidden"
         }
+        // Odsłonięty pasek edytora zajmuje górę okna — pigułka zjeżdża wtedy pod niego,
+        // zamiast się z nim nakładać.
+        style={pelnyEkran ? { top: chromeGora ? 60 : 12 } : undefined}
       >
         {multiSelected.length > 0 && (
           <button onClick={deleteSelection} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600">
@@ -1264,6 +1303,50 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           </div>
         </div>
       </div>
+
+      {/* UCHWYTY: jedyna rzecz, po której widać, że przy krawędziach coś jest schowane.
+          Bez nich tryb wygląda jak plan bez narzędzi — nikt nie wodzi myszą po
+          krawędziach ekranu w poszukiwaniu niewidzialnych paneli.
+          Są też PRZYCISKAMI, nie samą dekoracją: na tablecie nie ma najeżdżania myszą,
+          więc kliknięcie musi wystarczyć do otwarcia panelu. Znikają, gdy panel jest
+          już wysunięty — wtedy niczego nie zapowiadają. */}
+      {pelnyEkran && !chromeLewo && (
+        <button
+          onClick={() => setChromeLewo(true)}
+          title="Narzędzia rysowania — najedź na krawędź albo kliknij"
+          aria-label="Pokaż narzędzia rysowania"
+          style={{ width: PAS_WYZWALAJACY }}
+          className="absolute left-0 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-r-lg border border-l-0 border-border bg-white/90 py-3 text-slate-400 shadow-md backdrop-blur transition-colors hover:bg-white hover:text-copper"
+        >
+          <ChevronRight size={13} />
+          <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ writingMode: "vertical-rl" }}>
+            Narzędzia
+          </span>
+          <ChevronRight size={13} />
+        </button>
+      )}
+
+      {pelnyEkran && !chromeGora && (
+        <button
+          onClick={() => setChromeGora(true)}
+          title="Pasek edytora — najedź na górną krawędź albo kliknij"
+          aria-label="Pokaż pasek edytora"
+          className="absolute left-1/2 top-0 z-30 flex -translate-x-1/2 items-center gap-1 rounded-b-lg border border-t-0 border-border bg-white/90 px-4 py-0.5 text-slate-400 shadow-md backdrop-blur transition-colors hover:bg-white hover:text-copper"
+        >
+          <ChevronDown size={13} />
+        </button>
+      )}
+
+      {pelnyEkran && !chromeDol && (
+        <button
+          onClick={() => setChromeDol(true)}
+          title="Dane planu — najedź na dolną krawędź albo kliknij"
+          aria-label="Pokaż dane planu"
+          className="absolute bottom-0 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-t-lg border border-b-0 border-border bg-white/90 px-4 py-0.5 text-slate-400 shadow-md backdrop-blur transition-colors hover:bg-white hover:text-copper"
+        >
+          <ChevronUp size={13} />
+        </button>
+      )}
 
       {pelnyEkran && (
         <>

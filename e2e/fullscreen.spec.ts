@@ -92,6 +92,56 @@ test("Escape wychodzi z pełnego ekranu, ale najpierw porzuca rozpoczęty rysune
   await expect(page.getByRole("button", { name: "Projektowanie na pełnym ekranie" })).toBeVisible();
 });
 
+test("uchwyt przy lewej krawędzi zapowiada schowane narzędzia i otwiera je kliknięciem", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+
+  // Uchwyt to jedyny sygnał, że coś tam jest — bez niego tryb wygląda jak plan
+  // bez narzędzi. Musi być widoczny od razu po wejściu, bez ruszania myszą.
+  const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
+  await expect(uchwyt).toBeVisible();
+  await expect(uchwyt).toContainText("Narzędzia");
+
+  const karta = lewaKarta(page);
+  await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeLessThan(0);
+
+  // Kliknięcie, nie najechanie: na tablecie nie ma najeżdżania myszą, więc sam
+  // hover nie wystarczy do otwarcia panelu.
+  await uchwyt.click();
+  await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
+
+  // Gdy panel jest już wysunięty, uchwyt nie ma czego zapowiadać.
+  await expect(uchwyt).toHaveCount(0);
+});
+
+test("uchwyt mieści się w pasie wyzwalającym — najechanie na niego wysuwa panel", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+
+  const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
+  const box = (await uchwyt.boundingBox())!;
+
+  // Sedno: kursor na PRAWEJ krawędzi uchwytu, czyli najdalszym jego punkcie.
+  // Gdyby uchwyt był szerszy niż pas wyzwalający, celowanie w widoczny element
+  // nie dawałoby efektu — a to najgorszy rodzaj kontrolki.
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
+  await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
+});
+
+test("pasek kontrolek stoi tuż nad płótnem, bez pustego rzędu pod spodem", async ({ page }) => {
+  await page.goto("/");
+
+  const pasek = (await page.getByLabel("Rozmiar elementów").locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]").boundingBox())!;
+  const wiersz = (await page.locator('nav[aria-label="Narzędzia rysowania"]').locator("xpath=ancestor::div[contains(@class,'items-start')][1]").boundingBox())!;
+
+  // Pusty rząd kontrolek kontekstowych ma znikać z układu (`empty:hidden`), a nie
+  // zbierać margines z obu stron — inaczej wstawiał 32 px pustki między pasek
+  // a płótno, mimo zerowej wysokości.
+  const odstep = wiersz.y - (pasek.y + pasek.height);
+  expect(odstep).toBeGreaterThanOrEqual(0);
+  expect(odstep).toBeLessThan(12);
+});
+
 test("kondygnacje mieszkają w jednym pasku razem z podkładem i siatką", async ({ page }) => {
   await page.goto("/");
 
