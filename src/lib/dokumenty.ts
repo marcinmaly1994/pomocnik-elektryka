@@ -36,6 +36,27 @@ export function filtrujPoRodzaju<T extends Pick<PozycjaDokumentu, "kind">>(lista
   return lista.filter((p) => rodzajDokumentu(p) === rodzaj);
 }
 
+/**
+ * Szuka dokumentu tego samego rodzaju o tej samej nazwie.
+ *
+ * Zapis pod istniejącą nazwą ma NADPISYWAĆ, a nie tworzyć kolejną pozycję. Bez tego
+ * każde „Zapisz” robiło nowy wpis, konto zapychało się kopiami tego samego projektu,
+ * a przy piątej pozycji autozapis wpadał w pętlę blokady limitu.
+ *
+ * Porównanie po przycięciu spacji i bez rozróżniania wielkości liter: „Mój dom”
+ * i „mój dom  ” to dla użytkownika ten sam projekt, choć bajtowo są różne.
+ */
+export function znajdzPoNazwie(
+  lista: Pick<PozycjaDokumentu, "id" | "name" | "kind">[],
+  rodzaj: RodzajDokumentu,
+  nazwa: string,
+): string | null {
+  const szukana = nazwa.trim().toLocaleLowerCase("pl");
+  if (!szukana) return null;
+  const trafienie = filtrujPoRodzaju(lista, rodzaj).find((p) => p.name.trim().toLocaleLowerCase("pl") === szukana);
+  return trafienie?.id ?? null;
+}
+
 export interface WynikLimitu {
   /** `true` = zapisu nie wolno wykonać, trzeba najpierw coś usunąć. */
   zablokowany: boolean;

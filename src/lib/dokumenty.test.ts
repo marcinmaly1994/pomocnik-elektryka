@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filtrujPoRodzaju, LIMIT_ZAPISOW, rodzajDokumentu, sprawdzLimit } from "./dokumenty";
+import { filtrujPoRodzaju, LIMIT_ZAPISOW, rodzajDokumentu, sprawdzLimit, znajdzPoNazwie } from "./dokumenty";
 
 const poz = (id: string, kind?: string | null) => ({ id, kind });
 
@@ -51,5 +51,38 @@ describe("sprawdzLimit", () => {
     const lista = Array.from({ length: LIMIT_ZAPISOW }, (_, i) => poz(`d${i}`, "projekt"));
     expect(sprawdzLimit(lista, "protokoly", null).zablokowany).toBe(false);
     expect(sprawdzLimit(lista, "projekt", null).zablokowany).toBe(true);
+  });
+});
+
+describe("znajdzPoNazwie", () => {
+  const lista = [
+    { id: "a", name: "Mój dom", kind: "projekt" },
+    { id: "b", name: "Hala nr 3", kind: "protokoly" },
+    { id: "c", name: "Stary zapis", kind: undefined },
+  ];
+
+  it("znajduje dokument tego samego rodzaju o tej samej nazwie", () => {
+    expect(znajdzPoNazwie(lista, "projekt", "Mój dom")).toBe("a");
+  });
+
+  it("ignoruje wielkość liter i spacje na brzegach — dla użytkownika to ta sama nazwa", () => {
+    expect(znajdzPoNazwie(lista, "projekt", "  mój DOM ")).toBe("a");
+  });
+
+  it("nie myli rodzajów — protokoły o nazwie projektu nie są nadpisywane", () => {
+    expect(znajdzPoNazwie(lista, "protokoly", "Mój dom")).toBeNull();
+    expect(znajdzPoNazwie(lista, "protokoly", "Hala nr 3")).toBe("b");
+  });
+
+  it("stary zapis bez `kind` liczy się jako projekt i też da się nadpisać", () => {
+    expect(znajdzPoNazwie(lista, "projekt", "Stary zapis")).toBe("c");
+  });
+
+  it("pusta nazwa nie dopasowuje się do niczego", () => {
+    expect(znajdzPoNazwie(lista, "projekt", "   ")).toBeNull();
+  });
+
+  it("brak dopasowania zwraca null — powstanie nowy dokument", () => {
+    expect(znajdzPoNazwie(lista, "projekt", "Nowy obiekt")).toBeNull();
   });
 });

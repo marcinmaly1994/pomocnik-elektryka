@@ -78,11 +78,15 @@ export function ProjectsModal({ open, session, rodzaj, onClose, onLoad, busyMsg,
           </div>
         )}
         {items?.length === 0 && <div className="text-xs text-slate-400">{t.pusto}</div>}
-        {items && items.length > 0 && (
-          <div className="mb-2 text-[11px] text-slate-400">
-            Wykorzystano {items.length} z {LIMIT_ZAPISOW} miejsc.
-          </div>
-        )}
+        {/* Zasada nadpisywania stoi tu, a nie w osobnej pomocy: to jedyne miejsce,
+            gdzie widać nazwy obok siebie, więc tutaj pytanie „co się stanie, jeśli
+            zapiszę pod tą samą nazwą" pojawia się naturalnie. */}
+        <div className="mb-2 text-[11px] leading-relaxed text-slate-400">
+          Wykorzystano <strong className="text-slate-500">{items?.length ?? 0} z {LIMIT_ZAPISOW}</strong> miejsc.
+          <br />
+          Zapis pod nazwą, która już jest na liście, <strong className="text-slate-500">nadpisuje</strong> tamtą pozycję —
+          nie tworzy kolejnej. Nową pozycję robi dopiero nowa nazwa.
+        </div>
         <div className="pe-scroll max-h-80 space-y-2 overflow-auto">
           {items?.map((p) => (
             <div key={p.id} className="pe-input flex items-center justify-between py-2">

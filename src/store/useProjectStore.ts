@@ -15,7 +15,7 @@ import { DEFAULT_PLAN_SIZE, nextRoomColor, nextRoomName, roomColorForIndex, scal
 import { DEFAULT_PRICES } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
-import { sprawdzLimit, type RodzajDokumentu } from "@/lib/dokumenty";
+import { sprawdzLimit, znajdzPoNazwie, type RodzajDokumentu } from "@/lib/dokumenty";
 import {
   SUPABASE_CONFIGURED,
   sesjaZOdpowiedzi,
@@ -156,6 +156,10 @@ interface ProjectState {
   /** Komunikat o przekroczonym limicie zapisów — osobno od `cloudSaveError`, bo to
    *  nie awaria, tylko decyzja do podjęcia przez użytkownika (co usunąć). */
   limitBlokada: { rodzaj: RodzajDokumentu; komunikat: string } | null;
+  /** Autozapis w chmurze wstrzymany, bo trafił na limit. Bez tej flagi próbowałby
+   *  co 2,5 s i za każdym razem zgłaszał ten sam błąd. Zdejmowana po udanym zapisie
+   *  oraz przy ręcznej próbie, którą użytkownik podejmuje po zrobieniu miejsca. */
+  autozapisWstrzymany: boolean;
 
   // historia cofnij/ponów — ten sam mechanizm co useHistory() w wersji JS,
   // ale jako część store'a, więc undo/redo działa niezależnie od tego,
@@ -200,7 +204,7 @@ interface ProjectState {
   /** Natychmiastowy zapis w chmurze (bez czekania na debounce autosave'u) — do
    *  przycisku „Zapisz teraz” w menu konta. Ten sam kod ścieżki, którym leci
    *  automatyczny zapis w tle, więc oba mają identyczne zachowanie i błędy. */
-  saveToCloud: () => Promise<void>;
+  saveToCloud: (opcje?: { reczny?: boolean }) => Promise<void>;
   /** Wczytuje projekt zapisany w chmurze pod danym id i ustawia go jako bieżący
    *  punkt startowy (czyści historię cofnij/ponów, jak `loadProjectPayload`). */
   loadFromCloud: (id: string) => Promise<void>;
@@ -246,6 +250,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   cloudId: null,
   protokolyId: null,
   oknoZestawowOtwarte: false,
+  autozapisWstrzymany: false,
   protokolyNazwa: "",
   limitBlokada: null,
   lastLocalSaveAt: null,
@@ -474,34 +479,49 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setCloudId: (id) => set({ cloudId: id }),
 
-  saveToCloud: async () => {
+  saveToCloud: async (opcje) => {
     const { getProjectPayload, cloudId, projectName, zapewnijSesje } = get();
     const session = await zapewnijSesje();
     if (!session) return;
-    set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null });
+    // Ręczna próba zawsze zaczyna od czystej karty: użytkownik klika „Zapisz teraz"
+    // zwykle właśnie po zrobieniu miejsca, więc wstrzymanie musi wtedy zniknąć.
+    set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null, ...(opcje?.reczny ? { autozapisWstrzymany: false } : {}) });
     try {
       const payload = getProjectPayload();
       // `kind` odróżnia projekt od zestawu protokołów w tej samej tabeli — bez niego
       // obie listy pokazywałyby wszystko i limity liczyłyby się wspólnie.
       const data = { ...payload, kind: "projekt" } as unknown as Record<string, unknown>;
-      if (!cloudId) {
-        // Limit dotyczy tylko NOWYCH zapisów; nadpisanie istniejącego przechodzi
-        // zawsze, żeby przy pełnym limicie nie dało się utracić bieżącej pracy.
+      let docelowyId = cloudId;
+      if (!docelowyId) {
         const lista = await supaListProjects(session.token, session.user.id);
-        const wynik = sprawdzLimit(lista, "projekt", null);
-        if (wynik.zablokowany) {
-          set({ limitBlokada: { rodzaj: "projekt", komunikat: wynik.komunikat } });
-          return;
+        // Zapis pod ISTNIEJĄCĄ NAZWĄ nadpisuje ten projekt, zamiast tworzyć kolejny.
+        // Bez tego konto zapychało się kopiami tego samego projektu, a po piątej
+        // każdy autozapis odbijał się od limitu.
+        docelowyId = znajdzPoNazwie(lista, "projekt", projectName);
+        if (!docelowyId) {
+          // Limit dotyczy tylko NOWYCH nazw; nadpisanie przechodzi zawsze, żeby przy
+          // pełnym limicie nie dało się utracić bieżącej pracy.
+          const wynik = sprawdzLimit(lista, "projekt", null);
+          if (wynik.zablokowany) {
+            // Autozapis chodzi co 2,5 s, więc bez wstrzymania otwierałby okno listy
+            // w kółko. Okno pokazujemy WYŁĄCZNIE przy zapisie ręcznym — tam jest to
+            // odpowiedź na kliknięcie, a nie wyskakujące znikąd.
+            set({ autozapisWstrzymany: true });
+            if (opcje?.reczny) set({ limitBlokada: { rodzaj: "projekt", komunikat: wynik.komunikat } });
+            else set({ cloudSaveError: wynik.komunikat });
+            return;
+          }
         }
       }
-      if (cloudId) {
-        await supaUpdateProject(session.token, cloudId, { name: projectName, data, updated_at: new Date().toISOString() });
+      if (docelowyId) {
+        await supaUpdateProject(session.token, docelowyId, { name: projectName, data, updated_at: new Date().toISOString() });
+        if (docelowyId !== cloudId) set({ cloudId: docelowyId });
       } else {
         const [row] = await supaInsertProject(session.token, { user_id: session.user.id, name: projectName, data });
         set({ cloudId: row.id });
       }
       lastCloudSavedJson = JSON.stringify(payload);
-      set({ lastCloudSaveAt: Date.now() });
+      set({ lastCloudSaveAt: Date.now(), autozapisWstrzymany: false });
     } catch (e) {
       set({ cloudSaveError: e instanceof Error ? e.message : "Nie udało się zapisać w chmurze" });
     } finally {
@@ -548,7 +568,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Limit sprawdzamy na ŚWIEŻEJ liście z serwera, nie na lokalnej kopii: ten sam
       // użytkownik mógł zapisać coś na innym urządzeniu i lokalny stan byłby nieaktualny.
       const lista = await supaListProjects(session.token, session.user.id);
-      const wynik = sprawdzLimit(lista, "protokoly", protokolyId);
+      const tytulRoboczy = nazwa.trim() || docHeader.obiekt || "Protokoły";
+      // Zapis pod istniejącą nazwą nadpisuje ten zestaw — tak samo jak przy projektach.
+      const docelowyId = protokolyId ?? znajdzPoNazwie(lista, "protokoly", tytulRoboczy);
+      const wynik = sprawdzLimit(lista, "protokoly", docelowyId);
       if (wynik.zablokowany) {
         set({ limitBlokada: { rodzaj: "protokoly", komunikat: wynik.komunikat } });
         return;
@@ -556,9 +579,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Do dokumentu idą WYŁĄCZNIE dane protokołów — bez planu, kondygnacji i
       // podkładów. To one czynią z tego dokument niezależny od projektowania.
       const data = { kind: "protokoly", docHeader, protocols } as unknown as Record<string, unknown>;
-      const tytul = nazwa.trim() || docHeader.obiekt || "Protokoły";
-      if (protokolyId) {
-        await supaUpdateProject(session.token, protokolyId, { name: tytul, data, updated_at: new Date().toISOString() });
+      const tytul = tytulRoboczy;
+      if (docelowyId) {
+        await supaUpdateProject(session.token, docelowyId, { name: tytul, data, updated_at: new Date().toISOString() });
+        if (docelowyId !== protokolyId) set({ protokolyId: docelowyId });
       } else {
         const [row] = await supaInsertProject(session.token, { user_id: session.user.id, name: tytul, data });
         set({ protokolyId: row.id });
@@ -752,6 +776,11 @@ useProjectStore.subscribe(() => {
     cloudAutosaveTimer = null;
     const state = useProjectStore.getState();
     if (!state.session || state.cloudBusy) return;
+    // Zapis odbity przez limit NIE aktualizuje migawki, więc bez tej straży pętla
+    // subskrypcja → timer → nieudany zapis nakręcałaby się bez końca, zgłaszając ten
+    // sam błąd co 2,5 s (a wcześniej otwierając przy tym okno listy projektów).
+    // Wstrzymanie zdejmuje dopiero udany zapis albo ręczna próba użytkownika.
+    if (state.autozapisWstrzymany) return;
     const json = JSON.stringify(state.getProjectPayload());
     if (json === lastCloudSavedJson) return;
     void state.saveToCloud();

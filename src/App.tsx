@@ -441,7 +441,7 @@ export default function App() {
                   <DropdownMenuItem onSelect={() => setOknoZestawow(true)}>
                     <ClipboardList size={14} /> Moje zestawy protokołów
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void saveToCloud()} disabled={cloudBusy}>
+                  <DropdownMenuItem onSelect={() => void saveToCloud({ reczny: true })} disabled={cloudBusy}>
                     <Save size={14} /> Zapisz teraz
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

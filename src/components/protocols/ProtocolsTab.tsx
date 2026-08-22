@@ -4,6 +4,7 @@ import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
 import { downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { resolveDocHeader } from "@/lib/docHeader";
+import { LIMIT_ZAPISOW } from "@/lib/dokumenty";
 import type { ProtocolKey } from "@/types";
 
 const HEADER_FIELDS: [string, string][] = [
@@ -171,6 +172,10 @@ export function ProtocolsTab() {
             </button>
           )}
           {cloudSaveError && <span className="text-xs text-red-600">{cloudSaveError}</span>}
+          <p className="w-full text-[11px] text-slate-400">
+            Zapis pod nazwą, która już jest na koncie, nadpisuje tamten zestaw. Nową pozycję tworzy dopiero nowa nazwa
+            (maksymalnie {LIMIT_ZAPISOW}).
+          </p>
         </div>
       )}
 
