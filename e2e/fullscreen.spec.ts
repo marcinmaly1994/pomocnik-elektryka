@@ -268,6 +268,44 @@ test("odpięcie przywraca chowanie, a przypięcie przeżywa odświeżenie", asyn
   await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeLessThan(0);
 });
 
+test("przypięcie panelu nie przesuwa rysunku — ten sam punkt planu zostaje w tym samym miejscu ekranu", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+
+  // Przybliżamy, żeby rzut przestał się mieścić — dopiero wtedy jest co przewijać
+  // i dopiero wtedy kompensacja ma co robić.
+  await page.getByRole("button", { name: "Przybliż widok" }).click();
+  for (let i = 0; i < 9; i++) await page.getByRole("button", { name: "Przybliż widok" }).click();
+  await page.waitForTimeout(300);
+
+  const plotno = page.locator("div.overflow-auto.rounded-card.border").first();
+  await plotno.evaluate((el) => {
+    el.scrollLeft = 400;
+  });
+
+  /**
+   * Przesunięcie między układem planu a układem ekranu: punkt planu `p` ląduje na
+   * ekranie w `rect.left - scrollLeft + p`. Żeby rysunek został w miejscu, stała
+   * musi zostać RÓŻNICA `scrollLeft - rect.left`, a nie ich suma — suma zmienia się
+   * o podwójne przesunięcie i wyglądałaby na błąd tam, gdzie go nie ma.
+   */
+  const przesuniecieUkladu = () =>
+    plotno.evaluate((el) => Math.round(el.scrollLeft - el.getBoundingClientRect().left));
+
+  const przed = await przesuniecieUkladu();
+
+  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
+  await page.waitForTimeout(400);
+
+  // Bez kompensacji plan skakał o szerokość panelu (~370 px) i trzeba go było
+  // szukać od nowa. Tolerancja 4 px na zaokrąglenia układu.
+  const po = await przesuniecieUkladu();
+  expect(Math.abs(po - przed)).toBeLessThan(4);
+});
+
 test("przypięty panel po lewej NIE zasłania górnego paska", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());

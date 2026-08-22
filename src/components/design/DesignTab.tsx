@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
   AlertTriangle,
   Check,
@@ -366,7 +366,18 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setChromeLewo(false);
   }, []);
 
+  /** Kontener przewijania płótna — DesignCanvas trzyma go u siebie, ale przypinanie
+   *  panelu musi go przewinąć, więc sięgamy po niego przez kolumnę płótna. Jedyny
+   *  element z `overflow-auto` w tej kolumnie to właśnie okno rysunku. */
+  const kontenerPlotna = useCallback(
+    () => kolumnaPlotnaRef.current?.querySelector<HTMLDivElement>("div.overflow-auto") ?? null,
+    [],
+  );
+  /** Pozycja lewej krawędzi okna rysunku sprzed przypięcia — do skompensowania skoku. */
+  const lewaPrzedPrzypieciem = useRef<number | null>(null);
+
   const przelaczPrzypiecie = useCallback(() => {
+    lewaPrzedPrzypieciem.current = kontenerPlotna()?.getBoundingClientRect().left ?? null;
     setPrzypietyPanel((p) => {
       const nowy = !p;
       try {
@@ -376,7 +387,29 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       }
       return nowy;
     });
-  }, []);
+  }, [kontenerPlotna]);
+
+  /**
+   * Przypięcie panelu zwęża obszar rysunku o jego szerokość, więc plan skakał
+   * o ~370 px w prawo i trzeba go było szukać od nowa. Kompensujemy to
+   * przewinięciem o dokładnie tyle, o ile przesunęła się lewa krawędź okna
+   * rysunku — dzięki temu rysunek zostaje pod tym samym miejscem EKRANU, a panel
+   * zajmuje miejsce, które i tak było poza kadrem.
+   *
+   * `useLayoutEffect`, bo przewinięcie musi wejść w tej samej klatce co nowy układ —
+   * inaczej widać przeskok, czyli dokładnie to, co naprawiamy.
+   *
+   * Gdy cały rzut mieści się w oknie, nie ma czego przewijać i plan po prostu
+   * przecentruje się w węższym obszarze. To poprawne: nic nie znika z widoku.
+   */
+  useLayoutEffect(() => {
+    const przed = lewaPrzedPrzypieciem.current;
+    if (przed === null) return;
+    lewaPrzedPrzypieciem.current = null;
+    const el = kontenerPlotna();
+    if (!el) return;
+    el.scrollLeft += el.getBoundingClientRect().left - przed;
+  }, [przypietyPanel, kontenerPlotna]);
 
   // Panel: widoczny pod kursorem albo przypięty. Paski poziome: zawsze.
   const widocznaLewa = chromeLewo || przypietyPanel;
