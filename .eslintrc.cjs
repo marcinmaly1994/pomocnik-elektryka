@@ -6,7 +6,18 @@ module.exports = {
     "plugin:@typescript-eslint/recommended",
     "plugin:react-hooks/recommended",
   ],
-  ignorePatterns: ["dist", ".eslintrc.cjs", "node_modules"],
+  // Cztery ostatnie pozycje to output `tsc -b` emitowany obok konfiguracji
+  // (tsconfig.node.json ma `composite` bez `outDir`) — nie są to nasze źródła,
+  // więc ESLint nie ma czego w nich pilnować.
+  ignorePatterns: [
+    "dist",
+    ".eslintrc.cjs",
+    "node_modules",
+    "vite.config.js",
+    "vite.config.d.ts",
+    "playwright.config.js",
+    "playwright.config.d.ts",
+  ],
   parser: "@typescript-eslint/parser",
   plugins: ["react-refresh"],
   rules: {
