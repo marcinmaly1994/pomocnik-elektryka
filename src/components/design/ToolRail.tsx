@@ -24,7 +24,9 @@ export const RAIL_TOOLS: RailTool[] = [
   { id: "pomieszczenie", label: "Narysuj Pomieszczenie", icon: Layers, hint: "Obrysuj pomieszczenie" },
   { id: "sciany", label: "Narysuj Ścianę", icon: PenLine, hint: "Rysuj ściany łamaną" },
   { id: "otwory", label: "Drzwi / Okno", icon: DoorOpen, hint: "Kliknij ścianę, żeby dodać drzwi albo okno" },
-  { id: "pan", label: "Przesuń widok", icon: Hand, hint: "Przeciągaj widok planu" },
+  // Podpowiedź mówi też o rolce, bo inaczej ten skrót jest nie do odkrycia: nikt
+  // nie wciska środkowego przycisku „na próbę", żeby sprawdzić, czy coś zrobi.
+  { id: "pan", label: "Przesuń widok", icon: Hand, hint: "Przeciągaj widok planu — albo przytrzymaj rolkę myszy w dowolnym narzędziu" },
   { id: "skala", label: "Kalibracja skali", icon: Ruler, hint: "Ustaw, ile metrów ma odcinek" },
 ];
 

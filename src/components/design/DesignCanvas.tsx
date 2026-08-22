@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -311,6 +311,10 @@ export function DesignCanvas({
   });
 
   function handleStageMouseDown(e: KonvaEventObject<MouseEvent>) {
+    // Rolką się PRZESUWA, a nie rysuje: bez tego wciśnięcie środkowego przycisku
+    // zaczynało prostokąt pomieszczenia albo zaznaczanie obszarem, i użytkownik
+    // przesuwając plan rysował po nim ramkę.
+    if (e.evt.button === 1) return;
     const stage = e.target.getStage();
     // Rysowanie prostokąta pomieszczenia działa też nad już narysowanym pomieszczeniem
     // (jest tylko podkładem rysunkowym), więc tu — inaczej niż przy zaznaczaniu — nie
@@ -420,7 +424,10 @@ export function DesignCanvas({
     // zatwierdzenia ściany (`handleStageContextMenu`) dokładał RÓWNOCZEŚNIE nowy
     // punkt tą samą drogą co lewy klik, więc zatwierdzona ściana miała jeden
     // punkt więcej niż faktycznie postawiono.
-    if (e.evt.button === 2) return;
+    // Środkowy przycisk (1) przesuwa widok — patrz `zacznijPrzesuwanieSrodkowym`.
+    // Bez tej straży puszczenie rolki po przesunięciu planu stawiałoby element
+    // albo czyściło zaznaczenie w miejscu, w którym akurat skończył się gest.
+    if (e.evt.button === 2 || e.evt.button === 1) return;
     const stage = e.target.getStage();
     if (!stage) return;
     const p = planPoint(stage, planSize);
@@ -493,6 +500,52 @@ export function DesignCanvas({
     });
   }
 
+  /**
+   * Przesuwanie planu wciśniętą rolką — konwencja z programów CAD i edytorów
+   * graficznych, działająca NIEZALEŻNIE od wybranego narzędzia. Dzięki temu można
+   * poprawić kadr w trakcie rysowania ściany, bez przełączania się na „Przesuń
+   * widok" i z powrotem (co porzuciłoby zaczęty odcinek).
+   *
+   * Przesuwamy `scrollLeft`/`scrollTop` kontenera, a nie scenę Konvy: kadr jest tu
+   * wyznaczany właśnie przez przewinięcie kontenera, więc ten sam mechanizm obsługuje
+   * kółko myszy i to, co widać po przybliżeniu. Ruszanie sceną dawałoby drugi,
+   * niezależny układ współrzędnych i dwa różne „przesunięcia" naraz.
+   */
+  const kontenerRef = useRef<HTMLDivElement>(null);
+  const przesuwanieRef = useRef<{ x: number; y: number; scrollX: number; scrollY: number } | null>(null);
+  /** Tylko po to, żeby zmienić kursor na „łapkę" — sam gest żyje w refie, bo
+   *  przerysowywanie sceny Konvy przy każdym pikselu ruchu byłoby marnotrawstwem. */
+  const [przesuwaRolka, setPrzesuwaRolka] = useState(false);
+
+  function zacznijPrzesuwanieSrodkowym(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.button !== 1) return;
+    const el = kontenerRef.current;
+    if (!el) return;
+    // `preventDefault` gasi windowsowe autoprzewijanie (kółko z kotwicą), które
+    // inaczej przejmuje gest i pokazuje własny kursor.
+    e.preventDefault();
+    przesuwanieRef.current = { x: e.clientX, y: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop };
+    el.setPointerCapture(e.pointerId);
+    setPrzesuwaRolka(true);
+  }
+
+  function przesuwajSrodkowym(e: ReactPointerEvent<HTMLDivElement>) {
+    const start = przesuwanieRef.current;
+    const el = kontenerRef.current;
+    if (!start || !el) return;
+    // Minus: chwytamy rysunek i ciągniemy go za kursorem, więc widok jedzie
+    // w przeciwną stronę niż mysz.
+    el.scrollLeft = start.scrollX - (e.clientX - start.x);
+    el.scrollTop = start.scrollY - (e.clientY - start.y);
+  }
+
+  function zakonczPrzesuwanieSrodkowym(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!przesuwanieRef.current) return;
+    przesuwanieRef.current = null;
+    kontenerRef.current?.releasePointerCapture(e.pointerId);
+    setPrzesuwaRolka(false);
+  }
+
   return (
     // Karta PRZYLEGA do rzutu (`w-fit`) i sama się centruje (`mx-auto`), zamiast
     // rozciągać się na kolumnę i centrować zawartość w środku. Efekt wizualny jest
@@ -501,8 +554,16 @@ export function DesignCanvas({
     // tam, gdzie użytkownik widzi rysunek. `max-w-full` zostawia przewijanie,
     // gdy rzut jest szerszy od kolumny.
     <div
+      ref={kontenerRef}
       className="pe-bez-suwaka mx-auto w-fit max-w-full overflow-auto rounded-card border border-border"
-      style={{ maxHeight }}
+      style={{ maxHeight, cursor: przesuwaRolka ? "grabbing" : undefined }}
+      onPointerDown={zacznijPrzesuwanieSrodkowym}
+      onPointerMove={przesuwajSrodkowym}
+      onPointerUp={zakonczPrzesuwanieSrodkowym}
+      onPointerCancel={zakonczPrzesuwanieSrodkowym}
+      // Środkowy przycisk domyślnie wkleja zaznaczenie (Linux) albo otwiera
+      // autoprzewijanie — jedno i drugie w trakcie przesuwania planu przeszkadza.
+      onAuxClick={(e) => e.button === 1 && e.preventDefault()}
     >
       <Stage
         width={planSize.w * zoom}
