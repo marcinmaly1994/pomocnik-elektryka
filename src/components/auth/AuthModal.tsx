@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from "react";
 import { AlertTriangle, LogIn, Loader2, Send } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { SUPABASE_CONFIGURED, supaRecover, supaSignIn, supaSignUp } from "@/lib/supabase";
+import { SUPABASE_CONFIGURED, sesjaZOdpowiedzi, supaRecover, supaSignIn, supaSignUp } from "@/lib/supabase";
 import type { Session } from "@/lib/supabase";
 
 interface AuthModalProps {
@@ -45,11 +45,14 @@ export function AuthModal({ open, onClose, onSignedIn }: AuthModalProps) {
     try {
       if (mode === "login") {
         const r = await supaSignIn(email, password);
-        onSignedIn({ token: r.access_token, user: r.user });
+        // `sesjaZOdpowiedzi`, a nie ręczne składanie obiektu: zabiera też token
+        // odnawiający i czas wygaśnięcia. Bez nich sesja umierała po godzinie,
+        // a zapisy w chmurze zaczynały po cichu wracać z 401.
+        onSignedIn(sesjaZOdpowiedzi(r));
       } else if (mode === "register") {
         const r = await supaSignUp(email, password);
         if (r.access_token) {
-          onSignedIn({ token: r.access_token, user: r.user });
+          onSignedIn(sesjaZOdpowiedzi(r));
         } else {
           setInfo("Konto utworzone. Sprawdź e-mail, aby potwierdzić rejestrację, a następnie zaloguj się.");
           setMode("login");

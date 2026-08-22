@@ -16,7 +16,21 @@ import { DEFAULT_PRICES } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
 import { sprawdzLimit, type RodzajDokumentu } from "@/lib/dokumenty";
-import { SUPABASE_CONFIGURED, supaGetProject, supaInsertProject, supaListProjects, supaUpdateProject, type Session } from "@/lib/supabase";
+import {
+  SUPABASE_CONFIGURED,
+  sesjaZOdpowiedzi,
+  supaGetProject,
+  supaInsertProject,
+  supaListProjects,
+  supaRefresh,
+  supaUpdateProject,
+  wymagaOdswiezenia,
+  type Session,
+} from "@/lib/supabase";
+
+/** Jeden komunikat dla wszystkich ścieżek wygaśnięcia — użytkownik ma zobaczyć
+ *  to samo niezależnie od tego, czy odświeżenie się nie powiodło, czy nie było czym. */
+const SESJA_WYGASLA = "Sesja wygasła — zaloguj się ponownie, żeby zapisywać w chmurze.";
 
 const SESSION_KEY = "pomocnikelektryka_sesja";
 /** Osobny klucz od sesji logowania — to jest sam PROJEKT (plan, ceny, protokoły…),
@@ -194,6 +208,9 @@ interface ProjectState {
   /** Zapisuje BIEŻĄCE protokoły jako osobny dokument na koncie. Przy pełnym limicie
    *  nie zapisuje nic i ustawia `limitBlokada` — decyzję, co usunąć, podejmuje
    *  użytkownik, a nie aplikacja. */
+  /** Zwraca świeżą sesję (odświeżając token, jeśli trzeba) albo `null`, gdy trzeba
+   *  zalogować się ponownie. Każda ścieżka sięgająca do chmury przechodzi tędy. */
+  zapewnijSesje: () => Promise<Session | null>;
   saveProtokolyToCloud: (nazwa: string) => Promise<void>;
   loadProtokolyFromCloud: (id: string) => Promise<void>;
   /** Zaczyna nowy, pusty zestaw protokołów — odpina bieżący od zapisu w chmurze. */
@@ -453,7 +470,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setCloudId: (id) => set({ cloudId: id }),
 
   saveToCloud: async () => {
-    const { session, getProjectPayload, cloudId, projectName } = get();
+    const { getProjectPayload, cloudId, projectName, zapewnijSesje } = get();
+    const session = await zapewnijSesje();
     if (!session) return;
     set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null });
     try {
@@ -488,10 +506,35 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setLimitBlokada: (b) => set({ limitBlokada: b }),
 
+  zapewnijSesje: async () => {
+    const { session, setSession } = get();
+    if (!session) return null;
+    if (!wymagaOdswiezenia(session)) return session;
+    // Sesja sprzed wprowadzenia odświeżania nie ma czym się odnowić. Mówimy o tym
+    // wprost i wylogowujemy, zamiast pozwolić, żeby każdy kolejny zapis po cichu
+    // wracał z 401 — a użytkownik pracował dalej w przekonaniu, że dane lecą do chmury.
+    if (!session.refreshToken) {
+      setSession(null);
+      set({ cloudSaveError: SESJA_WYGASLA });
+      return null;
+    }
+    try {
+      const swieza = sesjaZOdpowiedzi(await supaRefresh(session.refreshToken));
+      setSession(swieza);
+      set({ cloudSaveError: null });
+      return swieza;
+    } catch {
+      setSession(null);
+      set({ cloudSaveError: SESJA_WYGASLA });
+      return null;
+    }
+  },
+
   nowyZestawProtokolow: () => set({ protokolyId: null, protokolyNazwa: "", protocols: {} }),
 
   saveProtokolyToCloud: async (nazwa) => {
-    const { session, docHeader, protocols, protokolyId } = get();
+    const { docHeader, protocols, protokolyId, zapewnijSesje } = get();
+    const session = await zapewnijSesje();
     if (!session) return;
     set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null });
     try {
@@ -522,7 +565,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   loadProtokolyFromCloud: async (id) => {
-    const { session } = get();
+    const session = await get().zapewnijSesje();
     if (!session) return;
     set({ cloudBusy: true, cloudSaveError: null });
     try {
@@ -545,7 +588,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   loadFromCloud: async (id) => {
-    const { session, loadProjectPayload, getProjectPayload } = get();
+    const { loadProjectPayload, getProjectPayload, zapewnijSesje } = get();
+    const session = await zapewnijSesje();
     if (!session) return;
     set({ cloudBusy: true, cloudSaveError: null });
     try {

@@ -48,6 +48,53 @@ export interface SupaUser {
 export interface Session {
   token: string;
   user: SupaUser;
+  /**
+   * Token odnawiający. Bez niego sesja umiera po godzinie (tyle żyje `access_token`
+   * w Supabase) i każdy zapis w chmurze zaczyna wracać z 401 — po cichu, bo
+   * autozapis nie ma komu tego zgłosić. Sesje zapisane przed wprowadzeniem
+   * odświeżania go NIE MAJĄ; takie traktujemy jak wygasłe i prosimy o ponowne
+   * zalogowanie, zamiast udawać, że zapis działa.
+   */
+  refreshToken?: string;
+  /** Moment wygaśnięcia `token` (ms epoch). Brak = sesja sprzed tej zmiany. */
+  expiresAt?: number;
+}
+
+/** Błąd z API z zachowanym kodem HTTP — po 401 trzeba odświeżyć sesję i ponowić. */
+export interface SupaError extends Error {
+  status?: number;
+}
+
+/**
+ * Zapas przed wygaśnięciem [ms]. Odświeżamy z wyprzedzeniem, bo token, który
+ * wygasa w trakcie lotu żądania, i tak wróci z 401 — a wtedy użytkownik zobaczy
+ * błąd zamiast zapisu.
+ */
+const MARGINES_ODSWIEZENIA = 60_000;
+
+/** Czy sesja wymaga odświeżenia przed użyciem. Czysta funkcja — testowalna bez sieci. */
+export function wymagaOdswiezenia(sesja: Pick<Session, "expiresAt">, teraz = Date.now()): boolean {
+  // Brak `expiresAt` = sesja sprzed wprowadzenia odświeżania. Nie wiemy, ile jej
+  // zostało, a najczęściej nie zostało nic — traktujemy jak wymagającą odnowienia.
+  if (!sesja.expiresAt) return true;
+  return sesja.expiresAt - teraz <= MARGINES_ODSWIEZENIA;
+}
+
+/** Składa sesję z odpowiedzi endpointu auth (logowanie, rejestracja, odświeżenie). */
+export function sesjaZOdpowiedzi(res: {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  user: SupaUser;
+}): Session {
+  return {
+    token: res.access_token ?? "",
+    user: res.user,
+    refreshToken: res.refresh_token,
+    // `expires_in` przychodzi w sekundach; brak wartości traktujemy jak godzinę,
+    // czyli domyślną żywotność tokenu w Supabase.
+    expiresAt: Date.now() + (res.expires_in ?? 3600) * 1000,
+  };
 }
 
 export interface CloudProjectListItem {
@@ -86,20 +133,35 @@ async function sbFetch<T>(path: string, { method = "GET", body, token }: SbFetch
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
     const msg = data?.error_description || data?.msg || data?.message || `Błąd ${res.status}`;
-    throw new Error(msg);
+    // Kod HTTP zachowany, żeby wywołujący odróżnił „sesja wygasła" (401) od
+    // każdej innej awarii i mógł ponowić po odświeżeniu tokenu.
+    const err = new Error(msg) as SupaError;
+    err.status = res.status;
+    throw err;
   }
   return data as T;
 }
 
-export function supaSignUp(email: string, password: string) {
-  return sbFetch<{ access_token?: string; user: SupaUser }>("/auth/v1/signup", { method: "POST", body: { email, password } });
+/** Wymienia token odnawiający na świeżą sesję. */
+export function supaRefresh(refreshToken: string) {
+  return sbFetch<{ access_token: string; refresh_token: string; expires_in: number; user: SupaUser }>(
+    "/auth/v1/token?grant_type=refresh_token",
+    { method: "POST", body: { refresh_token: refreshToken } },
+  );
 }
 
-export function supaSignIn(email: string, password: string) {
-  return sbFetch<{ access_token: string; user: SupaUser }>("/auth/v1/token?grant_type=password", {
+export function supaSignUp(email: string, password: string) {
+  return sbFetch<{ access_token?: string; refresh_token?: string; expires_in?: number; user: SupaUser }>("/auth/v1/signup", {
     method: "POST",
     body: { email, password },
   });
+}
+
+export function supaSignIn(email: string, password: string) {
+  return sbFetch<{ access_token: string; refresh_token: string; expires_in: number; user: SupaUser }>(
+    "/auth/v1/token?grant_type=password",
+    { method: "POST", body: { email, password } },
+  );
 }
 
 /** Wysyła e-mail z linkiem do zresetowania hasła. Supabase zawsze odpowiada 200
