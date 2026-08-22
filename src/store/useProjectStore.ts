@@ -15,7 +15,8 @@ import { DEFAULT_PLAN_SIZE, nextRoomColor, nextRoomName, roomColorForIndex, scal
 import { DEFAULT_PRICES } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
-import { SUPABASE_CONFIGURED, supaGetProject, supaInsertProject, supaUpdateProject, type Session } from "@/lib/supabase";
+import { sprawdzLimit, type RodzajDokumentu } from "@/lib/dokumenty";
+import { SUPABASE_CONFIGURED, supaGetProject, supaInsertProject, supaListProjects, supaUpdateProject, type Session } from "@/lib/supabase";
 
 const SESSION_KEY = "pomocnikelektryka_sesja";
 /** Osobny klucz od sesji logowania — to jest sam PROJEKT (plan, ceny, protokoły…),
@@ -130,6 +131,18 @@ interface ProjectState {
   /** Zapis/wczytanie w toku — do spinnera przy wskaźniku chmury. */
   cloudBusy: boolean;
 
+  /**
+   * Zestaw protokołów jest OSOBNYM dokumentem na koncie, niezależnym od projektu
+   * instalacji: pomiary pięcioletnie wykonuje się w obiektach, których się nie
+   * projektowało, więc wiązanie ich z planem zmuszałoby do zakładania pustych
+   * projektów. Stąd własne id i nazwa, obok `cloudId` projektu.
+   */
+  protokolyId: string | null;
+  protokolyNazwa: string;
+  /** Komunikat o przekroczonym limicie zapisów — osobno od `cloudSaveError`, bo to
+   *  nie awaria, tylko decyzja do podjęcia przez użytkownika (co usunąć). */
+  limitBlokada: { rodzaj: RodzajDokumentu; komunikat: string } | null;
+
   // historia cofnij/ponów — ten sam mechanizm co useHistory() w wersji JS,
   // ale jako część store'a, więc undo/redo działa niezależnie od tego,
   // które komponenty są aktualnie zamontowane
@@ -178,6 +191,15 @@ interface ProjectState {
    *  punkt startowy (czyści historię cofnij/ponów, jak `loadProjectPayload`). */
   loadFromCloud: (id: string) => Promise<void>;
 
+  /** Zapisuje BIEŻĄCE protokoły jako osobny dokument na koncie. Przy pełnym limicie
+   *  nie zapisuje nic i ustawia `limitBlokada` — decyzję, co usunąć, podejmuje
+   *  użytkownik, a nie aplikacja. */
+  saveProtokolyToCloud: (nazwa: string) => Promise<void>;
+  loadProtokolyFromCloud: (id: string) => Promise<void>;
+  /** Zaczyna nowy, pusty zestaw protokołów — odpina bieżący od zapisu w chmurze. */
+  nowyZestawProtokolow: () => void;
+  setLimitBlokada: (b: { rodzaj: RodzajDokumentu; komunikat: string } | null) => void;
+
   addRoomShape: (floor: string, points: Point[], name?: string) => void;
   renameRoomShape: (id: string, newName: string) => void;
   /** Przesuwa JEDEN narożnik obrysu — do edycji kształtu przeciąganiem na planie. */
@@ -201,6 +223,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   onboarding: INITIAL_ONBOARDING,
   session: loadStoredSession(),
   cloudId: null,
+  protokolyId: null,
+  protokolyNazwa: "",
+  limitBlokada: null,
   lastLocalSaveAt: null,
   lastCloudSaveAt: null,
   cloudSaveError: null,
@@ -430,10 +455,22 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   saveToCloud: async () => {
     const { session, getProjectPayload, cloudId, projectName } = get();
     if (!session) return;
-    set({ cloudBusy: true, cloudSaveError: null });
+    set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null });
     try {
       const payload = getProjectPayload();
-      const data = payload as unknown as Record<string, unknown>;
+      // `kind` odróżnia projekt od zestawu protokołów w tej samej tabeli — bez niego
+      // obie listy pokazywałyby wszystko i limity liczyłyby się wspólnie.
+      const data = { ...payload, kind: "projekt" } as unknown as Record<string, unknown>;
+      if (!cloudId) {
+        // Limit dotyczy tylko NOWYCH zapisów; nadpisanie istniejącego przechodzi
+        // zawsze, żeby przy pełnym limicie nie dało się utracić bieżącej pracy.
+        const lista = await supaListProjects(session.token, session.user.id);
+        const wynik = sprawdzLimit(lista, "projekt", null);
+        if (wynik.zablokowany) {
+          set({ limitBlokada: { rodzaj: "projekt", komunikat: wynik.komunikat } });
+          return;
+        }
+      }
       if (cloudId) {
         await supaUpdateProject(session.token, cloudId, { name: projectName, data, updated_at: new Date().toISOString() });
       } else {
@@ -444,6 +481,64 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({ lastCloudSaveAt: Date.now() });
     } catch (e) {
       set({ cloudSaveError: e instanceof Error ? e.message : "Nie udało się zapisać w chmurze" });
+    } finally {
+      set({ cloudBusy: false });
+    }
+  },
+
+  setLimitBlokada: (b) => set({ limitBlokada: b }),
+
+  nowyZestawProtokolow: () => set({ protokolyId: null, protokolyNazwa: "", protocols: {} }),
+
+  saveProtokolyToCloud: async (nazwa) => {
+    const { session, docHeader, protocols, protokolyId } = get();
+    if (!session) return;
+    set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null });
+    try {
+      // Limit sprawdzamy na ŚWIEŻEJ liście z serwera, nie na lokalnej kopii: ten sam
+      // użytkownik mógł zapisać coś na innym urządzeniu i lokalny stan byłby nieaktualny.
+      const lista = await supaListProjects(session.token, session.user.id);
+      const wynik = sprawdzLimit(lista, "protokoly", protokolyId);
+      if (wynik.zablokowany) {
+        set({ limitBlokada: { rodzaj: "protokoly", komunikat: wynik.komunikat } });
+        return;
+      }
+      // Do dokumentu idą WYŁĄCZNIE dane protokołów — bez planu, kondygnacji i
+      // podkładów. To one czynią z tego dokument niezależny od projektowania.
+      const data = { kind: "protokoly", docHeader, protocols } as unknown as Record<string, unknown>;
+      const tytul = nazwa.trim() || docHeader.obiekt || "Protokoły";
+      if (protokolyId) {
+        await supaUpdateProject(session.token, protokolyId, { name: tytul, data, updated_at: new Date().toISOString() });
+      } else {
+        const [row] = await supaInsertProject(session.token, { user_id: session.user.id, name: tytul, data });
+        set({ protokolyId: row.id });
+      }
+      set({ protokolyNazwa: tytul, lastCloudSaveAt: Date.now() });
+    } catch (e) {
+      set({ cloudSaveError: e instanceof Error ? e.message : "Nie udało się zapisać protokołów" });
+    } finally {
+      set({ cloudBusy: false });
+    }
+  },
+
+  loadProtokolyFromCloud: async (id) => {
+    const { session } = get();
+    if (!session) return;
+    set({ cloudBusy: true, cloudSaveError: null });
+    try {
+      const [row] = await supaGetProject(session.token, id);
+      if (!row) throw new Error("Nie znaleziono zestawu protokołów");
+      const data = row.data as { docHeader?: DocumentHeader; protocols?: Partial<Record<ProtocolKey, ProtocolState>> };
+      set({
+        // Nagłówek i protokoły podmieniamy w całości; plan zostaje nietknięty, bo
+        // zestaw protokołów nic o nim nie wie i nie ma prawa go nadpisać.
+        docHeader: { ...get().docHeader, ...(data.docHeader ?? {}) },
+        protocols: data.protocols ?? {},
+        protokolyId: row.id,
+        protokolyNazwa: row.name || "Protokoły",
+      });
+    } catch (e) {
+      set({ cloudSaveError: e instanceof Error ? e.message : "Nie udało się wczytać protokołów" });
     } finally {
       set({ cloudBusy: false });
     }

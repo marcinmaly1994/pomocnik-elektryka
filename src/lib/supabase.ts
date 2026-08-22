@@ -54,6 +54,8 @@ export interface CloudProjectListItem {
   id: string;
   name: string;
   updated_at: string;
+  /** `null` dla zapisow sprzed rozdzielenia rodzajow — patrz `rodzajDokumentu`. */
+  kind?: string | null;
 }
 
 export interface CloudProjectRow {
@@ -114,8 +116,18 @@ export function supaUpdateUser(token: string, patch: { password?: string; email?
   return sbFetch<SupaUser>("/auth/v1/user", { method: "PUT", body: patch, token });
 }
 
+/**
+ * Lista WSZYSTKICH dokumentow konta — projektow i zestawow protokolow razem.
+ * Rodzaj siedzi w `data->>kind`, wiec wyciagamy go aliasem i rozdzielamy po stronie
+ * aplikacji (patrz `lib/dokumenty.ts`). Filtrowanie po stronie serwera wymagaloby
+ * skladni `or=(...)` dla zapisow bez `kind`, a te trzeba i tak obsluzyc — prosciej
+ * i pewniej zrobic to w jednym miejscu.
+ */
 export function supaListProjects(token: string, userId: string) {
-  return sbFetch<CloudProjectListItem[]>(`/rest/v1/projects?user_id=eq.${userId}&select=id,name,updated_at&order=updated_at.desc`, { token });
+  return sbFetch<CloudProjectListItem[]>(
+    `/rest/v1/projects?user_id=eq.${userId}&select=id,name,updated_at,kind:data->>kind&order=updated_at.desc`,
+    { token },
+  );
 }
 
 export function supaInsertProject(token: string, row: { user_id: string; name: string; data: Record<string, unknown> }) {

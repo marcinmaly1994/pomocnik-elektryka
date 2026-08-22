@@ -292,6 +292,8 @@ export default function App() {
   const setSession = useProjectStore((s) => s.setSession);
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const cloudSaveError = useProjectStore((s) => s.cloudSaveError);
+  const limitBlokada = useProjectStore((s) => s.limitBlokada);
+  const setLimitBlokada = useProjectStore((s) => s.setLimitBlokada);
   const saveToCloud = useProjectStore((s) => s.saveToCloud);
   const loadFromCloud = useProjectStore((s) => s.loadFromCloud);
   const resetProject = useProjectStore((s) => s.resetProject);
@@ -526,12 +528,19 @@ export default function App() {
 
       {session && (
         <ProjectsModal
-          open={projectsOpen}
+          open={projectsOpen || limitBlokada?.rodzaj === "projekt"}
           session={session}
-          onClose={() => setProjectsOpen(false)}
+          rodzaj="projekt"
+          onClose={() => {
+            setProjectsOpen(false);
+            setLimitBlokada(null);
+          }}
           onLoad={loadCloudProject}
           busyMsg={cloudBusy ? "Wczytywanie…" : undefined}
           loadError={cloudSaveError}
+          // Przy pełnym limicie okno otwiera się SAMO z komunikatem — bo zapis się
+          // nie udał i użytkownik musi tu podjąć decyzję, a nie szukać, gdzie kliknąć.
+          limitMsg={limitBlokada?.rodzaj === "projekt" ? limitBlokada.komunikat : null}
         />
       )}
 

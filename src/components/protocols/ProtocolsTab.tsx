@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronRight, Download, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
 import { downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { resolveDocHeader } from "@/lib/docHeader";
+import { ProjectsModal } from "@/components/auth/ProjectsModal";
 import type { ProtocolKey } from "@/types";
 
 const HEADER_FIELDS: [string, string][] = [
@@ -57,6 +58,25 @@ export function ProtocolsTab() {
    *  a nie część protokołu. */
   const [daneZwiniete, setDaneZwiniete] = useState(odczytajDaneZwiniete);
   const [nazwaObwodu, setNazwaObwodu] = useState("");
+
+  const session = useProjectStore((s) => s.session);
+  const cloudBusy = useProjectStore((s) => s.cloudBusy);
+  const cloudSaveError = useProjectStore((s) => s.cloudSaveError);
+  const protokolyId = useProjectStore((s) => s.protokolyId);
+  const protokolyNazwa = useProjectStore((s) => s.protokolyNazwa);
+  const saveProtokolyToCloud = useProjectStore((s) => s.saveProtokolyToCloud);
+  const loadProtokolyFromCloud = useProjectStore((s) => s.loadProtokolyFromCloud);
+  const nowyZestawProtokolow = useProjectStore((s) => s.nowyZestawProtokolow);
+  const limitBlokada = useProjectStore((s) => s.limitBlokada);
+  const setLimitBlokada = useProjectStore((s) => s.setLimitBlokada);
+  const [zestawyOpen, setZestawyOpen] = useState(false);
+  const [nazwaZestawu, setNazwaZestawu] = useState("");
+
+  // Nazwa wczytanego zestawu wchodzi do pola, żeby „Zapisz zmiany” nie tworzyło
+  // dokumentu o pustej nazwie po wczytaniu istniejącego.
+  useEffect(() => {
+    if (protokolyNazwa) setNazwaZestawu(protokolyNazwa);
+  }, [protokolyNazwa]);
 
   function przelaczDane() {
     setDaneZwiniete((zwiniete) => {
@@ -117,6 +137,46 @@ export function ProtocolsTab() {
           dane ogólne, uzupełnij wyniki, pobierz gotowy protokół w PDF.
         </p>
       </div>
+
+      {/* Zapis na koncie — protokoły są OSOBNYM dokumentem, niezależnym od projektu
+          instalacji. Pomiary pięcioletnie robi się w obiektach, których się nie
+          projektowało, więc wiązanie ich z planem zmuszałoby do zakładania pustych
+          projektów tylko po to, żeby mieć gdzie zapisać wyniki. */}
+      {session && (
+        <div className="pe-card flex flex-wrap items-center gap-2 p-3">
+          <span className="text-xs text-slate-500">Zestaw protokołów:</span>
+          <input
+            value={nazwaZestawu}
+            onChange={(e) => setNazwaZestawu(e.target.value)}
+            placeholder={header.obiekt || "np. Przegląd 5-letni — Hala nr 3"}
+            aria-label="Nazwa zestawu protokołów"
+            className="pe-input min-w-0 flex-1 text-sm"
+            style={{ maxWidth: 320 }}
+          />
+          <button
+            onClick={() => saveProtokolyToCloud(nazwaZestawu)}
+            disabled={cloudBusy}
+            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
+          >
+            <Save size={14} /> {protokolyId ? "Zapisz zmiany" : "Zapisz na koncie"}
+          </button>
+          <button onClick={() => setZestawyOpen(true)} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+            <FolderOpen size={14} /> Moje zestawy
+          </button>
+          {protokolyId && (
+            <button
+              onClick={() => {
+                if (confirm("Zacząć nowy, pusty zestaw protokołów? Bieżący zostaje zapisany na koncie.")) nowyZestawProtokolow();
+                setNazwaZestawu("");
+              }}
+              className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs"
+            >
+              <FilePlus2 size={14} /> Nowy zestaw
+            </button>
+          )}
+          {cloudSaveError && <span className="text-xs text-red-600">{cloudSaveError}</span>}
+        </div>
+      )}
 
       <div className="pe-card p-5">
         {/* Nagłówek jest przyciskiem zwijającym. Po zwinięciu pokazuje PODSUMOWANIE
@@ -405,6 +465,27 @@ export function ProtocolsTab() {
           </div>
         )}
       </div>
+
+      {session && (
+        <ProjectsModal
+          // Przy pełnym limicie okno otwiera się SAMO — zapis się nie udał, więc
+          // użytkownik musi tu wybrać, co usunąć, zamiast szukać, gdzie kliknąć.
+          open={zestawyOpen || limitBlokada?.rodzaj === "protokoly"}
+          session={session}
+          rodzaj="protokoly"
+          onClose={() => {
+            setZestawyOpen(false);
+            setLimitBlokada(null);
+          }}
+          onLoad={async (id) => {
+            await loadProtokolyFromCloud(id);
+            setZestawyOpen(false);
+          }}
+          busyMsg={cloudBusy ? "Wczytywanie…" : undefined}
+          loadError={cloudSaveError}
+          limitMsg={limitBlokada?.rodzaj === "protokoly" ? limitBlokada.komunikat : null}
+        />
+      )}
     </div>
   );
 }
