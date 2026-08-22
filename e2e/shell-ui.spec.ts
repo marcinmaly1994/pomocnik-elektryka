@@ -140,3 +140,43 @@ test("przycisk Pomoc otwiera okno z opisem aplikacji i krokami startowymi", asyn
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("siatkę da się wyłączyć niezależnie od przyciągania", async ({ page }) => {
+  await page.goto("/");
+  // DesignTab ładuje się leniwie — bez tego pomiar trafia w moment przed powstaniem płótna.
+  await page.waitForSelector(".konvajs-content canvas");
+
+  /**
+   * Liczba jasnoszarych pikseli na płótnie. Linie siatki są wygładzane przy
+   * skalowaniu, więc dokładne dopasowanie koloru nic nie da — liczymy cały zakres
+   * odcieni i porównujemy STOSUNEK między stanami. W kadrze są też inne jasne
+   * elementy (obwódka planu), więc po wyłączeniu siatki wynik nie spada do zera.
+   */
+  const jasnePiksele = () =>
+    page.evaluate(() => {
+      const c = document.querySelectorAll(".konvajs-content canvas")[0] as HTMLCanvasElement;
+      const d = c.getContext("2d")!.getImageData(0, 0, c.width, Math.min(400, c.height)).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] > 225 && d[i] < 245 && d[i + 1] > 230 && d[i + 1] < 248) n++;
+      }
+      return n;
+    });
+
+  const zSiatka = await jasnePiksele();
+  expect(zSiatka).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Wyłącz siatkę" }).click();
+  await page.waitForTimeout(400);
+  const bezSiatki = await jasnePiksele();
+  // Siatka to zdecydowana większość jasnych pikseli — po wyłączeniu musi ich ubyć
+  // co najmniej o połowę. Zmierzone w praktyce: spadek o ~68%.
+  expect(bezSiatki).toBeLessThan(zSiatka * 0.5);
+
+  // Przyciąganie to OSOBNA kontrolka i wyłączenie kratki nie może jej ruszyć.
+  await expect(page.getByLabel("Przyciągaj do siatki")).toBeVisible();
+
+  await page.getByRole("button", { name: "Włącz siatkę" }).click();
+  await page.waitForTimeout(400);
+  expect(await jasnePiksele()).toBe(zSiatka);
+});

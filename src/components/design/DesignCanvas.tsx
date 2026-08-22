@@ -66,6 +66,9 @@ interface DesignCanvasProps {
   toolMode: ToolMode;
   roomMode: RoomDrawMode;
   snapOn: boolean;
+  /** Czy rysować siatkę pomocniczą. Niezależne od `snapOn` — patrz komentarz przy
+   *  renderowaniu siatki. */
+  gridOn: boolean;
   selected: Selection;
   multiSelected: string[];
   drawingWall: Point[];
@@ -187,6 +190,7 @@ export function DesignCanvas({
   toolMode,
   roomMode,
   snapOn,
+  gridOn,
   selected,
   multiSelected,
   drawingWall,
@@ -230,6 +234,19 @@ export function DesignCanvas({
   onCloseRoomPolygon,
   onAddCalibPoint,
 }: DesignCanvasProps) {
+  /**
+   * Wymuszone przerysowanie warstwy tła po przełączeniu siatki.
+   *
+   * react-konva nakłada `visible` na istniejące węzły, ale samo z siebie NIE
+   * odrysowuje warstwy — zmierzone: prop docierał do płótna (`true` → `false`),
+   * a linie zostawały na ekranie. Widać to było tylko przy zmianie, która i tak
+   * wymusza pełne odrysowanie (np. powiększenie), więc błąd łatwo wziąć za
+   * „przełącznik nie działa".
+   */
+  useEffect(() => {
+    warstwaTlaRef.current?.batchDraw();
+  }, [gridOn]);
+
   const bgImage = useBackgroundImage(bgImageUrl);
   /** Kontener przewijania — to jego `scrollLeft`/`scrollTop` wyznacza kadr planu.
    *  Wszystkie drogi przesuwania i przybliżania działają wyłącznie na nim. */
@@ -243,6 +260,9 @@ export function DesignCanvas({
   const [przesuwa, setPrzesuwa] = useState(false);
 
   const layerRef = useRef<Konva.Layer>(null);
+  /** Warstwa tła z siatką — potrzebna, żeby wymusić jej przerysowanie po zmianie
+   *  widoczności siatki (patrz efekt niżej). */
+  const warstwaTlaRef = useRef<Konva.Layer>(null);
   const elementNodesRef = useRef<Map<string, Konva.Group>>(new Map());
   // Węzły obrysu pomieszczenia — wizualny (wypełnienie) i „hitowy" (krawędź do
   // klikania) trzymają TE SAME punkty, więc podczas przeciągania narożnika trzeba
@@ -620,15 +640,32 @@ export function DesignCanvas({
         onContextMenu={handleStageContextMenu}
         style={{ background: "#F7F9FB", cursor: toolMode === "pan" ? "grab" : toolMode === "zaznacz" ? "default" : "crosshair" }}
       >
-        <Layer listening={false}>
+        {/* `key` zalezny od siatki PRZEMONTOWUJE warstwe przy przelaczeniu. Zwykla
+            zmiana `visible` na istniejacych wezlach nie odswiezala rysunku — prop
+            docieral do plotna (zmierzone: true -> false), ale linie zostawaly na
+            ekranie, a `batchDraw` na warstwie tego nie naprawial. Przemontowanie
+            tworzy plotno warstwy od nowa, wiec stan zawsze zgadza sie z widokiem.
+            Koszt jest znikomy: to gest uzytkownika, nie cos, co dzieje sie w petli. */}
+        <Layer listening={false} key={gridOn ? "tlo-z-siatka" : "tlo-bez-siatki"} ref={warstwaTlaRef}>
           <Rect x={0} y={0} width={planSize.w} height={planSize.h} fill="#F7F9FB" />
           {bgImage && <KonvaImage image={bgImage} x={0} y={0} width={planSize.w} height={planSize.h} opacity={0.85} />}
-          {Array.from({ length: Math.floor(planSize.w / GRID) + 1 }, (_, i) => i * GRID).map((x) => (
-            <Line key={`gx${x}`} points={[x, 0, x, planSize.h]} stroke="#E1E7EC" strokeWidth={1} />
-          ))}
-          {Array.from({ length: Math.floor(planSize.h / GRID) + 1 }, (_, i) => i * GRID).map((y) => (
-            <Line key={`gy${y}`} points={[0, y, planSize.w, y]} stroke="#E1E7EC" strokeWidth={1} />
-          ))}
+          {/* Siatkę da się wyłączyć niezależnie od przyciągania. To dwie różne rzeczy:
+              przyciąganie porządkuje RYSOWANIE, a siatka jest tylko widoczna — i przy
+              wgranym rzucie potrafi zwyczajnie przeszkadzać, przykrywając cienkie
+              linie podkładu. Wyłączenie jej nie zmienia sposobu stawiania elementów. */}
+          {/* `visible`, a nie warunek przed `map`. Węzły zostają zamontowane i tylko
+              zmieniają widoczność — usuwanie ich z drzewa nie przerysowywało warstwy
+              i siatka zostawała na płótnie mimo wyłączenia (zmierzone: ta sama liczba
+              linii w obu stanach). Zmiana `visible` na istniejącym węźle wymusza
+              odrysowanie, więc przełącznik działa natychmiast. */}
+          {gridOn &&
+            Array.from({ length: Math.floor(planSize.w / GRID) + 1 }, (_, i) => i * GRID).map((x) => (
+              <Line key={`gx${x}`} points={[x, 0, x, planSize.h]} stroke="#E1E7EC" strokeWidth={1} />
+            ))}
+          {gridOn &&
+            Array.from({ length: Math.floor(planSize.h / GRID) + 1 }, (_, i) => i * GRID).map((y) => (
+              <Line key={`gy${y}`} points={[0, y, planSize.w, y]} stroke="#E1E7EC" strokeWidth={1} />
+            ))}
           {/* Widoczna granica obszaru roboczego — po oddaleniu widoku wokół planu robi się
               puste tło i bez obwódki nie było wiadomo, dokąd wolno stawiać elementy. */}
           <Rect x={0} y={0} width={planSize.w} height={planSize.h} stroke="#C3CDD7" strokeWidth={1.5} />

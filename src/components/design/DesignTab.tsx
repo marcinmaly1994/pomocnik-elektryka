@@ -148,6 +148,8 @@ export interface DesignTabProps {
 
 export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const session = useProjectStore((s) => s.session);
+  const saveToCloud = useProjectStore((s) => s.saveToCloud);
+  const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const setDraft = useProjectStore((s) => s.setDraft);
   const addRoomShape = useProjectStore((s) => s.addRoomShape);
@@ -184,6 +186,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [dedicated, setDedicated] = useState(false);
   const [gangsByType, setGangsByType] = useState<Partial<Record<ElementType, number>>>({});
   const [snapOn, setSnapOn] = useState(false);
+  /** Widoczność siatki — osobno od przyciągania. Domyślnie włączona, bo bez rzutu
+   *  pod spodem to jedyny punkt odniesienia przy rysowaniu od zera. */
+  const [gridOn, setGridOn] = useState(true);
   const [selected, setSelected] = useState<Selection>(null);
   const [multiSelected, setMultiSelected] = useState<string[]>([]);
   const [drawingWall, setDrawingWall] = useState<Point[]>([]);
@@ -995,6 +1000,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         onPickBg={() => fileRef.current?.click()}
         onClearBg={() => setBgImage(activeFloorId, null)}
         snapOn={snapOn}
+        gridOn={gridOn}
+        onGridChange={setGridOn}
+        onZapisz={session ? () => void saveToCloud({ reczny: true }) : null}
+        zapisTrwa={cloudBusy}
         onSnapChange={setSnapOn}
         elementScale={elementScale}
         onElementScaleChange={setElementScale}
@@ -1406,6 +1415,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             toolMode={toolMode}
             roomMode={roomMode}
             snapOn={snapOn}
+            gridOn={gridOn}
             selected={selected}
             multiSelected={multiSelected}
             drawingWall={drawingWall}

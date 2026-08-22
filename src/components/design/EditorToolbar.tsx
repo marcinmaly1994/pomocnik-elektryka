@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Eye, EyeOff, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Scan, Undo2 } from "lucide-react";
+import { Eye, EyeOff, Grid3x3, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Save, Scan, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
 import { FloorBar } from "./FloorBar";
@@ -37,8 +37,15 @@ export interface EditorToolbarProps {
   onZoomChange: (z: number) => void;
   /** Dopasowanie rzutu do dostępnego miejsca — wraca też do trybu automatycznego. */
   onDopasuj: () => void;
+  /** Widoczność siatki — osobno od `snapOn`, patrz komentarz przy obu kontrolkach. */
+  gridOn: boolean;
+  onGridChange: (v: boolean) => void;
   pelnyEkran: boolean;
   onTogglePelnyEkran: () => void;
+  /** Ręczny zapis projektu. `null`, gdy użytkownik nie jest zalogowany — wtedy
+   *  przycisk się nie pokazuje, bo nie ma dokąd zapisywać poza tą przeglądarką. */
+  onZapisz?: (() => void) | null;
+  zapisTrwa?: boolean;
   /** Miejsce na pinezkę przypinającą pasek w trybie pełnoekranowym. Wstawiane
    *  przez rodzica jako gniazdo, bo sam pasek nic nie wie o chowaniu się za
    *  krawędź — to sprawa układu, nie kontrolek widoku. */
@@ -60,6 +67,10 @@ export function EditorToolbar({
   onClearBg,
   snapOn,
   onSnapChange,
+  gridOn,
+  onGridChange,
+  onZapisz,
+  zapisTrwa,
   elementScale,
   onElementScaleChange,
   defaultElementScale,
@@ -111,9 +122,21 @@ export function EditorToolbar({
 
       <Separator />
 
-      {/* Widoczne etykiety skrócone do jednego słowa, ale nazwy dostępnościowe zostają
-          pełne: przy checkboxie „Siatka" wystarczy, a czytnik ekranu i testy nadal
-          dostają „Przyciągaj do siatki". */}
+      {/* Dwie RÓŻNE rzeczy stojące obok siebie, obie z pełną nazwą — skrót „Siatka"
+          przy jednej z nich zacierał różnicę. Przełącznik decyduje, czy siatkę WIDAĆ;
+          checkbox — czy elementy się do niej PRZYCIĄGAJĄ. Można wyłączyć samą kratkę
+          (przeszkadza na wgranym rzucie) i dalej rysować z przyciąganiem. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onGridChange(!gridOn)}
+        title={gridOn ? "Wyłącz siatkę" : "Włącz siatkę"}
+        aria-label={gridOn ? "Wyłącz siatkę" : "Włącz siatkę"}
+        aria-pressed={gridOn}
+      >
+        <Grid3x3 size={15} className={gridOn ? "text-copper" : undefined} />
+      </Button>
+
       <label className="flex items-center gap-1.5 text-xs text-slate-500" title="Przyciągaj do siatki">
         <input
           type="checkbox"
@@ -122,7 +145,7 @@ export function EditorToolbar({
           aria-label="Przyciągaj do siatki"
           className="accent-copper"
         />
-        Siatka
+        Przyciągaj do siatki
       </label>
 
       {/* Rozmiar SYMBOLI, nie powiększenie planu — to dwie różne rzeczy i dlatego
@@ -212,6 +235,16 @@ export function EditorToolbar({
       >
         {pelnyEkran ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
       </Button>
+
+      {/* Zapis stał dotąd WYŁĄCZNIE w menu przy profilu — czyli tam, gdzie nikt nie
+          zagląda w trakcie rysowania. Autozapis i tak działa w tle, ale świadome
+          „zapisz teraz" musi być pod ręką: to ono daje pewność, że praca jest
+          odłożona, zanim zamknie się kartę. */}
+      {onZapisz && (
+        <Button variant="copper" size="sm" onClick={onZapisz} disabled={zapisTrwa} title="Zapisz projekt na koncie">
+          <Save size={14} /> Zapisz
+        </Button>
+      )}
 
       {przypinacz}
     </div>
