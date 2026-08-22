@@ -74,6 +74,21 @@ const SCHEMA_HEIGHT = TABLE_BOTTOM + 14;
 const TABLE_CELL_PAD = 8;
 const TABLE_CHARS_PER_LINE = Math.floor((LEAF_W - TABLE_CELL_PAD) / 4.3);
 
+/**
+ * Opis aparatu z liczbą biegunów: „3P · B16”, „1P+N · B16/30mA”.
+ *
+ * Liczba biegunów jest częścią doboru, a nie ozdobnikiem — z samego „B16” nie wynika,
+ * czy chodzi o zabezpieczenie jednofazowe, czy trójfazowe, a to zmienia i aparat,
+ * i miejsce w rozdzielnicy. Wcześniej pokazywał ją wyłącznie rozłącznik główny.
+ *
+ * Aparaty bez sensownej liczby biegunów (np. zasilacz modułowy) mają w katalogu „—”;
+ * dla nich zostaje sam opis, bo „— · 12V DC” niczego nie wnosi.
+ */
+function opisZBiegunami(device: PanelDevice): string {
+  const bieguny = device.poles?.trim();
+  return bieguny && bieguny !== "—" ? `${bieguny} · ${device.label}` : device.label;
+}
+
 function truncate(s: string, max: number) {
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
@@ -121,7 +136,7 @@ function MainSwitch({ x, device }: { x: number; device: PanelDevice }) {
         {device.tag}
       </text>
       <text x={x + dx} y={Y_SWITCH_TOP + 22} fontSize={10} fill={STROKE}>
-        {device.poles} · {device.label}
+        {opisZBiegunami(device)}
       </text>
       <text x={x + dx} y={Y_SWITCH_TOP + 34} fontSize={8.5} fill={MUTED}>
         {truncate(device.caption, 28)}
@@ -146,7 +161,7 @@ function SpdBranch({ col, device }: { col: Column; device: PanelDevice }) {
         {device.tag}
       </text>
       <text x={x + dx} y={Y_BUS + 56} fontSize={9} fill={MUTED}>
-        {device.label}
+        {opisZBiegunami(device)}
       </text>
     </g>
   );
@@ -163,7 +178,7 @@ function RcdBranch({ col, device }: { col: Column; device: PanelDevice }) {
         {device.tag}
       </text>
       <text x={x + dx} y={Y_BUS + 46} fontSize={9} fill={MUTED}>
-        {device.label}
+        {opisZBiegunami(device)}
       </text>
     </g>
   );
@@ -247,7 +262,7 @@ function CircuitBranch({ x, device }: { x: number; device: PanelDevice }) {
         {device.tag}
       </text>
       <text x={x + MCB_LABEL_DX} y={Y_MCB_TOP + MCB_H / 2 + 8} fontSize={8.5} fontWeight={700} textAnchor="start" fill={MUTED}>
-        {device.label}
+        {opisZBiegunami(device)}
       </text>
       {/* Nazwa odbiornika celowo NIE jest powtarzana tutaj — stoi w tabeli odpływów pod
           schematem, dokładnie w tej samej kolumnie. Wcześniej była w obu miejscach, w obu

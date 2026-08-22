@@ -336,7 +336,14 @@ export default function App() {
     await loadFromCloud(id);
     // `loadFromCloud` łapie błędy sam (ustawia `cloudSaveError`, nie rzuca) —
     // modal zamykamy tylko przy powodzeniu, żeby błąd nie zniknął razem z nim.
-    if (!useProjectStore.getState().cloudSaveError) setProjectsOpen(false);
+    if (!useProjectStore.getState().cloudSaveError) {
+      setProjectsOpen(false);
+      // Po wczytaniu pokazujemy PLAN, niezależnie od tego, z której zakładki
+      // otwarto listę. Projekt to przede wszystkim rzut — wylądowanie w kosztorysie
+      // albo w protokołach zostawiało użytkownika bez widocznego potwierdzenia,
+      // że cokolwiek się wczytało.
+      setTab("projekt");
+    }
   }
 
   return (
