@@ -142,6 +142,66 @@ test("pasek kontrolek stoi tuż nad płótnem, bez pustego rzędu pod spodem", a
   expect(odstep).toBeLessThan(12);
 });
 
+/** Grubość widocznego paska przewijania danego kontenera, w pikselach. Liczona
+ *  z różnicy `offset*` i `client*` pomniejszonej o obramowanie — to jedyny sposób,
+ *  żeby zmierzyć FAKTYCZNIE wyrenderowany suwak, a nie samą deklarację CSS. */
+async function gruboscSuwakow(page: Page, selektor: string) {
+  return page.locator(selektor).first().evaluate((el) => {
+    const cs = getComputedStyle(el);
+    const ramkaX = parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+    const ramkaY = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    return {
+      pion: Math.round(el.offsetWidth - el.clientWidth - ramkaX),
+      poziom: Math.round(el.offsetHeight - el.clientHeight - ramkaY),
+      maCoPrzewijac: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1,
+    };
+  });
+}
+
+test("plan po przybliżeniu przewija się, ale bez widocznych suwaków", async ({ page }) => {
+  await page.goto("/");
+
+  // Przybliżamy, aż rysunek przestanie się mieścić w oknie — dopiero wtedy
+  // przeglądarka ma powód, żeby pokazać suwaki.
+  for (let i = 0; i < 12; i++) await page.getByRole("button", { name: "Przybliż widok" }).click();
+
+  const plotno = await gruboscSuwakow(page, "div.overflow-auto.rounded-card.border");
+  expect(plotno.maCoPrzewijac).toBe(true); // test miałby zerową wartość, gdyby nie było co przewijać
+  expect(plotno.pion).toBe(0);
+  expect(plotno.poziom).toBe(0);
+});
+
+test("panel narzędzi w pełnym ekranie ma JEDEN obszar przewijania, bez suwaków", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
+
+  // Zagnieżdżone przewijanie (panel + lista w środku) dawało dwa suwaki obok
+  // siebie. Przewijać ma się WYŁĄCZNIE lista elementów.
+  const przewijalne = await page.evaluate(() => {
+    const out: { klasa: string; suwakPion: number; suwakPoziom: number }[] = [];
+    for (const el of document.querySelectorAll("div,nav")) {
+      const cs = getComputedStyle(el);
+      if (!/auto|scroll/.test(cs.overflowY + cs.overflowX)) continue;
+      const h = el as HTMLElement;
+      if (!(el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) continue;
+      out.push({
+        klasa: typeof el.className === "string" ? el.className : "",
+        suwakPion: Math.round(h.offsetWidth - el.clientWidth - (parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth))),
+        suwakPoziom: Math.round(h.offsetHeight - el.clientHeight - (parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth))),
+      });
+    }
+    return out;
+  });
+
+  // Ani jeden realnie przewijalny kontener nie może rysować paska.
+  for (const k of przewijalne) {
+    expect(k.suwakPion, `suwak pionowy w: ${k.klasa}`).toBe(0);
+    expect(k.suwakPoziom, `suwak poziomy w: ${k.klasa}`).toBe(0);
+  }
+});
+
 test("kondygnacje mieszkają w jednym pasku razem z podkładem i siatką", async ({ page }) => {
   await page.goto("/");
 

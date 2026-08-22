@@ -45,7 +45,10 @@ export function ToolRail({
       // Bez własnej ramki i tła: pasek jest LEWĄ KRAWĘDZIĄ wspólnej karty z panelem,
       // a nie osobnym kafelkiem. Delikatne tło odróżnia go od zawartości panelu tak,
       // jak activity bar odróżnia się od panelu bocznego w VS Code.
-      className="flex shrink-0 flex-row gap-1 overflow-x-auto border-r border-border p-1.5 md:flex-col md:overflow-visible"
+      // `md:overflow-y-auto` zamiast `md:overflow-visible`: w pełnym ekranie karta
+      // narzędzi ma `overflow-hidden`, więc na niskim oknie ostatnie narzędzia
+      // zostałyby ucięte bez żadnego sposobu, żeby do nich dotrzeć.
+      className="pe-bez-suwaka flex shrink-0 flex-row gap-1 overflow-x-auto border-r border-border p-1.5 md:flex-col md:overflow-x-visible md:overflow-y-auto"
       style={{ background: "#F7F9FB" }}
     >
       {RAIL_TOOLS.map(({ id, label, icon: Icon, hint }) => {

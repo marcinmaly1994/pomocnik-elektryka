@@ -11,11 +11,22 @@ interface ElementLibraryProps {
   onSetGangs: (type: ElementType, gangs: number) => void;
   dedicated: boolean;
   onToggleDedicated: (dedicated: boolean) => void;
+  /** Lista ma wypełnić wysokość rodzica zamiast kończyć się na 560 px. Włączane
+   *  w trybie pełnoekranowym, gdzie panel ma znaną, pełną wysokość okna. */
+  wypelnijWysokosc?: boolean;
 }
 
 /** Biblioteka elementów do umieszczania na planie: akordeon sekcji, szukajka,
  *  wybór liczby gniazd/klawiszy w ramce tam, gdzie dany typ na to pozwala. */
-export function ElementLibrary({ activeType, onPick, gangs, onSetGangs, dedicated, onToggleDedicated }: ElementLibraryProps) {
+export function ElementLibrary({
+  activeType,
+  onPick,
+  gangs,
+  onSetGangs,
+  dedicated,
+  onToggleDedicated,
+  wypelnijWysokosc = false,
+}: ElementLibraryProps) {
   const [openSection, setOpenSection] = useState<string | null>(
     () => ELEMENT_SECTIONS.find((s) => s.items.some((i) => i.key === activeType))?.title ?? ELEMENT_SECTIONS[0].title
   );
@@ -32,7 +43,7 @@ export function ElementLibrary({ activeType, onPick, gangs, onSetGangs, dedicate
     : ELEMENT_SECTIONS;
 
   return (
-    <div className="w-64 shrink-0">
+    <div className={wypelnijWysokosc ? "flex min-h-0 w-64 flex-1 shrink-0 flex-col" : "w-64 shrink-0"}>
       <div className="relative mb-3">
         <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -48,7 +59,18 @@ export function ElementLibrary({ activeType, onPick, gangs, onSetGangs, dedicate
         )}
       </div>
 
-      <div className="pe-scroll space-y-1.5 overflow-y-auto pr-1" style={{ maxHeight: 560 }}>
+      {/* W pełnym ekranie lista rozciąga się na całą dostępną wysokość panelu
+          (`flex-1` + `min-h-0`), zamiast kończyć się na sztywnych 560 px. Bez tego
+          panel i lista przewijały się NIEZALEŻNIE — dwa suwaki jeden przy drugim,
+          i to pierwsze, co rzucało się w oczy po wysunięciu narzędzi. */}
+      <div
+        className={
+          wypelnijWysokosc
+            ? "pe-bez-suwaka min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1"
+            : "pe-bez-suwaka space-y-1.5 overflow-y-auto pr-1"
+        }
+        style={wypelnijWysokosc ? undefined : { maxHeight: 560 }}
+      >
         {visibleSections.map((section) => {
           const isOpen = !!query || openSection === section.title;
           return (

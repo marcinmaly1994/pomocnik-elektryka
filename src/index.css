@@ -100,6 +100,24 @@ body {
     border-radius: 8px;
   }
 
+  /**
+   * Chowa suwaki, NIE przewijanie.
+   *
+   * Systemowe paski w oknie z rysunkiem wyglądają jak menedżer plików, a nie jak
+   * narzędzie do projektowania — żaden poważny edytor graficzny ich nie pokazuje.
+   * Przewijanie zostaje w pełni sprawne: kółko myszy (bez Ctrl nie jest
+   * przechwytywane), gest touchpada, Shift+kółko w poziomie oraz narzędzie
+   * „Przesuń widok" z paska. Znika wyłącznie chrom.
+   */
+  .pe-bez-suwaka {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* starszy Edge */
+  }
+  .pe-bez-suwaka::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
   /* Onboarding: subtelne wejście/wyjście karty i dymka podpowiedzi.
      Wszystko poniżej jest wyłączane przy prefers-reduced-motion — animacja ma
      zwracać uwagę, a nie fundować chorobę lokomocyjną komuś, kto prosił o spokój. */

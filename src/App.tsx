@@ -443,7 +443,10 @@ export default function App() {
           <span className="text-sm text-slate-400">Projekt:</span>
           <ProjectNameField />
         </div>
-        <div className="pe-scroll -mx-1 flex items-center gap-2 overflow-x-auto px-1 py-0.5">
+        {/* Bez widocznego suwaka: to pasek nawigacji, a nie okno z treścią. Że da
+            się przewinąć, widać po przyciętej karcie następnego etapu — tak samo
+            jak w paskach kart przeglądarki. */}
+        <div className="pe-bez-suwaka -mx-1 flex items-center gap-2 overflow-x-auto px-1 py-0.5">
           <FlowCard
             step="01"
             title="Instalacja"

@@ -1050,7 +1050,13 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           }}
           />
 
-          <div className={pelnyEkran ? "overflow-y-auto border-l border-border p-2" : "border-l border-border p-2"} style={{ width: 268 }}>
+          {/* W pełnym ekranie panel NIE przewija się sam — jest kolumną o pełnej
+              wysokości, a przewijanie oddaje liście elementów w środku. Wcześniej
+              przewijały się oba naraz i pokazywały dwa suwaki obok siebie. */}
+          <div
+            className={pelnyEkran ? "flex min-h-0 flex-col overflow-hidden border-l border-border p-2" : "border-l border-border p-2"}
+            style={{ width: 268 }}
+          >
           {/* Wgranie rzutu to pierwsza czynność w całym przepływie, więc stoi na samej
               górze kolumny. Wcześniej wisiało POD biblioteką elementów, czyli ~1000 px
               niżej, poza pierwszym ekranem — użytkownik musiał się do niego doscrollować,
@@ -1133,6 +1139,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
 
           {sidebarTab === "elementy" ? (
             <ElementLibrary
+              wypelnijWysokosc={pelnyEkran}
               activeType={activeType}
               onPick={(type) => {
                 setActiveType(type);

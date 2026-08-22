@@ -132,8 +132,12 @@ export function PanelRender({ devices, perRow, onDelete, sizing }: PanelRenderPr
   const svgW = innerW + PAD * 2;
   const svgH = Math.max(rows.length, 1) * rowH + PAD * 2 + LEGEND_H;
 
+  // Rysunek rozdzielnicy traktujemy jak plan: suwak systemowy pod rysunkiem
+  // technicznym wygląda jak podgląd pliku, a nie jak narzędzie. Tabele w kosztorysie
+  // i protokołach ZOSTAWIAMY z widocznym suwakiem — tam pasek niesie informację,
+  // że dalej są kolejne kolumny.
   return (
-    <div className="overflow-x-auto rounded-card border border-border" style={{ background: "#EDF0F3" }}>
+    <div className="pe-bez-suwaka overflow-x-auto rounded-card border border-border" style={{ background: "#EDF0F3" }}>
       <svg
         viewBox={`0 0 ${svgW} ${svgH}`}
         preserveAspectRatio="xMidYMin meet"

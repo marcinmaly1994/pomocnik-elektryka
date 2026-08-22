@@ -501,7 +501,7 @@ export function DesignCanvas({
     // tam, gdzie użytkownik widzi rysunek. `max-w-full` zostawia przewijanie,
     // gdy rzut jest szerszy od kolumny.
     <div
-      className="mx-auto w-fit max-w-full overflow-auto rounded-card border border-border"
+      className="pe-bez-suwaka mx-auto w-fit max-w-full overflow-auto rounded-card border border-border"
       style={{ maxHeight }}
     >
       <Stage
