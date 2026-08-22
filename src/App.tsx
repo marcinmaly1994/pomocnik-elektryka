@@ -311,6 +311,9 @@ export default function App() {
   const oknoZestawowOtwarte = useProjectStore((s) => s.oknoZestawowOtwarte);
   const setOknoZestawow = useProjectStore((s) => s.setOknoZestawow);
   const loadProtokolyFromCloud = useProjectStore((s) => s.loadProtokolyFromCloud);
+  const saveProtokolyToCloud = useProjectStore((s) => s.saveProtokolyToCloud);
+  const pytanieONadpisanie = useProjectStore((s) => s.pytanieONadpisanie);
+  const anulujNadpisanie = useProjectStore((s) => s.anulujNadpisanie);
   const setLimitBlokada = useProjectStore((s) => s.setLimitBlokada);
   const saveToCloud = useProjectStore((s) => s.saveToCloud);
   const loadFromCloud = useProjectStore((s) => s.loadFromCloud);
@@ -593,6 +596,42 @@ export default function App() {
           limitMsg={limitBlokada?.rodzaj === "protokoly" ? limitBlokada.komunikat : null}
         />
       )}
+
+      {/* Potwierdzenie nadpisania. Pojawia się TYLKO wtedy, gdy zapis trafiłby na
+          wpis o tej samej nazwie, którego w tej sesji nie otwieraliśmy — a więc
+          w sytuacji, w której użytkownik mógłby stracić cudzą (albo swoją starszą)
+          pracę, nie wiedząc o tym. Zwykłe „zapisz zmiany” w otwartym dokumencie
+          przechodzi bez pytania, żeby nie pytać przy każdym zapisie. */}
+      <Dialog open={!!pytanieONadpisanie} onOpenChange={(o) => !o && anulujNadpisanie()}>
+        <DialogContent title="Nadpisać istniejący zapis?">
+          <p className="mb-2 text-sm text-slate-600">
+            Na Twoim koncie jest już {pytanieONadpisanie?.rodzaj === "protokoly" ? "zestaw protokołów pomiarowych" : "projekt instalacji"} o nazwie{" "}
+            <strong className="text-ink">„{pytanieONadpisanie?.nazwa}”</strong>.
+          </p>
+          <p className="mb-4 text-xs text-slate-500">
+            Nadpisanie zastąpi tamten zapis bieżącą pracą — poprzedniej wersji nie da się odzyskać. Jeśli chcesz zachować
+            oba, anuluj i zmień nazwę przed zapisem.
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={anulujNadpisanie}>
+              Anuluj
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                const p = pytanieONadpisanie;
+                if (!p) return;
+                anulujNadpisanie();
+                if (p.rodzaj === "protokoly") void saveProtokolyToCloud(p.nazwa, { nadpiszId: p.id });
+                else void saveToCloud({ reczny: true, nadpiszId: p.id });
+              }}
+            >
+              Tak, nadpisz
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {session && accountModalTab && (
         <AccountModal

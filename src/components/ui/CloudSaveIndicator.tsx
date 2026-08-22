@@ -32,7 +32,7 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
       className="flex items-center gap-1 text-xs text-emerald-600"
       title={`Projekt zapisuje się automatycznie w chmurze — dostępny z każdego urządzenia po zalogowaniu. Ostatnio o ${time}`}
     >
-      <Check size={12} /> {compact ? "Zapisano w chmurze" : `Zapisano w chmurze ${time}`}
+      <Check size={12} /> {compact ? "Zapisano" : `Zapisano ${time}`}
     </span>
   );
 }

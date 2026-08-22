@@ -267,10 +267,14 @@ export function PanelTab() {
       </div>
 
       <div className="flex flex-wrap items-start gap-5">
-        {/* Kolumna przylega do rysunku (`flex-none`), zamiast rozciągać się na resztę
-            wiersza: rozdzielnica ma teraz naturalny rozmiar, więc rozciągnięty kontener
-            zostawiał obok niej pas pustego tła. Miejsce dostaje lista aparatów. */}
-        <div className="flex-none">
+        {/* Kolumna rysunku dostaje własną podstawę szerokości (`basis`) zamiast samego
+            `flex-none`. Przy `flex-none` szerokość brał się z zawartości, a rysunek ma
+            `width: 100%` — czyli wymiar zależny od rodzica. Takie wzajemne odwołanie
+            kończyło się na wartości domyślnej i rozdzielnica renderowała się na ~300 px
+            niezależnie od tego, ile miejsca było obok. Teraz kolumna zna swoją szerokość,
+            a rysunek może ją wypełnić; `max-w-full` pilnuje, żeby na wąskim ekranie
+            zmalała zamiast rozpychać układ. */}
+        <div className="w-[720px] max-w-full flex-none">
           <PanelRender devices={devices} perRow={perRow} onDelete={removeDevice} sizing={sizingByDeviceKey} />
         </div>
 

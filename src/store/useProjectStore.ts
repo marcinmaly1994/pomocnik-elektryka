@@ -160,6 +160,16 @@ interface ProjectState {
    *  co 2,5 s i za każdym razem zgłaszał ten sam błąd. Zdejmowana po udanym zapisie
    *  oraz przy ręcznej próbie, którą użytkownik podejmuje po zrobieniu miejsca. */
   autozapisWstrzymany: boolean;
+  /**
+   * Pytanie „nadpisać istniejący dokument o tej nazwie?”.
+   *
+   * Ustawiane, gdy zapis trafia na CUDZY wpis o tej samej nazwie — czyli taki,
+   * którego w tej sesji nie wczytaliśmy ani nie zapisaliśmy. Bez tego pytania
+   * autozapis potrafiłby nadpisać gotowy projekt świeżo otwartą, pustą sesją
+   * o tej samej nazwie, i to bez śladu. Nadpisanie dokumentu, który sami przed
+   * chwilą zapisaliśmy, pytania nie wymaga — to zwykłe „zapisz zmiany”.
+   */
+  pytanieONadpisanie: { rodzaj: RodzajDokumentu; nazwa: string; id: string } | null;
 
   // historia cofnij/ponów — ten sam mechanizm co useHistory() w wersji JS,
   // ale jako część store'a, więc undo/redo działa niezależnie od tego,
@@ -204,7 +214,7 @@ interface ProjectState {
   /** Natychmiastowy zapis w chmurze (bez czekania na debounce autosave'u) — do
    *  przycisku „Zapisz teraz” w menu konta. Ten sam kod ścieżki, którym leci
    *  automatyczny zapis w tle, więc oba mają identyczne zachowanie i błędy. */
-  saveToCloud: (opcje?: { reczny?: boolean }) => Promise<void>;
+  saveToCloud: (opcje?: { reczny?: boolean; nadpiszId?: string }) => Promise<void>;
   /** Wczytuje projekt zapisany w chmurze pod danym id i ustawia go jako bieżący
    *  punkt startowy (czyści historię cofnij/ponów, jak `loadProjectPayload`). */
   loadFromCloud: (id: string) => Promise<void>;
@@ -219,7 +229,9 @@ interface ProjectState {
    *  zarówno przycisk w zakładce, jak i menu przy profilu — jedno okno, dwa wejścia. */
   oknoZestawowOtwarte: boolean;
   setOknoZestawow: (open: boolean) => void;
-  saveProtokolyToCloud: (nazwa: string) => Promise<void>;
+  saveProtokolyToCloud: (nazwa: string, opcje?: { nadpiszId?: string }) => Promise<void>;
+  /** Zamyka pytanie o nadpisanie bez zapisywania. */
+  anulujNadpisanie: () => void;
   loadProtokolyFromCloud: (id: string) => Promise<void>;
   /** Zaczyna nowy, pusty zestaw protokołów — odpina bieżący od zapisu w chmurze. */
   nowyZestawProtokolow: () => void;
@@ -251,6 +263,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   protokolyId: null,
   oknoZestawowOtwarte: false,
   autozapisWstrzymany: false,
+  pytanieONadpisanie: null,
   protokolyNazwa: "",
   limitBlokada: null,
   lastLocalSaveAt: null,
@@ -497,7 +510,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // Zapis pod ISTNIEJĄCĄ NAZWĄ nadpisuje ten projekt, zamiast tworzyć kolejny.
         // Bez tego konto zapychało się kopiami tego samego projektu, a po piątej
         // każdy autozapis odbijał się od limitu.
-        docelowyId = znajdzPoNazwie(lista, "projekt", projectName);
+        docelowyId = opcje?.nadpiszId ?? znajdzPoNazwie(lista, "projekt", projectName);
+        // Trafiliśmy na wpis o tej samej nazwie, którego w tej sesji nie otwieraliśmy —
+        // pytamy, zamiast nadpisywać. Autozapis przy okazji wstrzymujemy, bo inaczej
+        // dopytywałby co 2,5 s.
+        if (docelowyId && !opcje?.nadpiszId) {
+          set({
+            autozapisWstrzymany: true,
+            pytanieONadpisanie: { rodzaj: "projekt", nazwa: projectName, id: docelowyId },
+          });
+          return;
+        }
         if (!docelowyId) {
           // Limit dotyczy tylko NOWYCH nazw; nadpisanie przechodzi zawsze, żeby przy
           // pełnym limicie nie dało się utracić bieżącej pracy.
@@ -533,6 +556,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setOknoZestawow: (open) => set({ oknoZestawowOtwarte: open }),
 
+  anulujNadpisanie: () => set({ pytanieONadpisanie: null }),
+
   zapewnijSesje: async () => {
     const { session, setSession } = get();
     if (!session) return null;
@@ -559,7 +584,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   nowyZestawProtokolow: () => set({ protokolyId: null, protokolyNazwa: "", protocols: {} }),
 
-  saveProtokolyToCloud: async (nazwa) => {
+  saveProtokolyToCloud: async (nazwa, opcje) => {
     const { docHeader, protocols, protokolyId, zapewnijSesje } = get();
     const session = await zapewnijSesje();
     if (!session) return;
@@ -570,7 +595,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const lista = await supaListProjects(session.token, session.user.id);
       const tytulRoboczy = nazwa.trim() || docHeader.obiekt || "Protokoły";
       // Zapis pod istniejącą nazwą nadpisuje ten zestaw — tak samo jak przy projektach.
-      const docelowyId = protokolyId ?? znajdzPoNazwie(lista, "protokoly", tytulRoboczy);
+      const docelowyId = protokolyId ?? opcje?.nadpiszId ?? znajdzPoNazwie(lista, "protokoly", tytulRoboczy);
+      // Cudzy wpis o tej samej nazwie — pytamy przed nadpisaniem. Wpis wczytany albo
+      // zapisany w tej sesji (`protokolyId`) idzie bez pytania: to „zapisz zmiany”.
+      if (docelowyId && !protokolyId && !opcje?.nadpiszId) {
+        set({ pytanieONadpisanie: { rodzaj: "protokoly", nazwa: tytulRoboczy, id: docelowyId } });
+        return;
+      }
       const wynik = sprawdzLimit(lista, "protokoly", docelowyId);
       if (wynik.zablokowany) {
         set({ limitBlokada: { rodzaj: "protokoly", komunikat: wynik.komunikat } });

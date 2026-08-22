@@ -30,6 +30,11 @@ const ROW_GAP = 14;
 const PAD = 26;
 const LEGEND_H = 80;
 
+/** O ile powiększyć cały rysunek względem rozmiaru naturalnego — patrz komentarz
+ *  przy `maxWidth` niżej. Skalujemy WIDOK, nie geometrię, więc proporcje aparatów
+ *  i wzajemne odległości zostają dokładnie takie same. */
+const SKALA_WIDOKU = 1.8;
+
 export interface PanelRenderProps {
   devices: PanelDevice[];
   perRow: number;
@@ -143,11 +148,14 @@ export function PanelRender({ devices, perRow, onDelete, sizing }: PanelRenderPr
         preserveAspectRatio="xMidYMin meet"
         role="img"
         aria-label="Widok czołowy rozdzielnicy"
-        // Rozdzielnica NIE rozciąga się na całą szerokość: aparat modułowy ma realny
-        // rozmiar (17,5 mm), więc rozdmuchany do szerokości monitora wygląda jak
-        // makieta, a nie jak sprzęt. `maxWidth` trzyma rysunek przy rozmiarze
-        // naturalnym, a `width: 100%` pozwala mu ZMALEĆ na wąskim ekranie.
-        style={{ display: "block", width: "100%", maxWidth: svgW, height: "auto" }}
+        // Rozdzielnica nadal nie rozciąga się na CAŁĄ szerokość — aparat modułowy ma
+        // realny rozmiar (17,5 mm) i rozdmuchany do monitora wygląda jak makieta.
+        // Ale sam „rozmiar naturalny" okazał się w praktyce za mały: przy 12 modułach
+        // to ~410 px, na których opisy obwodów i oznaczenia aparatów są ledwo czytelne.
+        // Stąd stały mnożnik: proporcje aparatów zostają nietknięte (skalujemy cały
+        // rysunek, nie geometrię), a wszystko — łącznie z tekstem — rośnie razem.
+        // `width: 100%` nadal pozwala rysunkowi ZMALEĆ na wąskim ekranie.
+        style={{ display: "block", width: "100%", maxWidth: svgW * SKALA_WIDOKU, height: "auto" }}
       >
         {/* obudowa */}
         <rect x={1} y={1} width={svgW - 2} height={svgH - 2} rx={8} fill="#EDF0F3" stroke="#B6C1CC" strokeWidth={2} />
