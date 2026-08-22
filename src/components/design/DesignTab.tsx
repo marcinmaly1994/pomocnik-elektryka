@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Loader2,
@@ -106,6 +107,19 @@ function odczytajOdrzuconyPrompt(): boolean {
   }
 }
 
+/** Zwinięcie panelu bocznego to preferencja widoku, nie część projektu — stąd
+ *  localStorage, a nie zapisywany dokument. Kto raz zwinie, ma zwinięty na stałe. */
+const PANEL_ZWINIETY_KEY = "pomocnikelektryka_panel_zwiniety";
+
+function odczytajPanelZwiniety(): boolean {
+  try {
+    return localStorage.getItem(PANEL_ZWINIETY_KEY) === "1";
+  } catch {
+    // patrz odczytajOdrzuconyPrompt — brak flagi znaczy „domyślnie rozwinięty"
+    return false;
+  }
+}
+
 export interface DesignTabProps {
   /** Otwiera modal logowania — sam DesignTab go nie renderuje (żyje w App.tsx
    *  razem z resztą kont/chmury), więc oddajemy sterowanie do rodzica. */
@@ -143,6 +157,33 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const openings = useActiveFloorOpenings();
 
   const [sidebarTab, setSidebarTab] = useState<"elementy" | "pomieszczenia">("elementy");
+  const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
+
+  /** Panel otwiera się sam, gdy sięgasz po narzędzie, które go potrzebuje — ale
+   *  ŻADNE narzędzie go nie zamyka. Automatyczne chowanie zabierałoby bibliotekę
+   *  dokładnie wtedy, gdy jest najbardziej potrzebna: zaraz po obrysowaniu pokoju
+   *  stawia się w nim gniazdka (ta sama pułapka, przez którą wcześniej wycofano
+   *  automatyczne przełączanie zawartości panelu — patrz komentarz przy ToolRail). */
+  const rozwinPanel = useCallback(() => {
+    setPanelZwiniety(false);
+    try {
+      localStorage.setItem(PANEL_ZWINIETY_KEY, "0");
+    } catch {
+      /* patrz odczytajPanelZwiniety */
+    }
+  }, []);
+
+  const przelaczPanel = useCallback(() => {
+    setPanelZwiniety((zwiniety) => {
+      const nowy = !zwiniety;
+      try {
+        localStorage.setItem(PANEL_ZWINIETY_KEY, nowy ? "1" : "0");
+      } catch {
+        /* patrz odczytajPanelZwiniety */
+      }
+      return nowy;
+    });
+  }, []);
   const [toolMode, setToolMode] = useState<ToolMode>("zaznacz");
   const [activeType, setActiveType] = useState<ElementType>("gniazdko");
   const [dedicated, setDedicated] = useState(false);
@@ -1044,15 +1085,37 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           // pokoju stawia się w nim gniazdka. Panel zostaje pod kontrolą użytkownika;
           // przewodnik onboardingu przełącza go świadomie (patrz handleStepAction).
           setToolMode(id);
+          // Sięgnięcie po narzędzie, które karmi się panelem, rozwija go, jeśli był
+          // zwinięty. W drugą stronę NIE działa: żadne narzędzie panelu nie zamyka.
+          if (id === "elementy" || id === "pomieszczenie") rozwinPanel();
           // Ręczny wybór narzędzia z paska (a nie z CTA karty/onboardingu) chowa
           // dymek — dotyczy obu: linijki i ścian.
           setCoachMark(null);
           }}
           />
 
+          {/* Uchwyt zwijania na styku paska narzędzi i panelu. Widoczny ZAWSZE, w obie
+              strony — zwinięty panel bez widocznego sposobu powrotu byłby pułapką,
+              a nie oszczędnością miejsca.
+              Zwarty i wyśrodkowany (`self-center`), a nie na całą wysokość karty: pasek
+              od góry do dołu czyta się jak kreska rozdzielająca, a nie jak przycisk —
+              i przy wysokiej karcie jego środek wypada poza ekranem, więc bywa nie do
+              kliknięcia. */}
+          <button
+            onClick={przelaczPanel}
+            title={panelZwiniety ? "Pokaż panel elementów i pomieszczeń" : "Zwiń panel — więcej miejsca dla planu"}
+            aria-label={panelZwiniety ? "Pokaż panel boczny" : "Zwiń panel boczny"}
+            aria-expanded={!panelZwiniety}
+            style={{ height: 56 }}
+            className="flex w-4 shrink-0 items-center justify-center self-center rounded-sm border border-border bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-copper"
+          >
+            {panelZwiniety ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+          </button>
+
           {/* W pełnym ekranie panel NIE przewija się sam — jest kolumną o pełnej
               wysokości, a przewijanie oddaje liście elementów w środku. Wcześniej
               przewijały się oba naraz i pokazywały dwa suwaki obok siebie. */}
+          {!panelZwiniety && (
           <div
             className={pelnyEkran ? "flex min-h-0 flex-col overflow-hidden border-l border-border p-2" : "border-l border-border p-2"}
             style={{ width: 268 }}
@@ -1154,6 +1217,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             <RoomPanel roomShapes={roomShapes} />
           )}
           </div>
+          )}
         </div>
 
         <div
