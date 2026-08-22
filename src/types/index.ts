@@ -190,7 +190,15 @@ export interface DocumentHeader {
   uwagi?: string;
 }
 
-export type ProtocolKey = "izolacja" | "petla" | "rcd" | "uziemienie" | "ciaglosc" | "ogledziny";
+export type ProtocolKey =
+  | "izolacja"
+  | "petla"
+  | "rcd"
+  | "uziemienie"
+  | "ciaglosc"
+  | "ogledziny"
+  | "rozdzielnice"
+  | "odgromowa";
 
 export interface PriceTable {
   [key: string]: number;

@@ -38,17 +38,93 @@ describe("PROTOCOL_DEFS.petla.evaluate", () => {
 
 describe("PROTOCOL_DEFS.rcd.evaluate", () => {
   const def = PROTOCOL_DEFS.rcd;
+  /** Limit protokołu to teraz dopuszczalne napięcie dotykowe, nie czas. */
+  const UB = 50;
 
-  it("prąd w zakresie 0,5-1× IΔn, czas w limicie, UB bezpieczne -> pozytywny", () => {
-    expect(def.evaluate!({ idn: 30, id: 25, t: 25, ub: 40 }, 300)).toBe(true);
+  it("prąd w zakresie 0,5-1× IΔn, oba czasy w normie, UB bezpieczne -> pozytywny", () => {
+    expect(def.evaluate!({ idn: 30, id: 25, t1: 25, t5: 15, ub: 40 }, UB)).toBe(true);
   });
 
-  it("czas zadziałania powyżej limitu -> negatywny", () => {
-    expect(def.evaluate!({ idn: 30, id: 25, t: 500, ub: 40 }, 300)).toBe(false);
+  it("czas przy IΔn powyżej 300 ms dla wyłącznika zwykłego -> negatywny", () => {
+    expect(def.evaluate!({ idn: 30, id: 25, t1: 500, t5: 15, ub: 40 }, UB)).toBe(false);
   });
 
-  it("napięcie dotykowe powyżej 50V -> negatywny", () => {
-    expect(def.evaluate!({ idn: 30, id: 25, t: 25, ub: 60 }, 300)).toBe(false);
+  it("czas przy 5·IΔn powyżej 40 ms dla wyłącznika zwykłego -> negatywny", () => {
+    expect(def.evaluate!({ idn: 30, id: 25, t1: 25, t5: 60, ub: 40 }, UB)).toBe(false);
+  });
+
+  it("napięcie dotykowe powyżej progu -> negatywny", () => {
+    expect(def.evaluate!({ idn: 30, id: 25, t1: 25, t5: 15, ub: 60 }, UB)).toBe(false);
+  });
+
+  it("próg 25 V w warunkach szczególnych odrzuca UB, które przy 50 V byłoby zgodne", () => {
+    expect(def.evaluate!({ idn: 30, id: 25, t1: 25, t5: 15, ub: 40 }, 25)).toBe(false);
+  });
+
+  it("wyłącznik selektywny: 400 ms przy IΔn jest ZGODNE, choć zwykły by nie przeszedł", () => {
+    const wiersz = { idn: 30, id: 25, t1: 400, t5: 100, ub: 40, sel: "tak" };
+    expect(def.evaluate!(wiersz, UB)).toBe(true);
+    expect(def.evaluate!({ ...wiersz, sel: "nie" }, UB)).toBe(false);
+  });
+
+  it("selektywny zbyt SZYBKI też jest niezgodny — zwłoka jest jego cechą, nie wadą", () => {
+    expect(def.evaluate!({ idn: 30, id: 25, t1: 20, t5: 100, ub: 40, sel: "tak" }, UB)).toBe(false);
+  });
+
+  it("niewpisany czas nie psuje oceny — pomiar mógł jeszcze nie zostać wykonany", () => {
+    expect(def.evaluate!({ idn: 30, id: 25, t1: 25, ub: 40 }, UB)).toBe(true);
+  });
+
+  it("prąd zadziałania poniżej 0,5·IΔn -> negatywny", () => {
+    expect(def.evaluate!({ idn: 30, id: 10, t1: 25, t5: 15, ub: 40 }, UB)).toBe(false);
+  });
+});
+
+describe("PROTOCOL_DEFS.izolacja — próg zależny od napięcia próby", () => {
+  const def = PROTOCOL_DEFS.izolacja;
+
+  it("obwód SELV (250 V) z wynikiem 0,7 MΩ jest ZGODNY — wymagane 0,5 MΩ", () => {
+    expect(def.evaluate!({ u: "250", ln: 0.7, lpe: 0.8, npe: 0.9 }, 0)).toBe(true);
+  });
+
+  it("ten sam wynik przy 500 V jest NIEZGODNY — wymagane 1,0 MΩ", () => {
+    expect(def.evaluate!({ u: "500", ln: 0.7, lpe: 0.8, npe: 0.9 }, 0)).toBe(false);
+  });
+
+  it("własny próg zaostrza kryterium ponad wymaganie normy", () => {
+    expect(def.evaluate!({ u: "500", ln: 1.5, lpe: 1.5, npe: 1.5 }, 2)).toBe(false);
+    expect(def.evaluate!({ u: "500", ln: 1.5, lpe: 1.5, npe: 1.5 }, 0)).toBe(true);
+  });
+
+  it("kolumna R min pokazuje próg wynikający z napięcia próby", () => {
+    const rmin = def.columns!.find((c) => c.key === "rmin")!;
+    expect(rmin.compute!({ u: "250" })).toBe("0.5");
+    expect(rmin.compute!({ u: "500" })).toBe("1.0");
+    expect(rmin.compute!({ u: "1000" })).toBe("1.0");
+  });
+});
+
+describe("PROTOCOL_DEFS.odgromowa.evaluate", () => {
+  const def = PROTOCOL_DEFS.odgromowa;
+
+  it("rezystancja w limicie i ciągłość zachowana -> pozytywny", () => {
+    expect(def.evaluate!({ r: 8, ciaglosc: 0.4, stan: "dobry" }, 10)).toBe(true);
+  });
+
+  it("rezystancja ponad limit -> negatywny", () => {
+    expect(def.evaluate!({ r: 14, ciaglosc: 0.4, stan: "dobry" }, 10)).toBe(false);
+  });
+
+  it("przerwana ciągłość -> negatywny mimo dobrego uziemienia", () => {
+    expect(def.evaluate!({ r: 5, ciaglosc: 6, stan: "dobry" }, 10)).toBe(false);
+  });
+
+  it("stan „do naprawy” przesądza o ocenie niezależnie od liczb", () => {
+    expect(def.evaluate!({ r: 5, ciaglosc: 0.3, stan: "do naprawy" }, 10)).toBe(false);
+  });
+
+  it("brak jakichkolwiek pomiarów -> brak oceny", () => {
+    expect(def.evaluate!({ stan: "dobry" }, 10)).toBeNull();
   });
 });
 

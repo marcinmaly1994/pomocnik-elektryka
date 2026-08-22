@@ -5,6 +5,24 @@ import { downloadPdfBytes, projectFileName } from "./download";
 import { PROTOCOL_DEFS, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
 import type { ProtocolKey } from "@/types";
 
+/** Łamie tekst na linie mieszczące się w `maxWidth`. Wydzielone z bloku „Uwagi",
+ *  bo tej samej logiki potrzebuje wydruk kryteriów niebędących jedną liczbą. */
+function zawijajTekst(tekst: string, maxWidth: number, size: number): string[] {
+  const linie: string[] = [];
+  let biezaca = "";
+  for (const slowo of tekst.split(/\s+/)) {
+    const kandydat = biezaca ? `${biezaca} ${slowo}` : slowo;
+    if (biezaca && pdfTextWidth(kandydat, size, false) > maxWidth) {
+      linie.push(biezaca);
+      biezaca = slowo;
+    } else {
+      biezaca = kandydat;
+    }
+  }
+  if (biezaca) linie.push(biezaca);
+  return linie;
+}
+
 /** Składa protokół pomiarowy i zwraca gotowe bajty PDF (bez pobierania — testowalne bez DOM-u). */
 export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows: ProtocolRow[], limit: number): Promise<Uint8Array> {
   const def = PROTOCOL_DEFS[key];
@@ -131,7 +149,18 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
     doc.y -= 14;
     doc.ensure(20);
     doc.text(`Kryterium oceny: ${def.limitLabel} = ${limit} ${def.limitUnit}`, M, doc.y, 8.5, false, 0.3);
-    doc.y -= 16;
+    doc.y -= 12;
+    // Kryteria niebędące jedną liczbą (czasy RCD zależne od typu, progi izolacji
+    // zależne od napięcia próby) muszą stać na WYDRUKU — bez nich czytający protokół
+    // nie ma jak sprawdzić, wobec czego oceniono poszczególne wiersze.
+    if (def.extraCriterion) {
+      for (const ln of zawijajTekst(def.extraCriterion, W - 10, 8)) {
+        doc.ensure(14);
+        doc.text(ln, M, doc.y, 8, false, 0.35);
+        doc.y -= 11;
+      }
+    }
+    doc.y -= 6;
   }
 
   // --- wynik końcowy ---
@@ -152,21 +181,10 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
     doc.ensure(40);
     doc.text("Uwagi:", M, doc.y, 9, true);
     doc.y -= 13;
-    const words = String(header.uwagi).split(/\s+/);
-    let ln = "";
-    words.forEach((w) => {
-      if (pdfTextWidth(ln + " " + w, 8.5, false) > W - 10) {
-        doc.text(ln, M, doc.y, 8.5);
-        doc.y -= 12;
-        doc.ensure(14);
-        ln = w;
-      } else {
-        ln = ln ? ln + " " + w : w;
-      }
-    });
-    if (ln) {
+    for (const ln of zawijajTekst(String(header.uwagi), W - 10, 8.5)) {
       doc.text(ln, M, doc.y, 8.5);
       doc.y -= 12;
+      doc.ensure(14);
     }
     doc.y -= 10;
   }

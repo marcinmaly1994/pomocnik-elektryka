@@ -44,6 +44,54 @@ test("Protokoły: lista kontrolna oględzin daje werdykt i pobiera się jako PDF
   expect(download.suggestedFilename()).toBe("protokol-ogledziny-dom-testowy.pdf");
 });
 
+test("Protokoły: komplet ośmiu protokołów wymaganych przy kontroli pięcioletniej", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+
+  // Zakres z art. 62 ust. 1 pkt 2 Prawa budowlanego: połączenia, osprzęt,
+  // zabezpieczenia i środki ochrony od porażeń, oporność izolacji, uziemienia —
+  // ORAZ instalacja piorunochronna, wymieniona w tym samym przepisie.
+  for (const tytul of [
+    "Oględziny instalacji",
+    "Rozdzielnice, zabezpieczenia i oznaczenia",
+    "Sprawdzenie ciągłości przewodów ochronnych",
+    "Pomiar rezystancji izolacji",
+    "Pomiar impedancji pętli zwarcia",
+    "Badanie wyłączników różnicowoprądowych",
+    "Pomiar rezystancji uziemienia",
+    "Ochrona odgromowa (LPS)",
+  ]) {
+    await expect(page.getByText(tytul, { exact: true }).first()).toBeVisible();
+  }
+});
+
+test("Protokoły: ochrona odgromowa ocenia ciągłość i rezystancję, i pobiera się jako PDF", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+  await page.getByLabel("Obiekt / nazwa instalacji").fill("Hala LPS");
+  await page.getByLabel("Wykonawca pomiarów").fill("Jan Kowalski");
+
+  await page.getByText("Ochrona odgromowa (LPS)", { exact: true }).click();
+  await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+
+  const wiersz = page.locator("tbody tr").first();
+  const pola = wiersz.locator("input");
+  await pola.nth(0).fill("Złącze kontrolne nr 1");
+  await pola.nth(1).fill("0.4"); // ciągłość — poniżej 1 Ω
+  await pola.nth(2).fill("8"); // rezystancja — poniżej 10 Ω
+  await expect(page.getByText("Wynik pozytywny")).toBeVisible();
+
+  // Przerwana ciągłość przesądza o ocenie nawet przy dobrym uziemieniu — to sedno
+  // badania LPS: uziom może być świetny, a zwód urwany.
+  await pola.nth(1).fill("6");
+  await expect(page.getByText("Wynik negatywny")).toBeVisible();
+
+  await pola.nth(1).fill("0.4");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Pobierz protokół (PDF)" }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe("protokol-odgromowa-hala-lps.pdf");
+});
+
 test("Schemat: renderuje rozłącznik główny i wygenerowane obwody po dodaniu elementów", async ({ page }) => {
   await placeThreeSockets(page);
   await page.getByRole("button", { name: "Schemat", exact: true }).click();
