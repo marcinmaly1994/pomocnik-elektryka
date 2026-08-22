@@ -202,6 +202,65 @@ test("panel narzędzi w pełnym ekranie ma JEDEN obszar przewijania, bez suwakó
   }
 });
 
+/** Wchodzi w pełny ekran i odsłania lewy panel uchwytem. */
+async function odslonNarzedzia(page: Page) {
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
+}
+
+test("przypięty panel zostaje na widoku po zjechaniu myszą", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await odslonNarzedzia(page);
+
+  await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
+
+  // Zjazd na środek — nieprzypięty panel by się schował.
+  await page.mouse.move(page.viewportSize()!.width / 2, page.viewportSize()!.height / 2);
+  await page.waitForTimeout(500);
+  expect(await pozycjaX(lewaKarta(page))).toBeGreaterThanOrEqual(0);
+
+  // Przypięty panel nie potrzebuje uchwytu — nie ma czego zapowiadać.
+  await expect(page.getByRole("button", { name: "Pokaż narzędzia rysowania" })).toHaveCount(0);
+});
+
+test("przypięty panel ODSUWA płótno, zamiast je zasłaniać", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await odslonNarzedzia(page);
+  await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
+  await page.waitForTimeout(400);
+
+  const karta = (await lewaKarta(page).boundingBox())!;
+  const plotno = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+
+  // Sedno: panel przyklejony na stałe do rysunku byłby GORSZY od chowającego się —
+  // zabierałby miejsce pracy bez możliwości zajrzenia pod spód.
+  expect(plotno.x).toBeGreaterThanOrEqual(karta.x + karta.width - 2);
+});
+
+test("odpięcie przywraca chowanie, a przypięcie przeżywa odświeżenie", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await odslonNarzedzia(page);
+  await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
+  await page.waitForTimeout(300);
+
+  await page.reload();
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await page.waitForTimeout(400);
+  // Po odświeżeniu panel jest od razu widoczny, bez dotykania myszą.
+  expect(await pozycjaX(lewaKarta(page))).toBeGreaterThanOrEqual(0);
+
+  await page.getByRole("button", { name: "Odepnij pasek: lewo" }).click();
+  await page.mouse.move(page.viewportSize()!.width / 2, page.viewportSize()!.height / 2);
+  await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeLessThan(0);
+});
+
 test("kondygnacje mieszkają w jednym pasku razem z podkładem i siatką", async ({ page }) => {
   await page.goto("/");
 

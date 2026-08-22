@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Eye, EyeOff, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Scan, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
@@ -38,6 +39,10 @@ export interface EditorToolbarProps {
   onDopasuj: () => void;
   pelnyEkran: boolean;
   onTogglePelnyEkran: () => void;
+  /** Miejsce na pinezkę przypinającą pasek w trybie pełnoekranowym. Wstawiane
+   *  przez rodzica jako gniazdo, bo sam pasek nic nie wie o chowaniu się za
+   *  krawędź — to sprawa układu, nie kontrolek widoku. */
+  przypinacz?: ReactNode;
 }
 
 const ZOOM_STEP = 0.1;
@@ -69,6 +74,7 @@ export function EditorToolbar({
   onDopasuj,
   pelnyEkran,
   onTogglePelnyEkran,
+  przypinacz,
 }: EditorToolbarProps) {
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100));
 
@@ -206,6 +212,8 @@ export function EditorToolbar({
       >
         {pelnyEkran ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
       </Button>
+
+      {przypinacz}
     </div>
   );
 }

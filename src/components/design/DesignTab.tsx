@@ -10,6 +10,7 @@ import {
   Minimize2,
   PenLine,
   Pencil,
+  Pin,
   RotateCw,
   ShieldAlert,
   Trash2,
@@ -117,6 +118,31 @@ function odczytajPanelZwiniety(): boolean {
   } catch {
     // patrz odczytajOdrzuconyPrompt — brak flagi znaczy „domyślnie rozwinięty"
     return false;
+  }
+}
+
+/** Które paski w pełnym ekranie zostają przypięte na stałe zamiast chować się za
+ *  krawędź. Preferencja widoku, więc localStorage — nie część zapisywanego projektu. */
+const PRZYPIETE_KEY = "pomocnikelektryka_przypiete_panele";
+
+interface PrzypieteChrome {
+  gora: boolean;
+  lewo: boolean;
+  dol: boolean;
+}
+
+const NIC_NIE_PRZYPIETE: PrzypieteChrome = { gora: false, lewo: false, dol: false };
+
+function odczytajPrzypiete(): PrzypieteChrome {
+  try {
+    const raw = localStorage.getItem(PRZYPIETE_KEY);
+    if (!raw) return NIC_NIE_PRZYPIETE;
+    const p = JSON.parse(raw) as Partial<PrzypieteChrome>;
+    // Czytamy pole po polu, zamiast ufać kształtowi z JSON-a: w localStorage może
+    // siedzieć wpis ze starszej wersji albo ręcznie zepsuty.
+    return { gora: p.gora === true, lewo: p.lewo === true, dol: p.dol === true };
+  } catch {
+    return NIC_NIE_PRZYPIETE;
   }
 }
 
@@ -229,6 +255,12 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [chromeGora, setChromeGora] = useState(false);
   const [chromeLewo, setChromeLewo] = useState(false);
   const [chromeDol, setChromeDol] = useState(false);
+  /** Paski przypięte zostają widoczne niezależnie od tego, gdzie jest kursor. */
+  const [przypiete, setPrzypiete] = useState<PrzypieteChrome>(odczytajPrzypiete);
+  /** Zmierzone rozmiary pasków — potrzebne, żeby przypięty pasek ODSUNĄŁ płótno,
+   *  zamiast położyć się na rysunku. Mierzymy, a nie wpisujemy na sztywno, bo
+   *  szerokość lewej karty zmienia się razem ze zwinięciem panelu bocznego. */
+  const [rozmiaryChrome, setRozmiaryChrome] = useState({ gora: 0, lewo: 0, dol: 0 });
   const pelnyEkranRef = useRef<HTMLDivElement>(null);
   const gornyPasekRef = useRef<HTMLDivElement>(null);
   const lewaKartaRef = useRef<HTMLDivElement>(null);
@@ -242,6 +274,26 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [outsideHint, setOutsideHint] = useState(false);
   const outsideHintTimer = useRef<number | undefined>(undefined);
   const [kontoPromptOdrzucony, setKontoPromptOdrzucony] = useState(odczytajOdrzuconyPrompt);
+
+  /**
+   * Pinezka przypinająca pasek w pełnym ekranie. Renderowana wewnątrz samego paska,
+   * więc wjeżdża i zjeżdża razem z nim — dzięki temu widać ją dokładnie wtedy, gdy
+   * jest do czego się odnieść, i nie zaśmieca rysunku, gdy pasek jest schowany.
+   */
+  function Pinezka({ ktore, klasa }: { ktore: keyof PrzypieteChrome; klasa: string }) {
+    const wpiete = przypiete[ktore];
+    return (
+      <button
+        onClick={() => przelaczPrzypiecie(ktore)}
+        title={wpiete ? "Odepnij — pasek znów będzie się chował" : "Przypnij — pasek zostanie na widoku"}
+        aria-label={wpiete ? `Odepnij pasek: ${ktore}` : `Przypnij pasek: ${ktore}`}
+        aria-pressed={wpiete}
+        className={`${klasa} rounded p-1 transition-colors ${wpiete ? "text-copper" : "text-slate-300 hover:text-slate-500"}`}
+      >
+        {wpiete ? <Pin size={13} fill="currentColor" /> : <Pin size={13} />}
+      </button>
+    );
+  }
 
   /**
    * Dopasowuje powiększenie tak, żeby rzut wypełnił dostępne miejsce.
@@ -264,11 +316,15 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     // W pełnym ekranie płótno bierze całą wysokość okna: paski leżą NAD nim jako
     // nakładki, więc nie ma już nagłówka ani paska etapów, na które trzeba zostawić
     // zapas (patrz `wysokoscPlotna`).
-    const przelicz = () => setWysPlotna(pelnyEkran ? Math.max(320, window.innerHeight - 16) : wysokoscPlotna());
+    // Przypięte paski zajmują górę/dół okna na stałe, więc płótno musi o tyle
+    // zmaleć — inaczej jego dolna krawędź chowałaby się pod przypiętym paskiem stanu.
+    const zajetePionowo = (przypiete.gora ? rozmiaryChrome.gora : 0) + (przypiete.dol ? rozmiaryChrome.dol : 0);
+    const przelicz = () =>
+      setWysPlotna(pelnyEkran ? Math.max(320, window.innerHeight - 16 - zajetePionowo) : wysokoscPlotna());
     przelicz();
     window.addEventListener("resize", przelicz);
     return () => window.removeEventListener("resize", przelicz);
-  }, [pelnyEkran]);
+  }, [pelnyEkran, przypiete.gora, przypiete.dol, rozmiaryChrome.gora, rozmiaryChrome.dol]);
 
   /** Wejście i wyjście z pełnego ekranu zmienia dostępne miejsce skokowo, więc rzut
    *  dopasowujemy na nowo — nawet jeśli użytkownik wcześniej ustawił zoom ręcznie.
@@ -319,12 +375,48 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   );
 
   /** Kursor opuszczający okno chowa wszystko — inaczej paski zostawałyby otwarte
-   *  po zjechaniu myszą poza przeglądarkę. */
+   *  po zjechaniu myszą poza przeglądarkę. Przypięte zostają, bo o to w przypięciu
+   *  właśnie chodzi (widoczność liczy się przez `lub`, patrz `widocznaGora` niżej). */
   const schowajChrome = useCallback(() => {
     setChromeGora(false);
     setChromeLewo(false);
     setChromeDol(false);
   }, []);
+
+  const przelaczPrzypiecie = useCallback((ktore: keyof PrzypieteChrome) => {
+    setPrzypiete((p) => {
+      const nowe = { ...p, [ktore]: !p[ktore] };
+      try {
+        localStorage.setItem(PRZYPIETE_KEY, JSON.stringify(nowe));
+      } catch {
+        /* patrz odczytajPrzypiete */
+      }
+      return nowe;
+    });
+  }, []);
+
+  // Przypięty pasek jest widoczny zawsze; nieprzypięty — tylko pod kursorem.
+  const widocznaGora = chromeGora || przypiete.gora;
+  const widocznaLewa = chromeLewo || przypiete.lewo;
+  const widocznyDol = chromeDol || przypiete.dol;
+
+  useEffect(() => {
+    if (!pelnyEkran) {
+      setRozmiaryChrome({ gora: 0, lewo: 0, dol: 0 });
+      return;
+    }
+    const zmierz = () =>
+      setRozmiaryChrome({
+        gora: gornyPasekRef.current?.offsetHeight ?? 0,
+        lewo: lewaKartaRef.current?.offsetWidth ?? 0,
+        dol: dolnyPasekRef.current?.offsetHeight ?? 0,
+      });
+    zmierz();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(zmierz);
+    for (const r of [gornyPasekRef, lewaKartaRef, dolnyPasekRef]) if (r.current) ro.observe(r.current);
+    return () => ro.disconnect();
+  }, [pelnyEkran, panelZwiniety]);
 
   useEffect(() => {
     if (zoomReczny) return;
@@ -871,11 +963,12 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         // odrzuca taką regułę bez słowa i pasek po prostu zostaje widoczny. Jawna
         // wartość jest odporna na tę klasę pomyłek i czytelna wprost.
         // `-100%` odnosi się do wysokości samego paska, `1rem` to zapas na cień.
-        style={pelnyEkran ? { transform: chromeGora ? "translateY(0)" : "translateY(calc(-100% - 1rem))" } : undefined}
+        style={pelnyEkran ? { transform: widocznaGora ? "translateY(0)" : "translateY(calc(-100% - 1rem))" } : undefined}
       >
       <EditorToolbar
         pelnyEkran={pelnyEkran}
         onTogglePelnyEkran={przelaczPelnyEkran}
+        przypinacz={pelnyEkran ? <Pinezka ktore="gora" klasa="" /> : undefined}
         bgImageUrl={bgImageUrl}
         bgName={bgName}
         onPickBg={() => fileRef.current?.click()}
@@ -922,7 +1015,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         }
         // Odsłonięty pasek edytora zajmuje górę okna — pigułka zjeżdża wtedy pod niego,
         // zamiast się z nim nakładać.
-        style={pelnyEkran ? { top: chromeGora ? 60 : 12 } : undefined}
+        style={pelnyEkran ? { top: widocznaGora ? 60 : 12 } : undefined}
       >
         {multiSelected.length > 0 && (
           <button onClick={deleteSelection} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600">
@@ -1048,7 +1141,22 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         )}
       </div>
 
-      <div className={pelnyEkran ? "h-full w-full" : "flex flex-wrap items-start gap-4"}>
+      {/* Przypięty pasek ODSUWA płótno, zamiast się na nie kłaść. Panel na stałe
+          zasłaniający róg rysunku byłby gorszy od chowającego się: zabierałby miejsce
+          pracy bez możliwości zajrzenia pod spód. Nieprzypięte paski nadal pływają
+          nad planem — tam przykrycie trwa chwilę i jest ceną za odsłonięcie. */}
+      <div
+        className={pelnyEkran ? "h-full w-full" : "flex flex-wrap items-start gap-4"}
+        style={
+          pelnyEkran
+            ? {
+                paddingLeft: przypiete.lewo ? rozmiaryChrome.lewo : undefined,
+                paddingTop: przypiete.gora ? rozmiaryChrome.gora : undefined,
+                paddingBottom: przypiete.dol ? rozmiaryChrome.dol : undefined,
+              }
+            : undefined
+        }
+      >
         {/* Pasek narzędzi i panel tworzą JEDNĄ kartę — wzorzec activity baru z VS Code.
             Wcześniej pasek był osobną wysepką kończącą się w połowie wysokości, przez
             co wyglądał na oderwany, a w rzędzie stały trzy niezależne obiekty. To zresztą
@@ -1066,8 +1174,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               ? "absolute bottom-0 left-0 top-0 z-30 flex overflow-hidden rounded-r-card border border-l-0 border-border bg-white shadow-xl transition-transform duration-200"
               : "flex shrink-0 overflow-hidden rounded-card border border-border bg-white"
           }
-          style={pelnyEkran ? { transform: chromeLewo ? "translateX(0)" : "translateX(calc(-100% - 1rem))" } : undefined}
+          style={pelnyEkran ? { transform: widocznaLewa ? "translateX(0)" : "translateX(calc(-100% - 1rem))" } : undefined}
         >
+          {/* Pinezka w rogu karty, na tle, żeby nie zlewała się z zawartością panelu. */}
+          {pelnyEkran && <Pinezka ktore="lewo" klasa="absolute right-1 top-1 z-10 bg-white/90" />}
           <ToolRail
           value={toolMode}
           onToolRef={(id, el) => {
@@ -1349,8 +1459,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                 : undefined
             }
             ref={dolnyPasekRef}
-            style={pelnyEkran ? { transform: chromeDol ? "translateY(0)" : "translateY(calc(100% + 1rem))" } : undefined}
+            style={pelnyEkran ? { transform: widocznyDol ? "translateY(0)" : "translateY(calc(100% + 1rem))" } : undefined}
           >
+          {pelnyEkran && <Pinezka ktore="dol" klasa="absolute right-1 top-1 z-10 bg-white/90" />}
           <EditorStatusBar
             floorName={floorName}
             roomShapes={roomShapes}
@@ -1381,7 +1492,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           Są też PRZYCISKAMI, nie samą dekoracją: na tablecie nie ma najeżdżania myszą,
           więc kliknięcie musi wystarczyć do otwarcia panelu. Znikają, gdy panel jest
           już wysunięty — wtedy niczego nie zapowiadają. */}
-      {pelnyEkran && !chromeLewo && (
+      {pelnyEkran && !widocznaLewa && (
         <button
           onClick={() => setChromeLewo(true)}
           title="Narzędzia rysowania — najedź na krawędź albo kliknij"
@@ -1397,7 +1508,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         </button>
       )}
 
-      {pelnyEkran && !chromeGora && (
+      {pelnyEkran && !widocznaGora && (
         <button
           onClick={() => setChromeGora(true)}
           title="Pasek edytora — najedź na górną krawędź albo kliknij"
@@ -1408,7 +1519,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         </button>
       )}
 
-      {pelnyEkran && !chromeDol && (
+      {pelnyEkran && !widocznyDol && (
         <button
           onClick={() => setChromeDol(true)}
           title="Dane planu — najedź na dolną krawędź albo kliknij"
