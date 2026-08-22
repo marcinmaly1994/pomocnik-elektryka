@@ -83,6 +83,41 @@ test("„Narysuj Pomieszczenie” też rozwija zwinięty panel", async ({ page }
   await expect(page.getByRole("button", { name: /^Pomieszczenia \(/ })).toBeVisible();
 });
 
+test("zwijanie panelu nie przesuwa rysunku w widoku standardowym", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  // Ręczne przybliżenie wyłącza automatyczne dopasowanie i sprawia, że rzut
+  // przestaje się mieścić — dopiero wtedy jest co przewijać i dopiero wtedy
+  // przesunięcie kolumny realnie przesuwa rysunek pod okiem użytkownika.
+  for (let i = 0; i < 10; i++) await page.getByRole("button", { name: "Przybliż widok" }).click();
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.scrollTo(0, 0));
+
+  const plotno = page.locator("div.overflow-auto.rounded-card.border").first();
+  await plotno.evaluate((el) => {
+    el.scrollLeft = 300;
+  });
+
+  /** Patrz komentarz w fullscreen.spec.ts: niezmiennikiem jest RÓŻNICA, nie suma. */
+  const przesuniecieUkladu = () =>
+    plotno.evaluate((el) => Math.round(el.scrollLeft - el.getBoundingClientRect().left));
+
+  const przed = await przesuniecieUkladu();
+
+  await page.getByRole("button", { name: "Zwiń panel boczny" }).click();
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(Math.abs((await przesuniecieUkladu()) - przed)).toBeLessThan(4);
+
+  // I z powrotem — rozwinięcie też nie może przestawiać kadru.
+  await page.getByRole("button", { name: "Pokaż panel boczny" }).click();
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(Math.abs((await przesuniecieUkladu()) - przed)).toBeLessThan(4);
+});
+
 test("zwinięty panel oddaje miejsce planowi", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());

@@ -179,31 +179,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [sidebarTab, setSidebarTab] = useState<"elementy" | "pomieszczenia">("elementy");
   const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
 
-  /** Panel otwiera się sam, gdy sięgasz po narzędzie, które go potrzebuje — ale
-   *  ŻADNE narzędzie go nie zamyka. Automatyczne chowanie zabierałoby bibliotekę
-   *  dokładnie wtedy, gdy jest najbardziej potrzebna: zaraz po obrysowaniu pokoju
-   *  stawia się w nim gniazdka (ta sama pułapka, przez którą wcześniej wycofano
-   *  automatyczne przełączanie zawartości panelu — patrz komentarz przy ToolRail). */
-  const rozwinPanel = useCallback(() => {
-    setPanelZwiniety(false);
-    try {
-      localStorage.setItem(PANEL_ZWINIETY_KEY, "0");
-    } catch {
-      /* patrz odczytajPanelZwiniety */
-    }
-  }, []);
-
-  const przelaczPanel = useCallback(() => {
-    setPanelZwiniety((zwiniety) => {
-      const nowy = !zwiniety;
-      try {
-        localStorage.setItem(PANEL_ZWINIETY_KEY, nowy ? "1" : "0");
-      } catch {
-        /* patrz odczytajPanelZwiniety */
-      }
-      return nowy;
-    });
-  }, []);
   const [toolMode, setToolMode] = useState<ToolMode>("zaznacz");
   const [activeType, setActiveType] = useState<ElementType>("gniazdko");
   const [dedicated, setDedicated] = useState(false);
@@ -366,18 +341,51 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setChromeLewo(false);
   }, []);
 
-  /** Kontener przewijania płótna — DesignCanvas trzyma go u siebie, ale przypinanie
-   *  panelu musi go przewinąć, więc sięgamy po niego przez kolumnę płótna. Jedyny
-   *  element z `overflow-auto` w tej kolumnie to właśnie okno rysunku. */
+  /** Kontener przewijania płótna — DesignCanvas trzyma go u siebie, ale zmiany
+   *  szerokości panelu muszą go przewinąć, więc sięgamy po niego przez kolumnę
+   *  płótna. Jedyny element z `overflow-auto` w tej kolumnie to okno rysunku. */
   const kontenerPlotna = useCallback(
     () => kolumnaPlotnaRef.current?.querySelector<HTMLDivElement>("div.overflow-auto") ?? null,
     [],
   );
-  /** Pozycja lewej krawędzi okna rysunku sprzed przypięcia — do skompensowania skoku. */
-  const lewaPrzedPrzypieciem = useRef<number | null>(null);
+  /** Pozycja lewej krawędzi okna rysunku sprzed zmiany układu — do skompensowania skoku. */
+  const lewaPrzedZmiana = useRef<number | null>(null);
+
+  /** Wywoływane TUŻ PRZED każdą zmianą, która zwęża albo poszerza obszar rysunku. */
+  const zapamietajKadr = useCallback(() => {
+    lewaPrzedZmiana.current = kontenerPlotna()?.getBoundingClientRect().left ?? null;
+  }, [kontenerPlotna]);
+
+  /** Panel otwiera się sam, gdy sięgasz po narzędzie, które go potrzebuje — ale
+   *  ŻADNE narzędzie go nie zamyka. Automatyczne chowanie zabierałoby bibliotekę
+   *  dokładnie wtedy, gdy jest najbardziej potrzebna: zaraz po obrysowaniu pokoju
+   *  stawia się w nim gniazdka (ta sama pułapka, przez którą wcześniej wycofano
+   *  automatyczne przełączanie zawartości panelu — patrz komentarz przy ToolRail). */
+  const rozwinPanel = useCallback(() => {
+    zapamietajKadr();
+    setPanelZwiniety(false);
+    try {
+      localStorage.setItem(PANEL_ZWINIETY_KEY, "0");
+    } catch {
+      /* patrz odczytajPanelZwiniety */
+    }
+  }, [zapamietajKadr]);
+
+  const przelaczPanel = useCallback(() => {
+    zapamietajKadr();
+    setPanelZwiniety((zwiniety) => {
+      const nowy = !zwiniety;
+      try {
+        localStorage.setItem(PANEL_ZWINIETY_KEY, nowy ? "1" : "0");
+      } catch {
+        /* patrz odczytajPanelZwiniety */
+      }
+      return nowy;
+    });
+  }, [zapamietajKadr]);
 
   const przelaczPrzypiecie = useCallback(() => {
-    lewaPrzedPrzypieciem.current = kontenerPlotna()?.getBoundingClientRect().left ?? null;
+    zapamietajKadr();
     setPrzypietyPanel((p) => {
       const nowy = !p;
       try {
@@ -387,29 +395,30 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       }
       return nowy;
     });
-  }, [kontenerPlotna]);
+  }, [zapamietajKadr]);
 
   /**
-   * Przypięcie panelu zwęża obszar rysunku o jego szerokość, więc plan skakał
-   * o ~370 px w prawo i trzeba go było szukać od nowa. Kompensujemy to
-   * przewinięciem o dokładnie tyle, o ile przesunęła się lewa krawędź okna
-   * rysunku — dzięki temu rysunek zostaje pod tym samym miejscem EKRANU, a panel
-   * zajmuje miejsce, które i tak było poza kadrem.
+   * Każda zmiana szerokości panelu przesuwa obszar rysunku w bok, więc plan skakał
+   * i trzeba go było szukać od nowa: o ~370 px przy przypięciu w pełnym ekranie
+   * i o ~270 px przy zwijaniu panelu w widoku standardowym. Kompensujemy to
+   * przewinięciem o dokładnie tyle, o ile przesunęła się lewa krawędź okna rysunku —
+   * rysunek zostaje pod tym samym miejscem EKRANU.
    *
    * `useLayoutEffect`, bo przewinięcie musi wejść w tej samej klatce co nowy układ —
    * inaczej widać przeskok, czyli dokładnie to, co naprawiamy.
    *
-   * Gdy cały rzut mieści się w oknie, nie ma czego przewijać i plan po prostu
-   * przecentruje się w węższym obszarze. To poprawne: nic nie znika z widoku.
+   * Gdy cały rzut mieści się w oknie, nie ma czego przewijać i plan przecentruje się
+   * w nowym obszarze (a przy automatycznym dopasowaniu jeszcze przeskaluje). To
+   * poprawne: nic nie znika z widoku, bo widać całość.
    */
   useLayoutEffect(() => {
-    const przed = lewaPrzedPrzypieciem.current;
+    const przed = lewaPrzedZmiana.current;
     if (przed === null) return;
-    lewaPrzedPrzypieciem.current = null;
+    lewaPrzedZmiana.current = null;
     const el = kontenerPlotna();
     if (!el) return;
     el.scrollLeft += el.getBoundingClientRect().left - przed;
-  }, [przypietyPanel, kontenerPlotna]);
+  }, [przypietyPanel, panelZwiniety, kontenerPlotna]);
 
   // Panel: widoczny pod kursorem albo przypięty. Paski poziome: zawsze.
   const widocznaLewa = chromeLewo || przypietyPanel;
