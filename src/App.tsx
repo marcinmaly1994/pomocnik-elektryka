@@ -359,7 +359,7 @@ export default function App() {
 
         <div className="flex flex-wrap items-center gap-1.5">
           <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
-          <ToolTab id="protokoly" label="Protokoły" active={tab} onPick={setTab} />
+          <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
           <button
             onClick={() => setHelpOpen(true)}
             className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"

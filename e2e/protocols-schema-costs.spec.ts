@@ -23,7 +23,7 @@ async function placeThreeSockets(page: import("@playwright/test").Page) {
 
 test("Protokoły: lista kontrolna oględzin daje werdykt i pobiera się jako PDF", async ({ page }) => {
   await placeThreeSockets(page);
-  await page.getByRole("button", { name: "Protokoły", exact: true }).click();
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
 
   await page.getByLabel("Obiekt / nazwa instalacji").fill("Dom testowy");
   await page.getByLabel("Wykonawca pomiarów").fill("Jan Kowalski");

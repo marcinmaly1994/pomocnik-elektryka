@@ -84,7 +84,7 @@ test("dane wykonawcy z Profilu zapisują się do projektu (współdzielone z Pro
   expect(wykonawca.uprawnienia).toBe("E/D 1234/56");
 
   // ten sam formularz w Protokołach musi pokazać te same wartości — jedno źródło prawdy
-  await page.getByRole("button", { name: "Protokoły" }).click();
+  await page.getByRole("button", { name: "Protokoły pomiarowe" }).click();
   await expect(page.getByLabel("Wykonawca pomiarów")).toHaveValue("Jan Kowalski");
 });
 
