@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -231,6 +231,17 @@ export function DesignCanvas({
   onAddCalibPoint,
 }: DesignCanvasProps) {
   const bgImage = useBackgroundImage(bgImageUrl);
+  /** Kontener przewijania — to jego `scrollLeft`/`scrollTop` wyznacza kadr planu.
+   *  Wszystkie drogi przesuwania i przybliżania działają wyłącznie na nim. */
+  const kontenerRef = useRef<HTMLDivElement>(null);
+  const przesuwanieRef = useRef<{ x: number; y: number; scrollX: number; scrollY: number } | null>(null);
+  /** Punkt planu, który ma zostać pod kursorem po zmianie powiększenia Ctrl+kółkiem.
+   *  Nakładany dopiero po przerysowaniu płótna — patrz `useLayoutEffect` niżej. */
+  const kotwicaZoomRef = useRef<{ planX: number; planY: number; kursorX: number; kursorY: number } | null>(null);
+  /** Tylko po to, żeby zmienić kursor na „łapkę" — sam gest żyje w refie, bo
+   *  przerysowywanie sceny przy każdym pikselu ruchu byłoby marnotrawstwem. */
+  const [przesuwa, setPrzesuwa] = useState(false);
+
   const layerRef = useRef<Konva.Layer>(null);
   const elementNodesRef = useRef<Map<string, Konva.Group>>(new Map());
   // Węzły obrysu pomieszczenia — wizualny (wypełnienie) i „hitowy" (krawędź do
@@ -476,28 +487,35 @@ export function DesignCanvas({
     onWallDrawContextMenu(e.evt.clientX, e.evt.clientY);
   }
 
+  /**
+   * Ctrl+kółko: przybliżenie z zachowaniem punktu pod kursorem.
+   *
+   * Kadr zmieniamy PRZEWINIĘCIEM kontenera, nie pozycją sceny. Wcześniej ta funkcja
+   * przesuwała scenę (`stage.position`), podczas gdy kółko i rolka przewijają
+   * kontener — dwa niezależne układy współrzędnych na tę samą czynność. Przy
+   * przybliżeniu potrafiły się wykluczać: treść wypchnięta sceną poza płótno była
+   * przycinana bezpowrotnie, a przewijanie pokazywało w tym miejscu pustkę.
+   *
+   * Nowa skala wchodzi przez stan Reacta, więc przewinięcie trzeba nałożyć dopiero
+   * PO przerysowaniu (patrz `useLayoutEffect` niżej) — w tym momencie płótno ma
+   * jeszcze stary rozmiar i większe wartości zostałyby przycięte.
+   */
   function handleWheel(e: KonvaEventObject<WheelEvent>) {
     if (!e.evt.ctrlKey && !e.evt.metaKey) return; // bez Ctrl — zwykłe przewijanie strony
     e.evt.preventDefault();
-    const stage = e.target.getStage();
-    if (!stage) return;
-    const oldScale = stage.scaleX();
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
-    const mousePointTo = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale,
-    };
+    const el = kontenerRef.current;
+    if (!el) return;
+    const ramka = el.getBoundingClientRect();
+    const kursorX = e.evt.clientX - ramka.left;
+    const kursorY = e.evt.clientY - ramka.top;
+    // Punkt planu pod kursorem — to on ma zostać w tym samym miejscu ekranu.
+    const planX = (el.scrollLeft + kursorX) / zoom;
+    const planY = (el.scrollTop + kursorY) / zoom;
     const factor = e.evt.deltaY < 0 ? 1.1 : 0.9;
-    const newScale = clampNum(oldScale * factor, MIN_ZOOM, MAX_ZOOM);
-    // Skalę ustawiamy od razu imperatywnie, żeby przesunięcie niżej liczyło się
-    // względem NOWEJ skali; prop z re-renderu przyniesie tę samą wartość.
-    stage.scale({ x: newScale, y: newScale });
-    onZoomChange(newScale);
-    stage.position({
-      x: pointer.x - mousePointTo.x * newScale,
-      y: pointer.y - mousePointTo.y * newScale,
-    });
+    const nowaSkala = clampNum(zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    if (nowaSkala === zoom) return;
+    kotwicaZoomRef.current = { planX, planY, kursorX, kursorY };
+    onZoomChange(nowaSkala);
   }
 
   /**
@@ -511,22 +529,43 @@ export function DesignCanvas({
    * kółko myszy i to, co widać po przybliżeniu. Ruszanie sceną dawałoby drugi,
    * niezależny układ współrzędnych i dwa różne „przesunięcia" naraz.
    */
-  const kontenerRef = useRef<HTMLDivElement>(null);
-  const przesuwanieRef = useRef<{ x: number; y: number; scrollX: number; scrollY: number } | null>(null);
-  /** Tylko po to, żeby zmienić kursor na „łapkę" — sam gest żyje w refie, bo
-   *  przerysowywanie sceny Konvy przy każdym pikselu ruchu byłoby marnotrawstwem. */
-  const [przesuwaRolka, setPrzesuwaRolka] = useState(false);
+  /**
+   * JEDEN mechanizm przesuwania widoku dla wszystkich dróg: narzędzia „Przesuń
+   * widok" (lewy przycisk), wciśniętej rolki (środkowy) i kółka myszy.
+   *
+   * Wcześniej narzędzie przesuwało SCENĘ Konvy, a kółko i rolka przewijały
+   * kontener — dwa układy współrzędnych na tę samą czynność. Po przybliżeniu
+   * wykluczały się nawzajem: treść wypchnięta sceną poza płótno była przycinana
+   * bezpowrotnie, a przewinięcie pokazywało tam pustkę. Teraz wszystko rusza
+   * wyłącznie przewinięciem kontenera, więc żaden fragment planu nie może stać
+   * się nieosiągalny.
+   */
+  /** Nakłada przewinięcie utrzymujące punkt spod kursora po zmianie powiększenia.
+   *  `useLayoutEffect`, nie `useEffect`: przewinięcie musi wejść w tej samej klatce,
+   *  w której płótno dostało nowy rozmiar — inaczej widać przeskok. */
+  useLayoutEffect(() => {
+    const k = kotwicaZoomRef.current;
+    const el = kontenerRef.current;
+    if (!k || !el) return;
+    kotwicaZoomRef.current = null;
+    el.scrollLeft = k.planX * zoom - k.kursorX;
+    el.scrollTop = k.planY * zoom - k.kursorY;
+  }, [zoom]);
 
-  function zacznijPrzesuwanieSrodkowym(e: ReactPointerEvent<HTMLDivElement>) {
-    if (e.button !== 1) return;
+  function zacznijPrzesuwanie(e: ReactPointerEvent<HTMLDivElement>) {
+    // Środkowy przycisk działa ZAWSZE, lewy tylko w trybie „Przesuń widok" —
+    // inaczej odebrałby rysowanie wszystkim pozostałym narzędziom.
+    const rolka = e.button === 1;
+    const lewyWTrybiePan = e.button === 0 && toolMode === "pan";
+    if (!rolka && !lewyWTrybiePan) return;
     const el = kontenerRef.current;
     if (!el) return;
     // `preventDefault` gasi windowsowe autoprzewijanie (kółko z kotwicą), które
     // inaczej przejmuje gest i pokazuje własny kursor.
-    e.preventDefault();
+    if (rolka) e.preventDefault();
     przesuwanieRef.current = { x: e.clientX, y: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop };
     el.setPointerCapture(e.pointerId);
-    setPrzesuwaRolka(true);
+    setPrzesuwa(true);
   }
 
   function przesuwajSrodkowym(e: ReactPointerEvent<HTMLDivElement>) {
@@ -543,7 +582,7 @@ export function DesignCanvas({
     if (!przesuwanieRef.current) return;
     przesuwanieRef.current = null;
     kontenerRef.current?.releasePointerCapture(e.pointerId);
-    setPrzesuwaRolka(false);
+    setPrzesuwa(false);
   }
 
   return (
@@ -556,8 +595,8 @@ export function DesignCanvas({
     <div
       ref={kontenerRef}
       className="pe-bez-suwaka mx-auto w-fit max-w-full overflow-auto rounded-card border border-border"
-      style={{ maxHeight, cursor: przesuwaRolka ? "grabbing" : undefined }}
-      onPointerDown={zacznijPrzesuwanieSrodkowym}
+      style={{ maxHeight, cursor: przesuwa ? "grabbing" : toolMode === "pan" ? "grab" : undefined }}
+      onPointerDown={zacznijPrzesuwanie}
       onPointerMove={przesuwajSrodkowym}
       onPointerUp={zakonczPrzesuwanieSrodkowym}
       onPointerCancel={zakonczPrzesuwanieSrodkowym}
@@ -570,7 +609,9 @@ export function DesignCanvas({
         height={planSize.h * zoom}
         scaleX={zoom}
         scaleY={zoom}
-        draggable={toolMode === "pan"}
+        // BEZ `draggable`: przesuwanie widoku obsługuje wyłącznie przewijanie
+        // kontenera (patrz `zacznijPrzesuwanie`). Przeciąganie sceny wypychało
+        // treść poza płótno, gdzie była przycinana bezpowrotnie.
         onWheel={handleWheel}
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}

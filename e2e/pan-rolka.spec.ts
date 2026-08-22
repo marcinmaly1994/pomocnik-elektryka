@@ -75,6 +75,58 @@ test("przesuwanie rolką nie stawia elementu ani nie rysuje", async ({ page }) =
   expect(zapisane).toEqual({ elementy: 0, sciany: 0, pomieszczenia: 0 });
 });
 
+test("narzędzie „Przesuń widok” przesuwa TAK SAMO jak rolka — jeden układ współrzędnych", async ({ page }) => {
+  await page.goto("/");
+  const box = await przyblizIZwrocBox(page);
+  await plotno(page).evaluate((el) => {
+    el.scrollLeft = 300;
+    el.scrollTop = 300;
+  });
+  const przed = await przewiniecie(page);
+
+  await page.getByRole("button", { name: "Przesuń widok", exact: true }).click();
+  await page.evaluate(() => window.scrollTo(0, 0));
+
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 100, cy + 70, { steps: 8 });
+  await page.mouse.up();
+
+  // Sedno naprawy: narzędzie rusza PRZEWINIĘCIEM kontenera, dokładnie jak rolka.
+  // Wcześniej przesuwało scenę Konvy, przez co przewinięcie zostawało nietknięte,
+  // a treść wypchnięta poza płótno była przycinana bezpowrotnie.
+  const po = await przewiniecie(page);
+  expect(po.x).toBe(przed.x - 100);
+  expect(po.y).toBe(przed.y - 70);
+});
+
+test("Ctrl+kółko przybliża i zostawia punkt spod kursora na miejscu", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const box = (await plotno(page).boundingBox())!;
+
+  const zoomPrzed = await page.getByRole("button", { name: /^Powiększenie/ }).textContent();
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down("Control");
+  for (let i = 0; i < 6; i++) {
+    await page.mouse.wheel(0, -120);
+    await page.waitForTimeout(60);
+  }
+  await page.keyboard.up("Control");
+  await page.waitForTimeout(200);
+
+  const zoomPo = await page.getByRole("button", { name: /^Powiększenie/ }).textContent();
+  expect(zoomPo).not.toBe(zoomPrzed);
+
+  // Kadr po przybliżeniu utrzymuje się PRZEWINIĘCIEM, a nie przesunięciem sceny —
+  // gdyby zoom nadal ruszał sceną, przewinięcie zostałoby na zerze.
+  const s = await przewiniecie(page);
+  expect(s.x + s.y).toBeGreaterThan(0);
+});
+
 test("lewy przycisk nadal stawia element — zabezpieczenie rolki nie zablokowało rysowania", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
