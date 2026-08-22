@@ -211,6 +211,10 @@ interface ProjectState {
   /** Zwraca świeżą sesję (odświeżając token, jeśli trzeba) albo `null`, gdy trzeba
    *  zalogować się ponownie. Każda ścieżka sięgająca do chmury przechodzi tędy. */
   zapewnijSesje: () => Promise<Session | null>;
+  /** Czy okno z listą zestawów protokołów jest otwarte. W store, bo otwiera je
+   *  zarówno przycisk w zakładce, jak i menu przy profilu — jedno okno, dwa wejścia. */
+  oknoZestawowOtwarte: boolean;
+  setOknoZestawow: (open: boolean) => void;
   saveProtokolyToCloud: (nazwa: string) => Promise<void>;
   loadProtokolyFromCloud: (id: string) => Promise<void>;
   /** Zaczyna nowy, pusty zestaw protokołów — odpina bieżący od zapisu w chmurze. */
@@ -241,6 +245,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   session: loadStoredSession(),
   cloudId: null,
   protokolyId: null,
+  oknoZestawowOtwarte: false,
   protokolyNazwa: "",
   limitBlokada: null,
   lastLocalSaveAt: null,
@@ -505,6 +510,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setLimitBlokada: (b) => set({ limitBlokada: b }),
+
+  setOknoZestawow: (open) => set({ oknoZestawowOtwarte: open }),
 
   zapewnijSesje: async () => {
     const { session, setSession } = get();

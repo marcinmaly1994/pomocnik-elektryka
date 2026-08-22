@@ -1,5 +1,20 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, CloudOff, FilePlus2, Folder, FolderOpen, HelpCircle, Loader2, LogOut, Pencil, Save, Settings, UserRound } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ClipboardList,
+  CloudOff,
+  FilePlus2,
+  Folder,
+  FolderOpen,
+  HelpCircle,
+  Loader2,
+  LogOut,
+  Pencil,
+  Save,
+  Settings,
+  UserRound,
+} from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
@@ -293,6 +308,9 @@ export default function App() {
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const cloudSaveError = useProjectStore((s) => s.cloudSaveError);
   const limitBlokada = useProjectStore((s) => s.limitBlokada);
+  const oknoZestawowOtwarte = useProjectStore((s) => s.oknoZestawowOtwarte);
+  const setOknoZestawow = useProjectStore((s) => s.setOknoZestawow);
+  const loadProtokolyFromCloud = useProjectStore((s) => s.loadProtokolyFromCloud);
   const setLimitBlokada = useProjectStore((s) => s.setLimitBlokada);
   const saveToCloud = useProjectStore((s) => s.saveToCloud);
   const loadFromCloud = useProjectStore((s) => s.loadFromCloud);
@@ -416,6 +434,12 @@ export default function App() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => setProjectsOpen(true)}>
                     <FolderOpen size={14} /> Moje projekty
+                  </DropdownMenuItem>
+                  {/* Protokoły są osobnym dokumentem, więc mają własne wejście obok
+                      projektów — inaczej dotarcie do zapisanych pomiarów wymagałoby
+                      przejścia do zakładki, czyli wiedzy, że w ogóle tam są. */}
+                  <DropdownMenuItem onSelect={() => setOknoZestawow(true)}>
+                    <ClipboardList size={14} /> Moje zestawy protokołów
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void saveToCloud()} disabled={cloudBusy}>
                     <Save size={14} /> Zapisz teraz
@@ -541,6 +565,32 @@ export default function App() {
           // Przy pełnym limicie okno otwiera się SAMO z komunikatem — bo zapis się
           // nie udał i użytkownik musi tu podjąć decyzję, a nie szukać, gdzie kliknąć.
           limitMsg={limitBlokada?.rodzaj === "projekt" ? limitBlokada.komunikat : null}
+        />
+      )}
+
+      {/* Okno zestawów protokołów żyje TUTAJ, a nie w zakładce: otwierają je dwa
+          różne miejsca (menu przy profilu i przycisk w zakładce), a dwie kopie tego
+          samego okna rozjechałyby się stanem. Po wczytaniu przechodzimy na zakładkę
+          protokołów, żeby było widać, co się właśnie wczytało. */}
+      {session && (
+        <ProjectsModal
+          open={oknoZestawowOtwarte || limitBlokada?.rodzaj === "protokoly"}
+          session={session}
+          rodzaj="protokoly"
+          onClose={() => {
+            setOknoZestawow(false);
+            setLimitBlokada(null);
+          }}
+          onLoad={async (id) => {
+            await loadProtokolyFromCloud(id);
+            if (!useProjectStore.getState().cloudSaveError) {
+              setOknoZestawow(false);
+              setTab("protokoly");
+            }
+          }}
+          busyMsg={cloudBusy ? "Wczytywanie…" : undefined}
+          loadError={cloudSaveError}
+          limitMsg={limitBlokada?.rodzaj === "protokoly" ? limitBlokada.komunikat : null}
         />
       )}
 

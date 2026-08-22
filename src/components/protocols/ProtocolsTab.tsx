@@ -4,7 +4,6 @@ import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
 import { downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { resolveDocHeader } from "@/lib/docHeader";
-import { ProjectsModal } from "@/components/auth/ProjectsModal";
 import type { ProtocolKey } from "@/types";
 
 const HEADER_FIELDS: [string, string][] = [
@@ -65,11 +64,8 @@ export function ProtocolsTab() {
   const protokolyId = useProjectStore((s) => s.protokolyId);
   const protokolyNazwa = useProjectStore((s) => s.protokolyNazwa);
   const saveProtokolyToCloud = useProjectStore((s) => s.saveProtokolyToCloud);
-  const loadProtokolyFromCloud = useProjectStore((s) => s.loadProtokolyFromCloud);
   const nowyZestawProtokolow = useProjectStore((s) => s.nowyZestawProtokolow);
-  const limitBlokada = useProjectStore((s) => s.limitBlokada);
-  const setLimitBlokada = useProjectStore((s) => s.setLimitBlokada);
-  const [zestawyOpen, setZestawyOpen] = useState(false);
+  const setOknoZestawow = useProjectStore((s) => s.setOknoZestawow);
   const [nazwaZestawu, setNazwaZestawu] = useState("");
 
   // Nazwa wczytanego zestawu wchodzi do pola, żeby „Zapisz zmiany” nie tworzyło
@@ -160,7 +156,7 @@ export function ProtocolsTab() {
           >
             <Save size={14} /> {protokolyId ? "Zapisz zmiany" : "Zapisz na koncie"}
           </button>
-          <button onClick={() => setZestawyOpen(true)} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+          <button onClick={() => setOknoZestawow(true)} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
             <FolderOpen size={14} /> Moje zestawy
           </button>
           {protokolyId && (
@@ -466,26 +462,9 @@ export function ProtocolsTab() {
         )}
       </div>
 
-      {session && (
-        <ProjectsModal
-          // Przy pełnym limicie okno otwiera się SAMO — zapis się nie udał, więc
-          // użytkownik musi tu wybrać, co usunąć, zamiast szukać, gdzie kliknąć.
-          open={zestawyOpen || limitBlokada?.rodzaj === "protokoly"}
-          session={session}
-          rodzaj="protokoly"
-          onClose={() => {
-            setZestawyOpen(false);
-            setLimitBlokada(null);
-          }}
-          onLoad={async (id) => {
-            await loadProtokolyFromCloud(id);
-            setZestawyOpen(false);
-          }}
-          busyMsg={cloudBusy ? "Wczytywanie…" : undefined}
-          loadError={cloudSaveError}
-          limitMsg={limitBlokada?.rodzaj === "protokoly" ? limitBlokada.komunikat : null}
-        />
-      )}
+      {/* Samo okno listy zestawów mieszka w App.tsx: otwierają je DWA miejsca —
+          ten przycisk i menu przy profilu — a dwie kopie tego samego okna
+          rozjechałyby się stanem. Tutaj zostaje wyłącznie przełącznik. */}
     </div>
   );
 }
