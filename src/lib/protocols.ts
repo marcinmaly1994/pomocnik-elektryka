@@ -13,6 +13,35 @@ export interface ProtocolColumn {
   compute?: (row: ProtocolRow) => string;
 }
 
+/**
+ * Zestaw par pomiarowych dla jednego obwodu. Liczba i rodzaj par wynikają z układu
+ * sieci, a nie z uznania: w TN-S/TT mierzy się 10 par, w TN-C — 6, bo nie ma tam
+ * osobnego N i PE (jest wspólny PEN), więc pomiary do N, do PE i N-PE po prostu
+ * nie istnieją.
+ */
+export interface GrupaPomiarow {
+  id: string;
+  label: string;
+  pary: string[];
+}
+
+const PARY_MIEDZYFAZOWE = ["L1-L2", "L2-L3", "L1-L3"];
+
+export const GRUPY_IZOLACJI: GrupaPomiarow[] = [
+  {
+    id: "tns",
+    label: "3-fazowy TN-S / TT — 10 pomiarów",
+    pary: [...PARY_MIEDZYFAZOWE, "L1-N", "L2-N", "L3-N", "L1-PE", "L2-PE", "L3-PE", "N-PE"],
+  },
+  {
+    id: "tnc",
+    label: "3-fazowy TN-C — 6 pomiarów",
+    pary: [...PARY_MIEDZYFAZOWE, "L1-PEN", "L2-PEN", "L3-PEN"],
+  },
+  { id: "jedno-tns", label: "1-fazowy TN-S / TT — 3 pomiary", pary: ["L-N", "L-PE", "N-PE"] },
+  { id: "jedno-tnc", label: "1-fazowy TN-C — 1 pomiar", pary: ["L-PEN"] },
+];
+
 export interface ProtocolDef {
   title: string;
   norm: string;
@@ -28,6 +57,10 @@ export interface ProtocolDef {
    *  wynikające z typu wyłącznika. Drukowane w protokole pod kryterium głównym,
    *  żeby dokument mówił wprost, wobec czego oceniono wiersze. */
   extraCriterion?: string;
+  /** Gotowe zestawy wierszy dodawane jednym kliknięciem — po jednym wierszu na parę
+   *  pomiarową. Bez tego użytkownik musiałby dodać 10 wierszy ręcznie i sam pamiętać,
+   *  których par nie wolno pominąć. */
+  grupy?: GrupaPomiarow[];
 }
 
 /**
@@ -65,24 +98,25 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     title: "Pomiar rezystancji izolacji",
     norm: "PN-HD 60364-6 zał. D — kontrola po wykonaniu (rezystancja izolacji)",
     intro: "Pomiar wykonano miernikiem rezystancji izolacji przy odłączonym zasilaniu i odłączonych odbiornikach.",
+    // JEDEN WIERSZ = JEDEN POMIAR PARY, a nie jeden wiersz na obwód z kompletem
+    // kolumn. Pełny zestaw dla TN-S/TT to 10 par, dla TN-C 6 — w układzie „kolumna
+    // na parę" dawałoby to 13 kolumn liczbowych, w większości pustych, bo każdy
+    // obwód używa tylko swojego podzbioru. Wiersz na parę jest wąski, czytelny,
+    // każdy pomiar dostaje własną ocenę i tak samo drukuje się w protokole.
     columns: [
-      { key: "obwod", label: "Obwód / miejsce pomiaru", w: 128, type: "text" },
-      { key: "uklad", label: "Obwód", w: 52, type: "select", options: ["1-faz", "3-faz"], default: "1-faz" },
-      { key: "u", label: "U pom. [V]", w: 52, type: "select", options: ["250", "500", "1000"], default: "500" },
-      // Kolumna wyłącznie dla obwodów 3-fazowych: pomiary międzyfazowe (L1-L2,
-      // L1-L3, L2-L3), których w obwodzie jednofazowym po prostu nie ma.
-      { key: "ll", label: "L-L [MΩ]", w: 52, type: "number" },
-      { key: "ln", label: "L-N [MΩ]", w: 52, type: "number" },
-      { key: "lpe", label: "L-PE [MΩ]", w: 52, type: "number" },
-      { key: "npe", label: "N-PE [MΩ]", w: 52, type: "number" },
+      { key: "obwod", label: "Obwód / miejsce pomiaru", w: 150, type: "text" },
+      { key: "para", label: "Pomiar", w: 70, type: "text" },
+      { key: "u", label: "U pom. [V]", w: 60, type: "select", options: ["250", "500", "1000"], default: "500" },
+      { key: "r", label: "R [MΩ]", w: 62, type: "number" },
       {
         key: "rmin",
         label: "R min [MΩ]",
-        w: 58,
+        w: 62,
         type: "computed",
         compute: (r) => minRezystancjaIzolacji(Number(r.u ?? 500)).toFixed(1),
       },
     ],
+    grupy: GRUPY_IZOLACJI,
     // Próg bierze się z napięcia próby (kolumna „R min"), a nie z tego pola. Zostaje
     // ono jako WŁASNE, ostrzejsze wymaganie — np. gdy zleceniodawca stawia wyższą
     // poprzeczkę niż norma. Zero znaczy „oceniaj wyłącznie wg normy".
@@ -90,14 +124,17 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     limitDefault: 0,
     limitUnit: "MΩ",
     extraCriterion:
-      "Minimum wg PN-HD 60364-6 tabl. 6.1: 0,5 MΩ przy 250 V (SELV/PELV), 1,0 MΩ przy 500 V i 1000 V. W obwodach 3-fazowych w kolumnie L-L wpisuje się NAJGORSZY wynik z pomiarów międzyfazowych (L1-L2, L1-L3, L2-L3); analogicznie w pozostałych kolumnach — najgorszy wynik z danej grupy.",
+      "Minimum wg PN-HD 60364-6 tabl. 6.1: 0,5 MΩ przy 250 V (SELV/PELV), 1,0 MΩ przy 500 V i 1000 V. Komplet pomiarów: TN-S/TT — L1-L2, L2-L3, L1-L3, L1-N, L2-N, L3-N, L1-PE, L2-PE, L3-PE, N-PE (10); TN-C — L1-L2, L2-L3, L1-L3, L1-PEN, L2-PEN, L3-PEN (6), bo brak osobnych N i PE.",
     evaluate: (r, limit) => {
-      // Kolumna L-L dochodzi tylko w obwodach 3-fazowych; w jednofazowych zostaje
-      // pusta i wypada z oceny tak samo jak każdy inny niewypełniony pomiar.
-      const vals = [r.ll, r.ln, r.lpe, r.npe].map(Number).filter((v) => !isNaN(v) && v > 0);
-      if (!vals.length) return null;
       const wymagane = Math.max(minRezystancjaIzolacji(Number(r.u ?? 500)), Number(limit) || 0);
-      return Math.min(...vals) >= wymagane;
+      // Wiersze zapisane przed przejściem na model „para na wiersz" mają osobne
+      // kolumny L-N/L-PE/N-PE. Czytamy je nadal, żeby stare protokoły nie straciły
+      // ocen — decyduje wtedy najgorszy z zapisanych pomiarów.
+      const stare = [r.ll, r.ln, r.lpe, r.npe].map(Number).filter((v) => !isNaN(v) && v > 0);
+      if (stare.length) return Math.min(...stare) >= wymagane;
+      const v = Number(r.r);
+      if (isNaN(v) || r.r === "" || r.r === undefined) return null;
+      return v >= wymagane;
     },
   },
 

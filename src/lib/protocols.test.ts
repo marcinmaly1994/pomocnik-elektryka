@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PROTOCOL_DEFS, protocolVerdict, type ProtocolRow } from "./protocols";
+import { GRUPY_IZOLACJI, PROTOCOL_DEFS, protocolVerdict, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
@@ -101,6 +101,47 @@ describe("PROTOCOL_DEFS.izolacja — próg zależny od napięcia próby", () => 
     expect(rmin.compute!({ u: "250" })).toBe("0.5");
     expect(rmin.compute!({ u: "500" })).toBe("1.0");
     expect(rmin.compute!({ u: "1000" })).toBe("1.0");
+  });
+});
+
+describe("izolacja — komplety pomiarów zależne od układu sieci", () => {
+  const grupa = (id: string) => GRUPY_IZOLACJI.find((g) => g.id === id)!;
+
+  it("TN-S/TT ma 10 par, w tym wszystkie międzyfazowe, do N, do PE i N-PE", () => {
+    expect(grupa("tns").pary).toEqual([
+      "L1-L2",
+      "L2-L3",
+      "L1-L3",
+      "L1-N",
+      "L2-N",
+      "L3-N",
+      "L1-PE",
+      "L2-PE",
+      "L3-PE",
+      "N-PE",
+    ]);
+  });
+
+  it("TN-C ma 6 par — bez pomiarów do N, do PE i N-PE, bo tam jest wspólny PEN", () => {
+    const pary = grupa("tnc").pary;
+    expect(pary).toEqual(["L1-L2", "L2-L3", "L1-L3", "L1-PEN", "L2-PEN", "L3-PEN"]);
+    expect(pary.some((p) => p === "N-PE" || p.endsWith("-N") || p.endsWith("-PE"))).toBe(false);
+  });
+
+  it("każda para występuje tylko raz — komplet bez duplikatów", () => {
+    for (const g of GRUPY_IZOLACJI) expect(new Set(g.pary).size).toBe(g.pary.length);
+  });
+
+  it("ocenia pojedynczy pomiar pary wobec progu z napięcia próby", () => {
+    const def = PROTOCOL_DEFS.izolacja;
+    expect(def.evaluate!({ para: "L1-PE", u: "500", r: 1.2 }, 0)).toBe(true);
+    expect(def.evaluate!({ para: "L1-PE", u: "500", r: 0.7 }, 0)).toBe(false);
+    // ten sam wynik w obwodzie SELV badanym 250 V jest zgodny
+    expect(def.evaluate!({ para: "L1-PE", u: "250", r: 0.7 }, 0)).toBe(true);
+  });
+
+  it("pusty pomiar nie jest oceniany — wiersz czeka na wypełnienie", () => {
+    expect(PROTOCOL_DEFS.izolacja.evaluate!({ para: "L1-PE", u: "500", r: "" }, 0)).toBeNull();
   });
 });
 

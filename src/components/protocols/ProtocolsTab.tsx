@@ -56,6 +56,7 @@ export function ProtocolsTab() {
    *  wejściu w zakładkę. Stan zwinięcia w localStorage, bo to preferencja widoku,
    *  a nie część protokołu. */
   const [daneZwiniete, setDaneZwiniete] = useState(odczytajDaneZwiniete);
+  const [nazwaObwodu, setNazwaObwodu] = useState("");
 
   function przelaczDane() {
     setDaneZwiniete((zwiniete) => {
@@ -89,6 +90,16 @@ export function ProtocolsTab() {
   }
   function removeRow(i: number) {
     update({ rows: rows.filter((_, idx) => idx !== i) });
+  }
+  /** Dokłada komplet wierszy dla jednego obwodu — po jednym na parę pomiarową.
+   *  Nazwa obwodu wpisywana raz, zamiast powtarzania jej w dziesięciu wierszach. */
+  function addGroup(grupa: { pary: string[] }) {
+    const blank: ProtocolRow = {};
+    (def.columns ?? []).forEach((c) => {
+      blank[c.key] = c.default !== undefined ? c.default : "";
+    });
+    update({ rows: [...rows, ...grupa.pary.map((para) => ({ ...blank, obwod: nazwaObwodu, para }))] });
+    setNazwaObwodu("");
   }
   function initChecklist() {
     update({ rows: (def.items ?? []).map((t) => ({ text: t, status: "" })) });
@@ -353,9 +364,35 @@ export function ProtocolsTab() {
                 </tbody>
               </table>
             </div>
-            <button onClick={addRow} className="pe-btn-ghost mt-3 flex items-center gap-1 px-2.5 py-1.5 text-xs">
-              <Plus size={13} /> Dodaj wiersz
-            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button onClick={addRow} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs">
+                <Plus size={13} /> Dodaj wiersz
+              </button>
+              {/* Komplet par jednym kliknięciem. Liczba pomiarów wynika z układu sieci
+                  i łatwo o niej zapomnieć — przycisk pilnuje, żeby żadna para nie wypadła. */}
+              {def.grupy?.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => addGroup(g)}
+                  title={`Dodaje ${g.pary.length} wierszy: ${g.pary.join(", ")}`}
+                  className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                >
+                  <Plus size={13} /> {g.label}
+                </button>
+              ))}
+            </div>
+            {def.grupy && (
+              <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                Nazwa obwodu dla dodawanego kompletu:
+                <input
+                  value={nazwaObwodu}
+                  onChange={(e) => setNazwaObwodu(e.target.value)}
+                  placeholder="np. Obwód gniazd — kuchnia"
+                  aria-label="Nazwa obwodu dla dodawanego kompletu"
+                  className="pe-input w-56 text-sm"
+                />
+              </label>
+            )}
           </>
         )}
 
