@@ -1171,10 +1171,27 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               // Przy samej krawędzi (`left-0`), bez zaokrąglenia i ramki od tej strony:
               // panel wygląda wtedy jak wysunięty Z krawędzi okna, a nie jak kafelek
               // przypadkiem o nią oparty.
-              ? "absolute bottom-0 left-0 top-0 z-30 flex overflow-hidden rounded-r-card border border-l-0 border-border bg-white shadow-xl transition-transform duration-200"
+              // Animujemy WYŁĄCZNIE `transform`. Przy `transition-all` płynnie jechałyby
+              // też `top`/`bottom`, przez co karta gonilaby wysuwający się pasek
+              // z opóźnieniem i na moment go zasłaniała — czyli dokładnie to, co
+              // ta zmiana ma naprawić. Odsunięcie ma być natychmiastowe.
+              ? "absolute left-0 z-30 flex overflow-hidden rounded-r-card border border-l-0 border-border bg-white shadow-xl transition-transform duration-200"
               : "flex shrink-0 overflow-hidden rounded-card border border-border bg-white"
           }
-          style={pelnyEkran ? { transform: widocznaLewa ? "translateX(0)" : "translateX(calc(-100% - 1rem))" } : undefined}
+          // Karta USTĘPUJE pasków poziomych, zamiast się na nie kłaść. Wszystkie trzy
+          // panele mają ten sam `z-index`, więc o wierzchu decydowała kolejność w DOM
+          // i karta przykrywała lewy koniec górnego paska — czyli kondygnacje i podkład.
+          // Odsunięcie zamiast walki na `z-index` daje układ, w którym da się korzystać
+          // z obu naraz: pasek u góry, narzędzia pod nim (tak jak w edytorach kodu).
+          style={
+            pelnyEkran
+              ? {
+                  top: widocznaGora ? rozmiaryChrome.gora : 0,
+                  bottom: widocznyDol ? rozmiaryChrome.dol : 0,
+                  transform: widocznaLewa ? "translateX(0)" : "translateX(calc(-100% - 1rem))",
+                }
+              : undefined
+          }
         >
           {/* Pinezka w rogu karty, na tle, żeby nie zlewała się z zawartością panelu. */}
           {pelnyEkran && <Pinezka ktore="lewo" klasa="absolute right-1 top-1 z-10 bg-white/90" />}
@@ -1530,22 +1547,24 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         </button>
       )}
 
-      {pelnyEkran && (
-        <>
-          {/* Jedyny element widoczny STALE. Bez niego tryb bywa pułapką: paski są
-              schowane, więc nie widać żadnego wyjścia, a nie każdy zgadnie Escape. */}
-          <button
-            onClick={przelaczPelnyEkran}
-            title="Wyjdź z pełnego ekranu (Esc)"
-            // Inna nazwa niż przycisk w pasku, żeby w drzewie dostępności nie stały
-            // dwa różne elementy o identycznej etykiecie.
-            aria-label="Zamknij pełny ekran"
-            className="absolute right-3 top-3 z-40 flex items-center gap-1.5 rounded-lg border border-border bg-white/85 px-2 py-1 text-[11px] text-slate-500 shadow-sm backdrop-blur transition-colors hover:text-ink"
-          >
-            <Minimize2 size={13} />
-            Esc
-          </button>
-        </>
+      {/* Wyjście awaryjne na czas, gdy paski są schowane — bez niego tryb bywa
+          pułapką: nie widać żadnego wyjścia, a nie każdy zgadnie Escape.
+          Znika, GDY GÓRNY PASEK JEST NA WIDOKU, bo pasek ma własny przycisk wyjścia
+          dokładnie w tym rogu. Dwa przyciski w jednym miejscu nie tylko dublowały
+          funkcję — pigułka kładła się na sąsiednich kontrolkach paska („Dopasuj widok
+          do planu", pinezka), więc zamiast pomagać, blokowała klikanie. */}
+      {pelnyEkran && !widocznaGora && (
+        <button
+          onClick={przelaczPelnyEkran}
+          title="Wyjdź z pełnego ekranu (Esc)"
+          // Inna nazwa niż przycisk w pasku, żeby w drzewie dostępności nie stały
+          // dwa różne elementy o identycznej etykiecie.
+          aria-label="Zamknij pełny ekran"
+          className="absolute right-3 top-3 z-40 flex items-center gap-1.5 rounded-lg border border-border bg-white/85 px-2 py-1 text-[11px] text-slate-500 shadow-sm backdrop-blur transition-colors hover:text-ink"
+        >
+          <Minimize2 size={13} />
+          Esc
+        </button>
       )}
         </div>
       )}

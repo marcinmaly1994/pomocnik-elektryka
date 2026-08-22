@@ -261,6 +261,65 @@ test("odpięcie przywraca chowanie, a przypięcie przeżywa odświeżenie", asyn
   await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeLessThan(0);
 });
 
+test("przypięty panel po lewej NIE zasłania górnego paska", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await odslonNarzedzia(page);
+  await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
+  // Pinezka karty leży tuż pod górną krawędzią, więc kliknięcie jej wysuwa PRZY OKAZJI
+  // górny pasek. Odsuwamy kursor i czekamy, aż wszystko wróci do stanu spoczynku,
+  // żeby test sprawdzał układ, a nie skutek uboczny własnego kliknięcia.
+  await page.mouse.move(page.viewportSize()!.width / 2, page.viewportSize()!.height / 2);
+  await page.waitForTimeout(500);
+
+  await page.getByRole("button", { name: "Pokaż pasek edytora" }).click();
+  await page.waitForTimeout(400);
+
+  const karta = (await lewaKarta(page).boundingBox())!;
+  const pasek = (await page.getByLabel("Rozmiar elementów").locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]").boundingBox())!;
+
+  // Wszystkie panele mają ten sam z-index, więc o wierzchu decydowała kolejność
+  // w DOM — karta przykrywała lewy koniec paska, czyli kondygnacje i podkład.
+  expect(karta.y).toBeGreaterThanOrEqual(pasek.y + pasek.height - 2);
+
+  // Dowód użytkowy: klik w „Parter” ma trafić w „Parter”, a nie w narzędzie pod spodem.
+  const parter = page.getByRole("button", { name: "Parter" });
+  await expect(parter).toBeVisible();
+  const trafiaWParter = await parter.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const pod = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return pod ? pod.closest("button") === el : false;
+  });
+  expect(trafiaWParter).toBe(true);
+});
+
+test("przycisk Esc znika, gdy górny pasek jest na widoku — nie zasłania jego kontrolek", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+
+  // Paski schowane — pigułka jest jedynym widocznym wyjściem i MUSI być.
+  await expect(page.getByRole("button", { name: "Zamknij pełny ekran" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Pokaż pasek edytora" }).click();
+  await page.waitForTimeout(400);
+
+  // Pasek ma własny przycisk wyjścia w tym samym rogu — pigułka tylko przykrywała
+  // sąsiednie kontrolki („Dopasuj widok do planu”, pinezkę).
+  await expect(page.getByRole("button", { name: "Zamknij pełny ekran" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Wyjdź z pełnego ekranu" })).toBeVisible();
+
+  const dopasuj = page.getByRole("button", { name: "Dopasuj widok do planu" });
+  const klikalny = await dopasuj.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const pod = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return pod ? pod.closest("button") === el : false;
+  });
+  expect(klikalny).toBe(true);
+});
+
 test("kondygnacje mieszkają w jednym pasku razem z podkładem i siatką", async ({ page }) => {
   await page.goto("/");
 
