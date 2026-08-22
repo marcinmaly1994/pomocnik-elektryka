@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filtrujPoRodzaju, LIMIT_ZAPISOW, rodzajDokumentu, sprawdzLimit, znajdzPoNazwie } from "./dokumenty";
+import { decyzjaZapisu, filtrujPoRodzaju, LIMIT_ZAPISOW, rodzajDokumentu, sprawdzLimit, znajdzPoNazwie } from "./dokumenty";
 
 const poz = (id: string, kind?: string | null) => ({ id, kind });
 
@@ -84,5 +84,59 @@ describe("znajdzPoNazwie", () => {
 
   it("brak dopasowania zwraca null — powstanie nowy dokument", () => {
     expect(znajdzPoNazwie(lista, "projekt", "Nowy obiekt")).toBeNull();
+  });
+});
+
+describe("decyzjaZapisu", () => {
+  const lista = [
+    { id: "a", name: "Mój dom", kind: "projekt" },
+    { id: "b", name: "Dom Kowalskich", kind: "projekt" },
+  ];
+  const bazowe = { lista, rodzaj: "projekt" as const };
+
+  it("nowy dokument o wolnej nazwie -> utwórz", () => {
+    expect(decyzjaZapisu({ ...bazowe, nazwa: "Nowy obiekt", biezacyId: null })).toEqual({ akcja: "utworz" });
+  });
+
+  it("zapis zmian we WŁASNYM dokumencie -> aktualizuj, bez pytania", () => {
+    // Gdyby tu padło pytanie, wracałoby przy każdym zapisie — czyli co 2,5 s.
+    expect(decyzjaZapisu({ ...bazowe, nazwa: "Mój dom", biezacyId: "a" })).toEqual({ akcja: "aktualizuj", id: "a" });
+  });
+
+  it("nowy dokument o ZAJĘTEJ nazwie -> pytaj", () => {
+    expect(decyzjaZapisu({ ...bazowe, nazwa: "Mój dom", biezacyId: null })).toEqual({ akcja: "pytaj", id: "a" });
+  });
+
+  it("ZMIANA NAZWY zapisanego projektu na cudzą -> pytaj (to była luka)", () => {
+    // Projekt „b" przemianowany na „Mój dom": wcześniej kod szedł prosto do
+    // aktualizacji „b", bo miał już powiązanie z chmurą — i powstawały dwa wpisy
+    // o tej samej nazwie, bez ostrzeżenia.
+    expect(decyzjaZapisu({ ...bazowe, nazwa: "Mój dom", biezacyId: "b" })).toEqual({ akcja: "pytaj", id: "a" });
+  });
+
+  it("potwierdzone nadpisanie pomija pytanie", () => {
+    expect(decyzjaZapisu({ ...bazowe, nazwa: "Mój dom", biezacyId: null, wymuszonyId: "a" })).toEqual({
+      akcja: "aktualizuj",
+      id: "a",
+    });
+  });
+
+  it("nowa nazwa przy pełnym limicie -> limit", () => {
+    const pelna = Array.from({ length: LIMIT_ZAPISOW }, (_, i) => ({ id: `p${i}`, name: `P${i}`, kind: "projekt" }));
+    const d = decyzjaZapisu({ lista: pelna, rodzaj: "projekt", nazwa: "Szósty", biezacyId: null });
+    expect(d.akcja).toBe("limit");
+  });
+
+  it("pełny limit NIE blokuje zapisu zmian w istniejącym dokumencie", () => {
+    const pelna = Array.from({ length: LIMIT_ZAPISOW }, (_, i) => ({ id: `p${i}`, name: `P${i}`, kind: "projekt" }));
+    expect(decyzjaZapisu({ lista: pelna, rodzaj: "projekt", nazwa: "P2", biezacyId: "p2" })).toEqual({
+      akcja: "aktualizuj",
+      id: "p2",
+    });
+  });
+
+  it("kolizji szuka tylko w tym samym rodzaju", () => {
+    const mieszana = [{ id: "x", name: "Hala", kind: "protokoly" }];
+    expect(decyzjaZapisu({ lista: mieszana, rodzaj: "projekt", nazwa: "Hala", biezacyId: null })).toEqual({ akcja: "utworz" });
   });
 });

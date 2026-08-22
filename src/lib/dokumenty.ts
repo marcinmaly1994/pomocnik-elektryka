@@ -57,6 +57,44 @@ export function znajdzPoNazwie(
   return trafienie?.id ?? null;
 }
 
+/**
+ * Co zrobić z żądaniem zapisu. Wydzielone z warstwy sieciowej, bo to TU siedzi cała
+ * logika, którą łatwo przeoczyć — i którą raz już przeoczyłem: kolizję nazw
+ * sprawdzałem wyłącznie dla dokumentów bez powiązania z chmurą, więc zmiana nazwy
+ * już zapisanego projektu na istniejącą przechodziła bez pytania i tworzyła dwa
+ * wpisy o tej samej nazwie.
+ */
+export type DecyzjaZapisu =
+  | { akcja: "aktualizuj"; id: string }
+  | { akcja: "utworz" }
+  | { akcja: "pytaj"; id: string }
+  | { akcja: "limit"; komunikat: string };
+
+export function decyzjaZapisu(opts: {
+  lista: Pick<PozycjaDokumentu, "id" | "name" | "kind">[];
+  rodzaj: RodzajDokumentu;
+  nazwa: string;
+  /** Id dokumentu, który w tej sesji wczytaliśmy albo zapisaliśmy. */
+  biezacyId: string | null;
+  /** Id wskazane przez użytkownika po potwierdzeniu nadpisania — pomija pytanie. */
+  wymuszonyId?: string | null;
+}): DecyzjaZapisu {
+  const { lista, rodzaj, nazwa, biezacyId, wymuszonyId } = opts;
+  if (wymuszonyId) return { akcja: "aktualizuj", id: wymuszonyId };
+
+  const zNazwy = znajdzPoNazwie(lista, rodzaj, nazwa);
+  // Kolizja to wpis o tej samej nazwie INNY niż ten, który właśnie edytujemy.
+  // Zapisanie zmian we własnym dokumencie nie jest kolizją i nie może pytać —
+  // inaczej pytanie wracałoby przy każdym zapisie.
+  if (zNazwy && zNazwy !== biezacyId) return { akcja: "pytaj", id: zNazwy };
+
+  if (biezacyId) return { akcja: "aktualizuj", id: biezacyId };
+
+  const limit = sprawdzLimit(lista, rodzaj, null);
+  if (limit.zablokowany) return { akcja: "limit", komunikat: limit.komunikat };
+  return { akcja: "utworz" };
+}
+
 export interface WynikLimitu {
   /** `true` = zapisu nie wolno wykonać, trzeba najpierw coś usunąć. */
   zablokowany: boolean;

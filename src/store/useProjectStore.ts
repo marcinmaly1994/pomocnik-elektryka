@@ -15,7 +15,7 @@ import { DEFAULT_PLAN_SIZE, nextRoomColor, nextRoomName, roomColorForIndex, scal
 import { DEFAULT_PRICES } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
-import { sprawdzLimit, znajdzPoNazwie, type RodzajDokumentu } from "@/lib/dokumenty";
+import { decyzjaZapisu, type RodzajDokumentu } from "@/lib/dokumenty";
 import {
   SUPABASE_CONFIGURED,
   sesjaZOdpowiedzi,
@@ -43,6 +43,10 @@ const AUTOSAVE_KEY = "pomocnikelektryka_projekt_autosave";
  *  poza store'em (jak `lastAutosavedJson` niżej), żeby porównanie z bieżącym
  *  stanem nie wymagało osobnego zapisu do store'a przy każdej zmianie. */
 let lastCloudSavedJson: string | null = null;
+
+/** Nazwa, pod którą projekt trafił ostatnio do chmury. Zmiana nazwy musi wymusić
+ *  ponowne sprawdzenie kolizji — patrz `saveToCloud`. */
+let ostatniaZapisanaNazwa: string | null = null;
 
 function loadStoredSession(): Session | null {
   try {
@@ -331,6 +335,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     // bez wyzerowania tego automatyczny zapis w tle nadpisałby STARY projekt
     // pustym draftem zamiast założyć nowy wiersz.
     lastCloudSavedJson = null;
+    ostatniaZapisanaNazwa = null;
     set((state) => ({
       draft: emptyDraft,
       past: [],
@@ -505,36 +510,37 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // obie listy pokazywałyby wszystko i limity liczyłyby się wspólnie.
       const data = { ...payload, kind: "projekt" } as unknown as Record<string, unknown>;
       let docelowyId = cloudId;
-      if (!docelowyId) {
+      // Listę pobieramy nie tylko dla nowego projektu, ale też PO ZMIANIE NAZWY.
+      // Bez tego drugiego warunku zmiana nazwy zapisanego projektu na już zajętą
+      // szła prosto do aktualizacji i tworzyła drugi wpis o tej samej nazwie —
+      // bez żadnego pytania. Przy niezmienionej nazwie dodatkowego żądania nie ma,
+      // więc autozapis nadal kosztuje jedno wywołanie.
+      if (!docelowyId || projectName !== ostatniaZapisanaNazwa) {
         const lista = await supaListProjects(session.token, session.user.id);
-        // Zapis pod ISTNIEJĄCĄ NAZWĄ nadpisuje ten projekt, zamiast tworzyć kolejny.
-        // Bez tego konto zapychało się kopiami tego samego projektu, a po piątej
-        // każdy autozapis odbijał się od limitu.
-        docelowyId = opcje?.nadpiszId ?? znajdzPoNazwie(lista, "projekt", projectName);
-        // Trafiliśmy na wpis o tej samej nazwie, którego w tej sesji nie otwieraliśmy —
-        // pytamy, zamiast nadpisywać. Autozapis przy okazji wstrzymujemy, bo inaczej
-        // dopytywałby co 2,5 s.
-        if (docelowyId && !opcje?.nadpiszId) {
+        const decyzja = decyzjaZapisu({
+          lista,
+          rodzaj: "projekt",
+          nazwa: projectName,
+          biezacyId: cloudId,
+          wymuszonyId: opcje?.nadpiszId,
+        });
+        if (decyzja.akcja === "pytaj") {
+          // Autozapis wstrzymujemy, bo inaczej dopytywałby co 2,5 s.
           set({
             autozapisWstrzymany: true,
-            pytanieONadpisanie: { rodzaj: "projekt", nazwa: projectName, id: docelowyId },
+            pytanieONadpisanie: { rodzaj: "projekt", nazwa: projectName, id: decyzja.id },
           });
           return;
         }
-        if (!docelowyId) {
-          // Limit dotyczy tylko NOWYCH nazw; nadpisanie przechodzi zawsze, żeby przy
-          // pełnym limicie nie dało się utracić bieżącej pracy.
-          const wynik = sprawdzLimit(lista, "projekt", null);
-          if (wynik.zablokowany) {
-            // Autozapis chodzi co 2,5 s, więc bez wstrzymania otwierałby okno listy
-            // w kółko. Okno pokazujemy WYŁĄCZNIE przy zapisie ręcznym — tam jest to
-            // odpowiedź na kliknięcie, a nie wyskakujące znikąd.
-            set({ autozapisWstrzymany: true });
-            if (opcje?.reczny) set({ limitBlokada: { rodzaj: "projekt", komunikat: wynik.komunikat } });
-            else set({ cloudSaveError: wynik.komunikat });
-            return;
-          }
+        if (decyzja.akcja === "limit") {
+          // Okno listy pokazujemy WYŁĄCZNIE przy zapisie ręcznym — tam jest to
+          // odpowiedź na kliknięcie, a nie coś wyskakującego znikąd.
+          set({ autozapisWstrzymany: true });
+          if (opcje?.reczny) set({ limitBlokada: { rodzaj: "projekt", komunikat: decyzja.komunikat } });
+          else set({ cloudSaveError: decyzja.komunikat });
+          return;
         }
+        docelowyId = decyzja.akcja === "aktualizuj" ? decyzja.id : null;
       }
       if (docelowyId) {
         await supaUpdateProject(session.token, docelowyId, { name: projectName, data, updated_at: new Date().toISOString() });
@@ -544,6 +550,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         set({ cloudId: row.id });
       }
       lastCloudSavedJson = JSON.stringify(payload);
+      ostatniaZapisanaNazwa = projectName;
       set({ lastCloudSaveAt: Date.now(), autozapisWstrzymany: false });
     } catch (e) {
       set({ cloudSaveError: e instanceof Error ? e.message : "Nie udało się zapisać w chmurze" });
@@ -594,19 +601,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // użytkownik mógł zapisać coś na innym urządzeniu i lokalny stan byłby nieaktualny.
       const lista = await supaListProjects(session.token, session.user.id);
       const tytulRoboczy = nazwa.trim() || docHeader.obiekt || "Protokoły";
-      // Zapis pod istniejącą nazwą nadpisuje ten zestaw — tak samo jak przy projektach.
-      const docelowyId = protokolyId ?? opcje?.nadpiszId ?? znajdzPoNazwie(lista, "protokoly", tytulRoboczy);
-      // Cudzy wpis o tej samej nazwie — pytamy przed nadpisaniem. Wpis wczytany albo
-      // zapisany w tej sesji (`protokolyId`) idzie bez pytania: to „zapisz zmiany”.
-      if (docelowyId && !protokolyId && !opcje?.nadpiszId) {
-        set({ pytanieONadpisanie: { rodzaj: "protokoly", nazwa: tytulRoboczy, id: docelowyId } });
+      // Ta sama decyzja co przy projektach — łącznie z przypadkiem, w którym zestaw
+      // jest już zapisany, ale użytkownik zmienił mu nazwę na zajętą przez inny.
+      const decyzja = decyzjaZapisu({
+        lista,
+        rodzaj: "protokoly",
+        nazwa: tytulRoboczy,
+        biezacyId: protokolyId,
+        wymuszonyId: opcje?.nadpiszId,
+      });
+      if (decyzja.akcja === "pytaj") {
+        set({ pytanieONadpisanie: { rodzaj: "protokoly", nazwa: tytulRoboczy, id: decyzja.id } });
         return;
       }
-      const wynik = sprawdzLimit(lista, "protokoly", docelowyId);
-      if (wynik.zablokowany) {
-        set({ limitBlokada: { rodzaj: "protokoly", komunikat: wynik.komunikat } });
+      if (decyzja.akcja === "limit") {
+        set({ limitBlokada: { rodzaj: "protokoly", komunikat: decyzja.komunikat } });
         return;
       }
+      const docelowyId = decyzja.akcja === "aktualizuj" ? decyzja.id : null;
       // Do dokumentu idą WYŁĄCZNIE dane protokołów — bez planu, kondygnacji i
       // podkładów. To one czynią z tego dokument niezależny od projektowania.
       const data = { kind: "protokoly", docHeader, protocols } as unknown as Record<string, unknown>;
@@ -663,6 +675,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // bez tego automatyczny zapis w tle odpaliłby zbędny request od razu
       // po wczytaniu, mimo że nic się jeszcze nie zmieniło.
       lastCloudSavedJson = JSON.stringify(getProjectPayload());
+      // Nazwa wczytanego projektu liczy się jako „ostatnio zapisana" — inaczej
+      // pierwszy autozapis po wczytaniu uznałby ją za zmienioną i niepotrzebnie
+      // pobierał listę, żeby sprawdzić kolizję z samym sobą.
+      ostatniaZapisanaNazwa = row.name || "Projekt";
       set({ cloudId: row.id, lastCloudSaveAt: Date.now() });
     } catch (e) {
       set({ cloudSaveError: e instanceof Error ? e.message : "Nie udało się wczytać projektu" });
