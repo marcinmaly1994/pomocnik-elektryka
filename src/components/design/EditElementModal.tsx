@@ -1,0 +1,210 @@
+import { useEffect, useState } from "react";
+import type { ElementType, InstallationElement } from "@/types";
+import { ELEMENT_SECTIONS, ELEMENT_TYPES, VARIANTS_FOR } from "@/lib/elements";
+import { circuitCount, isLightControl, isLightPoint, manualGroups } from "@/lib/lightGroups";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
+
+export interface EditElementPatch {
+  type: ElementType;
+  room: string;
+  gangs: number;
+  dedicated: boolean;
+  note: string;
+  /** Po jednej pozycji na obwód; `null` = ten obwód dobierany automatycznie.
+   *  `undefined` całości = wszystkie obwody automatyczne. */
+  lightGroup?: (number | null)[];
+}
+
+interface EditElementModalProps {
+  element: InstallationElement;
+  roomSuggestions: string[];
+  /** Numery wyliczone automatycznie, po jednym na obwód — pokazywane jako podpowiedź
+   *  w polach, których użytkownik nie nadpisał. */
+  autoLightGroups?: (number | undefined)[];
+  onClose: () => void;
+  onSave: (patch: EditElementPatch) => void;
+}
+
+/**
+ * Edycja istniejącego elementu na planie: zmiana typu, liczby gniazd/klawiszy
+ * w ramce (tam, gdzie typ na to pozwala), przypisanego pomieszczenia i (dla
+ * gniazdek) własnego obwodu.
+ */
+export function EditElementModal({ element, roomSuggestions, autoLightGroups, onClose, onSave }: EditElementModalProps) {
+  const [type, setType] = useState<ElementType>(element.type);
+  const [room, setRoom] = useState(element.room);
+  const [gangs, setGangs] = useState(element.gangs || 1);
+  const [dedicated, setDedicated] = useState(element.dedicated);
+  // Puste pole = „automatycznie". Trzymane jako tekst, żeby dało się je wyczyścić —
+  // liczba nie ma stanu „brak", a to właśnie on przywraca automatyczne przypisanie.
+  const [groupInputs, setGroupInputs] = useState<string[]>(() =>
+    manualGroups(element).map((n) => (n != null ? String(n) : ""))
+  );
+
+  const variants = VARIANTS_FOR[type];
+  const maxGangs = variants ? variants[variants.length - 1] : 1;
+  // Grupa dotyczy tylko tego, co steruje światłem, i samego światła — przy gniazdku czy
+  // puszce pole byłoby bez sensu, więc się nie pokazuje.
+  const groupApplies = isLightControl({ ...element, type }) || isLightPoint({ ...element, type });
+  // Łącznik grupowy ma dwa niezależne obwody, więc dostaje dwa pola — przy jednym nie dało
+  // się ustawić drugiej dźwigni, a wpisanie numeru po cichu gubiło jej numer.
+  const circuits = circuitCount(type);
+
+  useEffect(() => {
+    setGangs((g) => Math.max(1, Math.min(maxGangs, g)));
+  }, [type, maxGangs]);
+
+  // Zmiana typu potrafi zmienić liczbę obwodów (zwykły łącznik → grupowy i odwrotnie),
+  // więc lista pól musi za tym nadążyć.
+  useEffect(() => {
+    setGroupInputs((prev) => Array.from({ length: circuits }, (_, i) => prev[i] ?? ""));
+  }, [circuits]);
+
+  function handleSave() {
+    const parsed = Array.from({ length: circuits }, (_, i) => {
+      const n = parseInt(groupInputs[i] ?? "", 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    });
+    onSave({
+      type,
+      room: room.trim() || "Salon",
+      gangs: variants ? gangs : 1,
+      dedicated: type === "gniazdko" ? dedicated : false,
+      note: type === "gniazdko" && dedicated ? "AGD" : "",
+      lightGroup: groupApplies && parsed.some((n) => n != null) ? parsed : undefined,
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent title="Edytuj element" className="max-w-sm">
+        <div className="space-y-3">
+          <div>
+            <div className="mb-1.5 text-xs text-slate-500">Zmień na</div>
+            <div className="pe-scroll max-h-64 space-y-3 overflow-y-auto pr-1">
+              {ELEMENT_SECTIONS.map((section) => (
+                <div key={section.title}>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{section.title}</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {section.items.map((item) => {
+                      const def = ELEMENT_TYPES[item.key];
+                      const active = type === item.key;
+                      return (
+                        <button
+                          type="button"
+                          key={item.key}
+                          onClick={() => setType(item.key)}
+                          className="pe-btn-ghost flex items-center gap-2 p-2 text-left text-[11px]"
+                          style={active ? { borderColor: def.color, background: `${def.color}14`, color: def.color } : undefined}
+                        >
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                            <GlyphPreview type={item.key} color={def.color} gangs={active ? gangs : 1} size={20} />
+                          </span>
+                          <span className="truncate">{def.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {variants && variants.length > 1 && (
+            <div>
+              <div className="mb-1.5 text-xs text-slate-500">
+                {type.startsWith("wlacznik") ? "Liczba klawiszy" : "Liczba gniazd w ramce"}
+              </div>
+              <div className={`grid gap-1 ${variants.length > 2 ? "grid-cols-6" : "grid-cols-2"}`}>
+                {variants.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setGangs(n)}
+                    className="pe-btn-ghost py-1.5 text-xs"
+                    style={gangs === n ? { borderColor: "#C1793F", color: "#C1793F", background: "#C1793F0D" } : undefined}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {type === "gniazdko" && (
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <input type="checkbox" checked={dedicated} onChange={(e) => setDedicated(e.target.checked)} />
+              Gniazdo dedykowane (AGD, własny obwód)
+            </label>
+          )}
+
+          {groupApplies && (
+            <div>
+              <div className="mb-1 text-xs text-slate-500">
+                {circuits > 1 ? "Grupy sterowania oświetleniem (dwa obwody)" : "Grupa sterowania oświetleniem"}
+              </div>
+              <div className={circuits > 1 ? "grid grid-cols-2 gap-2" : ""}>
+                {Array.from({ length: circuits }, (_, i) => (
+                  <div key={i}>
+                    <input
+                      type="number"
+                      min={1}
+                      aria-label={circuits > 1 ? `Grupa — obwód ${i + 1}` : "Grupa sterowania oświetleniem"}
+                      value={groupInputs[i] ?? ""}
+                      onChange={(e) =>
+                        setGroupInputs((prev) => prev.map((v, idx) => (idx === i ? e.target.value : v)))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSave();
+                      }}
+                      placeholder={autoLightGroups?.[i] != null ? `auto: ${autoLightGroups[i]}` : "auto"}
+                      className="pe-input w-full text-sm"
+                    />
+                    {circuits > 1 && (
+                      <div className="mt-0.5 text-[10px] text-slate-400">
+                        {i === 0 ? "lewa dźwignia" : "prawa dźwignia"}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] leading-snug text-slate-400">
+                Elementy z tym samym numerem tworzą jedną grupę — wpisz numer, do którego chcesz dołączyć.
+                Puste pole oznacza dobór automatyczny (najbliższy łącznik w tym samym pomieszczeniu).
+              </p>
+            </div>
+          )}
+
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Pomieszczenie</div>
+            <input
+              list="rooms-edit"
+              value={room}
+              onChange={(e) => setRoom(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+              }}
+              className="pe-input w-full text-sm"
+            />
+            <datalist id="rooms-edit">
+              {roomSuggestions.map((r) => (
+                <option key={r} value={r} />
+              ))}
+            </datalist>
+          </label>
+
+          <div className="flex gap-2 pt-1">
+            <Button type="button" variant="ghost" className="flex-1" onClick={onClose}>
+              Anuluj
+            </Button>
+            <Button type="button" variant="copper" className="flex-1" onClick={handleSave}>
+              Zapisz
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

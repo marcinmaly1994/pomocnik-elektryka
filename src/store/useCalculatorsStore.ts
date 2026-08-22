@@ -1,0 +1,131 @@
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type { LayingMethod } from "@/lib/panel/norms";
+import type { CircuitKind } from "@/lib/panel/sizing";
+
+/**
+ * Stan zakładki „Kalkulatory" — osobny store od `useProjectStore`, bo te
+ * kalkulatory są narzędziami NIEZALEŻNYMI od konkretnego projektu (patrz opisy
+ * w `CalculatorsTab.tsx`: „działają niezależnie od projektu na planie"), a nie
+ * czymś, co powinno wędrować do chmury razem z rzutem domu i resetować się przy
+ * „Nowy projekt". Zapisywany lokalnie (localStorage, klucz niżej) przez
+ * `persist` z samego zustanda — bez custom debounce jak przy autosave projektu
+ * w `useProjectStore`, bo tu nie ma z czym synchronizować się w chmurze ani
+ * czego scalać, więc prosty zapis przy każdej zmianie w zupełności wystarcza.
+ *
+ * Bez tego stan (a zwłaszcza ręcznie wpisana lista odbiorników w „Bilansie
+ * mocy") znikał przy każdym przejściu na inną zakładkę i przy odświeżeniu
+ * strony — mimo że reszta projektu jest zapisywana lokalnie od dawna.
+ */
+
+export type CalcId = "przewod" | "moc" | "petla" | "wlz" | "uziemienieTT" | "oswietlenie" | "rcd";
+
+export interface CalculatorDevice {
+  id: string;
+  name: string;
+  power: number;
+}
+
+interface CalculatorsState {
+  activeCalc: CalcId;
+
+  // --- dobór przewodu, zabezpieczenia i spadku napięcia ---
+  circuitKind: CircuitKind;
+  power: number;
+  phase: "1" | "3";
+  cosphi: number;
+  length: number;
+  layingMethod: LayingMethod;
+  ambientC: number;
+  bundleCount: number;
+  motorStart: boolean;
+
+  // --- bilans mocy ---
+  devices: CalculatorDevice[];
+  ks: number;
+
+  // --- impedancja pętli zwarcia ---
+  zCurve: string;
+  zIn: number;
+  zMeasured: number;
+
+  // --- WLZ (linia zasilająca) ---
+  wlzCurrentA: number;
+  wlzPhase: "1" | "3";
+  wlzLength: number;
+  wlzLayingMethod: LayingMethod;
+  wlzAmbientC: number;
+  wlzBundleCount: number;
+  wlzDropLimit: number;
+
+  // --- rezystancja uziemienia (układ TT) ---
+  ttIdnMa: number;
+  ttMeasuredRa: number;
+
+  // --- oświetlenie ---
+  roomA: number;
+  lux: number;
+  lumPerOpr: number;
+  mf: number;
+  uf: number;
+}
+
+interface CalculatorsActions {
+  /** Płytki patch — jak `setDocHeader`/`setPanelConfig` w `useProjectStore`,
+   *  bo to płaska „torba ustawień", nie zagnieżdżona struktura wymagająca
+   *  osobnej logiki scalania. */
+  patch: (p: Partial<CalculatorsState>) => void;
+  setDevices: (updater: (devices: CalculatorDevice[]) => CalculatorDevice[]) => void;
+}
+
+const DEFAULT_DEVICES: CalculatorDevice[] = [
+  { id: crypto.randomUUID(), name: "Gniazda i oświetlenie", power: 6000 },
+  { id: crypto.randomUUID(), name: "Kuchenka elektryczna", power: 7000 },
+  { id: crypto.randomUUID(), name: "Bojler / pompa ciepła", power: 3000 },
+];
+
+export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>()(
+  persist(
+    (set) => ({
+      activeCalc: "przewod",
+
+      circuitKind: "gniazda",
+      power: 2000,
+      phase: "1",
+      cosphi: 1,
+      length: 15,
+      layingMethod: "w_scianie",
+      ambientC: 30,
+      bundleCount: 1,
+      motorStart: false,
+
+      devices: DEFAULT_DEVICES,
+      ks: 0.7,
+
+      zCurve: "B",
+      zIn: 16,
+      zMeasured: 0.8,
+
+      wlzCurrentA: 20,
+      wlzPhase: "3",
+      wlzLength: 20,
+      wlzLayingMethod: "w_rurce",
+      wlzAmbientC: 30,
+      wlzBundleCount: 1,
+      wlzDropLimit: 2,
+
+      ttIdnMa: 30,
+      ttMeasuredRa: 15,
+
+      roomA: 20,
+      lux: 300,
+      lumPerOpr: 1200,
+      mf: 0.8,
+      uf: 0.6,
+
+      patch: (p) => set(p),
+      setDevices: (updater) => set((s) => ({ devices: updater(s.devices) })),
+    }),
+    { name: "pomocnikelektryka_kalkulatory" }
+  )
+);

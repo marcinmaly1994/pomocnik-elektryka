@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-paper text-ink font-sans;
+}
+
+/* Klasy `.pe-*` przeniesione 1:1 z bloku CSS w oryginalnym PomocnikElektryka.jsx
+ * (ta sama identyfikacja wizualna „schemat kreślarski + miedź”). Dopisywane
+ * stopniowo — tylko te, których używają już przeniesione komponenty. */
+@layer components {
+  .pe-display {
+    font-family: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .pe-mono {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .pe-card {
+    @apply rounded-card border border-border bg-white;
+  }
+  .pe-nav-btn {
+    border-bottom: 2px solid transparent;
+    font-weight: 500;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .pe-nav-btn:hover {
+    @apply text-blueprint;
+  }
+  .pe-btn-ghost {
+    @apply rounded-md border border-border bg-white font-medium transition-all;
+  }
+  .pe-btn-ghost:hover {
+    @apply border-blueprint text-blueprint;
+  }
+  .pe-btn-ghost:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  /* Przycisk akcji głównej. Klasa zniknęła z arkusza przy migracji na komponent
+     `Button` (patrz komentarz w ui/button.tsx), ale osiem surowych <button> w
+     aplikacji nadal się do niej odwoływało — renderowały się jako goły tekst bez
+     tła i obramowania, m.in. „Zatwierdź skalę" i „Eksportuj CSV". */
+  .pe-btn-copper {
+    @apply rounded-md bg-copper font-medium text-white transition-colors;
+  }
+  .pe-btn-copper:hover:not(:disabled) {
+    background: #a9652f;
+  }
+  .pe-btn-copper:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .pe-input {
+    @apply rounded-[5px] border border-border bg-white px-2.5 py-1.5;
+  }
+  .pe-input:focus {
+    outline: 2px solid #2d5a8c33;
+    @apply border-blueprint;
+  }
+  .pe-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .pe-tag-blue {
+    background: #2d5a8c0f;
+    color: #2d5a8c;
+    border: 1px solid #2d5a8c26;
+  }
+  .pe-tag-copper {
+    background: #c1793f0f;
+    color: #a9652f;
+    border: 1px solid #c1793f26;
+  }
+  .pe-tag-green {
+    background: #3b8c630f;
+    color: #2c6b4a;
+    border: 1px solid #3b8c6326;
+  }
+  .pe-result {
+    @apply rounded border border-border bg-white;
+    border-top: 2px solid #2d5a8c;
+  }
+  .pe-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .pe-scroll::-webkit-scrollbar-thumb {
+    background: #c7d0d9;
+    border-radius: 8px;
+  }
+
+  /* Onboarding: subtelne wejście/wyjście karty i dymka podpowiedzi.
+     Wszystko poniżej jest wyłączane przy prefers-reduced-motion — animacja ma
+     zwracać uwagę, a nie fundować chorobę lokomocyjną komuś, kto prosił o spokój. */
+  .pe-onboarding-enter {
+    animation: pe-slide-up 220ms ease-out both;
+  }
+  .pe-onboarding-leave {
+    animation: pe-slide-out 380ms ease-in 900ms both;
+  }
+  .pe-onboarding-bar {
+    transition: width 320ms ease-out;
+  }
+  .pe-coach {
+    animation: pe-fade-in 180ms ease-out both;
+  }
+  @keyframes pe-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pe-slide-out {
+    to {
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+    }
+  }
+  @keyframes pe-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pe-onboarding-enter,
+    .pe-onboarding-leave,
+    .pe-coach {
+      animation: none;
+    }
+    .pe-onboarding-bar {
+      transition: none;
+    }
+  }
+}

@@ -1,0 +1,319 @@
+/**
+ * Silnik PDF — wielostronicowy dokument z tekstem, liniami i tłem, napisany od zera
+ * (bez zewnętrznych bibliotek typu jsPDF), przeniesiony z oryginalnego pliku JS.
+ *
+ * Polskie znaki: standardowe kodowanie WinAnsi nie zawiera ą/ć/ę/ł/ń/ś/ź/ż, więc font
+ * dostaje własną tablicę /Differences mapującą kody 128+ na nazwy glifów. W oryginale to
+ * polegało na podstawieniu fontu Helvetica przez czytnik PDF — działało niepewnie, bo nie
+ * każdy czytnik ma te glify w swoim foncie zastępczym. Tutaj zamiast tego osadzamy realny
+ * font (DejaVu Sans, licencja pozwala na osadzanie/redystrybucję — zob.
+ * src/assets/fonts/DejaVuSans-LICENSE.txt) jako /FontFile2, więc znaki renderują się
+ * poprawnie niezależnie od czytnika. Metryki (szerokości, wysokości) czyta `ttf.ts`
+ * bezpośrednio z plików fontu.
+ *
+ * W wersji JS `createPdfDoc(...).finish(filename)` od razu assemblował PDF i uruchamiał
+ * pobieranie w jednej funkcji. Tutaj rozdzielone: `finish()` zwraca same bajty (testowalne
+ * bez DOM-u — patrz `assemblePdfBytes`, które przyjmuje już sparsowane fonty i jest w pełni
+ * synchroniczne/czyste), a wywołanie pobierania w przeglądarce jest osobnym krokiem (zob.
+ * download.ts). `finish()` jest asynchroniczne tylko dlatego, że pierwsze użycie musi pobrać
+ * (`fetch`) i sparsować pliki fontów — wynik jest cache'owany w module, więc kolejne PDF-y
+ * w tej samej sesji nie pobierają ich ponownie.
+ */
+
+import { parseTtf, type ParsedTtf } from "./ttf";
+import regularFontUrl from "@/assets/fonts/DejaVuSans.ttf?url";
+import boldFontUrl from "@/assets/fonts/DejaVuSans-Bold.ttf?url";
+
+export const PDF_POLISH: Record<string, number> = {
+  ą: 128, ć: 129, ę: 130, ł: 131, ń: 132, ó: 133, ś: 134, ź: 135, ż: 136,
+  Ą: 137, Ć: 138, Ę: 139, Ł: 140, Ń: 141, Ó: 142, Ś: 143, Ź: 144, Ż: 145,
+};
+
+export const PDF_DIFF_NAMES = [
+  "aogonek", "cacute", "eogonek", "lslash", "nacute", "oacute", "sacute", "zacute", "zdotaccent",
+  "Aogonek", "Cacute", "Eogonek", "Lslash", "Nacute", "Oacute", "Sacute", "Zacute", "Zdotaccent",
+];
+
+export const PDF_FALLBACK: Record<string, string> = {
+  "—": "-", "–": "-", "·": "-", "„": '"', "”": '"', "²": "2", "×": "x", "…": "...", " ": " ",
+  Ω: "Ohm", "°": "st.", Δ: "d", μ: "u", "≤": "<=", "≥": ">=",
+};
+
+// Metryki fontów (jednostki/1000) — kody 32..126 wg AFM Helvetiki, następnie 127 (nieużywany)
+// i 128..145 dla polskich glifów zdefiniowanych w /Differences.
+export const PDF_W_REG = [
+  278, 278, 355, 556, 556, 889, 667, 222, 333, 333, 389, 584, 278, 333, 278, 278,
+  556, 556, 556, 556, 556, 556, 556, 556, 556, 556,
+  278, 278, 584, 584, 584, 556, 1015,
+  667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611,
+  278, 278, 278, 469, 556, 222,
+  556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500,
+  334, 260, 334, 584,
+  0, // 127
+  556, 500, 556, 222, 556, 556, 500, 500, 500, // ą ć ę ł ń ó ś ź ż
+  667, 722, 667, 556, 722, 778, 667, 611, 611, // Ą Ć Ę Ł Ń Ó Ś Ź Ż
+];
+
+export const PDF_W_BOLD = [
+  278, 333, 474, 556, 556, 889, 722, 278, 333, 333, 389, 584, 278, 333, 278, 278,
+  556, 556, 556, 556, 556, 556, 556, 556, 556, 556,
+  333, 333, 584, 584, 584, 611, 975,
+  722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611,
+  333, 278, 333, 584, 556, 278,
+  556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500,
+  389, 280, 389, 584,
+  0, // 127
+  556, 556, 556, 278, 611, 611, 556, 500, 500,
+  722, 722, 667, 611, 722, 778, 667, 611, 611,
+];
+
+/** Zamienia znak na kod używany w strumieniu PDF (z uwzględnieniem polskich znaków i zamienników). */
+export function pdfCharCode(ch: string): number {
+  if (PDF_POLISH[ch] !== undefined) return PDF_POLISH[ch];
+  const code = ch.codePointAt(0) ?? 63;
+  if (code >= 32 && code <= 126) return code;
+  const fb = PDF_FALLBACK[ch];
+  if (fb !== undefined && fb.length === 1) return fb.codePointAt(0) ?? 63;
+  return 63; // "?"
+}
+
+export function pdfCharWidth(code: number, bold: boolean): number {
+  const table = bold ? PDF_W_BOLD : PDF_W_REG;
+  const w = table[code - 32];
+  return w === undefined ? 556 : w;
+}
+
+/** Szerokość napisu w punktach — pozwala przycinać tekst do realnej szerokości kolumny,
+ *  zamiast zgadywać po liczbie znaków (co przy polskich literach dawało błędne wyniki). */
+export function pdfTextWidth(str: string, size: number, bold: boolean): number {
+  let total = 0;
+  for (const ch of String(str)) {
+    const multi = PDF_FALLBACK[ch];
+    if (multi !== undefined && multi.length > 1) {
+      for (const c2 of multi) total += pdfCharWidth(c2.codePointAt(0) ?? 63, bold);
+      continue;
+    }
+    total += pdfCharWidth(pdfCharCode(ch), bold);
+  }
+  return (total * size) / 1000;
+}
+
+export function pdfFitText(str: string, maxWidth: number, size: number, bold: boolean): string {
+  if (pdfTextWidth(str, size, bold) <= maxWidth) return str;
+  const ell = "..";
+  let out = "";
+  for (const ch of String(str)) {
+    if (pdfTextWidth(out + ch + ell, size, bold) > maxWidth) break;
+    out += ch;
+  }
+  return out + ell;
+}
+
+export function pdfEscape(str: string): string {
+  let out = "";
+  for (const ch of String(str)) {
+    if (PDF_POLISH[ch] !== undefined) {
+      out += "\\" + PDF_POLISH[ch].toString(8).padStart(3, "0");
+      continue;
+    }
+    if (ch === "(" || ch === ")" || ch === "\\") {
+      out += "\\" + ch;
+      continue;
+    }
+    const code = ch.codePointAt(0) ?? 0;
+    if (code < 32 || code > 126) {
+      out += PDF_FALLBACK[ch] !== undefined ? PDF_FALLBACK[ch] : "?";
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+export interface PdfDoc {
+  y: number;
+  readonly pageW: number;
+  readonly margin: number;
+  readonly innerW: number;
+  setNewPageHandler(fn: (doc: PdfDoc) => void): void;
+  text(str: string, x: number, y: number, size?: number, bold?: boolean, gray?: number): void;
+  line(x1: number, y1: number, x2: number, y2: number, w?: number, gray?: number): void;
+  box(x: number, y: number, w: number, h: number, gray?: number): void;
+  /** Zapewnia miejsce na kolejny blok; w razie potrzeby rysuje stopkę na bieżącej stronie i zaczyna nową. */
+  ensure(h: number): boolean;
+  /** Assembluje kompletny plik PDF i zwraca jego bajty (bez efektu ubocznego pobierania).
+   *  Asynchroniczne — przy pierwszym wywołaniu w sesji pobiera i parsuje pliki fontów. */
+  finish(): Promise<Uint8Array>;
+}
+
+export interface PdfDocOptions {
+  pageW?: number;
+  pageH?: number;
+  margin?: number;
+  footer?: (doc: PdfDoc) => void;
+}
+
+/** Uniwersalny silnik PDF — wielostronicowy dokument z tekstem, liniami i tłem. */
+export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, footer }: PdfDocOptions = {}): PdfDoc {
+  const pages: string[] = [];
+  let content: string[] = [];
+  let y = pageH - margin;
+  let onNewPage: ((doc: PdfDoc) => void) | null = null;
+  const footerReserve = footer ? 50 : 26; // zarezerwowane miejsce nad tabliczką rysunkową
+
+  const api: PdfDoc = {
+    get y() {
+      return y;
+    },
+    set y(v: number) {
+      y = v;
+    },
+    get pageW() {
+      return pageW;
+    },
+    get margin() {
+      return margin;
+    },
+    get innerW() {
+      return pageW - margin * 2;
+    },
+    setNewPageHandler(fn) {
+      onNewPage = fn;
+    },
+    text(str, x, yy, size = 9, bold = false, gray = 0) {
+      content.push(`${gray} g BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfEscape(str)}) Tj ET 0 g`);
+    },
+    line(x1, y1, x2, y2, w = 0.6, gray = 0.75) {
+      content.push(`${gray} G ${w} w ${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S`);
+    },
+    box(x, yy, w, h, gray = 0.93) {
+      content.push(`${gray} g ${x.toFixed(1)} ${yy.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f 0 g`);
+    },
+    ensure(h) {
+      if (y - h < margin + footerReserve) {
+        if (footer) footer(api);
+        pages.push(content.join("\n"));
+        content = [];
+        y = pageH - margin;
+        if (onNewPage) onNewPage(api);
+        return true;
+      }
+      return false;
+    },
+    async finish() {
+      if (footer) footer(api);
+      pages.push(content.join("\n"));
+      const { regular, bold } = await loadPdfFonts();
+      return assemblePdfBytes(pages, pageW, pageH, regular, bold);
+    },
+  };
+  return api;
+}
+
+/** Code (128..145) -> code point Unicode, odwrócone z `PDF_POLISH` — do wyliczania
+ *  realnych szerokości polskich znaków z osadzonego fontu. */
+const PDF_POLISH_BY_CODE: Record<number, number> = {};
+for (const ch of Object.keys(PDF_POLISH)) {
+  PDF_POLISH_BY_CODE[PDF_POLISH[ch]] = ch.codePointAt(0)!;
+}
+
+/** Konwertuje bajty na "binarny" JS string (jeden code unit = jeden bajt) — do osadzenia
+ *  surowego pliku fontu w strumieniu obiektu PDF. Fragmentami, żeby nie przekroczyć limitu
+ *  argumentów `String.fromCharCode(...)` dla dużych plików fontów. */
+function bytesToBinaryString(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
+  let out = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    out += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return out;
+}
+
+/** Realne szerokości znaków (kody 32..145) z osadzonego fontu, z awaryjnym spadkiem na
+ *  przybliżone tabele Helvetiki, gdyby jakiegoś code pointa w foncie zabrakło. */
+function widthsForFont(font: ParsedTtf, fallback: number[]): number[] {
+  const widths: number[] = [];
+  for (let code = 32; code <= 145; code++) {
+    if (code === 127) {
+      widths.push(0);
+      continue;
+    }
+    const codePoint = code <= 126 ? code : PDF_POLISH_BY_CODE[code];
+    const w = codePoint !== undefined ? font.widthOf(codePoint) : null;
+    widths.push(w ?? fallback[code - 32] ?? 556);
+  }
+  return widths;
+}
+
+let cachedFonts: Promise<{ regular: ParsedTtf; bold: ParsedTtf }> | null = null;
+
+/** Pobiera i parsuje pliki fontów DejaVu Sans (regular + bold) — raz na sesję, wynik
+ *  cache'owany w module. `regularFontUrl`/`boldFontUrl` to adresy zassetowane przez Vite. */
+function loadPdfFonts(): Promise<{ regular: ParsedTtf; bold: ParsedTtf }> {
+  if (!cachedFonts) {
+    cachedFonts = Promise.all([
+      fetch(regularFontUrl).then((r) => r.arrayBuffer()),
+      fetch(boldFontUrl).then((r) => r.arrayBuffer()),
+    ]).then(([regularBuf, boldBuf]) => ({
+      regular: parseTtf(new Uint8Array(regularBuf)),
+      bold: parseTtf(new Uint8Array(boldBuf)),
+    }));
+  }
+  return cachedFonts;
+}
+
+/** Składa strumienie stron w kompletny plik PDF i zwraca jego bajty. Czysta/synchroniczna —
+ *  fonty przekazywane są już sparsowane (patrz `loadPdfFonts`), co czyni tę funkcję w pełni
+ *  testowalną bez sieci/DOM-u (testy wczytują pliki fontów z dysku przez `fs`). */
+export function assemblePdfBytes(pages: string[], PW: number, PH: number, regularFont: ParsedTtf, boldFont: ParsedTtf): Uint8Array {
+  const objs: string[] = [];
+  const push = (s: string) => {
+    objs.push(s);
+    return objs.length;
+  };
+
+  const contentIds = pages.map((c) => push(`<< /Length ${c.length} >>\nstream\n${c}\nendstream`));
+  const encId = push(`<< /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [128 ${PDF_DIFF_NAMES.map((n) => "/" + n).join(" ")}] >>`);
+
+  function pushFont(font: ParsedTtf, baseFontName: string, fallbackWidths: number[], stemV: number): number {
+    const fontFileId = push(`<< /Length ${font.bytes.length} /Length1 ${font.bytes.length} >>\nstream\n${bytesToBinaryString(font.bytes)}\nendstream`);
+    const descId = push(
+      `<< /Type /FontDescriptor /FontName /${baseFontName} /Flags 32 ` +
+        `/FontBBox [${font.bbox.join(" ")}] /ItalicAngle ${font.italicAngle} ` +
+        `/Ascent ${font.ascent} /Descent ${font.descent} /CapHeight ${font.capHeight} /StemV ${stemV} ` +
+        `/FontFile2 ${fontFileId} 0 R >>`
+    );
+    return push(
+      `<< /Type /Font /Subtype /TrueType /BaseFont /${baseFontName} /FirstChar 32 /LastChar 145 ` +
+        `/Widths [${widthsForFont(font, fallbackWidths).join(" ")}] /Encoding ${encId} 0 R /FontDescriptor ${descId} 0 R >>`
+    );
+  }
+
+  const f1 = pushFont(regularFont, "DejaVuSans", PDF_W_REG, 80);
+  const f2 = pushFont(boldFont, "DejaVuSans-Bold", PDF_W_BOLD, 120);
+
+  const pagesId = objs.length + pages.length + 1;
+  const kidsIds = pages.map((_, i) =>
+    push(
+      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}] ` +
+        `/Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${contentIds[i]} 0 R >>`
+    )
+  );
+  push(`<< /Type /Pages /Kids [${kidsIds.map((k) => k + " 0 R").join(" ")}] /Count ${kidsIds.length} >>`);
+  const catalogId = push(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objs.forEach((body, idx) => {
+    offsets.push(pdf.length);
+    pdf += `${idx + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefPos = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objs.length; i++) pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefPos}\n%%EOF`;
+
+  const bytes = new Uint8Array(pdf.length);
+  for (let i = 0; i < pdf.length; i++) bytes[i] = pdf.charCodeAt(i) & 0xff;
+  return bytes;
+}

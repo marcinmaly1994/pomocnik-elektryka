@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+.wrangler
+
+# artefakty `tsc -b` emitowane obok konfiguracji (tsconfig.node.json ma composite bez outDir)
+/vite.config.js
+/vite.config.d.ts
+/playwright.config.js
+/playwright.config.d.ts
