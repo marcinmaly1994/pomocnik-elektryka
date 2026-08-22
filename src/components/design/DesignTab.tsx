@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { AlertTriangle, Check, Loader2, PenLine, Pencil, RotateCw, ShieldAlert, Trash2, Upload, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { AlertTriangle, Check, Loader2, Minimize2, PenLine, Pencil, RotateCw, ShieldAlert, Trash2, Upload, X } from "lucide-react";
 import {
   useActiveFloorElements,
   useActiveFloorOpenings,
@@ -30,7 +30,6 @@ import { CropTool } from "@/components/detect/CropTool";
 import { DesignCanvas, MAX_ZOOM, MIN_ZOOM, wysokoscPlotna, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
 import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
-import { FloorBar } from "./FloorBar";
 import { EditorStatusBar } from "./EditorStatusBar";
 import { ToolRail } from "./ToolRail";
 import { ElementLibrary } from "./ElementLibrary";
@@ -50,6 +49,11 @@ const BASE_ELEMENT_SCALE = 0.7;
  *  WZGLĘDEM BASE_ELEMENT_SCALE, nie bezpośredni rozmiar renderu — patrz przeliczenie
  *  `elementScale * BASE_ELEMENT_SCALE` przekazywane do DesignCanvas. */
 const DEFAULT_ELEMENT_SCALE = 1;
+
+/** Szerokość pasa przy krawędzi okna, który w pełnym ekranie wysuwa schowany pasek.
+ *  14 px, a nie 1–2: przy szybkim ruchu myszy kursor przeskakuje między klatkami
+ *  kilka pikseli i cieńszy pas dawał się „przestrzelić" bez efektu. */
+const PAS_WYZWALAJACY = 14;
 
 const ROOM_MODES: { id: RoomDrawMode; label: string; hint: string }[] = [
   { id: "prostokat", label: "Prostokąt", hint: "przytrzymaj lewy przycisk i przeciągnij" },
@@ -148,6 +152,22 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   /** Gdy użytkownik sam ustawi powiększenie, przestajemy je dopasowywać automatycznie —
    *  nic bardziej nie irytuje niż widok, który sam sobie zmienia skalę po zmianie okna. */
   const [zoomReczny, setZoomReczny] = useState(false);
+  /**
+   * Tryb pełnoekranowy: plan zajmuje całe okno, a paski chowają się poza jego
+   * krawędzie i wracają po najechaniu myszą. Świadomie NIE używamy tu
+   * `requestFullscreen()` — natywny pełny ekran zabiera pasek kart i przycisk
+   * wstecz, a przy narzędziu, w którym wgrywa się pliki i otwiera okna dialogowe,
+   * to raczej pułapka niż udogodnienie. Tu chodzi o oddanie planowi miejsca
+   * wewnątrz strony, nie o przejęcie całego monitora.
+   */
+  const [pelnyEkran, setPelnyEkran] = useState(false);
+  /** Które grupy kontrolek są w tej chwili odsłonięte (tylko w pełnym ekranie). */
+  const [chromeGora, setChromeGora] = useState(false);
+  const [chromeLewo, setChromeLewo] = useState(false);
+  const [chromeDol, setChromeDol] = useState(false);
+  const gornyPasekRef = useRef<HTMLDivElement>(null);
+  const lewaKartaRef = useRef<HTMLDivElement>(null);
+  const dolnyPasekRef = useRef<HTMLDivElement>(null);
   const kolumnaPlotnaRef = useRef<HTMLDivElement>(null);
   const [wysPlotna, setWysPlotna] = useState(wysokoscPlotna);
   const ostatniaSzerRef = useRef(0);
@@ -176,9 +196,63 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   }, [planSize.w, planSize.h, wysPlotna]);
 
   useEffect(() => {
-    const przelicz = () => setWysPlotna(wysokoscPlotna());
+    // W pełnym ekranie płótno bierze całą wysokość okna: paski leżą NAD nim jako
+    // nakładki, więc nie ma już nagłówka ani paska etapów, na które trzeba zostawić
+    // zapas (patrz `wysokoscPlotna`).
+    const przelicz = () => setWysPlotna(pelnyEkran ? Math.max(320, window.innerHeight - 16) : wysokoscPlotna());
+    przelicz();
     window.addEventListener("resize", przelicz);
     return () => window.removeEventListener("resize", przelicz);
+  }, [pelnyEkran]);
+
+  /** Wejście i wyjście z pełnego ekranu zmienia dostępne miejsce skokowo, więc rzut
+   *  dopasowujemy na nowo — nawet jeśli użytkownik wcześniej ustawił zoom ręcznie.
+   *  Zostawienie starego powiększenia dawało rysunek wielkości znaczka w rogu
+   *  pustego ekranu, czyli dokładne przeciwieństwo tego, po co się tu wchodzi. */
+  const przelaczPelnyEkran = useCallback(() => {
+    setPelnyEkran((v) => !v);
+    setZoomReczny(false);
+    setChromeGora(false);
+    setChromeLewo(false);
+    setChromeDol(false);
+  }, []);
+
+  /**
+   * O odsłonięciu pasków decyduje POZYCJA KURSORA, a nie `mouseenter`/`mouseleave`
+   * na samych panelach.
+   *
+   * Zdarzenia najechania są tu zawodne z konkretnego powodu: panel wjeżdża pod
+   * nieruchomy kursor, a przeglądarka nie zawsze przelicza wtedy stan `hover`.
+   * Panel potrafi więc nigdy nie dostać `mouseenter` — a skoro nie wszedł, to
+   * późniejsze `mouseleave` też nie ma prawa się pojawić i panel zostaje otwarty
+   * na zawsze. W praktyce łapie to każdego, kto zatrzyma mysz przy krawędzi
+   * i szarpnie nią w bok.
+   *
+   * Histereza: zamknięty panel otwiera dopiero wejście w wąski pas przy krawędzi,
+   * a otwarty zamyka się dopiero po wyjściu poza JEGO WŁASNY obrys. Bez tego panel
+   * mrugałby w kółko na granicy pasa wyzwalającego.
+   */
+  const obsluzRuchMyszy = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      if (!pelnyEkran) return;
+      const x = e.clientX;
+      const y = e.clientY;
+      const szerLewej = lewaKartaRef.current?.offsetWidth ?? 0;
+      const wysGornej = gornyPasekRef.current?.offsetHeight ?? 0;
+      const wysDolnej = dolnyPasekRef.current?.offsetHeight ?? 0;
+      setChromeLewo(x <= (chromeLewo ? szerLewej : PAS_WYZWALAJACY));
+      setChromeGora(y <= (chromeGora ? wysGornej : PAS_WYZWALAJACY));
+      setChromeDol(y >= window.innerHeight - (chromeDol ? wysDolnej : PAS_WYZWALAJACY));
+    },
+    [pelnyEkran, chromeLewo, chromeGora, chromeDol],
+  );
+
+  /** Kursor opuszczający okno chowa wszystko — inaczej paski zostawałyby otwarte
+   *  po zjechaniu myszą poza przeglądarkę. */
+  const schowajChrome = useCallback(() => {
+    setChromeGora(false);
+    setChromeLewo(false);
+    setChromeDol(false);
   }, []);
 
   useEffect(() => {
@@ -308,11 +382,24 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         }
       }
       if (e.key === "Escape") {
+        // Escape ma jeden poziom naraz: najpierw porzuca to, co właśnie rysujesz,
+        // i dopiero gdy nie ma czego porzucić — wychodzi z pełnego ekranu. Inaczej
+        // jedno wciśnięcie kasowałoby niedokończoną ścianę I wyrzucało z trybu,
+        // czyli karałoby za pomyłkę dwa razy.
+        const bylCosDoPorzucenia =
+          drawingWall.length > 0 || drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
         setDrawingWall([]);
         setDrawingRoomPoints([]);
         setMultiSelected([]);
         setCalibPoints([]);
         setContextMenu(null);
+        if (!bylCosDoPorzucenia && pelnyEkran) przelaczPelnyEkran();
+      }
+      // „F" jak fullscreen — skrót dla osób, które raz znajdą przycisk i potem chcą
+      // przełączać tryb bez sięgania po mysz.
+      if ((e.key === "f" || e.key === "F") && tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        przelaczPelnyEkran();
       }
       // Enter zatwierdza rysowaną ścianę — druga (obok PPM na płótnie, patrz
       // `onWallDrawContextMenu`) klawiaturowa alternatywa dla przycisku „Zakończ".
@@ -635,8 +722,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         </div>
       )}
 
-      <FloorBar />
-
       {/* Przycinanie zastępuje widok edytora, ale NIE jest modalem bez wyjścia:
           podkład jest już w projekcie (patrz efekt wyżej), więc pominięcie albo
           przycięcie zawsze zostawia w pełni działający edytor — po prostu z
@@ -692,8 +777,31 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           i płótno) myliły co do tego, na którym się właśnie pracuje. Po
           przycięciu albo pominięciu edytor wraca w całości. */}
       {wgrywanie.stan !== "przycinanie" && (
-        <>
+        <div
+          className={pelnyEkran ? "fixed inset-0 z-40 overflow-hidden bg-[#EEF2F6]" : "space-y-4"}
+          onMouseMove={pelnyEkran ? obsluzRuchMyszy : undefined}
+          onMouseLeave={pelnyEkran ? schowajChrome : undefined}
+        >
+      {/* Pasek kontrolek. W pełnym ekranie leży jako nakładka NAD płótnem i wysuwa
+          się zza górnej krawędzi — dlatego `absolute`, a nie zwykły rząd w kolumnie:
+          płótno nie może tracić wysokości na coś, co przez większość czasu jest
+          schowane. */}
+      <div
+        // `top-0` z tego samego powodu co `left-0` przy panelu narzędzi: żadnej
+        // szczeliny między pasem wyzwalającym a odsłanianym elementem.
+        ref={gornyPasekRef}
+        className={pelnyEkran ? "absolute inset-x-0 top-0 z-30 transition-transform duration-200" : undefined}
+        // Przesunięcie w `style`, nie klasą Tailwinda z wartością arbitralną: ujemne
+        // wartości arbitralne (`-translate-y-[calc(...)]`) to znany ostry róg — łatwo
+        // trafić na zapis, który Tailwind złoży w niepoprawny CSS, a przeglądarka
+        // odrzuca taką regułę bez słowa i pasek po prostu zostaje widoczny. Jawna
+        // wartość jest odporna na tę klasę pomyłek i czytelna wprost.
+        // `-100%` odnosi się do wysokości samego paska, `1rem` to zapas na cień.
+        style={pelnyEkran ? { transform: chromeGora ? "translateY(0)" : "translateY(calc(-100% - 1rem))" } : undefined}
+      >
       <EditorToolbar
+        pelnyEkran={pelnyEkran}
+        onTogglePelnyEkran={przelaczPelnyEkran}
         bgImageUrl={bgImageUrl}
         bgName={bgName}
         onPickBg={() => fileRef.current?.click()}
@@ -719,10 +827,23 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           dopasujZoom();
         }}
       />
+      </div>
 
       {/* Kontrolki kontekstowe: pokazują się tylko przy narzędziu, którego dotyczą,
-          więc pasek nie puchnie od opcji nieaktywnych w danym momencie. */}
-      <div className="flex flex-wrap items-center gap-3">
+          więc pasek nie puchnie od opcji nieaktywnych w danym momencie.
+          W pełnym ekranie pływają na środku góry i — w odróżnieniu od reszty — NIE
+          chowają się za krawędź. Siedzą tu rzeczy, bez których nie da się dokończyć
+          zaczętej czynności („Zakończ" ściany, kalibracja skali); ukrycie ich za
+          najechaniem zostawiałoby użytkownika w połowie operacji bez wyjścia.
+          `empty:hidden` gasi całą pigułkę, gdy żadne narzędzie nic tu nie wstawia —
+          inaczej nad planem wisiałby pusty biały prostokąt. */}
+      <div
+        className={
+          pelnyEkran
+            ? "absolute left-1/2 top-3 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-border bg-white/95 px-2.5 py-1.5 shadow-lg backdrop-blur empty:hidden"
+            : "flex flex-wrap items-center gap-3"
+        }
+      >
         {multiSelected.length > 0 && (
           <button onClick={deleteSelection} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600">
             <Trash2 size={13} /> Usuń zaznaczone ({multiSelected.length})
@@ -847,13 +968,26 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-start gap-4">
+      <div className={pelnyEkran ? "h-full w-full" : "flex flex-wrap items-start gap-4"}>
         {/* Pasek narzędzi i panel tworzą JEDNĄ kartę — wzorzec activity baru z VS Code.
             Wcześniej pasek był osobną wysepką kończącą się w połowie wysokości, przez
             co wyglądał na oderwany, a w rzędzie stały trzy niezależne obiekty. To zresztą
             konceptualnie jedno: pasek wybiera, CZYM pracuję, panel pokazuje opcje dla
-            tego wyboru. */}
-        <div className="flex shrink-0 overflow-hidden rounded-card border border-border bg-white">
+            tego wyboru.
+            W pełnym ekranie ta sama karta staje się nakładką wysuwaną zza lewej
+            krawędzi — `shadow-xl` odrywa ją wtedy wizualnie od rysunku pod spodem. */}
+        <div
+          ref={lewaKartaRef}
+          className={
+            pelnyEkran
+              // Przy samej krawędzi (`left-0`), bez zaokrąglenia i ramki od tej strony:
+              // panel wygląda wtedy jak wysunięty Z krawędzi okna, a nie jak kafelek
+              // przypadkiem o nią oparty.
+              ? "absolute bottom-0 left-0 top-0 z-30 flex overflow-hidden rounded-r-card border border-l-0 border-border bg-white shadow-xl transition-transform duration-200"
+              : "flex shrink-0 overflow-hidden rounded-card border border-border bg-white"
+          }
+          style={pelnyEkran ? { transform: chromeLewo ? "translateX(0)" : "translateX(calc(-100% - 1rem))" } : undefined}
+        >
           <ToolRail
           value={toolMode}
           onToolRef={(id, el) => {
@@ -877,7 +1011,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           }}
           />
 
-          <div className="border-l border-border p-2" style={{ width: 268 }}>
+          <div className={pelnyEkran ? "overflow-y-auto border-l border-border p-2" : "border-l border-border p-2"} style={{ width: 268 }}>
           {/* Wgranie rzutu to pierwsza czynność w całym przepływie, więc stoi na samej
               górze kolumny. Wcześniej wisiało POD biblioteką elementów, czyli ~1000 px
               niżej, poza pierwszym ekranem — użytkownik musiał się do niego doscrollować,
@@ -976,7 +1110,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           </div>
         </div>
 
-        <div ref={kolumnaPlotnaRef} style={{ flex: "1 1 480px", minWidth: 320 }}>
+        <div
+          ref={kolumnaPlotnaRef}
+          className={pelnyEkran ? "h-full w-full p-2" : undefined}
+          style={pelnyEkran ? undefined : { flex: "1 1 480px", minWidth: 320 }}
+        >
           {/* Wybór drzwi/okno stoi TUŻ NAD płótnem, do którego się odnosi — nie w
               ogólnym pasku kontrolek nad całym układem (tam, gdzie „Kształt:"
               pomieszczenia czy „Grubość:" ściany), żeby było jasne, że dotyczy
@@ -1091,6 +1229,18 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             onCloseRoomPolygon={finishRoomDrawing}
             onAddCalibPoint={(p) => setCalibPoints((pts) => (pts.length >= 2 ? [p] : [...pts, p]))}
           />
+          {/* Pasek stanu razem z linijką danych planu — w pełnym ekranie wysuwany zza
+              dolnej krawędzi. Liczby (powierzchnia, skala, pozycja kursora) przydają
+              się przy sprawdzaniu, a nie przy samym rysowaniu, więc mogą być schowane. */}
+          <div
+            className={
+              pelnyEkran
+                ? "absolute inset-x-0 bottom-0 z-30 border border-border bg-white px-2 py-1 shadow-xl transition-transform duration-200"
+                : undefined
+            }
+            ref={dolnyPasekRef}
+            style={pelnyEkran ? { transform: chromeDol ? "translateY(0)" : "translateY(calc(100% + 1rem))" } : undefined}
+          >
           <EditorStatusBar
             floorName={floorName}
             roomShapes={roomShapes}
@@ -1111,9 +1261,28 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               </span>
             )}
           </div>
+          </div>
         </div>
       </div>
+
+      {pelnyEkran && (
+        <>
+          {/* Jedyny element widoczny STALE. Bez niego tryb bywa pułapką: paski są
+              schowane, więc nie widać żadnego wyjścia, a nie każdy zgadnie Escape. */}
+          <button
+            onClick={przelaczPelnyEkran}
+            title="Wyjdź z pełnego ekranu (Esc)"
+            // Inna nazwa niż przycisk w pasku, żeby w drzewie dostępności nie stały
+            // dwa różne elementy o identycznej etykiecie.
+            aria-label="Zamknij pełny ekran"
+            className="absolute right-3 top-3 z-40 flex items-center gap-1.5 rounded-lg border border-border bg-white/85 px-2 py-1 text-[11px] text-slate-500 shadow-sm backdrop-blur transition-colors hover:text-ink"
+          >
+            <Minimize2 size={13} />
+            Esc
+          </button>
         </>
+      )}
+        </div>
       )}
 
       <Dialog open={!!pendingRoom} onOpenChange={(open) => !open && setPendingRoom(null)}>

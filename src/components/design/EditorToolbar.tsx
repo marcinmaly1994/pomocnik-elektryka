@@ -1,14 +1,19 @@
-import { Eye, EyeOff, Image as ImageIcon, Maximize2, Minus, Plus, Redo2, Undo2 } from "lucide-react";
+import { Eye, EyeOff, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Scan, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
+import { FloorBar } from "./FloorBar";
 
 /**
- * Górny pasek edytora: podkład, przyciąganie do siatki, rozmiar symboli, strefy,
- * cofnij/ponów i powiększenie — wszystko, co dotyczy WIDOKU, w jednym rzędzie.
+ * JEDEN pasek edytora: kondygnacje, podkład, siatka, rozmiar symboli, strefy,
+ * cofnij/ponów, powiększenie i wejście w pełny ekran.
  *
- * Narzędzia rysowania mieszkają osobno, w pionowym `ToolRail`: to dwie różne rzeczy
- * (czym rysuję vs. jak patrzę), a wcześniej stały w jednym pasku i mieszały się
- * ze sobą.
+ * Kondygnacje mieszkały wcześniej w osobnym rzędzie NAD paskiem. Dwa rzędy kontrolek
+ * zjadały plan z góry i rozbijały uwagę na dwie wysepki, choć konceptualnie to jedno:
+ * ustawienia tego, co i jak widzę na planie. Po scaleniu ten pas wraca do rysunku.
+ *
+ * Narzędzia rysowania nadal mieszkają osobno, w pionowym `ToolRail` — to inna
+ * kategoria (czym rysuję vs. jak patrzę), a przy krawędzi płótna nie zabierają mu
+ * wysokości.
  */
 
 export interface EditorToolbarProps {
@@ -31,9 +36,17 @@ export interface EditorToolbarProps {
   onZoomChange: (z: number) => void;
   /** Dopasowanie rzutu do dostępnego miejsca — wraca też do trybu automatycznego. */
   onDopasuj: () => void;
+  pelnyEkran: boolean;
+  onTogglePelnyEkran: () => void;
 }
 
 const ZOOM_STEP = 0.1;
+
+/** Pionowa kreska rozdzielająca grupy kontrolek. Znika na wąskim ekranie, gdzie pasek
+ *  i tak się zawija i kreska nie rozdzielałaby już niczego sensownego. */
+function Separator() {
+  return <span className="hidden h-5 w-px shrink-0 bg-border sm:block" aria-hidden="true" />;
+}
 
 export function EditorToolbar({
   bgImageUrl,
@@ -54,18 +67,26 @@ export function EditorToolbar({
   zoom,
   onZoomChange,
   onDopasuj,
+  pelnyEkran,
+  onTogglePelnyEkran,
 }: EditorToolbarProps) {
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100));
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-border bg-white px-3 py-2">
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-card border border-border bg-white px-2.5 py-1.5">
+      <FloorBar />
+
+      <Separator />
+
       {/* Podkład: nazwa pliku zamiast samego „wgrany" — przy kilku kondygnacjach
           to jedyny sposób, żeby sprawdzić, czy pod spodem leży właściwy rzut. */}
-      <span className="flex items-center gap-2 text-xs">
-        <ImageIcon size={14} className="text-blueprint" />
+      <span className="flex items-center gap-1.5 text-xs">
+        <ImageIcon size={14} className="shrink-0 text-blueprint" />
         {bgImageUrl ? (
           <>
-            <span className="max-w-[180px] truncate text-slate-600" title={bgName ?? undefined}>
+            {/* Przedrostek „Podkład:" zostaje mimo walki o miejsce — sama nazwa pliku
+                obok ikonki nie mówi, CZYM ten plik jest w projekcie. */}
+            <span className="max-w-[160px] truncate text-slate-600" title={bgName ?? undefined}>
               Podkład: {bgName ?? "wgrany"}
             </span>
             <button onClick={onPickBg} className="text-blueprint hover:underline">
@@ -82,17 +103,26 @@ export function EditorToolbar({
         )}
       </span>
 
-      <span className="hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
+      <Separator />
 
-      <label className="flex items-center gap-1.5 text-xs text-slate-500">
-        <input type="checkbox" checked={snapOn} onChange={(e) => onSnapChange(e.target.checked)} className="accent-copper" />
-        Przyciągaj do siatki
+      {/* Widoczne etykiety skrócone do jednego słowa, ale nazwy dostępnościowe zostają
+          pełne: przy checkboxie „Siatka" wystarczy, a czytnik ekranu i testy nadal
+          dostają „Przyciągaj do siatki". */}
+      <label className="flex items-center gap-1.5 text-xs text-slate-500" title="Przyciągaj do siatki">
+        <input
+          type="checkbox"
+          checked={snapOn}
+          onChange={(e) => onSnapChange(e.target.checked)}
+          aria-label="Przyciągaj do siatki"
+          className="accent-copper"
+        />
+        Siatka
       </label>
 
       {/* Rozmiar SYMBOLI, nie powiększenie planu — to dwie różne rzeczy i dlatego
-          stoją obok siebie z osobnymi etykietami (patrz komentarz przy zoomie). */}
-      <label className="flex items-center gap-2 text-xs text-slate-500" title="Rozmiar symboli na planie">
-        <span className="whitespace-nowrap">Rozmiar elementów</span>
+          stoją w osobnych grupach (zoom siedzi po prawej, przy dopasowaniu widoku). */}
+      <label className="flex items-center gap-1.5 text-xs text-slate-500" title="Rozmiar symboli na planie">
+        <span className="whitespace-nowrap">Rozmiar</span>
         <input
           type="range"
           min={0.6}
@@ -101,9 +131,9 @@ export function EditorToolbar({
           value={elementScale}
           onChange={(e) => onElementScaleChange(Number(e.target.value))}
           aria-label="Rozmiar elementów"
-          className="w-20 accent-copper"
+          className="w-16 accent-copper"
         />
-        <span className="pe-mono w-9 text-right text-[11px] tabular-nums">{elementScale.toFixed(1)}×</span>
+        <span className="pe-mono w-8 text-right text-[11px] tabular-nums">{elementScale.toFixed(1)}×</span>
         {elementScale !== defaultElementScale && (
           <button onClick={() => onElementScaleChange(defaultElementScale)} className="text-[11px] text-blueprint hover:underline">
             reset
@@ -115,7 +145,7 @@ export function EditorToolbar({
         {showZones ? <Eye size={15} /> : <EyeOff size={15} />}
       </Button>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center">
         <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title="Cofnij">
           <Undo2 size={15} />
         </Button>
@@ -140,7 +170,7 @@ export function EditorToolbar({
           onClick={() => onZoomChange(1)}
           title="Przywróć powiększenie 100%"
           aria-label={`Powiększenie ${Math.round(zoom * 100)} procent — kliknij, aby przywrócić 100%`}
-          className="pe-mono w-12 text-center text-[11px] tabular-nums text-slate-600"
+          className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600"
         >
           {Math.round(zoom * 100)}%
         </button>
@@ -160,9 +190,22 @@ export function EditorToolbar({
           title="Dopasuj widok do planu"
           className="rounded px-1.5 py-1 text-slate-500 hover:text-ink"
         >
-          <Maximize2 size={13} />
+          <Scan size={13} />
         </button>
       </div>
+
+      {/* Pełny ekran stoi POZA grupą powiększenia: tamta zmienia skalę rysunku,
+          ta zmienia ilość miejsca, jaką rysunek dostaje. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onTogglePelnyEkran}
+        title={pelnyEkran ? "Wyjdź z pełnego ekranu (Esc)" : "Projektowanie na pełnym ekranie (F)"}
+        aria-label={pelnyEkran ? "Wyjdź z pełnego ekranu" : "Projektowanie na pełnym ekranie"}
+        aria-pressed={pelnyEkran}
+      >
+        {pelnyEkran ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+      </Button>
     </div>
   );
 }
