@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Download, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
 import { downloadProtocolPdf } from "@/lib/pdf/protocol";
@@ -13,6 +13,18 @@ const HEADER_FIELDS: [string, string][] = [
   ["data", "Data pomiarów"], ["temperatura", "Temperatura [°C]"], ["wilgotnosc", "Wilgotność [%]"],
   ["drawingNo", "Nr rysunku / dokumentu"], ["revision", "Rewizja"],
 ];
+
+const DANE_ZWINIETE_KEY = "pomocnikelektryka_dane_ogolne_zwiniete";
+
+function odczytajDaneZwiniete(): boolean {
+  try {
+    return localStorage.getItem(DANE_ZWINIETE_KEY) === "1";
+  } catch {
+    // prywatny tryb przeglądarki potrafi rzucać przy dostępie do localStorage —
+    // brak flagi znaczy „domyślnie rozwinięte", co jest bezpieczniejsze
+    return false;
+  }
+}
 
 const STATUS_OPTIONS: [string, string, string][] = [
   ["tak", "zgodne", "#3B8C63"],
@@ -40,6 +52,22 @@ export function ProtocolsTab() {
 
   const [active, setActive] = useState<ProtocolKey>("ogledziny");
   const [blocked, setBlocked] = useState(false);
+  /** Dane ogólne wypełnia się RAZ na zlecenie, a potem przewija się je przy każdym
+   *  wejściu w zakładkę. Stan zwinięcia w localStorage, bo to preferencja widoku,
+   *  a nie część protokołu. */
+  const [daneZwiniete, setDaneZwiniete] = useState(odczytajDaneZwiniete);
+
+  function przelaczDane() {
+    setDaneZwiniete((zwiniete) => {
+      const nowy = !zwiniete;
+      try {
+        localStorage.setItem(DANE_ZWINIETE_KEY, nowy ? "1" : "0");
+      } catch {
+        /* patrz odczytajDaneZwiniete */
+      }
+      return nowy;
+    });
+  }
 
   const def = PROTOCOL_DEFS[active];
   const state = protocols[active] ?? { rows: [] };
@@ -80,7 +108,25 @@ export function ProtocolsTab() {
       </div>
 
       <div className="pe-card p-5">
-        <h3 className="pe-display mb-3 text-[15px]">Dane ogólne (wspólne dla wszystkich protokołów)</h3>
+        {/* Nagłówek jest przyciskiem zwijającym. Po zwinięciu pokazuje PODSUMOWANIE
+            (obiekt, data), żeby nie trzeba było rozwijać tylko po to, by sprawdzić,
+            czyje dane są wpisane — inaczej zwijanie oszczędzałoby miejsce kosztem
+            dodatkowego kliknięcia przy każdej weryfikacji. */}
+        <button
+          onClick={przelaczDane}
+          aria-expanded={!daneZwiniete}
+          className="mb-3 flex w-full items-center gap-2 text-left"
+        >
+          {daneZwiniete ? <ChevronRight size={15} className="shrink-0 text-slate-400" /> : <ChevronDown size={15} className="shrink-0 text-slate-400" />}
+          <h3 className="pe-display text-[15px]">Dane ogólne (wspólne dla wszystkich protokołów)</h3>
+          {daneZwiniete && (
+            <span className="ml-auto truncate pl-3 text-xs text-slate-400">
+              {[header.obiekt, header.wykonawca, header.data].filter(Boolean).join(" · ") || "nie wypełniono"}
+            </span>
+          )}
+        </button>
+        {!daneZwiniete && (
+        <>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {HEADER_FIELDS.map(([k, label]) => (
             <label key={k} className="block">
@@ -121,8 +167,12 @@ export function ProtocolsTab() {
             className="pe-input w-full text-sm"
           />
         </label>
+        </>
+        )}
+        {/* Ostrzeżenie o brakach zostaje widoczne TAKŻE po zwinięciu — inaczej
+            zwinięcie sekcji chowałoby jedyny sygnał, że protokół wyjdzie niekompletny. */}
         {!headerReady && (
-          <p className="mt-2 text-[11px]" style={{ color: "#8A5526" }}>
+          <p className={daneZwiniete ? "text-[11px]" : "mt-2 text-[11px]"} style={{ color: "#8A5526" }}>
             Uzupełnij co najmniej „Obiekt” i „Wykonawca pomiarów” — te dane trafiają do nagłówka każdego protokołu.
           </p>
         )}

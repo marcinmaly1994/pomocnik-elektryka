@@ -66,11 +66,15 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     norm: "PN-HD 60364-6 zał. D — kontrola po wykonaniu (rezystancja izolacji)",
     intro: "Pomiar wykonano miernikiem rezystancji izolacji przy odłączonym zasilaniu i odłączonych odbiornikach.",
     columns: [
-      { key: "obwod", label: "Obwód / miejsce pomiaru", w: 138, type: "text" },
-      { key: "u", label: "U pom. [V]", w: 56, type: "select", options: ["250", "500", "1000"], default: "500" },
-      { key: "ln", label: "L-N [MΩ]", w: 54, type: "number" },
-      { key: "lpe", label: "L-PE [MΩ]", w: 54, type: "number" },
-      { key: "npe", label: "N-PE [MΩ]", w: 54, type: "number" },
+      { key: "obwod", label: "Obwód / miejsce pomiaru", w: 128, type: "text" },
+      { key: "uklad", label: "Obwód", w: 52, type: "select", options: ["1-faz", "3-faz"], default: "1-faz" },
+      { key: "u", label: "U pom. [V]", w: 52, type: "select", options: ["250", "500", "1000"], default: "500" },
+      // Kolumna wyłącznie dla obwodów 3-fazowych: pomiary międzyfazowe (L1-L2,
+      // L1-L3, L2-L3), których w obwodzie jednofazowym po prostu nie ma.
+      { key: "ll", label: "L-L [MΩ]", w: 52, type: "number" },
+      { key: "ln", label: "L-N [MΩ]", w: 52, type: "number" },
+      { key: "lpe", label: "L-PE [MΩ]", w: 52, type: "number" },
+      { key: "npe", label: "N-PE [MΩ]", w: 52, type: "number" },
       {
         key: "rmin",
         label: "R min [MΩ]",
@@ -85,9 +89,12 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     limitLabel: "Własny próg (0 = wg normy)",
     limitDefault: 0,
     limitUnit: "MΩ",
-    extraCriterion: "Minimum wg PN-HD 60364-6 tabl. 6.1: 0,5 MΩ przy 250 V (SELV/PELV), 1,0 MΩ przy 500 V i 1000 V.",
+    extraCriterion:
+      "Minimum wg PN-HD 60364-6 tabl. 6.1: 0,5 MΩ przy 250 V (SELV/PELV), 1,0 MΩ przy 500 V i 1000 V. W obwodach 3-fazowych w kolumnie L-L wpisuje się NAJGORSZY wynik z pomiarów międzyfazowych (L1-L2, L1-L3, L2-L3); analogicznie w pozostałych kolumnach — najgorszy wynik z danej grupy.",
     evaluate: (r, limit) => {
-      const vals = [r.ln, r.lpe, r.npe].map(Number).filter((v) => !isNaN(v) && v > 0);
+      // Kolumna L-L dochodzi tylko w obwodach 3-fazowych; w jednofazowych zostaje
+      // pusta i wypada z oceny tak samo jak każdy inny niewypełniony pomiar.
+      const vals = [r.ll, r.ln, r.lpe, r.npe].map(Number).filter((v) => !isNaN(v) && v > 0);
       if (!vals.length) return null;
       const wymagane = Math.max(minRezystancjaIzolacji(Number(r.u ?? 500)), Number(limit) || 0);
       return Math.min(...vals) >= wymagane;
@@ -99,10 +106,15 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     norm: "PN-HD 60364-4-41 — ochrona przez samoczynne wyłączenie zasilania",
     intro: "Sprawdzenie skuteczności ochrony przeciwporażeniowej przez samoczynne wyłączenie zasilania (układ TN).",
     columns: [
-      { key: "obwod", label: "Obwód", w: 120, type: "text" },
-      { key: "curve", label: "Char.", w: 40, type: "select", options: ["B", "C", "D"], default: "B" },
-      { key: "in", label: "In [A]", w: 44, type: "number", default: 16 },
-      { key: "zs", label: "Zs zmierz. [Ω]", w: 70, type: "number" },
+      { key: "obwod", label: "Obwód", w: 106, type: "text" },
+      { key: "uklad", label: "Obwód", w: 50, type: "select", options: ["1-faz", "3-faz"], default: "1-faz" },
+      { key: "curve", label: "Char.", w: 38, type: "select", options: ["B", "C", "D"], default: "B" },
+      { key: "in", label: "In [A]", w: 42, type: "number", default: 16 },
+      // W obwodzie 3-fazowym mierzy się pętlę L-PE dla KAŻDEJ fazy — o ocenie
+      // decyduje najgorsza. W jednofazowym wypełnia się tylko L1.
+      { key: "zs", label: "Zs L1 [Ω]", w: 58, type: "number" },
+      { key: "zs2", label: "Zs L2 [Ω]", w: 58, type: "number" },
+      { key: "zs3", label: "Zs L3 [Ω]", w: 58, type: "number" },
       { key: "ia", label: "Ia [A]", w: 48, type: "computed", compute: (r) => zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0)).ia.toFixed(0) },
       {
         key: "zsmax",
@@ -118,11 +130,15 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     limitLabel: "Współczynnik bezpieczeństwa",
     limitDefault: 1.0,
     limitUnit: "×Zs max",
+    extraCriterion:
+      "Zs max liczone dla U0 = 230 V — zwarcie L-PE ma to samo napięcie w obwodzie 1- i 3-fazowym, więc próg jest wspólny. W obwodzie 3-fazowym mierzy się pętlę dla każdej fazy, a o ocenie decyduje NAJGORSZA z nich.",
     evaluate: (r, limit) => {
-      const zs = Number(r.zs);
+      // Najgorsza (największa) zmierzona impedancja z wypełnionych faz. W obwodzie
+      // jednofazowym wypełniona jest tylko L1 i sprowadza się to do niej samej.
+      const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
       const { zsMax } = zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0));
-      if (!zs || !zsMax) return null;
-      return zs <= zsMax * Number(limit);
+      if (!zmierzone.length || !zsMax) return null;
+      return Math.max(...zmierzone) <= zsMax * Number(limit);
     },
   },
 

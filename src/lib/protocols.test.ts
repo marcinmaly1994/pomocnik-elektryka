@@ -104,6 +104,38 @@ describe("PROTOCOL_DEFS.izolacja — próg zależny od napięcia próby", () => 
   });
 });
 
+describe("obwody 3-fazowe", () => {
+  it("izolacja: pomiar międzyfazowy L-L wchodzi do oceny", () => {
+    const def = PROTOCOL_DEFS.izolacja;
+    // Same pomiary do N i PE są dobre — dopiero L-L ujawnia usterkę.
+    expect(def.evaluate!({ uklad: "3-faz", u: "500", ln: 5, lpe: 5, npe: 5 }, 0)).toBe(true);
+    expect(def.evaluate!({ uklad: "3-faz", u: "500", ll: 0.3, ln: 5, lpe: 5, npe: 5 }, 0)).toBe(false);
+  });
+
+  it("izolacja: pusta kolumna L-L nie psuje oceny obwodu 1-fazowego", () => {
+    const def = PROTOCOL_DEFS.izolacja;
+    expect(def.evaluate!({ uklad: "1-faz", u: "500", ll: "", ln: 5, lpe: 5, npe: 5 }, 0)).toBe(true);
+  });
+
+  it("pętla zwarcia: o ocenie decyduje NAJGORSZA faza, nie pierwsza", () => {
+    const def = PROTOCOL_DEFS.petla;
+    // Zs max dla B16 to 2,88 Ω. L1 mieści się z zapasem, L3 nie.
+    expect(def.evaluate!({ uklad: "3-faz", curve: "B", in: 16, zs: 1.2, zs2: 1.3, zs3: 1.4 }, 1)).toBe(true);
+    expect(def.evaluate!({ uklad: "3-faz", curve: "B", in: 16, zs: 1.2, zs2: 1.3, zs3: 4.5 }, 1)).toBe(false);
+  });
+
+  it("pętla zwarcia: obwód 1-fazowy ocenia się po samej L1", () => {
+    const def = PROTOCOL_DEFS.petla;
+    expect(def.evaluate!({ uklad: "1-faz", curve: "B", in: 16, zs: 1.2, zs2: "", zs3: "" }, 1)).toBe(true);
+    expect(def.evaluate!({ uklad: "1-faz", curve: "B", in: 16, zs: 4.5, zs2: "", zs3: "" }, 1)).toBe(false);
+  });
+
+  it("pętla zwarcia: brak choćby jednej zmierzonej fazy -> brak oceny", () => {
+    const def = PROTOCOL_DEFS.petla;
+    expect(def.evaluate!({ uklad: "3-faz", curve: "B", in: 16 }, 1)).toBeNull();
+  });
+});
+
 describe("PROTOCOL_DEFS.odgromowa.evaluate", () => {
   const def = PROTOCOL_DEFS.odgromowa;
 

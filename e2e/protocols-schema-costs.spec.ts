@@ -65,6 +65,48 @@ test("Protokoły: komplet ośmiu protokołów wymaganych przy kontroli pięciole
   }
 });
 
+test("Protokoły: „Dane ogólne” zwijają się, a stan przeżywa odświeżenie", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+
+  const obiekt = page.getByLabel("Obiekt / nazwa instalacji");
+  await obiekt.fill("Hala nr 3");
+  await expect(obiekt).toBeVisible();
+
+  const naglowek = page.getByRole("button", { name: /Dane ogólne/ });
+  await naglowek.click();
+  await expect(obiekt).toHaveCount(0);
+
+  // Po zwinięciu nagłówek musi POKAZAĆ, czyje dane są wpisane — inaczej sprawdzenie
+  // tego wymagałoby rozwinięcia sekcji z powrotem.
+  await expect(naglowek).toContainText("Hala nr 3");
+
+  await page.reload();
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+  await expect(page.getByLabel("Obiekt / nazwa instalacji")).toHaveCount(0);
+});
+
+test("Protokoły: wypełnione wiersze trafiają do zapisu projektu", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+  await page.getByText("Pomiar rezystancji izolacji", { exact: true }).click();
+  await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+  await page.locator("tbody tr").first().locator("input").first().fill("Obwód gniazd kuchnia");
+
+  await page.waitForTimeout(900); // debounce autozapisu
+  // Protokoły są częścią projektu, więc idą tą samą drogą co plan — i tym samym
+  // trafiają na konto przy zapisie w chmurze. To podstawa dokończenia pomiarów później.
+  const zapis = await page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return raw ? JSON.parse(raw).protocols?.izolacja?.rows?.[0]?.obwod : null;
+  });
+  expect(zapis).toBe("Obwód gniazd kuchnia");
+});
+
 test("Protokoły: ochrona odgromowa ocenia ciągłość i rezystancję, i pobiera się jako PDF", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
