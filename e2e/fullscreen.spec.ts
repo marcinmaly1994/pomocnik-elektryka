@@ -1,8 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Tryb pełnoekranowy: plan dostaje całe okno, a paski chowają się za krawędzie
- * i wracają po najechaniu myszą.
+ * Tryb pełnoekranowy: plan dostaje całe okno pomniejszone o dwa niskie paski
+ * poziome, a panel narzędzi chowa się za lewą krawędź i wraca po najechaniu myszą
+ * albo zostaje przypięty.
+ *
+ * Chowa się WYŁĄCZNIE panel boczny — on jeden ma szerokość (~370 px), która realnie
+ * zmienia ilość miejsca dla rysunku. Paski poziome (~46 i ~54 px) stoją na stałe:
+ * odzysk był znikomy, a wysuwały się pod kursorem w trakcie pracy i wchodziły
+ * w drogę przypiętym narzędziom.
  *
  * Testy mierzą FAKTYCZNE położenie paneli (`boundingBox`), a nie klasy CSS —
  * to jedyny sposób, żeby złapać przypadek, w którym transformacja jest zapisana
@@ -22,7 +28,7 @@ async function pozycjaX(locator: ReturnType<typeof lewaKarta>): Promise<number> 
   return box ? Math.round(box.x) : NaN;
 }
 
-test("pełny ekran chowa paski za krawędzie i oddaje planowi całe okno", async ({ page }) => {
+test("pełny ekran chowa panel narzędzi i oddaje planowi resztę okna", async ({ page }) => {
   await page.goto("/");
 
   const karta = lewaKarta(page);
@@ -33,10 +39,11 @@ test("pełny ekran chowa paski za krawędzie i oddaje planowi całe okno", async
   // Panel zjeżdża w całości poza lewą krawędź — ujemny X, nie tylko „mniejszy".
   await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeLessThan(0);
 
-  // Płótno dostaje niemal całą wysokość okna: bez pasków nie ma na co zostawiać zapasu.
+  // Paski poziome zostaja na stale (sa niskie, wiec odzysk bylby znikomy), ale plotno
+  // i tak dostaje wiekszosc okna — znika naglowek, pasek etapow i cala reszta powloki.
   const wysOkna = page.viewportSize()!.height;
   const plotno = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
-  expect(plotno.height).toBeGreaterThan(wysOkna * 0.85);
+  expect(plotno.height).toBeGreaterThan(wysOkna * 0.75);
 });
 
 test("najechanie na lewą krawędź wysuwa narzędzia, odjechanie chowa je z powrotem", async ({ page }) => {
@@ -84,11 +91,11 @@ test("Escape wychodzi z pełnego ekranu, ale najpierw porzuca rozpoczęty rysune
   // rysunek porzucony…
   await expect(page.getByText(/Rysowanie ściany: 2 pkt\./)).toHaveCount(0);
   // …ale tryb pełnoekranowy trwa
-  await expect(page.getByRole("button", { name: "Zamknij pełny ekran" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Wyjdź z pełnego ekranu" })).toBeVisible();
 
   // Dopiero drugi Escape wychodzi z trybu.
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Zamknij pełny ekran" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Wyjdź z pełnego ekranu" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Projektowanie na pełnym ekranie" })).toBeVisible();
 });
 
@@ -267,13 +274,7 @@ test("przypięty panel po lewej NIE zasłania górnego paska", async ({ page }) 
   await page.reload();
   await odslonNarzedzia(page);
   await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
-  // Pinezka karty leży tuż pod górną krawędzią, więc kliknięcie jej wysuwa PRZY OKAZJI
-  // górny pasek. Odsuwamy kursor i czekamy, aż wszystko wróci do stanu spoczynku,
-  // żeby test sprawdzał układ, a nie skutek uboczny własnego kliknięcia.
   await page.mouse.move(page.viewportSize()!.width / 2, page.viewportSize()!.height / 2);
-  await page.waitForTimeout(500);
-
-  await page.getByRole("button", { name: "Pokaż pasek edytora" }).click();
   await page.waitForTimeout(400);
 
   const karta = (await lewaKarta(page).boundingBox())!;
@@ -294,30 +295,42 @@ test("przypięty panel po lewej NIE zasłania górnego paska", async ({ page }) 
   expect(trafiaWParter).toBe(true);
 });
 
-test("przycisk Esc znika, gdy górny pasek jest na widoku — nie zasłania jego kontrolek", async ({ page }) => {
+test("paski poziome stoją na stałe i nie chowają się przed kursorem", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await page.waitForTimeout(300);
 
-  // Paski schowane — pigułka jest jedynym widocznym wyjściem i MUSI być.
-  await expect(page.getByRole("button", { name: "Zamknij pełny ekran" })).toBeVisible();
+  // Chowa się WYŁĄCZNIE panel boczny — on jeden ma szerokość, która realnie
+  // zmienia ilość miejsca dla planu. Paski poziome są niskie, więc chowanie ich
+  // dawało znikomy zysk, a wchodziło w drogę przypiętym narzędziom.
+  const pasek = page.getByLabel("Rozmiar elementów");
+  const dane = page.getByText(/Obszar planu:/);
+  await expect(pasek).toBeVisible();
+  await expect(dane).toBeVisible();
 
-  await page.getByRole("button", { name: "Pokaż pasek edytora" }).click();
+  // Kursor na środku planu — nic nie powinno zniknąć.
+  await page.mouse.move(page.viewportSize()!.width / 2, page.viewportSize()!.height / 2);
   await page.waitForTimeout(400);
+  await expect(pasek).toBeVisible();
+  await expect(dane).toBeVisible();
 
-  // Pasek ma własny przycisk wyjścia w tym samym rogu — pigułka tylko przykrywała
-  // sąsiednie kontrolki („Dopasuj widok do planu”, pinezkę).
+  // Nie ma już uchwytów do wysuwania pasków poziomych ani awaryjnej pigułki „Esc”:
+  // wyjście z trybu siedzi w samym pasku, który jest zawsze pod ręką.
+  await expect(page.getByRole("button", { name: "Pokaż pasek edytora" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Pokaż dane planu" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Zamknij pełny ekran" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Wyjdź z pełnego ekranu" })).toBeVisible();
 
-  const dopasuj = page.getByRole("button", { name: "Dopasuj widok do planu" });
-  const klikalny = await dopasuj.evaluate((el) => {
-    const r = el.getBoundingClientRect();
-    const pod = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-    return pod ? pod.closest("button") === el : false;
-  });
-  expect(klikalny).toBe(true);
+  // Kontrolki paska muszą być klikalne — nic nie może na nich leżeć.
+  for (const nazwa of ["Dopasuj widok do planu", "Wyjdź z pełnego ekranu"]) {
+    const klikalny = await page.getByRole("button", { name: nazwa }).evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const pod = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return pod ? pod.closest("button") === el : false;
+    });
+    expect(klikalny, `przycisk „${nazwa}” zasłonięty`).toBe(true);
+  }
 });
 
 test("kondygnacje mieszkają w jednym pasku razem z podkładem i siatką", async ({ page }) => {
