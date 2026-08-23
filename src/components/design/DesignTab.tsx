@@ -192,18 +192,19 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   /**
    * Symbole użyte NA TEJ kondygnacji, do legendy. Kluczem jest typ RAZEM z liczbą
    * klawiszy/gniazd, bo glif łącznika grupowego różni się od pojedynczego — legenda
-   * musi pokazywać dokładnie ten znak, który stoi na rysunku, inaczej nie spełnia
-   * swojego zadania przy odbiorze.
+   * musi pokazywać dokładnie ten znak, który stoi na rysunku.
+   *
+   * Sortowane ALFABETYCZNIE po opisie: legenda jest tablicą do sprawdzania „co to za
+   * znak", więc czyta się ją wyszukiwaniem, a nie od góry do dołu.
    */
   const uzyteSymbole = useMemo(() => {
-    const licznik = new Map<string, { type: ElementType; gangs: number; ile: number }>();
+    const wpisy = new Map<string, { type: ElementType; gangs: number }>();
     for (const el of elements) {
-      const klucz = `${el.type}:${el.gangs || 1}`;
-      const wpis = licznik.get(klucz);
-      if (wpis) wpis.ile++;
-      else licznik.set(klucz, { type: el.type, gangs: el.gangs || 1, ile: 1 });
+      wpisy.set(`${el.type}:${el.gangs || 1}`, { type: el.type, gangs: el.gangs || 1 });
     }
-    return [...licznik.values()].sort((a, b) => b.ile - a.ile);
+    return [...wpisy.values()].sort((a, b) =>
+      ELEMENT_TYPES[a.type].label.localeCompare(ELEMENT_TYPES[b.type].label, "pl")
+    );
   }, [elements]);
 
   /**
@@ -233,7 +234,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       legenda.push({
         symbol: await plotnoDoPdf(await svgDoPlotna(svg, 96)),
         opis: wariant && sym.gangs > 1 ? `${ELEMENT_TYPES[sym.type].label} — ${wariant}` : ELEMENT_TYPES[sym.type].label,
-        ile: sym.ile,
       });
     }
 

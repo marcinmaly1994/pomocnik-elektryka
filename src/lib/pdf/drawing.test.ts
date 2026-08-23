@@ -23,6 +23,7 @@ function bytesToAscii(bytes: Uint8Array): string {
 /** Odczytuje napisy razem z pozycją — do sprawdzania, gdzie legenda wylądowała. */
 function napisy(out: string) {
   return [...out.matchAll(/BT \/(F\d) ([\d.]+) Tf ([\d.]+) ([\d.]+) Td \(((?:\\.|[^)])*)\) Tj ET/g)].map((m) => ({
+    size: Number(m[2]),
     x: Number(m[3]),
     y: Number(m[4]),
     t: m[5],
@@ -91,7 +92,7 @@ describe("buildDrawingPdf", () => {
           tytul: "Rzut",
           header,
           rysunek: obraz(1000, 500),
-          legenda: [{ symbol: obraz(40, 40), opis: "Gniazdo 230 V", ile: 3 }],
+          legenda: [{ symbol: obraz(40, 40), opis: "Gniazdo 230 V" }],
         })
       )
     );
@@ -101,20 +102,30 @@ describe("buildDrawingPdf", () => {
 
   describe("legenda", () => {
     const legenda = [
-      { symbol: obraz(40, 40), opis: "Gniazdo 230 V", ile: 3 },
-      { symbol: obraz(40, 40), opis: "Łącznik świecznikowy — 2× klawisze", ile: 2 },
+      { symbol: obraz(40, 40), opis: "Gniazdo 230 V" },
+      { symbol: obraz(40, 40), opis: "Łącznik świecznikowy — 2× klawisze" },
     ];
 
-    it("ma nagłówek, opisy i liczbę sztuk", async () => {
+    it("ma nagłówek i opisy symboli", async () => {
       const out = bytesToAscii(
         await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(1000, 600), legenda })
       );
       const t = napisy(out).map((n) => n.t);
       expect(t).toContain("LEGENDA");
       expect(t).toContain("Gniazdo 230 V");
-      // Liczba sztuk — przy odbiorze sprawdza się, czy policzone zgadza się z zamontowanym.
-      expect(t.some((s) => /^3\s*x$/i.test(s))).toBe(true);
-      expect(t.some((s) => /^2\s*x$/i.test(s))).toBe(true);
+    });
+
+    it("NIE podaje liczby sztuk", async () => {
+      // Legenda ma objaśniać, co dany znak oznacza. Zestawienie ilościowe to inny
+      // dokument (kosztorys), a liczba wydrukowana obok symbolu starzeje się przy
+      // każdej zmianie projektu i bywa po prostu nieprawdziwa.
+      const out = bytesToAscii(
+        await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(1000, 600), legenda })
+      );
+      const naglowek = napisy(out).find((n) => n.t === "LEGENDA")!;
+      const wLegendzie = napisy(out).filter((n) => n.x >= naglowek.x && n.y < naglowek.y);
+      expect(wLegendzie.length).toBeGreaterThan(0);
+      for (const n of wLegendzie) expect(n.t).not.toMatch(/^\d+\s*[x×]$/i);
     });
 
     it("stoi po PRAWEJ stronie kartki, obok rysunku", async () => {
@@ -154,5 +165,59 @@ describe("buildDrawingPdf", () => {
       expect(opisy.length).toBeGreaterThanOrEqual(2);
       for (const o of opisy) expect(o.x).toBeLessThan(STRONA_W);
     });
+  });
+});
+
+/**
+ * Tabliczka rysunkowa. Testowana tu, bo rysunek jest jedynym dokumentem, w którym
+ * widać ją w całości — ale wada dotyczyła WSZYSTKICH PDF-ów, także protokołów.
+ *
+ * Trzecia kolumna upychała cztery napisy w wysokości przewidzianej na trzy: etykieta
+ * „DATA" lądowała 2 pt pod dziewięciopunktowym numerem rysunku i obie linie zlewały
+ * się w jedną plamę. Test mierzy odstępy pionowe w obrębie kolumny, bo tylko one
+ * odróżniają czytelną metrykę od nieczytelnej.
+ */
+describe("tabliczka rysunkowa", () => {
+  async function metryka() {
+    const out = bytesToAscii(await buildDrawingPdf({ tytul: "Rzut - Parter", header, rysunek: obraz(1000, 600) }));
+    return napisy(out).filter((n) => n.y < 100);
+  }
+
+  it("zawiera komplet rubryk", async () => {
+    const t = (await metryka()).map((n) => n.t);
+    for (const rubryka of ["OBIEKT", "RYSUNEK / DOKUMENT", "NR RYS.", "REW.", "DATA"]) {
+      expect(t).toContain(rubryka);
+    }
+    expect(t).toContain("E-02");
+    expect(t).toContain("2026-08-23");
+  });
+
+  it("napisy w jednej kolumnie nie nachodzą na siebie", async () => {
+    const m = await metryka();
+    // Grupujemy po X (ta sama rubryka = ta sama krawędź lewa) i sprawdzamy, czy
+    // kolejne linie bazowe dzieli co najmniej wysokość większego z dwóch napisów.
+    const kolumny = new Map<number, typeof m>();
+    for (const n of m) {
+      const klucz = Math.round(n.x);
+      kolumny.set(klucz, [...(kolumny.get(klucz) ?? []), n]);
+    }
+    for (const [x, napisyKolumny] of kolumny) {
+      const posortowane = [...napisyKolumny].sort((a, b) => b.y - a.y);
+      for (let i = 0; i < posortowane.length - 1; i++) {
+        const gorny = posortowane[i];
+        const dolny = posortowane[i + 1];
+        const odstep = gorny.y - dolny.y;
+        expect(odstep, `x=${x}: „${gorny.t}" i „${dolny.t}" stoją ${odstep} pt od siebie`).toBeGreaterThanOrEqual(
+          Math.max(gorny.size, dolny.size)
+        );
+      }
+    }
+  });
+
+  it("rysunek nie wchodzi na tabliczkę", async () => {
+    const out = bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(1000, 600) }));
+    const [rys] = obrazy(out);
+    const gornaKrawedzTabliczki = 36 - 6 + 48; // margines - odsadzka + wysokość paska
+    expect(rys.y).toBeGreaterThanOrEqual(gornaKrawedzTabliczki);
   });
 });

@@ -1,6 +1,6 @@
 import type { DocumentHeader } from "@/types";
 import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfImage } from "./engine";
-import { drawTitleBlock } from "./titleBlock";
+import { drawTitleBlock, TITLE_BLOCK_H } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
 
 /**
@@ -16,12 +16,17 @@ import { downloadPdfBytes, projectFileName } from "./download";
  * czego wydruk zrzutu ekranu nigdy nie daje.
  */
 
-/** Pozycja legendy: symbol (rasteryzowany glif) + jego opis. */
+/**
+ * Pozycja legendy: symbol (rasteryzowany glif) + jego opis.
+ *
+ * Świadomie BEZ liczby sztuk. Legenda objaśnia, co dany znak oznacza — zestawienie
+ * ilościowe to inny dokument (kosztorys) i inny moment pracy. Liczba na rysunku
+ * dodatkowo starzeje się przy każdej zmianie projektu, więc wydrukowana obok symbolu
+ * bywa po prostu nieprawdziwa.
+ */
 export interface PozycjaLegendy {
   symbol: PdfImage;
   opis: string;
-  /** Ile sztuk na rysunku. Pomijane, gdy nieznane. */
-  ile?: number;
 }
 
 export interface RysunekPdfOpcje {
@@ -43,9 +48,11 @@ const MARGINES = 36;
 const LEGENDA_W = 176;
 const LEGENDA_SYMBOL = 20;
 const LEGENDA_WIERSZ = 26;
+/** Wysokość paska nagłówka „LEGENDA". */
+const LEGENDA_NAGLOWEK = 20;
 
 /** Wysokość paska zajmowanego przez tabliczkę rysunkową u dołu strony. */
-const TABLICZKA_H = 46;
+const TABLICZKA_H = TITLE_BLOCK_H + 8;
 
 /** Łamie opis na dwie linie mieszczące się w kolumnie legendy. */
 function dwieLinie(tekst: string, maxW: number, size: number): [string, string | null] {
@@ -87,7 +94,9 @@ export function buildDrawingPdf({ tytul, header, rysunek, legenda }: RysunekPdfO
   if (maLegende) {
     const lx = STRONA_W - MARGINES - LEGENDA_W;
     const gora = poleY + poleH;
-    const wysokosc = Math.min(poleH, 24 + legenda!.length * LEGENDA_WIERSZ + 6);
+    // Dokładnie nagłówek + wiersze. Zapas „na oko" zostawiał pod ostatnią pozycją
+    // pusty pasek, który czytał się jak zaczęty, niedokończony wiersz tabeli.
+    const wysokosc = Math.min(poleH, LEGENDA_NAGLOWEK + legenda!.length * LEGENDA_WIERSZ);
     const dol = gora - wysokosc;
 
     doc.box(lx, dol, LEGENDA_W, wysokosc, 0.985);
@@ -96,18 +105,18 @@ export function buildDrawingPdf({ tytul, header, rysunek, legenda }: RysunekPdfO
     doc.line(lx, dol, lx, gora, 0.7, 0.55);
     doc.line(lx + LEGENDA_W, dol, lx + LEGENDA_W, gora, 0.7, 0.55);
 
-    doc.box(lx, gora - 20, LEGENDA_W, 20, 0.88);
+    doc.box(lx, gora - LEGENDA_NAGLOWEK, LEGENDA_W, LEGENDA_NAGLOWEK, 0.88);
     doc.text("LEGENDA", lx + 8, gora - 14, 9, true);
-    doc.line(lx, gora - 20, lx + LEGENDA_W, gora - 20, 0.5, 0.55);
+    doc.line(lx, gora - LEGENDA_NAGLOWEK, lx + LEGENDA_W, gora - LEGENDA_NAGLOWEK, 0.5, 0.55);
 
-    let y = gora - 20;
+    let y = gora - LEGENDA_NAGLOWEK;
     for (const poz of legenda!) {
       y -= LEGENDA_WIERSZ;
       const srodek = y + LEGENDA_WIERSZ / 2;
       doc.image(poz.symbol, lx + 8, srodek - LEGENDA_SYMBOL / 2, LEGENDA_SYMBOL, LEGENDA_SYMBOL);
 
       const opisX = lx + 8 + LEGENDA_SYMBOL + 8;
-      const opisW = LEGENDA_W - (opisX - lx) - 8 - (poz.ile ? 22 : 0);
+      const opisW = LEGENDA_W - (opisX - lx) - 8;
       const [l1, l2] = dwieLinie(poz.opis, opisW, 7.5);
       if (l2) {
         doc.text(l1, opisX, srodek + 1, 7.5);
@@ -116,13 +125,9 @@ export function buildDrawingPdf({ tytul, header, rysunek, legenda }: RysunekPdfO
         doc.text(l1, opisX, srodek - 3, 7.5);
       }
 
-      // Liczba sztuk przy prawej krawędzi — przy odbiorze to pierwsza rzecz,
-      // którą się sprawdza: czy policzone zgadza się z zamontowanym.
-      if (poz.ile) {
-        const ile = `${poz.ile}×`;
-        doc.text(ile, lx + LEGENDA_W - 8 - pdfTextWidth(ile, 7.5, true), srodek - 3, 7.5, true);
-      }
-      doc.line(lx, y, lx + LEGENDA_W, y, 0.3, 0.88);
+      // Kreska tylko MIĘDZY wierszami: pod ostatnim leży już dolna ramka i podwójna
+      // linia w tym miejscu wygląda jak niedomknięta tabela.
+      if (poz !== legenda![legenda!.length - 1]) doc.line(lx, y, lx + LEGENDA_W, y, 0.3, 0.88);
     }
   }
 
