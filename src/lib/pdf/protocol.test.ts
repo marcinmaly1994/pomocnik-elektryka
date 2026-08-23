@@ -63,3 +63,47 @@ describe("buildProtocolPdf — dopisek Uwagi", () => {
     expect(out).toContain("Uwagi:");
   });
 });
+
+/**
+ * Układ nagłówka — pilnowany liczbowo, bo obie usterki, które tu wystąpiły, były
+ * NIEWIDOCZNE dla testów sprawdzających samą obecność tekstu w pliku: napisy były
+ * w PDF-ie, tylko leżały jeden na drugim i pod szarym tłem. Zgłosił to dopiero
+ * użytkownik („brakuje nagłówków, na górze jest jakiś szary prostokąt").
+ *
+ * Strumień treści nie jest kompresowany, więc operatory czyta się wprost:
+ *   tekst  ->  `<szarość> g BT /F<n> <rozmiar> Tf <x> <y> Td (...) Tj ET`
+ *   tło    ->  `<szarość> g <x> <y> <szer> <wys> re f`
+ * `re` liczy od LEWEGO DOLNEGO rogu i rośnie w GÓRĘ — na tym poległa pierwsza wersja.
+ */
+describe("buildProtocolPdf — układ nagłówka", () => {
+  const WYS_STRONY = 842; // A4 w punktach
+
+  async function nagl() {
+    const out = bytesToAscii(await buildProtocolPdf("izolacja", header, [{ obwod: "Obwód 1", u: 500, ln: 500 }], 1.0));
+    const tytul = out.match(/\/F2 13 Tf [\d.]+ ([\d.]+) Td/);
+    const norma = out.match(/0\.35 g BT \/F1 8\.5 Tf [\d.]+ ([\d.]+) Td/);
+    const tlo = out.match(/0\.965 g [\d.]+ ([\d.]+) [\d.]+ ([\d.]+) re f/);
+    expect(tytul, "brak tytułu 13 pt").not.toBeNull();
+    expect(norma, "brak wiersza z normą").not.toBeNull();
+    expect(tlo, "brak szarego tła danych ogólnych").not.toBeNull();
+    return {
+      tytulY: Number(tytul![1]),
+      normaY: Number(norma![1]),
+      tloDol: Number(tlo![1]),
+      tloGora: Number(tlo![1]) + Number(tlo![2]),
+    };
+  }
+
+  it("tytuł i wiersz z normą nie nachodzą na siebie", async () => {
+    const { tytulY, normaY } = await nagl();
+    // Tytuł ma 13 pt, więc jego linia potrzebuje co najmniej tyle odstępu.
+    expect(tytulY - normaY).toBeGreaterThanOrEqual(13);
+  });
+
+  it("szare tło danych ogólnych leży POD nagłówkiem i mieści się na stronie", async () => {
+    const { normaY, tloDol, tloGora } = await nagl();
+    expect(tloGora).toBeLessThan(normaY); // nie przykrywa tytułu ani normy
+    expect(tloGora).toBeLessThan(WYS_STRONY); // nie wychodzi poza krawędź kartki
+    expect(tloDol).toBeGreaterThan(0);
+  });
+});

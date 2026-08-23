@@ -32,7 +32,10 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
 
   const drawTitle = (cd: boolean) => {
     doc.text(def.title.toUpperCase(), M, doc.y - 12, 13, true);
-    doc.y -= cd ? 26 : 20;
+    // 26, nie 20: tytuł ma 13 pt, więc jego linia potrzebuje tyle miejsca. Przy 20
+    // wiersz z normą lądował 8 pt pod linią bazową tytułu — wchodził w jego światło
+    // i obie linie zlewały się w nieczytelną plamę.
+    doc.y -= 26;
     if (!cd) {
       doc.text(pdfFitText(`Wymagania wg ${def.norm}`, W, 8.5, false), M, doc.y, 8.5, false, 0.35);
       doc.y -= 18;
@@ -58,7 +61,12 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
   const LABEL_WIDTH_SAFETY = 1.3;
   const col1End = M + 270;
   const col2End = M + W;
-  doc.box(M, doc.y - 6, W, 6 + (info.length / 2) * 15, 0.965);
+  // `box` przyjmuje LEWY DOLNY róg i rośnie w GÓRĘ (patrz `engine.ts`: operator `re`
+  // w PDF-ie). Wcześniej dół podawano jako `doc.y - 6`, więc 96-punktowe tło jechało
+  // 90 pt ponad bieżącą pozycję — przykrywało tytuł i wychodziło poza krawędź strony.
+  // Stąd „szary prostokąt na górze" i wrażenie, że nagłówka nie ma: był, tylko pod spodem.
+  const wysBloku = 6 + (info.length / 2) * 15;
+  doc.box(M, doc.y + 8 - wysBloku, W, wysBloku, 0.965);
   for (let i = 0; i < info.length; i += 2) {
     const yy = doc.y + 2;
     const label1 = info[i][0] + ":";

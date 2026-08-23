@@ -7,7 +7,7 @@ import { CadGlyph, GLYPHS, labelOffset, LINE_W, STROKE } from "./deviceGlyphs";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits } from "@/lib/panel/project";
 import { scaleOf } from "@/lib/design";
-import { buildPanelDevices } from "@/lib/panel/devices";
+import { buildPanelDevices, PHASE_COLORS } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
 
 const MUTED = "#6B7684";
@@ -62,8 +62,15 @@ const TABLE_TAG_H = 18;
 // („Obwód dedykowany — Kuchnia (zmywarka)”), a przy jednej linii ucięcie zjadało
 // końcówkę, czyli dokładnie to, co odróżnia obwód 1 od obwodu 2.
 const TABLE_NAME_H = 26;
+// Wiersz fazy stoi MIĘDZY oznaczeniem a nazwą, bo to informacja o obwodzie, a nie
+// o aparacie: z samego „F3 / Gniazda kuchnia” nie wynika, na której fazie obwód
+// siedzi, a przy odbiorze i przy szukaniu przyczyny zaniku to pierwsza rzecz, jakiej
+// się szuka. Rozdziałem 1-fazowych na L1/L2/L3 zajmuje się `balancePhases`, więc bez
+// tego wiersza wynik bilansowania nie był na schemacie widoczny w ogóle.
+const TABLE_PHASE_H = 15;
 const TABLE_MID = TABLE_TOP + TABLE_TAG_H;
-const TABLE_BOTTOM = TABLE_MID + TABLE_NAME_H;
+const TABLE_PHASE_BOTTOM = TABLE_MID + TABLE_PHASE_H;
+const TABLE_BOTTOM = TABLE_PHASE_BOTTOM + TABLE_NAME_H;
 const SCHEMA_HEIGHT = TABLE_BOTTOM + 14;
 
 /** Ile znaków mieści się w jednej linii komórki tabeli. Szerokość znaku (4,3 px dla
@@ -330,6 +337,7 @@ function FinalCircuitsTable({ columns }: { columns: Column[] }) {
           <g key={col.block.device.uid}>
             <line x1={left} y1={TABLE_TOP} x2={right} y2={TABLE_TOP} stroke={STROKE} strokeWidth={LINE_W} />
             <line x1={left} y1={TABLE_MID} x2={right} y2={TABLE_MID} stroke={STROKE} strokeWidth={LINE_W} />
+            <line x1={left} y1={TABLE_PHASE_BOTTOM} x2={right} y2={TABLE_PHASE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
             <line x1={left} y1={TABLE_BOTTOM} x2={right} y2={TABLE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
             <line x1={right} y1={TABLE_TOP} x2={right} y2={TABLE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
             {mcbs.map((mcb, i) => {
@@ -341,16 +349,30 @@ function FinalCircuitsTable({ columns }: { columns: Column[] }) {
                   <text x={cx} y={TABLE_TOP + 13} fontSize={9.5} fontWeight={700} textAnchor="middle" fill={STROKE}>
                     {mcb.tag}
                   </text>
+                  {/* Faza obwodu. „3F" dla odbiorników trójfazowych, L1/L2/L3 dla
+                      jednofazowych; kolor wg PN-HD 308 S2, ten sam co na widoku
+                      czołowym rozdzielnicy — żeby oznaczenie na schemacie i w szafce
+                      czytało się jako jedno i to samo. */}
+                  <text
+                    x={cx}
+                    y={TABLE_MID + 11}
+                    fontSize={8.5}
+                    fontWeight={700}
+                    textAnchor="middle"
+                    fill={PHASE_COLORS[mcb.phase ?? ""] ?? MUTED}
+                  >
+                    {mcb.phase || "—"}
+                  </text>
                   {(() => {
                     const [l1, l2] = wrapTwoLines(mcb.caption, TABLE_CHARS_PER_LINE);
                     return (
                       <text fontSize={8} textAnchor="middle" fill={STROKE}>
                         <title>{mcb.caption}</title>
-                        <tspan x={cx} y={l2 ? TABLE_MID + 11 : TABLE_MID + 16}>
+                        <tspan x={cx} y={l2 ? TABLE_PHASE_BOTTOM + 11 : TABLE_PHASE_BOTTOM + 16}>
                           {l1}
                         </tspan>
                         {l2 && (
-                          <tspan x={cx} y={TABLE_MID + 21}>
+                          <tspan x={cx} y={TABLE_PHASE_BOTTOM + 21}>
                             {l2}
                           </tspan>
                         )}
