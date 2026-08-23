@@ -49,6 +49,14 @@ import { ToolRail } from "./ToolRail";
 import { ElementLibrary } from "./ElementLibrary";
 import { RoomPanel } from "./RoomPanel";
 import { EditElementModal } from "./EditElementModal";
+import type Konva from "konva";
+import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
+import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
+import { buildDrawingPdf } from "@/lib/pdf/drawing";
+import { bialePlotno, plotnoDoPdf, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
+import { projectFileName } from "@/lib/pdf/download";
+import { resolveDocHeader } from "@/lib/docHeader";
+import { PdfPreview } from "@/components/ui/PdfPreview";
 
 const DEFAULT_ROOM_SUGGESTIONS = ["Salon", "Kuchnia", "Łazienka", "Sypialnia", "Korytarz"];
 
@@ -174,6 +182,68 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const floorName = floors.find((f) => f.id === activeFloorId)?.name ?? "Kondygnacja";
 
   const elements = useActiveFloorElements();
+  const rawDocHeader = useProjectStore((st) => st.docHeader);
+  const projectName = useProjectStore((st) => st.projectName);
+  const stageRef = useRef<Konva.Stage | null>(null);
+  const glifyRef = useRef<HTMLDivElement>(null);
+  const [podgladPdf, setPodgladPdf] = useState(false);
+  const docHeader = resolveDocHeader(rawDocHeader, projectName);
+
+  /**
+   * Symbole użyte NA TEJ kondygnacji, do legendy. Kluczem jest typ RAZEM z liczbą
+   * klawiszy/gniazd, bo glif łącznika grupowego różni się od pojedynczego — legenda
+   * musi pokazywać dokładnie ten znak, który stoi na rysunku, inaczej nie spełnia
+   * swojego zadania przy odbiorze.
+   */
+  const uzyteSymbole = useMemo(() => {
+    const licznik = new Map<string, { type: ElementType; gangs: number; ile: number }>();
+    for (const el of elements) {
+      const klucz = `${el.type}:${el.gangs || 1}`;
+      const wpis = licznik.get(klucz);
+      if (wpis) wpis.ile++;
+      else licznik.set(klucz, { type: el.type, gangs: el.gangs || 1, ile: 1 });
+    }
+    return [...licznik.values()].sort((a, b) => b.ile - a.ile);
+  }, [elements]);
+
+  /**
+   * Rzut do PDF-a: rysunek rasteryzowany ze sceny Konvy + legenda złożona z glifów
+   * tych samych komponentów, które rysują paletę elementów.
+   *
+   * Scena eksportuje się przez `toCanvas` z `pixelRatio` liczonym pod DRUK, a nie pod
+   * ekran — na ekranie rzut ma kilkaset pikseli szerokości i wydrukowany wyglądałby
+   * jak powiększony zrzut.
+   */
+  async function zbudujPdfRzutu(): Promise<Uint8Array> {
+    const stage = stageRef.current;
+    if (!stage) throw new Error("Rzut nie jest jeszcze gotowy.");
+
+    // Pole rysunku obok legendy, przeliczone na piksele druku.
+    const docelowaSzer = Math.round(600 * PIKSELI_NA_PUNKT);
+    const plotno = stage.toCanvas({ pixelRatio: docelowaSzer / stage.width() }) as HTMLCanvasElement;
+    // Scena Konvy jest przezroczysta — bez podłożenia bieli wychodzi czarna płachta.
+    const naBieli = bialePlotno(plotno.width, plotno.height);
+    naBieli.getContext("2d")!.drawImage(plotno, 0, 0);
+
+    const legenda = [];
+    for (const sym of uzyteSymbole) {
+      const svg = glifyRef.current?.querySelector<SVGSVGElement>(`[data-glif="${sym.type}:${sym.gangs}"] svg`);
+      if (!svg) continue;
+      const wariant = libSubtitle(sym.type, sym.gangs);
+      legenda.push({
+        symbol: await plotnoDoPdf(await svgDoPlotna(svg, 96)),
+        opis: wariant && sym.gangs > 1 ? `${ELEMENT_TYPES[sym.type].label} — ${wariant}` : ELEMENT_TYPES[sym.type].label,
+        ile: sym.ile,
+      });
+    }
+
+    return buildDrawingPdf({
+      tytul: `Rzut — ${floorName}`,
+      header: docHeader,
+      rysunek: await plotnoDoPdf(naBieli),
+      legenda,
+    });
+  }
   const walls = useActiveFloorWalls();
   const roomShapes = useActiveFloorRoomShapes();
   const openings = useActiveFloorOpenings();
@@ -992,7 +1062,28 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         // wartość jest odporna na tę klasę pomyłek i czytelna wprost.
         // `-100%` odnosi się do wysokości samego paska, `1rem` to zapas na cień.
       >
+      {/* Glify legendy renderowane POZA ekranem tymi samymi komponentami, co paleta
+          elementów — dzięki temu symbol w PDF-ie jest dokładnie tym samym znakiem,
+          który użytkownik widzi w aplikacji i na rysunku. `aria-hidden`, bo dla
+          czytnika ekranu to duplikat treści palety. */}
+      <div ref={glifyRef} aria-hidden className="pointer-events-none absolute -left-[9999px] top-0 h-0 overflow-hidden">
+        {uzyteSymbole.map((s) => (
+          <span key={`${s.type}:${s.gangs}`} data-glif={`${s.type}:${s.gangs}`}>
+            <GlyphPreview type={s.type} color={ELEMENT_TYPES[s.type].color} gangs={s.gangs} size={40} />
+          </span>
+        ))}
+      </div>
+
+      <PdfPreview
+        open={podgladPdf}
+        onOpenChange={setPodgladPdf}
+        title={`Rzut — ${floorName}`}
+        filename={projectFileName(`rzut-${floorName}`, projectName, "pdf")}
+        build={zbudujPdfRzutu}
+      />
+
       <EditorToolbar
+        onPdf={() => setPodgladPdf(true)}
         pelnyEkran={pelnyEkran}
         onTogglePelnyEkran={przelaczPelnyEkran}
         bgImageUrl={bgImageUrl}
@@ -1408,6 +1499,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             </div>
           )}
           <DesignCanvas
+            stageRef={stageRef}
             elements={elements}
             walls={walls}
             roomShapes={roomShapes}

@@ -203,3 +203,42 @@ describe("createPdfDoc — tło stron", () => {
     for (const s of strumienie) expect(s).toMatch(TLO);
   });
 });
+
+/**
+ * Osadzanie obrazów. Rysunki (schemat, rzut) wchodzą do PDF-a jako rastry, więc silnik
+ * musi umieć wypuścić poprawny XObject i podpiąć go do zasobów strony — bez tego
+ * czytnik pokazuje pustą kartkę i nie zgłasza błędu.
+ */
+describe("createPdfDoc — obrazy", () => {
+  const obraz = { bytes: new Uint8Array([1, 2, 3, 4, 5]), width: 4, height: 2, filter: "FlateDecode" as const };
+
+  it("wypuszcza XObject i odwołuje się do niego w treści oraz w zasobach strony", async () => {
+    const doc = createPdfDoc();
+    doc.image(obraz, 50, 100, 200, 100);
+    const out = bytesToAscii(await doc.finish());
+
+    expect(out).toContain("/Type /XObject /Subtype /Image /Width 4 /Height 2");
+    expect(out).toContain("/Filter /FlateDecode /Length 5");
+    // `cm` skaluje jednostkowy kwadrat do prostokąta docelowego i przesuwa na miejsce.
+    expect(out).toContain("q 200.00 0 0 100.00 50.00 100.00 cm /Im1 Do Q");
+    expect(out).toMatch(/\/XObject << \/Im1 \d+ 0 R >>/);
+  });
+
+  it("ten sam obraz użyty dwa razy to JEDEN obiekt w pliku", async () => {
+    // Inaczej rysunek powtórzony na kilku stronach mnożyłby megabajty.
+    const doc = createPdfDoc();
+    doc.image(obraz, 10, 10, 50, 25);
+    doc.image(obraz, 10, 200, 50, 25);
+    const out = bytesToAscii(await doc.finish());
+
+    expect(out.split("/Subtype /Image")).toHaveLength(2);
+    expect(out.split("/Im1 Do")).toHaveLength(3);
+  });
+
+  it("bez obrazów zasoby strony nie dostają pustego /XObject", async () => {
+    const doc = createPdfDoc();
+    doc.text("Sam tekst", 42, 700);
+    const out = bytesToAscii(await doc.finish());
+    expect(out).not.toContain("/XObject");
+  });
+});

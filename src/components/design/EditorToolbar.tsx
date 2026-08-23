@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Eye, EyeOff, Grid3x3, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Save, Scan, Undo2 } from "lucide-react";
+import { Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Save, Scan, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
 import { FloorBar } from "./FloorBar";
@@ -45,6 +45,10 @@ export interface EditorToolbarProps {
   /** Ręczny zapis projektu. `null`, gdy użytkownik nie jest zalogowany — wtedy
    *  przycisk się nie pokazuje, bo nie ma dokąd zapisywać poza tą przeglądarką. */
   onZapisz?: (() => void) | null;
+  /** Otwiera podgląd rzutu w formie kartki A4 — z tabliczką rysunkową i legendą
+   *  użytych symboli. Pobranie pliku dzieje się z poziomu podglądu, żeby nikt nie
+   *  wysyłał klientowi rysunku, na który sam nie spojrzał. */
+  onPdf?: () => void;
   zapisTrwa?: boolean;
   /** Miejsce na pinezkę przypinającą pasek w trybie pełnoekranowym. Wstawiane
    *  przez rodzica jako gniazdo, bo sam pasek nic nie wie o chowaniu się za
@@ -70,6 +74,7 @@ export function EditorToolbar({
   gridOn,
   onGridChange,
   onZapisz,
+  onPdf,
   zapisTrwa,
   elementScale,
   onElementScaleChange,
@@ -240,6 +245,12 @@ export function EditorToolbar({
           zagląda w trakcie rysowania. Autozapis i tak działa w tle, ale świadome
           „zapisz teraz" musi być pod ręką: to ono daje pewność, że praca jest
           odłożona, zanim zamknie się kartę. */}
+      {onPdf && (
+        <Button variant="ghost" size="icon" onClick={onPdf} title="Rzut do PDF — z tabliczką rysunkową i legendą symboli" aria-label="Rzut do PDF">
+          <FileText size={15} />
+        </Button>
+      )}
+
       {onZapisz && (
         <Button variant="copper" size="sm" onClick={onZapisz} disabled={zapisTrwa} title="Zapisz projekt na koncie">
           <Save size={14} /> Zapisz

@@ -59,6 +59,10 @@ function useBackgroundImage(src: string | null): HTMLImageElement | null {
 }
 
 interface DesignCanvasProps {
+  /** Uchwyt na scenę Konvy dla rodzica — potrzebny wyłącznie do EKSPORTU rzutu
+   *  (rasteryzacja przez `stage.toCanvas()`). Rysowaniem steruje nadal wyłącznie
+   *  ten komponent; ref jest tu podglądem, nie kanałem sterowania. */
+  stageRef?: React.MutableRefObject<Konva.Stage | null>;
   elements: InstallationElement[];
   walls: Wall[];
   roomShapes: RoomShape[];
@@ -183,6 +187,7 @@ function centroid(points: Point[]): Point {
 }
 
 export function DesignCanvas({
+  stageRef,
   elements,
   walls,
   roomShapes,
@@ -625,6 +630,7 @@ export function DesignCanvas({
       onAuxClick={(e) => e.button === 1 && e.preventDefault()}
     >
       <Stage
+        ref={stageRef}
         width={planSize.w * zoom}
         height={planSize.h * zoom}
         scaleX={zoom}

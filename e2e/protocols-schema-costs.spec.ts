@@ -215,7 +215,7 @@ test("Schemat: eksportuje się do SVG z zachowaniem grup aparatów i tekstu", as
   await page.getByRole("button", { name: "Schemat", exact: true }).click();
 
   const dl = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Eksportuj schemat" }).click();
+  await page.getByRole("button", { name: "Eksportuj SVG" }).click();
   const download = await dl;
   expect(download.suggestedFilename()).toBe("schemat-jednokreskowy-moj-dom.svg");
 
@@ -343,4 +343,40 @@ test("Rozdzielnica: podgląd legendy rysuje zadrukowaną kartkę", async ({ page
   await page.getByRole("button", { name: "Podgląd legendy" }).click();
 
   oczekujKartke(await zmierzPodglad(page));
+});
+
+/**
+ * Eksport rysunków do PDF (schemat jednokreskowy i rzut kondygnacji).
+ *
+ * Rysunek wchodzi do PDF-a jako raster, a wokół niego rysowana jest wektorowo
+ * tabliczka rysunkowa i legenda. Sprawdzamy PIKSELE gotowej strony — plik może być
+ * formalnie poprawnym PDF-em i mimo to być pustą kartką, jeśli obraz nie zostanie
+ * podpięty do zasobów strony albo scena wyeksportuje się przezroczysta.
+ */
+test("Schemat: eksport do PDF rysuje schemat na kartce", async ({ page }) => {
+  await placeThreeSockets(page);
+  await page.getByRole("button", { name: "Schemat" }).click();
+  await page.getByRole("button", { name: "Podgląd PDF" }).click();
+
+  const w = await zmierzPodglad(page);
+  oczekujKartke(w);
+
+  const pobranie = page.waitForEvent("download");
+  await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
+  expect((await pobranie).suggestedFilename()).toMatch(/^schemat-jednokreskowy.*\.pdf$/);
+});
+
+test("Rzut: eksport do PDF dokłada legendę użytych symboli", async ({ page }) => {
+  await placeThreeSockets(page);
+  await page.getByRole("button", { name: "Rzut do PDF" }).click();
+
+  const w = await zmierzPodglad(page);
+  oczekujKartke(w);
+
+  // Sama TREŚĆ legendy (napisy, licznik sztuk) sprawdzana jest w teście jednostkowym
+  // `drawing.test.ts` — tam da się ją odczytać wprost ze strumienia PDF-a, bez
+  // rasteryzacji. Tutaj chodzi o to, że strona w ogóle się rysuje i daje się pobrać.
+  const pobranie = page.waitForEvent("download");
+  await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
+  expect((await pobranie).suggestedFilename()).toMatch(/^rzut-.*[.]pdf$/);
 });

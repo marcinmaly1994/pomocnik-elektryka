@@ -147,6 +147,19 @@ export function pdfEscape(str: string): string {
   return out;
 }
 
+/**
+ * Obraz gotowy do osadzenia. `bytes` to już ZAKODOWANY strumień (skompresowany zlib
+ * dla `FlateDecode` albo surowy plik JPEG dla `DCTDecode`) — silnik go nie przetwarza,
+ * tylko wkleja, dokładnie jak plik fontu. Przygotowaniem zajmuje się `raster.ts`.
+ */
+export interface PdfImage {
+  bytes: Uint8Array;
+  /** Szerokość w PIKSELACH — rozmiar na stronie podaje się osobno, w punktach. */
+  width: number;
+  height: number;
+  filter: "FlateDecode" | "DCTDecode";
+}
+
 export interface PdfDoc {
   y: number;
   readonly pageW: number;
@@ -156,6 +169,8 @@ export interface PdfDoc {
   text(str: string, x: number, y: number, size?: number, bold?: boolean, gray?: number): void;
   line(x1: number, y1: number, x2: number, y2: number, w?: number, gray?: number): void;
   box(x: number, y: number, w: number, h: number, gray?: number): void;
+  /** Wstawia obraz. `x`,`y` to LEWY DOLNY róg — jak w `box`, bo PDF liczy od dołu. */
+  image(img: PdfImage, x: number, y: number, w: number, h: number): void;
   /** Zapewnia miejsce na kolejny blok; w razie potrzeby rysuje stopkę na bieżącej stronie i zaczyna nową. */
   ensure(h: number): boolean;
   /** Assembluje kompletny plik PDF i zwraca jego bajty (bez efektu ubocznego pobierania).
@@ -173,6 +188,7 @@ export interface PdfDocOptions {
 /** Uniwersalny silnik PDF — wielostronicowy dokument z tekstem, liniami i tłem. */
 export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, footer }: PdfDocOptions = {}): PdfDoc {
   const pages: string[] = [];
+  const obrazy: PdfImage[] = [];
 
   /**
    * Białe tło strony — pierwsza rzecz na KAŻDEJ stronie.
@@ -222,6 +238,15 @@ export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, foot
     box(x, yy, w, h, gray = 0.93) {
       content.push(`${gray} g ${x.toFixed(1)} ${yy.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f 0 g`);
     },
+    image(img, x, yy, w, h) {
+      // Ten sam obraz wstawiony dwa razy ma być JEDNYM obiektem w pliku — inaczej
+      // rysunek na kilku stronach mnożyłby megabajty.
+      let nr = obrazy.indexOf(img);
+      if (nr === -1) nr = obrazy.push(img) - 1;
+      // `cm` skaluje jednostkowy kwadrat obrazu do docelowego prostokąta i przesuwa go
+      // na miejsce; `q`/`Q` zamykają tę transformację, żeby nie wyciekła na dalszy rysunek.
+      content.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${yy.toFixed(2)} cm /Im${nr + 1} Do Q`);
+    },
     ensure(h) {
       if (y - h < margin + footerReserve) {
         if (footer) footer(api);
@@ -237,7 +262,7 @@ export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, foot
       if (footer) footer(api);
       pages.push(content.join("\n"));
       const { regular, bold } = await loadPdfFonts();
-      return assemblePdfBytes(pages, pageW, pageH, regular, bold);
+      return assemblePdfBytes(pages, pageW, pageH, regular, bold, obrazy);
     },
   };
   return api;
@@ -298,7 +323,14 @@ function loadPdfFonts(): Promise<{ regular: ParsedTtf; bold: ParsedTtf }> {
 /** Składa strumienie stron w kompletny plik PDF i zwraca jego bajty. Czysta/synchroniczna —
  *  fonty przekazywane są już sparsowane (patrz `loadPdfFonts`), co czyni tę funkcję w pełni
  *  testowalną bez sieci/DOM-u (testy wczytują pliki fontów z dysku przez `fs`). */
-export function assemblePdfBytes(pages: string[], PW: number, PH: number, regularFont: ParsedTtf, boldFont: ParsedTtf): Uint8Array {
+export function assemblePdfBytes(
+  pages: string[],
+  PW: number,
+  PH: number,
+  regularFont: ParsedTtf,
+  boldFont: ParsedTtf,
+  images: PdfImage[] = []
+): Uint8Array {
   const objs: string[] = [];
   const push = (s: string) => {
     objs.push(s);
@@ -325,11 +357,25 @@ export function assemblePdfBytes(pages: string[], PW: number, PH: number, regula
   const f1 = pushFont(regularFont, "DejaVuSans", PDF_W_REG, 80);
   const f2 = pushFont(boldFont, "DejaVuSans-Bold", PDF_W_BOLD, 120);
 
+  // Obrazy jako XObject-y — bajty wklejane surowo, tak samo jak plik fontu.
+  // Wrzucane PRZED wyliczeniem `pagesId`, bo ono zakłada, że po tym miejscu
+  // dochodzą już tylko obiekty stron.
+  const imageIds = images.map((im) =>
+    push(
+      `<< /Type /XObject /Subtype /Image /Width ${im.width} /Height ${im.height} ` +
+        `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /${im.filter} /Length ${im.bytes.length} >>\n` +
+        `stream\n${bytesToBinaryString(im.bytes)}\nendstream`
+    )
+  );
+  const xobjRes = imageIds.length
+    ? ` /XObject << ${imageIds.map((id, i) => `/Im${i + 1} ${id} 0 R`).join(" ")} >>`
+    : "";
+
   const pagesId = objs.length + pages.length + 1;
   const kidsIds = pages.map((_, i) =>
     push(
       `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}] ` +
-        `/Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${contentIds[i]} 0 R >>`
+        `/Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xobjRes} >> /Contents ${contentIds[i]} 0 R >>`
     )
   );
   push(`<< /Type /Pages /Kids [${kidsIds.map((k) => k + " 0 R").join(" ")}] /Count ${kidsIds.length} >>`);

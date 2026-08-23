@@ -1,7 +1,11 @@
-import { useMemo, useRef } from "react";
-import { Download } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Download, Eye, FileText } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { downloadBlob, projectFileName } from "@/lib/pdf/download";
+import { downloadBlob, downloadPdfBytes, projectFileName } from "@/lib/pdf/download";
+import { buildDrawingPdf } from "@/lib/pdf/drawing";
+import { plotnoDoPdf, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
+import { resolveDocHeader } from "@/lib/docHeader";
+import { PdfPreview } from "@/components/ui/PdfPreview";
 import { Button } from "@/components/ui/button";
 import { CadGlyph, GLYPHS, labelOffset, LINE_W, STROKE } from "./deviceGlyphs";
 import { computeRcdGroups } from "@/lib/panel/circuits";
@@ -405,6 +409,43 @@ export function SchemaTab() {
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const scales = useProjectStore((s) => s.scales);
   const svgRef = useRef<SVGSVGElement>(null);
+  const rawDocHeader = useProjectStore((s) => s.docHeader);
+  // Nazwa projektu jako domyślny „Obiekt" — dzięki temu tabliczka rysunkowa i nazwa
+  // pliku są wypełnione nawet bez wizyty w zakładce Protokoły pomiarowe.
+  const docHeader = resolveDocHeader(rawDocHeader, projectName);
+  const [podglad, setPodglad] = useState(false);
+  const [pdfTrwa, setPdfTrwa] = useState(false);
+
+  /**
+   * Schemat do PDF-a. Rysunek idzie jako obraz zrasteryzowany z TEGO SAMEGO <svg>,
+   * który widać na ekranie — odtwarzanie geometrii po raz drugi w prymitywach PDF-a
+   * byłoby drugą implementacją schematu, rozjeżdżającą się z pierwszą przy każdej
+   * zmianie. Tabliczka rysunkowa dorysowywana jest wektorowo, więc metryka zostaje
+   * ostra i możliwa do zaznaczenia.
+   *
+   * SVG zostaje jako osobny przycisk: PDF jest do wydruku i wysyłki, SVG do CAD-u.
+   */
+  async function zbudujPdf(): Promise<Uint8Array> {
+    const node = svgRef.current;
+    if (!node) throw new Error("Rysunek nie jest jeszcze gotowy.");
+    // Szerokość pola rysunku na kartce A4 poziomo, przeliczona na piksele druku.
+    const canvas = await svgDoPlotna(node, Math.round(770 * PIKSELI_NA_PUNKT));
+    return buildDrawingPdf({
+      tytul: "Schemat jednokreskowy",
+      header: docHeader,
+      rysunek: await plotnoDoPdf(canvas),
+    });
+  }
+
+  async function pobierzPdf() {
+    setPdfTrwa(true);
+    try {
+      const bytes = await zbudujPdf();
+      downloadPdfBytes(bytes, projectFileName("schemat-jednokreskowy", projectName, "pdf"));
+    } finally {
+      setPdfTrwa(false);
+    }
+  }
 
   /**
    * Eksport rysunku do pliku SVG. Schemat jest już wektorem w DOM, więc wystarczy go
@@ -485,9 +526,31 @@ export function SchemaTab() {
             {rcdBlocks.length === 1 ? "różnicówka" : "różnicówki"}.
           </p>
         </div>
-        <Button variant="copper" size="sm" onClick={exportSvg} title="Zapisz rysunek jako plik SVG (wektor)">
-          <Download size={13} /> Eksportuj schemat
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setPodglad(true)} title="Zobacz, jak wyjdzie na kartce">
+            <Eye size={13} /> Podgląd PDF
+          </Button>
+          <Button variant="ghost" size="sm" onClick={exportSvg} title="Zapisz rysunek jako plik SVG (wektor)">
+            <Download size={13} /> Eksportuj SVG
+          </Button>
+          <Button
+            variant="copper"
+            size="sm"
+            onClick={pobierzPdf}
+            disabled={pdfTrwa}
+            title="Zapisz rysunek jako PDF (A4 poziomo, z tabliczką rysunkową)"
+          >
+            <FileText size={13} /> Eksportuj PDF
+          </Button>
+        </div>
+
+        <PdfPreview
+          open={podglad}
+          onOpenChange={setPodglad}
+          title="Schemat jednokreskowy"
+          filename={projectFileName("schemat-jednokreskowy", projectName, "pdf")}
+          build={zbudujPdf}
+        />
       </div>
 
       <div className="pe-card pe-scroll overflow-auto p-4" style={{ background: "#fff" }}>
