@@ -57,9 +57,9 @@ test.describe("konto i chmura", () => {
     const nazwa = nazwaTestowa("zapis");
     await ustawNazweProjektu(page, nazwa);
 
-    await page.getByRole("button", { name: "Zapisz projekt na koncie" }).click();
+    await page.getByTitle("Zapisz projekt na koncie").click();
     // Wskaźnik chmury potwierdza zapis — to on mówi użytkownikowi, że praca wyszła.
-    await expect(page.getByText(/^Zapisano/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Zapisano [0-9]{2}:[0-9]{2}/)).toBeVisible({ timeout: 15000 });
   });
 
   test("zapis pod nazwą, która już jest na koncie, PYTA o nadpisanie", async ({ page }) => {
@@ -67,27 +67,28 @@ test.describe("konto i chmura", () => {
 
     // pierwszy zapis — tworzy wpis
     await ustawNazweProjektu(page, nazwa);
-    await page.getByRole("button", { name: "Zapisz projekt na koncie" }).click();
-    await expect(page.getByText(/^Zapisano/)).toBeVisible({ timeout: 15000 });
+    await page.getByTitle("Zapisz projekt na koncie").click();
+    await expect(page.getByText(/Zapisano [0-9]{2}:[0-9]{2}/)).toBeVisible({ timeout: 15000 });
 
     // Nowa sesja bez powiązania z chmurą, ta sama nazwa — dokładnie sytuacja,
     // w której autozapis potrafiłby po cichu nadpisać gotowy projekt.
     await page.evaluate(() => localStorage.removeItem("pomocnikelektryka_projekt_autosave"));
     await page.reload();
     await ustawNazweProjektu(page, nazwa);
-    await page.getByRole("button", { name: "Zapisz projekt na koncie" }).click();
+    await page.getByTitle("Zapisz projekt na koncie").click();
 
     await expect(page.getByText("Nadpisać istniejący zapis?")).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText(nazwa)).toBeVisible();
+    // Nazwa musi byc w OKNIE — ta sama nazwa stoi tez w naglowku projektu.
+    await expect(page.getByRole("dialog").getByText(nazwa)).toBeVisible();
 
     // Anulowanie NIE zapisuje — to sedno zabezpieczenia.
     await page.getByRole("button", { name: "Anuluj" }).click();
     await expect(page.getByText("Nadpisać istniejący zapis?")).toHaveCount(0);
 
     // Potwierdzenie zapisuje do TEGO SAMEGO wpisu, nie tworzy drugiego.
-    await page.getByRole("button", { name: "Zapisz projekt na koncie" }).click();
+    await page.getByTitle("Zapisz projekt na koncie").click();
     await page.getByRole("button", { name: "Tak, nadpisz" }).click();
-    await expect(page.getByText(/^Zapisano/)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Zapisano [0-9]{2}:[0-9]{2}/)).toBeVisible({ timeout: 15000 });
   });
 
   test("zestaw protokołów zapisuje się i wczytuje jako osobny dokument", async ({ page }) => {
@@ -125,10 +126,10 @@ test.describe("konto i chmura", () => {
 
     const nazwa = nazwaTestowa("odnowienie");
     await ustawNazweProjektu(page, nazwa);
-    await page.getByRole("button", { name: "Zapisz projekt na koncie" }).click();
+    await page.getByTitle("Zapisz projekt na koncie").click();
 
     // Zapis MA SIĘ UDAĆ — token odnawiany jest w locie, użytkownik nic nie widzi.
-    await expect(page.getByText(/^Zapisano/)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/Zapisano [0-9]{2}:[0-9]{2}/)).toBeVisible({ timeout: 20000 });
     await expect(page.getByText(/Sesja wygasła/)).toHaveCount(0);
 
     // I sesja w przeglądarce ma nowy, ważny termin — dowód, że odnowienie faktycznie
