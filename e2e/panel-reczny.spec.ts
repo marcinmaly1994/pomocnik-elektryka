@@ -119,3 +119,64 @@ test("długie opisy pod aparatami łamią się na dwie linie, zamiast urywać wi
   });
   expect(wielokropki).toEqual([]);
 });
+
+test("klik na aparacie otwiera edycję; zmiana przeżywa odświeżenie", async ({ page }) => {
+  await pustyProjekt(page);
+  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
+  await page.getByRole("button", { name: "Dodaj", exact: true }).click();
+
+  const svg = page.getByRole("img", WIDOK);
+  await expect(svg).toBeVisible();
+  const tagText = svg.locator("text", { hasText: "F2" }).first();
+  await tagText.scrollIntoViewIfNeeded();
+  const box = await tagText.boundingBox();
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + 60);
+
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog")).toContainText("Aparat F2");
+
+  await page.getByLabel("Nastawa").fill("C20");
+  await page.getByLabel("Opis obwodu").fill("Gniazda garaż");
+  await page.getByRole("button", { name: "Zapisz zmiany" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await expect(svg).toContainText("C20");
+  await expect(svg).toContainText("Gniazda");
+
+  // Nadpisanie jest kluczowane po `key` aparatu i musi przeżyć odbudowę z rzutu —
+  // wcześniej edycja aparatu auto-generowanego znikałaby po najbliższej zmianie planu.
+  await page.waitForTimeout(1200);
+  await page.reload();
+  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await expect(page.getByRole("img", WIDOK)).toContainText("C20");
+});
+
+test("edycja aparatu dodanego ręcznie działa bez nadpisań", async ({ page }) => {
+  await pustyProjekt(page);
+  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
+  await page.getByRole("button", { name: "Dodaj", exact: true }).click();
+
+  await page.getByRole("button", { name: "Edytuj aparat F2" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByLabel("Oznaczenie").fill("F9");
+  await page.getByRole("button", { name: "Zapisz zmiany" }).click();
+
+  await expect(page.getByRole("img", WIDOK)).toContainText("F9");
+});
+
+test("paski opisowe: podgląd pokazuje zadrukowaną kartkę i pobiera się", async ({ page }) => {
+  await pustyProjekt(page);
+  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
+
+  await page.getByRole("button", { name: "Podgląd pasków" }).click();
+  const canvas = page.locator("[data-podglad-stron] canvas");
+  await expect(canvas.first()).toBeVisible({ timeout: 30000 });
+
+  const pobranie = page.waitForEvent("download");
+  await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
+  const plik = await pobranie;
+  expect(plik.suggestedFilename()).toMatch(/^paski-opisowe-rozdzielnicy.*\.pdf$/);
+});

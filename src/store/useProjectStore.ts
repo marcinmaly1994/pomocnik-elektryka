@@ -107,6 +107,17 @@ export interface ProjectPayload {
    * wymiana tablicy w istniejącym budynku albo wycena nie wymagają rysowania rzutu.
    */
   panelTryb: "zRzutu" | "reczny";
+  /**
+   * Ręczne poprawki aparatów AUTO-GENEROWANYCH, kluczowane ich `key`.
+   *
+   * Aparat wynikający z obwodu jest odtwarzany przy każdej zmianie planu — a plan
+   * zmienia się po każdym postawionym elemencie. Gdyby edycja szła wprost w listę,
+   * poprawiona nastawa albo opis znikałyby po chwili bez śladu. Nadpisania przeżywają
+   * odbudowę i są nakładane na świeżo policzony aparat; kasuje je dopiero świadome
+   * „Odbuduj z rzutu". Aparaty dodane ręcznie nie potrzebują tego mechanizmu — nic ich
+   * nie odtwarza, więc edytuje się je wprost.
+   */
+  panelOverrides: Record<string, Partial<PanelDevice>>;
   planSize: PlanSize;
   /** Postęp onboardingu „Zacznij w 3 krokach" — per projekt, żeby po powrocie
    *  do zapisanego projektu przewodnik się nie powtarzał. */
@@ -149,6 +160,7 @@ interface ProjectState {
   panelDevices: PanelDevice[];
   panelHidden: string[];
   panelTryb: "zRzutu" | "reczny";
+  panelOverrides: Record<string, Partial<PanelDevice>>;
   /** Obszar roboczy planu w jednostkach logicznych. Zapisywany w projekcie, bo
    *  dopasowuje się do proporcji wgranego rzutu — patrz planSizeForImage. */
   planSize: PlanSize;
@@ -238,6 +250,7 @@ interface ProjectState {
   setPanelDevices: (devices: PanelDevice[]) => void;
   setPanelHidden: (keys: string[]) => void;
   setPanelTryb: (tryb: "zRzutu" | "reczny") => void;
+  setPanelOverrides: (o: Record<string, Partial<PanelDevice>>) => void;
   setPlanSize: (size: PlanSize) => void;
   setOnboarding: (patch: Partial<OnboardingState>) => void;
 
@@ -293,6 +306,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   panelDevices: [],
   panelHidden: [],
   panelTryb: "zRzutu",
+  panelOverrides: {},
   planSize: DEFAULT_PLAN_SIZE,
   onboarding: INITIAL_ONBOARDING,
   session: loadStoredSession(),
@@ -387,6 +401,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       panelDevices: [],
       panelHidden: [],
       panelTryb: "zRzutu",
+      panelOverrides: {},
       planSize: DEFAULT_PLAN_SIZE,
       onboarding: INITIAL_ONBOARDING,
       docHeader: {
@@ -403,8 +418,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   getProjectPayload: () => {
-    const { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, planSize, onboarding } = get();
-    return { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, planSize, onboarding };
+    const { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding } = get();
+    return { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
   },
 
   loadProjectPayload: (payload) =>
@@ -430,6 +445,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       panelDevices: payload.panelDevices || [],
       panelHidden: payload.panelHidden || [],
       panelTryb: payload.panelTryb === "reczny" ? "reczny" : "zRzutu",
+      panelOverrides: payload.panelOverrides || {},
       // starsze migawki nie mają obszaru planu — wracamy do domyślnego 1000x700
       planSize: payload.planSize || DEFAULT_PLAN_SIZE,
       // migawki sprzed onboardingu go nie mają — traktujemy je jak projekt
@@ -518,6 +534,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setPanelDevices: (devices) => set({ panelDevices: devices }),
   setPanelHidden: (keys) => set({ panelHidden: keys }),
   setPanelTryb: (tryb) => set({ panelTryb: tryb }),
+  setPanelOverrides: (o) => set({ panelOverrides: o }),
 
   setPlanSize: (size) => set({ planSize: size }),
 

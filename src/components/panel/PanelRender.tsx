@@ -43,6 +43,8 @@ export interface PanelRenderProps {
   /** Przeniesienie aparatu na inną pozycję szyny (indeksy w tablicy `devices`).
    *  Brak funkcji = widok tylko do oglądania, bez chwytania aparatów. */
   onMove?: (from: number, to: number) => void;
+  /** Otwiera edycję aparatu — klik, nie przeciągnięcie (patrz `przeciagnieto` niżej). */
+  onEdit?: (uid: string) => void;
   /** Wynik doboru dla aparatów obwodowych, kluczowany polem `key` aparatu. */
   sizing?: Map<string, SizedCircuit>;
 }
@@ -133,7 +135,7 @@ function DeviceFace({ device, w }: { device: PanelDevice; w: number }) {
   );
 }
 
-export function PanelRender({ devices, perRow, onDelete, onMove, sizing }: PanelRenderProps) {
+export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing }: PanelRenderProps) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   /**
@@ -272,13 +274,17 @@ export function PanelRender({ devices, perRow, onDelete, onMove, sizing }: Panel
                       setChwycony(d.index);
                       setCel(d.index);
                     }}
+                    onClick={() => {
+                      if (przeciagnieto.current || d.kind === "blank") return;
+                      onEdit?.(d.uid);
+                    }}
                     onPointerEnter={() => {
                       if (chwycony === null) return;
                       przeciagnieto.current = true;
                       setCel(d.index);
                     }}
                     style={{
-                      cursor: przenoszalny ? (chwycony !== null ? "grabbing" : "grab") : undefined,
+                      cursor: przenoszalny ? (chwycony !== null ? "grabbing" : "grab") : onEdit && d.kind !== "blank" ? "pointer" : undefined,
                       opacity: wRuchu ? 0.45 : 1,
                     }}
                   >

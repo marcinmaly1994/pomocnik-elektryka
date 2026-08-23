@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Pencil, Plus, RotateCcw, Scissors, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import {
@@ -15,11 +15,13 @@ import {
 import { assignPhases, computeSizedCircuits, phaseBalance } from "@/lib/panel/project";
 import { scaleOf } from "@/lib/design";
 import { buildPanelLegendPdf, downloadPanelLegendPdf } from "@/lib/pdf/panelLegend";
+import { buildLabelStripsPdf, downloadLabelStripsPdf } from "@/lib/pdf/labelStrips";
 import { projectFileName } from "@/lib/pdf/download";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { Button } from "@/components/ui/button";
 import { PanelRender } from "./PanelRender";
+import { EditDeviceModal } from "./EditDeviceModal";
 import type { PanelDevice } from "@/types";
 
 const SELECTIVITY_STYLE: Record<SelectivityLevel, { bg: string; fg: string; Icon: typeof AlertTriangle }> = {
@@ -76,6 +78,10 @@ export function PanelTab() {
     setHiddenKeysRaw(typeof f === "function" ? f(useProjectStore.getState().panelHidden) : f);
   const [addForm, setAddForm] = useState({ kind: "mcb", label: "B16", caption: "" });
   const [podgladLegendy, setPodgladLegendy] = useState(false);
+  const [edytowany, setEdytowany] = useState<string | null>(null);
+  const [podgladPaskow, setPodgladPaskow] = useState(false);
+  const panelOverrides = useProjectStore((s) => s.panelOverrides);
+  const setPanelOverrides = useProjectStore((s) => s.setPanelOverrides);
 
   // Dobór normatywny: przekrój, zabezpieczenie, ΔU i Zs liczone z tablic PN-HD 60364
   // (src/lib/panel/sizing.ts) zamiast stałych wpisanych przy generowaniu obwodów.
@@ -107,11 +113,15 @@ export function PanelTab() {
     if (trybReczny) return;
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
-      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, spd, mainRating }).filter((d) => !d.key || !hiddenKeys.includes(d.key));
+      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, spd, mainRating })
+        .filter((d) => !d.key || !hiddenKeys.includes(d.key))
+        // Ręczne poprawki nakładane na świeżo policzony aparat — inaczej zmiana
+        // nastawy albo opisu znikałaby po każdym elemencie postawionym na planie.
+        .map((d) => (d.key && panelOverrides[d.key] ? { ...d, ...panelOverrides[d.key] } : d));
       return [...rebuilt, ...manual];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circuits, rcdGroups, supply3f, spd, mainRating, trybReczny]);
+  }, [circuits, rcdGroups, supply3f, spd, mainRating, trybReczny, panelOverrides]);
 
   const rows = useMemo(() => layoutPanel(devices, perRow), [devices, perRow]);
   const usedModules = devices.reduce((a, d) => a + d.modules, 0);
@@ -154,10 +164,26 @@ export function PanelTab() {
 
   function resetLayout() {
     setHiddenKeys([]);
+    // „Odbuduj z rzutu" znaczy właśnie tyle: wracamy do stanu wynikającego z planu,
+    // więc ręczne poprawki też idą precz. Ostrzega o tym podpowiedź przy przycisku.
+    setPanelOverrides({});
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
       return [...buildPanelDevices(rcdGroups, { supply3f, spd, mainRating }), ...manual];
     });
+  }
+
+  /**
+   * Zapis edycji aparatu. Aparat auto-generowany dostaje dodatkowo trwałe NADPISANIE
+   * kluczowane jego `key`, bo sama lista jest odtwarzana przy każdej zmianie planu.
+   * Aparat dodany ręcznie zmieniamy wprost — nic go nie odtwarza.
+   */
+  function zapiszEdycje(uid: string, zmiany: Partial<PanelDevice>) {
+    const cel = devices.find((d) => d.uid === uid);
+    if (cel && !cel.manual && cel.key) {
+      setPanelOverrides({ ...panelOverrides, [cel.key]: { ...panelOverrides[cel.key], ...zmiany } });
+    }
+    setDevices((ds) => ds.map((d) => (d.uid === uid ? { ...d, ...zmiany } : d)));
   }
 
   function addManualDevice() {
@@ -308,6 +334,27 @@ export function PanelTab() {
         >
           <Download size={13} /> Legenda PDF
         </Button>
+        {/* Osobny dokument od legendy: legenda to tabela do biurka, to jest wydruk do
+            wycięcia i wsunięcia w tabliczki na aparatach — stąd inny przycisk i inna
+            ikona (nożyczki), żeby nie sugerować, że to to samo w innym formacie. */}
+        <Button variant="ghost" size="sm" onClick={() => setPodgladPaskow(true)}>
+          <Scissors size={13} /> Podgląd pasków
+        </Button>
+        <Button
+          variant="copper"
+          size="sm"
+          onClick={() => downloadLabelStripsPdf(devices, perRow, docHeader)}
+          title="Wydruk do wycięcia i wsunięcia w tabliczki opisowe aparatów — skala 1:1"
+        >
+          <Download size={13} /> Paski opisowe PDF
+        </Button>
+
+        <EditDeviceModal
+          device={devices.find((d) => d.uid === edytowany) ?? null}
+          onClose={() => setEdytowany(null)}
+          onSave={zapiszEdycje}
+          supply3f={supply3f}
+        />
 
         <PdfPreview
           open={podgladLegendy}
@@ -315,6 +362,14 @@ export function PanelTab() {
           title="Legenda rozdzielnicy"
           filename={projectFileName("legenda-rozdzielnicy", docHeader.obiekt, "pdf")}
           build={() => buildPanelLegendPdf(devices, rows.length, usedModules, totalModules, perRow, docHeader)}
+        />
+
+        <PdfPreview
+          open={podgladPaskow}
+          onOpenChange={setPodgladPaskow}
+          title="Paski opisowe rozdzielnicy"
+          filename={projectFileName("paski-opisowe-rozdzielnicy", docHeader.obiekt, "pdf")}
+          build={() => buildLabelStripsPdf(devices, perRow, docHeader)}
         />
 
         {supply3f && (
@@ -360,6 +415,7 @@ export function PanelTab() {
             perRow={perRow}
             onDelete={removeDevice}
             onMove={(from, to) => setDevices((ds) => przeniesAparat(ds, from, to))}
+            onEdit={setEdytowany}
             sizing={sizingByDeviceKey}
           />
         </div>
@@ -379,6 +435,14 @@ export function PanelTab() {
                 <span className="pe-mono w-10 shrink-0 font-semibold">{d.tag}</span>
                 <span className="min-w-0 flex-1 truncate">{d.caption}</span>
                 <span className="pe-mono shrink-0 text-slate-400">{d.label}</span>
+                <button
+                  onClick={() => setEdytowany(d.uid)}
+                  title="Edytuj aparat"
+                  aria-label={`Edytuj aparat ${d.tag}`}
+                  className="text-slate-400 hover:text-blueprint"
+                >
+                  <Pencil size={13} />
+                </button>
                 <button onClick={() => moveDevice(d.uid, -1)} disabled={i === 0} className="text-slate-400 hover:text-blueprint disabled:opacity-30">
                   <ArrowUp size={13} />
                 </button>
