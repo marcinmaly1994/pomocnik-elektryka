@@ -221,3 +221,46 @@ describe("tabliczka rysunkowa", () => {
     expect(rys.y).toBeGreaterThanOrEqual(gornaKrawedzTabliczki);
   });
 });
+
+/**
+ * Wyrównanie legendy do rysunku.
+ *
+ * Rysunek jest w pionie WYŚRODKOWANY w swoim polu, więc legenda przypięta do górnej
+ * krawędzi pola zaczynała się wyżej niż on i kartka wyglądała na niepoprawnie złożoną.
+ * Zgłoszone przez użytkownika: „obniż legendę, aby była na równo z planem".
+ */
+describe("legenda względem rysunku", () => {
+  const poz = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ symbol: obraz(40, 40), opis: `Symbol ${i + 1}` }));
+
+  /** Górna krawędź ramki legendy = linia bazowa „LEGENDA" + reszta paska nagłówka. */
+  async function ukladu(rysW: number, rysH: number, ile: number) {
+    const out = bytesToAscii(
+      await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(rysW, rysH), legenda: poz(ile) })
+    );
+    const rys = obrazy(out).find((o) => o.im === 1)!;
+    // Pasek nagłówka legendy to prostokąt o szarości 0.88 i szerokości kolumny legendy.
+    const pasek = [...out.matchAll(/0\.88 g ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re f/g)]
+      .map((m) => ({ x: +m[1], y: +m[2], w: +m[3], h: +m[4] }))
+      .find((r) => r.w > 100 && r.w < 200)!;
+    return { goraRysunku: rys.y + rys.h, goraLegendy: pasek.y + pasek.h, dolLegendy: pasek.y + pasek.h - (20 + ile * 26) };
+  }
+
+  it("góra legendy równa się górze rysunku", async () => {
+    const u = await ukladu(1000, 600, 3);
+    expect(u.goraLegendy).toBeCloseTo(u.goraRysunku, 1);
+  });
+
+  it("wyrównanie działa też dla niskiego, szerokiego rysunku", async () => {
+    const u = await ukladu(2400, 500, 2);
+    expect(u.goraLegendy).toBeCloseTo(u.goraRysunku, 1);
+  });
+
+  it("długa legenda nie schodzi pod pole rysunku — wyrównanie ustępuje mieszczeniu się", async () => {
+    // Przy dwunastu pozycjach i niskim rysunku legenda nie zmieściłaby się pod jego
+    // górną krawędzią; wtedy ma zostać na kartce, a nie wejść na tabliczkę rysunkową.
+    const u = await ukladu(2400, 400, 12);
+    const dolPola = 36 + 48 + 8; // margines + tabliczka
+    expect(u.dolLegendy).toBeGreaterThanOrEqual(dolPola - 0.5);
+  });
+});

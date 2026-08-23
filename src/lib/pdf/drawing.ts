@@ -89,14 +89,23 @@ export function buildDrawingPdf({ tytul, header, rysunek, legenda }: RysunekPdfO
   const skala = Math.min(poleW / rysunek.width, poleH / rysunek.height);
   const rysW = rysunek.width * skala;
   const rysH = rysunek.height * skala;
-  doc.image(rysunek, poleX + (poleW - rysW) / 2, poleY + (poleH - rysH) / 2, rysW, rysH);
+  const rysDol = poleY + (poleH - rysH) / 2;
+  doc.image(rysunek, poleX + (poleW - rysW) / 2, rysDol, rysW, rysH);
 
   if (maLegende) {
     const lx = STRONA_W - MARGINES - LEGENDA_W;
-    const gora = poleY + poleH;
     // Dokładnie nagłówek + wiersze. Zapas „na oko" zostawiał pod ostatnią pozycją
     // pusty pasek, który czytał się jak zaczęty, niedokończony wiersz tabeli.
     const wysokosc = Math.min(poleH, LEGENDA_NAGLOWEK + legenda!.length * LEGENDA_WIERSZ);
+
+    // Góra legendy równo z górą RYSUNKU, a nie z górną krawędzią pola. Rysunek jest
+    // w pionie wyśrodkowany, więc przy przypięciu legendy do pola obie ramki zaczynały
+    // się na różnych wysokościach i kartka wyglądała na niepoprawnie złożoną.
+    //
+    // Dwa ograniczenia: legenda nie może zejść pod pole (weszłaby na tabliczkę
+    // rysunkową) ani wyjść ponad nie — przy długiej liście lub niskim rysunku
+    // wyrównanie ustępuje więc mieszczeniu się na kartce.
+    const gora = Math.min(poleY + poleH, Math.max(rysDol + rysH, poleY + wysokosc));
     const dol = gora - wysokosc;
 
     doc.box(lx, dol, LEGENDA_W, wysokosc, 0.985);
