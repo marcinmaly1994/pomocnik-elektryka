@@ -155,3 +155,42 @@ describe("createPdfDoc + assemblePdfBytes", () => {
     expect((out.match(/\/FontFile2/g) || []).length).toBe(2);
   });
 });
+
+/**
+ * Każda strona musi zaczynać się białym tłem na pełny MediaBox.
+ *
+ * Bez tego strona jest PRZEZROCZYSTA. Czytniki na jasnym podłożu dorysowują biel za
+ * nas i usterka jest niewidoczna — ale wbudowany czytnik Chrome ma podłoże ciemne,
+ * więc pokazywał czarny prostokąt zamiast dokumentu. Zgłoszone przez użytkownika
+ * dopiero po dodaniu podglądu („wyskakuje czarne okno"), choć problem siedział w
+ * samym dokumencie i dotyczył tak samo pobranych plików.
+ */
+describe("createPdfDoc — tło stron", () => {
+  const TLO = /^1 g 0 0 595\.28 841\.89 re f 0 g/;
+
+  it("pierwsza strona zaczyna się białym tłem na cały MediaBox", async () => {
+    const doc = createPdfDoc();
+    doc.text("Cokolwiek", 42, 700);
+    const out = bytesToAscii(await doc.finish());
+    const strumien = out.slice(out.indexOf("stream\n") + 7);
+    expect(strumien).toMatch(TLO);
+  });
+
+  it("tło dostaje TAKŻE każda kolejna strona", async () => {
+    const doc = createPdfDoc();
+    // `ensure` z wysokością większą niż strona wymusza łamanie.
+    doc.text("Strona 1", 42, 700);
+    expect(doc.ensure(10_000)).toBe(true);
+    doc.text("Strona 2", 42, 700);
+    const out = bytesToAscii(await doc.finish());
+
+    const strumienie = [...out.matchAll(/stream\n([\s\S]*?)\nendstream/g)]
+      .map((m) => m[1])
+      // Osadzone fonty to binaria, w których sekwencja "Tj" trafia się przypadkiem.
+      // Odsiewamy je rozmiarem: font waży setki kilobajtów, strumień treści strony
+      // kilkaset bajtów — sam operator "Tj" nie wystarczy, żeby je rozróżnić.
+      .filter((s) => s.includes("Tj") && s.length < 4000);
+    expect(strumienie).toHaveLength(2);
+    for (const s of strumienie) expect(s).toMatch(TLO);
+  });
+});

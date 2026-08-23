@@ -156,7 +156,23 @@ export interface PdfDocOptions {
 /** Uniwersalny silnik PDF — wielostronicowy dokument z tekstem, liniami i tłem. */
 export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, footer }: PdfDocOptions = {}): PdfDoc {
   const pages: string[] = [];
-  let content: string[] = [];
+
+  /**
+   * Białe tło strony — pierwsza rzecz na KAŻDEJ stronie.
+   *
+   * PDF bez jawnie namalowanego tła jest PRZEZROCZYSTY. Czytniki składające go na
+   * jasnym podłożu dorysowują biel za nas i wszystko wygląda dobrze — ale wbudowany
+   * czytnik Chrome ma podłoże CIEMNE (#525659), więc przezroczysta strona wychodzi
+   * w nim czarnym prostokątem z ledwo widocznym tekstem. Ten sam mechanizm opisuje
+   * komentarz przy rasteryzacji wgrywanych rzutów w `lib/detect/source.ts`:
+   * „przezroczystość po rasteryzacji wychodzi czarna".
+   *
+   * Tło należy więc do DOKUMENTU, a nie do komponentu, który go pokazuje — dotyczy
+   * tak samo podglądu, wydruku i każdego czytnika, w którym plik wyląduje.
+   */
+  const tloStrony = () => `1 g 0 0 ${pageW.toFixed(2)} ${pageH.toFixed(2)} re f 0 g`;
+
+  let content: string[] = [tloStrony()];
   let y = pageH - margin;
   let onNewPage: ((doc: PdfDoc) => void) | null = null;
   const footerReserve = footer ? 50 : 26; // zarezerwowane miejsce nad tabliczką rysunkową
@@ -193,7 +209,7 @@ export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, foot
       if (y - h < margin + footerReserve) {
         if (footer) footer(api);
         pages.push(content.join("\n"));
-        content = [];
+        content = [tloStrony()];
         y = pageH - margin;
         if (onNewPage) onNewPage(api);
         return true;

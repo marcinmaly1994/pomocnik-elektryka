@@ -260,56 +260,48 @@ test("Kosztorys: rozbija sumę na netto/VAT/brutto i ostrzega o pozycjach bez ce
 /**
  * Podgląd PDF przed pobraniem.
  *
- * Sprawdzamy tu trzy rzeczy, których nie widać po samym pojawieniu się okna:
- *  1. w ramce siedzi PRAWDZIWY PDF (nagłówek `%PDF`, typ `application/pdf`) — a nie
- *     pusty blob albo strona błędu, która wygląda tak samo jak nierozwinięty podgląd;
- *  2. przeglądarka faktycznie GO OTWORZYŁA swoją wtyczką (`contentType` dokumentu
- *     w ramce), bo podgląd, który zostaje białym prostokątem, jest bezużyteczny.
- *     Ta akurat asercja działa TYLKO tam, gdzie wtyczka PDF w ogóle jest: Chromium
- *     Playwrighta jej nie ma (`navigator.pdfViewerEnabled === false`) i zwraca wtedy
- *     `text/html`. To ograniczenie środowiska testowego, nie zachowanie aplikacji,
- *     więc sprawdzamy warunkowo zamiast wywalać test na czymś, czego przeglądarka
- *     testowa nie umie. W zwykłym Chrome zmierzone: dokument w ramce ma
- *     `application/pdf` i wciąga `pdf_embedder.css` wbudowanej przeglądarki PDF;
- *  3. zamknięcie ZWALNIA adres blob — plik z osadzonymi fontami waży ~1,4 MB
- *     i bez zwolnienia każde otwarcie podglądu zostawiałoby tyle w pamięci karty.
+ * Strony rysuje `pdfjs-dist` na <canvas>, więc piksele są NASZE i dają się zmierzyć —
+ * to jedyny sposób, żeby test złapał usterkę, którą zgłosił użytkownik („wyskakuje
+ * czarne okno"). Pierwsza wersja podglądu wstawiała plik do <iframe> i polegała na
+ * wtyczce przeglądarki: test sprawdzał wtedy typ zawartości i nagłówek `%PDF`, więc
+ * przechodził na zielono, mimo że okno było czarne. Sprawdzanie, czy PLIK jest
+ * poprawny, nie mówi nic o tym, czy użytkownik go ZOBACZY.
  */
-async function zbadajPodglad(page: import("@playwright/test").Page) {
-  const okno = page.getByRole("dialog");
-  await expect(okno.locator("iframe")).toHaveCount(1, { timeout: 15000 });
-  return okno.evaluate(async (d) => {
-    const f = d.querySelector("iframe") as HTMLIFrameElement;
-    const r = await fetch(f.src);
-    const bajty = new Uint8Array(await r.arrayBuffer());
+async function zmierzPodglad(page: import("@playwright/test").Page) {
+  const canvas = page.locator("[data-podglad-stron] canvas");
+  await expect(canvas.first()).toBeVisible({ timeout: 30000 });
+  return page.evaluate(() => {
+    const k = document.querySelector("[data-podglad-stron] canvas") as HTMLCanvasElement;
+    const d = k.getContext("2d")!.getImageData(0, 0, k.width, k.height).data;
+    const n = d.length / 4;
+    let bialych = 0;
+    let ciemnych = 0;
+    let przezroczystych = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 255) przezroczystych++;
+      if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) bialych++;
+      else if (d[i] < 90 && d[i + 1] < 90 && d[i + 2] < 90) ciemnych++;
+    }
     return {
-      adres: f.src,
-      typ: r.headers.get("content-type"),
-      naglowek: String.fromCharCode(...bajty.slice(0, 4)),
-      rozmiar: bajty.length,
-      typDokumentu: f.contentDocument?.contentType ?? null,
-      wtyczkaPdf: navigator.pdfViewerEnabled,
+      stron: document.querySelectorAll("[data-podglad-stron] canvas").length,
+      bialychProc: (100 * bialych) / n,
+      ciemnychProc: (100 * ciemnych) / n,
+      przezroczystych,
     };
   });
 }
 
-/** Asercja renderowania — pomijana tam, gdzie przeglądarka nie ma czym renderować. */
-function sprawdzRenderowanie(w: { typDokumentu: string | null; wtyczkaPdf: boolean }) {
-  if (w.wtyczkaPdf) expect(w.typDokumentu).toBe("application/pdf");
+/** Wspólne progi „to wygląda jak zadrukowana kartka, a nie czarny prostokąt". */
+function oczekujKartke(w: { bialychProc: number; ciemnychProc: number; przezroczystych: number }) {
+  // Kartka jest w przeważającej części biała...
+  expect(w.bialychProc).toBeGreaterThan(70);
+  // ...ale COŚ na niej stoi — inaczej podgląd byłby pustą, białą płachtą.
+  expect(w.ciemnychProc).toBeGreaterThan(0.2);
+  // Zero przezroczystości: to ona po złożeniu na ciemnym tle dawała czarny prostokąt.
+  expect(w.przezroczystych).toBe(0);
 }
 
-/** Czy adres blob został zwolniony (pobranie po zwolnieniu jest odrzucane). */
-async function zwolniony(page: import("@playwright/test").Page, adres: string) {
-  return page.evaluate(async (a) => {
-    try {
-      await fetch(a);
-      return false;
-    } catch {
-      return true;
-    }
-  }, adres);
-}
-
-test("Protokoły: podgląd pokazuje gotowy PDF, a zamknięcie zwalnia go z pamięci", async ({ page }) => {
+test("Protokoły: podgląd rysuje zadrukowaną kartkę, nie czarny prostokąt", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
   await page.getByLabel("Obiekt / nazwa instalacji").fill("Dom testowy");
@@ -319,47 +311,36 @@ test("Protokoły: podgląd pokazuje gotowy PDF, a zamknięcie zwalnia go z pami�
   await page.getByRole("button", { name: "Wczytaj listę kontrolną oględzin" }).click();
   await page.getByRole("button", { name: "Podgląd" }).click();
 
-  const w = await zbadajPodglad(page);
-  expect(w.naglowek).toBe("%PDF");
-  expect(w.typ).toBe("application/pdf");
-  expect(w.rozmiar).toBeGreaterThan(1000);
-  sprawdzRenderowanie(w);
+  oczekujKartke(await zmierzPodglad(page));
 
   await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(await zwolniony(page, w.adres)).toBe(true);
 });
 
-test("Protokoły: „Pobierz PDF” w podglądzie zapisuje ten sam dokument, który widać", async ({ page }) => {
+test("Protokoły: „Pobierz PDF” w podglądzie zapisuje niepusty plik pod właściwą nazwą", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
   await page.getByLabel("Obiekt / nazwa instalacji").fill("Dom testowy");
   await page.getByRole("button", { name: "Wczytaj listę kontrolną oględzin" }).click();
   await page.getByRole("button", { name: "Podgląd" }).click();
+  await zmierzPodglad(page);
 
-  const w = await zbadajPodglad(page);
   const pobranie = page.waitForEvent("download");
   await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
   const plik = await pobranie;
   expect(plik.suggestedFilename()).toBe("protokol-ogledziny-dom-testowy.pdf");
 
-  // Ten sam rozmiar co podglądany blob: przycisk zapisuje ZŁOŻONE JUŻ bajty,
-  // a nie składa dokumentu po raz drugi. Inaczej podgląd przestałby być dowodem
-  // na to, co wyląduje na dysku — czyli straciłby jedyny powód istnienia.
+  // Rozmiar > 0 nie jest tu formalnością: pdf.js PRZEJMUJE przekazany bufor i go
+  // odpina, więc gdyby podgląd oddał mu oryginał zamiast kopii, przycisk zapisałby
+  // pusty plik — a podgląd wyglądałby przy tym zupełnie poprawnie.
   const fs = await import("node:fs");
-  const sciezka = await plik.path();
-  expect(fs.statSync(sciezka).size).toBe(w.rozmiar);
+  expect(fs.statSync(await plik.path()).size).toBeGreaterThan(1000);
 });
 
-test("Rozdzielnica: podgląd legendy pokazuje gotowy PDF", async ({ page }) => {
+test("Rozdzielnica: podgląd legendy rysuje zadrukowaną kartkę", async ({ page }) => {
   await placeThreeSockets(page);
   await page.getByRole("button", { name: "Rozdzielnica" }).click();
   await page.getByRole("button", { name: "Podgląd legendy" }).click();
 
-  const w = await zbadajPodglad(page);
-  expect(w.naglowek).toBe("%PDF");
-  sprawdzRenderowanie(w);
-
-  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).click();
-  expect(await zwolniony(page, w.adres)).toBe(true);
+  oczekujKartke(await zmierzPodglad(page));
 });
