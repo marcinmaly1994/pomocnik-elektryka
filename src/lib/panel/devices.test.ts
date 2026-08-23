@@ -6,6 +6,7 @@ import {
   computeSelectivity,
   layoutPanel,
   MANUAL_DEVICE_TYPES,
+  przeniesAparat,
   ratedCurrent,
 } from "./devices";
 import type { Circuit, PanelDevice, RcdGroup } from "@/types";
@@ -185,5 +186,50 @@ describe("layoutPanel", () => {
 
   it("pusta lista aparatów -> brak rzędów", () => {
     expect(layoutPanel([], 12)).toEqual([]);
+  });
+});
+
+/**
+ * Przenoszenie aparatów na widoku czołowym. `layoutPanel` wypełnia szyny po kolei,
+ * więc pozycja aparatu to jego miejsce w tablicy — a przeciąganie sprowadza się do
+ * przestawienia elementu. Tu sprawdzamy tę czystą część; resztę (chwytanie myszą)
+ * pokrywa test e2e.
+ */
+describe("przeniesAparat", () => {
+  const ap = (uid: string, kind = "mcb"): PanelDevice => ({
+    uid, kind, tag: uid, modules: 1, label: "B16", caption: uid, poles: "1P",
+  });
+  const lista = [ap("Q1", "main"), ap("F1"), ap("F2"), ap("F3")];
+
+  it("przestawia aparat na wskazane miejsce", () => {
+    expect(przeniesAparat(lista, 3, 1).map((d) => d.uid)).toEqual(["Q1", "F3", "F1", "F2"]);
+  });
+
+  it("przesuwa też w drugą stronę", () => {
+    expect(przeniesAparat(lista, 1, 3).map((d) => d.uid)).toEqual(["Q1", "F2", "F3", "F1"]);
+  });
+
+  it("rozłącznik główny zostaje pierwszy", () => {
+    // W realnej rozdzielnicy zasilanie wchodzi na pierwszy aparat szyny; rysunek
+    // z głównym w środku nie odpowiadałby niczemu, co da się zmontować.
+    expect(przeniesAparat(lista, 0, 2)).toBe(lista);
+    expect(przeniesAparat(lista, 2, 0)).toBe(lista);
+  });
+
+  it("bez rozłącznika głównego pierwsza pozycja jest normalnym miejscem", () => {
+    const bezGlownego = [ap("F1"), ap("F2"), ap("F3")];
+    expect(przeniesAparat(bezGlownego, 2, 0).map((d) => d.uid)).toEqual(["F3", "F1", "F2"]);
+  });
+
+  it("ruch donikąd i indeksy poza zakresem nie zmieniają listy", () => {
+    expect(przeniesAparat(lista, 2, 2)).toBe(lista);
+    expect(przeniesAparat(lista, 9, 1)).toBe(lista);
+    expect(przeniesAparat(lista, 1, -1)).toBe(lista);
+  });
+
+  it("nie modyfikuje oryginału", () => {
+    const kopia = [...lista];
+    przeniesAparat(lista, 3, 1);
+    expect(lista).toEqual(kopia);
   });
 });

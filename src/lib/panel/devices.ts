@@ -313,3 +313,28 @@ export function layoutPanel(devices: PanelDevice[], perRow: number): PanelSlot[]
   if (cur.length) rows.push(cur);
   return rows;
 }
+
+/**
+ * Przenosi aparat na inną pozycję w rozdzielnicy.
+ *
+ * Układ (`layoutPanel`) wypełnia szyny po kolei, więc pozycja aparatu to po prostu jego
+ * miejsce w tablicy — przeniesienie sprowadza się do przestawienia elementu. Wydzielone
+ * jako czysta funkcja, bo to jedyny fragment przeciągania, który da się sprawdzić bez
+ * symulowania myszy.
+ *
+ * Rozłącznik główny zostaje na PIERWSZEJ pozycji: w realnej rozdzielnicy zasilanie
+ * wchodzi na pierwszy aparat szyny, a rysunek, na którym główny stoi w środku, nie
+ * odpowiadałby niczemu, co da się zmontować.
+ */
+export function przeniesAparat(devices: PanelDevice[], from: number, to: number): PanelDevice[] {
+  if (from === to || from < 0 || to < 0 || from >= devices.length || to >= devices.length) return devices;
+
+  const glownyNaPoczatku = devices[0]?.kind === "main";
+  const dolnaGranica = glownyNaPoczatku ? 1 : 0;
+  if (glownyNaPoczatku && (from === 0 || to < dolnaGranica)) return devices;
+
+  const kopia = [...devices];
+  const [przenoszony] = kopia.splice(from, 1);
+  kopia.splice(to, 0, przenoszony);
+  return kopia;
+}

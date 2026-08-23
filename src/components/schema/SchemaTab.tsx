@@ -289,7 +289,9 @@ function CircuitBranch({ x, device }: { x: number; device: PanelDevice }) {
 }
 
 interface RcdBlock {
-  device: PanelDevice;
+  /** Różnicówka nad grupą. `undefined` dla wyłączników wychodzących wprost z szyny
+   *  głównej — układ normalny, np. obwód przeciwpożarowy poza zasięgiem RCD. */
+  device?: PanelDevice;
   mcbs: PanelDevice[];
 }
 
@@ -338,7 +340,7 @@ function FinalCircuitsTable({ columns }: { columns: Column[] }) {
         const left = circuitX(col, 0) - LEAF_W / 2;
         const right = left + mcbs.length * LEAF_W;
         return (
-          <g key={col.block.device.uid}>
+          <g key={col.block.device?.uid ?? `bez-rcd-${col.x0}`}>
             <line x1={left} y1={TABLE_TOP} x2={right} y2={TABLE_TOP} stroke={STROKE} strokeWidth={LINE_W} />
             <line x1={left} y1={TABLE_MID} x2={right} y2={TABLE_MID} stroke={STROKE} strokeWidth={LINE_W} />
             <line x1={left} y1={TABLE_PHASE_BOTTOM} x2={right} y2={TABLE_PHASE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
@@ -475,22 +477,59 @@ export function SchemaTab() {
   const mpu = scaleOf(scales, activeFloorId);
   const { circuits } = useMemo(() => computeSizedCircuits(elements, { metersPerUnit: mpu }), [elements, mpu]);
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
-  const devices = useMemo(() => buildPanelDevices(rcdGroups, panelConfig), [rcdGroups, panelConfig]);
+  /**
+   * Aparaty bierzemy z ROZDZIELNICY, nie budujemy własnych.
+   *
+   * Wcześniej schemat wołał `buildPanelDevices` po swojemu, więc wszystko, co
+   * użytkownik zrobił w zakładce Rozdzielnica — dołożone aparaty, skasowane pozycje,
+   * kolejność na szynie — nie miało jak trafić na schemat i oba widoki potrafiły
+   * pokazywać co innego. Tym bardziej dotyczy to rozdzielnicy składanej ręcznie,
+   * bez rzutu: nie ma wtedy obwodów, z których dałoby się cokolwiek odtworzyć.
+   *
+   * Odbudowa z obwodów zostaje jako zapas dla projektów zapisanych, zanim rozdzielnica
+   * zaczęła być trwała, oraz na wypadek, gdyby ktoś w ogóle nie zajrzał do tamtej
+   * zakładki — wtedy schemat pokazuje to, co wynika z rzutu.
+   */
+  const panelDevices = useProjectStore((s) => s.panelDevices);
+  const devices = useMemo(
+    () => (panelDevices.length ? panelDevices : buildPanelDevices(rcdGroups, panelConfig)),
+    [panelDevices, rcdGroups, panelConfig]
+  );
 
   const mainDevice = devices.find((d) => d.kind === "main");
   const spdDevice = devices.find((d) => d.kind === "spd");
   const rcdDevices = devices.filter((d) => d.kind === "rcd");
 
-  const rcdBlocks: RcdBlock[] = rcdGroups.map((group, gi) => ({
-    device: rcdDevices[gi],
-    mcbs: group.circuits.map((c) => devices.find((d) => d.kind === "mcb" && d.key === `mcb-${c.id}`)!),
+  /**
+   * Grupy różnicówek wyprowadzone z SAMYCH APARATÓW (po `rcdTag`), a nie z obwodów
+   * policzonych z rzutu. To ta sama zasada grupowania, po której widok czołowy
+   * rozdzielnicy rysuje klamry „zasięg różnicówki" — jedno źródło prawdy zamiast dwóch.
+   *
+   * Bez tego rozdzielnica złożona ręcznie dawała pusty schemat: nie ma rzutu, więc nie
+   * ma obwodów, więc nie było z czego zbudować kolumn.
+   */
+  const rcdBlocks: RcdBlock[] = rcdDevices.map((rcd) => ({
+    device: rcd,
+    mcbs: devices.filter((d) => d.kind === "mcb" && d.rcdTag === rcd.tag),
   }));
 
-  if (circuits.length === 0 || !mainDevice) {
+  // Wyłączniki spoza zasięgu jakiejkolwiek różnicówki idą wprost z szyny głównej —
+  // to normalny układ (np. obwód przeciwpożarowy), a wcześniej takie aparaty po
+  // prostu znikały ze schematu.
+  const pozaRcd = devices.filter(
+    (d) => d.kind === "mcb" && !rcdDevices.some((r) => r.tag === d.rcdTag)
+  );
+  if (pozaRcd.length) rcdBlocks.push({ device: undefined, mcbs: pozaRcd });
+
+  const pusty = !mainDevice || rcdBlocks.every((b) => b.mcbs.length === 0);
+  if (pusty) {
     return (
       <div className="pe-card p-8 text-center">
         <h2 className="pe-display mb-2 text-xl">Schemat instalacji (jednokreskowy)</h2>
-        <p className="text-sm text-slate-500">Schemat wygeneruje się automatycznie po dodaniu elementów w zakładce „Zaprojektuj instalację”.</p>
+        <p className="mx-auto max-w-lg text-sm text-slate-500">
+          Schemat powstaje z aparatów rozdzielnicy. Rozstaw elementy w zakładce „Instalacja” albo złóż
+          rozdzielnicę ręcznie w zakładce „Rozdzielnica” — rysunek pojawi się tu sam.
+        </p>
       </div>
     );
   }
@@ -565,8 +604,8 @@ export function SchemaTab() {
             col.kind === "spd" && spdDevice ? (
               <SpdBranch key="spd" col={col} device={spdDevice} />
             ) : col.block ? (
-              <g key={col.block.device.uid}>
-                <RcdBranch col={col} device={col.block.device} />
+              <g key={col.block.device?.uid ?? `bez-rcd-${col.x0}`}>
+                {col.block.device && <RcdBranch col={col} device={col.block.device} />}
                 {col.block.mcbs.length > 1 && (
                   <line
                     x1={col.x0 + (col.width - col.block.mcbs.length * LEAF_W) / 2 + LEAF_W / 2}

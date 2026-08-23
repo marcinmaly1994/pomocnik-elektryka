@@ -10,6 +10,7 @@ import type {
   Point,
   ProtocolKey,
   PanelConfig,
+  PanelDevice,
 } from "@/types";
 import { DEFAULT_PLAN_SIZE, nextRoomColor, nextRoomName, roomColorForIndex, scaleOf, type PlanSize } from "@/lib/design";
 import { DEFAULT_PRICES } from "@/lib/costs";
@@ -83,6 +84,29 @@ export interface ProjectPayload {
   protocols: Partial<Record<ProtocolKey, ProtocolState>>;
   projectName: string;
   panelConfig: PanelConfig;
+  /**
+   * Stan rozdzielnicy: aparaty, ukryte pozycje auto-generowane i tryb pracy.
+   *
+   * Wcześniej lista aparatów żyła WYŁĄCZNIE w stanie komponentu `PanelTab`, więc
+   * ręcznie dołożone aparaty, skasowane pozycje i kolejność na szynie przepadały przy
+   * każdym odświeżeniu i nie trafiały do zapisu projektu. Schemat jednokreskowy budował
+   * sobie przy tym własną listę z obwodów, więc oba widoki potrafiły pokazywać co
+   * innego. Trzymanie tego w projekcie naprawia jedno i drugie, a przy okazji jest
+   * warunkiem koniecznym trybu ręcznego — rozdzielnica bez rzutu nie miałaby się
+   * z czego odtworzyć.
+   */
+  panelDevices: PanelDevice[];
+  /** `key` aparatów auto-generowanych, które użytkownik skasował — żeby nie wracały
+   *  przy każdym przeliczeniu z rzutu. */
+  panelHidden: string[];
+  /**
+   * `zRzutu` — aparaty wynikają z obwodów policzonych z planu i odświeżają się przy
+   * jego zmianie. `reczny` — rozdzielnicę składa użytkownik i NIC jej nie nadpisuje.
+   *
+   * Tryb ręczny istnieje, bo dobór rozdzielnicy to częste zadanie samo w sobie:
+   * wymiana tablicy w istniejącym budynku albo wycena nie wymagają rysowania rzutu.
+   */
+  panelTryb: "zRzutu" | "reczny";
   planSize: PlanSize;
   /** Postęp onboardingu „Zacznij w 3 krokach" — per projekt, żeby po powrocie
    *  do zapisanego projektu przewodnik się nie powtarzał. */
@@ -122,6 +146,9 @@ interface ProjectState {
    *  Rozdzielnicy i wygenerowany z niej Schemat jednokreskowy (ten sam
    *  `buildPanelDevices`), żeby oba widoki zawsze się zgadzały. */
   panelConfig: PanelConfig;
+  panelDevices: PanelDevice[];
+  panelHidden: string[];
+  panelTryb: "zRzutu" | "reczny";
   /** Obszar roboczy planu w jednostkach logicznych. Zapisywany w projekcie, bo
    *  dopasowuje się do proporcji wgranego rzutu — patrz planSizeForImage. */
   planSize: PlanSize;
@@ -208,6 +235,9 @@ interface ProjectState {
   setDocHeader: (patch: Partial<DocumentHeader>) => void;
   setProjectName: (name: string) => void;
   setPanelConfig: (patch: Partial<PanelConfig>) => void;
+  setPanelDevices: (devices: PanelDevice[]) => void;
+  setPanelHidden: (keys: string[]) => void;
+  setPanelTryb: (tryb: "zRzutu" | "reczny") => void;
   setPlanSize: (size: PlanSize) => void;
   setOnboarding: (patch: Partial<OnboardingState>) => void;
 
@@ -260,6 +290,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectName: "Mój dom",
   protocols: {},
   panelConfig: { supply3f: true, spd: "T1+T2", mainRating: 40 },
+  panelDevices: [],
+  panelHidden: [],
+  panelTryb: "zRzutu",
   planSize: DEFAULT_PLAN_SIZE,
   onboarding: INITIAL_ONBOARDING,
   session: loadStoredSession(),
@@ -351,6 +384,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       activeFloorId: "f1",
       projectName: "Mój dom",
       panelConfig: { supply3f: true, spd: "T1+T2", mainRating: 40 },
+      panelDevices: [],
+      panelHidden: [],
+      panelTryb: "zRzutu",
       planSize: DEFAULT_PLAN_SIZE,
       onboarding: INITIAL_ONBOARDING,
       docHeader: {
@@ -367,8 +403,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   getProjectPayload: () => {
-    const { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, planSize, onboarding } = get();
-    return { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, planSize, onboarding };
+    const { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, planSize, onboarding } = get();
+    return { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, planSize, onboarding };
   },
 
   loadProjectPayload: (payload) =>
@@ -388,6 +424,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // `panelConfig` dodane po pierwszych zapisach w chmurze/lokalnie — starsze
       // migawki go nie mają, stąd fallback do domyślnej konfiguracji.
       panelConfig: payload.panelConfig || { supply3f: true, spd: "T1+T2", mainRating: 40 },
+      // Projekty zapisane przed wprowadzeniem trwałej rozdzielnicy nie mają tych pól —
+      // wracają wtedy do trybu „z rzutu" i odbudowują aparaty z obwodów, czyli
+      // dokładnie tak, jak działały do tej pory.
+      panelDevices: payload.panelDevices || [],
+      panelHidden: payload.panelHidden || [],
+      panelTryb: payload.panelTryb === "reczny" ? "reczny" : "zRzutu",
       // starsze migawki nie mają obszaru planu — wracamy do domyślnego 1000x700
       planSize: payload.planSize || DEFAULT_PLAN_SIZE,
       // migawki sprzed onboardingu go nie mają — traktujemy je jak projekt
@@ -472,6 +514,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setProjectName: (name) => set({ projectName: name }),
 
   setPanelConfig: (patch) => set((state) => ({ panelConfig: { ...state.panelConfig, ...patch } })),
+
+  setPanelDevices: (devices) => set({ panelDevices: devices }),
+  setPanelHidden: (keys) => set({ panelHidden: keys }),
+  setPanelTryb: (tryb) => set({ panelTryb: tryb }),
 
   setPlanSize: (size) => set({ planSize: size }),
 

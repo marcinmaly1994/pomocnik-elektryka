@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PHASE_COLORS, accentForDevice, layoutPanel } from "@/lib/panel/devices";
+import { zawijNaDwieLinie } from "@/lib/tekst";
 import type { SizedCircuit } from "@/lib/panel/sizing";
 import type { PanelDevice } from "@/types";
 
@@ -39,6 +40,9 @@ export interface PanelRenderProps {
   devices: PanelDevice[];
   perRow: number;
   onDelete: (uid: string) => void;
+  /** Przeniesienie aparatu na inną pozycję szyny (indeksy w tablicy `devices`).
+   *  Brak funkcji = widok tylko do oglądania, bez chwytania aparatów. */
+  onMove?: (from: number, to: number) => void;
   /** Wynik doboru dla aparatów obwodowych, kluczowany polem `key` aparatu. */
   sizing?: Map<string, SizedCircuit>;
 }
@@ -129,8 +133,28 @@ function DeviceFace({ device, w }: { device: PanelDevice; w: number }) {
   );
 }
 
-export function PanelRender({ devices, perRow, onDelete, sizing }: PanelRenderProps) {
+export function PanelRender({ devices, perRow, onDelete, onMove, sizing }: PanelRenderProps) {
   const [hovered, setHovered] = useState<string | null>(null);
+
+  /**
+   * Przeciąganie aparatów po szynie.
+   *
+   * Bez `setPointerCapture`: przechwycenie wskaźnika sprawia, że zdarzenia trafiają
+   * wyłącznie do chwyconego elementu, a my potrzebujemy `onPointerEnter` NA SĄSIADACH,
+   * żeby wiedzieć, gdzie aparat ma wylądować. Zamiast tego pilnujemy stanu ręcznie
+   * i kończymy na `pointerup` gdziekolwiek nad rysunkiem.
+   */
+  const [chwycony, setChwycony] = useState<number | null>(null);
+  const [cel, setCel] = useState<number | null>(null);
+  // Rozróżnia kliknięcie od przeciągnięcia — bez tego puszczenie aparatu nad kółkiem
+  // kasowania kasowałoby go zamiast przenieść.
+  const przeciagnieto = useRef(false);
+
+  const zakonczPrzenoszenie = () => {
+    if (chwycony !== null && cel !== null && cel !== chwycony) onMove?.(chwycony, cel);
+    setChwycony(null);
+    setCel(null);
+  };
   const rows = layoutPanel(devices, perRow);
   const rowH = TAG_H + DEVICE_H + LABEL_H + ROW_GAP;
   const innerW = perRow * MODULE_W;
@@ -156,6 +180,13 @@ export function PanelRender({ devices, perRow, onDelete, sizing }: PanelRenderPr
         // rysunek, nie geometrię), a wszystko — łącznie z tekstem — rośnie razem.
         // `width: 100%` nadal pozwala rysunkowi ZMALEĆ na wąskim ekranie.
         style={{ display: "block", width: "100%", maxWidth: svgW * SKALA_WIDOKU, height: "auto" }}
+        onPointerUp={zakonczPrzenoszenie}
+        // Wyjście wskaźnikiem poza rysunek ANULUJE przeniesienie: aparat nie ma dokąd
+        // trafić, a zostawienie stanu „w trakcie" łapałoby każde kolejne najechanie.
+        onPointerLeave={() => {
+          setChwycony(null);
+          setCel(null);
+        }}
       >
         {/* obudowa */}
         <rect x={1} y={1} width={svgW - 2} height={svgH - 2} rx={8} fill="#EDF0F3" stroke="#B6C1CC" strokeWidth={2} />
@@ -224,12 +255,44 @@ export function PanelRender({ devices, perRow, onDelete, sizing }: PanelRenderPr
                   );
                 }
 
+                const przenoszalny = !!onMove && d.kind !== "main";
+                const wRuchu = chwycony === d.index;
+                const celTutaj = chwycony !== null && cel === d.index && !wRuchu;
+
                 return (
                   <g
                     key={d.uid}
                     onMouseEnter={() => setHovered(d.uid)}
                     onMouseLeave={() => setHovered((h) => (h === d.uid ? null : h))}
+                    onPointerDown={(e) => {
+                      if (!przenoszalny) return;
+                      // Bez tego przeciąganie zaznacza tekst opisów i rysunek „skacze".
+                      e.preventDefault();
+                      przeciagnieto.current = false;
+                      setChwycony(d.index);
+                      setCel(d.index);
+                    }}
+                    onPointerEnter={() => {
+                      if (chwycony === null) return;
+                      przeciagnieto.current = true;
+                      setCel(d.index);
+                    }}
+                    style={{
+                      cursor: przenoszalny ? (chwycony !== null ? "grabbing" : "grab") : undefined,
+                      opacity: wRuchu ? 0.45 : 1,
+                    }}
                   >
+                    {/* Kreska w miejscu, gdzie aparat wyląduje po puszczeniu. */}
+                    {celTutaj && (
+                      <rect
+                        x={cel > chwycony! ? x + w - 2 : x - 1}
+                        y={y - 6}
+                        width={3}
+                        height={DEVICE_H + 12}
+                        rx={1.5}
+                        fill="#C1793F"
+                      />
+                    )}
                     <text x={x + w / 2} y={y - 20} textAnchor="middle" fontSize={11} fontWeight={700} fill="#16202B">
                       {d.tag}
                     </text>
@@ -284,28 +347,52 @@ export function PanelRender({ devices, perRow, onDelete, sizing }: PanelRenderPr
                         )
                       )}
 
-                      {/* Nazwa obwodu: poziomo pod szerokim aparatem, pionowo pod wąskim. */}
-                      {w < NARROW_W ? (
-                        <text
-                          transform={`translate(${w / 2 + 2.5} 28) rotate(-90)`}
-                          textAnchor="end"
-                          fontSize={6.8}
-                          fill="#5B6B7E"
-                        >
-                          {truncate(d.caption, 22)}
-                        </text>
-                      ) : (
-                        <text x={w / 2} y={34} textAnchor="middle" fontSize={7.5} fill="#5B6B7E">
-                          {truncate(d.caption, Math.floor(w / 3.7))}
-                        </text>
-                      )}
+                      {/* Nazwa obwodu na DWÓCH liniach zamiast ucinania wielokropkiem.
+                          Ucinany był koniec nazwy, czyli dokładnie to, co odróżnia
+                          „Gniazda — Kuchnia" od „Gniazda — Kuchnia (zmywarka)".
+                          Poziomo pod szerokim aparatem, pionowo pod wąskim. */}
+                      {(() => {
+                        const waski = w < NARROW_W;
+                        const naLinie = waski ? 20 : Math.max(6, Math.floor(w / 3.7));
+                        const [l1, l2] = zawijNaDwieLinie(d.caption, naLinie);
+                        if (waski) {
+                          return (
+                            <g transform={`translate(${w / 2 + 2.5} 28) rotate(-90)`}>
+                              <text textAnchor="end" fontSize={6.8} fill="#5B6B7E">
+                                {l1}
+                              </text>
+                              {l2 && (
+                                <text y={8} textAnchor="end" fontSize={6.8} fill="#5B6B7E">
+                                  {l2}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        }
+                        return (
+                          <text x={w / 2} y={34} textAnchor="middle" fontSize={7.5} fill="#5B6B7E">
+                            <tspan x={w / 2}>{l1}</tspan>
+                            {l2 && (
+                              <tspan x={w / 2} dy={9}>
+                                {l2}
+                              </tspan>
+                            )}
+                          </text>
+                        );
+                      })()}
                     </g>
 
                     {/* Kasowanie w prawym górnym rogu LICA aparatu, nie nad nim: pas nad
                         aparatami zajmują oznaczenie i klamra różnicówki, więc kółko
                         lądowało na cudzym tekście. Pokazywane tylko pod kursorem. */}
                     {deletable && hovered === d.uid && (
-                      <g style={{ cursor: "pointer" }} onClick={() => onDelete(d.uid)}>
+                      <g
+                        style={{ cursor: "pointer" }}
+                        onClick={() => {
+                          if (przeciagnieto.current) return;
+                          onDelete(d.uid);
+                        }}
+                      >
                         <circle cx={x + w - 9} cy={y + 11} r={7.5} fill="#fff" stroke="#C6433A" strokeWidth={1.3} />
                         <text x={x + w - 9} y={y + 14.5} textAnchor="middle" fontSize={11} fill="#C6433A">
                           ×
@@ -364,6 +451,3 @@ export function PanelRender({ devices, perRow, onDelete, sizing }: PanelRenderPr
   );
 }
 
-function truncate(s: string, max: number): string {
-  return s.length <= max ? s : s.slice(0, Math.max(1, max - 1)) + "…";
-}

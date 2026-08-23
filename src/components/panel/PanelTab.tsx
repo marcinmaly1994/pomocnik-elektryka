@@ -9,6 +9,7 @@ import {
   layoutPanel,
   MANUAL_DEVICE_TYPES,
   PHASE_COLORS,
+  przeniesAparat,
   type SelectivityLevel,
 } from "@/lib/panel/devices";
 import { assignPhases, computeSizedCircuits, phaseBalance } from "@/lib/panel/project";
@@ -56,8 +57,23 @@ export function PanelTab() {
   const setPanelConfig = useProjectStore((s) => s.setPanelConfig);
   const { supply3f, spd, mainRating } = panelConfig;
   const [perRow, setPerRow] = useState(12);
-  const [devices, setDevices] = useState<PanelDevice[]>([]);
-  const [hiddenKeys, setHiddenKeys] = useState<string[]>([]);
+  // Aparaty, ukryte pozycje i tryb mieszkają w PROJEKCIE, nie w stanie komponentu.
+  // Wcześniej ręcznie dołożone aparaty i skasowane pozycje przepadały przy odświeżeniu
+  // i nie trafiały do zapisu — a bez trwałości nie da się złożyć rozdzielnicy bez rzutu.
+  const devices = useProjectStore((s) => s.panelDevices);
+  const setDevicesRaw = useProjectStore((s) => s.setPanelDevices);
+  const hiddenKeys = useProjectStore((s) => s.panelHidden);
+  const setHiddenKeysRaw = useProjectStore((s) => s.setPanelHidden);
+  const panelTryb = useProjectStore((s) => s.panelTryb);
+  const setPanelTryb = useProjectStore((s) => s.setPanelTryb);
+  const trybReczny = panelTryb === "reczny";
+
+  // Nakładki w stylu `useState`, żeby reszta komponentu nie musiała wiedzieć,
+  // że stan przeniósł się do store'a.
+  const setDevices = (f: PanelDevice[] | ((prev: PanelDevice[]) => PanelDevice[])) =>
+    setDevicesRaw(typeof f === "function" ? f(useProjectStore.getState().panelDevices) : f);
+  const setHiddenKeys = (f: string[] | ((prev: string[]) => string[])) =>
+    setHiddenKeysRaw(typeof f === "function" ? f(useProjectStore.getState().panelHidden) : f);
   const [addForm, setAddForm] = useState({ kind: "mcb", label: "B16", caption: "" });
   const [podgladLegendy, setPodgladLegendy] = useState(false);
 
@@ -85,14 +101,17 @@ export function PanelTab() {
 
   // Aparaty przeliczają się, gdy zmienią się obwody lub konfiguracja zasilania.
   // Ręcznie dodane aparaty i ręcznie usunięte (auto-generowane) są zachowywane.
+  // W trybie ręcznym NIC nie nadpisuje rozdzielnicy — to cała jego istota. Odbudowa
+  // z obwodów dotyczy wyłącznie trybu „z rzutu".
   useEffect(() => {
+    if (trybReczny) return;
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
       const rebuilt = buildPanelDevices(rcdGroups, { supply3f, spd, mainRating }).filter((d) => !d.key || !hiddenKeys.includes(d.key));
       return [...rebuilt, ...manual];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circuits, rcdGroups, supply3f, spd, mainRating]);
+  }, [circuits, rcdGroups, supply3f, spd, mainRating, trybReczny]);
 
   const rows = useMemo(() => layoutPanel(devices, perRow), [devices, perRow]);
   const usedModules = devices.reduce((a, d) => a + d.modules, 0);
@@ -164,13 +183,34 @@ export function PanelTab() {
     });
   }
 
-  if (circuits.length === 0) {
+  /** Wchodzi w tryb ręczny, zaczynając od rozłącznika głównego i ogranicznika —
+   *  pusta szyna wymagałaby od użytkownika odgadnięcia, od czego zacząć. */
+  function zacznijRecznie() {
+    if (devices.length === 0) setDevices(buildPanelDevices([], { supply3f, spd, mainRating }));
+    setPanelTryb("reczny");
+  }
+
+  // Pusty ekran, dopóki nie ma czego pokazać. Sprawdzamy aparaty RĘCZNE, a nie długość
+  // całej listy: bez żadnego obwodu odbudowa i tak dokłada rozłącznik główny oraz
+  // ogranicznik, więc lista nigdy nie jest pusta — a sam rozłącznik z ogranicznikiem
+  // to jeszcze nie rozdzielnica.
+  if (circuits.length === 0 && !trybReczny && !devices.some((d) => d.manual)) {
     return (
       <div className="pe-card p-8 text-center">
         <h2 className="pe-display mb-2 text-xl">Rozdzielnica elektryczna</h2>
-        <p className="text-sm text-slate-500">
-          Rozdzielnica pojawi się tu automatycznie, gdy dodasz elementy w zakładce „Zaprojektuj instalację”.
+        <p className="mx-auto max-w-lg text-sm text-slate-500">
+          Rozdzielnica wypełni się sama, gdy rozstawisz elementy w zakładce „Instalacja” — wtedy aparaty
+          wynikają z policzonych obwodów.
         </p>
+        {/* Dobór rozdzielnicy bywa zadaniem samym w sobie: wymiana tablicy w istniejącym
+            budynku albo wycena nie wymagają rysowania rzutu. */}
+        <p className="mx-auto mt-4 max-w-lg text-sm text-slate-500">
+          Możesz też złożyć ją samodzielnie — aparat po aparacie, bez rysowania rzutu. Schemat jednokreskowy
+          powstanie z tego, co ustawisz.
+        </p>
+        <Button variant="copper" size="sm" onClick={zacznijRecznie} className="mt-4">
+          <Plus size={14} /> Zbuduj rozdzielnicę bez rzutu
+        </Button>
       </div>
     );
   }
@@ -187,6 +227,21 @@ export function PanelTab() {
       </div>
 
       <div className="pe-card flex flex-wrap items-end gap-4 p-4">
+        {/* Źródło aparatów rozstrzyga, czy rozdzielnica sama się odświeża, czy jest
+            wyłączną własnością użytkownika. Stoi PRZED resztą ustawień, bo zmienia
+            znaczenie wszystkiego poniżej. */}
+        <label className="block">
+          <div className="mb-1 text-xs text-slate-500">Aparaty</div>
+          <select
+            value={panelTryb}
+            onChange={(e) => setPanelTryb(e.target.value as "zRzutu" | "reczny")}
+            className="pe-input text-sm"
+            aria-label="Źródło aparatów"
+          >
+            <option value="zRzutu">Z rzutu instalacji</option>
+            <option value="reczny">Składam ręcznie</option>
+          </select>
+        </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Zasilanie</div>
           <select value={supply3f ? "3" : "1"} onChange={(e) => setPanelConfig({ supply3f: e.target.value === "3" })} className="pe-input text-sm">
@@ -229,9 +284,20 @@ export function PanelTab() {
             Wyrównaj fazy
           </Button>
         )}
-        <Button variant="ghost" size="sm" onClick={resetLayout} className={supply3f ? "" : "ml-auto"}>
-          <RotateCcw size={13} /> Przelicz od nowa
-        </Button>
+        {/* Nazwa mówi, SKĄD bierze się przeliczenie: z obwodów policzonych z rzutu.
+            „Przelicz od nowa" nie zdradzało, że skasuje ręczne zmiany i odtworzy stan
+            z planu — a to jedyne działanie w tej zakładce, które potrafi wymazać pracę. */}
+        {!trybReczny && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetLayout}
+            className={supply3f ? "" : "ml-auto"}
+            title="Odtwarza aparaty z obwodów policzonych z rzutu — ręczne zmiany zostaną nadpisane"
+          >
+            <RotateCcw size={13} /> Odbuduj z rzutu
+          </Button>
+        )}
         <Button variant="ghost" size="sm" onClick={() => setPodgladLegendy(true)}>
           <Eye size={13} /> Podgląd legendy
         </Button>
@@ -289,7 +355,13 @@ export function PanelTab() {
             a rysunek może ją wypełnić; `max-w-full` pilnuje, żeby na wąskim ekranie
             zmalała zamiast rozpychać układ. */}
         <div className="w-[720px] max-w-full flex-none">
-          <PanelRender devices={devices} perRow={perRow} onDelete={removeDevice} sizing={sizingByDeviceKey} />
+          <PanelRender
+            devices={devices}
+            perRow={perRow}
+            onDelete={removeDevice}
+            onMove={(from, to) => setDevices((ds) => przeniesAparat(ds, from, to))}
+            sizing={sizingByDeviceKey}
+          />
         </div>
 
         <div className="pe-card min-w-[280px] flex-1 p-4">

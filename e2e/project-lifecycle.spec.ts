@@ -60,7 +60,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
 
   // schemat/rozdzielnica wracają do stanu pustego
   await page.getByRole("button", { name: "Schemat", exact: true }).click();
-  await expect(page.getByText(/Schemat wygeneruje się automatycznie/)).toBeVisible();
+  await expect(page.getByText(/Schemat powstaje z aparatów rozdzielnicy/)).toBeVisible();
 
   // anulowanie NIE kasuje
   await page.getByRole("button", { name: "Instalacja" }).click();
