@@ -256,3 +256,110 @@ test("Kosztorys: rozbija sumę na netto/VAT/brutto i ostrzega o pozycjach bez ce
   await labour.blur();
   await expect(page.getByText(/Suma nie obejmuje wszystkiego/)).toBeHidden();
 });
+
+/**
+ * Podgląd PDF przed pobraniem.
+ *
+ * Sprawdzamy tu trzy rzeczy, których nie widać po samym pojawieniu się okna:
+ *  1. w ramce siedzi PRAWDZIWY PDF (nagłówek `%PDF`, typ `application/pdf`) — a nie
+ *     pusty blob albo strona błędu, która wygląda tak samo jak nierozwinięty podgląd;
+ *  2. przeglądarka faktycznie GO OTWORZYŁA swoją wtyczką (`contentType` dokumentu
+ *     w ramce), bo podgląd, który zostaje białym prostokątem, jest bezużyteczny.
+ *     Ta akurat asercja działa TYLKO tam, gdzie wtyczka PDF w ogóle jest: Chromium
+ *     Playwrighta jej nie ma (`navigator.pdfViewerEnabled === false`) i zwraca wtedy
+ *     `text/html`. To ograniczenie środowiska testowego, nie zachowanie aplikacji,
+ *     więc sprawdzamy warunkowo zamiast wywalać test na czymś, czego przeglądarka
+ *     testowa nie umie. W zwykłym Chrome zmierzone: dokument w ramce ma
+ *     `application/pdf` i wciąga `pdf_embedder.css` wbudowanej przeglądarki PDF;
+ *  3. zamknięcie ZWALNIA adres blob — plik z osadzonymi fontami waży ~1,4 MB
+ *     i bez zwolnienia każde otwarcie podglądu zostawiałoby tyle w pamięci karty.
+ */
+async function zbadajPodglad(page: import("@playwright/test").Page) {
+  const okno = page.getByRole("dialog");
+  await expect(okno.locator("iframe")).toHaveCount(1, { timeout: 15000 });
+  return okno.evaluate(async (d) => {
+    const f = d.querySelector("iframe") as HTMLIFrameElement;
+    const r = await fetch(f.src);
+    const bajty = new Uint8Array(await r.arrayBuffer());
+    return {
+      adres: f.src,
+      typ: r.headers.get("content-type"),
+      naglowek: String.fromCharCode(...bajty.slice(0, 4)),
+      rozmiar: bajty.length,
+      typDokumentu: f.contentDocument?.contentType ?? null,
+      wtyczkaPdf: navigator.pdfViewerEnabled,
+    };
+  });
+}
+
+/** Asercja renderowania — pomijana tam, gdzie przeglądarka nie ma czym renderować. */
+function sprawdzRenderowanie(w: { typDokumentu: string | null; wtyczkaPdf: boolean }) {
+  if (w.wtyczkaPdf) expect(w.typDokumentu).toBe("application/pdf");
+}
+
+/** Czy adres blob został zwolniony (pobranie po zwolnieniu jest odrzucane). */
+async function zwolniony(page: import("@playwright/test").Page, adres: string) {
+  return page.evaluate(async (a) => {
+    try {
+      await fetch(a);
+      return false;
+    } catch {
+      return true;
+    }
+  }, adres);
+}
+
+test("Protokoły: podgląd pokazuje gotowy PDF, a zamknięcie zwalnia go z pamięci", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+  await page.getByLabel("Obiekt / nazwa instalacji").fill("Dom testowy");
+
+  // Bez wierszy nie ma czego podglądać — przycisk ma być wtedy nieczynny.
+  await expect(page.getByRole("button", { name: "Podgląd" })).toBeDisabled();
+  await page.getByRole("button", { name: "Wczytaj listę kontrolną oględzin" }).click();
+  await page.getByRole("button", { name: "Podgląd" }).click();
+
+  const w = await zbadajPodglad(page);
+  expect(w.naglowek).toBe("%PDF");
+  expect(w.typ).toBe("application/pdf");
+  expect(w.rozmiar).toBeGreaterThan(1000);
+  sprawdzRenderowanie(w);
+
+  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await zwolniony(page, w.adres)).toBe(true);
+});
+
+test("Protokoły: „Pobierz PDF” w podglądzie zapisuje ten sam dokument, który widać", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+  await page.getByLabel("Obiekt / nazwa instalacji").fill("Dom testowy");
+  await page.getByRole("button", { name: "Wczytaj listę kontrolną oględzin" }).click();
+  await page.getByRole("button", { name: "Podgląd" }).click();
+
+  const w = await zbadajPodglad(page);
+  const pobranie = page.waitForEvent("download");
+  await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
+  const plik = await pobranie;
+  expect(plik.suggestedFilename()).toBe("protokol-ogledziny-dom-testowy.pdf");
+
+  // Ten sam rozmiar co podglądany blob: przycisk zapisuje ZŁOŻONE JUŻ bajty,
+  // a nie składa dokumentu po raz drugi. Inaczej podgląd przestałby być dowodem
+  // na to, co wyląduje na dysku — czyli straciłby jedyny powód istnienia.
+  const fs = await import("node:fs");
+  const sciezka = await plik.path();
+  expect(fs.statSync(sciezka).size).toBe(w.rozmiar);
+});
+
+test("Rozdzielnica: podgląd legendy pokazuje gotowy PDF", async ({ page }) => {
+  await placeThreeSockets(page);
+  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Podgląd legendy" }).click();
+
+  const w = await zbadajPodglad(page);
+  expect(w.naglowek).toBe("%PDF");
+  sprawdzRenderowanie(w);
+
+  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).click();
+  expect(await zwolniony(page, w.adres)).toBe(true);
+});

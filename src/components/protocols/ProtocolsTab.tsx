@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Download, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
-import { downloadProtocolPdf } from "@/lib/pdf/protocol";
+import { buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
+import { projectFileName } from "@/lib/pdf/download";
+import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { LIMIT_ZAPISOW } from "@/lib/dokumenty";
 import type { ProtocolKey } from "@/types";
@@ -53,6 +55,7 @@ export function ProtocolsTab() {
 
   const [active, setActive] = useState<ProtocolKey>("ogledziny");
   const [blocked, setBlocked] = useState(false);
+  const [podglad, setPodglad] = useState(false);
   /** Dane ogólne wypełnia się RAZ na zlecenie, a potem przewija się je przy każdym
    *  wejściu w zakładkę. Stan zwinięcia w localStorage, bo to preferencja widoku,
    *  a nie część protokołu. */
@@ -283,13 +286,32 @@ export function ProtocolsTab() {
             <h3 className="pe-display text-[15px]">{def.title}</h3>
             <p className="mt-0.5 text-xs text-slate-500">{def.intro}</p>
           </div>
-          <button
-            onClick={async () => setBlocked(!(await downloadProtocolPdf(active, header, rows, limit)))}
-            disabled={!rows.length}
-            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
-          >
-            <Download size={14} /> Pobierz protokół (PDF)
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Podgląd stoi PRZED pobieraniem, bo taka jest kolejność pracy: najpierw
+                sprawdzam, czy protokół się zgadza, dopiero potem odkładam plik. */}
+            <button
+              onClick={() => setPodglad(true)}
+              disabled={!rows.length}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs text-slate-600 hover:text-ink disabled:opacity-50"
+            >
+              <Eye size={14} /> Podgląd
+            </button>
+            <button
+              onClick={async () => setBlocked(!(await downloadProtocolPdf(active, header, rows, limit)))}
+              disabled={!rows.length}
+              className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
+            >
+              <Download size={14} /> Pobierz protokół (PDF)
+            </button>
+          </div>
+
+          <PdfPreview
+            open={podglad}
+            onOpenChange={setPodglad}
+            title={def.title}
+            filename={projectFileName(`protokol-${active}`, header.obiekt, "pdf")}
+            build={() => buildProtocolPdf(active, header, rows, limit)}
+          />
         </div>
 
         {blocked && (

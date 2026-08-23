@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, FileText, Info, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import {
@@ -13,7 +13,9 @@ import {
 } from "@/lib/panel/devices";
 import { assignPhases, computeSizedCircuits, phaseBalance } from "@/lib/panel/project";
 import { scaleOf } from "@/lib/design";
-import { downloadPanelLegendPdf } from "@/lib/pdf/panelLegend";
+import { buildPanelLegendPdf, downloadPanelLegendPdf } from "@/lib/pdf/panelLegend";
+import { projectFileName } from "@/lib/pdf/download";
+import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { Button } from "@/components/ui/button";
 import { PanelRender } from "./PanelRender";
@@ -57,6 +59,7 @@ export function PanelTab() {
   const [devices, setDevices] = useState<PanelDevice[]>([]);
   const [hiddenKeys, setHiddenKeys] = useState<string[]>([]);
   const [addForm, setAddForm] = useState({ kind: "mcb", label: "B16", caption: "" });
+  const [podgladLegendy, setPodgladLegendy] = useState(false);
 
   // Dobór normatywny: przekrój, zabezpieczenie, ΔU i Zs liczone z tablic PN-HD 60364
   // (src/lib/panel/sizing.ts) zamiast stałych wpisanych przy generowaniu obwodów.
@@ -229,6 +232,9 @@ export function PanelTab() {
         <Button variant="ghost" size="sm" onClick={resetLayout} className={supply3f ? "" : "ml-auto"}>
           <RotateCcw size={13} /> Przelicz od nowa
         </Button>
+        <Button variant="ghost" size="sm" onClick={() => setPodgladLegendy(true)}>
+          <Eye size={13} /> Podgląd legendy
+        </Button>
         <Button
           variant="copper"
           size="sm"
@@ -236,6 +242,14 @@ export function PanelTab() {
         >
           <Download size={13} /> Legenda PDF
         </Button>
+
+        <PdfPreview
+          open={podgladLegendy}
+          onOpenChange={setPodgladLegendy}
+          title="Legenda rozdzielnicy"
+          filename={projectFileName("legenda-rozdzielnicy", docHeader.obiekt, "pdf")}
+          build={() => buildPanelLegendPdf(devices, rows.length, usedModules, totalModules, perRow, docHeader)}
+        />
 
         {supply3f && (
           <div className="w-full border-t pt-4" style={{ borderColor: "#EEF1F4" }}>
