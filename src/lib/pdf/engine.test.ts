@@ -97,8 +97,17 @@ describe("pdfEscape", () => {
     expect(pdfEscape("ą")).toBe("\\200");
   });
 
-  it("zamienia niekodowalne znaki na fallback", () => {
-    expect(pdfEscape("Ω")).toBe("Ohm");
+  it("znaki jednostek mają własne glify, nie transliterację", () => {
+    // Ω i ° dostały własne kody w /Differences (146, 147 -> oktalnie 222, 223).
+    // Wcześniej szły jako „Ohm" i „st.": zapis niepoprawny dla jednostki i o dwa
+    // znaki dłuższy, przez co rozpychał nagłówki tabeli wyników.
+    expect(pdfEscape("Ω")).toBe("\\222");
+    expect(pdfEscape("°")).toBe("\\223");
+  });
+
+  it("znaki bez własnego glifu nadal idą przez fallback", () => {
+    expect(pdfEscape("≤")).toBe("<=");
+    expect(pdfEscape("—")).toBe("-");
   });
 });
 

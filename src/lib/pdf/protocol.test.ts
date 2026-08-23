@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { buildProtocolPdf } from "./protocol";
+import { pdfTextWidth } from "./engine";
 import { stubPdfFontFetch } from "./testFontMock";
 import type { DocumentHeader } from "@/types";
 import type { ProtocolRow } from "@/lib/protocols";
@@ -105,5 +106,79 @@ describe("buildProtocolPdf — układ nagłówka", () => {
     expect(tloGora).toBeLessThan(normaY); // nie przykrywa tytułu ani normy
     expect(tloGora).toBeLessThan(WYS_STRONY); // nie wychodzi poza krawędź kartki
     expect(tloDol).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Wyrównanie kolumn tabeli wyników.
+ *
+ * Zgłoszenie: „dane z protokołów nie są bezpośrednio pod nagłówkami". Pozycje x były
+ * przy tym arytmetycznie ZGODNE — wszystko stało przy lewej krawędzi kolumny, więc
+ * krótkie „500" siedziało pod lewym skrajem szerokiego „U pom. [V]" i oko wiązało
+ * wartość z sąsiednią kolumną. Test mierzy więc ŚRODKI, a nie początki napisów:
+ * to one decydują, czy tabela czyta się kolumnami.
+ */
+describe("buildProtocolPdf — wyrównanie kolumn", () => {
+  /** Wszystkie napisy ze strumienia treści wraz z pozycją i krojem. */
+  function napisy(out: string) {
+    return [...out.matchAll(/BT \/(F\d) ([\d.]+) Tf ([\d.]+) ([\d.]+) Td \(((?:\.|[^)])*)\) Tj ET/g)].map((m) => ({
+      bold: m[1] === "F2",
+      size: Number(m[2]),
+      x: Number(m[3]),
+      y: Number(m[4]),
+      t: m[5],
+    }));
+  }
+
+  it("wartości liczbowe stoją w tej samej osi co ich nagłówki", async () => {
+    const rows: ProtocolRow[] = [{ obwod: "Obwód 1", para: "L1-L2", u: 500, r: 250 }];
+    const out = bytesToAscii(await buildProtocolPdf("izolacja", header, rows, 1.0));
+    const w = napisy(out);
+
+    const yNag = w.find((n) => n.t === "Ocena")!.y;
+    const naglowki = w.filter((n) => Math.abs(n.y - yNag) < 0.5).sort((a, b) => a.x - b.x);
+    const yDane = Math.max(...w.filter((n) => n.y < yNag - 5).map((n) => n.y));
+    const dane = w.filter((n) => Math.abs(n.y - yDane) < 0.5).sort((a, b) => a.x - b.x);
+    expect(naglowki).toHaveLength(6);
+    expect(dane).toHaveLength(6);
+
+    // Środek napisu = początek + połowa jego szerokości.
+    const srodek = (n: { x: number; t: string; size: number; bold: boolean }) =>
+      n.x + pdfTextWidth(n.t.replace(/\\\d{3}/g, "X"), n.size, n.bold) / 2;
+
+    // Kolumny 2..5 (U pom., R, R min, Ocena) są wyśrodkowane — nagłówek i wartość
+    // muszą mieć wspólną oś. 1,5 pt zapasu na przybliżenie tablic metryk.
+    for (let i = 2; i < 6; i++) {
+      expect(Math.abs(srodek(naglowki[i]) - srodek(dane[i]))).toBeLessThan(1.5);
+    }
+
+    // Kolumny opisowe zostają przy LEWEJ — nazwa obwodu ma zaczynać się w jednym
+    // miejscu w każdym wierszu, więc tu zgadzać ma się początek, nie środek.
+    expect(dane[0].x).toBe(naglowki[0].x);
+    expect(dane[1].x).toBe(naglowki[1].x);
+  });
+
+  it("nagłówki sąsiednich kolumn nie zachodzą na siebie", async () => {
+    const rows: ProtocolRow[] = [{ obwod: "Obwód 1", para: "L1-L2", u: 500, r: 250 }];
+    const out = bytesToAscii(await buildProtocolPdf("izolacja", header, rows, 1.0));
+    const w = napisy(out);
+    const yNag = w.find((n) => n.t === "Ocena")!.y;
+    const naglowki = w.filter((n) => Math.abs(n.y - yNag) < 0.5).sort((a, b) => a.x - b.x);
+
+    // „R min [MOhm]" stykało się z „Ocena", bo Ω szło jako trzyznakowe „Ohm".
+    for (let i = 0; i < naglowki.length - 1; i++) {
+      const koniec = naglowki[i].x + pdfTextWidth(naglowki[i].t.replace(/\\\d{3}/g, "X"), naglowki[i].size, naglowki[i].bold);
+      expect(koniec).toBeLessThan(naglowki[i + 1].x);
+    }
+  });
+
+  it("Ω i ° idą jako własne glify, a nie jako „Ohm” i „st.”", async () => {
+    const rows: ProtocolRow[] = [{ obwod: "Obwód 1", para: "L1-L2", u: 500, r: 250 }];
+    const out = bytesToAscii(await buildProtocolPdf("izolacja", header, rows, 1.0));
+    // 146 ósemkowo = \222 (Ω), 147 = \223 (°)
+    expect(out).toContain("R [M\\222]");
+    expect(out).toContain("Temperatura [\\223C]");
+    expect(out).not.toContain("MOhm");
+    expect(out).not.toContain("st.C");
   });
 });

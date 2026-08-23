@@ -27,20 +27,35 @@ import boldFontUrl from "@/assets/fonts/DejaVuSans-Bold.ttf?url";
 export const PDF_POLISH: Record<string, number> = {
   ą: 128, ć: 129, ę: 130, ł: 131, ń: 132, ó: 133, ś: 134, ź: 135, ż: 136,
   Ą: 137, Ć: 138, Ę: 139, Ł: 140, Ń: 141, Ó: 142, Ś: 143, Ź: 144, Ż: 145,
+  // Znaki JEDNOSTEK. Wcześniej szły przez `PDF_FALLBACK` jako transliteracje: „MΩ"
+  // wychodziło „MOhm", „°C" jako „st.C", „IΔn" jako „Idn". W protokole pomiarowym to
+  // nie jest drobiazg — „MOhm" nie jest poprawnym zapisem jednostki, a dłuższe o dwa
+  // znaki etykiety rozpychały nagłówki tak, że „R min [MOhm]" stykało się z „Ocena".
+  //
+  // Kody muszą iść BEZ DZIUR od 128: /Differences wypisuje nazwy glifów jednym ciągiem
+  // od 128, a tablica szerokości leci po kolei do `PDF_LAST_CHAR`.
+  Ω: 146, "°": 147, Δ: 148, μ: 149, "·": 150, "²": 151,
 };
 
 export const PDF_DIFF_NAMES = [
   "aogonek", "cacute", "eogonek", "lslash", "nacute", "oacute", "sacute", "zacute", "zdotaccent",
   "Aogonek", "Cacute", "Eogonek", "Lslash", "Nacute", "Oacute", "Sacute", "Zacute", "Zdotaccent",
+  "Omega", "degree", "Delta", "mu", "periodcentered", "twosuperior",
 ];
 
+/** Najwyższy kod obsadzony w /Differences — liczony, a nie wpisany na sztywno, żeby
+ *  dołożenie glifu nie wymagało pamiętania o `/LastChar` i o tablicach szerokości. */
+export const PDF_LAST_CHAR = Math.max(...Object.values(PDF_POLISH));
+
 export const PDF_FALLBACK: Record<string, string> = {
-  "—": "-", "–": "-", "·": "-", "„": '"', "”": '"', "²": "2", "×": "x", "…": "...", " ": " ",
-  Ω: "Ohm", "°": "st.", Δ: "d", μ: "u", "≤": "<=", "≥": ">=",
+  "—": "-", "–": "-", "„": '"', "”": '"', "×": "x", "…": "...", " ": " ",
+  "≤": "<=", "≥": ">=",
 };
 
 // Metryki fontów (jednostki/1000) — kody 32..126 wg AFM Helvetiki, następnie 127 (nieużywany)
-// i 128..145 dla polskich glifów zdefiniowanych w /Differences.
+// i 128+ dla glifów zdefiniowanych w /Differences (polskie litery, potem jednostki).
+// Te tablice służą TYLKO szacowaniu układu (`pdfTextWidth`); szerokości wpisywane do
+// samego PDF-a bierze `widthsForFont` z osadzonego pliku fontu.
 export const PDF_W_REG = [
   278, 278, 355, 556, 556, 889, 667, 222, 333, 333, 389, 584, 278, 333, 278, 278,
   556, 556, 556, 556, 556, 556, 556, 556, 556, 556,
@@ -52,6 +67,7 @@ export const PDF_W_REG = [
   0, // 127
   556, 500, 556, 222, 556, 556, 500, 500, 500, // ą ć ę ł ń ó ś ź ż
   667, 722, 667, 556, 722, 778, 667, 611, 611, // Ą Ć Ę Ł Ń Ó Ś Ź Ż
+  768, 400, 684, 634, 318, 400, // Ω ° Δ μ · ²
 ];
 
 export const PDF_W_BOLD = [
@@ -65,6 +81,7 @@ export const PDF_W_BOLD = [
   0, // 127
   556, 556, 556, 278, 611, 611, 556, 500, 500,
   722, 722, 667, 611, 722, 778, 667, 611, 611,
+  830, 500, 762, 712, 400, 500, // Ω ° Δ μ · ²
 ];
 
 /** Zamienia znak na kod używany w strumieniu PDF (z uwzględnieniem polskich znaków i zamienników). */
@@ -249,7 +266,7 @@ function bytesToBinaryString(bytes: Uint8Array): string {
  *  przybliżone tabele Helvetiki, gdyby jakiegoś code pointa w foncie zabrakło. */
 function widthsForFont(font: ParsedTtf, fallback: number[]): number[] {
   const widths: number[] = [];
-  for (let code = 32; code <= 145; code++) {
+  for (let code = 32; code <= PDF_LAST_CHAR; code++) {
     if (code === 127) {
       widths.push(0);
       continue;
@@ -300,7 +317,7 @@ export function assemblePdfBytes(pages: string[], PW: number, PH: number, regula
         `/FontFile2 ${fontFileId} 0 R >>`
     );
     return push(
-      `<< /Type /Font /Subtype /TrueType /BaseFont /${baseFontName} /FirstChar 32 /LastChar 145 ` +
+      `<< /Type /Font /Subtype /TrueType /BaseFont /${baseFontName} /FirstChar 32 /LastChar ${PDF_LAST_CHAR} ` +
         `/Widths [${widthsForFont(font, fallbackWidths).join(" ")}] /Encoding ${encId} 0 R /FontDescriptor ${descId} 0 R >>`
     );
   }

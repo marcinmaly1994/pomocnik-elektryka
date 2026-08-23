@@ -121,12 +121,27 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
     const scale = W / totalW;
     const cols = baseCols.map((c) => ({ ...c, w: c.w * scale }));
 
+    // Kolumny opisowe czytają się od lewej — nazwa obwodu ma zaczynać się w jednym
+    // miejscu w każdym wierszu. Wartości (liczby, wybory, ocena) WYŚRODKOWUJEMY.
+    //
+    // Wcześniej wszystko było dosunięte do lewej i tabela wyglądała na rozjechaną:
+    // krótkie „500" siedziało pod lewym skrajem szerokiego nagłówka „U pom. [V]",
+    // więc oko wiązało wartość z sąsiednią kolumną. Pozycje x były przy tym
+    // arytmetycznie ZGODNE — usterka była czysto wzrokowa, ale przez to nie mniej
+    // realna: protokół czyta się kolumnami.
+    const doSrodka = (c: (typeof cols)[number]) => c.def?.type !== "text";
+
+    /** X, od którego rysujemy tekst w kolumnie o lewej krawędzi `lewa`. */
+    const xTekstu = (tekst: string, lewa: number, c: (typeof cols)[number], size: number, bold: boolean) =>
+      doSrodka(c) ? lewa + Math.max(3, (c.w - pdfTextWidth(tekst, size, bold)) / 2) : lewa + 4;
+
     const drawHead = () => {
       doc.box(M, doc.y - 12, W, 18, 0.88);
-      let cx = M + 4;
+      let lewa = M;
       cols.forEach((c) => {
-        doc.text(pdfFitText(c.label, c.w - 6, 8, true), cx, doc.y - 7, 8, true);
-        cx += c.w;
+        const etykieta = pdfFitText(c.label, c.w - 6, 8, true);
+        doc.text(etykieta, xTekstu(etykieta, lewa, c, 8, true), doc.y - 7, 8, true);
+        lewa += c.w;
       });
       doc.y -= 18;
       doc.line(M, doc.y + 5, M + W, doc.y + 5, 0.8, 0.4);
@@ -136,7 +151,7 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
     rows.forEach((r, i) => {
       if (doc.ensure(ROW_H)) drawHead();
       if (i % 2 === 1) doc.box(M, doc.y - ROW_H + 5, W, ROW_H, 0.968);
-      let cx = M + 4;
+      let lewa = M;
       cols.forEach((c) => {
         let v: string;
         if (c.key === "__ocena") {
@@ -147,8 +162,10 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
         } else {
           v = r[c.key] === undefined || r[c.key] === "" ? "—" : String(r[c.key]);
         }
-        doc.text(pdfFitText(v, c.w - 6, 8.5, c.key === "__ocena"), cx, doc.y - ROW_H + 11, 8.5, c.key === "__ocena");
-        cx += c.w;
+        const pogrubione = c.key === "__ocena";
+        const tekst = pdfFitText(v, c.w - 6, 8.5, pogrubione);
+        doc.text(tekst, xTekstu(tekst, lewa, c, 8.5, pogrubione), doc.y - ROW_H + 11, 8.5, pogrubione);
+        lewa += c.w;
       });
       doc.y -= ROW_H;
       doc.line(M, doc.y + 5, M + W, doc.y + 5, 0.4, 0.86);
