@@ -147,10 +147,14 @@ export interface CableRoute {
 
 /** Konfiguracja zasilania rozdzielnicy — współdzielona przez widok Rozdzielnicy i
  *  Schemat jednokreskowy (patrz `buildPanelDevices`), żeby oba widoki zawsze zgadzały
- *  się co do tego, czy jest SPD, ile faz i jaki rozłącznik główny. */
+ *  się co do tego, ile faz i jaki rozłącznik główny.
+ *
+ *  Bez pola SPD: ogranicznik przepięć jest zwykłym aparatem katalogowym
+ *  (MANUAL_DEVICE_TYPES, `kind: "spd"`), dokładanym świadomie jak każde inne
+ *  zabezpieczenie, a nie osobną flagą konfiguracji wymuszającą go w każdej
+ *  rozdzielnicy z automatu. */
 export interface PanelConfig {
   supply3f: boolean;
-  spd: string;
   mainRating: number;
 }
 

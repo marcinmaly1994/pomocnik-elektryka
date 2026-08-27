@@ -36,6 +36,12 @@ export const MANUAL_DEVICE_TYPES: ManualDeviceType[] = [
   { key: "mcb", label: "Wyłącznik nadprądowy", prefix: "F", modules: 1, poles: "1P", defLabel: "B16", accent: "#2D5A8C", ratings: ["B6", "B10", "B13", "B16", "B20", "B25", "C10", "C16", "C20", "C25", "C32"] },
   { key: "rcbo", label: "Wyłącznik różnicowo-nadprądowy", prefix: "F", modules: 2, poles: "1P+N", defLabel: "B16/30mA", accent: "#C1793F", ratings: ["B10/30mA", "B16/30mA", "B20/30mA", "C16/30mA"] },
   { key: "rcd", label: "Wyłącznik różnicowoprądowy", prefix: "FI", modules: 2, poles: "2P", defLabel: "40A/30mA", accent: "#C1793F", ratings: ["25A/30mA", "40A/30mA", "63A/30mA", "40A/300mA", "63A/300mA"] },
+  // Domyślnie 4P/4 moduły jak przy zasilaniu 3-fazowym — przy dodawaniu ręcznym
+  // (patrz `addManualDevice` w PanelTab) przeliczane na 2P/2 moduły dla instalacji
+  // 1-fazowej, tym samym wzorem co rozłącznik główny: SPD musi mieć tyle biegunów,
+  // ile przewodów fazowych i N dochodzi do rozdzielnicy, a to zależy od zasilania,
+  // nie od samego typu aparatu.
+  { key: "spd", label: "Ogranicznik przepięć (SPD)", prefix: "F", modules: 4, poles: "4P", defLabel: "T1+T2", accent: "#3B8C63", ratings: ["T1", "T2", "T1+T2"] },
   // Bezpiecznik pod ogranicznik przepięć. Do dołożenia RĘCZNIE, gdy wytrzymałość
   // zwarciowa SPD jest niższa od spodziewanego prądu zwarcia i nie pokrywa jej
   // zabezpieczenie nadrzędne — dane z karty katalogowej konkretnego ogranicznika.
@@ -81,33 +87,26 @@ export function balancePhases(devices: PanelDevice[]): PanelDevice[] {
 
 export interface BuildPanelDevicesOptions {
   supply3f?: boolean;
-  spd?: string;
   mainRating?: number;
 }
 
 /** Zamienia obwody na listę aparatów rozdzielnicy. Oznaczenia wg IEC 81346:
- *  Q — łączniki (rozłącznik główny), F — zabezpieczenia, FI — różnicowoprądowe. */
+ *  Q — łączniki (rozłącznik główny), F — zabezpieczenia, FI — różnicowoprądowe.
+ *
+ * Ogranicznik przepięć (SPD) NIE jest tu generowany automatycznie — dawniej był
+ * zawsze obecny (sterowany osobnym wyborem w pasku narzędzi), więc każda rozdzielnica
+ * dostawała go z automatu, nawet w instalacjach, które go nie wymagają (np. bez
+ * zasilania napowietrznego czy instalacji odgromowej). Jest teraz zwykłą pozycją
+ * katalogu (patrz MANUAL_DEVICE_TYPES) — dokłada się go tak samo jak każde inne
+ * zabezpieczenie, kiedy jest faktycznie potrzebny. Ostrzeżenie o jego braku
+ * (patrz `computeSelectivity`) i tak zostaje, bo dotyczy każdej instalacji. */
 export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevicesOptions = {}): PanelDevice[] {
-  const { supply3f = true, spd = "T1+T2", mainRating = 40 } = opts;
+  const { supply3f = true, mainRating = 40 } = opts;
   const devices: PanelDevice[] = [];
   const p = supply3f ? "4P" : "2P";
   const mod = supply3f ? 4 : 2;
 
   devices.push({ uid: "", kind: "main", tag: "Q1", modules: mod, label: `${mainRating}A`, caption: "Rozłącznik izolacyjny główny", poles: p, phase: supply3f ? "3F" : "L1", key: "main" });
-
-  // Sam ogranicznik przepięć — BEZ automatycznego bezpiecznika przed nim.
-  //
-  // Wcześniej razem z SPD wstawiał się tu „gG 63A" opisany jako zabezpieczenie
-  // przedlicznikowe. To było podwójnie nie na miejscu: „przedlicznikowe" znaczy
-  // PRZED licznikiem, czyli w plombowanej szafce operatora, a nie w rozdzielnicy
-  // mieszkaniowej, którą rysuje ta aplikacja. A osobny bezpiecznik pod SPD jest
-  // potrzebny tylko wtedy, gdy wytrzymałość zwarciowa ogranicznika jest niższa
-  // od spodziewanego prądu zwarcia i nie pokrywa go zabezpieczenie nadrzędne —
-  // czyli nie „za każdym razem". Kto go potrzebuje, dokłada go ręcznie
-  // (patrz MANUAL_DEVICE_TYPES, pozycja `spdFuse`).
-  if (spd !== "brak") {
-    devices.push({ uid: "", kind: "spd", tag: "F00", modules: mod, label: spd, caption: `Ogranicznik przepięć ${spd}`, poles: p, phase: supply3f ? "3F" : "L1", key: "spd" });
-  }
 
   let mcbNo = 0;
   rcdGroups.forEach((r, gi) => {

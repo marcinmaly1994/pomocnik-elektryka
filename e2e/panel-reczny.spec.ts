@@ -32,20 +32,21 @@ test("bez rzutu można złożyć rozdzielnicę, a jej zawartość przeżywa odś
   await page.getByRole("button", { name: "Rozdzielnica" }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
 
-  // Start od rozłącznika głównego i ogranicznika — pusta szyna kazałaby użytkownikowi
-  // zgadywać, od czego zacząć.
+  // Start od samego rozłącznika głównego — pusta szyna kazałaby użytkownikowi
+  // zgadywać, od czego zacząć. SPD i reszta zabezpieczeń to zwykłe pozycje katalogu
+  // (patrz „Dodaj aparat ręcznie"), dokładane świadomie, nie z automatu.
   await expect(page.getByRole("img", WIDOK)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Aparaty (2)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Aparaty (1)" })).toBeVisible();
 
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Aparaty (3)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Aparaty (2)" })).toBeVisible();
 
   // Autozapis lokalny ma 600 ms debounce'u — bez odczekania test sprawdzałby,
   // czy zapis, który jeszcze nie wystartował, coś zapisał.
   await page.waitForTimeout(1200);
   await page.reload();
   await page.getByRole("button", { name: "Rozdzielnica" }).click();
-  await expect(page.getByRole("heading", { name: "Aparaty (3)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Aparaty (2)" })).toBeVisible();
 });
 
 test("schemat jednokreskowy powstaje z ręcznie złożonej rozdzielnicy", async ({ page }) => {
@@ -66,7 +67,7 @@ test("aparat da się przeciągnąć na inne miejsce szyny; główny zostaje pier
   await pustyProjekt(page);
   await page.getByRole("button", { name: "Rozdzielnica" }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
-  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Dodaj", exact: true }).click();
+  for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
   const svg = page.getByRole("img", WIDOK);
   await expect(svg).toBeVisible();
@@ -128,13 +129,13 @@ test("klik na aparacie otwiera edycję; zmiana przeżywa odświeżenie", async (
 
   const svg = page.getByRole("img", WIDOK);
   await expect(svg).toBeVisible();
-  const tagText = svg.locator("text", { hasText: "F2" }).first();
+  const tagText = svg.locator("text", { hasText: "F1" }).first();
   await tagText.scrollIntoViewIfNeeded();
   const box = await tagText.boundingBox();
   await page.mouse.click(box!.x + box!.width / 2, box!.y + 60);
 
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByRole("dialog")).toContainText("Aparat F2");
+  await expect(page.getByRole("dialog")).toContainText("Aparat F1");
 
   await page.getByLabel("Nastawa").fill("C20");
   await page.getByLabel("Opis obwodu").fill("Gniazda garaż");
@@ -158,7 +159,7 @@ test("edycja aparatu dodanego ręcznie działa bez nadpisań", async ({ page }) 
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
-  await page.getByRole("button", { name: "Edytuj aparat F2" }).click();
+  await page.getByRole("button", { name: "Edytuj aparat F1" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByLabel("Oznaczenie").fill("F9");
   await page.getByRole("button", { name: "Zapisz zmiany" }).click();
@@ -179,4 +180,66 @@ test("paski opisowe: podgląd pokazuje zadrukowaną kartkę i pobiera się", asy
   await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
   const plik = await pobranie;
   expect(plik.suggestedFilename()).toMatch(/^paski-opisowe-rozdzielnicy.*\.pdf$/);
+});
+
+test("SPD nie jest dodawany automatycznie; jest zwykłą pozycją katalogu ręcznego", async ({ page }) => {
+  await pustyProjekt(page);
+  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
+
+  // Wcześniej SPD stał w pasku narzędzi jako osobny, zawsze widoczny wybór ("brak" /
+  // T1 / T2 / T1+T2) i pojawiał się w rozdzielnicy z automatu. Zabrany stamtąd, zostaje
+  // dostępny tak samo jak każde inne zabezpieczenie — w liście „Dodaj aparat ręcznie".
+  await expect(page.getByText("Ogranicznik przepięć", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Aparaty (1)" })).toBeVisible();
+
+  const wybor = page.locator("select").filter({ has: page.locator('option:has-text("Ogranicznik przepięć (SPD)")') });
+  await wybor.selectOption({ label: "Ogranicznik przepięć (SPD)" });
+  await page.getByRole("button", { name: "Dodaj", exact: true }).click();
+
+  const svg = page.getByRole("img", WIDOK);
+  await expect(svg).toContainText("Ogranicznik przepięć");
+  // Zasilanie domyślnie 3-fazowe -> SPD dostaje tyle biegunów, ile rozłącznik główny.
+  await expect(svg).toContainText("4P");
+});
+
+test("zmiana liczby biegunów aparatu zmienia jego szerokość na wizualizacji", async ({ page }) => {
+  await pustyProjekt(page);
+  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
+  // Domyślny wybór w formularzu to "Wyłącznik nadprądowy" (MCB) — dokładnie ten
+  // aparat, którego dotyczyło zgłoszenie: zmiana z 1-fazowego na 3-fazowy nie
+  // zmieniała jego rozmiaru na rysunku.
+  await page.getByRole("button", { name: "Dodaj", exact: true }).click();
+
+  const svg = page.getByRole("img", WIDOK);
+  const szerokoscModulu = async () => {
+    const tag = svg.locator("text", { hasText: "F1" }).first();
+    const box = (await tag.boundingBox())!;
+    // Prostokąt lica aparatu leży pod jego oznaczeniem; mierzymy jego szerokość
+    // bezpośrednio w DOM-ie, bo to ONA (nie napis „3P") rysuje pole na szynie.
+    return page.evaluate(
+      ([x, y]) => {
+        const el = document.elementsFromPoint(x, y + 70).find((e) => e.tagName === "rect") as SVGRectElement | undefined;
+        return el ? el.width.baseVal.value : null;
+      },
+      [box.x + box.width / 2, box.y]
+    );
+  };
+
+  const przed = await szerokoscModulu();
+
+  await page.getByRole("button", { name: "Edytuj aparat F1" }).click();
+  await page.getByLabel("Liczba biegunów").selectOption("3P");
+  // Zmiana biegunów ma NATYCHMIAST podpowiedzieć nową szerokość — bez tego pole
+  // „Szerokość [modułów]” zostawało przy starej wartości i rysunek się nie zmieniał.
+  await expect(page.getByLabel("Szerokość w modułach")).toHaveValue("3");
+  await page.getByRole("button", { name: "Zapisz zmiany" }).click();
+
+  const po = await szerokoscModulu();
+  // Nie liczymy dokładnego mnożnika — lico ma stały margines wewnętrzny, więc
+  // szerokość nie skaluje się czysto x3 (26px -> 86px, nie 78px). Liczy się to, że
+  // aparat 3-biegunowy jest WYRAŹNIE szerszy niż 1-biegunowy — dokładnie to, czego
+  // brakowało przed poprawką (szerokość zostawała identyczna).
+  expect(po).toBeGreaterThan((przed ?? 0) * 2.5);
 });

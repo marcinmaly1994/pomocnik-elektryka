@@ -25,6 +25,18 @@ export interface EditDeviceModalProps {
 }
 
 const BIEGUNY = ["1P", "1P+N", "2P", "3P", "3P+N", "4P", "—"];
+
+/**
+ * Sensowna szerokość [modułów] przy danej liczbie biegunów — w większości aparatów
+ * modułowych 1 biegun zajmuje 1 moduł na szynie TH35 (tak liczy zresztą rozłącznik
+ * główny i SPD w `buildPanelDevices`/`addManualDevice`). Traktowane jako PODPOWIEDŹ
+ * przy zmianie biegunów, nie sztywne ograniczenie: kompaktowe warianty niektórych
+ * aparatów bywają węższe (np. część 4-biegunowych rozłączników mieści się w
+ * 2 modułach) — pole szerokości zostaje więc zawsze edytowalne osobno.
+ */
+const SUGEROWANE_MODULY: Partial<Record<string, number>> = {
+  "1P": 1, "1P+N": 2, "2P": 2, "3P": 3, "3P+N": 4, "4P": 4,
+};
 const FAZY = ["L1", "L2", "L3", "3F"] as const;
 
 export function EditDeviceModal({ device, onClose, onSave, supply3f }: EditDeviceModalProps) {
@@ -103,7 +115,21 @@ export function EditDeviceModal({ device, onClose, onSave, supply3f }: EditDevic
 
           <label className="block">
             <div className="mb-1 text-xs text-slate-500">Liczba biegunów</div>
-            <select value={poles} onChange={(e) => setPoles(e.target.value)} className="pe-input w-full text-sm" aria-label="Liczba biegunów">
+            <select
+              value={poles}
+              onChange={(e) => {
+                const nowe = e.target.value;
+                setPoles(nowe);
+                // Zmiana biegunów bez zmiany szerokości nie miała żadnego efektu na
+                // rysunku — aparat przełączony z 1-fazowego na 3-fazowy zostawał tej
+                // samej szerokości, więc na froncie rozdzielnicy wyglądał tak samo.
+                // To szerokość [modułów], nie opis biegunów, rysuje pole na szynie.
+                const sugestia = SUGEROWANE_MODULY[nowe];
+                if (sugestia !== undefined) setModules(sugestia);
+              }}
+              className="pe-input w-full text-sm"
+              aria-label="Liczba biegunów"
+            >
               {(BIEGUNY.includes(poles) ? BIEGUNY : [poles, ...BIEGUNY]).map((b) => (
                 <option key={b} value={b}>
                   {b}

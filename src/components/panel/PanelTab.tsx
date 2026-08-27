@@ -33,7 +33,6 @@ const SELECTIVITY_STYLE: Record<SelectivityLevel, { bg: string; fg: string; Icon
 
 const PER_ROW_OPTIONS = [8, 12, 18, 24];
 const MAIN_RATING_OPTIONS = [25, 32, 40, 63, 80];
-const SPD_OPTIONS = ["brak", "T1", "T2", "T1+T2"];
 
 let manualSeq = 0;
 const nextManualUid = () => `manual-${++manualSeq}`;
@@ -52,12 +51,12 @@ export function PanelTab() {
   // PDF ma wypełniony nagłówek i nazwę pliku nawet bez wizyty w zakładce Protokoły.
   const docHeader = resolveDocHeader(rawDocHeader, projectName);
 
-  // Zasilanie/SPD/rozłącznik główny mieszkają w store (nie w lokalnym stanie), bo
-  // ten sam `buildPanelDevices` na tych samych parametrach zasila też zakładkę
-  // Schemat — inaczej zmiana SPD tutaj nie byłaby widoczna na schemacie jednokreskowym.
+  // Zasilanie/rozłącznik główny mieszkają w store (nie w lokalnym stanie), bo ten sam
+  // `buildPanelDevices` na tych samych parametrach zasila też zakładkę Schemat —
+  // inaczej zmiana zasilania tutaj nie byłaby widoczna na schemacie jednokreskowym.
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const setPanelConfig = useProjectStore((s) => s.setPanelConfig);
-  const { supply3f, spd, mainRating } = panelConfig;
+  const { supply3f, mainRating } = panelConfig;
   const [perRow, setPerRow] = useState(12);
   // Aparaty, ukryte pozycje i tryb mieszkają w PROJEKCIE, nie w stanie komponentu.
   // Wcześniej ręcznie dołożone aparaty i skasowane pozycje przepadały przy odświeżeniu
@@ -113,7 +112,7 @@ export function PanelTab() {
     if (trybReczny) return;
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
-      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, spd, mainRating })
+      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, mainRating })
         .filter((d) => !d.key || !hiddenKeys.includes(d.key))
         // Ręczne poprawki nakładane na świeżo policzony aparat — inaczej zmiana
         // nastawy albo opisu znikałaby po każdym elemencie postawionym na planie.
@@ -121,7 +120,7 @@ export function PanelTab() {
       return [...rebuilt, ...manual];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circuits, rcdGroups, supply3f, spd, mainRating, trybReczny, panelOverrides]);
+  }, [circuits, rcdGroups, supply3f, mainRating, trybReczny, panelOverrides]);
 
   const rows = useMemo(() => layoutPanel(devices, perRow), [devices, perRow]);
   const usedModules = devices.reduce((a, d) => a + d.modules, 0);
@@ -131,9 +130,14 @@ export function PanelTab() {
   // zabezpieczeń — i ta sama wartość idzie do kontroli selektywności, żeby obie
   // sekcje w tej zakładce nie pokazywały dwóch różnych liczb dla tej samej rzeczy.
   const phaseLoad = balance.amps;
+  // Obecność SPD sprawdzamy w LIŚCIE APARATÓW, nie w osobnej fladze konfiguracji —
+  // SPD jest teraz zwykłym aparatem, więc to jedyne źródło prawdy o tym, czy realnie
+  // stoi w rozdzielnicy. Flaga konfiguracji mogłaby się rozjechać z listą (np. po
+  // ręcznym skasowaniu aparatu) i ostrzeżenie kłamałoby, że ochrona jest.
+  const maSpd = devices.some((d) => d.kind === "spd");
   const selectivity = useMemo(
-    () => computeSelectivity(devices, mainRating, supply3f, spd !== "brak", balance.amps),
-    [devices, mainRating, supply3f, spd, balance]
+    () => computeSelectivity(devices, mainRating, supply3f, maSpd, balance.amps),
+    [devices, mainRating, supply3f, maSpd, balance]
   );
   const maxPhase = Math.max(phaseLoad.L1, phaseLoad.L2, phaseLoad.L3, 1);
   const phaseSpread = Math.round((maxPhase - Math.min(phaseLoad.L1, phaseLoad.L2, phaseLoad.L3)) * 10) / 10;
@@ -169,7 +173,7 @@ export function PanelTab() {
     setPanelOverrides({});
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
-      return [...buildPanelDevices(rcdGroups, { supply3f, spd, mainRating }), ...manual];
+      return [...buildPanelDevices(rcdGroups, { supply3f, mainRating }), ...manual];
     });
   }
 
@@ -189,6 +193,16 @@ export function PanelTab() {
   function addManualDevice() {
     const def = MANUAL_DEVICE_TYPES.find((t) => t.key === addForm.kind);
     if (!def) return;
+    // SPD musi mieć tyle biegunów, ile przewodów fazowych i N dochodzi do rozdzielnicy
+    // — dokładnie ten sam wzór, którym `buildPanelDevices` liczy rozłącznik główny.
+    // Katalog trzyma 4P/4 moduły jako domyślny (typowy) wariant 3-fazowy; przy
+    // zasilaniu 1-fazowym trzeba to przeliczyć, inaczej aparat 2-biegunowy dostałby
+    // szerokość 4-biegunowego. Reszta katalogu tego nie potrzebuje: pozostałe
+    // zabezpieczenia mają liczbę biegunów wynikającą z SAMEGO OBWODU, który
+    // zabezpieczają (np. RCBO zawsze 1P+N), a nie z zasilania całej rozdzielnicy.
+    const dynamiczneBieguny = def.key === "spd";
+    const poles = dynamiczneBieguny ? (supply3f ? "4P" : "2P") : def.poles;
+    const modules = dynamiczneBieguny ? (supply3f ? 4 : 2) : def.modules;
     setDevices((prev) => {
       const used = prev.filter((d) => String(d.tag || "").startsWith(def.prefix)).length;
       const tag = def.prefix ? `${def.prefix}${used + 1}` : "";
@@ -199,20 +213,22 @@ export function PanelTab() {
           kind: def.key,
           manual: true,
           tag,
-          modules: def.modules,
+          modules,
           label: addForm.label || def.defLabel,
           caption: addForm.caption || def.label,
-          poles: def.poles,
-          phase: supply3f && def.poles === "1P" ? "L1" : supply3f ? "3F" : "L1",
+          poles,
+          phase: supply3f && poles === "1P" ? "L1" : supply3f ? "3F" : "L1",
         },
       ];
     });
   }
 
-  /** Wchodzi w tryb ręczny, zaczynając od rozłącznika głównego i ogranicznika —
-   *  pusta szyna wymagałaby od użytkownika odgadnięcia, od czego zacząć. */
+  /** Wchodzi w tryb ręczny, zaczynając od rozłącznika głównego — pusta szyna
+   *  wymagałaby od użytkownika odgadnięcia, od czego zacząć. Nic ponad to: SPD
+   *  i reszta zabezpieczeń to teraz zwykłe pozycje katalogu, dokładane świadomie
+   *  przez „Dodaj aparat ręcznie", a nie coś, co pojawia się z automatu. */
   function zacznijRecznie() {
-    if (devices.length === 0) setDevices(buildPanelDevices([], { supply3f, spd, mainRating }));
+    if (devices.length === 0) setDevices(buildPanelDevices([], { supply3f, mainRating }));
     setPanelTryb("reczny");
   }
 
@@ -281,16 +297,6 @@ export function PanelTab() {
             {MAIN_RATING_OPTIONS.map((a) => (
               <option key={a} value={a}>
                 {a} A
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <div className="mb-1 text-xs text-slate-500">Ogranicznik przepięć</div>
-          <select value={spd} onChange={(e) => setPanelConfig({ spd: e.target.value })} className="pe-input text-sm">
-            {SPD_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s === "brak" ? "brak" : s}
               </option>
             ))}
           </select>

@@ -58,21 +58,24 @@ describe("buildPanelDevices", () => {
     // zwarciowej ogranicznika, a „przedlicznikowy" leży PRZED licznikiem, czyli
     // poza zakresem tego rysunku. Dokłada się go ręcznie, gdy karta katalogowa
     // ogranicznika tego wymaga.
-    for (const spd of ["T1", "T2", "T1+T2"]) {
-      expect(buildPanelDevices(rcdGroups, { spd }).some((d) => d.kind === "spdFuse")).toBe(false);
-    }
+    expect(buildPanelDevices(rcdGroups).some((d) => d.kind === "spdFuse")).toBe(false);
     // ...ale nadal da się go dołożyć z katalogu ręcznego
     expect(MANUAL_DEVICE_TYPES.some((t) => t.key === "spdFuse")).toBe(true);
   });
 
-  it("dodaje SPD gdy spd !== 'brak'", () => {
-    const devices = buildPanelDevices(rcdGroups, { spd: "T1+T2" });
-    expect(devices.some((d) => d.kind === "spd")).toBe(true);
+  it("NIE dokłada ogranicznika przepięć automatycznie", () => {
+    // Wcześniej SPD pojawiał się z automatu, sterowany osobną flagą konfiguracji —
+    // więc każda nowa rozdzielnica dostawała go, nawet gdy instalacja go nie
+    // potrzebuje. Teraz jest zwykłą pozycją katalogu (patrz test niżej), dokładaną
+    // świadomie tak samo jak każde inne zabezpieczenie — bez żadnej opcji, którą
+    // dałoby się przekazać do `buildPanelDevices`, żeby go z powrotem wymusić.
+    expect(buildPanelDevices(rcdGroups).some((d) => d.kind === "spd")).toBe(false);
   });
 
-  it("pomija SPD gdy spd === 'brak'", () => {
-    const devices = buildPanelDevices(rcdGroups, { spd: "brak" });
-    expect(devices.some((d) => d.kind === "spd")).toBe(false);
+  it("ogranicznik przepięć da się dołożyć z katalogu ręcznego", () => {
+    const spd = MANUAL_DEVICE_TYPES.find((t) => t.key === "spd");
+    expect(spd).toBeDefined();
+    expect(spd!.ratings).toEqual(expect.arrayContaining(["T1", "T2", "T1+T2"]));
   });
 
   it("generuje RCD i MCB dla każdego obwodu w grupie", () => {

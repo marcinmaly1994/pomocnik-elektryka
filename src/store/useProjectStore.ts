@@ -153,7 +153,7 @@ interface ProjectState {
   docHeader: DocumentHeader;
   projectName: string;
   protocols: Partial<Record<ProtocolKey, ProtocolState>>;
-  /** Zasilanie/SPD/rozłącznik główny rozdzielnicy — współdzielone przez widok
+  /** Zasilanie/rozłącznik główny rozdzielnicy — współdzielone przez widok
    *  Rozdzielnicy i wygenerowany z niej Schemat jednokreskowy (ten sam
    *  `buildPanelDevices`), żeby oba widoki zawsze się zgadzały. */
   panelConfig: PanelConfig;
@@ -302,7 +302,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   prices: { ...DEFAULT_PRICES },
   projectName: "Mój dom",
   protocols: {},
-  panelConfig: { supply3f: true, spd: "T1+T2", mainRating: 40 },
+  panelConfig: { supply3f: true, mainRating: 40 },
   panelDevices: [],
   panelHidden: [],
   panelTryb: "zRzutu",
@@ -397,7 +397,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       floors: [{ id: "f1", name: "Parter" }],
       activeFloorId: "f1",
       projectName: "Mój dom",
-      panelConfig: { supply3f: true, spd: "T1+T2", mainRating: 40 },
+      panelConfig: { supply3f: true, mainRating: 40 },
       panelDevices: [],
       panelHidden: [],
       panelTryb: "zRzutu",
@@ -437,8 +437,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       protocols: payload.protocols,
       projectName: payload.projectName || "Projekt",
       // `panelConfig` dodane po pierwszych zapisach w chmurze/lokalnie — starsze
-      // migawki go nie mają, stąd fallback do domyślnej konfiguracji.
-      panelConfig: payload.panelConfig || { supply3f: true, spd: "T1+T2", mainRating: 40 },
+      // migawki go nie mają, stąd fallback do domyślnej konfiguracji. Starsze zapisy
+      // MOGĄ mieć w środku jeszcze pole `spd` sprzed usunięcia go z typu — zostaje
+      // wtedy nieużywane w obiekcie (nikt go już nie czyta), nie trzeba go czyścić.
+      panelConfig: payload.panelConfig || { supply3f: true, mainRating: 40 },
       // Projekty zapisane przed wprowadzeniem trwałej rozdzielnicy nie mają tych pól —
       // wracają wtedy do trybu „z rzutu" i odbudowują aparaty z obwodów, czyli
       // dokładnie tak, jak działały do tej pory.
