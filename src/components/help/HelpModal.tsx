@@ -24,7 +24,7 @@ const KROKI: { tytul: string; opis: string }[] = [
   },
   {
     tytul: "Rozstaw gniazdka, łączniki i oświetlenie",
-    opis: "Narzędziem „Wstaw Element” wybierz element z listy i kliknij na rzucie, żeby go postawić. Drzwi i okna dodasz narzędziem „Drzwi / Okno”, klikając w ścianę, w którą mają być wstawione.",
+    opis: "Narzędziem „Wstaw Element” wybierz element z listy i kliknij na rzucie, żeby go postawić. Drzwi dodasz narzędziem „Drzwi”, klikając w ścianę albo krawędź pomieszczenia, w które mają być wstawione.",
   },
   {
     tytul: "Sprawdź rozdzielnicę i schemat",
@@ -110,7 +110,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             <h3 className="pe-display mb-2 text-[15px] text-ink">Przydatne skróty klawiszowe</h3>
             <ul className="space-y-1.5">
               <li className="flex items-center gap-2">
-                <Key>R</Key> obraca zaznaczony element albo otwór (drzwi/okno) o 180°
+                <Key>R</Key> obraca zaznaczony element albo otwór (drzwi) o 180°
               </li>
               <li className="flex items-center gap-2">
                 <Key>Delete</Key> usuwa zaznaczenie

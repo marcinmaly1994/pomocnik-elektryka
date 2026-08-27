@@ -27,21 +27,19 @@ export const DEFAULT_WALL_THICKNESS = 5;
  */
 export const MANUAL_DRAW_SCALE_MPU = 0.05;
 
-/** Domyślne szerokości otworów w REALNYCH centymetrach (typowe wymiary stolarki) —
- *  przeliczane na jednostki planu przy stawianiu, patrz `defaultOpeningWidth`. */
+/** Domyślna szerokość drzwi w REALNYCH centymetrach (typowy wymiar stolarki) —
+ *  przeliczana na jednostki planu przy stawianiu, patrz `defaultOpeningWidth`. */
 export const DEFAULT_DOOR_WIDTH_CM = 90;
-export const DEFAULT_WINDOW_WIDTH_CM = 120;
 /** Fallback w jednostkach planu, gdy nie ma ŻADNEJ skali (ani wgranego rzutu, ani
  *  `MANUAL_DRAW_SCALE_MPU`) — rzadki przypadek, bo tryb „Otwory" wymaga najpierw
  *  narysowanej ściany, a ściana zwykle idzie w parze z jakąś skalą. */
 export const DEFAULT_OPENING_WIDTH_UNITS = 18;
 
-/** Szerokość NOWEGO otworu (jedn. planu) dla danego rodzaju, z uwzględnieniem
- *  bieżącej skali — centymetry, gdy skala jest znana, inaczej stały fallback. */
-export function defaultOpeningWidth(kind: "drzwi" | "okno", metersPerUnit: number | null): number {
+/** Szerokość NOWYCH drzwi (jedn. planu), z uwzględnieniem bieżącej skali —
+ *  centymetry, gdy skala jest znana, inaczej stały fallback. */
+export function defaultOpeningWidth(metersPerUnit: number | null): number {
   if (metersPerUnit === null || !(metersPerUnit > 0)) return DEFAULT_OPENING_WIDTH_UNITS;
-  const cm = kind === "drzwi" ? DEFAULT_DOOR_WIDTH_CM : DEFAULT_WINDOW_WIDTH_CM;
-  return cm / 100 / metersPerUnit;
+  return DEFAULT_DOOR_WIDTH_CM / 100 / metersPerUnit;
 }
 
 export interface PlanSize {

@@ -1,10 +1,14 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Drzwi/okna: lekkie narzędzie „przyklejające" otwór do najbliższego miejsca na
- * klikniętej ścianie (patrz `nearestPointOnPolyline`). Testowane e2e, bo klik w
- * konkretny punkt ściany na płótnie Konvy nie da się odtworzyć syntetycznie —
+ * Drzwi: lekkie narzędzie „przyklejające" otwór do najbliższego miejsca na klikniętej
+ * ścianie/krawędzi pomieszczenia (patrz `nearestPointOnPolyline`). Testowane e2e, bo
+ * klik w konkretny punkt ściany na płótnie Konvy nie da się odtworzyć syntetycznie —
  * ten sam powód co przy rysowaniu ścian w wall-drawing.spec.ts.
+ *
+ * Narzędzie stawiało kiedyś też okna — opcja okazała się niepotrzebna i została
+ * usunięta (patrz `OpeningKind` w types/index.ts, tam zostaje tylko dla zgodności ze
+ * starymi zapisami), więc tu testujemy już wyłącznie drzwi.
  */
 
 async function planBox(page: import("@playwright/test").Page) {
@@ -70,34 +74,22 @@ async function drawRectRoom(page: import("@playwright/test").Page, x1: number, y
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
 }
 
-test("kliknięcie w ścianę w trybie Drzwi/Okno dodaje otwór w najbliższym miejscu", async ({ page }) => {
+test("kliknięcie w ścianę w trybie Drzwi dodaje otwór w najbliższym miejscu", async ({ page }) => {
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
-  await expect(page.getByText("Rodzaj:")).toBeVisible();
-
-  // domyślny rodzaj to "Drzwi"
-  let box = await planBox(page);
+  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(900);
 
-  await page.getByRole("button", { name: "Okno", exact: true }).click();
-  box = await planBox(page);
-  await page.mouse.click(box.x + 320, box.y + 100);
-  await page.waitForTimeout(900);
-
   const draft = await projectState(page);
-  expect(draft.openings).toHaveLength(2);
-  const [door, window_] = draft.openings;
+  expect(draft.openings).toHaveLength(1);
+  const [door] = draft.openings;
   expect(door.kind).toBe("drzwi");
-  expect(window_.kind).toBe("okno");
   // ściana jest pozioma (oba punkty mają tę samą wartość y w jedn. planu) —
   // otwór "przyklejony" do niej powinien wylądować na TEJ SAMEJ wysokości
-  expect(door.y).toBe(window_.y);
   expect(door.angle).toBeCloseTo(0, 6);
-  // klikając dalej wzdłuż ściany, otwór ma większe X
-  expect(window_.x).toBeGreaterThan(door.x);
   expect(door.wallId).toBe(draft.walls[0].id);
 });
 
@@ -105,7 +97,7 @@ test("PPM na otworze pokazuje „Usuń otwór” i go kasuje", async ({ page }) 
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(900);
@@ -126,7 +118,7 @@ test("usunięcie ściany kasuje też jej otwory (nie zostają osierocone)", asyn
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(900);
@@ -162,11 +154,11 @@ test("usunięcie ściany kasuje też jej otwory (nie zostają osierocone)", asyn
   expect(draft.openings).toHaveLength(0);
 });
 
-test("klik w krawędź pomieszczenia w trybie Drzwi/Okno dodaje otwór, gdy nie ma osobnej ściany", async ({ page }) => {
+test("klik w krawędź pomieszczenia w trybie Drzwi dodaje otwór, gdy nie ma osobnej ściany", async ({ page }) => {
   await openPlan(page);
   await drawRectRoom(page, 100, 100, 400, 250);
 
-  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
   // górna krawędź pomieszczenia jest pozioma na y=100 (jedn. planu) — klikamy blisko
   // środka górnego boku, z dala od narożników.
   const box = await planBox(page);
@@ -185,7 +177,7 @@ test("usunięcie pomieszczenia kasuje też otwory na jego krawędzi (nie zostaj�
   await openPlan(page);
   await drawRectRoom(page, 100, 100, 400, 250);
 
-  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 250, box.y + 100);
   await page.waitForTimeout(900);
@@ -206,27 +198,11 @@ test("usunięcie pomieszczenia kasuje też otwory na jego krawędzi (nie zostaj�
   expect(draft.openings).toHaveLength(0);
 });
 
-test("wybór Drzwi/Okno stoi nad płótnem, nie w ogólnym pasku kontrolek", async ({ page }) => {
-  await openPlan(page);
-  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
-
-  const rodzaj = page.getByText("Rodzaj:");
-  await expect(rodzaj).toBeVisible();
-  const rodzajBox = (await rodzaj.boundingBox())!;
-  const canvasBox = await planBox(page);
-
-  // bezpośrednio NAD płótnem (kończy się tuż przed jego górną krawędzią)...
-  expect(rodzajBox.y + rodzajBox.height).toBeLessThanOrEqual(canvasBox.y + 4);
-  // ...i wyrównany do jego lewej krawędzi, a nie do paska narzędzi/panelu z
-  // lewej (ten ogólny pasek kontrolek zaczyna się dużo bardziej na lewo)
-  expect(Math.abs(rodzajBox.x - canvasBox.x)).toBeLessThan(20);
-});
-
 test("świeżo postawione drzwi są od razu zaznaczone — R działa BEZ dodatkowego kliknięcia", async ({ page }) => {
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(300);
@@ -246,7 +222,7 @@ test("Obrót drzwi o 180° przez menu kontekstowe i przez klawisz R", async ({ p
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(900);

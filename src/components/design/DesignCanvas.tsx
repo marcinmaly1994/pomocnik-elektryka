@@ -117,18 +117,18 @@ interface DesignCanvasProps {
    *  kontekstowego co przy elementach/ścianach/pomieszczeniach. */
   onWallDrawContextMenu: (clientX: number, clientY: number) => void;
   /** Klik w ścianę W TRYBIE „otwory" — zamiast zaznaczać ścianę, dokłada na niej
-   *  drzwi/okno w najbliższym do kliknięcia miejscu (`point`/`angle` już policzone
+   *  drzwi w najbliższym do kliknięcia miejscu (`point`/`angle` już policzone
    *  przez `nearestPointOnPolyline`, DesignTab tylko zapisuje). */
   onWallClickForOpening: (wallId: string, point: Point, angle: number) => void;
   onSelectOpening: (id: string) => void;
   onOpeningContextMenu: (id: string, clientX: number, clientY: number) => void;
   /** Klik w KRAWĘDŹ obrysu pomieszczenia (nie we wnętrze — patrz komentarz przy
    *  renderowaniu obrysu) — zaznacza pomieszczenie i odsłania uchwyty narożników.
-   *  W trybie „otwory" ta sama krawędź zamiast tego dokłada drzwi/okno — patrz
+   *  W trybie „otwory" ta sama krawędź zamiast tego dokłada drzwi — patrz
    *  `onRoomEdgeClickForOpening` niżej, ten sam wzorzec co `onWallClickForOpening`. */
   onSelectRoom: (id: string) => void;
   /** Klik w krawędź pomieszczenia W TRYBIE „otwory" — pomieszczenia często nie mają
-   *  osobno narysowanej ściany, więc to jedyny sposób postawić tam drzwi/okno.
+   *  osobno narysowanej ściany, więc to jedyny sposób postawić tam drzwi.
    *  `point`/`angle` liczone tu samo, tak jak przy `onWallClickForOpening`, tylko na
    *  ZAMKNIĘTYM obrysie (ostatni punkt łączy się z pierwszym). */
   onRoomEdgeClickForOpening: (roomId: string, point: Point, angle: number) => void;
@@ -764,7 +764,7 @@ export function DesignCanvas({
                   onClick={(e) => {
                     e.cancelBubble = true;
                     // W trybie „otwory" klik w krawędź pomieszczenia dokłada na niej
-                    // drzwi/okno zamiast zaznaczać pomieszczenie — ten sam wzorzec co przy
+                    // drzwi zamiast zaznaczać pomieszczenie — ten sam wzorzec co przy
                     // ścianach (`onWallClickForOpening`), tylko na ZAMKNIĘTYM obrysie
                     // (domykamy pierwszym punktem na końcu, bo `nearestPointOnPolyline`
                     // sam nie zna ostatniego, zamykającego segmentu).
@@ -864,7 +864,7 @@ export function DesignCanvas({
                   lineJoin="round"
                   onClick={(e) => {
                     e.cancelBubble = true;
-                    // W trybie „otwory" klik w ścianę dokłada na niej drzwi/okno
+                    // W trybie „otwory" klik w ścianę dokłada na niej drzwi
                     // zamiast ją zaznaczać — patrz `onWallClickForOpening`.
                     if (toolMode === "otwory") {
                       const stage = e.target.getStage();
@@ -921,9 +921,11 @@ export function DesignCanvas({
             );
           })}
 
-          {/* Otwory (drzwi/okna): „wycięcie" w kolorze tła planu nad ścianą plus
-              glif — łuk skrzydła dla drzwi, podwójna linia szyby dla okna. Ściana
-              pod spodem zostaje NIETKNIĘTA (żaden segment nie jest faktycznie
+          {/* Otwory: „wycięcie" w kolorze tła planu nad ścianą plus glif — łuk skrzydła
+              dla drzwi. Gałąź `o.kind !== "drzwi"` (podwójna linia szyby okna) rysuje
+              już tylko STARE otwory z zapisów sprzed usunięcia opcji okna — narzędzie
+              stawia od tej pory wyłącznie drzwi, patrz `OpeningKind` w types/index.ts.
+              Ściana pod spodem zostaje NIETKNIĘTA (żaden segment nie jest faktycznie
               dzielony) — to czysto wizualne przykrycie, więc edycja ściany
               (przeciąganie narożnika, zmiana grubości) działa bez zmian. */}
           {openings.map((o) => {

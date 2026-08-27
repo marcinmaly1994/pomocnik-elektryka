@@ -69,14 +69,18 @@ export interface Wall {
   thickness?: number;
 }
 
+/** „okno" jest tu tylko dla zgodności ze STARYMI zapisami — narzędzie stawia już
+ *  wyłącznie drzwi (opcja okna okazała się niepotrzebna i została usunięta), ale
+ *  projekt zapisany przed tą zmianą może mieć otwory tego rodzaju i mają nadal
+ *  wyglądać tak jak wcześniej (patrz gałąź renderowania w DesignCanvas.tsx). */
 export type OpeningKind = "drzwi" | "okno";
 
 /**
- * Otwór (drzwi/okno) wycięty w konkretnej ścianie ALBO w krawędzi narysowanego
+ * Otwór (drzwi, dawniej też okno) wycięty w konkretnej ścianie ALBO w krawędzi narysowanego
  * pomieszczenia — dokładnie jedno z `wallId`/`roomId` jest ustawione, zależnie od
  * tego, w co użytkownik kliknął w trybie „otwory" (pomieszczenia często nie mają
  * osobno narysowanych ścian, więc bez tej drugiej opcji nie dało się tam w ogóle
- * postawić drzwi/okna). Pozycja jest zapisana jako gotowy punkt świata (`x`, `y`)
+ * postawić drzwi). Pozycja jest zapisana jako gotowy punkt świata (`x`, `y`)
  * plus kierunek ściany/krawędzi w tym miejscu (`angle`), a nie jako indeks
  * segmentu + parametr t — dzięki temu rysowanie glifu nie wymaga ponownego
  * przeliczania geometrii przy każdym renderze.

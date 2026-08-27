@@ -10,7 +10,6 @@ import {
   GRID,
   defaultOpeningWidth,
   DEFAULT_DOOR_WIDTH_CM,
-  DEFAULT_WINDOW_WIDTH_CM,
   DEFAULT_OPENING_WIDTH_UNITS,
 } from "./design";
 
@@ -96,23 +95,16 @@ describe("planSizeForImage", () => {
 
 describe("defaultOpeningWidth", () => {
   it("bez skali spada na stały fallback w jednostkach planu", () => {
-    expect(defaultOpeningWidth("drzwi", null)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
-    expect(defaultOpeningWidth("okno", null)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
+    expect(defaultOpeningWidth(null)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
   });
 
   it("ze skalą przelicza realne centymetry na jednostki planu", () => {
     const mpu = 0.05; // 1 jedn. = 5 cm — MANUAL_DRAW_SCALE_MPU
-    expect(defaultOpeningWidth("drzwi", mpu)).toBeCloseTo(DEFAULT_DOOR_WIDTH_CM / 100 / mpu, 6);
-    expect(defaultOpeningWidth("okno", mpu)).toBeCloseTo(DEFAULT_WINDOW_WIDTH_CM / 100 / mpu, 6);
-  });
-
-  it("okno jest szersze niż drzwi przy tej samej skali", () => {
-    const mpu = 0.02;
-    expect(defaultOpeningWidth("okno", mpu)).toBeGreaterThan(defaultOpeningWidth("drzwi", mpu));
+    expect(defaultOpeningWidth(mpu)).toBeCloseTo(DEFAULT_DOOR_WIDTH_CM / 100 / mpu, 6);
   });
 
   it("nieprawidłowa skala (0 lub ujemna) też spada na fallback", () => {
-    expect(defaultOpeningWidth("drzwi", 0)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
-    expect(defaultOpeningWidth("drzwi", -1)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
+    expect(defaultOpeningWidth(0)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
+    expect(defaultOpeningWidth(-1)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
   });
 });

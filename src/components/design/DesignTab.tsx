@@ -21,7 +21,7 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, OpeningKind, Point } from "@/types";
+import type { ElementType, Point } from "@/types";
 import { computeSanitaryZones, NO_ROOM, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import {
@@ -88,11 +88,6 @@ const PAS_WYZWALAJACY = 24;
 const ROOM_MODES: { id: RoomDrawMode; label: string; hint: string }[] = [
   { id: "prostokat", label: "Prostokąt", hint: "przytrzymaj lewy przycisk i przeciągnij" },
   { id: "wielobok", label: "Wielobok", hint: "klikaj kolejne narożniki, na koniec kliknij w pierwszy" },
-];
-
-const OPENING_MODES: { id: OpeningKind; label: string }[] = [
-  { id: "drzwi", label: "Drzwi" },
-  { id: "okno", label: "Okno" },
 ];
 
 /** Klucz w localStorage: użytkownik już raz odrzucił prompt „zabezpiecz kontem"
@@ -271,10 +266,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [orthoWalls, setOrthoWalls] = useState(false);
   const [drawingRoomPoints, setDrawingRoomPoints] = useState<Point[]>([]);
   const [roomMode, setRoomMode] = useState<RoomDrawMode>("prostokat");
-  /** Rodzaj otworu stawianego kolejnym kliknięciem w ścianę — jak `roomMode` dla
-   *  pomieszczeń, ale bez osobnego stanu „w trakcie rysowania": otwór powstaje
-   *  od razu jednym kliknięciem, nie serią punktów. */
-  const [openingKind, setOpeningKind] = useState<OpeningKind>("drzwi");
   const [pendingRoom, setPendingRoom] = useState<{ points: Point[]; name: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calibPoints, setCalibPoints] = useState<Point[]>([]);
@@ -791,7 +782,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setDraft((d) => ({ ...d, walls: d.walls.map((w) => (w.id === id ? { ...w, thickness } : w)) }));
   }
 
-  /** Dokłada drzwi/okno w miejscu kliknięcia w ścianę (`point`/`angle` już
+  /** Dokłada drzwi w miejscu kliknięcia w ścianę (`point`/`angle` już
    *  policzone w DesignCanvas — patrz `nearestPointOnPolyline`). Podobnie jak
    *  ściany, otwory nie mają własnych akcji w store — jeden `setDraft`.
    *
@@ -806,7 +797,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       ...d,
       openings: [
         ...d.openings,
-        { id, floor: activeFloorId, wallId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(openingKind, mpu), kind: openingKind },
+        { id, floor: activeFloorId, wallId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(mpu), kind: "drzwi" },
       ],
     }));
     setSelected({ kind: "opening", id });
@@ -815,14 +806,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
 
   /** Klik w krawędź pomieszczenia w trybie „otwory" — ten sam wzorzec co
    *  `handleWallClickForOpening`, tylko `roomId` zamiast `wallId`: pomieszczenia
-   *  narysowane bez osobnej ściany inaczej w ogóle nie miałyby jak dostać drzwi/okna. */
+   *  narysowane bez osobnej ściany inaczej w ogóle nie miałyby jak dostać drzwi. */
   function handleRoomEdgeClickForOpening(roomId: string, point: Point, angle: number) {
     const id = crypto.randomUUID();
     setDraft((d) => ({
       ...d,
       openings: [
         ...d.openings,
-        { id, floor: activeFloorId, roomId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(openingKind, mpu), kind: openingKind },
+        { id, floor: activeFloorId, roomId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(mpu), kind: "drzwi" },
       ],
     }));
     setSelected({ kind: "opening", id });
@@ -1552,31 +1543,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           className={pelnyEkran ? "h-full w-full p-2" : undefined}
           style={pelnyEkran ? undefined : { flex: "1 1 480px", minWidth: 320 }}
         >
-          {/* Wybór drzwi/okno stoi TUŻ NAD płótnem, do którego się odnosi — nie w
-              ogólnym pasku kontrolek nad całym układem (tam, gdzie „Kształt:"
-              pomieszczenia czy „Grubość:" ściany), żeby było jasne, że dotyczy
-              samego rysowania na planie, a nie np. panelu narzędzi obok. Widoczny
-              przez cały tryb „Drzwi / Okno", nie tylko w trakcie stawiania —
-              otwór powstaje jednym kliknięciem, więc nie ma tu odpowiednika
-              „N pkt./Zakończ" jak przy ścianach/pomieszczeniach. */}
-          {toolMode === "otwory" && (
-            <div className="mb-2 flex items-center gap-2 text-xs">
-              <span className="text-slate-500">Rodzaj:</span>
-              <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
-                {OPENING_MODES.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    onClick={() => setOpeningKind(id)}
-                    className="rounded-md px-2 py-1 text-xs"
-                    style={openingKind === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <span className="text-slate-400">kliknij ścianę, żeby postawić otwór</span>
-            </div>
-          )}
           <DesignCanvas
             stageRef={stageRef}
             elements={elements}
