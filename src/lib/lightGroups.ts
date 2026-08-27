@@ -1,5 +1,5 @@
 import type { ElementType, InstallationElement, Point } from "@/types";
-import { ELEMENT_TYPES, NO_ROOM } from "./elements";
+import { ELEMENT_TYPES } from "./elements";
 
 /**
  * Grupy sterowania oświetleniem — kojarzą łączniki z punktami świetlnymi, którymi
@@ -104,10 +104,13 @@ export function computeLightGroups(elements: InstallationElement[]): Map<string,
   });
   const isManual = (e: InstallationElement, circuit: number) => manualOf.get(e.id)![circuit] != null;
 
-  const auto = elements.filter((e) => e.room !== NO_ROOM);
-
+  // Elementy bez rozpoznanego pomieszczenia (NO_ROOM) NIE są tu odsiewane — trafiają do
+  // grupowania jako jeden wspólny „pokój" na kondygnację, po prostu z kluczem NO_ROOM.
+  // Bez tego numeracja w ogóle nie działała, dopóki użytkownik nie narysował pomieszczeń
+  // (albo dla elementów postawionych poza obrysem pokoju) — całkowita cisza była gorszym
+  // wynikiem niż dopasowanie do najbliższego łącznika/lampy bez znajomości ścian.
   const byFloor = new Map<string, InstallationElement[]>();
-  auto.forEach((e) => {
+  elements.forEach((e) => {
     const list = byFloor.get(e.floor) ?? [];
     list.push(e);
     byFloor.set(e.floor, list);

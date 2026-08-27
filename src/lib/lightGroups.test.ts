@@ -49,9 +49,17 @@ describe("computeLightGroups", () => {
     expect(computeLightGroups([sw, light]).size).toBe(0);
   });
 
-  it("pomija elementy bez przypisanego pomieszczenia", () => {
+  it("łączy elementy bez przypisanego pomieszczenia — NO_ROOM to wspólny „pokój”, nie odsiew", () => {
     const sw = el("wlacznik", 10, 10, NO_ROOM);
     const light = el("oswietlenie", 50, 50, NO_ROOM);
+    const g = computeLightGroups([sw, light]);
+    expect(one(g, sw.id)).toBe(1);
+    expect(one(g, light.id)).toBe(1);
+  });
+
+  it("nie łączy elementu bez pomieszczenia z elementem w rozpoznanym pomieszczeniu", () => {
+    const sw = el("wlacznik", 10, 10, NO_ROOM);
+    const light = el("oswietlenie", 50, 50, "Salon");
     expect(computeLightGroups([sw, light]).size).toBe(0);
   });
 

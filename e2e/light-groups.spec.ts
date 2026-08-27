@@ -12,8 +12,10 @@ async function planBox(page: import("@playwright/test").Page) {
   return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
 }
 
-/** Rysuje prostokątne pomieszczenie, żeby elementy dostały nazwę pokoju (bez niej
- *  grupowanie jest celowo wyłączone — patrz NO_ROOM w lib/lightGroups.ts). */
+/** Rysuje prostokątne pomieszczenie, żeby elementy dostały nazwę pokoju — potrzebne
+ *  tam, gdzie test celowo sprawdza dwa RÓŻNE pokoje. Samo grupowanie działa też bez
+ *  pomieszczenia (patrz test „…bez narysowanego pomieszczenia" niżej i NO_ROOM w
+ *  lib/lightGroups.ts). */
 async function drawRoom(page: import("@playwright/test").Page, x1: number, y1: number, x2: number, y2: number) {
   // Płótno mierzymy DOPIERO po przełączeniu narzędzia: wejście w tryb „Pomieszczenie"
   // dokłada do paska wybór kształtu, co zsuwa płótno w dół. Pomiar zrobiony wcześniej
@@ -121,6 +123,33 @@ test("łącznik i światło w jednym pomieszczeniu dostają ten sam numer na pla
   const els = await groups(page);
   expect(els).toHaveLength(2);
   expect(els.every((e: { manual: number | null }) => e.manual === null)).toBe(true);
+});
+
+test("łącznik i światło numerują się też bez narysowanego pomieszczenia", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+
+  // Celowo BEZ drawRoom — elementy lądują z room = NO_ROOM ("Bez pomieszczenia").
+  // Wcześniej numeracja w tym wypadku w ogóle się nie uruchamiała.
+  await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
+  await place(page, /Łącznik jednobiegunowy/, 100, 80);
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  await place(page, /Punkt sufitowy/, 300, 210);
+
+  const badges = await page.evaluate(() => {
+    const konva = (window as unknown as { Konva?: { stages: { find(sel: string): { text(): string }[] }[] } }).Konva;
+    const stage = konva?.stages?.[0];
+    if (!stage) return null;
+    return stage
+      .find("Text")
+      .map((t) => t.text())
+      .filter((t) => /^\d+$/.test(t));
+  });
+  expect(badges).not.toBeNull();
+  expect(badges!).toHaveLength(2); // po jednej cyfrze przy łączniku i przy punkcie
+  expect(new Set(badges!).size).toBe(1); // i jest to TA SAMA cyfra
 });
 
 test("ręczna zmiana grupy z okna edycji nadpisuje automat", async ({ page }) => {
