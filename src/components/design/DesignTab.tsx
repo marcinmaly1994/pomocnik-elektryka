@@ -165,9 +165,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
   const moveRoomShapePoint = useProjectStore((s) => s.moveRoomShapePoint);
   const removeElements = useProjectStore((s) => s.removeElements);
-  const undo = useProjectStore((s) => s.undo);
+  const cofnijZatwierdzone = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
-  const canUndo = useProjectStore((s) => s.past.length > 0);
+  const maZatwierdzoneDoCofniecia = useProjectStore((s) => s.past.length > 0);
   const canRedo = useProjectStore((s) => s.future.length > 0);
   const bgImageUrl = useProjectStore((s) => s.bgImages[s.activeFloorId] ?? null);
   const setBgImage = useProjectStore((s) => s.setBgImage);
@@ -278,6 +278,16 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [pendingRoom, setPendingRoom] = useState<{ points: Point[]; name: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calibPoints, setCalibPoints] = useState<Point[]>([]);
+  /** Potwierdzenie tuż po zatwierdzeniu skali — znika razem z pigułką narzędzia
+   *  kalibracji (`toolMode` wraca do „zaznacz"), więc bez tego wynik był widoczny
+   *  wyłącznie w drobnym pasku stanu POD całym płótnem. Kto właśnie podał wymiar,
+   *  patrzy w to miejsce na górze, nie w dół strony. */
+  const [skalaPotwierdzenie, setSkalaPotwierdzenie] = useState<string | null>(null);
+  useEffect(() => {
+    if (!skalaPotwierdzenie) return;
+    const t = setTimeout(() => setSkalaPotwierdzenie(null), 4000);
+    return () => clearTimeout(t);
+  }, [skalaPotwierdzenie]);
   const [showZones, setShowZones] = useState(true);
   // Skala samych symboli na planie (nie powiększenie widoku) — ustawienie widoku, więc
   // stan lokalny jak snapOn/showZones, a nie część zapisywanego projektu.
@@ -625,6 +635,34 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setContextMenu({ x, y, kind: "room", id, multi: false });
   }
 
+  /**
+   * „Cofnij” świadomy tego, co się właśnie rysuje.
+   *
+   * Historia (`past`/`future` w store) zna tylko ZATWIERDZONE zmiany — ściana czy
+   * pomieszczenie trafiają do niej dopiero w `finishWall`/`finishRoomDrawing`. Punkty
+   * postawione W TRAKCIE rysowania żyją w lokalnym stanie (`drawingWall`,
+   * `drawingRoomPoints`) i historia o nich nic nie wie. Efekt: kto postawił trzeci
+   * narożnik przez pomyłkę i sięgnął po „Cofnij”, trafiał na WYŁĄCZONY przycisk —
+   * bo z punktu widzenia historii nie było jeszcze niczego do cofnięcia, choć na
+   * ekranie stał świeżo postawiony punkt.
+   *
+   * Cofnięcie ostatniego postawionego punktu ma więc PIERWSZEŃSTWO przed cofnięciem
+   * zatwierdzonej zmiany — dokładnie w kolejności, w jakiej użytkownik naciskał klawisze.
+   */
+  const wTrakcieRysowania = drawingWall.length > 0 || drawingRoomPoints.length > 0;
+  const canUndo = wTrakcieRysowania || maZatwierdzoneDoCofniecia;
+  function undo() {
+    if (drawingWall.length > 0) {
+      setDrawingWall((pts) => pts.slice(0, -1));
+      return;
+    }
+    if (drawingRoomPoints.length > 0) {
+      setDrawingRoomPoints((pts) => pts.slice(0, -1));
+      return;
+    }
+    cofnijZatwierdzone();
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
@@ -668,6 +706,16 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       if (e.key === "Enter" && drawingWall.length >= 2 && tag !== "INPUT" && tag !== "TEXTAREA") {
         e.preventDefault();
         finishWall();
+      }
+      // Ctrl/Cmd+Z jak wszędzie indziej — idzie przez ten sam wrapper `undo()` co
+      // przycisk „Cofnij”, więc mid-draw usuwa ostatni punkt tak samo jak przycisk.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (canRedo) redo();
+        } else if (canUndo) {
+          undo();
+        }
       }
     }
     window.addEventListener("keydown", onKey);
@@ -1128,11 +1176,13 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       <div
         className={
           pelnyEkran
-            ? "absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-border bg-white/95 px-2.5 py-1.5 shadow-lg backdrop-blur transition-[top] duration-200 empty:hidden"
-            // `empty:hidden` także w zwykłym widoku: bez tego pusty rząd o zerowej
-            // wysokości i tak zbierał margines z obu stron i wstawiał 32 px pustki
-            // między pasek a płótno.
-            : "flex flex-wrap items-center gap-3 empty:hidden"
+            ? "absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-3 py-2 shadow-lg backdrop-blur transition-[top] duration-200 empty:hidden"
+            : // Wcześniej: gołe `flex`, bez tła i obramowania — komunikaty w środku
+              // (np. wybór kształtu pomieszczenia, podpowiedź „klikaj kolejne
+              // narożniki") tonęły w bieli strony i realnie NIE BYŁY WIDOCZNE, mimo
+              // że technicznie się renderowały. Ta sama karta co w pełnym ekranie:
+              // to jest okno robocze aktywnego narzędzia, więc ma tak wyglądać.
+              "flex flex-wrap items-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF] px-3 py-2 shadow-sm empty:hidden"
         }
         // Odsłonięty pasek edytora zajmuje górę okna — pigułka zjeżdża wtedy pod niego,
         // zamiast się z nim nakładać.
@@ -1177,10 +1227,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         )}
 
         {drawingWall.length > 0 && (
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500">Rysowanie ściany: {drawingWall.length} pkt.</span>
-            <button onClick={finishWall} className="pe-btn-ghost px-2 py-1">Zakończ</button>
-            <button onClick={() => setDrawingWall([])} className="pe-btn-ghost px-2 py-1">Anuluj</button>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium text-slate-600">Rysowanie ściany: {drawingWall.length} pkt.</span>
+            <button onClick={finishWall} className="pe-btn-ghost px-2.5 py-1 text-sm">Zakończ</button>
+            <button onClick={() => setDrawingWall([])} className="pe-btn-ghost px-2.5 py-1 text-sm">Anuluj</button>
           </div>
         )}
 
@@ -1212,8 +1262,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
             poza nim byłby tylko szumem w pasku narzędzi. */}
         {toolMode === "pomieszczenie" && (
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500">Kształt:</span>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium text-slate-600">Kształt:</span>
             <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
               {ROOM_MODES.map(({ id, label, hint }) => (
                 <button
@@ -1223,26 +1273,26 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                     setDrawingRoomPoints([]); // zmiana trybu przerywa figurę zaczętą w poprzednim
                   }}
                   title={hint}
-                  className="rounded-md px-2 py-1 text-xs"
+                  className="rounded-md px-2.5 py-1 text-sm"
                   style={roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
                 >
                   {label}
                 </button>
               ))}
             </div>
-            <span className="text-slate-400">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
+            <span className="text-slate-500">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
           </div>
         )}
         {drawingRoomPoints.length > 0 && (
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium text-slate-600">
               {drawingRoomPoints.length} pkt.
               {drawingRoomPoints.length >= 3 && " — kliknij w pierwszy punkt, aby zamknąć"}
             </span>
             {drawingRoomPoints.length >= 3 && (
-              <button onClick={finishRoomDrawing} className="pe-btn-ghost px-2 py-1">Zakończ</button>
+              <button onClick={finishRoomDrawing} className="pe-btn-ghost px-2.5 py-1 text-sm">Zakończ</button>
             )}
-            <button onClick={() => setDrawingRoomPoints([])} className="pe-btn-ghost px-2 py-1">Anuluj</button>
+            <button onClick={() => setDrawingRoomPoints([])} className="pe-btn-ghost px-2.5 py-1 text-sm">Anuluj</button>
           </div>
         )}
         {toolMode === "skala" && (
@@ -1255,10 +1305,20 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               setCalibPoints([]);
               setToolMode("zaznacz");
               dismissScaleStale();
+              setSkalaPotwierdzenie(`Skala ustawiona: 1 jedn. = ${(metersPerUnit * 100).toFixed(1).replace(".", ",")} cm`);
             }}
             onCancel={() => setCalibPoints([])}
             onClear={() => clearScale(activeFloorId)}
           />
+        )}
+        {/* Znika po 4 s albo przy następnej akcji, która coś tu wstawi (patrz
+            `empty:hidden` wyżej) — to jedyny komunikat w tej pigułce, który sam się
+            chowa, bo nie odpowiada żadnemu aktywnemu narzędziu; zostawiony na stałe
+            wisiałby nad planem bez powodu. */}
+        {skalaPotwierdzenie && toolMode !== "skala" && (
+          <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "#2C6B4A" }}>
+            <Check size={15} /> {skalaPotwierdzenie}
+          </span>
         )}
       </div>
 
@@ -1327,12 +1387,15 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           // wisiałyby na planie i doklejałyby się po powrocie do rysowania.
           if (id !== "pomieszczenie") setDrawingRoomPoints([]);
           if (id !== "sciany") setDrawingWall([]);
-          // Pasek wybiera NARZĘDZIE, nie zawartość panelu obok. Automatyczne
-          // przełączanie panelu na listę pomieszczeń chowało bibliotekę elementów
-          // dokładnie w momencie, w którym typowo się jej używa: zaraz po obrysowaniu
-          // pokoju stawia się w nim gniazdka. Panel zostaje pod kontrolą użytkownika;
-          // przewodnik onboardingu przełącza go świadomie (patrz handleStepAction).
           setToolMode(id);
+          // Zakładka panelu ma pokazywać zawartość ZGODNĄ z wybranym narzędziem —
+          // „Wstaw element” podświetla „Elementy”, „Obrysuj pomieszczenie” podświetla
+          // „Pomieszczenia”. Wcześniej pasek zmieniał tylko narzędzie i zostawiał
+          // zakładkę bez zmian, więc po przejściu z jednego narzędzia na drugie w
+          // panelu nadal stała treść od poprzedniego wyboru — myląco, bo z boku
+          // wyglądało to na niedziałający przycisk.
+          if (id === "elementy") setSidebarTab("elementy");
+          if (id === "pomieszczenie") setSidebarTab("pomieszczenia");
           // Sięgnięcie po narzędzie, które karmi się panelem, rozwija go, jeśli był
           // zwinięty. W drugą stronę NIE działa: żadne narzędzie panelu nie zamyka.
           if (id === "elementy" || id === "pomieszczenie") rozwinPanel();

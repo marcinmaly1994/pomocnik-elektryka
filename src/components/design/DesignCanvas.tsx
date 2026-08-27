@@ -284,6 +284,15 @@ export function DesignCanvas({
   const marqueeRectRef = useRef<MarqueeRect | null>(null);
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const groupDragRef = useRef<{ ids: string[]; start: Record<string, Point>; draggedId: string } | null>(null);
+  /**
+   * Konva po zakończeniu przeciągnięcia elementu i tak wysyła Stage'owi zdarzenie
+   * „click” (drag suszy shape'owi jego WŁASNY click, ale Stage śledzi start/koniec
+   * gestu niezależnie) — bez tej straży `handleStageClick` w trybie „Wstaw element”
+   * traktował puszczenie przeciąganego elementu jak kliknięcie w puste miejsce i
+   * stawiał tam DRUGI element. Ustawiane w `onDragEnd`, gaszone przy najbliższym
+   * kliknięciu Stage'a (jednorazowo — nie ma znaczyć „zawsze ignoruj kliknięcia”).
+   */
+  const elementDragJustEndedRef = useRef(false);
 
   // Prostokąt pomieszczenia rysowany przeciągnięciem — ta sama para ref+stan co przy
   // zaznaczaniu prostokątem wyżej i z tego samego powodu (React batchuje stan między
@@ -455,6 +464,14 @@ export function DesignCanvas({
   }
 
   function handleStageClick(e: KonvaEventObject<MouseEvent>) {
+    // Patrz komentarz przy `elementDragJustEndedRef`: to zdarzenie „click” jest
+    // ECHEM zakończonego przeciągnięcia elementu, nie nowym kliknięciem — gasimy
+    // flagę i kończymy, zanim narzędzie „elementy” zdąży postawić drugi element
+    // dokładnie tam, gdzie przeciągany właśnie wylądował.
+    if (elementDragJustEndedRef.current) {
+      elementDragJustEndedRef.current = false;
+      return;
+    }
     // Konva synteryzuje własne zdarzenie „click" na mousedown+mouseup na tym samym
     // celu NIEZALEŻNIE od przycisku myszy — bez tej straży PPM otwierające menu
     // zatwierdzenia ściany (`handleStageContextMenu`) dokładał RÓWNOCZEŚNIE nowy
@@ -1130,7 +1147,16 @@ export function DesignCanvas({
                 rotation={el.rotation ?? 0}
                 scaleX={elementScale}
                 scaleY={elementScale}
-                draggable={toolMode === "zaznacz"}
+                // Przeciąganie działa też w narzędziu „Wstaw element” — kliknięcie na
+                // JUŻ POSTAWIONY element (gniazdko, łącznik…) w tym trybie tylko go
+                // zaznacza (patrz `onClick` niżej, `cancelBubble` gasi kliknięcie
+                // stawiające NOWY element), więc przeciąganie tu nie koliduje z
+                // niczym. Bez tego drobna korekta pozycji wymagała przełączenia się
+                // na „Zaznacz” i z powrotem — dwa kliknięcia na jeden mały ruch.
+                // Pozostałe narzędzia (ściany, pomieszczenia…) zostają wyłączone:
+                // tam przeciąganie elementu kolidowałoby z klikaniem kolejnych
+                // punktów rysowanej figury.
+                draggable={toolMode === "zaznacz" || toolMode === "elementy"}
                 onMouseDown={(e) => {
                   e.cancelBubble = true;
                 }}
@@ -1175,6 +1201,7 @@ export function DesignCanvas({
                   });
                 }}
                 onDragEnd={(e) => {
+                  elementDragJustEndedRef.current = true;
                   const group = groupDragRef.current;
                   groupDragRef.current = null;
                   if (group) {

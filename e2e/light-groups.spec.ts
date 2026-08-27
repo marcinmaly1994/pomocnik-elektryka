@@ -33,9 +33,19 @@ async function drawRoom(page: import("@playwright/test").Page, x1: number, y1: n
   await page.mouse.move(box.x + x2, box.y + y2, { steps: 6 });
   await page.mouse.up();
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  // Zakładka panelu podąża za wybranym narzędziem — po „Narysuj Pomieszczenie” panel
+  // biblioteki elementów jest schowany. Każde wywołanie tego helpera w tym pliku
+  // kończy się od razu stawianiem elementów w narysowanym pomieszczeniu, więc powrót
+  // do „Wstaw Element” należy tu, a nie osobno przy każdym wywołaniu.
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
 }
 
 async function place(page: import("@playwright/test").Page, name: RegExp, x: number, y: number) {
+  // Zakładka panelu podąża teraz za wybranym narzędziem (Pomieszczenia po „Obrysuj
+  // pomieszczenie”, Elementy po „Wstaw element”) — po narysowaniu pomieszczenia panel
+  // biblioteki elementów jest więc SCHOWANY, dopóki jawnie nie wrócimy do „Wstaw
+  // Element”. Bez tego kliknięcia przycisk z nazwą elementu w ogóle nie istnieje w DOM.
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
   // Wybór elementu przełącza narzędzie na „Elementy", co ZWIJA pasek wyboru kształtu i
   // podnosi płótno z powrotem o ~46 px. Dlatego mierzymy je dopiero po kliknięciu w
   // bibliotekę — pomiar wcześniejszy przesuwał wszystkie elementy w dół względem

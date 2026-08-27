@@ -130,6 +130,9 @@ test("zaznaczanie obszarem nadal działa po dodaniu krawędzi klikalnej pomieszc
   const box0 = await openPlan(page);
   await drawRoom(page, box0);
 
+  // Zakładka panelu podąża za wybranym narzędziem — po „Obrysuj pomieszczenie” panel
+  // biblioteki elementów jest schowany, dopóki jawnie nie wrócimy do „Wstaw Element”.
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   // scrollTo(0,0) tuż PRZED pomiarem, nie przed kliknięciem: klik zmieniający
   // narzędzie sam potrafi przesunąć stronę, więc dopiero pomiar PO nim (z jawnym

@@ -235,21 +235,26 @@ function ProjectNameField() {
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="rounded border border-copper/40 bg-white px-1.5 py-0.5 text-sm font-medium text-slate-700 outline-none focus:border-copper"
-        style={{ width: "16ch" }}
+        className="rounded border border-copper/40 bg-white px-2 py-0.5 text-base font-semibold text-ink outline-none focus:border-copper"
+        style={{ width: "18ch" }}
         aria-label="Nazwa projektu"
       />
     );
   }
 
   return (
+    // Nazwa projektu to GŁÓWNY identyfikator tego, nad czym się pracuje — wcześniej
+    // stała tym samym bladym `text-sm text-slate-600` co reszta drobnego chrome'u
+    // nagłówka (etykieta „Projekt:”, ikonki), więc ginęła w tle mimo bycia
+    // najważniejszą informacją w tym rzędzie. `text-base font-semibold text-ink`
+    // to ta sama waga, jaką dostają nagłówki sekcji (`pe-display`) w reszcie apki.
     <button
       onClick={() => setEditing(true)}
-      className="group flex items-center gap-1 rounded px-1.5 py-0.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+      className="group flex items-center gap-1.5 rounded px-2 py-0.5 text-base font-semibold text-ink hover:bg-slate-100"
       title="Zmień nazwę projektu"
     >
       {projectName}
-      <Pencil size={11} className="text-slate-300 group-hover:text-slate-400" />
+      <Pencil size={13} className="text-slate-400 group-hover:text-slate-600" />
     </button>
   );
 }

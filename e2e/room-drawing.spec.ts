@@ -140,6 +140,9 @@ test("zaznaczanie obszarem działa, gdy start jest wewnątrz narysowanego pomies
   await page.mouse.up();
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
 
+  // Zakładka panelu podąża za wybranym narzędziem — po „Obrysuj pomieszczenie” panel
+  // biblioteki elementów jest schowany, dopóki jawnie nie wrócimy do „Wstaw Element”.
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
