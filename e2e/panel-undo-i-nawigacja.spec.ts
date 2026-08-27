@@ -44,7 +44,7 @@ test("Rozdzielnica: „Cofnij”/„Ponów” działają niezależnie od cofania
   await expect(page.getByRole("heading", { name: "Aparaty (2)" })).toBeVisible();
 });
 
-test("duży przycisk „Dalej” prowadzi po kolei przez wszystkie kroki", async ({ page }) => {
+test("przycisk „Dalej” prowadzi po kolei przez wszystkie kroki", async ({ page }) => {
   await page.goto("/");
 
   const dalej = page.getByRole("button", { name: /^Dalej:/ });

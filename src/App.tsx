@@ -591,10 +591,10 @@ export default function App() {
         return (
           <button
             onClick={() => setTab(nastepny.id)}
-            className="fixed bottom-6 right-6 z-30 flex items-center gap-2 rounded-full bg-copper px-5 py-3.5 text-base font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90"
+            className="fixed bottom-5 right-5 z-30 flex items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90"
           >
             Dalej: {nastepny.tytul}
-            <ArrowRight size={19} />
+            <ArrowRight size={15} />
           </button>
         );
       })()}
