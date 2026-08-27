@@ -56,6 +56,9 @@ const Y_SPD_BOTTOM = Y_BUS + SPD_H;
 const Y_SPD_GROUND = Y_SPD_BOTTOM + 12;
 
 const MCB_LABEL_DX = labelOffset(GLYPHS.mcb, Y_SUBBUS, Y_MCB_BOTTOM);
+// Odsunięcie etykiety przy symbolu zastępczym (GLYPHS.generic) — liczone osobno, bo ta
+// ramka jest węższa niż glif MCB, więc ten sam MCB_LABEL_DX zostawiałby zbędną pustkę.
+const GENERIC_LABEL_DX = labelOffset(GLYPHS.generic, Y_SUBBUS, Y_MCB_BOTTOM);
 
 // Tabela odpływów końcowych pod schematem — tylko obwody (nie W1/SPD/RCD), każda
 // komórka dokładnie pod swoją gałęzią powyżej (te same współrzędne x co CircuitBranch).
@@ -255,24 +258,43 @@ function PeTaps({ columns }: { columns: Column[] }) {
   );
 }
 
+/**
+ * Czy aparat rysujemy jako gałąź odpływową pod szyną (MCB, RCBO, stycznik, lampka…).
+ * Wyklucza aparaty, które mają już własne, osobne miejsce na schemacie (main/spd/rcd)
+ * oraz `blank` — zaślepka nie jest prawdziwym aparatem, nie ma czego rysować. Wcześniej
+ * ten filtr sprawdzał wyłącznie `kind === "mcb"`, więc cały reszta katalogu (stycznik,
+ * przekaźnik, zasilacz, lampka, CZF, rozłącznik ppoż, RCBO…) po prostu znikała ze
+ * schematu bez żadnego ostrzeżenia.
+ */
+function jestOdplywem(d: PanelDevice): boolean {
+  return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank";
+}
+
 /** Jeden obwód odbiorczy: wyłącznik nadprądowy (symbol MCB użytkownika), znacznik przewodu i nazwa odbiornika. */
 function CircuitBranch({ x, device }: { x: number; device: PanelDevice }) {
+  // Tylko wyłącznik nadprądowy ma symbol odwzorowany z pliku CAD — reszta katalogu
+  // (stycznik, przekaźnik, zasilacz, lampka, CZF, rozłącznik ppoż…) dostaje na razie
+  // symbol zastępczy (patrz komentarz przy GLYPHS.generic w deviceGlyphs.tsx), żeby nic
+  // już nie znikało po cichu ze schematu, tak jak wcześniej.
+  const isMcb = device.kind === "mcb";
+  const spec = isMcb ? GLYPHS.mcb : GLYPHS.generic;
+  const labelDx = isMcb ? MCB_LABEL_DX : GENERIC_LABEL_DX;
   return (
     <g id={`circuit-${device.tag}`}>
-      <CadGlyph spec={GLYPHS.mcb} x={x} top={Y_SUBBUS} bottom={Y_MCB_BOTTOM} />
+      <CadGlyph spec={spec} x={x} top={Y_SUBBUS} bottom={Y_MCB_BOTTOM} />
       <line x1={x} y1={Y_MCB_BOTTOM} x2={x} y2={Y_WIRE_END} stroke={STROKE} strokeWidth={LINE_W} />
 
       {/* Tag i wartość zabezpieczenia (B10/B16…) stoją RAZEM z prawej strony symbolu —
           tag nad wartością, tak jak przy pozostałych aparatach (RcdBranch, SpdBranch,
           MainSwitch). Wcześniej tag wisiał osobno nad glifem, a wartość osobno obok,
-          więc nie czytało się ich jako pary. Obie linie odsunięte o MCB_LABEL_DX od osi
+          więc nie czytało się ich jako pary. Obie linie odsunięte o labelDx od osi
           przewodu, żeby ominąć najszerszy punkt glifu (strzałka wyzwalacza sięga ok.
           +20px od osi na tej wysokości) — żadna już nie leży na przewodzie, więc bez
           białej „poświaty" pod spodem (była potrzebna tylko, gdy tag siedział na kresce). */}
-      <text x={x + MCB_LABEL_DX} y={Y_MCB_TOP + MCB_H / 2 - 4} fontSize={9.5} fontWeight={700} textAnchor="start" fill={STROKE}>
+      <text x={x + labelDx} y={Y_MCB_TOP + MCB_H / 2 - 4} fontSize={9.5} fontWeight={700} textAnchor="start" fill={STROKE}>
         {device.tag}
       </text>
-      <text x={x + MCB_LABEL_DX} y={Y_MCB_TOP + MCB_H / 2 + 8} fontSize={8.5} fontWeight={700} textAnchor="start" fill={MUTED}>
+      <text x={x + labelDx} y={Y_MCB_TOP + MCB_H / 2 + 8} fontSize={8.5} fontWeight={700} textAnchor="start" fill={MUTED}>
         {opisZBiegunami(device)}
       </text>
       {/* Nazwa odbiornika celowo NIE jest powtarzana tutaj — stoi w tabeli odpływów pod
@@ -510,14 +532,14 @@ export function SchemaTab() {
    */
   const rcdBlocks: RcdBlock[] = rcdDevices.map((rcd) => ({
     device: rcd,
-    mcbs: devices.filter((d) => d.kind === "mcb" && d.rcdTag === rcd.tag),
+    mcbs: devices.filter((d) => jestOdplywem(d) && d.rcdTag === rcd.tag),
   }));
 
   // Wyłączniki spoza zasięgu jakiejkolwiek różnicówki idą wprost z szyny głównej —
   // to normalny układ (np. obwód przeciwpożarowy), a wcześniej takie aparaty po
   // prostu znikały ze schematu.
   const pozaRcd = devices.filter(
-    (d) => d.kind === "mcb" && !rcdDevices.some((r) => r.tag === d.rcdTag)
+    (d) => jestOdplywem(d) && !rcdDevices.some((r) => r.tag === d.rcdTag)
   );
   if (pozaRcd.length) rcdBlocks.push({ device: undefined, mcbs: pozaRcd });
 

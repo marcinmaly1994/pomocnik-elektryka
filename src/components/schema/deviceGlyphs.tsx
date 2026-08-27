@@ -154,7 +154,34 @@ const RCD: GlyphSpec = {
   ),
 };
 
-export const GLYPHS = { mcb: MCB, main: MAIN_SWITCH, spd: SPD, rcd: RCD };
+/**
+ * Symbol zastępczy — dla rodzajów aparatów, których nikt jeszcze nie odwzorował z
+ * pliku CAD (stycznik, przekaźnik, zasilacz, lampka, czujnik zaniku faz, rozłącznik
+ * przeciwpożarowy…). Bez niego takie aparaty po prostu ZNIKAŁY ze schematu —
+ * `SchemaTab` rysował gałąź tylko dla `kind === "mcb"`, więc reszta katalogu nie
+ * miała czym się narysować i cichutko wypadała z rysunku.
+ *
+ * Przerywana ramka (zamiast ciągłej kreski jak w MCB/SPD/RCD) to CELOWY sygnał: ten
+ * prostokąt nie jest śladem prawdziwego symbolu z dokumentacji aparatu, tylko
+ * zastępczym oznaczeniem „tu coś stoi, ale kształtu jeszcze nie znamy". Podmiana na
+ * właściwy `GlyphSpec` (patrz komentarz na górze pliku) nie wymaga zmian poza tym
+ * plikiem — `CircuitBranch` w SchemaTab.tsx wybiera symbol po `device.kind`.
+ */
+const GENERIC: GlyphSpec = {
+  axisX: 50,
+  topY: 0,
+  bottomY: 100,
+  rightX: 68,
+  Paths: () => (
+    <GlyphGroup>
+      <path d="M50 0L50 30" />
+      <path d="M50 70L50 100" />
+      <rect x="32" y="30" width="36" height="40" rx="3" strokeDasharray="4 3" />
+    </GlyphGroup>
+  ),
+};
+
+export const GLYPHS = { mcb: MCB, main: MAIN_SWITCH, spd: SPD, rcd: RCD, generic: GENERIC };
 
 /**
  * Wstawia symbol na oś `x`, rozciągnięty dokładnie od `top` do `bottom`. Skala wynika
