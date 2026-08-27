@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Pencil, Plus, RotateCcw, Scissors, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import {
@@ -81,6 +81,15 @@ export function PanelTab() {
   const [podgladPaskow, setPodgladPaskow] = useState(false);
   const panelOverrides = useProjectStore((s) => s.panelOverrides);
   const setPanelOverrides = useProjectStore((s) => s.setPanelOverrides);
+  // Osobna, mniejsza historia cofnij/ponów TYLKO dla ręcznych zmian w rozdzielnicy —
+  // patrz obszerny komentarz przy `panelPast`/`panelFuture` w store. Jedyną drogą do
+  // cofnięcia było wcześniej „Odbuduj z rzutu”, które kasuje WSZYSTKO i liczy od
+  // zera — nieprzydatne, kiedy chce się cofnąć jedno kasowanie aparatu.
+  const commitPanelSnapshot = useProjectStore((s) => s.commitPanelSnapshot);
+  const panelUndo = useProjectStore((s) => s.panelUndo);
+  const panelRedo = useProjectStore((s) => s.panelRedo);
+  const panelCanUndo = useProjectStore((s) => s.panelPast.length > 0);
+  const panelCanRedo = useProjectStore((s) => s.panelFuture.length > 0);
 
   // Dobór normatywny: przekrój, zabezpieczenie, ΔU i Zs liczone z tablic PN-HD 60364
   // (src/lib/panel/sizing.ts) zamiast stałych wpisanych przy generowaniu obwodów.
@@ -143,10 +152,12 @@ export function PanelTab() {
   const phaseSpread = Math.round((maxPhase - Math.min(phaseLoad.L1, phaseLoad.L2, phaseLoad.L3)) * 10) / 10;
 
   function autoBalance() {
+    commitPanelSnapshot();
     setDevices((ds) => balancePhases(ds));
   }
 
   function removeDevice(uid: string) {
+    commitPanelSnapshot();
     setDevices((ds) => {
       const d = ds.find((x) => x.uid === uid);
       if (!d || d.kind === "main") return ds;
@@ -156,6 +167,7 @@ export function PanelTab() {
   }
 
   function moveDevice(uid: string, dir: -1 | 1) {
+    commitPanelSnapshot();
     setDevices((ds) => {
       const i = ds.findIndex((d) => d.uid === uid);
       const j = i + dir;
@@ -167,9 +179,11 @@ export function PanelTab() {
   }
 
   function resetLayout() {
+    commitPanelSnapshot();
     setHiddenKeys([]);
     // „Odbuduj z rzutu" znaczy właśnie tyle: wracamy do stanu wynikającego z planu,
-    // więc ręczne poprawki też idą precz. Ostrzega o tym podpowiedź przy przycisku.
+    // więc ręczne poprawki też idą precz. Ostrzega o tym podpowiedź przy przycisku —
+    // a gdyby to jednak była pomyłka, „Cofnij” przywraca stan sprzed odbudowy.
     setPanelOverrides({});
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
@@ -183,6 +197,7 @@ export function PanelTab() {
    * Aparat dodany ręcznie zmieniamy wprost — nic go nie odtwarza.
    */
   function zapiszEdycje(uid: string, zmiany: Partial<PanelDevice>) {
+    commitPanelSnapshot();
     const cel = devices.find((d) => d.uid === uid);
     if (cel && !cel.manual && cel.key) {
       setPanelOverrides({ ...panelOverrides, [cel.key]: { ...panelOverrides[cel.key], ...zmiany } });
@@ -193,6 +208,7 @@ export function PanelTab() {
   function addManualDevice() {
     const def = MANUAL_DEVICE_TYPES.find((t) => t.key === addForm.kind);
     if (!def) return;
+    commitPanelSnapshot();
     // SPD musi mieć tyle biegunów, ile przewodów fazowych i N dochodzi do rozdzielnicy
     // — dokładnie ten sam wzór, którym `buildPanelDevices` liczy rozłącznik główny.
     // Katalog trzyma 4P/4 moduły jako domyślny (typowy) wariant 3-fazowy; przy
@@ -311,20 +327,45 @@ export function PanelTab() {
             ))}
           </select>
         </label>
+        {/* Jedyną drogą do cofnięcia ręcznej zmiany (kasowanie aparatu, przesunięcie,
+            edycja) było wcześniej „Odbuduj z rzutu" — a to liczy WSZYSTKO od zera,
+            więc cofnięcie jednego kasowania kosztowało utratę reszty pracy. Ta para
+            ma WŁASNĄ, mniejszą historię (patrz `commitPanelSnapshot` w store) —
+            niezależną od cofania na planie w zakładce Instalacja. */}
+        <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-border p-0.5">
+          <button
+            onClick={panelUndo}
+            disabled={!panelCanUndo}
+            title="Cofnij ostatnią zmianę w rozdzielnicy"
+            aria-label="Cofnij"
+            className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30"
+          >
+            <Undo2 size={15} />
+          </button>
+          <button
+            onClick={panelRedo}
+            disabled={!panelCanRedo}
+            title="Ponów"
+            aria-label="Ponów"
+            className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30"
+          >
+            <Redo2 size={15} />
+          </button>
+        </div>
         {supply3f && (
-          <Button variant="ghost" size="sm" onClick={autoBalance} className="ml-auto">
+          <Button variant="ghost" size="sm" onClick={autoBalance}>
             Wyrównaj fazy
           </Button>
         )}
         {/* Nazwa mówi, SKĄD bierze się przeliczenie: z obwodów policzonych z rzutu.
             „Przelicz od nowa" nie zdradzało, że skasuje ręczne zmiany i odtworzy stan
-            z planu — a to jedyne działanie w tej zakładce, które potrafi wymazać pracę. */}
+            z planu. Też trafia na stos cofania (patrz `resetLayout`), więc pomyłkowe
+            kliknięcie da się cofnąć tak samo jak każdą inną zmianę. */}
         {!trybReczny && (
           <Button
             variant="ghost"
             size="sm"
             onClick={resetLayout}
-            className={supply3f ? "" : "ml-auto"}
             title="Odtwarza aparaty z obwodów policzonych z rzutu — ręczne zmiany zostaną nadpisane"
           >
             <RotateCcw size={13} /> Odbuduj z rzutu
@@ -420,7 +461,10 @@ export function PanelTab() {
             devices={devices}
             perRow={perRow}
             onDelete={removeDevice}
-            onMove={(from, to) => setDevices((ds) => przeniesAparat(ds, from, to))}
+            onMove={(from, to) => {
+              commitPanelSnapshot();
+              setDevices((ds) => przeniesAparat(ds, from, to));
+            }}
             onEdit={setEdytowany}
             sizing={sizingByDeviceKey}
           />

@@ -142,6 +142,15 @@ interface Draft {
 
 const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [] };
 
+/** Migawka do historii cofnij/ponów rozdzielnicy — trzy pola, które razem opisują to,
+ *  co użytkownik faktycznie edytuje ręcznie. Bez `panelTryb`/`panelConfig`: zmiana
+ *  trybu albo zasilania to przełącznik, nie edycja do cofnięcia. */
+interface PanelSnapshot {
+  devices: PanelDevice[];
+  hidden: string[];
+  overrides: Record<string, Partial<PanelDevice>>;
+}
+
 interface ProjectState {
   draft: Draft;
   floors: Floor[];
@@ -227,6 +236,26 @@ interface ProjectState {
   canUndo: () => boolean;
   canRedo: () => boolean;
   resetProject: () => void;
+
+  /**
+   * Osobna, mniejsza historia cofnij/ponów — WYŁĄCZNIE dla ręcznych zmian w
+   * rozdzielnicy (kasowanie aparatu, przenoszenie na szynie, edycja, „Wyrównaj fazy",
+   * „Odbuduj z rzutu"). Musi być osobna od `past`/`future` powyżej: te śledzą PLAN
+   * (`draft`), a aparaty w trybie „z rzutu" przeliczają się automatycznie przy KAŻDEJ
+   * zmianie planu — gdyby dzieliły jeden stos, każde postawione gniazdko zaśmiecałoby
+   * historię rozdzielnicy nieistotnym stanem pośrednim, a „Cofnij” w Rozdzielnicy
+   * cofałoby losowe przeliczenia zamiast ostatniej ręcznej decyzji użytkownika.
+   * Dlatego migawka trafia na stos wyłącznie przez jawne wywołanie
+   * `commitPanelSnapshot()` w miejscu, które faktycznie jest akcją użytkownika —
+   * nie przy każdym zapisie `panelDevices`.
+   */
+  panelPast: PanelSnapshot[];
+  panelFuture: PanelSnapshot[];
+  commitPanelSnapshot: () => void;
+  panelUndo: () => void;
+  panelRedo: () => void;
+  panelCanUndo: () => boolean;
+  panelCanRedo: () => boolean;
 
   /** Migawka danych projektu do zapisu (lokalnie lub w chmurze) — celowo bez
    *  historii cofnij/ponów i sesji/cloudId, które są stanem sesji, nie projektu. */
@@ -331,6 +360,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   past: [],
   future: [],
+  panelPast: [],
+  panelFuture: [],
 
   setDraft: (updater, opts) => {
     const commit = opts?.commit !== false;
@@ -387,6 +418,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       draft: emptyDraft,
       past: [],
       future: [],
+      panelPast: [],
+      panelFuture: [],
       bgImages: {},
       scales: {},
       prices: { ...DEFAULT_PRICES },
@@ -455,6 +488,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       onboarding: payload.onboarding || { ...INITIAL_ONBOARDING, pominiety: true },
       past: [],
       future: [],
+      panelPast: [],
+      panelFuture: [],
     }),
 
   setActiveFloorId: (id) => set({ activeFloorId: id }),
@@ -537,6 +572,48 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setPanelHidden: (keys) => set({ panelHidden: keys }),
   setPanelTryb: (tryb) => set({ panelTryb: tryb }),
   setPanelOverrides: (o) => set({ panelOverrides: o }),
+
+  // Patrz komentarz przy `panelPast`/`panelFuture` w interfejsie: osobny, mniejszy
+  // stos historii, wypełniany WYŁĄCZNIE jawnym wywołaniem `commitPanelSnapshot()`
+  // tuż PRZED ręczną zmianą — ten sam wzorzec co `commit: true` w `setDraft`, tylko
+  // bez automatycznego wyzwalania przy każdym zapisie (bo tu „każdy zapis" obejmuje
+  // też przeliczenia automatyczne z planu, których cofać nie wolno).
+  commitPanelSnapshot: () => {
+    const { panelDevices, panelHidden, panelOverrides } = get();
+    set((state) => ({
+      panelPast: [...state.panelPast, { devices: panelDevices, hidden: panelHidden, overrides: panelOverrides }],
+      panelFuture: [],
+    }));
+  },
+
+  panelUndo: () => {
+    const { panelPast, panelDevices, panelHidden, panelOverrides, panelFuture } = get();
+    if (panelPast.length === 0) return;
+    const prev = panelPast[panelPast.length - 1];
+    set({
+      panelDevices: prev.devices,
+      panelHidden: prev.hidden,
+      panelOverrides: prev.overrides,
+      panelPast: panelPast.slice(0, -1),
+      panelFuture: [{ devices: panelDevices, hidden: panelHidden, overrides: panelOverrides }, ...panelFuture],
+    });
+  },
+
+  panelRedo: () => {
+    const { panelFuture, panelDevices, panelHidden, panelOverrides, panelPast } = get();
+    if (panelFuture.length === 0) return;
+    const next = panelFuture[0];
+    set({
+      panelDevices: next.devices,
+      panelHidden: next.hidden,
+      panelOverrides: next.overrides,
+      panelFuture: panelFuture.slice(1),
+      panelPast: [...panelPast, { devices: panelDevices, hidden: panelHidden, overrides: panelOverrides }],
+    });
+  },
+
+  panelCanUndo: () => get().panelPast.length > 0,
+  panelCanRedo: () => get().panelFuture.length > 0,
 
   setPlanSize: (size) => set({ planSize: size }),
 

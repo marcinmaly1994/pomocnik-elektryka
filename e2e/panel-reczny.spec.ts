@@ -29,7 +29,7 @@ async function pustyProjekt(page: import("@playwright/test").Page) {
 
 test("bez rzutu można złożyć rozdzielnicę, a jej zawartość przeżywa odświeżenie", async ({ page }) => {
   await pustyProjekt(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
 
   // Start od samego rozłącznika głównego — pusta szyna kazałaby użytkownikowi
@@ -45,17 +45,17 @@ test("bez rzutu można złożyć rozdzielnicę, a jej zawartość przeżywa odś
   // czy zapis, który jeszcze nie wystartował, coś zapisał.
   await page.waitForTimeout(1200);
   await page.reload();
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Aparaty (2)" })).toBeVisible();
 });
 
 test("schemat jednokreskowy powstaje z ręcznie złożonej rozdzielnicy", async ({ page }) => {
   await pustyProjekt(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
-  await page.getByRole("button", { name: "Schemat" }).click();
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
   // Bez rzutu nie ma obwodów, więc schemat MUSI budować się z aparatów — inaczej
   // zostaje pusty ekran mimo gotowej rozdzielnicy.
   await expect(page.getByText(/Schemat powstaje z aparatów/)).toHaveCount(0);
@@ -65,7 +65,7 @@ test("schemat jednokreskowy powstaje z ręcznie złożonej rozdzielnicy", async 
 
 test("aparat da się przeciągnąć na inne miejsce szyny; główny zostaje pierwszy", async ({ page }) => {
   await pustyProjekt(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
   for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
@@ -109,7 +109,7 @@ test("długie opisy pod aparatami łamią się na dwie linie, zamiast urywać wi
     const b = (await wrap.boundingBox())!;
     await page.mouse.click(b.x + 90 + i * 70, b.y + 110);
   }
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await expect(page.getByRole("img", WIDOK)).toBeVisible();
 
   // Ucinany był KONIEC nazwy — czyli dokładnie to, co odróżnia „Gniazda — Kuchnia"
@@ -123,7 +123,7 @@ test("długie opisy pod aparatami łamią się na dwie linie, zamiast urywać wi
 
 test("klik na aparacie otwiera edycję; zmiana przeżywa odświeżenie", async ({ page }) => {
   await pustyProjekt(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
@@ -149,13 +149,13 @@ test("klik na aparacie otwiera edycję; zmiana przeżywa odświeżenie", async (
   // wcześniej edycja aparatu auto-generowanego znikałaby po najbliższej zmianie planu.
   await page.waitForTimeout(1200);
   await page.reload();
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await expect(page.getByRole("img", WIDOK)).toContainText("C20");
 });
 
 test("edycja aparatu dodanego ręcznie działa bez nadpisań", async ({ page }) => {
   await pustyProjekt(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
@@ -169,7 +169,7 @@ test("edycja aparatu dodanego ręcznie działa bez nadpisań", async ({ page }) 
 
 test("paski opisowe: podgląd pokazuje zadrukowaną kartkę i pobiera się", async ({ page }) => {
   await pustyProjekt(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
 
   await page.getByRole("button", { name: "Podgląd pasków" }).click();
@@ -184,7 +184,7 @@ test("paski opisowe: podgląd pokazuje zadrukowaną kartkę i pobiera się", asy
 
 test("SPD nie jest dodawany automatycznie; jest zwykłą pozycją katalogu ręcznego", async ({ page }) => {
   await pustyProjekt(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
 
   // Wcześniej SPD stał w pasku narzędzi jako osobny, zawsze widoczny wybór ("brak" /
@@ -205,7 +205,7 @@ test("SPD nie jest dodawany automatycznie; jest zwykłą pozycją katalogu ręcz
 
 test("zmiana liczby biegunów aparatu zmienia jego szerokość na wizualizacji", async ({ page }) => {
   await pustyProjekt(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
   // Domyślny wybór w formularzu to "Wyłącznik nadprądowy" (MCB) — dokładnie ten
   // aparat, którego dotyczyło zgłoszenie: zmiana z 1-fazowego na 3-fazowy nie

@@ -339,7 +339,7 @@ test("Protokoły: „Pobierz PDF” w podglądzie zapisuje niepusty plik pod wł
 
 test("Rozdzielnica: podgląd legendy rysuje zadrukowaną kartkę", async ({ page }) => {
   await placeThreeSockets(page);
-  await page.getByRole("button", { name: "Rozdzielnica" }).click();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Podgląd legendy" }).click();
 
   oczekujKartke(await zmierzPodglad(page));
@@ -355,7 +355,7 @@ test("Rozdzielnica: podgląd legendy rysuje zadrukowaną kartkę", async ({ page
  */
 test("Schemat: eksport do PDF rysuje schemat na kartce", async ({ page }) => {
   await placeThreeSockets(page);
-  await page.getByRole("button", { name: "Schemat" }).click();
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
   await page.getByRole("button", { name: "Podgląd PDF" }).click();
 
   const w = await zmierzPodglad(page);

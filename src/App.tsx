@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
+  ArrowRight,
   ChevronDown,
   ChevronRight,
   ClipboardList,
@@ -200,6 +201,17 @@ function ToolTab({ id, label, active, onPick }: TabButtonProps) {
 }
 
 type AppTab = "kalkulatory" | "projekt" | "rozdzielnica" | "protokoly" | "schemat" | "kosztorys";
+
+/** Kolejność głównego przepływu 1→2→3→4 (patrz kafle „FlowCard” niżej) — osobno od
+ *  „Kalkulatory”/„Protokoły pomiarowe”, które są narzędziami OBOK przepływu, nie jego
+ *  krokami. Używana przez przycisk „Dalej”, żeby wiedzieć, dokąd prowadzi kolejny krok,
+ *  bez zgadywania po całej liście zakładek. */
+const KOLEJNOSC_KROKOW: { id: AppTab; tytul: string }[] = [
+  { id: "projekt", tytul: "Instalacja" },
+  { id: "rozdzielnica", tytul: "Rozdzielnica" },
+  { id: "schemat", tytul: "Schemat" },
+  { id: "kosztorys", tytul: "Kosztorys" },
+];
 
 /** Nazwa projektu, edytowalna wprost w nagłówku — była zapisywana w store od
  *  integracji z chmurą (`setProjectName`), ale nie miała żadnej kontrolki w UI. */
@@ -555,6 +567,37 @@ export default function App() {
           </Suspense>
         </>
       )}
+
+      {/*
+        Duży, zawsze widoczny przycisk „Dalej” — bez niego jedyną drogą do kolejnego
+        kroku były małe kafle przepływu na samej górze strony, poza kadrem po
+        przewinięciu w dół do treści. Kto nie skojarzył kafli z nawigacją, nie miał
+        skąd wiedzieć, co robić dalej.
+
+        `position: fixed` w rogu, więc nie zależy od długości treści ani pozycji
+        przewijania — zawsze w tym samym miejscu, niezależnie od zakładki. Pokazuje
+        się TYLKO na krokach głównego przepływu (nie na „Kalkulatory”/„Protokoły
+        pomiarowe”, które są narzędziami obok przepływu) i znika na ostatnim kroku —
+        nie ma dokąd iść dalej z Kosztorysu.
+
+        `z-30`: CELOWO niżej niż nakładka pełnoekranowego projektowania (`z-40` w
+        DesignTab) — w pełnym ekranie chowa się razem z resztą chrome'u, zgodnie
+        z sensem tego trybu (skupienie na rysunku, bez elementów nawigacji).
+      */}
+      {(() => {
+        const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
+        const nastepny = idx >= 0 ? KOLEJNOSC_KROKOW[idx + 1] : undefined;
+        if (!nastepny) return null;
+        return (
+          <button
+            onClick={() => setTab(nastepny.id)}
+            className="fixed bottom-6 right-6 z-30 flex items-center gap-2 rounded-full bg-copper px-5 py-3.5 text-base font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90"
+          >
+            Dalej: {nastepny.tytul}
+            <ArrowRight size={19} />
+          </button>
+        );
+      })()}
 
       <AuthModal
         open={authOpen}
