@@ -76,9 +76,114 @@ function Screws({ modules }: { modules: number }) {
   );
 }
 
-/** Lico aparatu: dźwignia w pozycji ON, przycisk T dla różnicówki, wkłady dla SPD. */
-function DeviceFace({ device, w }: { device: PanelDevice; w: number }) {
+/**
+ * Lico aparatu — jeden kształt na RODZAJ urządzenia, nie jeden uniwersalny rocker.
+ *
+ * Wcześniej każdy aparat poza SPD/SPD-bezpiecznikiem dostawał tę samą ciemną dźwignię
+ * z „I” — lampka sygnalizacyjna wyglądała identycznie jak wyłącznik nadprądowy, bo
+ * jedyną różnicą był kolor nadruku pod spodem. Reszta katalogu dostaje więc własny
+ * kształt, dobrany pod to, co dany aparat FAKTYCZNIE ma na przedniej ściance:
+ * przekaźnik monitorujący ma lampki fazowe, nie dźwignię; zasilacz ma zaciski
+ * wyjściowe, nie dźwignię; stycznik ma okienko stanu i zaciski cewki A1/A2 — to
+ * właśnie te zaciski odróżniają go na pierwszy rzut oka od zwykłego łącznika.
+ */
+function DeviceFace({ device, w, accent }: { device: PanelDevice; w: number; accent: string }) {
   const leverY = DEVICE_H * 0.4;
+
+  if (device.kind === "ovr") {
+    // Czujnik zaniku/kolejności faz: trzy lampki fazowe u góry (obecność L1/L2/L3),
+    // okienko statusu przekaźnika pod spodem — monitoruje, nie łączy ręcznie.
+    return (
+      <>
+        {(["L1", "L2", "L3"] as const).map((p, i) => (
+          <circle key={p} cx={w / 2 + (i - 1) * 8} cy={33} r={3} fill={PHASE_COLORS[p]} />
+        ))}
+        <rect x={w / 2 - 11} y={43} width={22} height={16} rx={1.5} fill="#fff" stroke="#8494A5" strokeWidth={0.9} />
+        <circle cx={w / 2} cy={51} r={3.2} fill="#3B8C63" />
+      </>
+    );
+  }
+
+  if (device.kind === "ppoz") {
+    // Rozłącznik przeciwpożarowy: pokrętło izolacyjne (obrót, nie rocker) — tak
+    // rozróżnia się go na rysunku od zwykłego łącznika, niezależnie od koloru.
+    return (
+      <>
+        <circle cx={w / 2} cy={leverY} r={16} fill={accent} fillOpacity={0.12} stroke={accent} strokeWidth={2} />
+        <line x1={w / 2} y1={leverY} x2={w / 2 + 11} y2={leverY - 11} stroke={accent} strokeWidth={2.4} strokeLinecap="round" />
+        <circle cx={w / 2} cy={leverY} r={2.2} fill={accent} />
+      </>
+    );
+  }
+
+  if (device.kind === "stycznik") {
+    // Stycznik: mechaniczne okienko stanu („I” = zwarty) plus zaciski cewki
+    // sterującej A1/A2 — to one, nie dźwignia, są tym, co widać na styczniku.
+    return (
+      <>
+        <rect x={w / 2 - 14} y={leverY - 14} width={28} height={20} rx={2} fill="#fff" stroke={accent} strokeWidth={1.1} />
+        <rect x={w / 2 - 11} y={leverY - 11} width={9} height={14} fill={accent} fillOpacity={0.85} />
+        <text x={w / 2 + 5.5} y={leverY - 1} textAnchor="middle" fontSize={8} fontWeight={700} fill={accent}>
+          I
+        </text>
+        <text x={w / 2} y={leverY + 17} textAnchor="middle" fontSize={6} fontWeight={600} fill="#8494A5">
+          A1 · A2
+        </text>
+      </>
+    );
+  }
+
+  if (device.kind === "przekaznik") {
+    // Przekaźnik bistabilny (np. schodowy): mały okrągły przycisk ręcznego
+    // testu/override — jedyny manualny element na czole tego aparatu.
+    return (
+      <>
+        <circle cx={w / 2} cy={leverY} r={11} fill="#fff" stroke={accent} strokeWidth={1.6} />
+        <circle cx={w / 2} cy={leverY} r={7} fill={accent} fillOpacity={0.18} />
+        <circle cx={w / 2} cy={leverY} r={3} fill={accent} />
+      </>
+    );
+  }
+
+  if (device.kind === "zasilacz") {
+    // Zasilacz DC: BEZ dźwigni — to przetwornik, nie łącznik. Zaciski wyjściowe
+    // +/− i dioda sygnalizująca obecność napięcia wyjściowego.
+    return (
+      <>
+        <text x={w / 2 - 13} y={leverY - 5} textAnchor="middle" fontSize={12} fontWeight={700} fill={accent}>
+          +
+        </text>
+        <text x={w / 2 + 13} y={leverY - 3} textAnchor="middle" fontSize={14} fontWeight={700} fill={accent}>
+          −
+        </text>
+        <line x1={w / 2 - 13} y1={leverY} x2={w / 2 - 13} y2={leverY + 13} stroke={accent} strokeWidth={1.3} />
+        <line x1={w / 2 + 13} y1={leverY} x2={w / 2 + 13} y2={leverY + 13} stroke={accent} strokeWidth={1.3} />
+        <circle cx={w / 2} cy={leverY + 15.5} r={2.6} fill="#3B8C63" />
+      </>
+    );
+  }
+
+  if (device.kind === "lampka") {
+    // Lampka sygnalizacyjna: kolorowy klosz, nie dźwignia. Wariant 3-fazowy
+    // (etykieta „L1-L2-L3”) dostaje trzy małe klosze w barwach faz, pojedynczy
+    // obwód — jeden większy klosz w kolorze aparatu.
+    const trojfazowa = device.label.includes("L1");
+    return trojfazowa ? (
+      <>
+        {(["L1", "L2", "L3"] as const).map((p, i) => (
+          <g key={p}>
+            <circle cx={w / 2 + (i - 1) * 9} cy={leverY} r={4.4} fill={PHASE_COLORS[p]} />
+            <circle cx={w / 2 + (i - 1) * 9 - 1.3} cy={leverY - 1.3} r={1.3} fill="#fff" fillOpacity={0.6} />
+          </g>
+        ))}
+      </>
+    ) : (
+      <>
+        <circle cx={w / 2} cy={leverY} r={10} fill={accent} />
+        <circle cx={w / 2 - 3} cy={leverY - 3} r={3} fill="#fff" fillOpacity={0.55} />
+      </>
+    );
+  }
 
   if (device.kind === "spd" || device.kind === "spdFuse") {
     const tint = device.kind === "spd" ? "#3B8C63" : "#B98C2F";
@@ -123,7 +228,11 @@ function DeviceFace({ device, w }: { device: PanelDevice; w: number }) {
       <text x={w / 2} y={leverY + 9} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#fff">
         I
       </text>
-      {device.kind === "rcd" && (
+      {/* Przycisk testowy różnicówki. RCBO dostaje go RÓWNIEŻ — to wyłącznik
+          nadprądowy I różnicowoprądowy w jednej obudowie, więc ma oba mechanizmy
+          wyzwalania, tak jak samodzielna różnicówka. Wcześniej RCBO wyglądał jak
+          zwykły wyłącznik nadprądowy, bez śladu członu różnicowego. */}
+      {(device.kind === "rcd" || device.kind === "rcbo") && (
         <g>
           <rect x={w - 17} y={leverY - 15} width={13} height={13} rx={1.5} fill="#C6433A" />
           <text x={w - 10.5} y={leverY - 5.5} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#fff">
@@ -316,7 +425,7 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                         {d.label}
                       </text>
 
-                      <DeviceFace device={d} w={w} />
+                      <DeviceFace device={d} w={w} accent={accent} />
 
                       {/* liczba biegunów — drobny nadruk przy krawędzi */}
                       <text x={w / 2} y={DEVICE_H - 30} textAnchor="middle" fontSize={6.5} fill="#8494A5">
