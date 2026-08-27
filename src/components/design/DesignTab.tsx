@@ -924,6 +924,167 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setContextMenu({ x, y, kind: "wallDraw", id: "", multi: false });
   }
 
+  /**
+   * Czy pigułka kontrolek kontekstowych ma w tej chwili jakąkolwiek treść — TE SAME
+   * warunki co gałęzie w `kontekstoweTresc` niżej, tylko spłaszczone do jednego
+   * booleana. Potrzebne w widoku zwykłym do stylu „obramowanie/tło tylko gdy jest co
+   * pokazać" przy STAŁEJ wysokości slotu (patrz `kolumnaPlotnaRef`) — inaczej pusta
+   * pigułka rysowałaby pusty bordowany prostokąt nad płótnem przez większość czasu
+   * pracy (tryb „zaznacz" jest domyślny i najczęstszy).
+   */
+  const kontekstoweAktywne =
+    multiSelected.length > 0 ||
+    toolMode === "sciany" ||
+    toolMode === "pomieszczenie" ||
+    toolMode === "skala" ||
+    (selected?.kind === "wall" && toolMode === "zaznacz" && walls.some((w) => w.id === selected.id)) ||
+    // `toolMode !== "skala"` pominięte celowo: powyżej już wykluczyliśmy ten
+    // przypadek (`toolMode === "skala"` zwróciłoby true wcześniej w tym samym `||`).
+    !!skalaPotwierdzenie;
+
+  /**
+   * Treść pigułki kontrolek kontekstowych — WSPÓLNA dla obu miejsc, w których się
+   * renderuje (pełny ekran kontra widok zwykły, patrz komentarze przy obu). Jedna
+   * definicja, żeby te same kontrolki (grubość ściany, kształt pomieszczenia,
+   * kalibracja skali…) nie rozjechały się przypadkiem między dwiema kopiami JSX.
+   */
+  const kontekstoweTresc = (
+    <>
+      {multiSelected.length > 0 && (
+        <button onClick={deleteSelection} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600">
+          <Trash2 size={13} /> Usuń zaznaczone ({multiSelected.length})
+        </button>
+      )}
+
+      {/* Grubość i ortogonalność ustawia się PRZED pierwszym kliknięciem, nie tylko
+          w trakcie — stąd osobny warunek na `toolMode`, a nie na `drawingWall.length`. */}
+      {toolMode === "sciany" && (
+        <div className="flex items-center gap-3 text-xs">
+          <label className="flex items-center gap-1.5 text-slate-500">
+            Grubość:
+            <input
+              data-testid="wall-thickness-input"
+              type="number"
+              min={1}
+              step={mpu !== null ? 0.5 : 1}
+              value={thicknessToDisplay(wallThickness)}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v > 0) setWallThickness(thicknessFromDisplay(v));
+              }}
+              className="w-16 rounded border border-border px-1.5 py-0.5"
+            />
+            {mpu !== null ? "cm" : "jedn."}
+          </label>
+          <label className="flex items-center gap-1.5 text-slate-500">
+            <input
+              data-testid="wall-ortho-checkbox"
+              type="checkbox"
+              checked={orthoWalls}
+              onChange={(e) => setOrthoWalls(e.target.checked)}
+            />
+            Ortogonalnie (kąty proste)
+          </label>
+        </div>
+      )}
+
+      {drawingWall.length > 0 && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium text-slate-600">Rysowanie ściany: {drawingWall.length} pkt.</span>
+          <button onClick={finishWall} className="pe-btn-ghost px-2.5 py-1 text-sm">Zakończ</button>
+          <button onClick={() => setDrawingWall([])} className="pe-btn-ghost px-2.5 py-1 text-sm">Anuluj</button>
+        </div>
+      )}
+
+      {/* Grubość JUŻ ZAPISANEJ ściany — edytowalna tylko w trybie „zaznacz", tak jak
+          uchwyty narożników w DesignCanvas (w trybie „ściany" klik dokłada nowy punkt). */}
+      {selected?.kind === "wall" && toolMode === "zaznacz" && (() => {
+        const w = walls.find((x) => x.id === selected.id);
+        if (!w) return null;
+        const currentThickness = w.thickness ?? DEFAULT_WALL_THICKNESS;
+        return (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500">Grubość zaznaczonej ściany:</span>
+            <input
+              data-testid="selected-wall-thickness-input"
+              type="number"
+              min={1}
+              step={mpu !== null ? 0.5 : 1}
+              value={thicknessToDisplay(currentThickness)}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v > 0) setWallThicknessOf(w.id, thicknessFromDisplay(v));
+              }}
+              className="w-16 rounded border border-border px-1.5 py-0.5"
+            />
+            {mpu !== null ? "cm" : "jedn."}
+          </div>
+        );
+      })()}
+      {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
+          poza nim byłby tylko szumem w pasku narzędzi. */}
+      {toolMode === "pomieszczenie" && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium text-slate-600">Kształt:</span>
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+            {ROOM_MODES.map(({ id, label, hint }) => (
+              <button
+                key={id}
+                onClick={() => {
+                  setRoomMode(id);
+                  setDrawingRoomPoints([]); // zmiana trybu przerywa figurę zaczętą w poprzednim
+                }}
+                title={hint}
+                className="rounded-md px-2.5 py-1 text-sm"
+                style={roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="text-slate-500">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
+        </div>
+      )}
+      {drawingRoomPoints.length > 0 && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium text-slate-600">
+            {drawingRoomPoints.length} pkt.
+            {drawingRoomPoints.length >= 3 && " — kliknij w pierwszy punkt, aby zamknąć"}
+          </span>
+          {drawingRoomPoints.length >= 3 && (
+            <button onClick={finishRoomDrawing} className="pe-btn-ghost px-2.5 py-1 text-sm">Zakończ</button>
+          )}
+          <button onClick={() => setDrawingRoomPoints([])} className="pe-btn-ghost px-2.5 py-1 text-sm">Anuluj</button>
+        </div>
+      )}
+      {toolMode === "skala" && (
+        <ScaleCalibrationTool
+          calibPoints={calibPoints}
+          metersPerUnit={mpu}
+          planWidthUnits={planSize.w}
+          onApply={(metersPerUnit) => {
+            setScale(activeFloorId, metersPerUnit);
+            setCalibPoints([]);
+            setToolMode("zaznacz");
+            dismissScaleStale();
+            setSkalaPotwierdzenie(`Skala ustawiona: 1 jedn. = ${(metersPerUnit * 100).toFixed(1).replace(".", ",")} cm`);
+          }}
+          onCancel={() => setCalibPoints([])}
+          onClear={() => clearScale(activeFloorId)}
+        />
+      )}
+      {/* Znika po 4 s albo przy następnej akcji, która coś tu wstawi (patrz
+          `empty:hidden` przy obu miejscach renderowania) — to jedyny komunikat w tej
+          pigułce, który sam się chowa, bo nie odpowiada żadnemu aktywnemu narzędziu;
+          zostawiony na stałe wisiałby nad planem bez powodu. */}
+      {skalaPotwierdzenie && toolMode !== "skala" && (
+        <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "#2C6B4A" }}>
+          <Check size={15} /> {skalaPotwierdzenie}
+        </span>
+      )}
+    </>
+  );
+
   return (
     <div className="space-y-4">
       {/* Zamontowany ZAWSZE, niezależnie od tego, który ekran jest aktywny (edytor,
@@ -1199,161 +1360,36 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       </div>
 
       {/* Kontrolki kontekstowe: pokazują się tylko przy narzędziu, którego dotyczą,
-          więc pasek nie puchnie od opcji nieaktywnych w danym momencie.
-          W pełnym ekranie pływają na środku góry i — w odróżnieniu od reszty — NIE
-          chowają się za krawędź. Siedzą tu rzeczy, bez których nie da się dokończyć
+          więc pasek nie puchnie od opcji nieaktywnych w danym momencie. W pełnym
+          ekranie pływają na środku góry i — w odróżnieniu od reszty — NIE chowają
+          się za krawędź. Siedzą tu rzeczy, bez których nie da się dokończyć
           zaczętej czynności („Zakończ" ściany, kalibracja skali); ukrycie ich za
           najechaniem zostawiałoby użytkownika w połowie operacji bez wyjścia.
           `empty:hidden` gasi całą pigułkę, gdy żadne narzędzie nic tu nie wstawia —
-          inaczej nad planem wisiałby pusty biały prostokąt. */}
-      <div
-        className={
-          pelnyEkran
-            ? "absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-3 py-2 shadow-lg backdrop-blur transition-[top] duration-200 empty:hidden"
-            : // Wcześniej: gołe `flex`, bez tła i obramowania — komunikaty w środku
-              // (np. wybór kształtu pomieszczenia, podpowiedź „klikaj kolejne
-              // narożniki") tonęły w bieli strony i realnie NIE BYŁY WIDOCZNE, mimo
-              // że technicznie się renderowały. Ta sama karta co w pełnym ekranie:
-              // to jest okno robocze aktywnego narzędzia, więc ma tak wyglądać.
-              "flex flex-wrap items-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF] px-3 py-2 shadow-sm empty:hidden"
-        }
-        // Odsłonięty pasek edytora zajmuje górę okna — pigułka zjeżdża wtedy pod niego,
-        // zamiast się z nim nakładać.
-        style={pelnyEkran ? { top: rozmiaryChrome.gora + 12 } : undefined}
-      >
-        {multiSelected.length > 0 && (
-          <button onClick={deleteSelection} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600">
-            <Trash2 size={13} /> Usuń zaznaczone ({multiSelected.length})
-          </button>
-        )}
-
-        {/* Grubość i ortogonalność ustawia się PRZED pierwszym kliknięciem, nie tylko
-            w trakcie — stąd osobny warunek na `toolMode`, a nie na `drawingWall.length`. */}
-        {toolMode === "sciany" && (
-          <div className="flex items-center gap-3 text-xs">
-            <label className="flex items-center gap-1.5 text-slate-500">
-              Grubość:
-              <input
-                data-testid="wall-thickness-input"
-                type="number"
-                min={1}
-                step={mpu !== null ? 0.5 : 1}
-                value={thicknessToDisplay(wallThickness)}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  if (Number.isFinite(v) && v > 0) setWallThickness(thicknessFromDisplay(v));
-                }}
-                className="w-16 rounded border border-border px-1.5 py-0.5"
-              />
-              {mpu !== null ? "cm" : "jedn."}
-            </label>
-            <label className="flex items-center gap-1.5 text-slate-500">
-              <input
-                data-testid="wall-ortho-checkbox"
-                type="checkbox"
-                checked={orthoWalls}
-                onChange={(e) => setOrthoWalls(e.target.checked)}
-              />
-              Ortogonalnie (kąty proste)
-            </label>
-          </div>
-        )}
-
-        {drawingWall.length > 0 && (
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-slate-600">Rysowanie ściany: {drawingWall.length} pkt.</span>
-            <button onClick={finishWall} className="pe-btn-ghost px-2.5 py-1 text-sm">Zakończ</button>
-            <button onClick={() => setDrawingWall([])} className="pe-btn-ghost px-2.5 py-1 text-sm">Anuluj</button>
-          </div>
-        )}
-
-        {/* Grubość JUŻ ZAPISANEJ ściany — edytowalna tylko w trybie „zaznacz", tak jak
-            uchwyty narożników w DesignCanvas (w trybie „ściany" klik dokłada nowy punkt). */}
-        {selected?.kind === "wall" && toolMode === "zaznacz" && (() => {
-          const w = walls.find((x) => x.id === selected.id);
-          if (!w) return null;
-          const currentThickness = w.thickness ?? DEFAULT_WALL_THICKNESS;
-          return (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500">Grubość zaznaczonej ściany:</span>
-              <input
-                data-testid="selected-wall-thickness-input"
-                type="number"
-                min={1}
-                step={mpu !== null ? 0.5 : 1}
-                value={thicknessToDisplay(currentThickness)}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  if (Number.isFinite(v) && v > 0) setWallThicknessOf(w.id, thicknessFromDisplay(v));
-                }}
-                className="w-16 rounded border border-border px-1.5 py-0.5"
-              />
-              {mpu !== null ? "cm" : "jedn."}
-            </div>
-          );
-        })()}
-        {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
-            poza nim byłby tylko szumem w pasku narzędzi. */}
-        {toolMode === "pomieszczenie" && (
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-slate-600">Kształt:</span>
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
-              {ROOM_MODES.map(({ id, label, hint }) => (
-                <button
-                  key={id}
-                  onClick={() => {
-                    setRoomMode(id);
-                    setDrawingRoomPoints([]); // zmiana trybu przerywa figurę zaczętą w poprzednim
-                  }}
-                  title={hint}
-                  className="rounded-md px-2.5 py-1 text-sm"
-                  style={roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <span className="text-slate-500">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
-          </div>
-        )}
-        {drawingRoomPoints.length > 0 && (
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-slate-600">
-              {drawingRoomPoints.length} pkt.
-              {drawingRoomPoints.length >= 3 && " — kliknij w pierwszy punkt, aby zamknąć"}
-            </span>
-            {drawingRoomPoints.length >= 3 && (
-              <button onClick={finishRoomDrawing} className="pe-btn-ghost px-2.5 py-1 text-sm">Zakończ</button>
-            )}
-            <button onClick={() => setDrawingRoomPoints([])} className="pe-btn-ghost px-2.5 py-1 text-sm">Anuluj</button>
-          </div>
-        )}
-        {toolMode === "skala" && (
-          <ScaleCalibrationTool
-            calibPoints={calibPoints}
-            metersPerUnit={mpu}
-            planWidthUnits={planSize.w}
-            onApply={(metersPerUnit) => {
-              setScale(activeFloorId, metersPerUnit);
-              setCalibPoints([]);
-              setToolMode("zaznacz");
-              dismissScaleStale();
-              setSkalaPotwierdzenie(`Skala ustawiona: 1 jedn. = ${(metersPerUnit * 100).toFixed(1).replace(".", ",")} cm`);
-            }}
-            onCancel={() => setCalibPoints([])}
-            onClear={() => clearScale(activeFloorId)}
-          />
-        )}
-        {/* Znika po 4 s albo przy następnej akcji, która coś tu wstawi (patrz
-            `empty:hidden` wyżej) — to jedyny komunikat w tej pigułce, który sam się
-            chowa, bo nie odpowiada żadnemu aktywnemu narzędziu; zostawiony na stałe
-            wisiałby nad planem bez powodu. */}
-        {skalaPotwierdzenie && toolMode !== "skala" && (
-          <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "#2C6B4A" }}>
-            <Check size={15} /> {skalaPotwierdzenie}
-          </span>
-        )}
-      </div>
+          inaczej nad planem wisiałby pusty biały prostokąt.
+          W widoku ZWYKŁYM ta sama treść renderuje się NIŻEJ, wewnątrz kolumny płótna,
+          TUŻ NAD `<DesignCanvas>` (patrz `kolumnaPlotnaRef`) — w zwykłym przepływie,
+          nie jako nakładka. Świadomy wybór: nakładka (`position:absolute`) próbowana
+          jako pierwsza zasłaniała samo płótno w miejscu, gdzie realnie zaczyna się
+          rysowanie ściany/pomieszczenia (np. blisko lewego górnego rogu) — pierwszy
+          klik/przeciągnięcie trafiał wtedy w pigułkę zamiast w płótno. W przepływie
+          pigułka owszem przesuwa płótno o własną wysokość, ale TYLKO płótno w jego
+          WŁASNEJ kolumnie — pasek narzędzi, kolumna ToolRail i panel Elementy/
+          Pomieszczenia (czyli to, o co chodziło w zgłoszeniu: „nie przesuwały
+          wszystkiego w dół") stoją w miejscu. Musi to być OSOBNE miejsce w drzewie,
+          a nie zwykły warunek na tym samym węźle: gdyby pigułka pływała nad CAŁĄ
+          szerokością strony (jak tutaj, w pełnym ekranie), zasłaniałaby klikalne
+          przyciski paska narzędzi i zakładki panelu pod spodem. */}
+      {pelnyEkran && (
+        <div
+          className="absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-3 py-2 shadow-lg backdrop-blur transition-[top] duration-200 empty:hidden"
+          // Odsłonięty pasek edytora zajmuje górę okna — pigułka zjeżdża wtedy pod niego,
+          // zamiast się z nim nakładać.
+          style={{ top: rozmiaryChrome.gora + 12 }}
+        >
+          {kontekstoweTresc}
+        </div>
+      )}
 
       {/* Przypięty pasek ODSUWA płótno, zamiast się na nie kłaść. Panel na stałe
           zasłaniający róg rysunku byłby gorszy od chowającego się: zabierałby miejsce
@@ -1506,6 +1542,38 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           className={pelnyEkran ? "h-full w-full p-2" : undefined}
           style={pelnyEkran ? undefined : { flex: "1 1 480px", minWidth: 320 }}
         >
+          {/* Widok ZWYKŁY: ta sama pigułka kontrolek kontekstowych co w pełnym ekranie
+              (`kontekstoweTresc` wyżej), tylko stojąca W PRZEPŁYWIE tuż nad samym
+              płótnem, w slocie o STAŁEJ wysokości (`min-h-[92px]`) zamiast pływająca
+              nad całą stroną jak w pełnym ekranie. Dwie wcześniejsze próby odpadły:
+              - `position:absolute` nad płótnem zasłaniało samo płótno w miejscu, gdzie
+                realnie zaczyna się rysowanie (blisko lewego górnego rogu) — pierwszy
+                klik/przeciągnięcie trafiał w pigułkę zamiast w scenę Konvy;
+              - slot o wysokości RÓWNEJ bieżącej treści (bez `min-h`) przesuwał płótno
+                przy KAŻDEJ zmianie treści, nie tylko przy zmianie narzędzia — np. sam
+                tekst podpowiedzi przy rysowaniu wieloboku rośnie z „kliknij pierwszy
+                narożnik" do „N pkt. — kliknij w pierwszy punkt, aby zamknąć" i mógł
+                zawinąć się na DRUGĄ linię w trakcie klikania kolejnych wierzchołków —
+                płótno (a więc i już postawione punkty względem kursora) jechało w dół
+                W POŁOWIE gestu rysowania, czyli dokładnie to, czego dotyczy zgłoszenie,
+                tylko przeniesione o poziom niżej.
+              Stała wysokość slotu eliminuje oba: płótno startuje zawsze w tym samym
+              miejscu swojej kolumny, niezależnie od narzędzia i etapu jego pracy —
+              a ToolRail i panel Elementy/Pomieszczenia po lewej i tak nigdy się nie
+              ruszają, co jest sednem zgłoszenia („nie przesuwały wszystkiego w dół").
+              Ramka/tło pojawiają się tylko, gdy jest co pokazać (`kontekstoweAktywne`)
+              — inaczej tryb „zaznacz" (domyślny, najczęstszy) wisiałby nad płótnem
+              jako pusty bordowany prostokąt. */}
+          {!pelnyEkran && (
+            <div
+              className={
+                "mb-1.5 flex min-h-[92px] flex-wrap items-center gap-3 rounded-card px-3 py-2" +
+                (kontekstoweAktywne ? " border border-copper/40 bg-[#FDF6EF] shadow-sm" : "")
+              }
+            >
+              {kontekstoweTresc}
+            </div>
+          )}
           <DesignCanvas
             stageRef={stageRef}
             elements={elements}
