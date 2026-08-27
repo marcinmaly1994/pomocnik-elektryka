@@ -123,8 +123,15 @@ interface DesignCanvasProps {
   onSelectOpening: (id: string) => void;
   onOpeningContextMenu: (id: string, clientX: number, clientY: number) => void;
   /** Klik w KRAWĘDŹ obrysu pomieszczenia (nie we wnętrze — patrz komentarz przy
-   *  renderowaniu obrysu) — zaznacza pomieszczenie i odsłania uchwyty narożników. */
+   *  renderowaniu obrysu) — zaznacza pomieszczenie i odsłania uchwyty narożników.
+   *  W trybie „otwory" ta sama krawędź zamiast tego dokłada drzwi/okno — patrz
+   *  `onRoomEdgeClickForOpening` niżej, ten sam wzorzec co `onWallClickForOpening`. */
   onSelectRoom: (id: string) => void;
+  /** Klik w krawędź pomieszczenia W TRYBIE „otwory" — pomieszczenia często nie mają
+   *  osobno narysowanej ściany, więc to jedyny sposób postawić tam drzwi/okno.
+   *  `point`/`angle` liczone tu samo, tak jak przy `onWallClickForOpening`, tylko na
+   *  ZAMKNIĘTYM obrysie (ostatni punkt łączy się z pierwszym). */
+  onRoomEdgeClickForOpening: (roomId: string, point: Point, angle: number) => void;
   onRoomContextMenu: (id: string, clientX: number, clientY: number) => void;
   /** Dwuklik w NAZWĘ pomieszczenia — otwiera edycję nazwy w miejscu kliknięcia. */
   onRoomNameDblClick: (id: string, clientX: number, clientY: number) => void;
@@ -224,6 +231,7 @@ export function DesignCanvas({
   onSelectOpening,
   onOpeningContextMenu,
   onSelectRoom,
+  onRoomEdgeClickForOpening,
   onRoomContextMenu,
   onRoomNameDblClick,
   onMoveRoomPoint,
@@ -699,14 +707,16 @@ export function DesignCanvas({
             const pts = r.points.flatMap((p) => [p.x, p.y]);
             const c = centroid(r.points);
             const isSelRoom = selected?.kind === "room" && selected.id === r.id;
-            // Krawędź i nazwa łapią klik TYLKO w trybie zaznaczania i w trybie rysowania
-            // pomieszczeń (bo zaraz po narysowaniu pomieszczenia narzędzie zostaje w tym
-            // trybie, a użytkownik od razu chce je edytować — to dokładnie zgłoszony
-            // przepływ). Bez tego wyłączenia w INNYCH trybach, `hitStrokeWidth` ciągnący
-            // się przez CAŁY obwód pomieszczenia kradłby kliknięcia w trybie
-            // „Wstaw Element"/„Narysuj Ścianę" za każdym razem, gdy padają blisko ściany —
-            // czyli niemal zawsze, bo gniazdka i łączniki stawia się właśnie przy ścianach.
-            const roomInteractive = toolMode === "zaznacz" || toolMode === "pomieszczenie";
+            // Krawędź i nazwa łapią klik TYLKO w trybie zaznaczania, rysowania pomieszczeń
+            // i otworów (bo zaraz po narysowaniu pomieszczenia narzędzie zostaje w trybie
+            // „pomieszczenie", a użytkownik od razu chce je edytować — to dokładnie
+            // zgłoszony przepływ; tryb „otwory" dochodzi z tego samego powodu co przy
+            // ścianach, patrz `onRoomEdgeClickForOpening`). Bez tego wyłączenia w INNYCH
+            // trybach, `hitStrokeWidth` ciągnący się przez CAŁY obwód pomieszczenia
+            // kradłby kliknięcia w trybie „Wstaw Element"/„Narysuj Ścianę" za każdym razem,
+            // gdy padają blisko ściany — czyli niemal zawsze, bo gniazdka i łączniki
+            // stawia się właśnie przy ścianach.
+            const roomInteractive = toolMode === "zaznacz" || toolMode === "pomieszczenie" || toolMode === "otwory";
             return (
               <Group key={r.id}>
                 {/* Wypełnienie: CZYSTO WIZUALNE, `listening={false}`. To musi zostać
@@ -753,6 +763,18 @@ export function DesignCanvas({
                   hitStrokeWidth={14}
                   onClick={(e) => {
                     e.cancelBubble = true;
+                    // W trybie „otwory" klik w krawędź pomieszczenia dokłada na niej
+                    // drzwi/okno zamiast zaznaczać pomieszczenie — ten sam wzorzec co przy
+                    // ścianach (`onWallClickForOpening`), tylko na ZAMKNIĘTYM obrysie
+                    // (domykamy pierwszym punktem na końcu, bo `nearestPointOnPolyline`
+                    // sam nie zna ostatniego, zamykającego segmentu).
+                    if (toolMode === "otwory") {
+                      const stage = e.target.getStage();
+                      const p = stage && planPoint(stage, planSize);
+                      const nearest = p && nearestPointOnPolyline(p, [...r.points, r.points[0]]);
+                      if (nearest) onRoomEdgeClickForOpening(r.id, nearest.point, nearest.angle);
+                      return;
+                    }
                     onSelectRoom(r.id);
                   }}
                   onContextMenu={(e) => {

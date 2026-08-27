@@ -813,6 +813,22 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setMultiSelected([]);
   }
 
+  /** Klik w krawędź pomieszczenia w trybie „otwory" — ten sam wzorzec co
+   *  `handleWallClickForOpening`, tylko `roomId` zamiast `wallId`: pomieszczenia
+   *  narysowane bez osobnej ściany inaczej w ogóle nie miałyby jak dostać drzwi/okna. */
+  function handleRoomEdgeClickForOpening(roomId: string, point: Point, angle: number) {
+    const id = crypto.randomUUID();
+    setDraft((d) => ({
+      ...d,
+      openings: [
+        ...d.openings,
+        { id, floor: activeFloorId, roomId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(openingKind, mpu), kind: openingKind },
+      ],
+    }));
+    setSelected({ kind: "opening", id });
+    setMultiSelected([]);
+  }
+
   function handleOpeningContextMenu(id: string, x: number, y: number) {
     setSelected({ kind: "opening", id });
     setMultiSelected([]);
@@ -1618,6 +1634,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               setSelected({ kind: "room", id });
               setMultiSelected([]);
             }}
+            onRoomEdgeClickForOpening={handleRoomEdgeClickForOpening}
             onRoomContextMenu={handleRoomContextMenu}
             onRoomNameDblClick={(id, clientX, clientY) => {
               const room = roomShapes.find((r) => r.id === id);

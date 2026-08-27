@@ -72,19 +72,25 @@ export interface Wall {
 export type OpeningKind = "drzwi" | "okno";
 
 /**
- * Otwór (drzwi/okno) wycięty w konkretnej ścianie. Pozycja jest zapisana jako
- * gotowy punkt świata (`x`, `y`) plus kierunek ściany w tym miejscu (`angle`),
- * a nie jako indeks segmentu + parametr t — dzięki temu rysowanie glifu nie
- * wymaga ponownego przeliczania geometrii ściany przy każdym renderze.
- * Świadomy kompromis: przesunięcie narożnika ściany (edycja po zapisie,
- * `moveWallPoint`) NIE przesuwa już postawionych otworów — te zostają na
- * swoim miejscu, nawet jeśli ściana się od nich oddali. To ten sam poziom
- * "lekkości" co reszta narzędzia ścian (bez własnych akcji w store, patrz niżej).
+ * Otwór (drzwi/okno) wycięty w konkretnej ścianie ALBO w krawędzi narysowanego
+ * pomieszczenia — dokładnie jedno z `wallId`/`roomId` jest ustawione, zależnie od
+ * tego, w co użytkownik kliknął w trybie „otwory" (pomieszczenia często nie mają
+ * osobno narysowanych ścian, więc bez tej drugiej opcji nie dało się tam w ogóle
+ * postawić drzwi/okna). Pozycja jest zapisana jako gotowy punkt świata (`x`, `y`)
+ * plus kierunek ściany/krawędzi w tym miejscu (`angle`), a nie jako indeks
+ * segmentu + parametr t — dzięki temu rysowanie glifu nie wymaga ponownego
+ * przeliczania geometrii przy każdym renderze.
+ * Świadomy kompromis: przesunięcie narożnika ściany/pomieszczenia (edycja po
+ * zapisie, `moveWallPoint`/`moveRoomShapePoint`) NIE przesuwa już postawionych
+ * otworów — te zostają na swoim miejscu, nawet jeśli krawędź się od nich oddali.
+ * To ten sam poziom "lekkości" co reszta narzędzia ścian/pomieszczeń (bez
+ * własnych akcji w store poza sprzątaniem przy kasowaniu, patrz niżej).
  */
 export interface Opening {
   id: string;
   floor: string;
-  wallId: string;
+  wallId?: string;
+  roomId?: string;
   x: number;
   y: number;
   /** Kierunek ściany w tym miejscu, radiany — do rysowania glifu (łuk skrzydła

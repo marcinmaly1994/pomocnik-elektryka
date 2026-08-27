@@ -881,7 +881,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   deleteRoomShape: (id) => {
     const { setDraft } = get();
-    setDraft((d) => ({ ...d, roomShapes: d.roomShapes.filter((r) => r.id !== id) }));
+    // Kasuje też otwory postawione na krawędzi TEGO pomieszczenia — inaczej zostałyby
+    // osierocone (roomId wskazujący na nieistniejące pomieszczenie), tak samo jak przy
+    // kasowaniu ściany i jej otworów w DesignTab.
+    setDraft((d) => ({
+      ...d,
+      roomShapes: d.roomShapes.filter((r) => r.id !== id),
+      openings: d.openings.filter((o) => o.roomId !== id),
+    }));
   },
 
   removeElements: (ids) => {

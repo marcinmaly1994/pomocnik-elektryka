@@ -55,6 +55,21 @@ async function projectState(page: import("@playwright/test").Page) {
   });
 }
 
+/** Rysuje prostokątne pomieszczenie BEZ żadnej osobnej ściany — box mierzony na nowo
+ *  tuż przed przeciągnięciem, bo wejście w tryb „Pomieszczenie" dokłada nad płótnem
+ *  pasek wyboru kształtu i zsuwa je w dół (ten sam wzorzec co `drawRoom` w
+ *  light-groups.spec.ts). */
+async function drawRectRoom(page: import("@playwright/test").Page, x1: number, y1: number, x2: number, y2: number) {
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  const box = await planBox(page);
+  await page.mouse.move(box.x + x1, box.y + y1);
+  await page.mouse.down();
+  await page.mouse.move(box.x + x2, box.y + y2, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+}
+
 test("kliknięcie w ścianę w trybie Drzwi/Okno dodaje otwór w najbliższym miejscu", async ({ page }) => {
   await openPlan(page);
   await drawHorizontalWall(page);
@@ -144,6 +159,50 @@ test("usunięcie ściany kasuje też jej otwory (nie zostają osierocone)", asyn
 
   const draft = await projectState(page);
   expect(draft.walls).toHaveLength(0);
+  expect(draft.openings).toHaveLength(0);
+});
+
+test("klik w krawędź pomieszczenia w trybie Drzwi/Okno dodaje otwór, gdy nie ma osobnej ściany", async ({ page }) => {
+  await openPlan(page);
+  await drawRectRoom(page, 100, 100, 400, 250);
+
+  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
+  // górna krawędź pomieszczenia jest pozioma na y=100 (jedn. planu) — klikamy blisko
+  // środka górnego boku, z dala od narożników.
+  const box = await planBox(page);
+  await page.mouse.click(box.x + 250, box.y + 100);
+  await page.waitForTimeout(900);
+
+  const draft = await projectState(page);
+  expect(draft.walls).toHaveLength(0); // celowo bez osobnej ściany — to jest sedno zgłoszenia
+  expect(draft.openings).toHaveLength(1);
+  expect(draft.openings[0].roomId).toBe(draft.roomShapes[0].id);
+  expect(draft.openings[0].wallId).toBeUndefined();
+  expect(draft.openings[0].angle).toBeCloseTo(0, 6); // krawędź pozioma
+});
+
+test("usunięcie pomieszczenia kasuje też otwory na jego krawędzi (nie zostają osierocone)", async ({ page }) => {
+  await openPlan(page);
+  await drawRectRoom(page, 100, 100, 400, 250);
+
+  await page.getByRole("button", { name: "Drzwi / Okno", exact: true }).click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 250, box.y + 100);
+  await page.waitForTimeout(900);
+  expect((await projectState(page)).openings).toHaveLength(1);
+
+  // PPM na krawędzi pomieszczenia, z DALA od otworu (x=150, nie x=250), żeby trafić
+  // w krawędź, nie w otwór, który ma tam własne menu kontekstowe „Usuń otwór".
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 150, box.y + 100, { button: "right" });
+  const usunPomieszczenie = page.getByText("Usuń pomieszczenie");
+  await expect(usunPomieszczenie).toBeVisible();
+  await usunPomieszczenie.click();
+  await page.waitForTimeout(900);
+
+  const draft = await projectState(page);
+  expect(draft.roomShapes).toHaveLength(0);
   expect(draft.openings).toHaveLength(0);
 });
 
