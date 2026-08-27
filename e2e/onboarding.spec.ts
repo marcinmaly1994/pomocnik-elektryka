@@ -114,11 +114,10 @@ test("kalibracja odpalona z paska narzędzi odhacza krok 1 bez udziału karty", 
 
 test("pominięcie odblokowuje pracę i nie wraca po odświeżeniu", async ({ page }) => {
   await freshDesign(page);
-  await expect(page.getByText("Dostępne po kalibracji")).toBeVisible();
+  await expect(card(page)).toBeVisible();
 
   await card(page).getByRole("button", { name: /Pomiń/ }).click();
   await expect(card(page)).toBeHidden();
-  await expect(page.getByText("Dostępne po kalibracji")).toHaveCount(0);
 
   // praca bez skali jest możliwa, ale ostrzeżenie jest trwałe
   const box = await planBox(page);

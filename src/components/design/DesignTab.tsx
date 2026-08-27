@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  PenLine,
   Pencil,
   Pin,
   RotateCw,
@@ -989,6 +988,33 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         </div>
       )}
 
+      {/* Podkład jeszcze nie wgrany — to pierwsza czynność w całym przepływie. Stała
+          dotąd w panelu bocznym, NAD biblioteką elementów — ale to dwie różne sprawy
+          (ogólny stan projektu kontra lista do wstawiania) tłoczące się w jednej wąskiej
+          kolumnie, i tam też została zgłoszona jako przeszkadzająca. Tu, jako baner na
+          całą szerokość (ten sam wzorzec co reszta banerów w tym miejscu), stoi
+          w pierwszym ekranie tak samo jak wcześniej — plan-upload.spec.ts pilnuje tylko
+          POZYCJI (nad biblioteką, bez scrollowania), nie konkretnego kontenera. */}
+      {!bgImageUrl && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+          style={{ background: "#C1793F14", color: "#8A5526" }}
+        >
+          <Upload size={14} className="shrink-0" />
+          <span>Zacznij od wgrania rzutu mieszkania albo odręcznego szkicu — posłuży za podkład, na którym rozmieścisz elementy.</span>
+          <button onClick={() => fileRef.current?.click()} className="font-semibold underline">
+            Wgraj rzut / zdjęcie
+          </button>
+          {/* Druga, RÓWNOLEGŁA droga startu — nie zapasowa: bez rzutu pod ręką dom da
+              się narysować od zera na siatce w standardowej skali (patrz
+              `startManualDrawing`), zamiast zmuszać do szukania/skanowania rzutu. */}
+          <button onClick={startManualDrawing} className="font-semibold underline">
+            Narysuj dom samodzielnie
+          </button>
+        </div>
+      )}
+
       {/* Trwały, nieinwazyjny baner: praca bez skali jest DOZWOLONA, ale jej skutek
           (nieprecyzyjne długości i kosztorys) musi być widoczny cały czas, a nie raz. */}
       {onboarding.missingScaleWarning && (
@@ -1438,46 +1464,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             className={pelnyEkran ? "flex min-h-0 flex-col overflow-hidden border-l border-border p-2" : "border-l border-border p-2"}
             style={{ width: 268 }}
           >
-          {/* Wgranie rzutu to pierwsza czynność w całym przepływie, więc stoi na samej
-              górze kolumny. Wcześniej wisiało POD biblioteką elementów, czyli ~1000 px
-              niżej, poza pierwszym ekranem — użytkownik musiał się do niego doscrollować,
-              zanim w ogóle się dowiedział, że taka opcja istnieje.
-              Dopóki podkładu nie ma, blok jest wyeksponowany; po wgraniu zwija się do
-              jednego wiersza, żeby nie odbierać miejsca bibliotece, z której korzysta się
-              przez resztę pracy. */}
-          <div className="mb-3">
-            {/* Po wgraniu podkładu sterowanie nim (nazwa, Zmień, Usuń) mieszka WYŁĄCZNIE
-                w pasku edytora — dwa komplety tych samych przycisków w dwóch miejscach
-                to nie redundancja, tylko dwa różne miejsca do sprawdzenia przy każdej
-                zmianie. W kolumnie zostaje samo wezwanie do działania, bo to ono musi
-                rzucać się w oczy nowemu użytkownikowi (pilnuje tego plan-upload.spec). */}
-            {!bgImageUrl && (
-              <div className="rounded-lg border border-dashed p-3" style={{ borderColor: "#C1793F80", background: "#C1793F0A" }}>
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#8A5526" }}>
-                  Plan / szkic
-                </div>
-                <p className="mb-2 text-[11px] leading-snug text-slate-500">
-                  Zacznij od wgrania rzutu mieszkania albo odręcznego szkicu — posłuży za podkład, na którym
-                  rozmieścisz elementy. Nie masz rzutu pod ręką? Narysuj ściany od zera.
-                </p>
-                <Button variant="copper" size="sm" className="w-full" onClick={() => fileRef.current?.click()}>
-                  <Upload size={14} /> Wgraj rzut / zdjęcie
-                </Button>
-                <div className="my-1.5 flex items-center gap-2 text-[10px] text-slate-400">
-                  <div className="h-px flex-1" style={{ background: "#C1793F40" }} />
-                  albo
-                  <div className="h-px flex-1" style={{ background: "#C1793F40" }} />
-                </div>
-                {/* Druga, RÓWNOLEGŁA droga startu — nie zapasowa: bez rzutu pod ręką dom
-                    da się narysować od zera na siatce w standardowej skali (patrz
-                    `startManualDrawing`), zamiast zmuszać do szukania/skanowania rzutu. */}
-                <Button variant="ghost" size="sm" className="w-full" onClick={startManualDrawing}>
-                  <PenLine size={14} /> Narysuj dom samodzielnie
-                </Button>
-              </div>
-            )}
-          </div>
-
           <div className="mb-2 flex gap-1 rounded-lg border border-border bg-white p-1 text-xs">
             <button
               onClick={() => setSidebarTab("elementy")}
@@ -1494,29 +1480,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               Pomieszczenia ({roomShapes.length})
             </button>
           </div>
-
-          {/* Miękkie blokowanie: dopóki nie ma skali, biblioteka jest przygaszona,
-              ale ZAWSZE widoczna i zawsze da się ją odblokować jednym kliknięciem.
-              Twarde blokowanie edytora zamieniłoby przewodnik w bramkę, a specyfikacja
-              wymaga wprost, żeby dało się pracować bez skali. */}
-          {sidebarTab === "elementy" && !onboarding.facts.maSkale && !onboarding.skipped && (
-            <div className="mb-2 rounded-lg border border-dashed p-2.5 text-[11px] leading-snug" style={{ borderColor: "#C1793F80", background: "#C1793F0A" }}>
-              <div className="mb-1 font-semibold" style={{ color: "#8A5526" }}>
-                Dostępne po kalibracji
-              </div>
-              <p className="mb-1.5 text-slate-500">
-                Bez skali policzymy sztuki, ale nie metry przewodów ani kosztorysu.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => handleStepAction("skala")} className="pe-btn-copper px-2 py-1 text-[11px]">
-                  Ustaw skalę
-                </button>
-                <button onClick={onboarding.skip} className="text-[11px] text-blueprint underline">
-                  Pomiń / ustawię później
-                </button>
-              </div>
-            </div>
-          )}
 
           {sidebarTab === "elementy" ? (
             <ElementLibrary

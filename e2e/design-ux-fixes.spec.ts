@@ -31,7 +31,15 @@ test.describe("Cofnij w trakcie rysowania", () => {
     await zacznijRysowacRecznie(page);
 
     const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
-    await wrap.evaluate((e) => e.scrollTo(0, 0));
+    // `scrollIntoView` przesuwa STRONĘ (nie tylko wewnętrzny scroll płótna) tak, żeby
+    // górna krawędź kontenera wypadła na szczycie okna — bez tego banery nad edytorem
+    // (np. „Zacznij od wgrania rzutu…", widoczny dopóki nie ma podkładu) potrafią
+    // zepchnąć płótno tak nisko, że kliknięcia z dużym `oy` lądują POZA widocznym
+    // viewportem i po prostu nic nie trafiają.
+    await wrap.evaluate((e) => {
+      e.scrollIntoView({ block: "start" });
+      e.scrollTo(0, 0);
+    });
     const b = (await wrap.boundingBox())!;
     const oy = b.y < 0 ? -b.y + 50 : 300;
 
@@ -64,7 +72,15 @@ test.describe("Cofnij w trakcie rysowania", () => {
     await zacznijRysowacRecznie(page);
 
     const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
-    await wrap.evaluate((e) => e.scrollTo(0, 0));
+    // `scrollIntoView` przesuwa STRONĘ (nie tylko wewnętrzny scroll płótna) tak, żeby
+    // górna krawędź kontenera wypadła na szczycie okna — bez tego banery nad edytorem
+    // (np. „Zacznij od wgrania rzutu…", widoczny dopóki nie ma podkładu) potrafią
+    // zepchnąć płótno tak nisko, że kliknięcia z dużym `oy` lądują POZA widocznym
+    // viewportem i po prostu nic nie trafiają.
+    await wrap.evaluate((e) => {
+      e.scrollIntoView({ block: "start" });
+      e.scrollTo(0, 0);
+    });
     const b = (await wrap.boundingBox())!;
     const oy = b.y < 0 ? -b.y + 50 : 300;
 
