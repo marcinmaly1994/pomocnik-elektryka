@@ -8,8 +8,9 @@
  * miejsce w całym łańcuchu, gdzie liczby nie pochodzą wprost z tablic.
  */
 
-import type { CableRoute, Circuit, ElementType, InstallationElement, Point } from "@/types";
+import type { CableRoute, Circuit, ElementType, InstallationElement, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
+import { routeAlongWalls } from "./routing";
 
 /**
  * Moc typowa pojedynczego punktu [W] — wartości projektowe, nie katalogowe.
@@ -134,9 +135,30 @@ export function findPanel(elements: InstallationElement[]): Point | null {
   return p ? { x: p.x, y: p.y } : null;
 }
 
+/** Łamana Manhattan (jedno załamanie: najpierw poziomo, potem pionowo) — zapasowa
+ *  trasa, gdy `routeAlongWalls` nie znajdzie połączenia (brak ścian/pomieszczeń na
+ *  kondygnacji, albo rozdzielnica i punkt siedzą w dwóch niepołączonych kawałkach
+ *  narysowanej geometrii). Ten sam kształt trasy co przed dodaniem routingu po
+ *  ścianach (krok 1) — wciąż lepszy niż linia prosta po przekątnej pokoju. */
+function manhattanFallback(panel: Point, end: Point): Point[] {
+  const corner: Point = { x: end.x, y: panel.y };
+  return corner.x === panel.x || corner.y === end.y ? [panel, end] : [panel, corner, end];
+}
+
+/** Długość łamanej w jednostkach planu — do `lengthUnits`, niezależnie od tego, czy
+ *  trasa jest routowana po ścianach, czy to zapasowa łamana Manhattan. */
+function polylineLengthUnits(points: Point[]): number {
+  let sum = 0;
+  for (let i = 0; i < points.length - 1; i++) sum += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+  return sum;
+}
+
 /**
- * Wizualne trasy przewodów — łamana Manhattan (jedno załamanie: najpierw poziomo,
- * potem pionowo) od rozdzielnicy do każdego punktu obwodu, do narysowania na planie.
+ * Wizualne trasy przewodów od rozdzielnicy do każdego punktu obwodu, do narysowania
+ * na planie — WZDŁUŻ narysowanych ścian i obrysów pomieszczeń (`routeAlongWalls`,
+ * krok 2), a gdy to się nie uda (brak geometrii, albo rozdzielnica i punkt w dwóch
+ * niepołączonych jej kawałkach) — łamana Manhattan jako zapasowa trasa (krok 1).
+ * `CableRoute.viaWalls` mówi, z której z tych dwóch dana trasa pochodzi.
  *
  * Osobna funkcja od `estimateRoutes`: tamta liczy WYŁĄCZNIE metry do kosztorysu/doboru
  * (z narzutem na bieg pod stropem i zapasem montażowym, które nie mają odpowiednika na
@@ -144,11 +166,12 @@ export function findPanel(elements: InstallationElement[]): Point | null {
  * jednostkach planu — do narysowania linii nie trzeba znać jej długości w metrach,
  * więc działa też BEZ skali (jedynym warunkiem jest postawiona na planie rozdzielnica).
  *
- * `circuits` powinny pochodzić z elementów TEJ SAMEJ kondygnacji co `panel` — trasa
- * między kondygnacjami nie ma sensu na płaskim rysunku (każda ma własny układ
- * współrzędnych). To odpowiedzialność wywołującego (patrz `useActiveFloorElements`).
+ * `circuits`/`walls`/`roomShapes` powinny pochodzić z elementów TEJ SAMEJ kondygnacji
+ * co `panel` — trasa między kondygnacjami nie ma sensu na płaskim rysunku (każda ma
+ * własny układ współrzędnych). To odpowiedzialność wywołującego (patrz
+ * `useActiveFloorElements`/`useActiveFloorWalls`/`useActiveFloorRoomShapes`).
  */
-export function buildCableRoutes(panel: Point | null, circuits: Circuit[]): CableRoute[] {
+export function buildCableRoutes(panel: Point | null, circuits: Circuit[], walls: Wall[], roomShapes: RoomShape[]): CableRoute[] {
   if (!panel) return [];
   const out: CableRoute[] = [];
   for (const c of circuits) {
@@ -157,8 +180,8 @@ export function buildCableRoutes(panel: Point | null, circuits: Circuit[]): Cabl
       // geometrią, a nie przeciekiem całego `InstallationElement` (rola, pokój,
       // kondygnacja…) tam, gdzie potrzebna jest tylko ścieżka do narysowania.
       const end: Point = { x: e.x, y: e.y };
-      const corner: Point = { x: e.x, y: panel.y };
-      const points = corner.x === panel.x || corner.y === end.y ? [panel, end] : [panel, corner, end];
+      const routed = routeAlongWalls(panel, end, walls, roomShapes);
+      const points = routed ?? manhattanFallback(panel, end);
       out.push({
         id: e.id,
         circuitId: c.id,
@@ -168,7 +191,8 @@ export function buildCableRoutes(panel: Point | null, circuits: Circuit[]): Cabl
         breaker: c.breaker,
         floor: e.floor,
         points,
-        lengthUnits: Math.abs(e.x - panel.x) + Math.abs(e.y - panel.y),
+        viaWalls: routed !== null,
+        lengthUnits: polylineLengthUnits(points),
       });
     }
   }

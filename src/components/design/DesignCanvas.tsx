@@ -1047,20 +1047,27 @@ export function DesignCanvas({
             </Group>
           ))}
 
-          {/* Trasy przewodów: łamana Manhattan (jedno załamanie) od rozdzielnicy do
-              każdego punktu obwodu, kolorowana jak MCB na schemacie/rozdzielnicy
-              (`colorForCircuit`) — ten sam kod koloru w trzech miejscach ułatwia
-              rozpoznanie, który obwód jest który. Czysto poglądowe (linia prosta,
-              nie prawdziwa trasa wzdłuż ścian) i nieinteraktywne — `listening={false}`,
-              jak strefy ochronne wyżej. */}
+          {/* Trasy przewodów: od rozdzielnicy do każdego punktu obwodu, kolorowane jak
+              MCB na schemacie/rozdzielnicy (`colorForCircuit`) — ten sam kod koloru w
+              trzech miejscach ułatwia rozpoznanie, który obwód jest który.
+              `viaWalls` odróżnia stylem linii DWA różne poziomy pewności co do trasy
+              (patrz `buildCableRoutes`): CIĄGŁA — trasa faktycznie routowana wzdłuż
+              narysowanych ścian/obrysów pomieszczeń; PRZERYWANA — zapasowy szacunek
+              Manhattan, użyty gdy nie ma po czym routować. Bez tego rozróżnienia
+              przerywana linia sugerowałaby pewność, której nie ma. Nieinteraktywne —
+              `listening={false}`, jak strefy ochronne wyżej. */}
           {cableRoutes.map((r) => (
             <Line
               key={r.id}
               points={r.points.flatMap((p) => [p.x, p.y])}
               stroke={colorForCircuit(r.type)}
-              strokeWidth={1.25}
-              dash={[6, 4]}
-              opacity={0.7}
+              // Grubsza i mniej przezroczysta niż typowa linia poglądowa — odcinek
+              // routowany WZDŁUŻ ściany dzieli z nią oś, więc cieniutka, półprzezroczysta
+              // kreska ginęła optycznie pod dużo grubszym, ciemnym pociągnięciem ściany.
+              strokeWidth={2.5}
+              dash={r.viaWalls ? undefined : [6, 4]}
+              opacity={0.9}
+              lineJoin="round"
               listening={false}
             />
           ))}

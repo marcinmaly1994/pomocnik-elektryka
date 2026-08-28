@@ -907,13 +907,13 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // Grupy sterowania oświetleniem liczone z elementów bieżącej kondygnacji — numer
   // pokazywany jest zarówno przy łączniku, jak i przy sterowanych przez niego punktach.
   const lightGroups = useMemo(() => computeLightGroups(elements), [elements]);
-  // Trasy przewodów — WYŁĄCZNIE z elementów TEJ kondygnacji (`elements` już jest
-  // przefiltrowane przez `useActiveFloorElements`), więc rozdzielnica i punkty, do
-  // których liczymy trasę, zawsze mieszkają w tym samym układzie współrzędnych.
-  // Pusta tablica bez rozdzielnicy na planie — `buildCableRoutes` zwraca wtedy [].
+  // Trasy przewodów — WYŁĄCZNIE z elementów/ścian/pomieszczeń TEJ kondygnacji
+  // (wszystkie trzy już przefiltrowane przez `useActiveFloor*`), więc rozdzielnica,
+  // punkty i sieć, po której routuje `buildCableRoutes`, zawsze mieszkają w tym samym
+  // układzie współrzędnych. Pusta tablica bez rozdzielnicy na planie.
   const cableRoutes = useMemo(
-    () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements)) : []),
-    [showRoutes, elements]
+    () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements), walls, roomShapes) : []),
+    [showRoutes, elements, walls, roomShapes]
   );
 
   function handleElementContextMenu(id: string, x: number, y: number) {

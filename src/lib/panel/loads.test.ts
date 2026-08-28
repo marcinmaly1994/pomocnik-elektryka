@@ -91,26 +91,34 @@ describe("buildCableRoutes", () => {
   }
 
   it("bez rozdzielnicy na planie zwraca pustą tablicę zamiast tras donikąd", () => {
-    expect(buildCableRoutes(null, [circuit({ elements: [el("gniazdko", { x: 30, y: 40 })] })])).toEqual([]);
+    expect(buildCableRoutes(null, [circuit({ elements: [el("gniazdko", { x: 30, y: 40 })] })], [], [])).toEqual([]);
   });
+
+  // Wszystkie poniższe testy wołają BEZ ścian/pomieszczeń ([], []) — `routeAlongWalls`
+  // nie ma wtedy po czym routować i celowo spada na zapasową łamaną Manhattan
+  // (patrz `manhattanFallback`); routing po ścianach ma OSOBNE testy w routing.test.ts.
 
   it("punkt NIE leżący na osi rozdzielnicy dostaje złamaną (Manhattan) trasę z jednym narożnikiem", () => {
     const e = el("gniazdko", { x: 30, y: 40 });
-    const [r] = buildCableRoutes(panel, [circuit({ elements: [e] })]);
+    const [r] = buildCableRoutes(panel, [circuit({ elements: [e] })], [], []);
     expect(r.points).toEqual([panel, { x: 30, y: 0 }, { x: 30, y: 40 }]);
     expect(r.lengthUnits).toBe(70); // |30-0| + |40-0|
+    expect(r.viaWalls).toBe(false);
   });
 
   it("punkt leżący na tej samej osi co rozdzielnica dostaje prostą trasę bez narożnika", () => {
-    const [r] = buildCableRoutes(panel, [circuit({ elements: [el("gniazdko", { x: 50, y: 0 })] })]);
+    const [r] = buildCableRoutes(panel, [circuit({ elements: [el("gniazdko", { x: 50, y: 0 })] })], [], []);
     expect(r.points).toEqual([panel, { x: 50, y: 0 }]);
   });
 
   it("niesie dalej tożsamość obwodu (id, nazwa, kabel, zabezpieczenie) — do kolorowania i etykiet", () => {
     const e = el("oswietlenie", { x: 10, y: 10 });
-    const [r] = buildCableRoutes(panel, [
-      circuit({ id: "obw7", name: "Obwód oświetlenia 1", type: "oswietlenie", cable: "YDYp 3x1,5 mm²", breaker: "B10", elements: [e] }),
-    ]);
+    const [r] = buildCableRoutes(
+      panel,
+      [circuit({ id: "obw7", name: "Obwód oświetlenia 1", type: "oswietlenie", cable: "YDYp 3x1,5 mm²", breaker: "B10", elements: [e] })],
+      [],
+      []
+    );
     expect(r).toMatchObject({
       id: e.id,
       circuitId: "obw7",
@@ -125,9 +133,16 @@ describe("buildCableRoutes", () => {
   it("jeden obwód z wieloma punktami daje po jednej trasie na punkt", () => {
     const a = el("gniazdko", { x: 10, y: 0 });
     const b = el("gniazdko", { x: 20, y: 5 });
-    const routes = buildCableRoutes(panel, [circuit({ elements: [a, b] })]);
+    const routes = buildCableRoutes(panel, [circuit({ elements: [a, b] })], [], []);
     expect(routes).toHaveLength(2);
     expect(routes.map((r) => r.id).sort()).toEqual([a.id, b.id].sort());
+  });
+
+  it("gdy jest ściana łącząca rozdzielnicę z punktem, trasa idzie WZDŁUŻ niej (viaWalls)", () => {
+    const w = { id: "w1", floor: "parter", points: [{ x: 0, y: 0 }, { x: 100, y: 0 }] };
+    const e = el("gniazdko", { x: 90, y: 10 });
+    const [r] = buildCableRoutes({ x: 10, y: -10 }, [circuit({ elements: [e] })], [w], []);
+    expect(r.viaWalls).toBe(true);
   });
 });
 

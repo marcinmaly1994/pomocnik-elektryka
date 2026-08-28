@@ -153,6 +153,12 @@ export interface CableRoute {
   floor: string;
   points: Point[];
   lengthUnits: number;
+  /** Czy trasa faktycznie biegnie wzdłuż narysowanych ścian/obrysów pomieszczeń
+   *  (`routeAlongWalls`), czy to tylko uproszczony szacunek Manhattan — użyty, gdy na
+   *  kondygnacji nie ma geometrii do routingu, albo rozdzielnica i punkt siedzą w
+   *  dwóch niepołączonych jej częściach. Rysowanie odróżnia je stylem linii (ciągła
+   *  kontra przerywana), żeby nie sugerować pewności co do trasy, której nie ma. */
+  viaWalls: boolean;
 }
 
 /** Konfiguracja zasilania rozdzielnicy — współdzielona przez widok Rozdzielnicy i

@@ -28,14 +28,22 @@ async function planBox(page: import("@playwright/test").Page) {
   return (await wrap.boundingBox())!;
 }
 
-/** Liczba narysowanych na scenie linii przerywanych (`dash` ustawiony) — jedyne
- *  przerywane linie na płótnie to trasy przewodów; siatka i ściany są ciągłe. */
-async function dashedLineCount(page: import("@playwright/test").Page) {
+/** Trasy przewodów są JEDYNYMI liniami na scenie z `opacity=0.9` w trybie „Zaznacz"
+ *  bez aktywnego rysowania ściany (podgląd rysowanej ściany też ma stałe opacity, ale
+ *  tylko w trakcie rysowania) — więc to bezpieczniejszy znacznik niż sam kolor obwodu
+ *  (`colorForCircuit` reużywa np. `#2D5A8C` gdzie indziej na płótnie). Zwraca liczbę
+ *  tras CIĄGŁYCH (routowanych wzdłuż ścian) i PRZERYWANYCH (zapasowy szacunek
+ *  Manhattan) osobno — patrz `viaWalls` w `CableRoute`. */
+async function routeLineCounts(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
-    const konva = (window as unknown as { Konva?: { stages: { find(sel: string): { dash(): number[] | undefined }[] }[] } }).Konva;
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { dash(): number[] | undefined; opacity(): number }[] }[] } }
+    ).Konva;
     const stage = konva?.stages?.[0];
-    if (!stage) return -1;
-    return stage.find("Line").filter((l) => (l.dash()?.length ?? 0) > 0).length;
+    if (!stage) return { solid: -1, dashed: -1 };
+    const routeLines = stage.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01);
+    const dashed = routeLines.filter((l) => (l.dash()?.length ?? 0) > 0).length;
+    return { solid: routeLines.length - dashed, dashed };
   });
 }
 
@@ -48,10 +56,10 @@ test("bez rozdzielnicy na planie przełącznik nic nie rysuje", async ({ page })
 
   await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
   await page.waitForTimeout(300);
-  expect(await dashedLineCount(page)).toBe(0);
+  expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
 });
 
-test("rozdzielnica + gniazdo + lampa: przełącznik rysuje dwie trasy, domyślnie ukryte", async ({ page }) => {
+test("rozdzielnica + gniazdo + lampa BEZ ścian: przełącznik rysuje dwie trasy, przerywane (szacunek Manhattan), domyślnie ukryte", async ({ page }) => {
   await openPlan(page);
 
   await page.getByRole("button", { name: /Rozdział/ }).click();
@@ -73,14 +81,44 @@ test("rozdzielnica + gniazdo + lampa: przełącznik rysuje dwie trasy, domyślni
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
 
   // domyślnie WYŁĄCZONE — to warstwa poglądowa, nie ma się narzucać od razu
-  expect(await dashedLineCount(page)).toBe(0);
+  expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
 
   await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
   await page.waitForTimeout(300);
-  expect(await dashedLineCount(page)).toBe(2); // po jednej trasie na punkt
+  // bez ścian/pomieszczeń na planie nie ma po czym routować — obie trasy
+  // spadają na zapasowy szacunek Manhattan (przerywane)
+  expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 2 });
 
   // ponowne kliknięcie chowa trasy z powrotem
   await page.getByRole("button", { name: "Ukryj trasy przewodów" }).click();
   await page.waitForTimeout(300);
-  expect(await dashedLineCount(page)).toBe(0);
+  expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
+});
+
+test("rozdzielnica i gniazdo połączone ścianą: trasa jest CIĄGŁA (routowana), nie przerywana", async ({ page }) => {
+  await openPlan(page);
+
+  // ściana pozioma — rozdzielnica i gniazdo staną blisko obu jej końców
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 80);
+  box = await planBox(page);
+  await page.mouse.click(box.x + 300, box.y + 80);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 60);
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 300, box.y + 110);
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+  expect(await routeLineCounts(page)).toEqual({ solid: 1, dashed: 0 });
 });
