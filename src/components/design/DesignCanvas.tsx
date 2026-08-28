@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, type SanitaryZone } from "@/lib/elements";
 import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
+import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { groupLabelAnchors } from "@/lib/glyphs";
@@ -320,6 +321,13 @@ export function DesignCanvas({
   const [wallCursor, setWallCursor] = useState<Point | null>(null);
 
   const drawingRoom = toolMode === "pomieszczenie";
+
+  // Trasy niezależnie policzone (`buildCableRoutes`) potrafią przebiegać dokładnie
+  // tym samym odcinkiem ściany (np. dwa obwody gniazdek w tym samym pomieszczeniu) —
+  // bez tego trasy renderowałyby się jako jedna zlana linia. `spreadOverlappingRoutes`
+  // liczy WYŁĄCZNIE punkty do rysowania (offset prostopadły do wspólnego odcinka),
+  // reszta pól `CableRoute` (długość, kolor, styl) zostaje autorytatywna z `r`.
+  const spreadRoutePoints = useMemo(() => spreadOverlappingRoutes(cableRoutes), [cableRoutes]);
 
   function withSnap(p: Point): Point {
     return snapOn ? { x: snap(p.x, GRID), y: snap(p.y, GRID) } : p;
@@ -1061,23 +1069,34 @@ export function DesignCanvas({
               (patrz `buildCableRoutes`): CIĄGŁA — trasa faktycznie routowana wzdłuż
               narysowanych ścian/obrysów pomieszczeń; PRZERYWANA — zapasowy szacunek
               Manhattan, użyty gdy nie ma po czym routować. Bez tego rozróżnienia
-              przerywana linia sugerowałaby pewność, której nie ma. Nieinteraktywne —
+              przerywana linia sugerowałaby pewność, której nie ma.
+              `kind` odróżnia dodatkowo ZASILANIE (rozdzielnica → punkt, grubsza linia)
+              od STEROWANIA (łącznik → lampa, cieńsza kropkowana) — to fizycznie inna
+              para żył w tym samym kablu, więc nie powinny wyglądać identycznie.
+              Punkty do rysowania idą z `spreadRoutePoints`, nie z `r.points` wprost —
+              trasy dzielące ten sam odcinek ściany dostają tam boczny offset, żeby się
+              nie zlewały w jedną linię (patrz `spreadOverlappingRoutes`). Nieinteraktywne —
               `listening={false}`, jak strefy ochronne wyżej. */}
-          {cableRoutes.map((r) => (
-            <Line
-              key={r.id}
-              points={r.points.flatMap((p) => [p.x, p.y])}
-              stroke={colorForRoomName(r.room, roomShapes)}
-              // Grubsza i mniej przezroczysta niż typowa linia poglądowa — odcinek
-              // routowany WZDŁUŻ ściany dzieli z nią oś, więc cieniutka, półprzezroczysta
-              // kreska ginęła optycznie pod dużo grubszym, ciemnym pociągnięciem ściany.
-              strokeWidth={2.5}
-              dash={r.viaWalls ? undefined : [6, 4]}
-              opacity={0.9}
-              lineJoin="round"
-              listening={false}
-            />
-          ))}
+          {cableRoutes.map((r) => {
+            const isControl = r.kind === "sterowanie";
+            const pts = spreadRoutePoints.get(r.id) ?? r.points;
+            return (
+              <Line
+                key={r.id}
+                points={pts.flatMap((p) => [p.x, p.y])}
+                stroke={colorForRoomName(r.room, roomShapes)}
+                // Grubsza i mniej przezroczysta niż typowa linia poglądowa — odcinek
+                // routowany WZDŁUŻ ściany dzieli z nią oś, więc cieniutka, półprzezroczysta
+                // kreska ginęła optycznie pod dużo grubszym, ciemnym pociągnięciem ściany.
+                // Trasy sterowania są celowo cieńsze i kropkowane — inny rodzaj przewodu.
+                strokeWidth={isControl ? 1.5 : 2.5}
+                dash={isControl ? [1, 3] : r.viaWalls ? undefined : [6, 4]}
+                opacity={0.9}
+                lineJoin="round"
+                listening={false}
+              />
+            );
+          })}
 
           {/* Ściana w trakcie rysowania: odcinki już postawione, punkty widoczne na
               każdym kliknięciu, „gumowy" odcinek do kursora i etykieta jego BIEŻĄCEJ

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Circuit, ElementType, InstallationElement } from "@/types";
-import { buildCableRoutes, circuitDemand, estimateRoutes, findPanel, kindForElements } from "./loads";
+import { buildCableRoutes, circuitDemand, estimateRoutes, findPanel, kindForElements, spreadOverlappingRoutes } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -91,7 +91,8 @@ describe("buildCableRoutes", () => {
   }
 
   it("bez rozdzielnicy na planie zwraca pustą tablicę zamiast tras donikąd", () => {
-    expect(buildCableRoutes(null, [circuit({ elements: [el("gniazdko", { x: 30, y: 40 })] })], [], [])).toEqual([]);
+    const e = el("gniazdko", { x: 30, y: 40 });
+    expect(buildCableRoutes(null, [circuit({ elements: [e] })], [e], [], [])).toEqual([]);
   });
 
   // Wszystkie poniższe testy wołają BEZ ścian/pomieszczeń ([], []) — `routeAlongWalls`
@@ -100,14 +101,15 @@ describe("buildCableRoutes", () => {
 
   it("punkt NIE leżący na osi rozdzielnicy dostaje złamaną (Manhattan) trasę z jednym narożnikiem", () => {
     const e = el("gniazdko", { x: 30, y: 40 });
-    const [r] = buildCableRoutes(panel, [circuit({ elements: [e] })], [], []);
+    const [r] = buildCableRoutes(panel, [circuit({ elements: [e] })], [e], [], []);
     expect(r.points).toEqual([panel, { x: 30, y: 0 }, { x: 30, y: 40 }]);
     expect(r.lengthUnits).toBe(70); // |30-0| + |40-0|
     expect(r.viaWalls).toBe(false);
   });
 
   it("punkt leżący na tej samej osi co rozdzielnica dostaje prostą trasę bez narożnika", () => {
-    const [r] = buildCableRoutes(panel, [circuit({ elements: [el("gniazdko", { x: 50, y: 0 })] })], [], []);
+    const e = el("gniazdko", { x: 50, y: 0 });
+    const [r] = buildCableRoutes(panel, [circuit({ elements: [e] })], [e], [], []);
     expect(r.points).toEqual([panel, { x: 50, y: 0 }]);
   });
 
@@ -116,6 +118,7 @@ describe("buildCableRoutes", () => {
     const [r] = buildCableRoutes(
       panel,
       [circuit({ id: "obw7", name: "Obwód oświetlenia 1", type: "oswietlenie", cable: "YDYp 3x1,5 mm²", breaker: "B10", elements: [e] })],
+      [e],
       [],
       []
     );
@@ -133,7 +136,7 @@ describe("buildCableRoutes", () => {
   it("jeden obwód z wieloma punktami daje po jednej trasie na punkt", () => {
     const a = el("gniazdko", { x: 10, y: 0 });
     const b = el("gniazdko", { x: 20, y: 5 });
-    const routes = buildCableRoutes(panel, [circuit({ elements: [a, b] })], [], []);
+    const routes = buildCableRoutes(panel, [circuit({ elements: [a, b] })], [a, b], [], []);
     expect(routes).toHaveLength(2);
     expect(routes.map((r) => r.id).sort()).toEqual([a.id, b.id].sort());
   });
@@ -141,8 +144,120 @@ describe("buildCableRoutes", () => {
   it("gdy jest ściana łącząca rozdzielnicę z punktem, trasa idzie WZDŁUŻ niej (viaWalls)", () => {
     const w = { id: "w1", floor: "parter", points: [{ x: 0, y: 0 }, { x: 100, y: 0 }] };
     const e = el("gniazdko", { x: 90, y: 10 });
-    const [r] = buildCableRoutes({ x: 10, y: -10 }, [circuit({ elements: [e] })], [w], []);
+    const [r] = buildCableRoutes({ x: 10, y: -10 }, [circuit({ elements: [e] })], [e], [w], []);
     expect(r.viaWalls).toBe(true);
+  });
+});
+
+describe("buildCableRoutes — sterowanie (łącznik -> lampa)", () => {
+  const panel = { x: 0, y: 0 };
+  function circuit(over: Partial<Circuit> = {}): Circuit {
+    return {
+      id: "obwOswietlenie",
+      name: "Obwód oświetlenia 1",
+      type: "oswietlenie",
+      elements: [],
+      cable: "YDYp 3x1,5 mm²",
+      breaker: "B10",
+      rcd: true,
+      ...over,
+    };
+  }
+
+  it("łącznik i lampa w tej samej grupie dostają trasę sterowania — niezależnie od rozdzielnicy", () => {
+    const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(null, [circuit({ elements: [light] })], [light, control], [], []);
+    expect(routes).toHaveLength(1);
+    expect(routes[0]).toMatchObject({
+      id: `${control.id}->${light.id}`,
+      kind: "sterowanie",
+      circuitId: "obwOswietlenie",
+      circuitName: "Obwód oświetlenia 1",
+      cable: "YDYp 3x1,5 mm²",
+      breaker: "B10",
+    });
+  });
+
+  it("łącznik grupowy steruje kilkoma lampami — po jednej trasie na parę", () => {
+    const lightA = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const lightB = el("oswietlenie", { x: 60, y: 10, lightGroup: [1] });
+    const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(
+      panel,
+      [circuit({ elements: [lightA] }), circuit({ id: "obwOswietlenie2", elements: [lightB] })],
+      [lightA, lightB, control],
+      [],
+      []
+    );
+    const control2 = routes.filter((r) => r.kind === "sterowanie");
+    expect(control2.map((r) => r.id).sort()).toEqual([`${control.id}->${lightA.id}`, `${control.id}->${lightB.id}`].sort());
+  });
+
+  it("łącznik bez lampy w swojej grupie nie dostaje żadnej trasy", () => {
+    const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(null, [], [control], [], []);
+    expect(routes).toEqual([]);
+  });
+});
+
+describe("spreadOverlappingRoutes", () => {
+  function route(id: string, points: { x: number; y: number }[]): ReturnType<typeof buildCableRoutes>[number] {
+    return {
+      id,
+      circuitId: "obw1",
+      circuitName: "Obwód",
+      kind: "zasilanie",
+      type: "gniazdko",
+      cable: "",
+      breaker: "",
+      room: "Salon",
+      floor: "parter",
+      points,
+      lengthUnits: 0,
+      viaWalls: true,
+    };
+  }
+
+  it("dwie trasy dzielące ten sam odcinek dostają przeciwne przesunięcia (kolejność po id)", () => {
+    const a = route("a", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+    const b = route("b", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+    const out = spreadOverlappingRoutes([a, b]);
+    const pa = out.get("a")!;
+    const pb = out.get("b")!;
+    expect(pa[0].y).not.toBeCloseTo(pb[0].y, 5);
+    expect(pa[0].y).toBeCloseTo(-pb[0].y, 5);
+  });
+
+  it("trasa samotna na odcinku nie dostaje żadnego przesunięcia", () => {
+    const a = route("a", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+    const out = spreadOverlappingRoutes([a]);
+    expect(out.get("a")).toEqual([{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+  });
+
+  it("zerowej długości odcinek nie psuje wyniku (brak NaN)", () => {
+    const a = route("a", [{ x: 5, y: 5 }, { x: 5, y: 5 }]);
+    const b = route("b", [{ x: 5, y: 5 }, { x: 5, y: 5 }]);
+    const out = spreadOverlappingRoutes([a, b]);
+    for (const pts of [out.get("a")!, out.get("b")!]) {
+      for (const p of pts) {
+        expect(Number.isNaN(p.x)).toBe(false);
+        expect(Number.isNaN(p.y)).toBe(false);
+      }
+    }
+  });
+
+  it("trasy rozchodzące się po wspólnym odcinku mają niezależne przesunięcia na dalszych segmentach", () => {
+    const a = route("a", [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }]);
+    const b = route("b", [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: -50 }]);
+    const out = spreadOverlappingRoutes([a, b]);
+    const pa = out.get("a")!;
+    const pb = out.get("b")!;
+    // wspólny pierwszy odcinek — przesunięte w Y, przeciwnie
+    expect(pa[0].y).toBeCloseTo(-pb[0].y, 5);
+    // drugi odcinek każdej trasy jest samotny (nikt inny go nie dzieli) — bez przesunięcia w X
+    expect(pa[2].x).toBeCloseTo(50, 1);
+    expect(pb[2].x).toBeCloseTo(50, 1);
   });
 });
 

@@ -177,3 +177,76 @@ test("rozdzielnica i gniazdo połączone ścianą: trasa jest CIĄGŁA (routowan
   await page.waitForTimeout(300);
   expect(await routeLineCounts(page)).toEqual({ solid: 1, dashed: 0 });
 });
+
+test("łącznik i lampa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się nawet BEZ rozdzielnicy na planie", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 150, box.y + 100);
+
+  await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 100);
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  // ŻADNEJ rozdzielnicy na planie — sterowanie łącznik→lampa jest od niej niezależne.
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const dashes = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; dash(): number[] | undefined }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01).map((l) => l.dash()) ?? [];
+  });
+  // trasa sterowania ma OSOBNY, odróżnialny styl kreski ([1,3]) od zasilania ([6,4]/ciągła)
+  expect(dashes).toEqual([[1, 3]]);
+});
+
+test("dwa obwody gniazdek dzielące ten sam odcinek ściany: trasy się NIE zlewają (rozsunięte równolegle)", async ({ page }) => {
+  await openPlan(page);
+
+  // jedna wspólna ściana pozioma, po której routują OBIE trasy
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 80);
+  box = await planBox(page);
+  await page.mouse.click(box.x + 300, box.y + 80);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 60);
+
+  // dwa gniazdka, oba bliżej TEJ SAMEJ ściany, więc obie trasy routują się przez nią
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 280, box.y + 100);
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 200, box.y + 100);
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const pointSets = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01).map((l) => l.points()) ?? [];
+  });
+  expect(pointSets).toHaveLength(2);
+  // gdyby trasy się nie rozsunęły, ich punkty byłyby identyczne — sprawdzamy, że
+  // faktycznie się różnią (rozsunięcie na wspólnym odcinku ściany zadziałało)
+  expect(pointSets[0]).not.toEqual(pointSets[1]);
+});

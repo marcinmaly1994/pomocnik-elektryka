@@ -918,9 +918,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // Trasy przewodów — WYŁĄCZNIE z elementów/ścian/pomieszczeń TEJ kondygnacji
   // (wszystkie trzy już przefiltrowane przez `useActiveFloor*`), więc rozdzielnica,
   // punkty i sieć, po której routuje `buildCableRoutes`, zawsze mieszkają w tym samym
-  // układzie współrzędnych. Pusta tablica bez rozdzielnicy na planie.
+  // układzie współrzędnych. Puste trasy zasilania bez rozdzielnicy na planie — trasy
+  // sterowania (łącznik→lampa) działają niezależnie od niej, patrz `buildCableRoutes`.
   const cableRoutes = useMemo(
-    () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements), walls, roomShapes) : []),
+    () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements), elements, walls, roomShapes) : []),
     [showRoutes, elements, walls, roomShapes]
   );
 
