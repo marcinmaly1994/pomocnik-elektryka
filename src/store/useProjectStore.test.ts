@@ -212,6 +212,41 @@ describe("useProjectStore", () => {
     expect(localStorage.getItem("pomocnikelektryka_sesja")).toBeNull();
   });
 
+  it("setRouteOverride/clearRouteOverride zapisują i kasują ręczną poprawkę trasy, obie przez historię cofnij/ponów", () => {
+    const { setRouteOverride, clearRouteOverride, undo } = useProjectStore.getState();
+    setRouteOverride("e1", [{ x: 30, y: 40 }]);
+    expect(useProjectStore.getState().draft.routeOverrides.e1).toEqual([{ x: 30, y: 40 }]);
+
+    clearRouteOverride("e1");
+    expect(useProjectStore.getState().draft.routeOverrides.e1).toBeUndefined();
+
+    undo(); // cofa clearRouteOverride
+    expect(useProjectStore.getState().draft.routeOverrides.e1).toEqual([{ x: 30, y: 40 }]);
+  });
+
+  it("removeElements sprząta poprawki tras odwołujące się do skasowanego elementu — obie strony trasy sterowania", () => {
+    const { setDraft, setRouteOverride, removeElements } = useProjectStore.getState();
+    setDraft((d) => ({
+      ...d,
+      elements: [
+        { ...sampleElement, id: "e1" },
+        { ...sampleElement, id: "sw1" },
+        { ...sampleElement, id: "lamp1" },
+      ],
+    }));
+    setRouteOverride("e1", [{ x: 1, y: 1 }]); // trasa zasilania (id = jeden element)
+    setRouteOverride("sw1->lamp1", [{ x: 2, y: 2 }]); // trasa sterowania (dwa id)
+
+    removeElements(["e1"]);
+    let overrides = useProjectStore.getState().draft.routeOverrides;
+    expect(overrides.e1).toBeUndefined();
+    expect(overrides["sw1->lamp1"]).toEqual([{ x: 2, y: 2 }]); // oba elementy nadal istnieją
+
+    removeElements(["lamp1"]);
+    overrides = useProjectStore.getState().draft.routeOverrides;
+    expect(overrides["sw1->lamp1"]).toBeUndefined(); // jedna strona zniknęła — poprawka też
+  });
+
   it("getProjectPayload/loadProjectPayload zapisują i przywracają stan projektu bez historii cofnij/ponów", () => {
     const { setDraft, undo, getProjectPayload, loadProjectPayload, setProjectName } = useProjectStore.getState();
     setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1" }] }));

@@ -30,6 +30,24 @@ function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function cross(o: Point, a: Point, b: Point): number {
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+/** Przecięcie WŁAŚCIWE (wnętrze obu odcinków, nie samo dotknięcie końca/narożnika) —
+ *  „doskok" trasy MA prawo dotknąć ściany, do której akurat dochodzi, ale nie ma
+ *  prawa przeciąć PO DRODZE innej. Ścisła nierówność (`> 0`/`< 0`, nie `>= 0`) celowo
+ *  wyklucza styczne/współliniowe przypadki — inaczej każdy doskok kończący się
+ *  dokładnie NA innej ścianie (częste przy narożnikach) fałszywie liczyłby się jako
+ *  kolizja. */
+function segmentsIntersect(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
+  const d1 = cross(p3, p4, p1);
+  const d2 = cross(p3, p4, p2);
+  const d3 = cross(p1, p2, p3);
+  const d4 = cross(p1, p2, p4);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
 interface Segment {
   aIdx: number;
   bIdx: number;
@@ -108,14 +126,24 @@ function projectOntoSegment(p: Point, a: Point, b: Point): { point: Point; distS
  */
 function connectPoint(graph: Graph, p: Point): number | null {
   if (graph.segments.length === 0) return null;
-  let best: { seg: Segment; point: Point; distSq: number } | null = null;
-  for (const seg of graph.segments) {
-    const proj = projectOntoSegment(p, seg.a, seg.b);
-    if (!best || proj.distSq < best.distSq) best = { seg, point: proj.point, distSq: proj.distSq };
-  }
-  const entry = nodeIndex(graph, best!.point);
-  addEdge(graph, entry, best!.seg.aIdx, dist(graph.nodes[entry], best!.seg.a));
-  addEdge(graph, entry, best!.seg.bIdx, dist(graph.nodes[entry], best!.seg.b));
+  const candidates = graph.segments
+    .map((seg) => ({ seg, ...projectOntoSegment(p, seg.a, seg.b) }))
+    .sort((a, b) => a.distSq - b.distSq);
+  // Wolimy najbliższy odcinek, do którego da się dojść PROSTO, nie przecinając po
+  // drodze innej ściany/obrysu — inaczej „doskok" (odcinek od punktu do sieci)
+  // potrafił przeciąć ścianę stojącą MIĘDZY punktem a odcinkiem, na który akurat
+  // trafił jako najbliższy w linii prostej (patrz zgłoszenie: przewody „przechodzą
+  // przez ściany"). Gdy żaden kandydat nie jest wolny od kolizji (np. punkt w
+  // zamkniętym, w pełni otoczonym przez inne ściany pomieszczeniu), wracamy do
+  // dotychczasowego zachowania — najbliższy mimo wszystko, żeby routing nie
+  // spadał bez potrzeby na zapasowy szacunek Manhattan.
+  const clear = candidates.find(
+    (c) => !graph.segments.some((other) => other !== c.seg && segmentsIntersect(p, c.point, other.a, other.b))
+  );
+  const best = clear ?? candidates[0];
+  const entry = nodeIndex(graph, best.point);
+  addEdge(graph, entry, best.seg.aIdx, dist(graph.nodes[entry], best.seg.a));
+  addEdge(graph, entry, best.seg.bIdx, dist(graph.nodes[entry], best.seg.b));
   return entry;
 }
 
@@ -176,6 +204,15 @@ function dedupeConsecutive(points: Point[]): Point[] {
  * częściach planu, między którymi sieć ścian/pomieszczeń nie łączy się — wtedy
  * wywołujący ma spaść na prostszy szacunek (patrz `buildCableRoutes` w loads.ts).
  */
+/** Czy odcinek `a`-`b` przecina KTÓRĄKOLWIEK ścianę/obrys pomieszczenia — używane
+ *  przez zapasowy szacunek Manhattan w loads.ts, który (w odróżnieniu od
+ *  `routeAlongWalls`) nie ma żadnej wiedzy o geometrii i bez tej sprawdzki rysował
+ *  linię na wprost przez wszystko, co stanęło na drodze. */
+export function crossesGeometry(a: Point, b: Point, walls: Wall[], roomShapes: RoomShape[]): boolean {
+  const graph = buildGraph(walls, roomShapes);
+  return graph.segments.some((seg) => segmentsIntersect(a, b, seg.a, seg.b));
+}
+
 export function routeAlongWalls(from: Point, to: Point, walls: Wall[], roomShapes: RoomShape[]): Point[] | null {
   const graph = buildGraph(walls, roomShapes);
   const start = connectPoint(graph, from);

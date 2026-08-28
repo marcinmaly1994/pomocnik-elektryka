@@ -11,7 +11,7 @@ import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/El
 import { groupLabelAnchors } from "@/lib/glyphs";
 
 export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "pan" | "skala";
-export type Selection = { kind: "el" | "wall" | "room" | "opening"; id: string } | null;
+export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route"; id: string } | null;
 
 /** Sposób rysowania pomieszczenia: prostokąt przeciągnięciem albo wielobok klikaniem. */
 export type RoomDrawMode = "prostokat" | "wielobok";
@@ -91,6 +91,12 @@ interface DesignCanvasProps {
   /** Wizualne trasy przewodów (rozdzielnica → punkt), patrz `buildCableRoutes` —
    *  pusta tablica, gdy na kondygnacji nie ma rozdzielnicy albo widoczność wyłączona. */
   cableRoutes: CableRoute[];
+  /** Ręczne poprawki tras (środkowe punkty), kluczowane `CableRoute.id` — patrz
+   *  `Draft.routeOverrides` w store. Tu wyłącznie do rozpoznania, KTÓRE trasy są
+   *  ręcznie zmienione (styl linii, wyłączenie z rozsuwania równoległych tras) —
+   *  same punkty do narysowania są już wmieszane w `cableRoutes` przez DesignTab
+   *  (`applyRouteOverrides`), więc to pole nie steruje samym rysowaniem ścieżki. */
+  routeOverrides: Record<string, Point[]>;
   /** Numery grup sterowania oświetleniem, wyliczone w DesignTab (lib/lightGroups.ts). */
   lightGroups: Map<string, (number | undefined)[]>;
   /** Mnożnik rozmiaru symboli elementów (1 = rozmiar bazowy). */
@@ -145,6 +151,14 @@ interface DesignCanvasProps {
   /** Koniec przeciągania narożnika ściany — jeden wpis do historii cofania na
    *  cały ruch, ten sam wzorzec co `onMoveRoomPoint`. */
   onMoveWallPoint: (id: string, index: number, point: Point) => void;
+  onSelectRoute: (id: string) => void;
+  /** Zapisuje CAŁĄ nową tablicę środkowych punktów trasy (nie pojedynczy indeks) —
+   *  prostsze niż mutacja po indeksie przez granicę propsów, a wywołujący i tak ma
+   *  pod ręką pełną, świeżą listę (patrz przeciąganie/wstawianie/kasowanie uchwytu
+   *  niżej). Pusta tablica cofa do routingu automatycznego, tak jak `onResetRoute`. */
+  onSetRoutePoints: (routeId: string, midPoints: Point[]) => void;
+  /** Kasuje ręczną poprawkę — trasa wraca do automatycznego routingu. */
+  onResetRoute: (routeId: string) => void;
   onClearSelection: () => void;
   onMarqueeSelect: (ids: string[]) => void;
   onPlaceElement: (p: Point) => void;
@@ -189,6 +203,30 @@ function clampedPlanPoint(stage: Konva.Stage, size: PlanSize): Point | null {
   return { x: clampNum(pos.x, 0, size.w), y: clampNum(pos.y, 0, size.h) };
 }
 
+/** Indeks odcinka [i, i+1] łamanej `points` najbliższego punktowi `p` — do
+ *  wstawienia nowego załamania trasy dokładnie tam, gdzie użytkownik dwukliknął,
+ *  zamiast zawsze na końcu. `nearestPointOnPolyline` w geometry.ts liczy to samo,
+ *  ale nie zwraca indeksu, którego tu akurat potrzeba. */
+function nearestRouteSegmentIndex(p: Point, points: Point[]): number {
+  let bestIdx = 0;
+  let bestDistSq = Infinity;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) continue;
+    const t = clampNum(((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq, 0, 1);
+    const distSq = (p.x - (a.x + t * dx)) ** 2 + (p.y - (a.y + t * dy)) ** 2;
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
 function centroid(points: Point[]): Point {
   const n = points.length || 1;
   return {
@@ -217,6 +255,7 @@ export function DesignCanvas({
   calibPoints,
   zones,
   cableRoutes,
+  routeOverrides,
   lightGroups,
   elementScale,
   planSize,
@@ -241,6 +280,9 @@ export function DesignCanvas({
   onRoomNameDblClick,
   onMoveRoomPoint,
   onMoveWallPoint,
+  onSelectRoute,
+  onSetRoutePoints,
+  onResetRoute,
   onClearSelection,
   onMarqueeSelect,
   onPlaceElement,
@@ -289,6 +331,10 @@ export function DesignCanvas({
   const roomLineNodesRef = useRef<Map<string, Konva.Line>>(new Map());
   const roomHitNodesRef = useRef<Map<string, Konva.Line>>(new Map());
   const wallLineNodesRef = useRef<Map<string, Konva.Line>>(new Map());
+  // Ten sam wzorzec co przy ścianach/pomieszczeniach: podgląd przeciągania uchwytu
+  // trasy jest imperatywny (onDragMove aktualizuje węzeł Line wprost), zapis do
+  // store'a dopiero na onDragEnd — jeden wpis w historii na cały ruch.
+  const routeLineNodesRef = useRef<Map<string, Konva.Line>>(new Map());
   const marqueeStartRef = useRef<Point | null>(null);
   // Źródło prawdy dla bieżącego prostokąta zaznaczania to ref, nie tylko stan —
   // przy szybkich zdarzeniach mousemove+mouseup w jednej turze React batchuje
@@ -327,7 +373,15 @@ export function DesignCanvas({
   // bez tego trasy renderowałyby się jako jedna zlana linia. `spreadOverlappingRoutes`
   // liczy WYŁĄCZNIE punkty do rysowania (offset prostopadły do wspólnego odcinka),
   // reszta pól `CableRoute` (długość, kolor, styl) zostaje autorytatywna z `r`.
-  const spreadRoutePoints = useMemo(() => spreadOverlappingRoutes(cableRoutes), [cableRoutes]);
+  // Trasy z RĘCZNĄ poprawką są wyłączone z rozsuwania — użytkownik jawnie ułożył ich
+  // przebieg, więc automatyczny boczny offset przesunąłby linię od miejsca, w które ją
+  // przeciągnął. Wyłączenie ich z listy „współlokatorów" danego odcinka jest też
+  // poprawne dla POZOSTAŁYCH tras: skoro edytowana trasa nie biegnie już tym odcinkiem
+  // ściany, nie powinna zajmować w nim pasa.
+  const spreadRoutePoints = useMemo(
+    () => spreadOverlappingRoutes(cableRoutes.filter((r) => !(r.id in routeOverrides))),
+    [cableRoutes, routeOverrides]
+  );
 
   function withSnap(p: Point): Point {
     return snapOn ? { x: snap(p.x, GRID), y: snap(p.y, GRID) } : p;
@@ -1075,26 +1129,99 @@ export function DesignCanvas({
               para żył w tym samym kablu, więc nie powinny wyglądać identycznie.
               Punkty do rysowania idą z `spreadRoutePoints`, nie z `r.points` wprost —
               trasy dzielące ten sam odcinek ściany dostają tam boczny offset, żeby się
-              nie zlewały w jedną linię (patrz `spreadOverlappingRoutes`). Nieinteraktywne —
-              `listening={false}`, jak strefy ochronne wyżej. */}
+              nie zlewały w jedną linię (patrz `spreadOverlappingRoutes`).
+
+              Klikalne WYŁĄCZNIE w trybie „zaznacz" (jak krawędzie ścian/pomieszczeń) —
+              wybiera trasę do RĘCZNEJ edycji: dwuklik na zaznaczonej trasie dokłada
+              nowe załamanie w miejscu kliknięcia, przeciągnięcie uchwytu przesuwa
+              istniejące, dwuklik na uchwycie go kasuje. Ręcznie zmienione trasy
+              (`routeOverrides`) dostają ciągłą linię niezależnie od `viaWalls`/`kind` —
+              to już nie szacunek, tylko świadoma decyzja użytkownika, i są wyłączone z
+              automatycznego rozsuwania (patrz `spreadRoutePoints` wyżej). */}
           {cableRoutes.map((r) => {
             const isControl = r.kind === "sterowanie";
-            const pts = spreadRoutePoints.get(r.id) ?? r.points;
+            const isEdited = r.id in routeOverrides;
+            const isSelRoute = selected?.kind === "route" && selected.id === r.id;
+            const pts = isEdited ? r.points : spreadRoutePoints.get(r.id) ?? r.points;
+            const routeInteractive = toolMode === "zaznacz";
+            const color = colorForRoomName(r.room, roomShapes);
             return (
-              <Line
-                key={r.id}
-                points={pts.flatMap((p) => [p.x, p.y])}
-                stroke={colorForRoomName(r.room, roomShapes)}
-                // Grubsza i mniej przezroczysta niż typowa linia poglądowa — odcinek
-                // routowany WZDŁUŻ ściany dzieli z nią oś, więc cieniutka, półprzezroczysta
-                // kreska ginęła optycznie pod dużo grubszym, ciemnym pociągnięciem ściany.
-                // Trasy sterowania są celowo cieńsze i kropkowane — inny rodzaj przewodu.
-                strokeWidth={isControl ? 1.5 : 2.5}
-                dash={isControl ? [1, 3] : r.viaWalls ? undefined : [6, 4]}
-                opacity={0.9}
-                lineJoin="round"
-                listening={false}
-              />
+              <Group key={r.id}>
+                <Line
+                  ref={(node) => {
+                    if (node) routeLineNodesRef.current.set(r.id, node);
+                    else routeLineNodesRef.current.delete(r.id);
+                  }}
+                  points={pts.flatMap((p) => [p.x, p.y])}
+                  stroke={isSelRoute ? "#C1793F" : color}
+                  // Grubsza i mniej przezroczysta niż typowa linia poglądowa — odcinek
+                  // routowany WZDŁUŻ ściany dzieli z nią oś, więc cieniutka, półprzezroczysta
+                  // kreska ginęła optycznie pod dużo grubszym, ciemnym pociągnięciem ściany.
+                  // Trasy sterowania są celowo cieńsze i kropkowane — inny rodzaj przewodu.
+                  strokeWidth={(isControl ? 1.5 : 2.5) + (isSelRoute ? 1.5 : 0)}
+                  dash={isEdited ? undefined : isControl ? [1, 3] : r.viaWalls ? undefined : [6, 4]}
+                  opacity={0.9}
+                  lineJoin="round"
+                  listening={routeInteractive}
+                  hitStrokeWidth={10}
+                  onClick={(e) => {
+                    e.cancelBubble = true;
+                    onSelectRoute(r.id);
+                  }}
+                  onDblClick={(e) => {
+                    e.cancelBubble = true;
+                    if (!isSelRoute) {
+                      // pierwszy dwuklik na jeszcze niezaznaczonej trasie tylko ją
+                      // zaznacza — dokładanie punktu wymaga świadomego DRUGIEGO dwukliku,
+                      // żeby przypadkowe trafienie od razu nie zniekształcało trasy
+                      onSelectRoute(r.id);
+                      return;
+                    }
+                    const stage = e.target.getStage();
+                    const p = stage && planPoint(stage, planSize);
+                    if (!p) return;
+                    const segIdx = nearestRouteSegmentIndex(p, r.points);
+                    const withInserted = [...r.points.slice(0, segIdx + 1), p, ...r.points.slice(segIdx + 1)];
+                    onSetRoutePoints(r.id, withInserted.slice(1, -1));
+                  }}
+                />
+                {/* Uchwyty ZAŁAMAŃ trasy — bez pierwszego/ostatniego punktu, bo te są
+                    zawsze przypięte do rzeczywistej pozycji rozdzielnicy/łącznika i
+                    punktu/lampy (przeciąga się SAM element, nie koniec trasy). Ten sam
+                    wzorzec co uchwyty ścian/pomieszczeń: podgląd przeciągania
+                    imperatywny (onDragMove), zapis do store'a dopiero na onDragEnd. */}
+                {isSelRoute &&
+                  routeInteractive &&
+                  r.points.slice(1, -1).map((p, i) => (
+                    <Circle
+                      key={i}
+                      x={p.x}
+                      y={p.y}
+                      radius={5}
+                      fill="#fff"
+                      stroke="#C1793F"
+                      strokeWidth={2}
+                      draggable
+                      onDragMove={(e) => {
+                        const mid = r.points.slice(1, -1).map((mp, mi) => (mi === i ? { x: e.target.x(), y: e.target.y() } : mp));
+                        const newPts = [r.points[0], ...mid, r.points[r.points.length - 1]].flatMap((pp) => [pp.x, pp.y]);
+                        routeLineNodesRef.current.get(r.id)?.points(newPts);
+                      }}
+                      onDragEnd={(e) => {
+                        const x = snapOn ? snap(e.target.x(), GRID) : e.target.x();
+                        const y = snapOn ? snap(e.target.y(), GRID) : e.target.y();
+                        const mid = r.points.slice(1, -1).map((mp, mi) => (mi === i ? { x, y } : mp));
+                        onSetRoutePoints(r.id, mid);
+                      }}
+                      onDblClick={(e) => {
+                        e.cancelBubble = true;
+                        const mid = r.points.slice(1, -1).filter((_, mi) => mi !== i);
+                        if (mid.length === 0) onResetRoute(r.id);
+                        else onSetRoutePoints(r.id, mid);
+                      }}
+                    />
+                  ))}
+              </Group>
             );
           })}
 

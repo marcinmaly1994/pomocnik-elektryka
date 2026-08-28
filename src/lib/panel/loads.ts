@@ -11,7 +11,7 @@
 import type { CableRoute, Circuit, ElementType, InstallationElement, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
 import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
-import { routeAlongWalls } from "./routing";
+import { crossesGeometry, routeAlongWalls } from "./routing";
 
 /**
  * Moc typowa pojedynczego punktu [W] — wartości projektowe, nie katalogowe.
@@ -141,10 +141,22 @@ export function findPanel(elements: InstallationElement[]): Point | null {
  *  kondygnacji, albo końce siedzą w dwóch niepołączonych kawałkach narysowanej
  *  geometrii). Ten sam kształt trasy co przed dodaniem routingu po ścianach
  *  (krok 1) — wciąż lepszy niż linia prosta po przekątnej pokoju. Używana zarówno
- *  dla tras zasilania (rozdzielnica→punkt), jak i sterowania (łącznik→lampa). */
-function manhattanFallback(from: Point, to: Point): Point[] {
-  const corner: Point = { x: to.x, y: from.y };
-  return corner.x === from.x || corner.y === to.y ? [from, to] : [from, corner, to];
+ *  dla tras zasilania (rozdzielnica→punkt), jak i sterowania (łącznik→lampa).
+ *
+ *  Załamanie ma DWIE możliwe orientacje (przez `{to.x, from.y}` albo przez
+ *  `{from.x, to.y}`) — bez geometrii ścian nie da się ich porządnie routować, ale
+ *  da się sprawdzić, która z dwóch prostych łamanych NIE przecina po drodze
+ *  narysowanej ściany/obrysu (`crossesGeometry`), i wybrać tę. Gdy obie przecinają
+ *  coś (albo nic nie narysowano), zostaje pierwsza — to nadal tylko SZACUNEK,
+ *  sygnalizowany na rysunku przerywaną kreską, nie obietnica trasy. */
+function manhattanFallback(from: Point, to: Point, walls: Wall[], roomShapes: RoomShape[]): Point[] {
+  const cornerA: Point = { x: to.x, y: from.y };
+  if (cornerA.x === from.x || cornerA.y === to.y) return [from, to];
+  const cornerB: Point = { x: from.x, y: to.y };
+  const blockedA = crossesGeometry(from, cornerA, walls, roomShapes) || crossesGeometry(cornerA, to, walls, roomShapes);
+  if (!blockedA) return [from, cornerA, to];
+  const blockedB = crossesGeometry(from, cornerB, walls, roomShapes) || crossesGeometry(cornerB, to, walls, roomShapes);
+  return blockedB ? [from, cornerA, to] : [from, cornerB, to];
 }
 
 /** Długość łamanej w jednostkach planu — do `lengthUnits`, niezależnie od tego, czy
@@ -194,7 +206,7 @@ function buildControlRoutes(elements: InstallationElement[], circuits: Circuit[]
         const from: Point = { x: c.x, y: c.y };
         const to: Point = { x: l.x, y: l.y };
         const routed = routeAlongWalls(from, to, walls, roomShapes);
-        const points = routed ?? manhattanFallback(from, to);
+        const points = routed ?? manhattanFallback(from, to, walls, roomShapes);
         const circuit = circuits.find((circ) => circ.elements.some((el) => el.id === l.id));
         out.push({
           id: `${c.id}->${l.id}`,
@@ -264,7 +276,7 @@ export function buildCableRoutes(
       // kondygnacja…) tam, gdzie potrzebna jest tylko ścieżka do narysowania.
       const end: Point = { x: e.x, y: e.y };
       const routed = routeAlongWalls(panel, end, walls, roomShapes);
-      const points = routed ?? manhattanFallback(panel, end);
+      const points = routed ?? manhattanFallback(panel, end, walls, roomShapes);
       supply.push({
         id: e.id,
         circuitId: c.id,
@@ -350,6 +362,27 @@ export function spreadOverlappingRoutes(routes: CableRoute[]): Map<string, Point
     out.set(r.id, points);
   });
   return out;
+}
+
+/**
+ * Nakłada ręczne poprawki tras (przeciągnięte przez użytkownika na planie, patrz
+ * `routeOverrides` w store'ie i edycję uchwytów w DesignCanvas.tsx) na świeżo
+ * policzone trasy.
+ *
+ * Poprawka trzyma WYŁĄCZNIE środkowe punkty (załamania) — bez pierwszego i
+ * ostatniego, które zawsze biorą się z aktualnej pozycji rozdzielnicy/łącznika i
+ * punktu/lampy (dokładnie tak zaczyna/kończy się `route.points` w `buildCableRoutes`
+ * i `buildControlRoutes`). Dzięki temu przesunięcie elementu na planie nie gubi
+ * ręcznie ułożonych zagięć — koniec trasy po prostu podąża za nowym miejscem
+ * elementu, tak jak przy trasie automatycznej.
+ */
+export function applyRouteOverrides(routes: CableRoute[], overrides: Record<string, Point[]>): CableRoute[] {
+  return routes.map((r) => {
+    const mid = overrides[r.id];
+    if (!mid || mid.length === 0) return r;
+    const points = [r.points[0], ...mid, r.points[r.points.length - 1]];
+    return { ...r, points, lengthUnits: polylineLengthUnits(points) };
+  });
 }
 
 /** Rodzaj obwodu wg roli elementów — mapowanie na kategorie używane w doborze. */

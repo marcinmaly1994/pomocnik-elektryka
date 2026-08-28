@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Point, RoomShape, Wall } from "@/types";
-import { routeAlongWalls } from "./routing";
+import { crossesGeometry, routeAlongWalls } from "./routing";
 
 function wall(points: Point[]): Wall {
   return { id: Math.random().toString(36).slice(2), floor: "parter", points };
@@ -91,5 +91,29 @@ describe("routeAlongWalls", () => {
     for (let i = 0; i < path!.length - 1; i++) {
       expect(Math.hypot(path![i + 1].x - path![i].x, path![i + 1].y - path![i].y)).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("crossesGeometry", () => {
+  it("wykrywa przecięcie ODCINKA z narysowaną ścianą", () => {
+    const w = wall([{ x: 50, y: -10 }, { x: 50, y: 10 }]);
+    expect(crossesGeometry({ x: 0, y: 0 }, { x: 100, y: 0 }, [w], [])).toBe(true);
+  });
+
+  it("odcinek RÓWNOLEGŁY do ściany, który jej nie mija, nie liczy się jako przecięcie", () => {
+    const w = wall([{ x: 50, y: -10 }, { x: 50, y: 10 }]);
+    expect(crossesGeometry({ x: 0, y: 100 }, { x: 100, y: 100 }, [w], [])).toBe(false);
+  });
+
+  it("dotknięcie końca/narożnika (bez wejścia w głąb odcinka) NIE liczy się jako przecięcie", () => {
+    // odcinek kończy się DOKŁADNIE na ścianie (typowy `from`/`to` doskoku) —
+    // to nie jest przebicie, tylko właściwe dojście do celu
+    const w = wall([{ x: 50, y: -10 }, { x: 50, y: 10 }]);
+    expect(crossesGeometry({ x: 0, y: 0 }, { x: 50, y: 0 }, [w], [])).toBe(false);
+  });
+
+  it("uwzględnia też obrysy pomieszczeń, nie tylko ściany", () => {
+    const r = room([{ x: 40, y: -10 }, { x: 60, y: -10 }, { x: 60, y: 10 }, { x: 40, y: 10 }]);
+    expect(crossesGeometry({ x: 0, y: 0 }, { x: 100, y: 0 }, [], [r])).toBe(true);
   });
 });

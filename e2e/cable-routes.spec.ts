@@ -208,6 +208,137 @@ test("łącznik i lampa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się 
   expect(dashes).toEqual([[1, 3]]);
 });
 
+/** Punkty i styl (dash) JEDYNEJ trasy na scenie — do asercji w testach ręcznej edycji. */
+async function soleRoute(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[]; dash(): number[] | undefined }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    const [line] = stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01) ?? [];
+    return line ? { points: line.points(), dashed: (line.dash()?.length ?? 0) > 0 } : null;
+  });
+}
+
+/**
+ * Ustawia rozdzielnicę i gniazdko (bez ścian — trasa spada na zapasowy szacunek
+ * Manhattan), zaznacza tryb "Zaznacz" i pokazuje trasy. Powiększenie widoku jest
+ * ZRESETOWANE do 100% (patrz przycisk „Powiększenie…"), ale i tak NIE zakładamy,
+ * że klik na ekranie w (box.x+dx, box.y+dy) trafia dokładnie w jednostkę planu
+ * (dx,dy) — obramowanie kontenera i subpikselowe skalowanie w przeglądarce dają w
+ * praktyce stały, ale niezerowy offset. Zamiast go zgadywać, kalibrujemy go
+ * empirycznie: klikamy zamierzone (60,60)/(250,80), CZYTAMY z powrotem, gdzie
+ * faktycznie wylądowały (pierwszy/ostatni punkt jedynej trasy = pozycja
+ * rozdzielnicy/gniazdka), i liczymy stały offset ekran→plan do użycia dalej.
+ */
+async function setupEditableRoute(page: import("@playwright/test").Page) {
+  await openPlan(page);
+  await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
+
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 60);
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 250, box.y + 80);
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const route = await soleRoute(page);
+  if (!route) throw new Error("trasa nie narysowała się");
+  const [panelX, panelY, , , sockX, sockY] = route.points;
+  const offsetX = 60 - panelX;
+  const offsetY = 60 - panelY;
+
+  box = await planBox(page);
+  const toScreen = (p: { x: number; y: number }) => ({ x: box.x + p.x + offsetX, y: box.y + p.y + offsetY });
+  return { route, panel: { x: panelX, y: panelY }, socket: { x: sockX, y: sockY }, toScreen };
+}
+
+test("ręczna edycja trasy: dwuklik dokłada punkt, przeciągnięcie go przesuwa, „Cofnij do trasy automatycznej” wraca do routingu", async ({ page }) => {
+  const { route: original, panel, socket, toScreen } = await setupEditableRoute(page);
+  // trasa zapasowa (Manhattan): panel -> (gniazdko.x, panel.y) -> gniazdko, przerywana
+  const corner = { x: socket.x, y: panel.y };
+  expect(original.dashed).toBe(true);
+
+  // klik na środku pierwszego (poziomego) odcinka zaznacza trasę
+  const mid = { x: (panel.x + corner.x) / 2, y: panel.y };
+  const screenMid = toScreen(mid);
+  await page.mouse.click(screenMid.x, screenMid.y);
+  await expect(page.getByText(/Trasa: dwuklik dokłada punkt/)).toBeVisible();
+
+  // drugi dwuklik (trasa już zaznaczona) dokłada tam nowe załamanie
+  await page.mouse.dblclick(screenMid.x, screenMid.y);
+  await page.waitForTimeout(200);
+  let route = await soleRoute(page);
+  expect(route?.points.length).toBe(8); // 4 punkty zamiast 3 — doszło jedno załamanie
+  expect(route?.points[0]).toBeCloseTo(panel.x, 1);
+  expect(route?.points[1]).toBeCloseTo(panel.y, 1);
+  // klik na środku odcinka nie musi trafić piksel w piksel (zaokrąglenia
+  // ekran<->plan) — wystarczy, że nowy punkt wylądował W POBLIŻU zamierzonego miejsca
+  const insertedY = route!.points[3];
+  expect(Math.abs(route!.points[2] - mid.x)).toBeLessThan(10);
+  expect(Math.abs(insertedY - mid.y)).toBeLessThan(10);
+  expect(route?.dashed).toBe(false); // ręcznie zmieniona trasa jest już CIĄGŁA — nie szacunek
+
+  // przycisk powrotu do automatu pojawia się TERAZ (jest co cofać)
+  const cofnij = page.getByRole("button", { name: "Cofnij do trasy automatycznej" });
+  await expect(cofnij).toBeVisible();
+
+  // przeciągnięcie nowego uchwytu w górę wyraźnie przesuwa załamanie (dokładna
+  // wartość docelowa nie jest tu istotna — liczy się, że drag rzeczywiście zadziałał)
+  const moved = { x: mid.x, y: mid.y - 40 };
+  const screenMoved = toScreen(moved);
+  await page.mouse.move(screenMid.x, screenMid.y);
+  await page.mouse.down();
+  await page.mouse.move(screenMoved.x, screenMoved.y, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  route = await soleRoute(page);
+  expect(route!.points[3]).toBeLessThan(insertedY - 20);
+
+  // powrót do automatu przywraca oryginalną, przerywaną trasę Manhattan
+  await cofnij.click();
+  await page.waitForTimeout(300);
+  route = await soleRoute(page);
+  expect(route?.points).toEqual(original.points);
+  expect(route?.dashed).toBe(true);
+});
+
+test("ręczna edycja trasy przeżywa odświeżenie strony (autozapis)", async ({ page }) => {
+  const { route: original, panel, socket, toScreen } = await setupEditableRoute(page);
+  // Nieedytowana trasa idzie przez `spreadOverlappingRoutes`, które dubluje punkt na
+  // każdym złączeniu odcinków (do ew. bocznego rozsunięcia) — więc surowa LICZBA
+  // punktów z Konvy nie jest tu miarodajnym sygnałem "czy doszła ręczna poprawka".
+  // Miarodajny jest `dashed`: ręcznie zmieniona trasa renderuje się ZAWSZE ciągła,
+  // niezależnie od `viaWalls` (patrz DesignCanvas.tsx) — więc przejście
+  // przerywana→ciągła, PRZETRWANE przez odświeżenie strony, dowodzi, że poprawka
+  // faktycznie zapisała się i wczytała z powrotem z autozapisu.
+  expect(original.dashed).toBe(true);
+  const mid = { x: (panel.x + socket.x) / 2, y: panel.y };
+  const screenMid = toScreen(mid);
+
+  await page.mouse.click(screenMid.x, screenMid.y);
+  await page.mouse.dblclick(screenMid.x, screenMid.y);
+  await page.waitForTimeout(900); // debounce autozapisu
+
+  await page.reload();
+  await page.waitForTimeout(300);
+  // widoczność tras to lokalny stan UI, nie część projektu — po odświeżeniu wraca
+  // do domyślnie WYŁĄCZONEJ, trzeba ją włączyć ponownie, żeby cokolwiek zobaczyć
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+  const route = await soleRoute(page);
+  expect(route?.dashed).toBe(false);
+});
+
 test("dwa obwody gniazdek dzielące ten sam odcinek ściany: trasy się NIE zlewają (rozsunięte równolegle)", async ({ page }) => {
   await openPlan(page);
 

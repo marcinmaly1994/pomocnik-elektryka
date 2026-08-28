@@ -10,6 +10,7 @@ import {
   RotateCw,
   ShieldAlert,
   Trash2,
+  Undo2,
   Upload,
   X,
 } from "lucide-react";
@@ -24,7 +25,7 @@ import type { ElementType, Point } from "@/types";
 import { computeSanitaryZones, NO_ROOM, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { computeCircuits } from "@/lib/panel/circuits";
-import { buildCableRoutes, findPanel } from "@/lib/panel/loads";
+import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
   MANUAL_DRAW_SCALE_MPU,
@@ -161,6 +162,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
   const moveRoomShapePoint = useProjectStore((s) => s.moveRoomShapePoint);
   const removeElements = useProjectStore((s) => s.removeElements);
+  const routeOverrides = useProjectStore((s) => s.draft.routeOverrides);
+  const setRouteOverride = useProjectStore((s) => s.setRouteOverride);
+  const clearRouteOverride = useProjectStore((s) => s.clearRouteOverride);
   const cofnijZatwierdzone = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
   const maZatwierdzoneDoCofniecia = useProjectStore((s) => s.past.length > 0);
@@ -620,7 +624,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         }));
       } else if (selected.kind === "opening") {
         setDraft((d) => ({ ...d, openings: d.openings.filter((o) => o.id !== selected.id) }));
-      } else deleteRoomShape(selected.id);
+      } else if (selected.kind === "room") {
+        deleteRoomShape(selected.id);
+      } else if (selected.kind === "route") {
+        // Trasy nie da się „usunąć" — to widok policzony z planu. Delete/Backspace
+        // na zaznaczonej trasie kasuje jej ręczną poprawkę (jeśli jakaś jest),
+        // czyli cofa do routingu automatycznego — no-op, gdy nic nie było zmienione.
+        clearRouteOverride(selected.id);
+      }
       setSelected(null);
     }
   }
@@ -920,10 +931,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // punkty i sieć, po której routuje `buildCableRoutes`, zawsze mieszkają w tym samym
   // układzie współrzędnych. Puste trasy zasilania bez rozdzielnicy na planie — trasy
   // sterowania (łącznik→lampa) działają niezależnie od niej, patrz `buildCableRoutes`.
-  const cableRoutes = useMemo(
+  const rawCableRoutes = useMemo(
     () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements), elements, walls, roomShapes) : []),
     [showRoutes, elements, walls, roomShapes]
   );
+  // Ręczne poprawki (przeciągnięte przez użytkownika załamania, patrz DesignCanvas)
+  // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
+  // z aktualnej pozycji elementu, więc jego przesunięcie nie gubi ręcznego układu.
+  const cableRoutes = useMemo(() => applyRouteOverrides(rawCableRoutes, routeOverrides), [rawCableRoutes, routeOverrides]);
 
   function handleElementContextMenu(id: string, x: number, y: number) {
     if (multiSelected.includes(id) && multiSelected.length > 1) {
@@ -961,6 +976,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     toolMode === "pomieszczenie" ||
     toolMode === "skala" ||
     (selected?.kind === "wall" && toolMode === "zaznacz" && walls.some((w) => w.id === selected.id)) ||
+    (selected?.kind === "route" && toolMode === "zaznacz") ||
     // `toolMode !== "skala"` pominięte celowo: powyżej już wykluczyliśmy ten
     // przypadek (`toolMode === "skala"` zwróciłoby true wcześniej w tym samym `||`).
     !!skalaPotwierdzenie;
@@ -1044,6 +1060,24 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           </div>
         );
       })()}
+      {/* Zaznaczona trasa przewodu — podpowiedź jak ją edytować (dwuklik dokłada
+          załamanie, przeciągnięcie uchwytu je przesuwa, dwuklik na uchwycie kasuje)
+          i przycisk powrotu do routingu automatycznego, widoczny tylko gdy trasa
+          FAKTYCZNIE ma ręczną poprawkę — inaczej wisiałby bez sensu przy każdej
+          jeszcze nietkniętej trasie. */}
+      {selected?.kind === "route" && toolMode === "zaznacz" && (
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span>Trasa: dwuklik dokłada punkt, przeciągnij uchwyt, dwuklik na uchwycie go kasuje.</span>
+          {selected.id in routeOverrides && (
+            <button
+              onClick={() => clearRouteOverride(selected.id)}
+              className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs"
+            >
+              <Undo2 size={13} /> Cofnij do trasy automatycznej
+            </button>
+          )}
+        </div>
+      )}
       {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
           poza nim byłby tylko szumem w pasku narzędzi. */}
       {toolMode === "pomieszczenie" && (
@@ -1619,6 +1653,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             calibPoints={calibPoints}
             zones={zones}
             cableRoutes={cableRoutes}
+            routeOverrides={routeOverrides}
             lightGroups={lightGroups}
             elementScale={elementScale * BASE_ELEMENT_SCALE}
             planSize={planSize}
@@ -1667,6 +1702,12 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             }}
             onMoveRoomPoint={(id, index, point) => moveRoomShapePoint(id, index, point)}
             onMoveWallPoint={moveWallPoint}
+            onSelectRoute={(id) => {
+              setSelected({ kind: "route", id });
+              setMultiSelected([]);
+            }}
+            onSetRoutePoints={setRouteOverride}
+            onResetRoute={clearRouteOverride}
             onClearSelection={() => {
               setSelected(null);
               setMultiSelected([]);

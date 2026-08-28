@@ -138,9 +138,32 @@ interface Draft {
   walls: Wall[];
   roomShapes: RoomShape[];
   openings: Opening[];
+  /**
+   * Ręczne poprawki tras przewodów, kluczowane `CableRoute.id` (id elementu dla
+   * zasilania, `"${łącznikId}->${lampaId}"` dla sterowania — patrz `buildCableRoutes`
+   * w loads.ts). Trzymają WYŁĄCZNIE środkowe punkty (załamania) narysowane ręcznie
+   * przez użytkownika, BEZ pierwszego/ostatniego punktu trasy — te zawsze biorą się
+   * z aktualnej pozycji rozdzielnicy/łącznika i punktu/lampy, żeby przesunięcie
+   * elementu nie gubiło ręcznie ułożonych zagięć (patrz `applyRouteOverrides`).
+   */
+  routeOverrides: Record<string, Point[]>;
 }
 
-const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [] };
+const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [], routeOverrides: {} };
+
+/** Usuwa poprawki tras, których id odwołuje się do elementu, którego już nie ma
+ *  (element skasowany albo cała kondygnacja usunięta) — inaczej `routeOverrides`
+ *  rosłoby w nieskończoność martwymi wpisami, które nigdy nie trafią w żadną trasę.
+ *  Id trasy zasilania to id JEDNEGO elementu; id trasy sterowania to dwa id
+ *  rozdzielone `"->"` (łącznik i lampa) — działa dla obu, bo sprawdza KAŻDĄ część. */
+function pruneRouteOverrides(overrides: Record<string, Point[]>, elements: InstallationElement[]): Record<string, Point[]> {
+  const ids = new Set(elements.map((e) => e.id));
+  const out: Record<string, Point[]> = {};
+  Object.entries(overrides).forEach(([routeId, pts]) => {
+    if (routeId.split("->").every((id) => ids.has(id))) out[routeId] = pts;
+  });
+  return out;
+}
 
 /** Migawka do historii cofnij/ponów rozdzielnicy — trzy pola, które razem opisują to,
  *  co użytkownik faktycznie edytuje ręcznie. Bez `panelTryb`/`panelConfig`: zmiana
@@ -320,6 +343,11 @@ interface ProjectState {
   recolorRoomShape: (id: string) => void;
   deleteRoomShape: (id: string) => void;
   removeElements: (ids: string[]) => void;
+
+  /** Zapisuje/nadpisuje ręczną poprawkę trasy — patrz `Draft.routeOverrides`. */
+  setRouteOverride: (routeId: string, midPoints: Point[]) => void;
+  /** Kasuje poprawkę, trasa wraca do automatycznego routingu. */
+  clearRouteOverride: (routeId: string) => void;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -518,11 +546,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set((state) => {
       if (state.floors.length <= 1) return state;
       const floors = state.floors.filter((f) => f.id !== id);
+      const remainingElements = state.draft.elements.filter((e) => e.floor !== id);
       const draft: Draft = {
-        elements: state.draft.elements.filter((e) => e.floor !== id),
+        elements: remainingElements,
         walls: state.draft.walls.filter((w) => w.floor !== id),
         roomShapes: state.draft.roomShapes.filter((r) => r.floor !== id),
         openings: state.draft.openings.filter((o) => o.floor !== id),
+        routeOverrides: pruneRouteOverrides(state.draft.routeOverrides, remainingElements),
       };
       const bgImages = { ...state.bgImages };
       delete bgImages[id];
@@ -893,7 +923,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   removeElements: (ids) => {
     const { setDraft } = get();
-    setDraft((d) => ({ ...d, elements: d.elements.filter((e) => !ids.includes(e.id)) }));
+    setDraft((d) => {
+      const elements = d.elements.filter((e) => !ids.includes(e.id));
+      return { ...d, elements, routeOverrides: pruneRouteOverrides(d.routeOverrides, elements) };
+    });
+  },
+
+  setRouteOverride: (routeId, midPoints) => {
+    const { setDraft } = get();
+    setDraft((d) => ({ ...d, routeOverrides: { ...d.routeOverrides, [routeId]: midPoints } }));
+  },
+
+  clearRouteOverride: (routeId) => {
+    const { setDraft } = get();
+    setDraft((d) => {
+      if (!(routeId in d.routeOverrides)) return d;
+      const routeOverrides = { ...d.routeOverrides };
+      delete routeOverrides[routeId];
+      return { ...d, routeOverrides };
+    });
   },
 }));
 

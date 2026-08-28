@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Circuit, ElementType, InstallationElement } from "@/types";
-import { buildCableRoutes, circuitDemand, estimateRoutes, findPanel, kindForElements, spreadOverlappingRoutes } from "./loads";
+import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, findPanel, kindForElements, spreadOverlappingRoutes } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -258,6 +258,72 @@ describe("spreadOverlappingRoutes", () => {
     // drugi odcinek każdej trasy jest samotny (nikt inny go nie dzieli) — bez przesunięcia w X
     expect(pa[2].x).toBeCloseTo(50, 1);
     expect(pb[2].x).toBeCloseTo(50, 1);
+  });
+});
+
+describe("buildCableRoutes — zapasowa trasa Manhattan omija ścianę stojącą na drodze", () => {
+  function circuit(over: Partial<Circuit> = {}): Circuit {
+    return { id: "obw1", name: "Obwód gniazd ogólnych 1", type: "gniazdko", elements: [], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true, ...over };
+  }
+
+  it("gdy domyślne załamanie (przez {to.x, from.y}) przecina ścianę, a DRUGA orientacja jest wolna — wybiera drugą", () => {
+    const panel = { x: 0, y: 0 };
+    const e = el("gniazdko", { x: 100, y: 100 });
+    // trzy ROZŁĄCZONE kawałki ściany (patrz routing.test.ts — dijkstra między nimi
+    // zwraca null, więc trasa MUSI spaść na Manhattan): jedna tuż przy rozdzielnicy,
+    // jedna tuż przy gniazdku (żeby to one, a nie przeszkoda, były „najbliższe" przy
+    // doskoku), i trzecia — przeszkoda — dokładnie na domyślnym załamaniu (100,0).
+    const nearPanel = { id: "wp", floor: "parter", points: [{ x: 0, y: -5 }, { x: 0, y: -1 }] };
+    const nearPoint = { id: "we", floor: "parter", points: [{ x: 100, y: 105 }, { x: 100, y: 101 }] };
+    const obstacle = { id: "wo", floor: "parter", points: [{ x: 50, y: -10 }, { x: 50, y: 10 }] };
+    const [r] = buildCableRoutes(panel, [circuit({ elements: [e] })], [e], [nearPanel, nearPoint, obstacle], []);
+    expect(r.viaWalls).toBe(false); // nadal szacunek, nie routing po ścianach
+    expect(r.points).toEqual([panel, { x: 0, y: 100 }, { x: 100, y: 100 }]);
+  });
+});
+
+describe("applyRouteOverrides", () => {
+  function route(id: string, points: { x: number; y: number }[]): ReturnType<typeof buildCableRoutes>[number] {
+    return {
+      id,
+      circuitId: "obw1",
+      circuitName: "Obwód",
+      kind: "zasilanie",
+      type: "gniazdko",
+      cable: "",
+      breaker: "",
+      room: "Salon",
+      floor: "parter",
+      points,
+      lengthUnits: 0,
+      viaWalls: true,
+    };
+  }
+
+  it("bez poprawki zwraca trasę BEZ zmian", () => {
+    const r = route("a", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+    expect(applyRouteOverrides([r], {})).toEqual([r]);
+  });
+
+  it("wstawia środkowe punkty poprawki MIĘDZY aktualny początek i koniec trasy", () => {
+    const r = route("a", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+    const [out] = applyRouteOverrides([r], { a: [{ x: 50, y: 40 }] });
+    expect(out.points).toEqual([{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 100, y: 0 }]);
+    expect(out.lengthUnits).toBeCloseTo(Math.hypot(50, 40) * 2, 5);
+  });
+
+  it("gdy element (koniec trasy) się przesunął, poprawka trzyma środkowe zagięcie, ale koniec ŚCIGA nową pozycję", () => {
+    // symulacja: trasa policzona NA NOWO po ruchu punktu (nowy `to`), poprawka
+    // wciąż ta sama — środek zostaje, tylko doczepiony do świeżego końca
+    const moved = route("a", [{ x: 0, y: 0 }, { x: 200, y: 0 }]);
+    const [out] = applyRouteOverrides([moved], { a: [{ x: 50, y: 40 }] });
+    expect(out.points).toEqual([{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 200, y: 0 }]);
+  });
+
+  it("pusta tablica poprawki traktowana jest jak BRAK poprawki (powrót do auto), nie jak prosta linia", () => {
+    const r = route("a", [{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 100, y: 0 }]);
+    const [out] = applyRouteOverrides([r], { a: [] });
+    expect(out.points).toEqual(r.points);
   });
 });
 
