@@ -189,6 +189,7 @@ export function buildCableRoutes(panel: Point | null, circuits: Circuit[], walls
         type: e.type,
         cable: c.cable,
         breaker: c.breaker,
+        room: e.room,
         floor: e.floor,
         points,
         viaWalls: routed !== null,

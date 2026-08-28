@@ -4,6 +4,8 @@
  * dało się przetestować bez montowania canvasu.
  */
 
+import type { RoomShape } from "@/types";
+
 /** Domyślny logiczny rozmiar planu i skok siatki — jak VB_DEFAULT/GRID w wersji JS.
  *  Domyślny, bo obszar planu jest teraz zapisywany w projekcie (`planSize` w store)
  *  i dopasowuje się do proporcji wgranego rzutu. */
@@ -98,6 +100,23 @@ export function nextRoomName(countOnFloor: number): string {
 export function nextRoomColor(currentColor: string): string {
   const idx = ROOM_COLORS.indexOf(currentColor as (typeof ROOM_COLORS)[number]);
   return ROOM_COLORS[(idx + 1) % ROOM_COLORS.length];
+}
+
+/** Kolor dla elementu/rzeczy BEZ rozpoznanego pomieszczenia (patrz `NO_ROOM` w
+ *  lib/elements.ts) albo z nazwą, dla której nie ma już narysowanego obrysu —
+ *  szary, celowo POZA `ROOM_COLORS`, żeby nie dało się go pomylić z żadnym
+ *  realnym kolorem pomieszczenia. */
+export const NO_ROOM_COLOR = "#94A3B8";
+
+/**
+ * Kolor pomieszczenia o danej NAZWIE — tak elementy trzymają przypisanie do
+ * pokoju (`InstallationElement.room` to nazwa, nie id), więc żeby pokolorować
+ * coś „po pomieszczeniu" (np. trasę przewodu), trzeba dopasować po nazwie do
+ * narysowanego obrysu. `NO_ROOM_COLOR`, gdy nazwa nie pasuje do żadnego —
+ * „Bez pomieszczenia" albo pokój wpisany ręcznie, zanim ktoś go obrysował.
+ */
+export function colorForRoomName(roomName: string, roomShapes: RoomShape[]): string {
+  return roomShapes.find((r) => r.name === roomName)?.color ?? NO_ROOM_COLOR;
 }
 
 /** Skala kondygnacji (metrów na jednostkę planu) albo `null`, jeśli nie skalibrowana. */

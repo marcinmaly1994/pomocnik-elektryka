@@ -150,6 +150,10 @@ export interface CableRoute {
   type: ElementType;
   cable: string;
   breaker: string;
+  /** Pomieszczenie PUNKTU DOCELOWEGO (nazwa, jak w `InstallationElement.room`) —
+   *  do kolorowania trasy tak samo jak pomieszczenie na planie (patrz
+   *  `colorForRoomName`), zamiast po rodzaju obwodu. */
+  room: string;
   floor: string;
   points: Point[];
   lengthUnits: number;

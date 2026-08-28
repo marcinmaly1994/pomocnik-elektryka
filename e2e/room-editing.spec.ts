@@ -104,6 +104,10 @@ test("dwuklik w nazwę pomieszczenia na planie pozwala ją zmienić", async ({ p
 test("przeciągnięcie narożnika po zaznaczeniu zmienia kształt pomieszczenia", async ({ page }) => {
   const box0 = await openPlan(page);
   await drawRoom(page, box0);
+  // Edycja uchwytami działa TYLKO w trybie „Zaznacz" (patrz test niżej: w trybie
+  // „Narysuj Pomieszczenie" jest celowo zablokowana) — bez tego przełączenia klik
+  // w krawędź poniżej i tak zaznaczyłby pomieszczenie, ale uchwyty by się nie pojawiły.
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
 
   const before = await roomPoints(page);
   const { box, zoom } = await zoomAndBox(page);
@@ -124,6 +128,37 @@ test("przeciągnięcie narożnika po zaznaczeniu zmienia kształt pomieszczenia"
 
   const after = await roomPoints(page);
   expect(after[0]).not.toEqual(before[0]);
+});
+
+/**
+ * Zgłoszenie: uchwyty narożników ISTNIEJĄCEGO pomieszczenia były aktywne także w
+ * trybie „Narysuj Pomieszczenie" — klik blisko narożnika przy próbie narysowania
+ * NOWEGO pomieszczenia chwytał za uchwyt starego zamiast zacząć nową figurę.
+ */
+test("w trybie „Narysuj Pomieszczenie” przeciąganie narożnika NIE zmienia kształtu (uchwyty wyłączone)", async ({ page }) => {
+  const box0 = await openPlan(page);
+  await drawRoom(page, box0);
+  // toolMode zostaje na „pomieszczenie" (drawRoom go nie zmienia) — to jest właśnie
+  // scenariusz ze zgłoszenia, nie trzeba nic dodatkowo przełączać.
+
+  const before = await roomPoints(page);
+  const { box, zoom } = await zoomAndBox(page);
+
+  const midX = (before[0].x + before[1].x) / 2;
+  await page.mouse.click(box.x + midX * zoom, box.y + before[0].y * zoom);
+
+  const corner = before[0];
+  const start = { x: box.x + corner.x * zoom, y: box.y + corner.y * zoom };
+  const target = { x: start.x - 30, y: start.y - 30 };
+
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(900);
+
+  const after = await roomPoints(page);
+  expect(after[0]).toEqual(before[0]);
 });
 
 test("zaznaczanie obszarem nadal działa po dodaniu krawędzi klikalnej pomieszczenia", async ({ page }) => {

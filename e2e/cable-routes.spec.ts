@@ -95,6 +95,61 @@ test("rozdzielnica + gniazdo + lampa BEZ ścian: przełącznik rysuje dwie trasy
   expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
 });
 
+test("trasa jest w KOLORZE POMIESZCZENIA punktu docelowego, nie w kolorze rodzaju obwodu", async ({ page }) => {
+  await openPlan(page);
+
+  // Dwa osobne pomieszczenia — drugie dostaje ROOM_COLORS[1] ("#C1793F"), CELOWO
+  // inny niż colorForCircuit("gniazdko") ("#2D5A8C", który akurat pokrywa się z
+  // ROOM_COLORS[0]) — inaczej test przechodziłby nawet, gdyby kolorowanie po
+  // pomieszczeniu w ogóle nie działało i została stara wersja po rodzaju obwodu.
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  let box = await planBox(page);
+  await page.mouse.move(box.x + 60, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 180, box.y + 160, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  box = await planBox(page);
+  await page.mouse.move(box.x + 260, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 380, box.y + 160, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  await page.waitForTimeout(900); // debounce autozapisu (600 ms) + zapas
+
+  const roomColors = await page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.roomShapes.map((r: { color: string }) => r.color);
+  });
+  expect(roomColors[1]).toBe("#C1793F");
+
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 100, box.y + 100); // wewnątrz pierwszego pomieszczenia
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 320, box.y + 100); // wewnątrz DRUGIEGO pomieszczenia
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const strokes = await page.evaluate(() => {
+    const konva = (window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; stroke(): string }[] }[] } }).Konva;
+    const stage = konva?.stages?.[0];
+    return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01).map((l) => l.stroke()) ?? [];
+  });
+  expect(strokes).toEqual(["#C1793F"]);
+});
+
 test("rozdzielnica i gniazdo połączone ścianą: trasa jest CIĄGŁA (routowana), nie przerywana", async ({ page }) => {
   await openPlan(page);
 

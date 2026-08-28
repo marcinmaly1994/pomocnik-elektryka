@@ -4,9 +4,8 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, type SanitaryZone } from "@/lib/elements";
-import { DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
+import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
 import { clampNum, nearestPointOnPolyline, snap } from "@/lib/geometry";
-import { colorForCircuit } from "@/lib/panel/circuits";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { groupLabelAnchors } from "@/lib/glyphs";
 
@@ -816,9 +815,15 @@ export function DesignCanvas({
                 {/* Uchwyty narożników — tylko przy zaznaczonym pomieszczeniu. Podgląd
                     przeciągania jest IMPERATYWNY (patrz onDragMove elementów wyżej w tym
                     pliku, ten sam wzorzec): dopiero dragEnd zapisuje do store'a, więc
-                    historia cofania dostaje jeden wpis na cały ruch, nie jeden na klatkę. */}
+                    historia cofania dostaje jeden wpis na cały ruch, nie jeden na klatkę.
+                    Tylko w trybie „zaznacz" — ten sam wzorzec i powód co przy uchwytach
+                    ściany niżej: w trybie „pomieszczenie" klik na płótnie stawia kolejny
+                    wierzchołek NOWEGO pomieszczenia, więc uchwyty ISTNIEJĄCEGO by się z
+                    tym gryzły (klik blisko narożnika chwytałby za uchwyt zamiast zaczynać
+                    rysowanie), a zaznaczenie z poprzedniego trybu potrafi przetrwać
+                    przełączenie na „pomieszczenie". */}
                 {isSelRoom &&
-                  roomInteractive &&
+                  toolMode === "zaznacz" &&
                   r.points.map((p, i) => (
                     <Circle
                       key={i}
@@ -1048,8 +1053,10 @@ export function DesignCanvas({
           ))}
 
           {/* Trasy przewodów: od rozdzielnicy do każdego punktu obwodu, kolorowane jak
-              MCB na schemacie/rozdzielnicy (`colorForCircuit`) — ten sam kod koloru w
-              trzech miejscach ułatwia rozpoznanie, który obwód jest który.
+              POMIESZCZENIE punktu docelowego (`colorForRoomName`) — ten sam kolor co
+              obrys pokoju na planie, więc od razu widać, do którego pokoju dana trasa
+              biegnie, nawet gdy krzyżuje się z innymi. Elementy bez rozpoznanego
+              pomieszczenia dostają neutralny szary (`NO_ROOM_COLOR`).
               `viaWalls` odróżnia stylem linii DWA różne poziomy pewności co do trasy
               (patrz `buildCableRoutes`): CIĄGŁA — trasa faktycznie routowana wzdłuż
               narysowanych ścian/obrysów pomieszczeń; PRZERYWANA — zapasowy szacunek
@@ -1060,7 +1067,7 @@ export function DesignCanvas({
             <Line
               key={r.id}
               points={r.points.flatMap((p) => [p.x, p.y])}
-              stroke={colorForCircuit(r.type)}
+              stroke={colorForRoomName(r.room, roomShapes)}
               // Grubsza i mniej przezroczysta niż typowa linia poglądowa — odcinek
               // routowany WZDŁUŻ ściany dzieli z nią oś, więc cieniutka, półprzezroczysta
               // kreska ginęła optycznie pod dużo grubszym, ciemnym pociągnięciem ściany.

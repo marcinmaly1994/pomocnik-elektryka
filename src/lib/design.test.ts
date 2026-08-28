@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
+import type { RoomShape } from "@/types";
 import {
   ROOM_COLORS,
   roomColorForIndex,
   nextRoomName,
   nextRoomColor,
+  colorForRoomName,
+  NO_ROOM_COLOR,
   scaleOf,
   planSizeForImage,
   DEFAULT_PLAN_SIZE,
@@ -39,6 +42,21 @@ describe("nextRoomColor", () => {
 
   it("nieznany kolor -> pierwszy z palety", () => {
     expect(nextRoomColor("#000000")).toBe(ROOM_COLORS[0]);
+  });
+});
+
+describe("colorForRoomName", () => {
+  const salon: RoomShape = { id: "r1", floor: "f1", name: "Salon", color: "#3B8C63", points: [] };
+  const kuchnia: RoomShape = { id: "r2", floor: "f1", name: "Kuchnia", color: "#C1793F", points: [] };
+
+  it("dopasowuje po NAZWIE, nie po id", () => {
+    expect(colorForRoomName("Salon", [salon, kuchnia])).toBe("#3B8C63");
+    expect(colorForRoomName("Kuchnia", [salon, kuchnia])).toBe("#C1793F");
+  });
+
+  it("nazwa bez odpowiadającego obrysu (np. „Bez pomieszczenia”) dostaje neutralny szary", () => {
+    expect(colorForRoomName("Bez pomieszczenia", [salon, kuchnia])).toBe(NO_ROOM_COLOR);
+    expect(colorForRoomName("Sypialnia", [])).toBe(NO_ROOM_COLOR);
   });
 });
 

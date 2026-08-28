@@ -112,6 +112,39 @@ test("kliknięcie daleko od startu dokłada wierzchołek zamiast zamykać", asyn
   await expect(page.getByText(/^4 pkt\./)).toBeVisible();
 });
 
+test("Enter zatwierdza wielobok pomieszczenia tak samo jak przycisk Zakończ", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.getByRole("button", { name: "Wielobok" }).click();
+
+  await page.mouse.click(box.x + 120, box.y + 120);
+  await page.mouse.click(box.x + 300, box.y + 130);
+  await page.mouse.click(box.x + 280, box.y + 260);
+  await expect(page.getByText(/^3 pkt\./)).toBeVisible();
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Nazwij pomieszczenie")).toBeVisible();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  expect(await roomCount(page)).toBe(1);
+});
+
+test("Enter w polu nazwy zatwierdza pomieszczenie tak samo jak przycisk Dodaj pomieszczenie", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  await page.mouse.move(box.x + 100, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 260, box.y + 220, { steps: 8 });
+  await page.mouse.up();
+
+  const dialog = page.getByText("Nazwij pomieszczenie");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.type(" — testowe");
+  await page.keyboard.press("Enter");
+
+  await expect(dialog).toBeHidden();
+  expect(await roomCount(page)).toBe(1);
+});
+
 test("zmiana kształtu w trakcie rysowania porzuca zaczętą figurę", async ({ page }) => {
   const box = await openPlan(page);
   await page.getByRole("button", { name: "Wielobok" }).click();

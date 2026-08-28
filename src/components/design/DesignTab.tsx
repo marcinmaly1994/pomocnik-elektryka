@@ -703,6 +703,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         e.preventDefault();
         finishWall();
       }
+      // To samo dla wieloboku pomieszczenia — próg 3 punktów jak w `finishRoomDrawing`
+      // (przycisk „Zakończ" pojawia się dopiero od trzech, mniej nie domyka figury).
+      // Prostokąt nie potrzebuje tego skrótu: tam zamknięcie następuje od razu po
+      // puszczeniu przycisku myszy, bez oddzielnego kroku zatwierdzenia.
+      if (e.key === "Enter" && drawingRoomPoints.length >= 3 && tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        finishRoomDrawing();
+      }
       // Ctrl/Cmd+Z jak wszędzie indziej — idzie przez ten sam wrapper `undo()` co
       // przycisk „Cofnij”, więc mid-draw usuwa ostatni punkt tak samo jak przycisk.
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && tag !== "INPUT" && tag !== "TEXTAREA") {
@@ -1751,6 +1759,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             autoFocus
             value={pendingRoom?.name ?? ""}
             onChange={(e) => setPendingRoom((p) => (p ? { ...p, name: e.target.value } : p))}
+            // Enter zatwierdza nazwę i dodaje pomieszczenie — bez tego trzeba było
+            // sięgnąć po mysz mimo trwającej pracy klawiaturą (wpisywanie nazwy).
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                savePendingRoom();
+              }
+            }}
             className="mb-4 w-full rounded border border-border px-3 py-1.5 text-sm"
           />
           <Button variant="copper" className="w-full" onClick={savePendingRoom}>
