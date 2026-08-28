@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Save, Scan, Undo2 } from "lucide-react";
+import { Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Save, Scan, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
 import { FloorBar } from "./FloorBar";
@@ -29,6 +29,10 @@ export interface EditorToolbarProps {
   defaultElementScale: number;
   showZones: boolean;
   onToggleZones: () => void;
+  /** Widoczność poglądowych tras przewodów (rozdzielnica → punkt) — patrz
+   *  `buildCableRoutes`. Puste, gdy na kondygnacji nie ma rozdzielnicy. */
+  showRoutes: boolean;
+  onToggleRoutes: () => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -81,6 +85,8 @@ export function EditorToolbar({
   defaultElementScale,
   showZones,
   onToggleZones,
+  showRoutes,
+  onToggleRoutes,
   canUndo,
   canRedo,
   onUndo,
@@ -177,6 +183,21 @@ export function EditorToolbar({
 
       <Button variant="ghost" size="icon" onClick={onToggleZones} title="Pokaż strefy ochronne w łazience">
         {showZones ? <Eye size={15} /> : <EyeOff size={15} />}
+      </Button>
+
+      {/* Trasy przewodów są poglądowe (linia prosta, nie prawdziwy przebieg wzdłuż
+          ścian) i puste bez rozdzielnicy postawionej na planie — stąd domyślnie
+          WYŁĄCZONE (w odróżnieniu od stref, które są zawsze przydatne, gdy w ogóle
+          mają co pokazać), żeby nie zaśmiecać planu czymś, czego często nie widać. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggleRoutes}
+        title={showRoutes ? "Ukryj poglądowe trasy przewodów" : "Pokaż poglądowe trasy przewodów"}
+        aria-label={showRoutes ? "Ukryj trasy przewodów" : "Pokaż trasy przewodów"}
+        aria-pressed={showRoutes}
+      >
+        <Cable size={15} className={showRoutes ? "text-copper" : undefined} />
       </Button>
 
       <div className="flex items-center">

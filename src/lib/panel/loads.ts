@@ -8,7 +8,7 @@
  * miejsce w całym łańcuchu, gdzie liczby nie pochodzą wprost z tablic.
  */
 
-import type { ElementType, InstallationElement, Point } from "@/types";
+import type { CableRoute, Circuit, ElementType, InstallationElement, Point } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
 
 /**
@@ -132,6 +132,47 @@ export function estimateRoutes(
 export function findPanel(elements: InstallationElement[]): Point | null {
   const p = elements.find((e) => e.type === "rozdzielnica");
   return p ? { x: p.x, y: p.y } : null;
+}
+
+/**
+ * Wizualne trasy przewodów — łamana Manhattan (jedno załamanie: najpierw poziomo,
+ * potem pionowo) od rozdzielnicy do każdego punktu obwodu, do narysowania na planie.
+ *
+ * Osobna funkcja od `estimateRoutes`: tamta liczy WYŁĄCZNIE metry do kosztorysu/doboru
+ * (z narzutem na bieg pod stropem i zapasem montażowym, które nie mają odpowiednika na
+ * rysunku 2D) i dlatego wymaga kalibracji skali. Ta zwraca same punkty ścieżki w
+ * jednostkach planu — do narysowania linii nie trzeba znać jej długości w metrach,
+ * więc działa też BEZ skali (jedynym warunkiem jest postawiona na planie rozdzielnica).
+ *
+ * `circuits` powinny pochodzić z elementów TEJ SAMEJ kondygnacji co `panel` — trasa
+ * między kondygnacjami nie ma sensu na płaskim rysunku (każda ma własny układ
+ * współrzędnych). To odpowiedzialność wywołującego (patrz `useActiveFloorElements`).
+ */
+export function buildCableRoutes(panel: Point | null, circuits: Circuit[]): CableRoute[] {
+  if (!panel) return [];
+  const out: CableRoute[] = [];
+  for (const c of circuits) {
+    for (const e of c.elements) {
+      // Punkty świadomie skopiowane do gołego `{x,y}` — `Point[]` ma zostać lekką
+      // geometrią, a nie przeciekiem całego `InstallationElement` (rola, pokój,
+      // kondygnacja…) tam, gdzie potrzebna jest tylko ścieżka do narysowania.
+      const end: Point = { x: e.x, y: e.y };
+      const corner: Point = { x: e.x, y: panel.y };
+      const points = corner.x === panel.x || corner.y === end.y ? [panel, end] : [panel, corner, end];
+      out.push({
+        id: e.id,
+        circuitId: c.id,
+        circuitName: c.name,
+        type: e.type,
+        cable: c.cable,
+        breaker: c.breaker,
+        floor: e.floor,
+        points,
+        lengthUnits: Math.abs(e.x - panel.x) + Math.abs(e.y - panel.y),
+      });
+    }
+  }
+  return out;
 }
 
 /** Rodzaj obwodu wg roli elementów — mapowanie na kategorie używane w doborze. */

@@ -2,10 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import type { InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
+import type { CableRoute, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, type SanitaryZone } from "@/lib/elements";
 import { DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
 import { clampNum, nearestPointOnPolyline, snap } from "@/lib/geometry";
+import { colorForCircuit } from "@/lib/panel/circuits";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { groupLabelAnchors } from "@/lib/glyphs";
 
@@ -87,6 +88,9 @@ interface DesignCanvasProps {
   bgImageUrl: string | null;
   calibPoints: Point[];
   zones: SanitaryZone[];
+  /** Wizualne trasy przewodów (rozdzielnica → punkt), patrz `buildCableRoutes` —
+   *  pusta tablica, gdy na kondygnacji nie ma rozdzielnicy albo widoczność wyłączona. */
+  cableRoutes: CableRoute[];
   /** Numery grup sterowania oświetleniem, wyliczone w DesignTab (lib/lightGroups.ts). */
   lightGroups: Map<string, (number | undefined)[]>;
   /** Mnożnik rozmiaru symboli elementów (1 = rozmiar bazowy). */
@@ -212,6 +216,7 @@ export function DesignCanvas({
   bgImageUrl,
   calibPoints,
   zones,
+  cableRoutes,
   lightGroups,
   elementScale,
   planSize,
@@ -1040,6 +1045,24 @@ export function DesignCanvas({
                 fill="#8A5526"
               />
             </Group>
+          ))}
+
+          {/* Trasy przewodów: łamana Manhattan (jedno załamanie) od rozdzielnicy do
+              każdego punktu obwodu, kolorowana jak MCB na schemacie/rozdzielnicy
+              (`colorForCircuit`) — ten sam kod koloru w trzech miejscach ułatwia
+              rozpoznanie, który obwód jest który. Czysto poglądowe (linia prosta,
+              nie prawdziwa trasa wzdłuż ścian) i nieinteraktywne — `listening={false}`,
+              jak strefy ochronne wyżej. */}
+          {cableRoutes.map((r) => (
+            <Line
+              key={r.id}
+              points={r.points.flatMap((p) => [p.x, p.y])}
+              stroke={colorForCircuit(r.type)}
+              strokeWidth={1.25}
+              dash={[6, 4]}
+              opacity={0.7}
+              listening={false}
+            />
           ))}
 
           {/* Ściana w trakcie rysowania: odcinki już postawione, punkty widoczne na

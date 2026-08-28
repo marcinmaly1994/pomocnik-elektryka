@@ -23,6 +23,8 @@ import {
 import type { ElementType, Point } from "@/types";
 import { computeSanitaryZones, NO_ROOM, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
+import { computeCircuits } from "@/lib/panel/circuits";
+import { buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
   MANUAL_DRAW_SCALE_MPU,
@@ -279,6 +281,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     return () => clearTimeout(t);
   }, [skalaPotwierdzenie]);
   const [showZones, setShowZones] = useState(true);
+  /** Widoczność tras przewodów — domyślnie WYŁĄCZONA: to warstwa poglądowa, nie
+   *  zawsze potrzebna, i bez rozdzielnicy postawionej na planie i tak jest pusta
+   *  (patrz `cableRoutes` niżej), więc nie ma po co narzucać jej od razu. */
+  const [showRoutes, setShowRoutes] = useState(false);
   // Skala samych symboli na planie (nie powiększenie widoku) — ustawienie widoku, więc
   // stan lokalny jak snapOn/showZones, a nie część zapisywanego projektu.
   const [elementScale, setElementScale] = useState(DEFAULT_ELEMENT_SCALE);
@@ -901,6 +907,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // Grupy sterowania oświetleniem liczone z elementów bieżącej kondygnacji — numer
   // pokazywany jest zarówno przy łączniku, jak i przy sterowanych przez niego punktach.
   const lightGroups = useMemo(() => computeLightGroups(elements), [elements]);
+  // Trasy przewodów — WYŁĄCZNIE z elementów TEJ kondygnacji (`elements` już jest
+  // przefiltrowane przez `useActiveFloorElements`), więc rozdzielnica i punkty, do
+  // których liczymy trasę, zawsze mieszkają w tym samym układzie współrzędnych.
+  // Pusta tablica bez rozdzielnicy na planie — `buildCableRoutes` zwraca wtedy [].
+  const cableRoutes = useMemo(
+    () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements)) : []),
+    [showRoutes, elements]
+  );
 
   function handleElementContextMenu(id: string, x: number, y: number) {
     if (multiSelected.includes(id) && multiSelected.length > 1) {
@@ -1343,6 +1357,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         defaultElementScale={DEFAULT_ELEMENT_SCALE}
         showZones={showZones}
         onToggleZones={() => setShowZones((z) => !z)}
+        showRoutes={showRoutes}
+        onToggleRoutes={() => setShowRoutes((r) => !r)}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}
@@ -1593,6 +1609,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             bgImageUrl={bgImageUrl}
             calibPoints={calibPoints}
             zones={zones}
+            cableRoutes={cableRoutes}
             lightGroups={lightGroups}
             elementScale={elementScale * BASE_ELEMENT_SCALE}
             planSize={planSize}
