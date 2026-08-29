@@ -1118,10 +1118,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       )}
 
       {drawingWall.length > 0 && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium text-slate-600">Rysowanie ściany: {drawingWall.length} pkt.</span>
-          <button onClick={finishWall} className="pe-btn-ghost px-2.5 py-1 text-sm">Zakończ</button>
-          <button onClick={() => setDrawingWall([])} className="pe-btn-ghost px-2.5 py-1 text-sm">Anuluj</button>
+        <div className="flex flex-nowrap items-center gap-2 text-sm">
+          <span className="whitespace-nowrap font-medium text-slate-600">Rysowanie ściany: {drawingWall.length} pkt.</span>
+          <button onClick={finishWall} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
+          <button onClick={() => setDrawingWall([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
         </div>
       )}
 
@@ -1193,15 +1193,15 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         </div>
       )}
       {drawingRoomPoints.length > 0 && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium text-slate-600">
+        <div className="flex flex-nowrap items-center gap-2 text-sm">
+          <span className="whitespace-nowrap font-medium text-slate-600">
             {drawingRoomPoints.length} pkt.
             {drawingRoomPoints.length >= 3 && " — kliknij w pierwszy punkt, aby zamknąć"}
           </span>
           {drawingRoomPoints.length >= 3 && (
-            <button onClick={finishRoomDrawing} className="pe-btn-ghost px-2.5 py-1 text-sm">Zakończ</button>
+            <button onClick={finishRoomDrawing} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
           )}
-          <button onClick={() => setDrawingRoomPoints([])} className="pe-btn-ghost px-2.5 py-1 text-sm">Anuluj</button>
+          <button onClick={() => setDrawingRoomPoints([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
         </div>
       )}
       {toolMode === "skala" && (
@@ -1725,7 +1725,21 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               ruszają, co jest sednem zgłoszenia („nie przesuwały wszystkiego w dół").
               Ramka/tło pojawiają się tylko, gdy jest co pokazać (`kontekstoweAktywne`)
               — inaczej tryb „zaznacz" (domyślny, najczęstszy) wisiałby nad płótnem
-              jako pusty bordowany prostokąt. */}
+              jako pusty bordowany prostokąt.
+              TRZECIA próba, odrzucona: skrócenie stałego slotu (92 → 56 px) plus
+              `whitespace-nowrap`/`flex-nowrap` na rosnącym liczniku punktów (patrz
+              „Rysowanie ściany"/„N pkt." niżej — ZOSTAJE, bo to i tak realna poprawka),
+              w nadziei że 56 px starczy na wszystkie stany. Nie starczało: w trybie
+              „Pomieszczenie" selektor kształtu I licznik punktów to DWA OSOBNE bloki w
+              tym samym `flex-wrap` — osobno mieszczą się w jednej linii, ale RAZEM (gdy
+              licznik pojawia się po pierwszym kliknięciu wieloboku) już nie, więc slot
+              i tak rósł z 56 do ~92 px DOKŁADNIE między pierwszym a drugim klikiem
+              rysowania — czyli ten sam mid-gesture jump, tylko przesunięty o jeden
+              klik. e2e złapało to (`room-drawing.spec.ts`, wielobok). 92 px nie jest
+              więc dowolnym zapasem — to naprawdę wysokość potrzebna na NAJGORSZY
+              jednoczesny przypadek (selektor kształtu + licznik punktów), więc wraca
+              bez zmian; skrócenie wymagałoby połączenia obu bloków w jeden wiersz,
+              a to osobna, większa zmiana UI. */}
           {!pelnyEkran && (
             <div
               className={
