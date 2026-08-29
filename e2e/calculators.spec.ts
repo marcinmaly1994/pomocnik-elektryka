@@ -58,11 +58,57 @@ test("dobór, którego nie da się spełnić, pokazuje czytelny komunikat zamias
   await expect(page.getByText(/przekracza obciążalność największego przekroju/)).toBeVisible();
 });
 
-test("Spadek napięcia nie jest już osobnym kalkulatorem — połączony z doborem przewodu", async ({ page }) => {
+/**
+ * Kalkulator „Spadek napięcia" wrócił jako osobna pozycja, ale w INNEJ roli niż
+ * ten skasowany w kroku 77 (patrz MIGRATION.md). Tamten dublował dobór przewodu
+ * z własną, błędną kopią wzoru (ρ dla 20 °C). Ten odpowiada na odwrotne pytanie —
+ * przekrój jest DANĄ, nie wynikiem — i liczy tym samym `voltageDropPct` co
+ * Rozdzielnica. Test pilnuje właśnie tego rozróżnienia: obie pozycje istnieją
+ * obok siebie, a dobór przewodu nadal sam sprawdza spadek.
+ */
+test("Spadek napięcia jest osobnym kalkulatorem sprawdzającym ZNANY przekrój, a dobór przewodu nadal liczy spadek sam", async ({ page }) => {
   await openCalculators(page);
 
-  await expect(page.getByRole("button", { name: "Spadek napięcia", exact: true })).toHaveCount(0);
   await expect(page.getByText("przekrój, wyłącznik, spadek napięcia")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
+  await expect(page.getByRole("heading", { name: "Spadek napięcia" })).toBeVisible();
+  // przekrój jest polem WEJŚCIOWYM — to odróżnia ten kalkulator od doboru przewodu
+  await expect(page.getByLabel("Przekrój żyły")).toBeVisible();
+});
+
+/**
+ * Wynik musi zgadzać się co do drugiego miejsca po przecinku z `voltageDropPct`
+ * (`lib/panel/sizing.ts`), czyli z ρ = 0,0225 dla 70 °C. Gdyby ktoś kiedyś wpiął
+ * tu z powrotem wzór z ρ = 0,0175 (20 °C), wynik spadłby do ~1,52% i test padnie.
+ * Domyślne dane: 10 A, 1-fazowe, 25 m, 2,5 mm² -> (2·25·10·0,0225)/2,5 = 4,5 V
+ * -> 4,5/230 = 1,957% -> przy limicie 3% warunek jest spełniony.
+ */
+test("spadek napięcia liczy się rezystywnością dla 70°C — te same liczby co Rozdzielnica", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("1.96 %");
+  await expect(result).toContainText("4.5 V");
+  await expect(result).toContainText("225.5 V");
+  await expect(page.getByText(/Warunek spełniony/)).toBeVisible();
+});
+
+test("za mały przekrój na długiej trasie podpowiada konkretny przekrój zamiast samego „nie spełnia”", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
+
+  // 16 A na 60 m przy 1,5 mm²: (2·60·16·0,0225)/1,5 = 28,8 V = 12,52% >> 3%
+  await page.getByLabel("Prąd obciążenia (Ib)").fill("16");
+  await page.getByLabel("Długość trasy (w jedną stronę)").fill("60");
+  await page.getByLabel("Przekrój żyły").selectOption("1.5");
+
+  await expect(page.getByText(/Warunek niespełniony/)).toBeVisible();
+  // 6 mm² daje jeszcze 3,13% (za dużo), 10 mm² już 1,88% — stąd 10 jako pierwszy,
+  // który wchodzi w limit. Test pilnuje, że podpowiedź liczy się z tego samego
+  // szeregu przekrojów co dobór (SECTIONS), a nie zaokrągla „na oko".
+  await expect(page.getByText(/Najmniejszy przekrój.*10 mm²/)).toBeVisible();
 });
 
 test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,88 Ω)", async ({ page }) => {

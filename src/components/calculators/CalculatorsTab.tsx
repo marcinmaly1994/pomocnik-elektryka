@@ -12,14 +12,15 @@ import {
   Info,
   Plus,
   Trash2,
+  TrendingDown,
   Zap,
   type LucideIcon,
 } from "lucide-react";
 import { calcLighting, calcPowerBalance, maxGroundingResistance, UL } from "@/lib/electrical";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { circuitDemand, kindForElements } from "@/lib/panel/loads";
-import { LAYING_METHOD_LABELS, U0, type LayingMethod } from "@/lib/panel/norms";
-import { sizeCircuit, sizeFeeder, zsMaxForBreaker, type CircuitKind } from "@/lib/panel/sizing";
+import { LAYING_METHOD_LABELS, SECTIONS, U0, type LayingMethod } from "@/lib/panel/norms";
+import { sizeCircuit, sizeFeeder, voltageDropPct, zsMaxForBreaker, type CircuitKind } from "@/lib/panel/sizing";
 import { useCalculatorsStore, type CalcId } from "@/store/useCalculatorsStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Card } from "./Card";
@@ -28,6 +29,7 @@ import { HowItWorks } from "./HowItWorks";
 
 const CALC_LIST: { id: CalcId; label: string; desc: string; icon: LucideIcon }[] = [
   { id: "przewod", label: "Dobór przewodu i zabezpieczenia", desc: "przekrój, wyłącznik, spadek napięcia", icon: Zap },
+  { id: "spadek", label: "Spadek napięcia", desc: "sprawdzenie trasy o znanym przekroju", icon: TrendingDown },
   { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza", icon: Home },
   { id: "wlz", label: "Dobór WLZ (linii zasilającej)", desc: "przekrój kabla od licznika do rozdzielnicy", icon: Cable },
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN", icon: ClipboardCheck },
@@ -46,6 +48,39 @@ const LAYING_METHOD_OPTIONS = (Object.entries(LAYING_METHOD_LABELS) as [LayingMe
   ([value, label]) => ({ value, label })
 );
 
+/**
+ * Orientacyjne cos φ typowych odbiorników domowych — ŚCIĄGA, nie tablica normowa.
+ *
+ * Powód istnienia: cos φ to jedyne pole w tym formularzu, którego laik nie ma skąd
+ * wziąć. Moc odczyta z tabliczki znamionowej, długość zmierzy, sposób ułożenia
+ * wybierze z listy — a współczynnik mocy albo jest schowany w karcie katalogowej,
+ * albo nie ma go wcale. Bez podpowiedzi zostaje domyślna 1, która dla odbiornika
+ * silnikowego zaniża prąd obliczeniowy (Ib = P/(U·cos φ)) i przez to CAŁY dobór.
+ *
+ * Wartości to typowe zakresy z praktyki instalatorskiej dla pracy przy pełnym
+ * obciążeniu — nie da się ich wziąć z normy, bo zależą od konkretnego egzemplarza.
+ * Stąd jawne „orientacyjne" w nagłówku i odesłanie do tabliczki znamionowej:
+ * podana wartość ma być punktem startowym, nie zastępować danych producenta.
+ * Silniki obciążone częściowo mają cos φ WYRAŹNIE niższy niż podany tu dla pracy
+ * znamionowej — to najczęstsze źródło niedoszacowania, więc mówimy o tym wprost.
+ */
+const COSPHI_EXAMPLES: { cos: number; odbiorniki: string }[] = [
+  { cos: 1.0, odbiorniki: "Grzałki, piekarnik, czajnik, bojler, żarówki — odbiorniki czysto rezystancyjne" },
+  { cos: 0.95, odbiorniki: "Płyta indukcyjna, ładowarka EV, komputery i RTV z układem PFC" },
+  { cos: 0.9, odbiorniki: "Pralka, zmywarka, oprawy LED z porządnym zasilaczem" },
+  { cos: 0.85, odbiorniki: "Silniki 3-fazowe przy pełnym obciążeniu, pompa ciepła" },
+  { cos: 0.8, odbiorniki: "Klimatyzacja, lodówka, zamrażarka — napęd sprężarki" },
+  { cos: 0.7, odbiorniki: "Pompy i wentylatory 1-fazowe, elektronarzędzia" },
+  { cos: 0.6, odbiorniki: "Małe silniki 1-fazowe słabo obciążone, świetlówki nieskompensowane" },
+];
+
+const PHASE_OPTIONS = [
+  { value: "1", label: "1-fazowe 230V" },
+  { value: "3", label: "3-fazowe 400V" },
+];
+
+const SECTION_OPTIONS = SECTIONS.map((s) => ({ value: String(s), label: `${String(s).replace(".", ",")} mm²` }));
+
 export function CalculatorsTab() {
   // Stan (wejścia i lista odbiorników w bilansie mocy) mieszka w osobnym,
   // trwałym store'zie (`useCalculatorsStore`, localStorage) — bez tego
@@ -63,6 +98,11 @@ export function CalculatorsTab() {
   const ambientC = useCalculatorsStore((s) => s.ambientC);
   const bundleCount = useCalculatorsStore((s) => s.bundleCount);
   const motorStart = useCalculatorsStore((s) => s.motorStart);
+  const duCurrentA = useCalculatorsStore((s) => s.duCurrentA);
+  const duPhase = useCalculatorsStore((s) => s.duPhase);
+  const duLength = useCalculatorsStore((s) => s.duLength);
+  const duSection = useCalculatorsStore((s) => s.duSection);
+  const duLimitPct = useCalculatorsStore((s) => s.duLimitPct);
   const devices = useCalculatorsStore((s) => s.devices);
   const ks = useCalculatorsStore((s) => s.ks);
   const zCurve = useCalculatorsStore((s) => s.zCurve);
@@ -95,6 +135,11 @@ export function CalculatorsTab() {
   const setAmbientC = (v: number) => patch({ ambientC: v });
   const setBundleCount = (v: number) => patch({ bundleCount: v });
   const setMotorStart = (v: boolean) => patch({ motorStart: v });
+  const setDuCurrentA = (v: number) => patch({ duCurrentA: v });
+  const setDuPhase = (v: "1" | "3") => patch({ duPhase: v });
+  const setDuLength = (v: number) => patch({ duLength: v });
+  const setDuSection = (v: number) => patch({ duSection: v });
+  const setDuLimitPct = (v: number) => patch({ duLimitPct: v });
   const setKs = (v: number) => patch({ ks: v });
   const setZCurve = (v: string) => patch({ zCurve: v });
   const setZIn = (v: number) => patch({ zIn: v });
@@ -136,7 +181,28 @@ export function CalculatorsTab() {
     [circuitKind, power, phase, cosphi, length, layingMethod, ambientC, bundleCount, motorStart]
   );
 
-  // --- 2. bilans mocy ---
+  // --- 2. spadek napięcia na ZNANYM przekroju ---
+  // Ten sam `voltageDropPct` co `sizeCircuit`/`sizeFeeder` — czyli rezystywność
+  // miedzi przy 70 °C, nie 20 °C (patrz `RHO_CU_70C` w norms.ts). To NIE jest
+  // kopia wzoru: osobna implementacja spadku napięcia mieszkała już kiedyś w
+  // `lib/electrical.ts` z ρ dla 20 °C i zaniżała wynik o ~28% względem
+  // Rozdzielnicy (MIGRATION.md, krok 77) — dokładnie tego błędu ten import unika.
+  const dropCheck = useMemo(() => {
+    const U = duPhase === "3" ? 400 : U0;
+    const pct = voltageDropPct(duLength, duCurrentA, duSection, duPhase);
+    // Najmniejszy przekrój z szeregu, który zmieściłby się w limicie — podpowiedź
+    // „co zrobić", gdy warunek nie wychodzi. `null`, gdy nie starcza nawet największy.
+    const minOk = SECTIONS.find((s) => voltageDropPct(duLength, duCurrentA, s, duPhase) <= duLimitPct) ?? null;
+    return {
+      pct,
+      volts: (pct / 100) * U,
+      atLoad: U - (pct / 100) * U,
+      ok: duLength > 0 && duCurrentA > 0 ? pct <= duLimitPct : null,
+      minOk,
+    };
+  }, [duLength, duCurrentA, duSection, duPhase, duLimitPct]);
+
+  // --- 3. bilans mocy ---
   const balance = useMemo(() => calcPowerBalance(devices, ks), [devices, ks]);
 
   // Obwody z CAŁEGO budynku (wszystkie kondygnacje — `draft.elements` nie jest
@@ -264,6 +330,46 @@ export function CalculatorsTab() {
                 <Field label="Współczynnik cos φ" value={cosphi} onChange={(v) => setCosphi(Number(v))} step="0.05" />
               </div>
 
+              {/* Ściąga cos φ — patrz `COSPHI_EXAMPLES`. Wiersze są KLIKALNE i wpisują
+                  wartość do pola wyżej: to jedyne pole formularza, którego laik nie ma
+                  skąd wziąć, a przepisywanie liczby ręcznie z tabelki obok pola byłoby
+                  krokiem bez powodu. Aktywny wiersz jest podświetlony, żeby było widać,
+                  która wartość siedzi w formularzu. */}
+              <details className="mb-3 rounded-lg border border-border bg-white/60">
+                <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold text-slate-600 hover:text-copper">
+                  Nie znasz cos φ? Zobacz orientacyjne wartości dla typowych odbiorników
+                </summary>
+                <div className="border-t border-border px-1.5 py-1.5">
+                  {COSPHI_EXAMPLES.map((e) => {
+                    const on = Math.abs(cosphi - e.cos) < 0.001;
+                    return (
+                      <button
+                        key={e.cos}
+                        type="button"
+                        onClick={() => setCosphi(e.cos)}
+                        title={`Wpisz cos φ = ${String(e.cos).replace(".", ",")}`}
+                        className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
+                        style={on ? { background: "#2D5A8C10" } : undefined}
+                      >
+                        <span
+                          className="pe-mono shrink-0 text-[12px] font-semibold"
+                          style={{ color: on ? "#2D5A8C" : "#8A5526" }}
+                        >
+                          {e.cos.toFixed(2).replace(".", ",")}
+                        </span>
+                        <span className="text-[11.5px] leading-snug text-slate-600">{e.odbiorniki}</span>
+                      </button>
+                    );
+                  })}
+                  <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
+                    Wartości orientacyjne, dla pracy przy pełnym obciążeniu — jeśli tabliczka znamionowa albo karta
+                    katalogowa podaje cos φ, wpisz TĘ wartość. Silnik obciążony częściowo ma cos φ wyraźnie niższy niż
+                    znamionowy (nawet 0,3–0,5 na biegu jałowym), więc dla odbiorników silnikowych pracujących z zapasem
+                    mocy przyjmij wartość niższą od podanej tutaj.
+                  </div>
+                </div>
+              </details>
+
               <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Trasa i warunki ułożenia</div>
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
@@ -352,6 +458,106 @@ export function CalculatorsTab() {
                   "Sposób ułożenia zmienia dopuszczalną obciążalność: przewód w ścianie ocieplonej termicznie grzeje się najbardziej (najostrzejszy przypadek), natynkowy chłodzi się najlepiej.",
                   "Bez podanej długości trasy (albo przy długości = 0) spadek napięcia NIE jest sprawdzany — dobór pokrywa wtedy wyłącznie obciążalność.",
                   "Wynik jest orientacyjny/edukacyjny — dobór do realizacji i odbioru wykonuje osoba z uprawnieniami, z uwzględnieniem rzeczywistej trasy kabla i warunków otoczenia.",
+                ]}
+              />
+            </Card>
+          )}
+
+          {activeCalc === "spadek" && (
+            <Card title={active.label} icon={TrendingDown} tag="sprawdzenie trasy">
+              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                Ten kalkulator sprawdza trasę o <strong>znanym przekroju</strong> — np. kabel, który już jest ułożony
+                albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór przewodu i zabezpieczenia”: tam
+                przekrój jest wynikiem, dobieranym pod obciążalność i spadek naraz.
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Prąd obciążenia (Ib)" value={duCurrentA} onChange={(v) => setDuCurrentA(Number(v))} unit="A" step="0.1" />
+                <Field label="Zasilanie" value={duPhase} onChange={(v) => setDuPhase(v as "1" | "3")} options={PHASE_OPTIONS} />
+                <Field label="Długość trasy (w jedną stronę)" value={duLength} onChange={(v) => setDuLength(Number(v))} unit="m" />
+                <Field
+                  label="Przekrój żyły"
+                  value={String(duSection)}
+                  onChange={(v) => setDuSection(Number(v))}
+                  options={SECTION_OPTIONS}
+                />
+                <Field
+                  label="Dopuszczalny spadek napięcia"
+                  value={duLimitPct}
+                  onChange={(v) => setDuLimitPct(Number(v))}
+                  unit="%"
+                  step="0.5"
+                />
+              </div>
+
+              <div className="mt-2 p-3 pe-result">
+                <div className="text-xs text-slate-500 mb-1">Spadek napięcia na trasie</div>
+                <div className="pe-mono text-lg text-blueprint">{dropCheck.pct.toFixed(2)} %</div>
+                <div className="mt-2 flex gap-2 flex-wrap">
+                  <span className="pe-chip pe-tag-copper">ΔU {dropCheck.volts.toFixed(1)} V</span>
+                  <span className="pe-chip pe-tag-blue">napięcie u odbiornika {dropCheck.atLoad.toFixed(1)} V</span>
+                  <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                    limit {String(duLimitPct).replace(".", ",")}%
+                  </span>
+                </div>
+              </div>
+
+              {dropCheck.ok !== null && (
+                <div
+                  className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2"
+                  style={dropCheck.ok ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
+                >
+                  {dropCheck.ok ? <Check size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+                  <div>
+                    {dropCheck.ok ? (
+                      "Warunek spełniony — spadek napięcia mieści się w przyjętym limicie."
+                    ) : dropCheck.minOk !== null ? (
+                      <>
+                        Warunek niespełniony. Najmniejszy przekrój, który zmieści się w limicie na tej trasie, to{" "}
+                        <strong>{String(dropCheck.minOk).replace(".", ",")} mm²</strong> — albo skróć trasę, albo zasil
+                        odbiornik z podrozdzielnicy postawionej bliżej.
+                      </>
+                    ) : (
+                      <>
+                        Warunek niespełniony i nie ratuje go nawet największy przekrój z szeregu
+                        ({String(SECTIONS[SECTIONS.length - 1]).replace(".", ",")} mm²). Na takiej długości trzeba
+                        postawić podrozdzielnicę bliżej odbiornika albo zasilić go trójfazowo.
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <HowItWorks
+                formulas={[
+                  {
+                    label: "Spadek napięcia — obwód 1-fazowy",
+                    eq: "ΔU = (2 × L × Ib × ρ) / S",
+                    where: "L — długość trasy w jedną stronę [m], Ib — prąd obciążenia [A], S — przekrój żyły [mm²]. Mnożnik 2, bo prąd płynie tam i z powrotem (L + N).",
+                  },
+                  {
+                    label: "Spadek napięcia — obwód 3-fazowy",
+                    eq: "ΔU = (√3 × L × Ib × ρ) / S",
+                    where: "√3 zamiast 2 — przy obciążeniu symetrycznym prąd nie wraca przewodem neutralnym",
+                  },
+                  {
+                    label: "Spadek względny",
+                    eq: "ΔU% = (ΔU / U) × 100%",
+                    where: "U = 230 V dla 1 fazy, 400 V (międzyfazowe) dla 3 faz",
+                  },
+                  {
+                    label: "Rezystywność miedzi",
+                    eq: "ρ = 0,0225 Ω·mm²/m",
+                    where: "wartość dla żyły nagrzanej prądem roboczym do 70 °C — NIE 0,0175 (to wartość dla 20 °C, zaniża wynik o ~28%)",
+                  },
+                ]}
+                notes={[
+                  "Ten sam silnik (`voltageDropPct` w `lib/panel/sizing.ts`) liczy spadek w kalkulatorze doboru przewodu, w doborze WLZ i w zakładce Rozdzielnica — wszystkie cztery miejsca zawsze podadzą ten sam wynik dla tych samych danych.",
+                  "Wartości zalecane wg PN-HD 60364-5-52 zał. G, liczone od złącza do odbiornika: 3% dla obwodów oświetleniowych, 5% dla pozostałych. Domyślne 3% w tym kalkulatorze to wariant ostrzejszy — zmień je, jeśli sprawdzasz obwód gniazd.",
+                  "To budżet dzielony na CAŁEJ drodze zasilania: WLZ zjada część limitu, zanim zacznie się obwód odbiorczy. Dlatego dla samej WLZ przyjmuje się węższe 2% (patrz kalkulator „Dobór WLZ”), żeby zostawić miejsce na spadek za rozdzielnicą.",
+                  "Zbyt duży spadek to nie tylko słabsze świecenie — silniki i sprężarki przy obniżonym napięciu pobierają większy prąd, grzeją się i szybciej się zużywają.",
+                  "Wzór dotyczy żył miedzianych i pomija reaktancję, co przy przekrojach domowych (do 25 mm²) jest przybliżeniem dobrym. Dla aluminium spadek jest ok. 1,6× większy przy tym samym przekroju.",
+                  "Prąd obciążenia to prąd, który REALNIE popłynie (Ib), nie prąd znamionowy zabezpieczenia (In) — wpisanie In zawyży spadek, bo obwód prawie nigdy nie pracuje na granicy wyłącznika.",
                 ]}
               />
             </Card>

@@ -18,7 +18,7 @@ import type { CircuitKind } from "@/lib/panel/sizing";
  * strony — mimo że reszta projektu jest zapisywana lokalnie od dawna.
  */
 
-export type CalcId = "przewod" | "moc" | "petla" | "wlz" | "uziemienieTT" | "oswietlenie" | "rcd";
+export type CalcId = "przewod" | "spadek" | "moc" | "petla" | "wlz" | "uziemienieTT" | "oswietlenie" | "rcd";
 
 export interface CalculatorDevice {
   id: string;
@@ -39,6 +39,21 @@ interface CalculatorsState {
   ambientC: number;
   bundleCount: number;
   motorStart: boolean;
+
+  /**
+   * --- sprawdzenie spadku napięcia na ZNANYM przekroju ---
+   *
+   * Osobny zestaw pól od „doboru przewodu" powyżej, bo to odwrotne pytanie:
+   * tam przekrój jest WYNIKIEM (`sizeCircuit` szuka najmniejszego, który spełnia
+   * obciążalność i spadek naraz), tutaj jest DANĄ WEJŚCIOWĄ — sprawdzamy trasę,
+   * która już istnieje albo jest z góry narzucona. Wspólny jest silnik
+   * (`voltageDropPct`), nie stan formularza.
+   */
+  duCurrentA: number;
+  duPhase: "1" | "3";
+  duLength: number;
+  duSection: number;
+  duLimitPct: number;
 
   // --- bilans mocy ---
   devices: CalculatorDevice[];
@@ -98,6 +113,12 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       ambientC: 30,
       bundleCount: 1,
       motorStart: false,
+
+      duCurrentA: 10,
+      duPhase: "1",
+      duLength: 25,
+      duSection: 2.5,
+      duLimitPct: 3,
 
       devices: DEFAULT_DEVICES,
       ks: 0.7,
