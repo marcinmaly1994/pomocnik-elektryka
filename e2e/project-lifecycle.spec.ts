@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Cykl życia projektu: autozapis lokalny + „Nowy projekt".
@@ -12,6 +13,7 @@ import { test, expect } from "@playwright/test";
 test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   // Box trzeba pobierać na nowo PRZED KAŻDYM kliknięciem, ze scrollTo(0,0) tuż
   // przedtem: klik zmieniający narzędzie ORAZ postawienie PIERWSZEGO elementu
   // (odsłania trwały baner ryzyka nad płótnem) potrafią przesunąć płótno w dół,
@@ -64,6 +66,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
 
   // anulowanie NIE kasuje
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
   const box2 = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;

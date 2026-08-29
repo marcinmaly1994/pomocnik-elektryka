@@ -29,6 +29,10 @@ export interface OnboardingProgress {
   /** Czy pokazać pełną kartę (kontra sam dyskretny przycisk „?"). */
   showCard: boolean;
   skipped: boolean;
+  /** Świadome „Pomiń" na EKRANIE STARTOWYM — patrz `ekranStartowyPominiety` w
+   *  lib/onboarding.ts. W odróżnieniu od `skipped`, `reopen()` tego NIE zdejmuje. */
+  entryScreenDismissed: boolean;
+  dismissEntryScreen: () => void;
   /** Skala straciła ważność po podmianie podkładu. */
   scaleStale: boolean;
   /** Projekt ma elementy, ale nie ma skali — powód trwałego banera. */
@@ -114,6 +118,14 @@ export function useOnboardingProgress(): OnboardingProgress {
   const reopen = useCallback(() => setOnboarding({ pominiety: false, ostatnioOtwarty: true }), [setOnboarding]);
   const collapse = useCallback(() => setOnboarding({ ostatnioOtwarty: false }), [setOnboarding]);
   const dismissScaleStale = useCallback(() => setOnboarding({ skalaNieaktualna: false }), [setOnboarding]);
+  const dismissEntryScreen = useCallback(() => {
+    // Pominięcie ekranu startowego pomija onboarding W CAŁOŚCI (nie tylko jego
+    // pierwszy krok) — kto odrzucił JEDEN wybór, nie chce być pytany o kolejne
+    // trzy zaraz potem. `pominiety`/`ostatnioOtwarty` jak w `skip()` (zostaje
+    // dyskretny przycisk „?"), plus WŁASNA flaga, której `reopen()` nie zdejmuje.
+    markOnboardingSeen();
+    setOnboarding({ ekranStartowyPominiety: true, pominiety: true, ostatnioOtwarty: false });
+  }, [setOnboarding]);
 
   return {
     steps: stepsFor(merged),
@@ -121,6 +133,8 @@ export function useOnboardingProgress(): OnboardingProgress {
     complete: isComplete(merged),
     showCard: shouldShowCard(merged),
     skipped: merged.pominiety,
+    entryScreenDismissed: merged.ekranStartowyPominiety,
+    dismissEntryScreen,
     scaleStale: merged.skalaNieaktualna,
     // Baner ma sens dopiero, gdy jest co mierzyć — pusty projekt bez skali
     // nie jest jeszcze problemem, tylko stanem wyjściowym.

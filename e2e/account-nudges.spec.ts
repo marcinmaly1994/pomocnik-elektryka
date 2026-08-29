@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Zachęty do założenia konta — projekt bez konta żyje WYŁĄCZNIE w localStorage
@@ -16,6 +17,7 @@ async function wejdz(page: import("@playwright/test").Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 }
 
 const BANER_RYZYKA = /Ten projekt istnieje tylko w tej przeglądarce/;
@@ -77,6 +79,7 @@ test("prompt „sporo pracy” pojawia się po przekroczeniu progu i da się odr
   // odrzucenie jest trwałe — przetrwa odświeżenie, w przeciwieństwie do banera ryzyka
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   await expect(page.getByText(BANER_RYZYKA)).toBeVisible();
   await expect(page.getByText(PROMPT_KONTO)).toBeHidden();
 });

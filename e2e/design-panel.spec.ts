@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Weryfikuje ścieżkę, której nie dało się sprawdzić przez syntetyczne
@@ -11,6 +12,7 @@ import { test, expect } from "@playwright/test";
 test("stawianie elementów na planie odblokowuje bilans faz i selektywność w rozdzielnicy", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   const canvasWrap = page.locator("div.overflow-auto.rounded-card.border").first();
   await expect(canvasWrap).toBeVisible();

@@ -552,6 +552,30 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const onboarding = useOnboardingProgress();
   const setOnboarding = useProjectStore((s) => s.setOnboarding);
   const { dismissScaleStale } = onboarding;
+
+  /**
+   * Pierwszy ekran zupełnie świeżego projektu: JEDEN wybór (wgraj rzut / narysuj
+   * samodzielnie / pomiń) zamiast trzech nakładających się wezwań do działania
+   * naraz — banera „Zacznij od wgrania rzutu", karty onboardingu i pustej siatki
+   * pod spodem. Znika przy PIERWSZYM fakcie świadczącym, że użytkownik już zaczął
+   * (te same fakty, na których stoi reszta onboardingu — patrz `OnboardingFacts`
+   * w lib/onboarding.ts) — i WRACA, jeśli te fakty przestaną być prawdą (np. „Usuń"
+   * na świeżo wgranym podkładzie, zanim zdążyło się cokolwiek jeszcze zdarzyć — to
+   * naprawdę powrót do punktu zero, więc ponowna propozycja wyboru ma sens).
+   * WYJĄTEK: świadome „Pomiń" na TYM EKRANIE (`onboarding.entryScreenDismissed`,
+   * trwały stan projektu, NIE stan tego komponentu — przełączenie zakładki i
+   * powrót odmontowuje/montuje DesignTab na nowo) już nie wraca, nawet gdy fakty
+   * się cofną albo użytkownik kliknie „Otwórz przewodnik" — inaczej „Pomiń" nic
+   * by nie znaczyło. `wgrywanie.stan === "bezczynny"`, bo podczas wczytywania/
+   * przycinania/błędu wgrywania te własne ekrany już mają pierwszeństwo.
+   */
+  const showEntryScreen =
+    !onboarding.entryScreenDismissed &&
+    wgrywanie.stan === "bezczynny" &&
+    !onboarding.facts.maPodklad &&
+    !onboarding.facts.maSkale &&
+    !onboarding.facts.maElement &&
+    !onboarding.facts.maNazwanePomieszczenie;
   const scaleToolRef = useRef<HTMLButtonElement | null>(null);
   const wallToolRef = useRef<HTMLButtonElement | null>(null);
   // Który dymek pokazać — dwa różne narzędzia (linijka / ściany), ten sam popover.
@@ -1259,14 +1283,46 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         </div>
       )}
 
+      {/* Pierwszy ekran zupełnie świeżego projektu — JEDEN wybór zamiast banera +
+          karty onboardingu + pustego edytora naraz (patrz `showEntryScreen` wyżej).
+          Zastępuje CAŁY edytor (baner niżej i pasek narzędzi/płótno dalej w tym
+          pliku są jawnie zgaszone na czas jego trwania), a nie tylko dokłada się
+          do niego — inaczej wracalibyśmy do tego samego nagromadzenia wezwań do
+          działania, tylko w innej kolejności. */}
+      {showEntryScreen && (
+        <div className="pe-card flex flex-col items-center gap-4 px-6 py-16 text-center">
+          <h2 className="pe-display text-xl">Zacznij projektować instalację</h2>
+          <p className="max-w-md text-sm text-slate-500">
+            Wgraj zdjęcie albo skan rzutu mieszkania, żeby rozmieścić elementy na prawdziwym planie — albo narysuj
+            ściany od zera, bez podkładu.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button variant="copper" onClick={() => fileRef.current?.click()}>
+              <Upload size={16} /> Wgraj rzut / zdjęcie
+            </Button>
+            {/* Druga, RÓWNOLEGŁA droga startu — nie zapasowa: bez rzutu pod ręką dom
+                da się narysować od zera na siatce w standardowej skali (patrz
+                `startManualDrawing`), zamiast zmuszać do szukania/skanowania rzutu. */}
+            <Button variant="ghost" onClick={startManualDrawing}>
+              Narysuj dom samodzielnie
+            </Button>
+          </div>
+          <button onClick={onboarding.dismissEntryScreen} className="text-xs text-slate-400 underline hover:text-slate-600">
+            Pomiń — zacznę na pustym planie
+          </button>
+        </div>
+      )}
+
       {/* Podkład jeszcze nie wgrany — to pierwsza czynność w całym przepływie. Stała
           dotąd w panelu bocznym, NAD biblioteką elementów — ale to dwie różne sprawy
           (ogólny stan projektu kontra lista do wstawiania) tłoczące się w jednej wąskiej
           kolumnie, i tam też została zgłoszona jako przeszkadzająca. Tu, jako baner na
           całą szerokość (ten sam wzorzec co reszta banerów w tym miejscu), stoi
           w pierwszym ekranie tak samo jak wcześniej — plan-upload.spec.ts pilnuje tylko
-          POZYCJI (nad biblioteką, bez scrollowania), nie konkretnego kontenera. */}
-      {!bgImageUrl && (
+          POZYCJI (nad biblioteką, bez scrollowania), nie konkretnego kontenera.
+          Zgaszony na czas `showEntryScreen`, który oferuje DOKŁADNIE ten sam wybór —
+          inaczej stałby POD nim i dublował go, czyli wracał do zgłoszonej bolączki. */}
+      {!bgImageUrl && !showEntryScreen && (
         <div
           role="status"
           className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
@@ -1388,8 +1444,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       {/* Podczas przycinania edytor jest UKRYTY, a nie pokazany obok: to osobny
           krok przepływu, a dwa równoległe widoki planu (nakładka przycinania
           i płótno) myliły co do tego, na którym się właśnie pracuje. Po
-          przycięciu albo pominięciu edytor wraca w całości. */}
-      {wgrywanie.stan !== "przycinanie" && (
+          przycięciu albo pominięciu edytor wraca w całości. Zgaszony też na czas
+          `showEntryScreen` — to on jest pierwszym ekranem, nie pusty edytor pod nim. */}
+      {wgrywanie.stan !== "przycinanie" && !showEntryScreen && (
         <div
           ref={pelnyEkranRef}
           // `space-y-1.5`, nie `space-y-4`: pasek kontrolek ma stać tuż nad płótnem,
@@ -1864,6 +1921,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       )}
 
       {/* Pozycjonowany `fixed`, więc miejsce w drzewie nie wpływa na układ strony. */}
+      {/* Niewyrenderowana CAŁKOWICIE na czas `showEntryScreen`, nie tylko zwinięta
+          (`open={false}`) — nawet dyskretny przycisk „?" byłby drugim, zbędnym
+          zaproszeniem do tego samego wyboru, który zadaje właśnie ten ekran. */}
+      {!showEntryScreen && (
       <OnboardingChecklist
         steps={onboarding.steps}
         complete={onboarding.complete}
@@ -1875,6 +1936,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           pominiety: onboarding.skipped,
           ostatnioOtwarty: onboarding.showCard,
           skalaNieaktualna: onboarding.scaleStale,
+          ekranStartowyPominiety: onboarding.entryScreenDismissed,
         })}
         bezPodkladu={!onboarding.facts.maPodklad}
         onStepAction={handleStepAction}
@@ -1883,6 +1945,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         onReopen={onboarding.reopen}
         onCollapse={onboarding.collapse}
       />
+      )}
 
       {coachMark === "skala" && (
         <CoachMark

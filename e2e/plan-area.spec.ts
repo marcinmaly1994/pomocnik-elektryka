@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 import { makePng } from "./_png";
 
 /**
@@ -37,6 +38,7 @@ test("wgrany rzut nie jest rozciągany — plan przyjmuje jego proporcje", async
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   const before = await planSize(page);
   expect(before).toEqual({ w: 1000, h: 700 }); // domyślny obszar
@@ -67,6 +69,7 @@ test("kliknięcie poza obszarem planu nic nie stawia i mówi dlaczego", async ({
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   // oddalamy widok, żeby wokół planu pojawiło się puste tło do kliknięcia
   await planSize(page); // czeka na leniwie doładowaną scenę Konvy

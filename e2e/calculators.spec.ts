@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Kalkulatory w zakładce „Kalkulatory".
@@ -90,6 +91,7 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
   // zmiana zakładki na Instalację i powrót — bez utraty ani aktywnego
   // kalkulatora, ani wpisanej nazwy odbiornika
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Bilans mocy budynku" })).toBeVisible();
   await expect(page.locator("input.pe-input.text-sm.flex-1").first()).toHaveValue("Test trwałości");
@@ -114,6 +116,7 @@ test("Wczytaj z projektu wypełnia bilans mocy obwodami wyliczonymi z elementów
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   // 1 gniazdko (300 W wg ASSUMED_POWER_W) -> obwód gniazdowy
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();

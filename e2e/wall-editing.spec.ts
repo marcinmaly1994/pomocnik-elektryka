@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Edycja zapisanej ściany: przeciąganie narożnika po zaznaczeniu. Ten sam wzorzec
@@ -28,6 +29,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 }
 
 async function drawWall(page: import("@playwright/test").Page) {

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Dobór normatywny widoczny w Rozdzielnicy.
@@ -20,6 +21,7 @@ test("rozdzielnica pokazuje przekrój i zabezpieczenie policzone, a nie wpisane 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   // Box mierzony PO każdym kliknięciu (własna funkcja `planBox` wraca na górę
   // strony przed pomiarem) i osobno przed KAŻDYM kliknięciem na płótnie: klik
@@ -68,6 +70,7 @@ test("bez kalibracji skali spadek napięcia jest zgłoszony jako niesprawdzony, 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   const box = await planBox(page);
@@ -88,6 +91,7 @@ test("bilans faz podaje udział procentowy, nie tylko ampery", async ({ page }) 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (let i = 0; i < 3; i++) {

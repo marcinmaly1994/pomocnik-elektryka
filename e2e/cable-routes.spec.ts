@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Poglądowe trasy przewodów (rozdzielnica → punkt), patrz `buildCableRoutes` w
@@ -14,6 +15,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   const pomin = page.getByRole("button", { name: "Pomiń — ustawię później" });
   if (await pomin.count()) await pomin.click();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).first().click();
   const rozumiem = page.getByRole("button", { name: "Rozumiem" });
   if (await rozumiem.count()) await rozumiem.click();

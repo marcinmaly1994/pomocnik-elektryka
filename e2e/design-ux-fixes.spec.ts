@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Zestaw poprawek zgłoszonych jedną paczką uwag UI/UX do edytora planu:
@@ -15,6 +16,7 @@ async function pustyProjekt(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   const pomin = page.getByRole("button", { name: "Pomiń — ustawię później" });
   if (await pomin.count()) await pomin.click();
 }
@@ -180,6 +182,7 @@ test("kalibracja skali pokazuje potwierdzenie na górze, przy planie", async ({ 
 
 test("nazwa projektu ma czytelną wagę typograficzną", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   const nazwa = page.getByTitle("Zmień nazwę projektu");
   await expect(nazwa).toHaveCSS("font-weight", "600");
 });

@@ -7,12 +7,14 @@ const PNG = Buffer.from(
 );
 
 /**
- * Wgranie podkładu to pierwsza czynność w przepływie, więc test pilnuje nie tylko tego,
- * ŻE kontrolka działa, ale też GDZIE stoi: w pierwszym ekranie i nad biblioteką
- * elementów. To akurat łatwo cofnąć przy przestawianiu JSX, a objawia się wyłącznie
- * tym, że nowy użytkownik nie znajduje punktu startowego.
+ * Wgranie podkładu to pierwsza czynność w całym przepływie. Na zupełnie świeżym
+ * projekcie jedynym wezwaniem do działania jest ekran startowy (patrz
+ * `showEntryScreen` w DesignTab.tsx — jeden wybór zamiast banera + karty
+ * onboardingu + pustej siatki naraz), więc test pilnuje GO, nie starego banera:
+ * że kontrolka jest widoczna bez przewijania, że to jedyne wezwanie do działania
+ * na ekranie, i że wgranie faktycznie działa i zwija się po zakończeniu.
  */
-test("wgrywanie planu: widoczne bez scrollowania, zwija się po wgraniu", async ({ page }) => {
+test("wgrywanie planu: ekran startowy widoczny bez scrollowania, zwija się po wgraniu", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -27,12 +29,13 @@ test("wgrywanie planu: widoczne bez scrollowania, zwija się po wgraniu", async 
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(vh);
 
-  // stoi NAD biblioteką elementów
-  const lib = (await page.getByRole("button", { name: /Gniazda i zasilanie/ }).boundingBox())!;
-  expect(box.y).toBeLessThan(lib.y);
+  // JEDYNE wezwanie do działania — biblioteka elementów (edytor) jeszcze nie
+  // istnieje, a stary, trwały baner "Zacznij od wgrania rzutu" jest na czas
+  // ekranu startowego zgaszony (dublowałby dokładnie ten sam wybór).
+  await expect(page.getByRole("button", { name: /Gniazda i zasilanie/ })).toHaveCount(0);
+  await expect(page.getByText("Zacznij od wgrania rzutu mieszkania")).toHaveCount(0);
 
-
-  // po wgraniu blok zwija się do jednego wiersza
+  // wgranie działa z ekranu startowego dokładnie tak samo jak dawny baner
   await page.setInputFiles('input[type="file"]', {
     name: "rzut.png",
     mimeType: "image/png",
@@ -47,9 +50,11 @@ test("wgrywanie planu: widoczne bez scrollowania, zwija się po wgraniu", async 
   await expect(page.getByText(/Podkład: rzut.png/)).toBeVisible();
   await expect(cta).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Zmień" })).toBeVisible();
+  // ekran startowy nie wraca — edytor (biblioteka elementów) jest teraz widoczny
+  await expect(page.getByRole("button", { name: /Gniazda i zasilanie/ })).toBeVisible();
 
-
-  // „Usuń" wraca do wezwania do działania
+  // „Usuń" wraca do wezwania do działania — projekt jest znów zupełnie świeży
+  // (bez podkładu, skali, elementów), więc to znów ekran startowy, nie edytor
   await page.getByRole("button", { name: "Usuń", exact: true }).click();
   await expect(cta).toBeVisible();
 });

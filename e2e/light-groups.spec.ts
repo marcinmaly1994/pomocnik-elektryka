@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Grupy sterowania oświetleniem. Testowane e2e, bo wartość tej funkcji leży w spięciu
@@ -97,6 +98,7 @@ test("łącznik i światło w jednym pomieszczeniu dostają ten sam numer na pla
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await drawRoom(page, 60, 40, 380, 250);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
@@ -130,6 +132,7 @@ test("łącznik i światło numerują się też bez narysowanego pomieszczenia",
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   // Celowo BEZ drawRoom — elementy lądują z room = NO_ROOM ("Bez pomieszczenia").
   // Wcześniej numeracja w tym wypadku w ogóle się nie uruchamiała.
@@ -157,6 +160,7 @@ test("ręczna zmiana grupy z okna edycji nadpisuje automat", async ({ page }) =>
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await drawRoom(page, 60, 40, 380, 250);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
@@ -194,6 +198,7 @@ test("łącznik grupowy ma DWA pola — po jednym na dźwignię, ustawialne osob
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await drawRoom(page, 60, 40, 560, 250);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
@@ -237,6 +242,7 @@ test("pole grupy nie pojawia się przy elementach niezwiązanych z oświetleniem
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await place(page, /Gniazdo 230 V/, 150, 150);
   await page.getByRole("button", { name: "Zaznacz" }).click();

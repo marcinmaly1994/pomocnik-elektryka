@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 import { makePlanPng } from "./_png";
 
 /**
@@ -23,6 +24,7 @@ async function wejdz(page: Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 }
 
 /** Rzut z jednym pokojem po prawej — po lewej puste tło, dobre miejsce na

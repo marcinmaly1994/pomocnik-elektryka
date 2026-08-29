@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Przesuwanie planu wciśniętą rolką myszy — konwencja z programów CAD, działająca
@@ -28,6 +29,7 @@ async function przewiniecie(page: Page) {
 
 test("przytrzymana rolka przesuwa plan", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   const box = await przyblizIZwrocBox(page);
 
   // Ustawiamy widok w środku zakresu, żeby dało się przesunąć w każdą stronę.
@@ -54,7 +56,9 @@ test("przesuwanie rolką nie stawia elementu ani nie rysuje", async ({ page }) =
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   // Najgorszy możliwy przypadek: aktywne narzędzie stawiające elementy.
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
@@ -77,6 +81,7 @@ test("przesuwanie rolką nie stawia elementu ani nie rysuje", async ({ page }) =
 
 test("narzędzie „Przesuń widok” przesuwa TAK SAMO jak rolka — jeden układ współrzędnych", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   const box = await przyblizIZwrocBox(page);
   await plotno(page).evaluate((el) => {
     el.scrollLeft = 300;
@@ -104,6 +109,7 @@ test("narzędzie „Przesuń widok” przesuwa TAK SAMO jak rolka — jeden ukł
 
 test("Ctrl+kółko przybliża i zostawia punkt spod kursora na miejscu", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   await page.evaluate(() => window.scrollTo(0, 0));
   const box = (await plotno(page).boundingBox())!;
 
@@ -131,7 +137,9 @@ test("lewy przycisk nadal stawia element — zabezpieczenie rolki nie zablokowa�
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
 
   await page.evaluate(() => window.scrollTo(0, 0));

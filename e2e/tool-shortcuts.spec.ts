@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Skróty klawiszowe pasku narzędzi (V/E/P/W/D/H/S — patrz `TOOL_SHORTCUTS` w
@@ -15,6 +16,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   const pomin = page.getByRole("button", { name: "Pomiń — ustawię później" });
   if (await pomin.count()) await pomin.click();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   // Skróty słuchają na `window` od momentu, gdy DesignTab się zamontuje i
   // odpali swój efekt — bez tej chwili pierwszy klawisz po samej nawigacji
   // potrafił polecieć PRZED podpięciem nasłuchu (wyścig, nie błąd skrótu).

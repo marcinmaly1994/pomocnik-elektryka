@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Rozdzielnica jako zadanie SAMO W SOBIE — bez rysowania rzutu.
@@ -102,6 +103,7 @@ test("aparat da się przeciągnąć na inne miejsce szyny; główny zostaje pier
 test("długie opisy pod aparatami łamią się na dwie linie, zamiast urywać wielokropkiem", async ({ page }) => {
   await pustyProjekt(page);
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
   await page.getByRole("button", { name: "Wstaw Element" }).click();
   for (let i = 0; i < 4; i++) {

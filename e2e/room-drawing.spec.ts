@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Rysowanie pomieszczeń: prostokąt przeciągnięciem i wielobok klikaniem z zamknięciem
@@ -14,6 +15,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
   return box;
@@ -30,6 +32,7 @@ test("wybór kształtu pojawia się dopiero po wejściu w tryb Pomieszczenie", a
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await expect(page.getByRole("button", { name: "Prostokąt" })).toBeHidden();
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();

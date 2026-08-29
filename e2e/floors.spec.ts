@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 test("dodanie nowej kondygnacji przez dialog", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   await expect(page.getByRole("button", { name: "Parter" })).toBeVisible();
 
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
@@ -18,7 +20,9 @@ test("usuwanie kondygnacji: przycisk dopiero przy drugiej, kasuje jej elementy",
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   // Box mierzony PO kliknięciu, które zmienia narzędzie — takie kliknięcie potrafi
   // doscrollować stronę, więc box zmierzony wcześniej byłby nieaktualny (patrz
   // `zoomAndBox` w room-editing.spec.ts, ten sam wzorzec).

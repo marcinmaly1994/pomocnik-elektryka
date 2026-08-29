@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /** Umieszcza 3 gniazdka na planie realnymi kliknięciami — wspólny punkt startowy dla
  *  Protokołów/Schematu/Kosztorysu, które (jak Rozdzielnica) wymagają elementów na planie,
@@ -7,6 +8,7 @@ import { test, expect } from "@playwright/test";
 async function placeThreeSockets(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   const canvasWrap = page.locator("div.overflow-auto.rounded-card.border").first();
   // Box mierzony na nowo PRZED KAŻDYM kliknięciem, ze scrollTo(0,0) tuż przedtem:
   // klik zmieniający narzędzie ORAZ postawienie PIERWSZEGO elementu (odsłania

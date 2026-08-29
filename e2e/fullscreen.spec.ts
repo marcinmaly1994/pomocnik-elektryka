@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Tryb pełnoekranowy: plan dostaje całe okno pomniejszone o dwa niskie paski
@@ -30,6 +31,7 @@ async function pozycjaX(locator: ReturnType<typeof lewaKarta>): Promise<number> 
 
 test("pełny ekran chowa panel narzędzi i oddaje planowi resztę okna", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
 
   const karta = lewaKarta(page);
   expect(await pozycjaX(karta)).toBeGreaterThanOrEqual(0);
@@ -48,6 +50,7 @@ test("pełny ekran chowa panel narzędzi i oddaje planowi resztę okna", async (
 
 test("najechanie na lewą krawędź wysuwa narzędzia, odjechanie chowa je z powrotem", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
 
   const karta = lewaKarta(page);
@@ -65,6 +68,7 @@ test("najechanie na lewą krawędź wysuwa narzędzia, odjechanie chowa je z pow
 
 test("Escape wychodzi z pełnego ekranu, ale najpierw porzuca rozpoczęty rysunek", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
   const karta = lewaKarta(page);
   await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeLessThan(0);
@@ -101,6 +105,7 @@ test("Escape wychodzi z pełnego ekranu, ale najpierw porzuca rozpoczęty rysune
 
 test("uchwyt przy lewej krawędzi zapowiada schowane narzędzia i otwiera je kliknięciem", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
 
   // Uchwyt to jedyny sygnał, że coś tam jest — bez niego tryb wygląda jak plan
@@ -123,6 +128,7 @@ test("uchwyt przy lewej krawędzi zapowiada schowane narzędzia i otwiera je kli
 
 test("uchwyt mieści się w pasie wyzwalającym — najechanie na niego wysuwa panel", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
 
   const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
@@ -137,6 +143,7 @@ test("uchwyt mieści się w pasie wyzwalającym — najechanie na niego wysuwa p
 
 test("pasek kontrolek stoi tuż nad płótnem, bez pustego rzędu pod spodem", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
 
   const pasek = (await page.getByLabel("Rozmiar elementów").locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]").boundingBox())!;
   const wiersz = (await page.locator('nav[aria-label="Narzędzia rysowania"]').locator("xpath=ancestor::div[contains(@class,'items-start')][1]").boundingBox())!;
@@ -167,6 +174,7 @@ async function gruboscSuwakow(page: Page, selektor: string) {
 
 test("plan po przybliżeniu przewija się, ale bez widocznych suwaków", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
 
   // Przybliżamy, aż rysunek przestanie się mieścić w oknie — dopiero wtedy
   // przeglądarka ma powód, żeby pokazać suwaki.
@@ -180,6 +188,7 @@ test("plan po przybliżeniu przewija się, ale bez widocznych suwaków", async (
 
 test("panel narzędzi w pełnym ekranie ma JEDEN obszar przewijania, bez suwaków", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
   await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
   await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
@@ -220,6 +229,7 @@ test("przypięty panel zostaje na widoku po zjechaniu myszą", async ({ page }) 
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await odslonNarzedzia(page);
 
   await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
@@ -237,6 +247,7 @@ test("przypięty panel ODSUWA płótno, zamiast je zasłaniać", async ({ page }
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await odslonNarzedzia(page);
   await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
   await page.waitForTimeout(400);
@@ -253,11 +264,13 @@ test("odpięcie przywraca chowanie, a przypięcie przeżywa odświeżenie", asyn
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await odslonNarzedzia(page);
   await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
   await page.waitForTimeout(300);
 
   await page.reload();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
   await page.waitForTimeout(400);
   // Po odświeżeniu panel jest od razu widoczny, bez dotykania myszą.
@@ -272,6 +285,7 @@ test("przypięcie panelu nie przesuwa rysunku — ten sam punkt planu zostaje w 
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
 
   // Przybliżamy, żeby rzut przestał się mieścić — dopiero wtedy jest co przewijać
@@ -310,6 +324,7 @@ test("przypięty panel po lewej NIE zasłania górnego paska", async ({ page }) 
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await odslonNarzedzia(page);
   await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
   await page.mouse.move(page.viewportSize()!.width / 2, page.viewportSize()!.height / 2);
@@ -337,6 +352,7 @@ test("paski poziome stoją na stałe i nie chowają się przed kursorem", async 
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
   await page.waitForTimeout(300);
 
@@ -373,6 +389,7 @@ test("paski poziome stoją na stałe i nie chowają się przed kursorem", async 
 
 test("kondygnacje mieszkają w jednym pasku razem z podkładem i siatką", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
 
   // Wszystkie cztery kontrolki dzielą JEDNĄ kartę paska — po scaleniu nie ma już
   // osobnego rzędu na kondygnacje.

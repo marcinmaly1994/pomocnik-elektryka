@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Drzwi: lekkie narzędzie „przyklejające" otwór do najbliższego miejsca na klikniętej
@@ -37,6 +38,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 }
 
 /** Rysuje poziomą ścianę od (100,100) do (400,100) — offsety względem świeżo

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Edycja narysowanych pomieszczeń: przeciąganie narożników, zmiana nazwy dwuklikiem
@@ -11,6 +12,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
   return box;

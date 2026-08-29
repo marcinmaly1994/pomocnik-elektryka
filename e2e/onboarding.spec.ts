@@ -1,12 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Onboarding „Zacznij w 3 krokach".
+ * Onboarding: EKRAN STARTOWY (pierwszy wybór na zupełnie świeżym projekcie —
+ * patrz `showEntryScreen` w DesignTab.tsx) i karta „Zacznij w 3 krokach" (dalsze
+ * kroki, po tym pierwszym wyborze).
  *
  * Logika przejść i walidacja mają testy jednostkowe w `src/lib/onboarding.test.ts`.
- * Tutaj sprawdzamy rzeczy, których nie widać bez przeglądarki: że karta faktycznie
- * prowadzi do właściwego narzędzia, że kroki odhaczają się od DZIAŁANIA użytkownika
- * (a nie od kliknięcia w kartę) i że pominięcie naprawdę odblokowuje pracę.
+ * Tutaj sprawdzamy rzeczy, których nie widać bez przeglądarki: że ekran startowy
+ * i karta faktycznie prowadzą do właściwego narzędzia, że kroki odhaczają się od
+ * DZIAŁANIA użytkownika (a nie od kliknięcia w kartę) i że pominięcie naprawdę
+ * odblokowuje pracę.
  */
 
 async function freshDesign(page: Page) {
@@ -26,12 +29,20 @@ async function planBox(page: Page) {
 
 const card = (page: Page) => page.getByRole("complementary", { name: /Zacznij w 3 krokach/i });
 
-test("karta prowadzi od skali do pierwszego elementu i znika po ukończeniu", async ({ page }) => {
-  await freshDesign(page);
-  await expect(card(page)).toBeVisible();
+/** Ekran startowy nie jest osobnym landmarkiem — identyfikujemy go po nagłówku,
+ *  unikalnym dla tego jednego, pierwszego ekranu. */
+async function skipEntryScreen(page: Page) {
+  await expect(page.getByText("Zacznij projektować instalację")).toBeVisible();
+  await page.getByRole("button", { name: "Pomiń — zacznę na pustym planie" }).click();
+}
 
-  // Bez podkładu krok 1 prosi najpierw o rzut — nie ma czego mierzyć (przypadek 1)
-  await expect(card(page).getByRole("button", { name: "Wgraj rzut" })).toBeVisible();
+test("ekran startowy prowadzi od wgrania rzutu przez skalę do pierwszego elementu i znika po ukończeniu", async ({ page }) => {
+  await freshDesign(page);
+  await expect(page.getByText("Zacznij projektować instalację")).toBeVisible();
+  // dopóki nie padł żaden wybór, karta „3 kroki" jeszcze nie istnieje — to ekran
+  // startowy zadaje to samo pytanie, dublowanie byłoby dokładnie zgłoszoną bolączką
+  await expect(card(page)).toHaveCount(0);
+
   const { makePng } = await import("./_png");
   await page.setInputFiles('input[type="file"]', {
     name: "rzut.png",
@@ -44,7 +55,8 @@ test("karta prowadzi od skali do pierwszego elementu i znika po ukończeniu", as
   await page.getByRole("button", { name: "Pomiń — użyj całego rzutu" }).click();
   await expect(page.getByText(/Podkład: rzut.png/)).toBeVisible();
 
-  // KROK 1 — CTA włącza narzędzie skali i pokazuje coach-mark
+  // podkład jest już wgrany — karta „3 kroki" przejmuje teraz krok 1 (skala)
+  await expect(card(page)).toBeVisible();
   await card(page).getByRole("button", { name: "Ustaw skalę" }).click();
   const coach = page.getByRole("dialog", { name: "Podpowiedź" });
   await expect(coach).toBeVisible();
@@ -94,12 +106,11 @@ test("karta prowadzi od skali do pierwszego elementu i znika po ukończeniu", as
   await expect(page.getByRole("button", { name: /Otwórz przewodnik/ })).toBeVisible();
 });
 
-test("kalibracja odpalona z paska narzędzi odhacza krok 1 bez udziału karty", async ({ page }) => {
+test("kalibracja odpalona z paska narzędzi (po pominięciu ekranu startowego) odhacza krok 1 bez udziału karty", async ({ page }) => {
   await freshDesign(page);
-  // bez podkładu krok 1 proponuje dwie równoległe drogi startu, nie tylko skalę
-  await expect(card(page).getByText("Wgraj rzut albo narysuj dom").first()).toBeVisible();
+  // user ignoruje przewodnik od samego początku i sam sięga po linijkę
+  await skipEntryScreen(page);
 
-  // user ignoruje kartę i sam sięga po linijkę
   await page.getByRole("button", { name: "Kalibracja skali" }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 120, box.y + 100);
@@ -107,17 +118,15 @@ test("kalibracja odpalona z paska narzędzi odhacza krok 1 bez udziału karty", 
   await page.getByLabel("Długość odcinka w metrach").fill("5");
   await page.getByRole("button", { name: "Zatwierdź skalę" }).click();
 
-  // checklist ma to wykryć samodzielnie
-  await expect(card(page).getByText("Zaznacz pomieszczenia")).toBeVisible();
-  await expect(card(page).getByRole("button", { name: "Obrysuj pomieszczenie" })).toBeVisible();
+  // przewodnik pozostaje pominięty — sam skorzystał z paska, nie z karty (i tak
+  // by tego nie zobaczył, sam ją odrzucił), więc karta się NIE pokazuje
+  await expect(card(page)).toHaveCount(0);
 });
 
-test("pominięcie odblokowuje pracę i nie wraca po odświeżeniu", async ({ page }) => {
+test("pominięcie ekranu startowego odblokowuje pracę i nie wraca po odświeżeniu", async ({ page }) => {
   await freshDesign(page);
-  await expect(card(page)).toBeVisible();
-
-  await card(page).getByRole("button", { name: /Pomiń/ }).click();
-  await expect(card(page)).toBeHidden();
+  await skipEntryScreen(page);
+  await expect(page.getByText("Zacznij projektować instalację")).toHaveCount(0);
 
   // praca bez skali jest możliwa, ale ostrzeżenie jest trwałe
   const box = await planBox(page);
@@ -128,19 +137,25 @@ test("pominięcie odblokowuje pracę i nie wraca po odświeżeniu", async ({ pag
   await page.waitForTimeout(900); // debounce autozapisu
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await expect(page.getByText("Zacznij projektować instalację")).toHaveCount(0);
   await expect(card(page)).toBeHidden();
   await expect(page.getByRole("button", { name: /Otwórz przewodnik/ })).toBeVisible();
 });
 
-test("dyskretny przycisk pomocy przywraca kartę na żądanie", async ({ page }) => {
+test("dyskretny przycisk pomocy przywraca KARTĘ (nie ekran startowy) na żądanie", async ({ page }) => {
   await freshDesign(page);
-  await card(page).getByRole("button", { name: /Pomiń/ }).click();
+  await skipEntryScreen(page);
+
   await page.getByRole("button", { name: /Otwórz przewodnik/ }).click();
+  // wraca skromna karta — pominięty ekran startowy się NIE wskrzesza, inaczej
+  // „Pomiń" na nim nic by nie znaczyło
   await expect(card(page)).toBeVisible();
+  await expect(page.getByText("Zacznij projektować instalację")).toHaveCount(0);
 });
 
 test("podmiana podkładu po kalibracji proponuje rekalibrację zamiast kasować skalę", async ({ page }) => {
   await freshDesign(page);
+  await skipEntryScreen(page);
 
   await page.getByRole("button", { name: "Kalibracja skali" }).click();
   const box = await planBox(page);
@@ -170,6 +185,7 @@ test("podmiana podkładu po kalibracji proponuje rekalibrację zamiast kasować 
 
 test("kolejna kondygnacja dziedziczy skalę, ale prosi o własne pomieszczenia", async ({ page }) => {
   await freshDesign(page);
+  await skipEntryScreen(page);
 
   // parter: skala + jedno pomieszczenie, czyli przewodnik ma krok 2 za sobą
   await page.getByRole("button", { name: "Kalibracja skali" }).click();
@@ -196,13 +212,16 @@ test("kolejna kondygnacja dziedziczy skalę, ale prosi o własne pomieszczenia",
   await expect(page.locator("span.pe-chip", { hasText: /m szer\./ })).toHaveText(parterScale!);
   // ...ale pomieszczenia są własne i aplikacja o nie prosi
   await expect(page.getByText(/ma już skalę z parteru, ale nie ma jeszcze pomieszczeń/)).toBeVisible();
-  // przewodnik NIE cofa się do kroku 1 — skala jest projektowa, nie per kondygnacja
-  await expect(card(page).getByRole("button", { name: "Ustaw skalę" })).toHaveCount(0);
-  await expect(card(page).getByRole("button", { name: "Obrysuj pomieszczenie" })).toHaveCount(0);
+  // ekran startowy pozostaje pominięty (skala jest projektowa, nie per kondygnacja)
+  await expect(page.getByText("Zacznij projektować instalację")).toHaveCount(0);
+  // przewodnik NIE cofa się do kroku 1 — ale i tak jest pominięty, więc karty nie ma
+  await expect(card(page)).toHaveCount(0);
 });
 
 test("szybka ścieżka: rzut w znanej skali ustawia skalę bez mierzenia", async ({ page }) => {
   await freshDesign(page);
+  await skipEntryScreen(page);
+
   await page.getByRole("button", { name: "Kalibracja skali" }).click();
   await page.getByRole("button", { name: "Rzut jest w skali" }).click();
 
@@ -215,16 +234,16 @@ test("szybka ścieżka: rzut w znanej skali ustawia skalę bez mierzenia", async
   await expect(page.locator("span.pe-chip", { hasText: "42.0 m szer." })).toBeVisible();
 });
 
-test("„Narysuj dom samodzielnie” z karty ustawia standardową skalę i odhacza krok 1", async ({ page }) => {
+test("„Narysuj dom samodzielnie” z EKRANU STARTOWEGO ustawia standardową skalę i odhacza krok 1", async ({ page }) => {
   await freshDesign(page);
-  await expect(card(page).getByText("Wgraj rzut albo narysuj dom")).toBeVisible();
+  await expect(page.getByText("Zacznij projektować instalację")).toBeVisible();
 
-  await card(page).getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
+  await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
 
   // narzędzie ścian jest od razu aktywne, gotowe do klikania — bez ekranu kalibracji
   await expect(page.getByRole("button", { name: "Narysuj Ścianę", exact: true })).toHaveAttribute("aria-pressed", "true");
   // dom 20×20 m ma się zmieścić w domyślnym obszarze planu przy standardowej skali —
-  // sprawdzamy pośrednio: skala jest już ustawiona, więc krok 1 jest ukończony
+  // sprawdzamy pośrednio: skala jest już ustawiona, więc krok 1 karty jest ukończony
   await expect(card(page).getByRole("button", { name: "Narysuj dom samodzielnie" })).toHaveCount(0);
   await expect(card(page).getByRole("button", { name: "Obrysuj pomieszczenie" })).toBeVisible();
 
@@ -241,10 +260,13 @@ test("„Narysuj dom samodzielnie” z karty ustawia standardową skalę i odhac
   expect(teksty.some((t) => /\d+,\d{2} m$/.test(t))).toBe(true);
 });
 
-test("„Narysuj dom samodzielnie” z kolumny narzędzi (poza kartą) działa tak samo", async ({ page }) => {
+test("„Narysuj dom samodzielnie” z trwałego banera (po pominięciu ekranu startowego) działa tak samo", async ({ page }) => {
   await freshDesign(page);
-  await card(page).getByRole("button", { name: /Pomiń/ }).click();
+  await skipEntryScreen(page);
 
+  // po pominięciu ekranu startowego wraca trwały baner „Zacznij od wgrania rzutu"
+  // z tym samym drugim przyciskiem — ten test sprawdza WŁAŚNIE jego, nie kartę
+  // (którą i tak pominęliśmy) ani ekran startowy (już zamknięty)
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
   await expect(page.getByRole("button", { name: "Narysuj Ścianę", exact: true })).toHaveAttribute("aria-pressed", "true");
 

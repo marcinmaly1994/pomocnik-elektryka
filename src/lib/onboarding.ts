@@ -26,6 +26,15 @@ export interface OnboardingState {
   ostatnioOtwarty: boolean;
   /** Skala straciła ważność po podmianie podkładu — patrz `markScaleStale`. */
   skalaNieaktualna: boolean;
+  /**
+   * Świadome „Pomiń" na EKRANIE STARTOWYM (patrz `showEntryScreen` w DesignTab.tsx)
+   * — osobna flaga od `pominiety`. `pominiety` jest zdejmowane przez „Otwórz
+   * przewodnik" (przywraca kartę na żądanie), a ekran startowy MA zostać pominięty
+   * mimo tego — inaczej samo „Otwórz przewodnik" wskrzeszałoby pełnoekranowy wybór
+   * zamiast skromnej karty. Musi żyć w zapisywanym stanie (nie w stanie komponentu),
+   * bo przełączenie zakładki i powrót odmontowuje/montuje DesignTab na nowo.
+   */
+  ekranStartowyPominiety: boolean;
 }
 
 export const INITIAL_ONBOARDING: OnboardingState = {
@@ -35,6 +44,7 @@ export const INITIAL_ONBOARDING: OnboardingState = {
   pominiety: false,
   ostatnioOtwarty: true,
   skalaNieaktualna: false,
+  ekranStartowyPominiety: false,
 };
 
 /** Co da się sprawdzić w projekcie niezależnie od zapisanych flag. */

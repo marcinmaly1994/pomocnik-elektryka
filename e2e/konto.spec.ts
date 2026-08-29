@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 import {
   KONTO_DOSTEPNE,
   POWOD_POMINIECIA,
@@ -31,6 +32,7 @@ test.describe("konto i chmura", () => {
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
     await page.reload();
+    await skipEntryScreen(page);
     await zaloguj(page);
     const { token, userId } = await tokenZSesji(page);
     // Poprzedni przebieg mógł paść w połowie i zostawić wpisy zajmujące limit.
@@ -74,6 +76,7 @@ test.describe("konto i chmura", () => {
     // w której autozapis potrafiłby po cichu nadpisać gotowy projekt.
     await page.evaluate(() => localStorage.removeItem("pomocnikelektryka_projekt_autosave"));
     await page.reload();
+    await skipEntryScreen(page);
     await ustawNazweProjektu(page, nazwa);
     await page.getByTitle("Zapisz projekt na koncie").click();
 
@@ -123,6 +126,7 @@ test.describe("konto i chmura", () => {
       localStorage.setItem("pomocnikelektryka_sesja", JSON.stringify(s));
     });
     await page.reload();
+    await skipEntryScreen(page);
 
     const nazwa = nazwaTestowa("odnowienie");
     await ustawNazweProjektu(page, nazwa);

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Powłoka aplikacji: nagłówek, suwak rozmiaru symboli i stopka.
@@ -17,7 +18,9 @@ test("suwak zmienia rozmiar symboli, nie ich położenie", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   const box = await planBox(page);
@@ -68,7 +71,9 @@ test("przyciski akcji głównej mają widoczne tło, a nie sam tekst", async ({ 
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   await page.getByRole("button", { name: "Kalibracja skali" }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -88,6 +93,7 @@ test("kliknięcie w logo wraca do etapu Instalacja z dowolnej zakładki", async 
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await skipEntryScreen(page);
 
   // wychodzimy poza główny przepływ — stąd użytkownik najczęściej szuka drogi powrotnej
   await page.getByRole("button", { name: "Kalkulatory" }).click();
@@ -99,6 +105,7 @@ test("kliknięcie w logo wraca do etapu Instalacja z dowolnej zakładki", async 
 
 test("stopka zawiera zastrzeżenie o orientacyjnym charakterze wyników", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   const footer = page.locator("footer");
   await expect(footer).toBeVisible();
   await expect(footer.getByText(/orientacyjne/)).toBeVisible();
@@ -108,6 +115,7 @@ test("stopka zawiera zastrzeżenie o orientacyjnym charakterze wyników", async 
 
 test("nagłówek eksponuje nazwę i hasło strony", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   const h1 = page.getByRole("heading", { level: 1 });
   await expect(h1).toContainText("pomocnikelektryka");
 
@@ -123,6 +131,7 @@ test("nagłówek eksponuje nazwę i hasło strony", async ({ page }) => {
  */
 test("przycisk Pomoc otwiera okno z opisem aplikacji i krokami startowymi", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Pomoc", exact: true }).click();
@@ -143,6 +152,7 @@ test("przycisk Pomoc otwiera okno z opisem aplikacji i krokami startowymi", asyn
 
 test("siatkę da się wyłączyć niezależnie od przyciągania", async ({ page }) => {
   await page.goto("/");
+  await skipEntryScreen(page);
   // DesignTab ładuje się leniwie — bez tego pomiar trafia w moment przed powstaniem płótna.
   await page.waitForSelector(".konvajs-content canvas");
 

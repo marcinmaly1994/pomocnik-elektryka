@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
 
 /**
  * Rysowanie ścian: „gumowy" podgląd odcinka do kursora i etykieta jego bieżącej
@@ -19,6 +20,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
   await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
   const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
@@ -65,6 +67,7 @@ test("po kalibracji skali etykieta w trakcie rysowania ściany pokazuje metry", 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
 
   // kalibracja: dwa punkty, potem długość w metrach — box mierzony PO wejściu w
   // narzędzie (patrz komentarz przy `openPlan` wyżej: klik zmieniający narzędzie

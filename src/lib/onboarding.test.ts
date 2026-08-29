@@ -52,6 +52,14 @@ describe("reconcile — kroki wynikają z faktów, nie z klikania w kartę", () 
     expect(next.pominiety).toBe(true);
     expect(next.ostatnioOtwarty).toBe(false);
   });
+
+  it("pominięcie EKRANU STARTOWEGO przeżywa uzgodnienie z faktami tak samo jak pozostałe pola", () => {
+    // patrz `showEntryScreen` w DesignTab.tsx: to osobna flaga od `pominiety`,
+    // celowo NIE zdejmowana przez „Otwórz przewodnik" — musi więc przetrwać
+    // dokładnie tak samo trwale jak reszta stanu, niezależnie od faktów projektu.
+    const next = reconcile(state({ ekranStartowyPominiety: true }), { ...NO_FACTS, maSkale: true });
+    expect(next.ekranStartowyPominiety).toBe(true);
+  });
 });
 
 describe("kolejność i statusy kroków", () => {
