@@ -184,8 +184,13 @@ function polylineLengthUnits(points: Point[]): number {
  * obwodu) — sterowanie fizycznie jedzie tym samym kablem 3-żyłowym co zasilanie
  * (faza, powrót łączony, neutralny), więc to ta sama przynależność obwodowa.
  */
-function buildControlRoutes(elements: InstallationElement[], circuits: Circuit[], walls: Wall[], roomShapes: RoomShape[]): CableRoute[] {
-  const groups = computeLightGroups(elements);
+function buildControlRoutes(
+  elements: InstallationElement[],
+  circuits: Circuit[],
+  walls: Wall[],
+  roomShapes: RoomShape[],
+  groups: Map<string, (number | undefined)[]>
+): CableRoute[] {
   const byGroup = new Map<number, { controls: InstallationElement[]; lights: InstallationElement[] }>();
   elements.forEach((e) => {
     const nums = groups.get(e.id);
@@ -229,6 +234,42 @@ function buildControlRoutes(elements: InstallationElement[], circuits: Circuit[]
 }
 
 /**
+ * Łącznik sterujący daną oprawą, NAJBLIŻSZY jej ze wszystkich dzielących z nią
+ * numer grupy (patrz `computeLightGroups`) — `null`, gdy oprawa nie jest w ogóle
+ * sterowana żadnym łącznikiem na planie (np. jeszcze niepostawionym, albo
+ * sterowaną inaczej niż łącznikiem ściennym).
+ *
+ * Używane do PRZEKIEROWANIA trasy zasilania: w typowej polskiej instalacji
+ * zasilanie (faza + neutralny) dochodzi NAJPIERW do puszki łącznika, a dopiero
+ * stamtąd 3-żyłowy przewód (faza stała, faza łączona, neutralny) idzie do oprawy
+ * — a nie odwrotnie. Przy łączniku schodowym/krzyżowym (kilka łączników na jedną
+ * oprawę) wybieramy najbliższy — sama instalacja międzyłącznikowa nie jest tu
+ * modelowana, to uproszczenie na tym samym poziomie co reszta routingu.
+ */
+function findControllingSwitch(
+  light: InstallationElement,
+  elements: InstallationElement[],
+  groups: Map<string, (number | undefined)[]>
+): InstallationElement | null {
+  const myGroups = new Set((groups.get(light.id) ?? []).filter((n): n is number => n != null));
+  if (myGroups.size === 0) return null;
+
+  let best: InstallationElement | null = null;
+  let bestDistSq = Infinity;
+  for (const e of elements) {
+    if (!isLightControl(e)) continue;
+    const nums = groups.get(e.id);
+    if (!nums?.some((n) => n != null && myGroups.has(n))) continue;
+    const distSq = (e.x - light.x) ** 2 + (e.y - light.y) ** 2;
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      best = e;
+    }
+  }
+  return best;
+}
+
+/**
  * Wizualne trasy przewodów do narysowania na planie — WZDŁUŻ narysowanych ścian i
  * obrysów pomieszczeń (`routeAlongWalls`, krok 2), a gdy to się nie uda (brak
  * geometrii, albo końce w dwóch niepołączonych jej kawałkach) — łamana Manhattan
@@ -242,8 +283,17 @@ function buildControlRoutes(elements: InstallationElement[], circuits: Circuit[]
  *   dwie trasy fizycznie biegną tym samym odcinkiem ściany, to i tak dwa osobne
  *   przewody, nie jeden wspólny (patrz rozsuwanie równoległych tras w
  *   DesignCanvas.tsx — bez niego nakładające się trasy wyglądały jak jedna).
+ *   WYJĄTEK: oprawa STEROWANA łącznikiem dostaje trasę zasilania NIE do siebie,
+ *   tylko do TEGO łącznika (`findControllingSwitch`) — zasilanie fizycznie
+ *   dochodzi najpierw do puszki łącznika, a dopiero stamtąd 3-żyłowy przewód
+ *   (patrz „sterowanie" niżej) prowadzi do oprawy. Bez tego rysunek sugerowałby
+ *   odwrotną, nierealistyczną kolejność: zasilanie prosto do oprawy, z
+ *   niezależnym doczepionym sterowaniem, zamiast jednego logicznego łańcucha
+ *   rozdzielnica → łącznik → oprawa.
  * - „sterowanie" — łącznik → oprawa, którą przełącza (patrz `buildControlRoutes`).
- *   Sam łącznik NIE dostaje trasy z rozdzielnicy — nie jest samodzielnym obwodem.
+ *   Sam łącznik NIE dostaje WŁASNEGO obwodu z rozdzielnicy (nie jest samodzielnym
+ *   odbiornikiem) — trasa zasilania, którą dostaje (patrz wyżej), należy nadal do
+ *   obwodu oprawy, nie do jakiegoś zmyślonego obwodu łącznika.
  *
  * Osobna funkcja od `estimateRoutes`: tamta liczy WYŁĄCZNIE metry do kosztorysu/doboru
  * (z narzutem na bieg pod stropem i zapasem montażowym, które nie mają odpowiednika na
@@ -265,16 +315,22 @@ export function buildCableRoutes(
   walls: Wall[],
   roomShapes: RoomShape[]
 ): CableRoute[] {
-  const control = buildControlRoutes(elements, circuits, walls, roomShapes);
+  const lightGroups = computeLightGroups(elements);
+  const control = buildControlRoutes(elements, circuits, walls, roomShapes, lightGroups);
   if (!panel) return control;
 
   const supply: CableRoute[] = [];
   for (const c of circuits) {
     for (const e of c.elements) {
+      // Oprawa sterowana łącznikiem: zasilanie kończy się NA ŁĄCZNIKU, nie na
+      // oprawie — patrz `findControllingSwitch` i komentarz przy tej funkcji
+      // niżej. Każdy inny odbiornik (gniazdko, roleta, oprawa BEZ łącznika…)
+      // dostaje zasilanie wprost do siebie, jak dotychczas.
+      const controllingSwitch = isLightPoint(e) ? findControllingSwitch(e, elements, lightGroups) : null;
       // Punkty świadomie skopiowane do gołego `{x,y}` — `Point[]` ma zostać lekką
       // geometrią, a nie przeciekiem całego `InstallationElement` (rola, pokój,
       // kondygnacja…) tam, gdzie potrzebna jest tylko ścieżka do narysowania.
-      const end: Point = { x: e.x, y: e.y };
+      const end: Point = controllingSwitch ? { x: controllingSwitch.x, y: controllingSwitch.y } : { x: e.x, y: e.y };
       const routed = routeAlongWalls(panel, end, walls, roomShapes);
       const points = routed ?? manhattanFallback(panel, end, walls, roomShapes);
       supply.push({

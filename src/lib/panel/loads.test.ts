@@ -194,6 +194,40 @@ describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
     expect(control2.map((r) => r.id).sort()).toEqual([`${control.id}->${lightA.id}`, `${control.id}->${lightB.id}`].sort());
   });
 
+  it("oprawa sterowana łącznikiem dostaje trasę ZASILANIA do ŁĄCZNIKA, nie do siebie — zasilanie idzie najpierw do łącznika, dopiero potem sterowanie do oprawy", () => {
+    const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(panel, [circuit({ elements: [light] })], [light, control], [], []);
+
+    const supply = routes.find((r) => r.kind === "zasilanie")!;
+    expect(supply).toBeDefined();
+    expect(supply.id).toBe(light.id); // trasa nadal "należy" do oprawy (obwód, kolor, kosztorys)
+    expect(supply.points[supply.points.length - 1]).toEqual({ x: control.x, y: control.y }); // ale KOŃCZY się na łączniku
+
+    const ctrl = routes.find((r) => r.kind === "sterowanie")!;
+    expect(ctrl).toBeDefined();
+    expect(ctrl.points[0]).toEqual({ x: control.x, y: control.y }); // sterowanie ZACZYNA się tam, gdzie skończyło się zasilanie
+    expect(ctrl.points[ctrl.points.length - 1]).toEqual({ x: light.x, y: light.y });
+  });
+
+  it("oprawa BEZ łącznika w swojej grupie dostaje zasilanie wprost do siebie, jak każdy inny odbiornik", () => {
+    const light = el("oswietlenie", { x: 50, y: 0 }); // bez lightGroup — nie steruje nią żaden łącznik
+    const routes = buildCableRoutes(panel, [circuit({ elements: [light] })], [light], [], []);
+    const supply = routes.find((r) => r.kind === "zasilanie")!;
+    expect(supply).toBeDefined();
+    expect(supply.points[supply.points.length - 1]).toEqual({ x: light.x, y: light.y });
+  });
+
+  it("łącznik schodowy (dwa łączniki, jedna oprawa): zasilanie ląduje na NAJBLIŻSZYM łączniku", () => {
+    const light = el("oswietlenie", { x: 100, y: 0, lightGroup: [1] });
+    const near = el("wlacznikSchodowy", { x: 90, y: 0, lightGroup: [1] }); // 10 jedn. od oprawy
+    const far = el("wlacznikSchodowy", { x: -50, y: 0, lightGroup: [1] }); // 150 jedn. od oprawy
+    const routes = buildCableRoutes(panel, [circuit({ elements: [light] })], [light, near, far], [], []);
+    const supply = routes.find((r) => r.kind === "zasilanie")!;
+    expect(supply).toBeDefined();
+    expect(supply.points[supply.points.length - 1]).toEqual({ x: near.x, y: near.y });
+  });
+
   it("łącznik bez oprawy w swojej grupie nie dostaje żadnej trasy", () => {
     const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
     const routes = buildCableRoutes(null, [], [control], [], []);

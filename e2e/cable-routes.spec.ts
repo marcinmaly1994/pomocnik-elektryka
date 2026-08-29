@@ -208,6 +208,54 @@ test("łącznik i oprawa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się
   expect(dashes).toEqual([[1, 3]]);
 });
 
+test("z rozdzielnicą na planie: zasilanie oprawy STEROWANEJ łącznikiem ląduje na łączniku, nie na oprawie — dopiero sterowanie prowadzi dalej do oprawy", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 60);
+
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 250, box.y + 100);
+
+  await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 150, box.y + 150);
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const lines = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[]; strokeWidth(): number }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01).map((l) => ({ points: l.points(), strokeWidth: l.strokeWidth() })) ?? [];
+  });
+  expect(lines).toHaveLength(2);
+
+  // zasilanie (grubsza linia, strokeWidth 2.5) — sterowanie jest cieńsze (1.5)
+  const supply = lines.find((l) => l.strokeWidth > 2)!;
+  const control = lines.find((l) => l.strokeWidth < 2)!;
+  expect(supply).toBeDefined();
+  expect(control).toBeDefined();
+
+  const supplyEnd = supply.points.slice(-2);
+  const controlStart = control.points.slice(0, 2);
+  const controlEnd = control.points.slice(-2);
+
+  // zasilanie KOŃCZY się dokładnie tam, gdzie sterowanie ZACZYNA się (na łączniku) —
+  // NIE na oprawie, do której sterowanie dopiero DALEJ prowadzi
+  expect(supplyEnd).toEqual(controlStart);
+  expect(controlEnd).not.toEqual(supplyEnd);
+});
+
 /** Punkty i styl (dash) JEDYNEJ trasy na scenie — do asercji w testach ręcznej edycji. */
 async function soleRoute(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
