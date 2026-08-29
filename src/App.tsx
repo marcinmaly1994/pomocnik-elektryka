@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
-  CloudOff,
   FilePlus2,
   Folder,
   FolderOpen,
@@ -414,17 +413,26 @@ export default function App() {
             <HelpCircle size={15} /> Pomoc
           </button>
           <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
-          {/* Niezalogowany widzi ten sam chip co dotychczas („offline" — nie ma się z
-              czym synchronizować). Po zalogowaniu jego rolę przejmuje `CloudSaveIndicator`
-              obok menu konta: pokazuje PRAWDZIWY status („zapisywanie…”, godzinę
-              ostatniego zapisu albo błąd), nie tylko fakt bycia zalogowanym. */}
+          {/* Niezalogowany widzi ten sam chip co dotychczas. Po zalogowaniu jego rolę
+              przejmuje `CloudSaveIndicator` obok menu konta: pokazuje PRAWDZIWY status
+              („zapisywanie…”, godzinę ostatniego zapisu albo błąd), nie tylko fakt
+              bycia zalogowanym.
+              Treść i ikona: „Synchronizacja: offline” + `CloudOff` brzmiały jak awaria
+              (czerwonawe skojarzenie „offline” + przekreślona chmura), a to normalny,
+              bezpieczny stan — projekt JEST zapisany, tylko lokalnie. „Zapisano
+              lokalnie” + `Save` mówią wprost co się dzieje, bez straszenia. Klikalne
+              (gdy Supabase jest skonfigurowane) — otwiera logowanie, więc to
+              rzeczywista zachęta, nie tylko podpowiedź w tooltipie. */}
           {!session && (
-            <span
-              className="pe-chip hidden items-center gap-1 text-slate-400 lg:flex"
+            <button
+              type="button"
+              onClick={SUPABASE_CONFIGURED ? () => setAuthOpen(true) : undefined}
+              disabled={!SUPABASE_CONFIGURED}
+              className="pe-chip hidden items-center gap-1 text-slate-400 transition-colors enabled:hover:border-copper enabled:hover:text-copper lg:flex disabled:cursor-default"
               title={SUPABASE_CONFIGURED ? "Zaloguj się, aby synchronizować projekt z chmurą" : "Uzupełnij VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY w .env"}
             >
-              <CloudOff size={13} /> Synchronizacja: offline
-            </span>
+              <Save size={13} /> Zapisano lokalnie
+            </button>
           )}
           <NewProjectButton onConfirm={resetProject} elementCount={elementCount} />
           {session ? (
