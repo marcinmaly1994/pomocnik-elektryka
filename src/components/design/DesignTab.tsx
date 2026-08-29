@@ -593,6 +593,47 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setToolMode("sciany");
     setCoachMark("sciany");
   }
+  /** Zmiana narzędzia — wspólna dla kliknięcia w ToolRail I skrótu klawiszowego
+   *  (patrz keydown handler niżej), żeby oba wejścia miały DOKŁADNIE te same
+   *  efekty uboczne (porzucenie niedokończonej figury, przełączenie zakładki
+   *  panelu, rozwinięcie zwiniętego panelu, zgaszenie dymka coach-marka) —
+   *  bez wspólnej funkcji skrót klawiszowy "po cichu" pomijałby część z nich. */
+  function selectTool(id: ToolMode) {
+    // Wyjście z trybu porzuca niedokończoną figurę — inaczej jej punkty
+    // wisiałyby na planie i doklejałyby się po powrocie do rysowania.
+    if (id !== "pomieszczenie") setDrawingRoomPoints([]);
+    if (id !== "sciany") setDrawingWall([]);
+    setToolMode(id);
+    // Zakładka panelu ma pokazywać zawartość ZGODNĄ z wybranym narzędziem —
+    // „Wstaw element” podświetla „Elementy”, „Obrysuj pomieszczenie” podświetla
+    // „Pomieszczenia”. Wcześniej pasek zmieniał tylko narzędzie i zostawiał
+    // zakładkę bez zmian, więc po przejściu z jednego narzędzia na drugie w
+    // panelu nadal stała treść od poprzedniego wyboru — myląco, bo z boku
+    // wyglądało to na niedziałający przycisk.
+    if (id === "elementy") setSidebarTab("elementy");
+    if (id === "pomieszczenie") setSidebarTab("pomieszczenia");
+    // Sięgnięcie po narzędzie, które karmi się panelem, rozwija go, jeśli był
+    // zwinięty. W drugą stronę NIE działa: żadne narzędzie panelu nie zamyka.
+    if (id === "elementy" || id === "pomieszczenie") rozwinPanel();
+    // Ręczny wybór narzędzia z paska (a nie z CTA karty/onboardingu) chowa
+    // dymek — dotyczy obu: linijki i ścian.
+    setCoachMark(null);
+  }
+
+  /** Skróty klawiszowe narzędzi (patrz `RAIL_TOOLS[].shortcut` w ToolRail.tsx —
+   *  tooltipy pokazują tę samą literę). Osobna mapa zamiast if-else w keydown
+   *  handlerze, żeby dodanie/zmiana skrótu wymagała jednej linijki w JEDNYM
+   *  miejscu (w ToolRail literę widzi użytkownik, tutaj musi się zgadzać). */
+  const TOOL_SHORTCUTS: Record<string, ToolMode> = {
+    v: "zaznacz",
+    e: "elementy",
+    p: "pomieszczenie",
+    w: "sciany",
+    d: "otwory",
+    h: "pan",
+    s: "skala",
+  };
+
   const [contextMenu, setContextMenu] = useState<
     { x: number; y: number; kind: "el" | "wall" | "room" | "wallDraw" | "opening"; id: string; multi: boolean } | null
   >(null);
@@ -676,6 +717,18 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       if ((e.key === "Delete" || e.key === "Backspace") && tag !== "INPUT" && tag !== "TEXTAREA") {
         e.preventDefault();
         deleteSelection();
+      }
+      // Skróty narzędzi (V/E/P/W/D/H/S — patrz TOOL_SHORTCUTS/ToolRail.tsx). Bez
+      // modyfikatorów: z Ctrl/Cmd/Alt to byłby skrót PRZEGLĄDARKI (np. Ctrl+P —
+      // drukowanie), nie ten. Sam skrót dostępny WSZĘDZIE, nie tylko w trybie
+      // „zaznacz" — to zamiennik kliknięcia w pasek narzędzi, który też działa
+      // z dowolnego trybu.
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && tag !== "INPUT" && tag !== "TEXTAREA") {
+        const tool = TOOL_SHORTCUTS[e.key.toLowerCase()];
+        if (tool) {
+          e.preventDefault();
+          selectTool(tool);
+        }
       }
       if ((e.key === "r" || e.key === "R") && tag !== "INPUT" && tag !== "TEXTAREA") {
         const ids = multiSelected.length > 0 ? multiSelected : selected?.kind === "el" ? [selected.id] : [];
@@ -1510,27 +1563,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             if (id === "skala") scaleToolRef.current = el;
             if (id === "sciany") wallToolRef.current = el;
           }}
-          onChange={(id) => {
-          // Wyjście z trybu porzuca niedokończoną figurę — inaczej jej punkty
-          // wisiałyby na planie i doklejałyby się po powrocie do rysowania.
-          if (id !== "pomieszczenie") setDrawingRoomPoints([]);
-          if (id !== "sciany") setDrawingWall([]);
-          setToolMode(id);
-          // Zakładka panelu ma pokazywać zawartość ZGODNĄ z wybranym narzędziem —
-          // „Wstaw element” podświetla „Elementy”, „Obrysuj pomieszczenie” podświetla
-          // „Pomieszczenia”. Wcześniej pasek zmieniał tylko narzędzie i zostawiał
-          // zakładkę bez zmian, więc po przejściu z jednego narzędzia na drugie w
-          // panelu nadal stała treść od poprzedniego wyboru — myląco, bo z boku
-          // wyglądało to na niedziałający przycisk.
-          if (id === "elementy") setSidebarTab("elementy");
-          if (id === "pomieszczenie") setSidebarTab("pomieszczenia");
-          // Sięgnięcie po narzędzie, które karmi się panelem, rozwija go, jeśli był
-          // zwinięty. W drugą stronę NIE działa: żadne narzędzie panelu nie zamyka.
-          if (id === "elementy" || id === "pomieszczenie") rozwinPanel();
-          // Ręczny wybór narzędzia z paska (a nie z CTA karty/onboardingu) chowa
-          // dymek — dotyczy obu: linijki i ścian.
-          setCoachMark(null);
-          }}
+          onChange={selectTool}
           />
 
           {/* Uchwyt zwijania na styku paska narzędzi i panelu. Widoczny ZAWSZE, w obie
