@@ -336,6 +336,86 @@ test("silnik: spadek napięcia przy rozruchu ponad 15% to warunek niespełniony"
   await expect(page.getByText(/moment ∝ U²/)).toBeVisible();
 });
 
+test("impedancja przewodu: R, X, Z oraz nierówny podział prądu między żyły równoległe", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Impedancja przewodu/ }).click();
+
+  // 100 m, 16 mm² Cu przy 70 °C: R = 0,021366·100/16 = 0,1335 Ω
+  const wyniki = page.locator(".pe-result");
+  await expect(wyniki.first()).toContainText("R 0,1335 Ω");
+  await expect(wyniki.first()).toContainText("γ 46,8 przy 70 °C");
+
+  // żyły 40 i 60 m: prąd dzieli się 120/80 A, nie po równo 100/100
+  await expect(wyniki.nth(1)).toContainText("podział 120,0 / 80,0 A");
+  await expect(wyniki.nth(1)).toContainText("odchylenie 20,0%");
+  // domyślnie Iz = 120 A, czyli DOKŁADNIE tyle, ile bierze krótsza żyła —
+  // zerowy zapas to wynik graniczny, nie „spełniony"
+  await expect(page.getByText(/Wynik graniczny/)).toBeVisible();
+
+  // obniżenie obciążalności ujawnia przeciążenie, którego zabezpieczenie
+  // nadprądowe nie wykryje, bo mierzy prąd całkowity (200 A dzielone na dwie żyły)
+  await page.getByLabel("Obciążalność jednej żyły (0 = bez oceny)").fill("110");
+  await expect(page.getByText(/NIE wykryje/)).toBeVisible();
+});
+
+/**
+ * PE ma dwa niezależne kryteria i obowiązuje ostrzejsze. Sama reguła
+ * „PE = połowa fazowego" NIE gwarantuje wytrzymałości zwarciowej przy dużym
+ * prądzie zwarcia — ten test pilnuje, że kalkulator liczy oba i mówi, które
+ * zadecydowało.
+ */
+test("dobór PE: przy dużym prądzie zwarciowym decyduje warunek cieplny, nie reguła tabelaryczna", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Dobór przewodu PE i N/ }).click();
+
+  const wynik = page.locator(".pe-result").first();
+  await expect(wynik).toContainText("z reguły 10,0 mm²");
+  await expect(wynik).toContainText("decyduje: reguła tabelaryczna");
+
+  // 6 kA przez 0,4 s, Cu/PVC (k=115) → 33 mm², czyli więcej niż reguła
+  await page.getByLabel("Prąd zwarcia doziemnego (0 = pomiń warunek cieplny)").fill("6000");
+  await expect(wynik).toContainText("z warunku cieplnego 33,00 mm²");
+  await expect(wynik).toContainText("decyduje: wytrzymałość zwarciowa cieplna");
+  await expect(wynik).toContainText("35,0 mm²");
+});
+
+test("dobór N: udział 3. harmonicznej ponad 33% daje prąd w N większy od fazowego", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Dobór przewodu PE i N/ }).click();
+
+  await page.getByLabel("Udział 3. harmonicznej").fill("40");
+  // 3 · 0,4 · 32 A = 38,4 A > 32 A
+  await expect(page.locator(".pe-result").nth(1)).toContainText("38,4 A");
+  await expect(page.getByText(/przekracza prąd fazowy/)).toBeVisible();
+  // nie proponuje przekroju mniejszego od fazowego i mówi dlaczego
+  await expect(page.getByText(/NIE ma wbudowanych/)).toBeVisible();
+});
+
+test("SPD: skuteczny poziom ochrony to Up powiększone o spadek na przewodach", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Ochronniki przepięć/ }).click();
+
+  const wynik = page.locator(".pe-result").first();
+  await expect(wynik).toContainText("2000 V");
+  await expect(wynik).toContainText("przyrost na przewodach 500 V");
+  await expect(wynik).toContainText("maks. długość przewodów 1,00 m");
+  await expect(page.getByText(/Warunek spełniony/)).toBeVisible();
+
+  // za długie przewody wywracają ochronę mimo poprawnego Up
+  await page.getByLabel("Długość przewodów przyłączeniowych (łącznie)").fill("1.5");
+  await expect(wynik).toContainText("3000 V");
+  await expect(page.getByText(/Warunek niespełniony/)).toBeVisible();
+});
+
+test("SPD: Up ≥ Uw to zły dobór ogranicznika, którego skracanie przewodów nie naprawi", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Ochronniki przepięć/ }).click();
+
+  await page.getByLabel("Poziom ochrony Up (z tabliczki)").fill("2500");
+  await expect(page.getByText(/Skrócenie przewodów tego nie naprawi/)).toBeVisible();
+  await expect(page.locator(".pe-result")).toHaveCount(0);
+});
+
 test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,88 Ω)", async ({ page }) => {
   await openCalculators(page);
 

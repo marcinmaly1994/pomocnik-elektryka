@@ -5,6 +5,7 @@ import type { UkladBaterii } from "@/lib/calc/powerFactor";
 import type { TypUziomu } from "@/lib/calc/earthing";
 import type { Faza } from "@/lib/calc/loadBalance";
 import type { SposobRozruchu } from "@/lib/calc/motor";
+import type { TypSPD } from "@/lib/calc/spd";
 import type { Izolacja, Material, RodzajLinii } from "@/lib/norms/conductors";
 import type { LayingMethod } from "@/lib/panel/norms";
 import type { CircuitKind } from "@/lib/panel/sizing";
@@ -37,6 +38,9 @@ export type CalcId =
   | "uziom"
   | "bilansFaz"
   | "silnik"
+  | "impedancja"
+  | "peN"
+  | "spd"
   | "oswietlenie"
   | "rcd";
 
@@ -141,6 +145,30 @@ interface CalculatorsState {
   slRozruch: SposobRozruchu;
   slCzasRozruchu: number;
   slImpedancja: number;
+
+  // --- kalkulatory uzupełniające (impedancja / PE-N / SPD) ---
+  imDlugosc: number;
+  imPrzekroj: number;
+  imMaterial: Material;
+  imIzolacja: Izolacja;
+  imRodzajLinii: RodzajLinii;
+  /** Przewody równoległe — długości poszczególnych żył [m], rozdzielone przecinkami. */
+  imRownoleglePrad: number;
+  imRownolegleDlugosci: string;
+  imRownolegleIz: number;
+
+  peFazowy: number;
+  peMaterial: Material;
+  peIzolacja: Izolacja;
+  pePradZwarciowy: number;
+  peCzas: number;
+  pnPradFazowy: number;
+  pnH3Pct: number;
+
+  spdTyp: TypSPD;
+  spdUp: number;
+  spdUw: number;
+  spdDlugosc: number;
 
   // --- kompensacja mocy biernej ---
   kmPkW: number;
@@ -264,6 +292,28 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       slRozruch: "bezposredni",
       slCzasRozruchu: 5,
       slImpedancja: 0,
+
+      imDlugosc: 100,
+      imPrzekroj: 16,
+      imMaterial: "Cu",
+      imIzolacja: "PVC",
+      imRodzajLinii: "kabel_wielozylowy",
+      imRownoleglePrad: 200,
+      imRownolegleDlugosci: "40, 60",
+      imRownolegleIz: 120,
+
+      peFazowy: 10,
+      peMaterial: "Cu",
+      peIzolacja: "PVC",
+      pePradZwarciowy: 0,
+      peCzas: 0.4,
+      pnPradFazowy: 32,
+      pnH3Pct: 0,
+
+      spdTyp: "T2",
+      spdUp: 1500,
+      spdUw: 2500,
+      spdDlugosc: 0.5,
 
       kmPkW: 100,
       kmCos1: 0.8,
