@@ -359,6 +359,9 @@ export function DesignCanvas({
   const roomRectStartRef = useRef<Point | null>(null);
   const roomRectRef = useRef<MarqueeRect | null>(null);
   const [roomRect, setRoomRect] = useState<MarqueeRect | null>(null);
+  /** Prostokąt domknięty przeciągnięciem — gasi `click`, który Konva wysyła zaraz
+   *  po `mouseup` (patrz `handleStageMouseUp`). */
+  const roomRectJustDrawnRef = useRef(false);
   // Pozycja kursora w trybie wieloboku — do „gumowej" linii od ostatniego punktu i do
   // podświetlenia punktu startowego, gdy kolejny klik zamknie figurę.
   const [roomCursor, setRoomCursor] = useState<Point | null>(null);
@@ -420,6 +423,21 @@ export function DesignCanvas({
       { x: r.x, y: r.y + r.h },
     ];
   }
+
+  /** Prostokąt rozpięty między dwoma narożnikami — niezależnie od kolejności. */
+  function rectBetween(a: Point, b: Point): MarqueeRect {
+    return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+  }
+
+  /**
+   * Kotwica trybu DWÓCH KLIKNIĘĆ dla prostokąta: pierwszy klik zostawia punkt,
+   * drugi domyka figurę. Ta sama tablica `drawingRoomPoints` co wielobok — celowo,
+   * mimo że prostokąt potrzebuje tylko jednego punktu: dzięki temu Escape,
+   * przycisk „Anuluj", zmiana narzędzia i zmiana kształtu (wszystkie czyszczą tę
+   * tablicę w DesignTab) anulują zaczęty prostokąt BEZ dokładania czwartej ścieżki
+   * anulowania, o której łatwo zapomnieć przy kolejnej zmianie.
+   */
+  const rectAnchor = drawingRoom && roomMode === "prostokat" && drawingRoomPoints.length > 0 ? drawingRoomPoints[0] : null;
 
   // layer.batchDraw() planuje przerysowanie mapy trafień przez requestAnimationFrame —
   // w tabie bez fokusu/widoczności przeglądarka potrafi to trwale wstrzymać, przez co
@@ -487,15 +505,12 @@ export function DesignCanvas({
         setRoomCursor(closesPolygon(raw) ? drawingRoomPoints[0] : withSnap(raw));
         return;
       }
-      const start = roomRectStartRef.current;
+      // Kotwica z pierwszego kliknięcia działa tak samo jak wciśnięty przycisk —
+      // podgląd prostokąta ma iść za kursorem w OBU trybach, inaczej po pierwszym
+      // kliknięciu ekran wyglądałby, jakby nic się nie stało.
+      const start = roomRectStartRef.current ?? rectAnchor;
       if (!start) return;
-      const p = withSnap(raw);
-      const rect = {
-        x: Math.min(start.x, p.x),
-        y: Math.min(start.y, p.y),
-        w: Math.abs(p.x - start.x),
-        h: Math.abs(p.y - start.y),
-      };
+      const rect = rectBetween(start, withSnap(raw));
       roomRectRef.current = rect;
       setRoomRect(rect);
       return;
@@ -519,9 +534,20 @@ export function DesignCanvas({
     if (roomRectStartRef.current) {
       roomRectStartRef.current = null;
       const rect = roomRectRef.current;
+      // Prostokąt zbyt mały to NIE jest nieudane przeciągnięcie do wyrzucenia —
+      // to zwykłe kliknięcie, czyli pierwszy krok trybu dwóch kliknięć. Kotwicę
+      // stawia dopiero `handleStageClick` (tam trafia też klik bez żadnego ruchu
+      // myszy), więc tutaj tylko sprzątamy podgląd i nie gasimy tamtej ścieżki.
+      const domkniety = !!rect && rect.w >= MIN_ROOM_SIZE && rect.h >= MIN_ROOM_SIZE;
       roomRectRef.current = null;
-      setRoomRect(null);
-      if (rect && rect.w >= MIN_ROOM_SIZE && rect.h >= MIN_ROOM_SIZE) onRoomRectDrawn(rectCorners(rect));
+      if (domkniety) {
+        setRoomRect(null);
+        // Konva wyśle po tym `click` (mousedown i mouseup na tym samym celu) —
+        // bez tej flagi domykałby od razu KOLEJNY prostokąt w miejscu, w którym
+        // skończyło się przeciągnięcie.
+        roomRectJustDrawnRef.current = true;
+        onRoomRectDrawn(rectCorners(rect!));
+      }
       return;
     }
 
@@ -571,9 +597,26 @@ export function DesignCanvas({
       return;
     }
     if (toolMode === "pomieszczenie") {
-      // Prostokąt powstaje z przeciągnięcia (mousedown→mouseup), więc towarzyszące
-      // kliknięcie musi tu zostać zignorowane, inaczej dokładałoby lewy punkt.
-      if (roomMode === "prostokat") return;
+      if (roomMode === "prostokat") {
+        // Echo przeciągnięcia, które właśnie domknęło prostokąt — patrz
+        // `roomRectJustDrawnRef` w `handleStageMouseUp`.
+        if (roomRectJustDrawnRef.current) {
+          roomRectJustDrawnRef.current = false;
+          return;
+        }
+        const rogSnapowany = withSnap(p);
+        // Druga (obok przytrzymania) droga do tego samego prostokąta: klik stawia
+        // narożnik, ruch myszy rozciąga podgląd, kolejny klik domyka figurę.
+        if (rectAnchor) {
+          const rect = rectBetween(rectAnchor, rogSnapowany);
+          if (rect.w < MIN_ROOM_SIZE || rect.h < MIN_ROOM_SIZE) return; // za mały — czekamy dalej
+          setRoomRect(null);
+          onRoomRectDrawn(rectCorners(rect));
+          return;
+        }
+        onAddRoomPoint(rogSnapowany);
+        return;
+      }
       if (closesPolygon(p)) {
         onCloseRoomPolygon();
         setRoomCursor(null);
@@ -1280,7 +1323,11 @@ export function DesignCanvas({
               linia, więc nie było wiadomo, gdzie dokładnie wylądował wierzchołek).
               Pierwszy punkt rośnie i zmienia się w pierścień, gdy kolejny klik zamknie
               figurę — to jedyny sygnał, że przyciąganie do zamknięcia właśnie działa. */}
-          {drawingRoomPoints.length > 0 && (
+          {/* Tylko wielobok: w trybie prostokąta ta sama tablica trzyma pojedynczą
+              kotwicę pierwszego kliknięcia (patrz `rectAnchor`), a tę pokazuje już
+              podgląd prostokąta niżej — bez tego warunku nad rysunkiem wisiałaby
+              dodatkowo samotna kropka. */}
+          {roomMode === "wielobok" && drawingRoomPoints.length > 0 && (
             <>
               <Line points={drawingRoomPoints.flatMap((p) => [p.x, p.y])} stroke="#C1793F" strokeWidth={2} dash={[6, 4]} closed={false} />
               {roomCursor && (

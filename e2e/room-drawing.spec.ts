@@ -66,12 +66,81 @@ test("prostokąt powstaje przez przytrzymanie LPM i przeciągnięcie", async ({ 
   expect(new Set(pts.map((p) => p.y)).size).toBe(2);
 });
 
-test("samo kliknięcie bez przeciągnięcia nie tworzy pomieszczenia", async ({ page }) => {
+/**
+ * Druga, RÓWNOLEŻNA droga do prostokąta obok przytrzymania: klik stawia narożnik,
+ * kolejny klik domyka figurę. Powód istnienia obu: przeciąganie przez pół ekranu
+ * z wciśniętym przyciskiem jest męczące na touchpadzie, a przy dłuższym geście
+ * łatwo puścić przycisk w połowie.
+ */
+test("prostokąt powstaje też przez dwa kliknięcia: narożnik → przeciwległy narożnik", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+
+  await page.mouse.click(box.x + 100, box.y + 100);
+  // pierwszy klik NIE tworzy jeszcze pomieszczenia — tylko stawia narożnik
+  await expect(page.getByText("Nazwij pomieszczenie")).toBeHidden();
+  await expect(page.getByText(/Narożnik postawiony/)).toBeVisible();
+
+  // podgląd musi iść za kursorem także bez wciśniętego przycisku
+  await page.mouse.move(box.x + 260, box.y + 220, { steps: 6 });
+  await page.mouse.click(box.x + 260, box.y + 220);
+
+  await expect(page.getByText("Nazwij pomieszczenie")).toBeVisible();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  expect(await roomCount(page)).toBe(1);
+
+  await page.waitForTimeout(900);
+  const pts = await page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.roomShapes[0].points as { x: number; y: number }[];
+  });
+  expect(pts).toHaveLength(4);
+  expect(new Set(pts.map((p) => p.x)).size).toBe(2);
+  expect(new Set(pts.map((p) => p.y)).size).toBe(2);
+});
+
+test("pojedyncze kliknięcie stawia dopiero narożnik — samo z siebie nie tworzy pomieszczenia", async ({ page }) => {
   const box = await openPlan(page);
   await page.getByRole("button", { name: "Prostokąt" }).click();
   await page.mouse.click(box.x + 150, box.y + 150);
   await expect(page.getByText("Nazwij pomieszczenie")).toBeHidden();
   expect(await roomCount(page)).toBe(0);
+});
+
+test("„Anuluj” kasuje postawiony narożnik — kolejny klik zaczyna prostokąt od nowa", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await expect(page.getByText(/Narożnik postawiony/)).toBeVisible();
+  await page.getByRole("button", { name: "Anuluj" }).click();
+  await expect(page.getByText(/Narożnik postawiony/)).toBeHidden();
+
+  // po anulowaniu klik w INNYM miejscu zaczyna od zera, a nie domyka figurę
+  // rozpiętą od skasowanego narożnika
+  await page.mouse.click(box.x + 300, box.y + 260);
+  await expect(page.getByText("Nazwij pomieszczenie")).toBeHidden();
+  await expect(page.getByText(/Narożnik postawiony/)).toBeVisible();
+});
+
+/**
+ * Regresja: Konva wysyła `click` po każdym `mouseup` na tym samym celu, więc
+ * przeciągnięcie kończące prostokąt generuje też kliknięcie. Bez wygaszenia go
+ * (`roomRectJustDrawnRef`) ten klik od razu stawiał narożnik NASTĘPNEGO prostokąta
+ * w miejscu, w którym skończyło się przeciągnięcie.
+ */
+test("przeciągnięcie nie zostawia po sobie zawieszonego narożnika następnego prostokąta", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+
+  await page.mouse.move(box.x + 100, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 260, box.y + 220, { steps: 8 });
+  await page.mouse.up();
+
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  expect(await roomCount(page)).toBe(1);
+  await expect(page.getByText(/Narożnik postawiony/)).toBeHidden();
 });
 
 test("wielobok zamyka się po kliknięciu w POBLIŻU pierwszego punktu", async ({ page }) => {

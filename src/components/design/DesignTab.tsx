@@ -88,7 +88,7 @@ const DEFAULT_ELEMENT_SCALE = 1;
 const PAS_WYZWALAJACY = 24;
 
 const ROOM_MODES: { id: RoomDrawMode; label: string; hint: string }[] = [
-  { id: "prostokat", label: "Prostokąt", hint: "przytrzymaj lewy przycisk i przeciągnij" },
+  { id: "prostokat", label: "Prostokąt", hint: "przeciągnij z wciśniętym przyciskiem albo kliknij dwa przeciwległe narożniki" },
   { id: "wielobok", label: "Wielobok", hint: "klikaj kolejne narożniki, na koniec kliknij w pierwszy" },
 ];
 
@@ -1211,13 +1211,24 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           <span className="min-w-0 basis-full text-slate-500">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
         </div>
       )}
+      {/* Prostokąt używa tej samej tablicy punktów na kotwicę pierwszego kliknięcia
+          (patrz `rectAnchor` w DesignCanvas), ale komunikat musi być jego własny:
+          „1 pkt." i podpowiedź o zamykaniu figury dotyczą wieloboku i przy
+          prostokącie tylko wprowadzałyby w błąd. „Anuluj" jest wspólne — kasuje
+          kotwicę tak samo jak zaczęty wielobok. */}
       {drawingRoomPoints.length > 0 && (
         <div className="flex flex-nowrap items-center gap-2 text-sm">
           <span className="whitespace-nowrap font-medium text-slate-600">
-            {drawingRoomPoints.length} pkt.
-            {drawingRoomPoints.length >= 3 && " — kliknij w pierwszy punkt, aby zamknąć"}
+            {roomMode === "prostokat" ? (
+              "Narożnik postawiony — kliknij przeciwległy, aby domknąć prostokąt"
+            ) : (
+              <>
+                {drawingRoomPoints.length} pkt.
+                {drawingRoomPoints.length >= 3 && " — kliknij w pierwszy punkt, aby zamknąć"}
+              </>
+            )}
           </span>
-          {drawingRoomPoints.length >= 3 && (
+          {roomMode === "wielobok" && drawingRoomPoints.length >= 3 && (
             <button onClick={finishRoomDrawing} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
           )}
           <button onClick={() => setDrawingRoomPoints([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
@@ -1846,7 +1857,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             }
             onAddWallPoint={(p) => setDrawingWall((pts) => [...pts, p])}
             onAddRoomPoint={(p) => setDrawingRoomPoints((pts) => [...pts, p])}
-            onRoomRectDrawn={(points) => setPendingRoom({ points, name: nextRoomName(roomShapes.length) })}
+            onRoomRectDrawn={(points) => {
+              setPendingRoom({ points, name: nextRoomName(roomShapes.length) });
+              // Prostokąt rysowany DWOMA KLIKNIĘCIAMI trzyma narożnik startowy w tej
+              // samej tablicy co wielobok (patrz `rectAnchor` w DesignCanvas), więc
+              // domknięcie figury musi ją wyczyścić — inaczej kolejny klik liczyłby
+              // się od nieaktualnej kotwicy poprzedniego pomieszczenia.
+              setDrawingRoomPoints([]);
+            }}
             onCloseRoomPolygon={finishRoomDrawing}
             onAddCalibPoint={(p) => setCalibPoints((pts) => (pts.length >= 2 ? [p] : [...pts, p]))}
           />
