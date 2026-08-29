@@ -256,6 +256,48 @@ test("z rozdzielnicą na planie: zasilanie oprawy STEROWANEJ łącznikiem ląduj
   expect(controlEnd).not.toEqual(supplyEnd);
 });
 
+test("z rozdzielnicą: KILKA opraw JEDNEGO obwodu na jednym łączniku — TYLKO JEDNA gruba linia zasilania do łącznika, nie po jednej na oprawę", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 60);
+
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 200, box.y + 60);
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.mouse.click(box.x + 260, box.y + 90);
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.mouse.click(box.x + 220, box.y + 140);
+
+  await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 150, box.y + 30);
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const lines = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; strokeWidth(): number }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01).map((l) => l.strokeWidth()) ?? [];
+  });
+  const supplyLines = lines.filter((w) => w > 2); // zasilanie: strokeWidth 2.5, sterowanie: 1.5
+  const controlLines = lines.filter((w) => w < 2);
+  // trzy oprawy WSPÓLNEGO obwodu sterowane jednym łącznikiem = JEDNA linia
+  // zasilania do łącznika (jeden kabel), a NIE trzy równoległe kreski
+  expect(supplyLines).toHaveLength(1);
+  expect(controlLines).toHaveLength(3); // sterowanie nadal odwiedza wszystkie trzy oprawy
+});
+
 test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania dotyka łącznika, nie trzy", async ({ page }) => {
   await openPlan(page);
   // Powiększenie 100%, żeby klik na ekranie odpowiadał jednostce planu — test niżej

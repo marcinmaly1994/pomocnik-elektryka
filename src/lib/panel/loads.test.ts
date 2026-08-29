@@ -279,6 +279,47 @@ describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
     expect(ctrl.points[ctrl.points.length - 1]).toEqual({ x: light.x, y: light.y });
   });
 
+  it("KILKA opraw JEDNEGO obwodu, JEDEN łącznik: zasilanie do łącznika jest TYLKO JEDNO, nie po jednym na oprawę", () => {
+    // dokładnie zgłoszony problem: cztery oprawy sterowane jednym łącznikiem, ale
+    // WSZYSTKIE na tym samym obwodzie (ten sam wyłącznik/bezpiecznik) — to fizycznie
+    // JEDEN kabel do puszki łącznika, nie cztery równoległe kreski kończące się w
+    // tym samym punkcie
+    const lightA = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const lightB = el("oswietlenie", { x: 60, y: 10, lightGroup: [1] });
+    const lightC = el("oswietlenie", { x: 70, y: -10, lightGroup: [1] });
+    const lightD = el("oswietlenie", { x: 80, y: 20, lightGroup: [1] });
+    const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(
+      panel,
+      [circuit({ elements: [lightA, lightB, lightC, lightD] })],
+      [lightA, lightB, lightC, lightD, control],
+      [],
+      []
+    );
+    const supplyRoutes = routes.filter((r) => r.kind === "zasilanie");
+    expect(supplyRoutes).toHaveLength(1); // NIE cztery
+    expect(supplyRoutes[0].points[supplyRoutes[0].points.length - 1]).toEqual({ x: control.x, y: control.y });
+    // sterowanie za łącznikiem nadal odwiedza WSZYSTKIE cztery oprawy (łańcuchem)
+    expect(routes.filter((r) => r.kind === "sterowanie")).toHaveLength(4);
+  });
+
+  it("oprawy sterowane TYM SAMYM łącznikiem, ale z RÓŻNYCH obwodów, dostają OSOBNE trasy zasilania — to naprawdę dwa różne kable", () => {
+    const lightA = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const lightB = el("oswietlenie", { x: 60, y: 10, lightGroup: [1] });
+    const control = el("wlacznikGrupowy", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(
+      panel,
+      [circuit({ elements: [lightA] }), circuit({ id: "obw2", elements: [lightB] })],
+      [lightA, lightB, control],
+      [],
+      []
+    );
+    const supplyRoutes = routes.filter((r) => r.kind === "zasilanie");
+    expect(supplyRoutes).toHaveLength(2); // dwa RÓŻNE obwody = dwa RÓŻNE kable, mimo wspólnego łącznika
+    expect(supplyRoutes.map((r) => r.circuitId).sort()).toEqual(["obw2", "obwOswietlenie"]);
+    supplyRoutes.forEach((r) => expect(r.points[r.points.length - 1]).toEqual({ x: control.x, y: control.y }));
+  });
+
   it("łącznik jednobiegunowy: zasilanie do puszki i sterowanie do oprawy są 3-żyłowe", () => {
     const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
     const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });

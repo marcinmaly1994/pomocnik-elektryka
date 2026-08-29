@@ -381,7 +381,11 @@ function findControllingSwitch(
  *   (patrz „sterowanie" niżej) prowadzi do oprawy. Bez tego rysunek sugerowałby
  *   odwrotną, nierealistyczną kolejność: zasilanie prosto do oprawy, z
  *   niezależnym doczepionym sterowaniem, zamiast jednego logicznego łańcucha
- *   rozdzielnica → łącznik → oprawa.
+ *   rozdzielnica → łącznik → oprawa. Gdy KILKA opraw TEGO SAMEGO obwodu dzieli
+ *   TEN SAM łącznik, dostają WSPÓLNĄ, jedną trasę do niego (nie po jednej każda)
+ *   — to fizycznie jeden kabel, a osobna linia na oprawę rysowałaby tyle kresek
+ *   zbiegających się w jednym punkcie, ile opraw steruje łącznik, myląco
+ *   sugerując tyle samo kabli wchodzących do jego puszki.
  * - „sterowanie" — łącznik → oprawa, którą przełącza (patrz `buildControlRoutes`).
  *   Sam łącznik NIE dostaje WŁASNEGO obwodu z rozdzielnicy (nie jest samodzielnym
  *   odbiornikiem) — trasa zasilania, którą dostaje (patrz wyżej), należy nadal do
@@ -413,33 +417,60 @@ export function buildCableRoutes(
 
   const supply: CableRoute[] = [];
   for (const c of circuits) {
+    // Oprawy TEGO SAMEGO obwodu sterowane TYM SAMYM łącznikiem dzielą JEDNĄ
+    // trasę zasilania do niego, nie po jednej każda — to fizycznie JEDEN kabel
+    // obwodu (ta sama faza, ten sam neutralny, to samo zabezpieczenie), rozdzielony
+    // na poszczególne oprawy DOPIERO ZA łącznikiem (patrz trasy sterowania).
+    // Rysowanie osobnej linii na oprawę dawało tyle równoległych kresek kończących
+    // się w JEDNYM punkcie, ile opraw steruje łącznik — myląco sugerując tyle samo
+    // kabli WCHODZĄCYCH do jego puszki, a nie jeden, którym ta ostatnia trasa i tak
+    // jest (patrz `switchBoxCoreCount` — TA liczba żył dotyczy właśnie tego kabla).
+    // `anchor` to element, którego id trafia do `CableRoute.id` — pierwszy
+    // napotkany z opraw danego łącznika w tym obwodzie, żeby id zostało stabilnym,
+    // prawdziwym id elementu (wymagane przez `pruneRouteOverrides` w store'ie).
+    const bySwitch = new Map<string, { sw: InstallationElement; anchor: InstallationElement }>();
+    const direct: InstallationElement[] = [];
     for (const e of c.elements) {
-      // Oprawa sterowana łącznikiem: zasilanie kończy się NA ŁĄCZNIKU, nie na
-      // oprawie — patrz `findControllingSwitch` i komentarz przy tej funkcji
-      // niżej. Każdy inny odbiornik (gniazdko, roleta, oprawa BEZ łącznika…)
-      // dostaje zasilanie wprost do siebie, jak dotychczas.
-      const controllingSwitch = isLightPoint(e) ? findControllingSwitch(e, elements, lightGroups) : null;
+      const sw = isLightPoint(e) ? findControllingSwitch(e, elements, lightGroups) : null;
+      if (sw) {
+        if (!bySwitch.has(sw.id)) bySwitch.set(sw.id, { sw, anchor: e });
+      } else {
+        direct.push(e);
+      }
+    }
+
+    const targets: { id: string; room: string; floor: string; type: ElementType; end: Point; cores: 3 | 4 | null }[] = [
+      ...direct.map((e) => ({ id: e.id, room: e.room, floor: e.floor, type: e.type, end: { x: e.x, y: e.y }, cores: null as 3 | 4 | null })),
+      ...[...bySwitch.values()].map(({ sw, anchor }) => ({
+        id: anchor.id,
+        room: sw.room,
+        floor: sw.floor,
+        type: sw.type,
+        end: { x: sw.x, y: sw.y },
+        // Przekrój wynika z obciążalności obwodu (`c.cable`, sizing.ts) i zostaje
+        // bez zmian — koryguje się WYŁĄCZNIE liczba żył w puszce łącznika (patrz
+        // `switchBoxCoreCount`): łącznik grupowy ma dwa niezależne mechanizmy w
+        // jednej ramce (wspólna faza + dwie łączone + PE), więc bywa 4-żyłowy.
+        cores: switchBoxCoreCount(sw.type),
+      })),
+    ];
+
+    for (const t of targets) {
       // Punkty świadomie skopiowane do gołego `{x,y}` — `Point[]` ma zostać lekką
       // geometrią, a nie przeciekiem całego `InstallationElement` (rola, pokój,
       // kondygnacja…) tam, gdzie potrzebna jest tylko ścieżka do narysowania.
-      const end: Point = controllingSwitch ? { x: controllingSwitch.x, y: controllingSwitch.y } : { x: e.x, y: e.y };
-      const routed = routeAlongWalls(panel, end, walls, roomShapes);
-      const points = routed ?? manhattanFallback(panel, end, walls, roomShapes);
-      // Przekrój wynika z obciążalności obwodu (`c.cable`, sizing.ts) — to zostaje
-      // bez zmian. Liczba żył w PUSZCE ŁĄCZNIKA bywa inna niż standardowe 3 (patrz
-      // `switchBoxCoreCount`): łącznik grupowy ma dwa niezależne mechanizmy w jednej
-      // ramce (wspólna faza + dwie łączone + PE), więc doliczamy tu WYŁĄCZNIE tę
-      // korektę, nie zmyślamy nowego przekroju.
-      const cable = controllingSwitch ? withCoreCount(c.cable, switchBoxCoreCount(controllingSwitch.type)) : c.cable;
+      const routed = routeAlongWalls(panel, t.end, walls, roomShapes);
+      const points = routed ?? manhattanFallback(panel, t.end, walls, roomShapes);
+      const cable = t.cores ? withCoreCount(c.cable, t.cores) : c.cable;
       supply.push({
-        id: e.id,
+        id: t.id,
         circuitId: c.id,
         circuitName: c.name,
-        type: e.type,
+        type: t.type,
         cable,
         breaker: c.breaker,
-        room: e.room,
-        floor: e.floor,
+        room: t.room,
+        floor: t.floor,
         points,
         viaWalls: routed !== null,
         kind: "zasilanie",
