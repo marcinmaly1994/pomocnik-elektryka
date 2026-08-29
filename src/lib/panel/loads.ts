@@ -167,9 +167,52 @@ function polylineLengthUnits(points: Point[]): number {
   return sum;
 }
 
+/** Łącznik dwubiegunowy łączy RÓWNOCZEŚNIE fazę i neutralny — więc każdy odcinek
+ *  za nim (aż do samych opraw) niesie fazę łączoną, neutralny łączony i PE, czyli
+ *  4 żyły, a nie standardowe 3 (faza łączona, neutralny „na wprost", PE). Jedyny
+ *  typ łącznika, gdzie 4-żyłowość dotyczy całego dalszego przewodu, nie tylko
+ *  samej puszki łącznika (patrz `switchBoxCoreCount` niżej — łącznik grupowy ma
+ *  4 żyły TYLKO w swojej puszce, dalej do każdej z opraw wraca do 3). */
+function isDualPoleSwitch(type: ElementType): boolean {
+  return type === "wlacznikDwubiegunowy";
+}
+
+/** Liczba żył kabla DOCHODZĄCEGO do puszki łącznika (zasilanie z rozdzielnicy,
+ *  patrz `findControllingSwitch`/pętla zasilania w `buildCableRoutes`) — zależnie
+ *  od budowy łącznika:
+ *  - jednobiegunowy / schodowy: faza stała + faza łączona + PE = 3 żyły. Łącznik
+ *    schodowy potrzebuje DODATKOWO żył wahadłowych, ale to okablowanie MIĘDZY
+ *    dwoma łącznikami, którego ta aplikacja nie modeluje (patrz komentarz przy
+ *    `findControllingSwitch`) — sama puszka od strony zasilania zostaje 3-żyłowa.
+ *  - krzyżowy: 4 żyły wahadłowe PRZELATUJĄ przez niego do sąsiedniego łącznika,
+ *    ale to również okablowanie międzyłącznikowe, którego tu nie rysujemy — od
+ *    strony zasilania jego własna puszka i tak startuje od 3 żył.
+ *  - dwubiegunowy: łączy fazę I neutralny naraz — 2 żyły wchodzą, 2 wychodzą (+PE) = 4.
+ *  - grupowy: DWA niezależne mechanizmy w jednej ramce — jedna wspólna faza
+ *    WCHODZI, DWIE osobne fazy łączone WYCHODZĄ (po jednej na obwód), plus PE = 4.
+ */
+function switchBoxCoreCount(type: ElementType): 3 | 4 {
+  return isDualPoleSwitch(type) || type === "wlacznikGrupowy" ? 4 : 3;
+}
+
+function cableSpecForCores(cores: 3 | 4): string {
+  return cores === 4 ? "YDYp 4x1,5 mm²" : "YDYp 3x1,5 mm²";
+}
+
+/** Podmienia WYŁĄCZNIE liczbę żył w opisie kabla obwodu (np. „YDYp 3x1,5 mm²" →
+ *  „YDYp 4x1,5 mm²"), zostawiając przekrój — o przekroju decyduje obciążalność
+ *  obwodu (sizing.ts), o liczbie żył w tym miejscu decyduje budowa łącznika
+ *  (`switchBoxCoreCount`), więc to dwie NIEZALEŻNE decyzje. Format `"{N}x{przekrój}"`
+ *  to ten sam, ustalony gdzie indziej (patrz `cableFor` w sizing.ts) — jeśli kiedyś
+ *  się zmieni, ten regexp trzeba będzie zmienić razem z nim. */
+function withCoreCount(cableSpec: string, cores: 3 | 4): string {
+  return cableSpec.replace(/(\d+)x/, `${cores}x`);
+}
+
 /**
- * Trasy STEROWANIA: łącznik → oprawa, którą przełącza (patrz `computeLightGroups` w
- * lightGroups.ts — wspólny numer grupy łączy łącznik z oprawami, które steruje).
+ * Trasy STEROWANIA: łącznik → oprawa (i, gdy jeden łącznik steruje kilkoma
+ * oprawami, dalej oprawa → kolejna oprawa) — patrz `computeLightGroups` w
+ * lightGroups.ts, wspólny numer grupy łączy łącznik z oprawami, które steruje.
  *
  * Elektrycznie to inna para żył niż zasilanie z rozdzielnicy: fazę do oprawy łączy
  * (i rozłącza) SAM łącznik, więc bez tej trasy rysunek sugerowałby, że łącznik
@@ -179,10 +222,22 @@ function polylineLengthUnits(points: Point[]): number {
  * `circuit.elements`), bo jego zadaniem jest przełączanie już zasilonej oprawy,
  * a nie pobór własnej mocy z osobnego obwodu.
  *
- * `cable`/`breaker`/`circuitId`/`circuitName` przejęte od obwodu, do którego
- * należy STEROWANA OPRAWA (nie tworzymy dla sterowania osobnego, zmyślonego
- * obwodu) — sterowanie fizycznie jedzie tym samym kablem 3-żyłowym co zasilanie
- * (faza, powrót łączony, neutralny), więc to ta sama przynależność obwodowa.
+ * WIELE opraw w jednej grupie NIE dostaje osobnego kabla z łącznika do KAŻDEJ z
+ * nich — fizycznie jest to JEDEN przewód, który pętli od łącznika przez kolejne
+ * oprawy (każda oprawa ma na listwie zaciskowej wejście i wyjście tej samej pętli).
+ * Odtwarzamy to jako drzewo najkrótszych połączeń (odmiana Prima): zbiór już
+ * „podłączonych" punktów zaczyna się od WSZYSTKICH łączników danej grupy (przy
+ * schodowym/krzyżowym może być ich kilka — którykolwiek z nich może fizycznie
+ * zaczynać pętlę), a każda kolejna, jeszcze niepodłączona oprawa dołącza się do
+ * NAJBLIŻSZEGO już podłączonego punktu — łącznika albo poprzednio dodanej oprawy.
+ *
+ * `breaker`/`circuitId`/`circuitName` przejęte od obwodu, do którego należy
+ * DOCELOWA oprawa danego odcinka (nie tworzymy dla sterowania osobnego,
+ * zmyślonego obwodu) — sterowanie należy do tego samego obwodu co zasilanie.
+ * `cable` NIE jest już od obwodu — patrz `switchBoxCoreCount`/`isDualPoleSwitch`:
+ * poza łącznikiem dwubiegunowym (żyły łączone: faza I neutralny na całej dalszej
+ * trasie) odcinek sterowania jest zawsze 3-żyłowy, niezależnie od przekroju/typu
+ * kabla wybranego dla samego obwodu oświetleniowego.
  */
 function buildControlRoutes(
   elements: InstallationElement[],
@@ -206,29 +261,49 @@ function buildControlRoutes(
 
   const out: CableRoute[] = [];
   byGroup.forEach((bucket) => {
-    bucket.controls.forEach((c) => {
-      bucket.lights.forEach((l) => {
-        const from: Point = { x: c.x, y: c.y };
-        const to: Point = { x: l.x, y: l.y };
-        const routed = routeAlongWalls(from, to, walls, roomShapes);
-        const points = routed ?? manhattanFallback(from, to, walls, roomShapes);
-        const circuit = circuits.find((circ) => circ.elements.some((el) => el.id === l.id));
-        out.push({
-          id: `${c.id}->${l.id}`,
-          circuitId: circuit?.id ?? "",
-          circuitName: circuit?.name ?? "Sterowanie oświetleniem",
-          type: l.type,
-          cable: circuit?.cable ?? "",
-          breaker: circuit?.breaker ?? "",
-          room: l.room,
-          floor: l.floor,
-          points,
-          viaWalls: routed !== null,
-          kind: "sterowanie",
-          lengthUnits: polylineLengthUnits(points),
+    if (bucket.controls.length === 0 || bucket.lights.length === 0) return;
+    const cable = cableSpecForCores(bucket.controls.some((c) => isDualPoleSwitch(c.type)) ? 4 : 3);
+
+    const connected: InstallationElement[] = [...bucket.controls];
+    const remaining = [...bucket.lights];
+    while (remaining.length > 0) {
+      let bestIdx = 0;
+      let bestFrom = connected[0];
+      let bestDistSq = Infinity;
+      remaining.forEach((l, i) => {
+        connected.forEach((node) => {
+          const distSq = (l.x - node.x) ** 2 + (l.y - node.y) ** 2;
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            bestIdx = i;
+            bestFrom = node;
+          }
         });
       });
-    });
+      const light = remaining[bestIdx];
+      remaining.splice(bestIdx, 1);
+      connected.push(light);
+
+      const from: Point = { x: bestFrom.x, y: bestFrom.y };
+      const to: Point = { x: light.x, y: light.y };
+      const routed = routeAlongWalls(from, to, walls, roomShapes);
+      const points = routed ?? manhattanFallback(from, to, walls, roomShapes);
+      const circuit = circuits.find((circ) => circ.elements.some((el) => el.id === light.id));
+      out.push({
+        id: `${bestFrom.id}->${light.id}`,
+        circuitId: circuit?.id ?? "",
+        circuitName: circuit?.name ?? "Sterowanie oświetleniem",
+        type: light.type,
+        cable,
+        breaker: circuit?.breaker ?? "",
+        room: light.room,
+        floor: light.floor,
+        points,
+        viaWalls: routed !== null,
+        kind: "sterowanie",
+        lengthUnits: polylineLengthUnits(points),
+      });
+    }
   });
   return out;
 }
@@ -333,12 +408,18 @@ export function buildCableRoutes(
       const end: Point = controllingSwitch ? { x: controllingSwitch.x, y: controllingSwitch.y } : { x: e.x, y: e.y };
       const routed = routeAlongWalls(panel, end, walls, roomShapes);
       const points = routed ?? manhattanFallback(panel, end, walls, roomShapes);
+      // Przekrój wynika z obciążalności obwodu (`c.cable`, sizing.ts) — to zostaje
+      // bez zmian. Liczba żył w PUSZCE ŁĄCZNIKA bywa inna niż standardowe 3 (patrz
+      // `switchBoxCoreCount`): łącznik grupowy ma dwa niezależne mechanizmy w jednej
+      // ramce (wspólna faza + dwie łączone + PE), więc doliczamy tu WYŁĄCZNIE tę
+      // korektę, nie zmyślamy nowego przekroju.
+      const cable = controllingSwitch ? withCoreCount(c.cable, switchBoxCoreCount(controllingSwitch.type)) : c.cable;
       supply.push({
         id: e.id,
         circuitId: c.id,
         circuitName: c.name,
         type: e.type,
-        cable: c.cable,
+        cable,
         breaker: c.breaker,
         room: e.room,
         floor: e.floor,

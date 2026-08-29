@@ -179,7 +179,10 @@ describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
     });
   });
 
-  it("łącznik grupowy steruje kilkoma oprawami — po jednej trasie na parę", () => {
+  it("łącznik steruje kilkoma oprawami: JEDEN przewód pętli łącznik -> najbliższa oprawa -> kolejna, a NIE osobny kabel z łącznika do każdej", () => {
+    // control -- (odl. 53,9) --> lightA -- (odl. 14,1) --> lightB
+    // ale control -- (odl. 60,8) --> lightB WPROST byłoby dłuższe niż przez lightA —
+    // prawdziwe okablowanie (i nasz routing) idzie więc PĘTLĄ, nie na skróty do każdej z osobna
     const lightA = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
     const lightB = el("oswietlenie", { x: 60, y: 10, lightGroup: [1] });
     const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
@@ -191,7 +194,36 @@ describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
       []
     );
     const control2 = routes.filter((r) => r.kind === "sterowanie");
-    expect(control2.map((r) => r.id).sort()).toEqual([`${control.id}->${lightA.id}`, `${control.id}->${lightB.id}`].sort());
+    // dokładnie DWA odcinki (nie trzy — gwiazda z łącznika do obu opraw jest zła),
+    // i żaden z nich NIE łączy łącznika wprost z lightB
+    expect(control2).toHaveLength(2);
+    expect(control2.map((r) => r.id).sort()).toEqual([`${control.id}->${lightA.id}`, `${lightA.id}->${lightB.id}`].sort());
+  });
+
+  it("łącznik sterujący TRZEMA oprawami: do łącznika dochodzi TYLKO JEDEN przewód sterowania, nie trzy", () => {
+    // dokładnie scenariusz ze zgłoszenia: jeden łącznik, trzy sterowane punkty
+    // świetlne w rzędzie coraz dalej od łącznika — każda kolejna oprawa jest
+    // bliżej POPRZEDNIEJ oprawy niż samego łącznika, więc fizycznie to jedna
+    // pętla, nie trzy osobne kable z łącznika
+    const control = el("wlacznik", { x: 0, y: 0, lightGroup: [1] });
+    const lightA = el("oswietlenie", { x: 30, y: 0, lightGroup: [1] }); // 30 od łącznika
+    const lightB = el("oswietlenie", { x: 55, y: 0, lightGroup: [1] }); // 55 od łącznika, 25 od lightA
+    const lightC = el("oswietlenie", { x: 80, y: 0, lightGroup: [1] }); // 80 od łącznika, 25 od lightB
+    const routes = buildCableRoutes(
+      null,
+      [
+        circuit({ elements: [lightA] }),
+        circuit({ id: "obw2", elements: [lightB] }),
+        circuit({ id: "obw3", elements: [lightC] }),
+      ],
+      [control, lightA, lightB, lightC],
+      [],
+      []
+    );
+    const control2 = routes.filter((r) => r.kind === "sterowanie");
+    expect(control2).toHaveLength(3); // trzy oprawy = trzy ODCINKI ŁAŃCUCHA...
+    const touchingControl = control2.filter((r) => r.id.startsWith(`${control.id}->`));
+    expect(touchingControl).toHaveLength(1); // ...ale TYLKO JEDEN z nich zaczyna się na łączniku
   });
 
   it("oprawa sterowana łącznikiem dostaje trasę ZASILANIA do ŁĄCZNIKA, nie do siebie — zasilanie idzie najpierw do łącznika, dopiero potem sterowanie do oprawy", () => {
@@ -208,6 +240,43 @@ describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
     expect(ctrl).toBeDefined();
     expect(ctrl.points[0]).toEqual({ x: control.x, y: control.y }); // sterowanie ZACZYNA się tam, gdzie skończyło się zasilanie
     expect(ctrl.points[ctrl.points.length - 1]).toEqual({ x: light.x, y: light.y });
+  });
+
+  it("łącznik jednobiegunowy: zasilanie do puszki i sterowanie do oprawy są 3-żyłowe", () => {
+    const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(panel, [circuit({ elements: [light] })], [light, control], [], []);
+    expect(routes.find((r) => r.kind === "zasilanie")?.cable).toBe("YDYp 3x1,5 mm²");
+    expect(routes.find((r) => r.kind === "sterowanie")?.cable).toBe("YDYp 3x1,5 mm²");
+  });
+
+  it("łącznik grupowy: zasilanie do JEGO puszki jest 4-żyłowe (dwa niezależne mechanizmy), ale sterowanie do oprawy zostaje 3-żyłowe", () => {
+    const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const control = el("wlacznikGrupowy", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(panel, [circuit({ elements: [light] })], [light, control], [], []);
+    expect(routes.find((r) => r.kind === "zasilanie")?.cable).toBe("YDYp 4x1,5 mm²");
+    expect(routes.find((r) => r.kind === "sterowanie")?.cable).toBe("YDYp 3x1,5 mm²");
+  });
+
+  it("łącznik dwubiegunowy: fazę i neutralny łączy RAZEM, więc 4-żyłowe jest ZARÓWNO zasilanie, jak i sterowanie", () => {
+    const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const control = el("wlacznikDwubiegunowy", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(panel, [circuit({ elements: [light] })], [light, control], [], []);
+    expect(routes.find((r) => r.kind === "zasilanie")?.cable).toBe("YDYp 4x1,5 mm²");
+    expect(routes.find((r) => r.kind === "sterowanie")?.cable).toBe("YDYp 4x1,5 mm²");
+  });
+
+  it("przekrój obwodu zostaje nietknięty — koryguje się WYŁĄCZNIE liczba żył", () => {
+    const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
+    const control = el("wlacznikGrupowy", { x: 0, y: 20, lightGroup: [1] });
+    const routes = buildCableRoutes(
+      panel,
+      [circuit({ elements: [light], cable: "YDYp 3x2,5 mm²" })],
+      [light, control],
+      [],
+      []
+    );
+    expect(routes.find((r) => r.kind === "zasilanie")?.cable).toBe("YDYp 4x2,5 mm²");
   });
 
   it("oprawa BEZ łącznika w swojej grupie dostaje zasilanie wprost do siebie, jak każdy inny odbiornik", () => {

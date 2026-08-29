@@ -256,6 +256,54 @@ test("z rozdzielnicą na planie: zasilanie oprawy STEROWANEJ łącznikiem ląduj
   expect(controlEnd).not.toEqual(supplyEnd);
 });
 
+test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania dotyka łącznika, nie trzy", async ({ page }) => {
+  await openPlan(page);
+  // Powiększenie 100%, żeby klik na ekranie odpowiadał jednostce planu — test niżej
+  // porównuje POZYCJĘ ekranową kliknięcia z narysowanymi punktami trasy.
+  await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
+
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 250, box.y + 60);
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.mouse.click(box.x + 280, box.y + 150);
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.mouse.click(box.x + 250, box.y + 240);
+
+  await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  box = await planBox(page);
+  const switchScreen = { x: box.x + 60, y: box.y + 150 };
+  await page.mouse.click(switchScreen.x, switchScreen.y);
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  // uchwyt łącznika (patrz ElementGlyphKonva) — trasy sterowania mają charakterystyczny
+  // cieńszy, kropkowany styl (strokeWidth 1.5) odróżniający je od zasilania (2.5)
+  const controlRoutes = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; strokeWidth(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    return (
+      stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < 2).map((l) => l.points()) ?? []
+    );
+  });
+  // trzy oprawy sterowane jednym łącznikiem = trzy odcinki ŁAŃCUCHA (łącznik->1,
+  // 1->2, 2->3), NIE trzy osobne kable z łącznika do każdej z osobna
+  expect(controlRoutes).toHaveLength(3);
+  const switchPlan = { x: switchScreen.x - box.x, y: switchScreen.y - box.y };
+  const touchingSwitch = controlRoutes.filter((pts) => {
+    const start = { x: pts[0], y: pts[1] };
+    return Math.hypot(start.x - switchPlan.x, start.y - switchPlan.y) < 5;
+  });
+  expect(touchingSwitch).toHaveLength(1); // TYLKO JEDNA trasa zaczyna się na łączniku
+});
+
 /** Punkty i styl (dash) JEDYNEJ trasy na scenie — do asercji w testach ręcznej edycji. */
 async function soleRoute(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
