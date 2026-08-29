@@ -226,6 +226,43 @@ describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
     expect(touchingControl).toHaveLength(1); // ...ale TYLKO JEDEN z nich zaczyna się na łączniku
   });
 
+  it("łańcuch NIE rozgałęzia się na żadnej oprawie — to prosta pętla, nie drzewo (każda oprawa ma jedno wejście i co najwyżej jedno wyjście)", () => {
+    // Ułożenie, przy którym „najbliższy JUŻ PODŁĄCZONY punkt" (odmiana Prima)
+    // dokłada DWIE różne oprawy do TEJ SAMEJ, wcześniej podłączonej oprawy B —
+    // robiąc z niej rozgałęźnik, mimo że żadna zwykła oprawa nie ma trzeciego
+    // zacisku na trzeci przewód. Łańcuch najbliższego sąsiada (patrz
+    // `buildControlRoutes`) musi zamiast tego doczepiać KAŻDĄ kolejną oprawę do
+    // KOŃCA dotychczasowego łańcucha, nigdy z powrotem do środkowego ogniwa.
+    const control = el("wlacznik", { x: 230, y: 125, lightGroup: [1] });
+    const lightB = el("oswietlenie", { x: 172, y: 148, lightGroup: [1] }); // najbliżej łącznika
+    const lightC = el("oswietlenie", { x: 132, y: 218, lightGroup: [1] }); // najbliżej B
+    const lightA = el("oswietlenie", { x: 46, y: 104, lightGroup: [1] }); // dalej, ale bliżej B niż C
+    const lightD = el("oswietlenie", { x: 196, y: 341, lightGroup: [1] }); // dalej, bliżej C niż A
+    const routes = buildCableRoutes(
+      null,
+      [
+        circuit({ elements: [lightA] }),
+        circuit({ id: "obw2", elements: [lightB] }),
+        circuit({ id: "obw3", elements: [lightC] }),
+        circuit({ id: "obw4", elements: [lightD] }),
+      ],
+      [control, lightA, lightB, lightC, lightD],
+      [],
+      []
+    );
+    const control2 = routes.filter((r) => r.kind === "sterowanie");
+    expect(control2).toHaveLength(4); // cztery oprawy = cztery odcinki łańcucha
+
+    // każdy punkt (łącznik albo oprawa) jest POCZĄTKIEM co najwyżej JEDNEGO
+    // odcinka — inaczej miałby DWA wychodzące przewody, czyli byłby rozgałęźnikiem
+    const froms = control2.map((r) => r.id.split("->")[0]);
+    expect(new Set(froms).size).toBe(froms.length);
+    // i każda oprawa jest CELEM dokładnie jednego odcinka — łańcuch odwiedza ją raz
+    const tos = control2.map((r) => r.id.split("->")[1]);
+    expect(new Set(tos).size).toBe(tos.length);
+    expect(tos.sort()).toEqual([lightA.id, lightB.id, lightC.id, lightD.id].sort());
+  });
+
   it("oprawa sterowana łącznikiem dostaje trasę ZASILANIA do ŁĄCZNIKA, nie do siebie — zasilanie idzie najpierw do łącznika, dopiero potem sterowanie do oprawy", () => {
     const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
     const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });

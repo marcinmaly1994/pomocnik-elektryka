@@ -224,12 +224,19 @@ function withCoreCount(cableSpec: string, cores: 3 | 4): string {
  *
  * WIELE opraw w jednej grupie NIE dostaje osobnego kabla z łącznika do KAŻDEJ z
  * nich — fizycznie jest to JEDEN przewód, który pętli od łącznika przez kolejne
- * oprawy (każda oprawa ma na listwie zaciskowej wejście i wyjście tej samej pętli).
- * Odtwarzamy to jako drzewo najkrótszych połączeń (odmiana Prima): zbiór już
- * „podłączonych" punktów zaczyna się od WSZYSTKICH łączników danej grupy (przy
- * schodowym/krzyżowym może być ich kilka — którykolwiek z nich może fizycznie
- * zaczynać pętlę), a każda kolejna, jeszcze niepodłączona oprawa dołącza się do
- * NAJBLIŻSZEGO już podłączonego punktu — łącznika albo poprzednio dodanej oprawy.
+ * oprawy (każda oprawa ma na listwie zaciskowej DWA zaciski tej samej pętli:
+ * wejście i wyjście). To wymusza PROSTY ŁAŃCUCH, nie drzewo z rozgałęzieniami —
+ * pierwsze podejście (najkrótsze POŁĄCZENIE z KTÓREGOKOLWIEK już podłączonego
+ * punktu, odmiana Prima) potrafiło dołożyć DRUGĄ i TRZECIĄ oprawę do tej samej,
+ * już podłączonej oprawy, czyli zrobić z niej rozgałęźnik — a żadna zwykła oprawa
+ * nie ma trzeciego zacisku na trzeci przewód. Budujemy więc łańcuch najbliższego
+ * sąsiada: START to łącznik grupy najbliższy KTÓREJKOLWIEK sterowanej oprawie
+ * (przy schodowym/krzyżowym paruset łączników wybieramy jeden — reszta to
+ * niemodelowane tu okablowanie międzyłącznikowe, patrz `findControllingSwitch`),
+ * a każdy kolejny odcinek prowadzi z KOŃCA dotychczasowego łańcucha do
+ * najbliższej JESZCZE niepodłączonej oprawy — nigdy z powrotem do wcześniejszego
+ * ogniwa. Każda oprawa (poza ostatnią) ma więc dokładnie jedno wejście i jedno
+ * wyjście, tak jak w rzeczywistej pętli.
  *
  * `breaker`/`circuitId`/`circuitName` przejęte od obwodu, do którego należy
  * DOCELOWA oprawa danego odcinka (nie tworzymy dla sterowania osobnego,
@@ -264,25 +271,35 @@ function buildControlRoutes(
     if (bucket.controls.length === 0 || bucket.lights.length === 0) return;
     const cable = cableSpecForCores(bucket.controls.some((c) => isDualPoleSwitch(c.type)) ? 4 : 3);
 
-    const connected: InstallationElement[] = [...bucket.controls];
+    // START łańcucha: łącznik grupy leżący najbliżej KTÓREJKOLWIEK sterowanej
+    // oprawy — od niego fizycznie zaczyna się pętla przewodu.
+    let chainEnd = bucket.controls[0];
+    let startDistSq = Infinity;
+    bucket.controls.forEach((c) => {
+      bucket.lights.forEach((l) => {
+        const distSq = (c.x - l.x) ** 2 + (c.y - l.y) ** 2;
+        if (distSq < startDistSq) {
+          startDistSq = distSq;
+          chainEnd = c;
+        }
+      });
+    });
+
     const remaining = [...bucket.lights];
     while (remaining.length > 0) {
       let bestIdx = 0;
-      let bestFrom = connected[0];
       let bestDistSq = Infinity;
       remaining.forEach((l, i) => {
-        connected.forEach((node) => {
-          const distSq = (l.x - node.x) ** 2 + (l.y - node.y) ** 2;
-          if (distSq < bestDistSq) {
-            bestDistSq = distSq;
-            bestIdx = i;
-            bestFrom = node;
-          }
-        });
+        const distSq = (l.x - chainEnd.x) ** 2 + (l.y - chainEnd.y) ** 2;
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          bestIdx = i;
+        }
       });
       const light = remaining[bestIdx];
       remaining.splice(bestIdx, 1);
-      connected.push(light);
+      const bestFrom = chainEnd;
+      chainEnd = light;
 
       const from: Point = { x: bestFrom.x, y: bestFrom.y };
       const to: Point = { x: light.x, y: light.y };

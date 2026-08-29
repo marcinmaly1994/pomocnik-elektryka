@@ -304,6 +304,55 @@ test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania d
   expect(touchingSwitch).toHaveLength(1); // TYLKO JEDNA trasa zaczyna się na łączniku
 });
 
+test("cztery oprawy na jednym łączniku: łańcuch, nie drzewo — ŻADNA oprawa nie ma dwóch wychodzących odcinków", async ({ page }) => {
+  await openPlan(page);
+  await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
+
+  // rozmieszczenie odtwarzające zgłoszony przypadek: „najbliższy już podłączony
+  // punkt" (drzewo, odmiana Prima) dokładał tu DWIE oprawy do TEJ SAMEJ, wcześniej
+  // dodanej oprawy — łańcuch najbliższego sąsiada musi tego unikać
+  const points = [
+    { x: 172, y: 148 }, // B — najbliżej łącznika
+    { x: 132, y: 218 }, // C — najbliżej B
+    { x: 46, y: 104 }, // A — dalej, ale bliżej B niż C
+    { x: 196, y: 341 }, // D — dalej, bliżej C niż A
+  ];
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  let box = await planBox(page);
+  for (const p of points) {
+    await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+    await page.mouse.click(box.x + p.x, box.y + p.y);
+  }
+
+  await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 230, box.y + 125);
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const controlRoutes = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; strokeWidth(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    return (
+      stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < 2).map((l) => l.points()) ?? []
+    );
+  });
+  // cztery oprawy sterowane jednym łącznikiem = cztery odcinki łańcucha
+  expect(controlRoutes).toHaveLength(4);
+
+  // ŻADEN punkt startowy (zaokrąglony, bo zaokrąglenia ekran<->plan) nie
+  // powtarza się między odcinkami — inaczej ten punkt miałby DWA wychodzące
+  // przewody, czyli byłby rozgałęźnikiem
+  const starts = controlRoutes.map((pts) => `${Math.round(pts[0])},${Math.round(pts[1])}`);
+  expect(new Set(starts).size).toBe(starts.length);
+});
+
 /** Punkty i styl (dash) JEDYNEJ trasy na scenie — do asercji w testach ręcznej edycji. */
 async function soleRoute(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
