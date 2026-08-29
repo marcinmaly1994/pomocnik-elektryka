@@ -8,6 +8,8 @@ import {
   ChevronRight,
   ClipboardCheck,
   Download,
+  Flame,
+  Gauge,
   Home,
   Info,
   Plus,
@@ -16,6 +18,18 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { CalcResultView } from "./CalcResultView";
+import { obliczSpadekNapiecia } from "@/lib/calc/voltageDrop";
+import { obliczKompensacje, UKLAD_BATERII_LABELS, type UkladBaterii } from "@/lib/calc/powerFactor";
+import {
+  CEL_ZWARCIA_LABELS,
+  impedancjaTransformatora,
+  obliczPradyZwarciowe,
+  obliczWytrzymaloscZwarciowa,
+  type CelZwarcia,
+} from "@/lib/calc/shortCircuit";
+import { RODZAJ_LINII_LABELS, type Izolacja, type Material, type RodzajLinii } from "@/lib/norms/conductors";
+import { formatLiczba } from "@/lib/calc/result";
 import { calcLighting, calcPowerBalance, maxGroundingResistance, UL } from "@/lib/electrical";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { circuitDemand, kindForElements } from "@/lib/panel/loads";
@@ -24,7 +38,6 @@ import {
   sizeBreakerForSection,
   sizeCircuit,
   sizeFeeder,
-  voltageDropPct,
   zsMaxForBreaker,
   type CircuitKind,
 } from "@/lib/panel/sizing";
@@ -36,6 +49,8 @@ import { HowItWorks } from "./HowItWorks";
 
 const CALC_LIST: { id: CalcId; label: string; desc: string; icon: LucideIcon }[] = [
   { id: "spadek", label: "Spadek napięcia", desc: "sprawdzenie trasy o znanym przekroju", icon: TrendingDown },
+  { id: "zwarcie", label: "Prądy zwarciowe", desc: "Ik, prąd udarowy, wytrzymałość cieplna", icon: Flame },
+  { id: "kompensacja", label: "Kompensacja mocy biernej", desc: "moc baterii, pojemność, rezonans", icon: Gauge },
   { id: "przekroj", label: "Dobór przekroju przewodu", desc: "przekrój wg obciążalności i spadku", icon: Cable },
   { id: "zabezpieczenie", label: "Dobór zabezpieczenia", desc: "wyłącznik do znanego przekroju", icon: Zap },
   { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza", icon: Home },
@@ -89,6 +104,44 @@ const PHASE_OPTIONS = [
 
 const SECTION_OPTIONS = SECTIONS.map((s) => ({ value: String(s), label: `${String(s).replace(".", ",")} mm²` }));
 
+/** Szereg handlowy do kalkulatorów inżynierskich — szerszy niż `SECTIONS`
+ *  (te obejmują tylko zakres domowego doboru obwodów, do 25 mm²). */
+const SZEREG_PELNY = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300, 400, 500, 630];
+const SZEREG_PELNY_OPTIONS = SZEREG_PELNY.map((s) => ({ value: String(s), label: `${String(s).replace(".", ",")} mm²` }));
+
+const MATERIAL_OPTIONS: { value: Material; label: string }[] = [
+  { value: "Cu", label: "miedź (Cu)" },
+  { value: "Al", label: "aluminium (Al)" },
+];
+const IZOLACJA_OPTIONS: { value: Izolacja; label: string }[] = [
+  { value: "PVC", label: "PVC (70 °C)" },
+  { value: "XLPE", label: "XLPE / EPR (90 °C)" },
+];
+const RODZAJ_LINII_OPTIONS = (Object.entries(RODZAJ_LINII_LABELS) as [RodzajLinii, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+const CEL_ZWARCIA_OPTIONS = (Object.entries(CEL_ZWARCIA_LABELS) as [CelZwarcia, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+const UKLAD_BATERII_OPTIONS = (Object.entries(UKLAD_BATERII_LABELS) as [UkladBaterii, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+
+/**
+ * Progi dopuszczalnego spadku napięcia (PN-HD 60364-5-52 zał. G) — do szybkiego
+ * wyboru zamiast wpisywania liczby z pamięci. Edytowalne, bo bywają zaostrzane
+ * warunkami przyłączenia (np. wymóg gminy dla oświetlenia drogowego).
+ */
+const LIMIT_SPADKU_OPCJE = [
+  { value: "3", label: "3% — oświetlenie (sieć publiczna)" },
+  { value: "5", label: "5% — pozostałe odbiorniki (sieć publiczna)" },
+  { value: "6", label: "6% — oświetlenie (własna stacja trafo)" },
+  { value: "8", label: "8% — pozostałe (własna stacja trafo)" },
+];
+
 export function CalculatorsTab() {
   // Stan (wejścia i lista odbiorników w bilansie mocy) mieszka w osobnym,
   // trwałym store'zie (`useCalculatorsStore`, localStorage) — bez tego
@@ -112,6 +165,29 @@ export function CalculatorsTab() {
   const duLength = useCalculatorsStore((s) => s.duLength);
   const duSection = useCalculatorsStore((s) => s.duSection);
   const duLimitPct = useCalculatorsStore((s) => s.duLimitPct);
+  const duMaterial = useCalculatorsStore((s) => s.duMaterial);
+  const duIzolacja = useCalculatorsStore((s) => s.duIzolacja);
+  const duCosfi = useCalculatorsStore((s) => s.duCosfi);
+  const duZReaktancja = useCalculatorsStore((s) => s.duZReaktancja);
+  const duRodzajLinii = useCalculatorsStore((s) => s.duRodzajLinii);
+  const duRownolegle = useCalculatorsStore((s) => s.duRownolegle);
+  const zwCel = useCalculatorsStore((s) => s.zwCel);
+  const zwSnKVA = useCalculatorsStore((s) => s.zwSnKVA);
+  const zwUkPct = useCalculatorsStore((s) => s.zwUkPct);
+  const zwUnV = useCalculatorsStore((s) => s.zwUnV);
+  const zwStratyCuW = useCalculatorsStore((s) => s.zwStratyCuW);
+  const zwZsOhm = useCalculatorsStore((s) => s.zwZsOhm);
+  const zwRdoX = useCalculatorsStore((s) => s.zwRdoX);
+  const zwCzasS = useCalculatorsStore((s) => s.zwCzasS);
+  const zwPrzekroj = useCalculatorsStore((s) => s.zwPrzekroj);
+  const zwMaterial = useCalculatorsStore((s) => s.zwMaterial);
+  const zwIzolacja = useCalculatorsStore((s) => s.zwIzolacja);
+  const kmPkW = useCalculatorsStore((s) => s.kmPkW);
+  const kmCos1 = useCalculatorsStore((s) => s.kmCos1);
+  const kmCos2 = useCalculatorsStore((s) => s.kmCos2);
+  const kmUV = useCalculatorsStore((s) => s.kmUV);
+  const kmUklad = useCalculatorsStore((s) => s.kmUklad);
+  const kmSkKVA = useCalculatorsStore((s) => s.kmSkKVA);
   const devices = useCalculatorsStore((s) => s.devices);
   const ks = useCalculatorsStore((s) => s.ks);
   const zCurve = useCalculatorsStore((s) => s.zCurve);
@@ -161,6 +237,7 @@ export function CalculatorsTab() {
   const setDuLength = (v: number) => patch({ duLength: v });
   const setDuSection = (v: number) => patch({ duSection: v });
   const setDuLimitPct = (v: number) => patch({ duLimitPct: v });
+  const setKm = (p: Partial<Parameters<typeof patch>[0]>) => patch(p);
   const setKs = (v: number) => patch({ ks: v });
   const setZCurve = (v: string) => patch({ zCurve: v });
   const setZIn = (v: number) => patch({ zIn: v });
@@ -254,26 +331,80 @@ export function CalculatorsTab() {
     [sized.Ib_A, phase, breakerSection, layingMethod, ambientC, bundleCount, motorStart, circuitKind]
   );
 
-  // --- 4. spadek napięcia na ZNANYM przekroju ---
-  // Ten sam `voltageDropPct` co `sizeCircuit`/`sizeFeeder` — czyli rezystywność
-  // miedzi przy 70 °C, nie 20 °C (patrz `RHO_CU_70C` w norms.ts). To NIE jest
-  // kopia wzoru: osobna implementacja spadku napięcia mieszkała już kiedyś w
-  // `lib/electrical.ts` z ρ dla 20 °C i zaniżała wynik o ~28% względem
-  // Rozdzielnicy (MIGRATION.md, krok 77) — dokładnie tego błędu ten import unika.
-  const dropCheck = useMemo(() => {
-    const U = duPhase === "3" ? 400 : U0;
-    const pct = voltageDropPct(duLength, duCurrentA, duSection, duPhase);
-    // Najmniejszy przekrój z szeregu, który zmieściłby się w limicie — podpowiedź
-    // „co zrobić", gdy warunek nie wychodzi. `null`, gdy nie starcza nawet największy.
-    const minOk = SECTIONS.find((s) => voltageDropPct(duLength, duCurrentA, s, duPhase) <= duLimitPct) ?? null;
-    return {
-      pct,
-      volts: (pct / 100) * U,
-      atLoad: U - (pct / 100) * U,
-      ok: duLength > 0 && duCurrentA > 0 ? pct <= duLimitPct : null,
-      minOk,
-    };
-  }, [duLength, duCurrentA, duSection, duPhase, duLimitPct]);
+  /**
+   * Spadek napięcia — pełny silnik wg specyfikacji (`lib/calc/voltageDrop.ts`):
+   * model temperaturowy ρ(θ), metoda pełna z reaktancją, przewody równoległe,
+   * kroki rachunku i ocena warunku z progiem „graniczny".
+   *
+   * Zastąpił wcześniejsze wywołanie `voltageDropPct` z `lib/panel/sizing.ts`.
+   * UWAGA: te dwa silniki liczą rezystywność INACZEJ (patrz komentarz w
+   * `lib/norms/conductors.ts`) — `sizing.ts` używa stałej 0,0225 Ω·mm²/m, tu
+   * liczymy z γ₂₀ = 56 i poprawki temperaturowej, co przy 70 °C daje ~0,0214.
+   * Różnica ~5%; ujednolicenie wymaga świadomej decyzji, bo przeliczyłoby
+   * dobory w całej zakładce Rozdzielnica.
+   */
+  const spadekPelny = useMemo(
+    () =>
+      obliczSpadekNapiecia({
+        uklad: duPhase === "3" ? "3f" : "1f",
+        napiecie_V: duPhase === "3" ? 400 : U0,
+        prad_A: duCurrentA,
+        cosfi: duCosfi,
+        dlugosc_m: duLength,
+        material: duMaterial,
+        przekroj_mm2: duSection,
+        izolacja: duIzolacja,
+        zReaktancja: duZReaktancja,
+        rodzajLinii: duRodzajLinii,
+        rownolegle: duRownolegle,
+        limit_pct: duLimitPct,
+      }),
+    [duPhase, duCurrentA, duCosfi, duLength, duMaterial, duSection, duIzolacja, duZReaktancja, duRodzajLinii, duRownolegle, duLimitPct]
+  );
+
+  // --- prądy zwarciowe ---
+  const trafo = useMemo(
+    () => impedancjaTransformatora({ Sn_VA: zwSnKVA * 1000, uk_pct: zwUkPct, Un_V: zwUnV, straty_Cu_W: zwStratyCuW }),
+    [zwSnKVA, zwUkPct, zwUnV, zwStratyCuW]
+  );
+  const zwarcie = useMemo(
+    () =>
+      obliczPradyZwarciowe({
+        cel: zwCel,
+        Un_V: zwUnV,
+        U0_V: U0,
+        Zk_ohm: trafo.wartosci?.Zt_ohm ?? 0,
+        Zs_ohm: zwZsOhm > 0 ? zwZsOhm : undefined,
+        R_do_X: zwRdoX >= 0 ? zwRdoX : undefined,
+      }),
+    [zwCel, zwUnV, trafo.wartosci?.Zt_ohm, zwZsOhm, zwRdoX]
+  );
+  const wytrzymalosc = useMemo(
+    () =>
+      obliczWytrzymaloscZwarciowa({
+        Ik_A: zwarcie.wartosci?.Ik3_A ?? 0,
+        czas_s: zwCzasS,
+        material: zwMaterial,
+        izolacja: zwIzolacja,
+        przekroj_mm2: zwPrzekroj,
+      }),
+    [zwarcie.wartosci?.Ik3_A, zwCzasS, zwMaterial, zwIzolacja, zwPrzekroj]
+  );
+
+  // --- kompensacja mocy biernej ---
+  const kompensacja = useMemo(
+    () =>
+      obliczKompensacje({
+        P_W: kmPkW * 1000,
+        cosfi1: kmCos1,
+        cosfi2: kmCos2,
+        napiecie_V: kmUV,
+        czestotliwosc_Hz: 50,
+        uklad: kmUklad,
+        Sk_VA: kmSkKVA > 0 ? kmSkKVA * 1000 : undefined,
+      }),
+    [kmPkW, kmCos1, kmCos2, kmUV, kmUklad, kmSkKVA]
+  );
 
   // --- 3. bilans mocy ---
   const balance = useMemo(() => calcPowerBalance(devices, ks), [devices, ks]);
@@ -751,92 +882,217 @@ export function CalculatorsTab() {
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field label="Prąd obciążenia (Ib)" value={duCurrentA} onChange={(v) => setDuCurrentA(Number(v))} unit="A" step="0.1" />
                 <Field label="Zasilanie" value={duPhase} onChange={(v) => setDuPhase(v as "1" | "3")} options={PHASE_OPTIONS} />
+                <Field label="Współczynnik cos φ" value={duCosfi} onChange={(v) => patch({ duCosfi: Number(v) })} step="0.05" />
                 <Field label="Długość trasy (w jedną stronę)" value={duLength} onChange={(v) => setDuLength(Number(v))} unit="m" />
                 <Field
                   label="Przekrój żyły"
                   value={String(duSection)}
                   onChange={(v) => setDuSection(Number(v))}
-                  options={SECTION_OPTIONS}
+                  options={SZEREG_PELNY_OPTIONS}
+                />
+                <Field
+                  label="Materiał żyły"
+                  value={duMaterial}
+                  onChange={(v) => patch({ duMaterial: v as Material })}
+                  options={MATERIAL_OPTIONS}
+                />
+                <Field
+                  label="Izolacja (temperatura pracy)"
+                  value={duIzolacja}
+                  onChange={(v) => patch({ duIzolacja: v as Izolacja })}
+                  options={IZOLACJA_OPTIONS}
+                />
+                <Field
+                  label="Przewody równoległe na fazę"
+                  value={duRownolegle}
+                  onChange={(v) => patch({ duRownolegle: Number(v) })}
+                  step="1"
                 />
                 <Field
                   label="Dopuszczalny spadek napięcia"
-                  value={duLimitPct}
+                  value={String(duLimitPct)}
                   onChange={(v) => setDuLimitPct(Number(v))}
-                  unit="%"
-                  step="0.5"
+                  options={LIMIT_SPADKU_OPCJE}
                 />
               </div>
 
-              <div className="mt-2 p-3 pe-result">
-                <div className="text-xs text-slate-500 mb-1">Spadek napięcia na trasie</div>
-                <div className="pe-mono text-lg text-blueprint">{dropCheck.pct.toFixed(2)} %</div>
-                <div className="mt-2 flex gap-2 flex-wrap">
-                  <span className="pe-chip pe-tag-copper">ΔU {dropCheck.volts.toFixed(1)} V</span>
-                  <span className="pe-chip pe-tag-blue">napięcie u odbiornika {dropCheck.atLoad.toFixed(1)} V</span>
-                  <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
-                    limit {String(duLimitPct).replace(".", ",")}%
-                  </span>
-                </div>
-              </div>
+              {/* Metoda pełna jest OBOWIĄZKOWA od 35 mm² (spec pkt 7) — silnik zwraca
+                  wtedy twardy błąd zamiast liczyć dalej, więc checkbox musi być
+                  widoczny obok pola przekroju, a nie schowany w opcjach. */}
+              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={duZReaktancja}
+                  onChange={(e) => patch({ duZReaktancja: e.target.checked })}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Uwzględnij reaktancję (metoda pełna — wymagana dla przekrojów od 35 mm²)
+              </label>
+              {duZReaktancja && (
+                <Field
+                  label="Rodzaj linii (reaktancja jednostkowa X′)"
+                  value={duRodzajLinii}
+                  onChange={(v) => patch({ duRodzajLinii: v as RodzajLinii })}
+                  options={RODZAJ_LINII_OPTIONS}
+                />
+              )}
 
-              {dropCheck.ok !== null && (
-                <div
-                  className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2"
-                  style={dropCheck.ok ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
-                >
-                  {dropCheck.ok ? <Check size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
-                  <div>
-                    {dropCheck.ok ? (
-                      "Warunek spełniony — spadek napięcia mieści się w przyjętym limicie."
-                    ) : dropCheck.minOk !== null ? (
-                      <>
-                        Warunek niespełniony. Najmniejszy przekrój, który zmieści się w limicie na tej trasie, to{" "}
-                        <strong>{String(dropCheck.minOk).replace(".", ",")} mm²</strong> — albo skróć trasę, albo zasil
-                        odbiornik z podrozdzielnicy postawionej bliżej.
-                      </>
-                    ) : (
-                      <>
-                        Warunek niespełniony i nie ratuje go nawet największy przekrój z szeregu
-                        ({String(SECTIONS[SECTIONS.length - 1]).replace(".", ",")} mm²). Na takiej długości trzeba
-                        postawić podrozdzielnicę bliżej odbiornika albo zasilić go trójfazowo.
-                      </>
+              {spadekPelny.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Spadek napięcia na trasie</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(spadekPelny.wartosci.spadek_pct, 2)} %</div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">ΔU {formatLiczba(spadekPelny.wartosci.spadek_V, 2)} V</span>
+                    <span className="pe-chip pe-tag-blue">
+                      napięcie u odbiornika {formatLiczba(spadekPelny.wartosci.napiecieKoncowe_V, 1)} V
+                    </span>
+                    {spadekPelny.wartosci.minPrzekroj_mm2 !== null && (
+                      <span className="pe-chip pe-tag-green">
+                        min. przekrój w limicie {String(spadekPelny.wartosci.minPrzekroj_mm2).replace(".", ",")} mm²
+                      </span>
                     )}
                   </div>
                 </div>
               )}
 
-              <HowItWorks
-                formulas={[
-                  {
-                    label: "Spadek napięcia — obwód 1-fazowy",
-                    eq: "ΔU = (2 × L × Ib × ρ) / S",
-                    where: "L — długość trasy w jedną stronę [m], Ib — prąd obciążenia [A], S — przekrój żyły [mm²]. Mnożnik 2, bo prąd płynie tam i z powrotem (L + N).",
-                  },
-                  {
-                    label: "Spadek napięcia — obwód 3-fazowy",
-                    eq: "ΔU = (√3 × L × Ib × ρ) / S",
-                    where: "√3 zamiast 2 — przy obciążeniu symetrycznym prąd nie wraca przewodem neutralnym",
-                  },
-                  {
-                    label: "Spadek względny",
-                    eq: "ΔU% = (ΔU / U) × 100%",
-                    where: "U = 230 V dla 1 fazy, 400 V (międzyfazowe) dla 3 faz",
-                  },
-                  {
-                    label: "Rezystywność miedzi",
-                    eq: "ρ = 0,0225 Ω·mm²/m",
-                    where: "wartość dla żyły nagrzanej prądem roboczym do 70 °C — NIE 0,0175 (to wartość dla 20 °C, zaniża wynik o ~28%)",
-                  },
-                ]}
-                notes={[
-                  "Ten sam silnik (`voltageDropPct` w `lib/panel/sizing.ts`) liczy spadek w kalkulatorze doboru przewodu, w doborze WLZ i w zakładce Rozdzielnica — wszystkie cztery miejsca zawsze podadzą ten sam wynik dla tych samych danych.",
-                  "Wartości zalecane wg PN-HD 60364-5-52 zał. G, liczone od złącza do odbiornika: 3% dla obwodów oświetleniowych, 5% dla pozostałych. Domyślne 3% w tym kalkulatorze to wariant ostrzejszy — zmień je, jeśli sprawdzasz obwód gniazd.",
-                  "To budżet dzielony na CAŁEJ drodze zasilania: WLZ zjada część limitu, zanim zacznie się obwód odbiorczy. Dlatego dla samej WLZ przyjmuje się węższe 2% (patrz kalkulator „Dobór WLZ”), żeby zostawić miejsce na spadek za rozdzielnicą.",
-                  "Zbyt duży spadek to nie tylko słabsze świecenie — silniki i sprężarki przy obniżonym napięciu pobierają większy prąd, grzeją się i szybciej się zużywają.",
-                  "Wzór dotyczy żył miedzianych i pomija reaktancję, co przy przekrojach domowych (do 25 mm²) jest przybliżeniem dobrym. Dla aluminium spadek jest ok. 1,6× większy przy tym samym przekroju.",
-                  "Prąd obciążenia to prąd, który REALNIE popłynie (Ib), nie prąd znamionowy zabezpieczenia (In) — wpisanie In zawyży spadek, bo obwód prawie nigdy nie pracuje na granicy wyłącznika.",
-                ]}
-              />
+              <CalcResultView wynik={spadekPelny} />
+            </Card>
+          )}
+
+          {activeCalc === "zwarcie" && (
+            <Card title={active.label} icon={Flame} tag="PN-EN 60909">
+              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                Współczynnik napięciowy <strong>c wynika z celu obliczenia</strong>, a nie z osobnego pola: do doboru
+                aparatów liczy się najgorszy przypadek największego prądu (c = 1,05), a do ochrony przeciwporażeniowej —
+                najmniejszego (c = 0,95). Pomylenie ich daje wynik pozornie poprawny i całkowicie nieprzydatny.
+              </div>
+
+              <Field label="Cel obliczenia" value={zwCel} onChange={(v) => patch({ zwCel: v as CelZwarcia })} options={CEL_ZWARCIA_OPTIONS} />
+
+              <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Transformator zasilający</div>
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Moc znamionowa Sn" value={zwSnKVA} onChange={(v) => patch({ zwSnKVA: Number(v) })} unit="kVA" />
+                <Field label="Napięcie zwarcia uk" value={zwUkPct} onChange={(v) => patch({ zwUkPct: Number(v) })} unit="%" step="0.1" />
+                <Field label="Napięcie międzyfazowe Un" value={zwUnV} onChange={(v) => patch({ zwUnV: Number(v) })} unit="V" />
+                <Field
+                  label="Straty obciążeniowe ΔPCu (0 = pomiń)"
+                  value={zwStratyCuW}
+                  onChange={(v) => patch({ zwStratyCuW: Number(v) })}
+                  unit="W"
+                />
+              </div>
+
+              <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Miejsce zwarcia</div>
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Impedancja pętli Zs (0 = pomiń Ik1)" value={zwZsOhm} onChange={(v) => patch({ zwZsOhm: Number(v) })} unit="Ω" step="0.01" />
+                <Field label="Stosunek R/X (do prądu udarowego)" value={zwRdoX} onChange={(v) => patch({ zwRdoX: Number(v) })} step="0.01" />
+              </div>
+
+              {trafo.wartosci && zwarcie.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Prąd zwarcia trójfazowego</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(zwarcie.wartosci.Ik3_A / 1000, 2)} kA</div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">Zt {formatLiczba(trafo.wartosci.Zt_ohm * 1000, 2)} mΩ</span>
+                    <span className="pe-chip pe-tag-blue">Ik2 {formatLiczba(zwarcie.wartosci.Ik2_A / 1000, 2)} kA</span>
+                    {zwarcie.wartosci.Ik1_A !== null && (
+                      <span className="pe-chip pe-tag-blue">Ik1 {formatLiczba(zwarcie.wartosci.Ik1_A, 0)} A</span>
+                    )}
+                    {zwarcie.wartosci.ip_A !== null && (
+                      <span className="pe-chip pe-tag-green">ip {formatLiczba(zwarcie.wartosci.ip_A / 1000, 2)} kA</span>
+                    )}
+                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                      c = {formatLiczba(zwarcie.wartosci.c, 2)}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                    Wymagana zdolność zwarciowa aparatu w tym miejscu: Icn ≥{" "}
+                    <strong>{formatLiczba(zwarcie.wartosci.Ik3_A / 1000, 2)} kA</strong> (dobieraj z c = 1,05).
+                  </div>
+                </div>
+              )}
+
+              {/* Błąd danych transformatora wyklucza policzenie zwarcia, więc
+                  pokazujemy WTEDY jego komunikat — inaczej użytkownik widziałby
+                  „impedancja musi być większa od zera" zamiast przyczyny. */}
+              {trafo.bledy.length > 0 ? <CalcResultView wynik={trafo} /> : <CalcResultView wynik={zwarcie} />}
+
+              <div className="mb-2 mt-4 text-xs font-semibold text-slate-600">
+                Wytrzymałość zwarciowa cieplna przewodu (S ≥ I·√t / k)
+              </div>
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Czas trwania zwarcia" value={zwCzasS} onChange={(v) => patch({ zwCzasS: Number(v) })} unit="s" step="0.01" />
+                <Field
+                  label="Przekrój żyły"
+                  value={String(zwPrzekroj)}
+                  onChange={(v) => patch({ zwPrzekroj: Number(v) })}
+                  options={SZEREG_PELNY_OPTIONS}
+                />
+                <Field label="Materiał" value={zwMaterial} onChange={(v) => patch({ zwMaterial: v as Material })} options={MATERIAL_OPTIONS} />
+                <Field label="Izolacja" value={zwIzolacja} onChange={(v) => patch({ zwIzolacja: v as Izolacja })} options={IZOLACJA_OPTIONS} />
+              </div>
+              {wytrzymalosc.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Minimalny przekrój ze względu na zwarcie</div>
+                  <div className="pe-mono text-lg text-blueprint">
+                    {formatLiczba(wytrzymalosc.wartosci.minPrzekroj_mm2, 2)} mm²
+                  </div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">k = {wytrzymalosc.wartosci.k}</span>
+                    {wytrzymalosc.wartosci.maksCzas_s !== null && (
+                      <span className="pe-chip pe-tag-blue">
+                        t max dla {String(zwPrzekroj).replace(".", ",")} mm² = {formatLiczba(wytrzymalosc.wartosci.maksCzas_s, 3)} s
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              <CalcResultView wynik={wytrzymalosc} />
+            </Card>
+          )}
+
+          {activeCalc === "kompensacja" && (
+            <Card title={active.label} icon={Gauge} tag="moc bierna">
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Moc czynna odbioru" value={kmPkW} onChange={(v) => setKm({ kmPkW: Number(v) })} unit="kW" />
+                <Field label="Napięcie (międzyfazowe)" value={kmUV} onChange={(v) => setKm({ kmUV: Number(v) })} unit="V" />
+                <Field label="cos φ przed kompensacją" value={kmCos1} onChange={(v) => setKm({ kmCos1: Number(v) })} step="0.01" />
+                <Field label="cos φ docelowy" value={kmCos2} onChange={(v) => setKm({ kmCos2: Number(v) })} step="0.01" />
+                <Field
+                  label="Układ połączeń baterii"
+                  value={kmUklad}
+                  onChange={(v) => setKm({ kmUklad: v as UkladBaterii })}
+                  options={UKLAD_BATERII_OPTIONS}
+                />
+                <Field
+                  label="Moc zwarciowa Sk (0 = nie sprawdzaj rezonansu)"
+                  value={kmSkKVA}
+                  onChange={(v) => setKm({ kmSkKVA: Number(v) })}
+                  unit="kVA"
+                />
+              </div>
+
+              {kompensacja.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Wymagana moc baterii kondensatorów</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(kompensacja.wartosci.Qc_var / 1000, 2)} kvar</div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">
+                      C = {formatLiczba(kompensacja.wartosci.C_F * 1e6, 1)} µF
+                      {kmUklad === "trojkat" ? " / gałąź" : ""}
+                    </span>
+                    <span className="pe-chip pe-tag-blue">tgφ₁ = {formatLiczba(kompensacja.wartosci.tgfi1, 3)}</span>
+                    <span className="pe-chip pe-tag-blue">tgφ₂ = {formatLiczba(kompensacja.wartosci.tgfi2, 3)}</span>
+                    {kompensacja.wartosci.rzadRezonansu !== null && (
+                      <span className="pe-chip pe-tag-green">
+                        rezonans przy n ≈ {formatLiczba(kompensacja.wartosci.rzadRezonansu, 2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <CalcResultView wynik={kompensacja} />
             </Card>
           )}
 

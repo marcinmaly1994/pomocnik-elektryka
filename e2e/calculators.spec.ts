@@ -140,37 +140,46 @@ test("trzy pierwsze kalkulatory stoją w kolejności spadek → przekrój → za
 });
 
 /**
- * Wynik musi zgadzać się co do drugiego miejsca po przecinku z `voltageDropPct`
- * (`lib/panel/sizing.ts`), czyli z ρ = 0,0225 dla 70 °C. Gdyby ktoś kiedyś wpiął
- * tu z powrotem wzór z ρ = 0,0175 (20 °C), wynik spadłby do ~1,52% i test padnie.
- * Domyślne dane: 10 A, 1-fazowe, 25 m, 2,5 mm² -> (2·25·10·0,0225)/2,5 = 4,5 V
- * -> 4,5/230 = 1,957% -> przy limicie 3% warunek jest spełniony.
+ * UWAGA — te liczby ZMIENIŁY SIĘ wraz z przejściem na silnik `lib/calc/voltageDrop.ts`.
+ *
+ * Wcześniej kalkulator wołał `voltageDropPct` z `lib/panel/sizing.ts`, czyli stałą
+ * ρ = 0,0225 Ω·mm²/m („wartość praktyczna z zapasem" dla 70 °C, γ ≈ 44,4).
+ * Nowy silnik liczy zgodnie ze specyfikacją: γ₂₀ = 56 i poprawka temperaturowa
+ * ρ(θ) = ρ₂₀·[1 + α·(θ−20)], co przy 70 °C daje ρ ≈ 0,02137 (γ ≈ 46,8).
+ * Model normowy jest więc o ~5% MNIEJ konserwatywny od dotychczasowej stałej.
+ *
+ * Domyślne dane: 10 A, 1-fazowe, 25 m, 2,5 mm², Cu/PVC
+ * -> ΔU = 2·(10·25)/(46,8·2,5) = 4,27 V -> 4,27/230 = 1,86%.
+ *
+ * Zakładka Rozdzielnica NADAL używa starej stałej — ujednolicenie obu wymaga
+ * osobnej decyzji, bo przeliczyłoby dobory w całym projekcie.
  */
-test("spadek napięcia liczy się rezystywnością dla 70°C — te same liczby co Rozdzielnica", async ({ page }) => {
+test("spadek napięcia liczy się modelem temperaturowym ze specyfikacji (γ₂₀ = 56 + poprawka)", async ({ page }) => {
   await openCalculators(page);
   await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
 
   const result = page.locator(".pe-result").first();
-  await expect(result).toContainText("1.96 %");
-  await expect(result).toContainText("4.5 V");
-  await expect(result).toContainText("225.5 V");
+  await expect(result).toContainText("1,86 %");
+  await expect(result).toContainText("4,27 V");
+  await expect(result).toContainText("225,7 V");
   await expect(page.getByText(/Warunek spełniony/)).toBeVisible();
+  // rachunek pokazuje WPROST, skąd wzięła się rezystywność — to jest ta różnica
+  await expect(page.getByText(/0,02137/)).toBeVisible();
 });
 
 test("za mały przekrój na długiej trasie podpowiada konkretny przekrój zamiast samego „nie spełnia”", async ({ page }) => {
   await openCalculators(page);
   await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
 
-  // 16 A na 60 m przy 1,5 mm²: (2·60·16·0,0225)/1,5 = 28,8 V = 12,52% >> 3%
+  // 16 A na 60 m przy 1,5 mm²: 2·(16·60)/(46,8·1,5) = 27,35 V = 11,89% >> 3%
   await page.getByLabel("Prąd obciążenia (Ib)").fill("16");
   await page.getByLabel("Długość trasy (w jedną stronę)").fill("60");
   await page.getByLabel("Przekrój żyły").selectOption("1.5");
 
   await expect(page.getByText(/Warunek niespełniony/)).toBeVisible();
-  // 6 mm² daje jeszcze 3,13% (za dużo), 10 mm² już 1,88% — stąd 10 jako pierwszy,
-  // który wchodzi w limit. Test pilnuje, że podpowiedź liczy się z tego samego
-  // szeregu przekrojów co dobór (SECTIONS), a nie zaokrągla „na oko".
-  await expect(page.getByText(/Najmniejszy przekrój.*10 mm²/)).toBeVisible();
+  // 4 mm² daje jeszcze 4,46% (za dużo), 6 mm² już 2,97% — stąd 6 jako pierwszy,
+  // który wchodzi w limit 3%. Przy starej stałej 0,0225 wychodziło 10 mm².
+  await expect(page.locator(".pe-result").first()).toContainText("min. przekrój w limicie 6 mm²");
 });
 
 /**
@@ -195,6 +204,75 @@ test("zapisany identyfikator kalkulatora sprzed aktualizacji nie wywraca zakład
 
   // zamiast białego ekranu — cofnięcie do pierwszej pozycji z listy
   await expect(page.getByRole("heading", { name: "Spadek napięcia" })).toBeVisible();
+  await expect(page.locator(".pe-result").first()).toBeVisible();
+});
+
+/**
+ * Kalkulatory inżynierskie (`src/lib/calc/*`) mają komplet testów jednostkowych
+ * z wartościami policzonymi ręcznie. Tu sprawdzamy WPIĘCIE: że zakładka woła ten
+ * silnik i pokazuje pełną kopertę wyniku wymaganą przez specyfikację — rachunek
+ * krok po kroku z podstawionymi wartościami, ocenę warunku, założenia i źródła.
+ */
+test("prądy zwarciowe: domyślny transformator 630 kVA / uk 4% daje Ik3 ≈ 23,9 kA i wymaganą Icn", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Prądy zwarciowe/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("23,87 kA");
+  await expect(result).toContainText("Zt 10,16 mΩ");
+  await expect(result).toContainText("c = 1,05");
+  await expect(page.getByText(/Icn ≥/)).toBeVisible();
+});
+
+test("współczynnik napięciowy c wynika z CELU obliczenia i nie da się go pomylić", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Prądy zwarciowe/ }).click();
+
+  await expect(page.locator(".pe-result").first()).toContainText("c = 1,05");
+  await page.getByLabel("Cel obliczenia").selectOption("ochrona_przeciwporazeniowa");
+  await expect(page.locator(".pe-result").first()).toContainText("c = 0,95");
+  // do ochrony liczymy przypadek NAJMNIEJSZEGO prądu — musi wyjść mniej niż 23,87 kA
+  await expect(page.locator(".pe-result").first()).toContainText("21,60 kA");
+});
+
+test("kompensacja mocy biernej: 100 kW, cosφ 0,80 → 0,95 daje 42,13 kvar", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Kompensacja mocy biernej/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("42,13 kvar");
+  await expect(result).toContainText("tgφ₁ = 0,750");
+  await expect(result).toContainText("tgφ₂ = 0,329");
+  // bez podanej mocy zwarciowej kalkulator MÓWI WPROST, że rezonansu nie sprawdzono
+  await expect(page.getByText(/NIE sprawdzono ryzyka rezonansu/)).toBeVisible();
+});
+
+test("wynik pokazuje rachunek krok po kroku z podstawionymi wartościami, założenia i źródła", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
+
+  await expect(page.getByText("Rachunek krok po kroku")).toBeVisible();
+  // wzór ogólny ORAZ ten sam wzór z liczbami — to jest sedno wymagania
+  await expect(page.getByText("ρ(θ) = ρ₂₀ · [1 + α · (θ − 20)]")).toBeVisible();
+  await expect(page.getByText("Przyjęte założenia")).toBeVisible();
+  await expect(page.getByText(/PN-HD 60364-5-52/).first()).toBeVisible();
+  await expect(page.getByText(/Nie zastępuje projektu ani sprawdzenia/).first()).toBeVisible();
+});
+
+/**
+ * Spec pkt 7 zabrania metody uproszczonej dla przekrojów ≥ 35 mm² — i ma to być
+ * TWARDY BŁĄD, nie ostrzeżenie obok policzonej mimo wszystko liczby.
+ */
+test("metoda uproszczona dla 50 mm² blokuje wynik zamiast go zaniżyć", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
+
+  await page.getByLabel("Przekrój żyły").selectOption("50");
+  await expect(page.getByText(/metoda uproszczona jest niedopuszczalna/i)).toBeVisible();
+  await expect(page.locator(".pe-result")).toHaveCount(0);
+
+  // włączenie reaktancji odblokowuje rachunek
+  await page.getByLabel(/Uwzględnij reaktancję/).check();
   await expect(page.locator(".pe-result").first()).toBeVisible();
 });
 

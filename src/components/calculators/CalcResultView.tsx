@@ -1,0 +1,117 @@
+import { AlertTriangle, Check, Info, TriangleAlert } from "lucide-react";
+import type { CalcResult } from "@/lib/calc/result";
+import { formatLiczba } from "@/lib/calc/result";
+
+/**
+ * Wspólna prezentacja koperty wyniku (`CalcResult`) — rachunek krok po kroku,
+ * ocena warunku, założenia i źródła normatywne.
+ *
+ * Jeden komponent dla wszystkich kalkulatorów inżynierskich, bo wymaganie
+ * „pokaż wzór z podstawionymi wartościami i podaj źródło" jest wspólne dla
+ * każdego z nich — a rozpisane osobno w każdej karcie rozjechałoby się przy
+ * pierwszej zmianie. Sam rachunek przychodzi gotowy z warstwy obliczeniowej;
+ * tutaj nie ma ŻADNEJ matematyki, żeby prezentacja nie mogła zacząć pokazywać
+ * czegoś innego, niż policzył silnik.
+ */
+
+const WERDYKT_STYL = {
+  spelniony: { bg: "#3B8C631A", fg: "#2C6B4A", Icon: Check, etykieta: "Warunek spełniony" },
+  graniczny: { bg: "#C1793F1A", fg: "#8A5526", Icon: TriangleAlert, etykieta: "Wynik graniczny" },
+  niespelniony: { bg: "#C6433A1A", fg: "#A2352C", Icon: AlertTriangle, etykieta: "Warunek niespełniony" },
+  nieoceniany: { bg: "#EEF1F4", fg: "#475569", Icon: Info, etykieta: "Bez oceny warunku" },
+} as const;
+
+export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
+  // Błędy walidacji wykluczają wynik — pokazujemy WYŁĄCZNIE je, żeby nie dało
+  // się odczytać nieistniejącej liczby obok komunikatu o błędnych danych.
+  if (wynik.bledy.length > 0) {
+    return (
+      <div className="mt-2 space-y-1.5">
+        {wynik.bledy.map((b) => (
+          <div
+            key={b.code}
+            className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+            style={{ background: "#C6433A14", color: "#A2352C" }}
+          >
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            <div>{b.message}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const ocena = wynik.ocena;
+  const styl = ocena ? WERDYKT_STYL[ocena.verdict] : null;
+
+  return (
+    <>
+      {ocena && styl && (
+        <div className="mt-2 flex items-start gap-2 rounded-lg p-3 text-sm" style={{ background: styl.bg, color: styl.fg }}>
+          <styl.Icon size={16} className="mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">
+              {styl.etykieta}
+              {ocena.margines_pct !== null && ` — margines ${formatLiczba(ocena.margines_pct, 1)}%`}
+            </div>
+            <div className="mt-0.5 leading-relaxed">{ocena.komunikat}</div>
+          </div>
+        </div>
+      )}
+
+      {wynik.kroki.length > 0 && (
+        <details className="mt-2 rounded-lg border border-border bg-white/60" open>
+          <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold text-slate-600 hover:text-copper">
+            Rachunek krok po kroku
+          </summary>
+          <div className="space-y-2 border-t border-border px-3 py-2">
+            {wynik.kroki.map((k, i) => (
+              <div key={i}>
+                <div className="text-[11px] text-slate-500">{k.opis}</div>
+                <div className="pe-mono text-[11.5px] text-slate-600">{k.wzor}</div>
+                {/* Podstawienie łamie się na wąskim ekranie zamiast rozpychać kartę —
+                    to najdłuższa linia w całym widoku. */}
+                <div className="pe-mono break-all text-[11.5px] text-slate-500">= {k.podstawienie}</div>
+                <div className="pe-mono text-[12.5px] font-semibold text-blueprint">= {k.wynik}</div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {wynik.zalozenia.length > 0 && (
+        <div className="mt-2 rounded-lg border border-border bg-white/60 px-3 py-2">
+          <div className="mb-1 text-xs font-semibold text-slate-600">Przyjęte założenia</div>
+          <ul className="space-y-1 text-[11px] leading-relaxed text-slate-500">
+            {wynik.zalozenia.map((z, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span aria-hidden="true">•</span>
+                <span>{z}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {wynik.zrodla.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {wynik.zrodla.map((z, i) => (
+            <span key={i} className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+              {z.norma}
+              {z.miejsce ? ` ${z.miejsce}` : ""}
+              {z.czego ? ` — ${z.czego}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Stopka merytoryczna wymagana przez specyfikację (pkt 3.7). Stoi przy KAŻDYM
+          wyniku, a nie raz na dole zakładki: kalkulatory bywają czytane pojedynczo
+          i zrzut ekranu jednego wyniku ma nieść to zastrzeżenie ze sobą. */}
+      <div className="mt-2 text-[11px] leading-relaxed text-slate-400">
+        Obliczenie wspomagające. Nie zastępuje projektu ani sprawdzenia wykonanego przez osobę z uprawnieniami — wynik
+        jest ważny tylko dla podanych wyżej założeń.
+      </div>
+    </>
+  );
+}

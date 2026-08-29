@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { CelZwarcia } from "@/lib/calc/shortCircuit";
+import type { UkladBaterii } from "@/lib/calc/powerFactor";
+import type { Izolacja, Material, RodzajLinii } from "@/lib/norms/conductors";
 import type { LayingMethod } from "@/lib/panel/norms";
 import type { CircuitKind } from "@/lib/panel/sizing";
 
@@ -20,6 +23,8 @@ import type { CircuitKind } from "@/lib/panel/sizing";
 
 export type CalcId =
   | "spadek"
+  | "zwarcie"
+  | "kompensacja"
   | "przekroj"
   | "zabezpieczenie"
   | "moc"
@@ -74,6 +79,36 @@ interface CalculatorsState {
   duLength: number;
   duSection: number;
   duLimitPct: number;
+  /** Materiał żyły, izolacja i cosφ — potrzebne do modelu temperaturowego
+   *  (ρ(θ) = ρ₂₀[1+α(θ−20)]) i do metody pełnej z reaktancją. */
+  duMaterial: Material;
+  duIzolacja: Izolacja;
+  duCosfi: number;
+  duZReaktancja: boolean;
+  duRodzajLinii: RodzajLinii;
+  duRownolegle: number;
+
+  // --- prądy zwarciowe i wytrzymałość zwarciowa cieplna ---
+  zwCel: CelZwarcia;
+  zwSnKVA: number;
+  zwUkPct: number;
+  zwUnV: number;
+  zwStratyCuW: number;
+  zwZsOhm: number;
+  zwRdoX: number;
+  /** Sprawdzenie cieplne: prąd i czas trwania zwarcia + przewód. */
+  zwCzasS: number;
+  zwPrzekroj: number;
+  zwMaterial: Material;
+  zwIzolacja: Izolacja;
+
+  // --- kompensacja mocy biernej ---
+  kmPkW: number;
+  kmCos1: number;
+  kmCos2: number;
+  kmUV: number;
+  kmUklad: UkladBaterii;
+  kmSkKVA: number;
 
   // --- bilans mocy ---
   devices: CalculatorDevice[];
@@ -140,6 +175,31 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       duLength: 25,
       duSection: 2.5,
       duLimitPct: 3,
+      duMaterial: "Cu",
+      duIzolacja: "PVC",
+      duCosfi: 1,
+      duZReaktancja: false,
+      duRodzajLinii: "kabel_wielozylowy",
+      duRownolegle: 1,
+
+      zwCel: "dobor_aparatu",
+      zwSnKVA: 630,
+      zwUkPct: 4,
+      zwUnV: 400,
+      zwStratyCuW: 6500,
+      zwZsOhm: 1,
+      zwRdoX: 0.1,
+      zwCzasS: 0.1,
+      zwPrzekroj: 10,
+      zwMaterial: "Cu",
+      zwIzolacja: "PVC",
+
+      kmPkW: 100,
+      kmCos1: 0.8,
+      kmCos2: 0.95,
+      kmUV: 400,
+      kmUklad: "trojkat",
+      kmSkKVA: 0,
 
       devices: DEFAULT_DEVICES,
       ks: 0.7,
