@@ -1072,6 +1072,25 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     !!skalaPotwierdzenie;
 
   /**
+   * Zwinięty panel rozwija się sam, gdy w środku jest JEDYNE wyjście z zaczętej
+   * operacji: „Zakończ"/„Anuluj" rysowanej ściany albo pomieszczenia i „Zatwierdź
+   * skalę" przy kalibracji. Odkąd kontrolki kontekstowe mieszkają W PANELU (a nie
+   * nad płótnem — patrz komentarz przy nich), zwinięcie panelu w połowie rysowania
+   * zostawiałoby użytkownika bez wyjścia. To ten sam powód, dla którego w pełnym
+   * ekranie pigułka kontrolek jako jedyna NIE chowa się za krawędź.
+   *
+   * Celowo WĘŻSZE niż `kontekstoweAktywne`: samo wybranie narzędzia (np. widoczny
+   * selektor „Kształt: Prostokąt/Wielobok") niczego nie blokuje — prostokąt da się
+   * narysować bez patrzenia na selektor, a panel wraca jednym kliknięciem. Gdyby
+   * warunek obejmował także ten przypadek, „Zwiń panel" w trybie Pomieszczenie/Ściana
+   * rozwijałby się natychmiast z powrotem i wyglądał na zepsuty przycisk.
+   */
+  const blokujaceKontrolki = drawingWall.length > 0 || drawingRoomPoints.length > 0 || toolMode === "skala";
+  useEffect(() => {
+    if (!pelnyEkran && blokujaceKontrolki && panelZwiniety) rozwinPanel();
+  }, [pelnyEkran, blokujaceKontrolki, panelZwiniety, rozwinPanel]);
+
+  /**
    * Treść pigułki kontrolek kontekstowych — WSPÓLNA dla obu miejsc, w których się
    * renderuje (pełny ekran kontra widok zwykły, patrz komentarze przy obu). Jedna
    * definicja, żeby te same kontrolki (grubość ściany, kształt pomieszczenia,
@@ -1171,7 +1190,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
           poza nim byłby tylko szumem w pasku narzędzi. */}
       {toolMode === "pomieszczenie" && (
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
           <span className="font-medium text-slate-600">Kształt:</span>
           <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
             {ROOM_MODES.map(({ id, label, hint }) => (
@@ -1189,7 +1208,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               </button>
             ))}
           </div>
-          <span className="text-slate-500">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
+          <span className="min-w-0 basis-full text-slate-500">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
         </div>
       )}
       {drawingRoomPoints.length > 0 && (
@@ -1662,6 +1681,33 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             className={pelnyEkran ? "flex min-h-0 flex-col overflow-hidden border-l border-border p-2" : "border-l border-border p-2"}
             style={{ width: 268 }}
           >
+          {/* Kontrolki kontekstowe bieżącego narzędzia (grubość ściany, kształt
+              pomieszczenia, kalibracja skali, „Zakończ"/„Anuluj" rysowania) — w widoku
+              ZWYKŁYM mieszkają TUTAJ, w panelu, a nie nad płótnem.
+              Stały nad płótnem, w slocie o stałej wysokości 92 px, i to był powód
+              zgłoszenia: w najczęstszym trybie („Zaznacz", bez zaznaczenia) slot
+              świecił pustką, odsuwając rzut od paska narzędzi. Wszystkie próby
+              zwijania/skracania tego slotu na miejscu odpadły — przesuwały płótno
+              W POŁOWIE gestu rysowania albo zaraz po kliknięciu zaznaczającym na
+              samym płótnie (patrz historia w git blame: cable-routes.spec.ts
+              i room-drawing.spec.ts łapały to jako realne przesunięcie celu kliknięcia).
+              Przeniesienie do panelu rozwiązuje to u źródła, a nie kompromisem:
+              panel ma STAŁĄ szerokość (268 px) i własną kolumnę, więc treść może tu
+              rosnąć i zawijać się do woli — kolumna płótna nawet o tym nie wie i rzut
+              stoi równo z górną krawędzią paska narzędzi niezależnie od narzędzia.
+              Zgodne zresztą z podziałem opisanym przy tej karcie wyżej: pasek wybiera,
+              CZYM pracuję, panel pokazuje opcje dla tego wyboru. */}
+          {!pelnyEkran && kontekstoweAktywne && (
+            // `flex-col`, nie `flex-wrap` jak w wersji pełnoekranowej: tam pigułka ma
+            // całą szerokość okna i bloki spokojnie stoją obok siebie, tu kolumna ma
+            // 268 px, więc każdy blok dostaje własny wiersz. `min-w-0` na kontenerze
+            // pozwala długim podpowiedziom („przytrzymaj lewy przycisk i przeciągnij")
+            // zawinąć się wewnątrz zamiast wypychać treść poza panel.
+            <div className="mb-2 flex min-w-0 flex-col items-start gap-2 rounded-card border border-copper/40 bg-[#FDF6EF] px-2.5 py-2 text-left shadow-sm">
+              {kontekstoweTresc}
+            </div>
+          )}
+
           <div className="mb-2 flex gap-1 rounded-lg border border-border bg-white p-1 text-xs">
             <button
               onClick={() => setSidebarTab("elementy")}
@@ -1704,52 +1750,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           className={pelnyEkran ? "h-full w-full p-2" : undefined}
           style={pelnyEkran ? undefined : { flex: "1 1 480px", minWidth: 320 }}
         >
-          {/* Widok ZWYKŁY: ta sama pigułka kontrolek kontekstowych co w pełnym ekranie
-              (`kontekstoweTresc` wyżej), tylko stojąca W PRZEPŁYWIE tuż nad samym
-              płótnem, w slocie o STAŁEJ wysokości (`min-h-[92px]`) zamiast pływająca
-              nad całą stroną jak w pełnym ekranie. Dwie wcześniejsze próby odpadły:
-              - `position:absolute` nad płótnem zasłaniało samo płótno w miejscu, gdzie
-                realnie zaczyna się rysowanie (blisko lewego górnego rogu) — pierwszy
-                klik/przeciągnięcie trafiał w pigułkę zamiast w scenę Konvy;
-              - slot o wysokości RÓWNEJ bieżącej treści (bez `min-h`) przesuwał płótno
-                przy KAŻDEJ zmianie treści, nie tylko przy zmianie narzędzia — np. sam
-                tekst podpowiedzi przy rysowaniu wieloboku rośnie z „kliknij pierwszy
-                narożnik" do „N pkt. — kliknij w pierwszy punkt, aby zamknąć" i mógł
-                zawinąć się na DRUGĄ linię w trakcie klikania kolejnych wierzchołków —
-                płótno (a więc i już postawione punkty względem kursora) jechało w dół
-                W POŁOWIE gestu rysowania, czyli dokładnie to, czego dotyczy zgłoszenie,
-                tylko przeniesione o poziom niżej.
-              Stała wysokość slotu eliminuje oba: płótno startuje zawsze w tym samym
-              miejscu swojej kolumny, niezależnie od narzędzia i etapu jego pracy —
-              a ToolRail i panel Elementy/Pomieszczenia po lewej i tak nigdy się nie
-              ruszają, co jest sednem zgłoszenia („nie przesuwały wszystkiego w dół").
-              Ramka/tło pojawiają się tylko, gdy jest co pokazać (`kontekstoweAktywne`)
-              — inaczej tryb „zaznacz" (domyślny, najczęstszy) wisiałby nad płótnem
-              jako pusty bordowany prostokąt.
-              TRZECIA próba, odrzucona: skrócenie stałego slotu (92 → 56 px) plus
-              `whitespace-nowrap`/`flex-nowrap` na rosnącym liczniku punktów (patrz
-              „Rysowanie ściany"/„N pkt." niżej — ZOSTAJE, bo to i tak realna poprawka),
-              w nadziei że 56 px starczy na wszystkie stany. Nie starczało: w trybie
-              „Pomieszczenie" selektor kształtu I licznik punktów to DWA OSOBNE bloki w
-              tym samym `flex-wrap` — osobno mieszczą się w jednej linii, ale RAZEM (gdy
-              licznik pojawia się po pierwszym kliknięciu wieloboku) już nie, więc slot
-              i tak rósł z 56 do ~92 px DOKŁADNIE między pierwszym a drugim klikiem
-              rysowania — czyli ten sam mid-gesture jump, tylko przesunięty o jeden
-              klik. e2e złapało to (`room-drawing.spec.ts`, wielobok). 92 px nie jest
-              więc dowolnym zapasem — to naprawdę wysokość potrzebna na NAJGORSZY
-              jednoczesny przypadek (selektor kształtu + licznik punktów), więc wraca
-              bez zmian; skrócenie wymagałoby połączenia obu bloków w jeden wiersz,
-              a to osobna, większa zmiana UI. */}
-          {!pelnyEkran && (
-            <div
-              className={
-                "mb-1.5 flex min-h-[92px] flex-wrap items-center gap-3 rounded-card px-3 py-2" +
-                (kontekstoweAktywne ? " border border-copper/40 bg-[#FDF6EF] shadow-sm" : "")
-              }
-            >
-              {kontekstoweTresc}
-            </div>
-          )}
           <DesignCanvas
             stageRef={stageRef}
             elements={elements}
