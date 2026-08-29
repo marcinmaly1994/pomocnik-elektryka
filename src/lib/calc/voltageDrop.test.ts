@@ -22,6 +22,10 @@ function wejscie(over: Partial<SpadekWejscie> = {}): SpadekWejscie {
     material: "Cu",
     izolacja: "PVC",
     tempZyly_C: TEMP_DLA_GAMMA_55,
+    // Przykłady ze specyfikacji podają γ = 55 WPROST, więc testy muszą liczyć
+    // modelem temperaturowym — domyślne uproszczenie zał. G (1,25·ρ₂₀) daje
+    // γ = 44,8 niezależnie od temperatury i sprawdzałoby co innego.
+    modelRezystywnosci: "temperaturowy",
     zReaktancja: false,
     przekroj_mm2: 2.5,
     limit_pct: 5,

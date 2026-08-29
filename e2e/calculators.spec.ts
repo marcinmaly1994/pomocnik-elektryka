@@ -140,46 +140,57 @@ test("trzy pierwsze kalkulatory stoją w kolejności spadek → przekrój → za
 });
 
 /**
- * UWAGA — te liczby ZMIENIŁY SIĘ wraz z przejściem na silnik `lib/calc/voltageDrop.ts`.
+ * Domyślnym modelem rezystywności jest UPROSZCZENIE PN-HD 60364-5-52 zał. G
+ * (ρ = 1,25 · ρ₂₀), czyli dokładnie to, czym dobiera obwody zakładka Rozdzielnica.
+ * Dzięki temu oba miejsca podają identyczny wynik — wymóg spójności krzyżowej
+ * ze specyfikacji (pkt 6.5), pilnowany też jednostkowo w `calc/spojnosc.test.ts`.
  *
- * Wcześniej kalkulator wołał `voltageDropPct` z `lib/panel/sizing.ts`, czyli stałą
- * ρ = 0,0225 Ω·mm²/m („wartość praktyczna z zapasem" dla 70 °C, γ ≈ 44,4).
- * Nowy silnik liczy zgodnie ze specyfikacją: γ₂₀ = 56 i poprawka temperaturowa
- * ρ(θ) = ρ₂₀·[1 + α·(θ−20)], co przy 70 °C daje ρ ≈ 0,02137 (γ ≈ 46,8).
- * Model normowy jest więc o ~5% MNIEJ konserwatywny od dotychczasowej stałej.
- *
- * Domyślne dane: 10 A, 1-fazowe, 25 m, 2,5 mm², Cu/PVC
- * -> ΔU = 2·(10·25)/(46,8·2,5) = 4,27 V -> 4,27/230 = 1,86%.
- *
- * Zakładka Rozdzielnica NADAL używa starej stałej — ujednolicenie obu wymaga
- * osobnej decyzji, bo przeliczyłoby dobory w całym projekcie.
+ * Domyślne dane: 10 A, 1-fazowe, 25 m, 2,5 mm², Cu
+ * -> ρ = 1,25/56 = 0,0223214 -> ΔU = 2·(10·25)·0,0223214/2,5 = 4,46 V = 1,94%.
  */
-test("spadek napięcia liczy się modelem temperaturowym ze specyfikacji (γ₂₀ = 56 + poprawka)", async ({ page }) => {
+test("spadek napięcia liczy domyślnie uproszczeniem zał. G — tak samo jak dobór obwodów", async ({ page }) => {
   await openCalculators(page);
   await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
 
   const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("1,94 %");
+  await expect(result).toContainText("4,46 V");
+  await expect(result).toContainText("225,5 V");
+  await expect(page.getByText(/Warunek spełniony/)).toBeVisible();
+  // rachunek pokazuje WPROST, skąd wzięła się rezystywność
+  await expect(page.getByText("ρ = 1,25 · ρ₂₀")).toBeVisible();
+});
+
+/**
+ * Model temperaturowy jest dostępny (spec pkt 4 go wymaga), ale jako WYBÓR —
+ * jest ok. 5% mniej konserwatywny, więc przełączenie musi być świadome i musi
+ * być widoczne w założeniach.
+ */
+test("model temperaturowy da się wybrać i jest opisany jako mniej konserwatywny", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
+
+  await page.getByLabel("Model rezystywności").selectOption("temperaturowy");
+  const result = page.locator(".pe-result").first();
   await expect(result).toContainText("1,86 %");
   await expect(result).toContainText("4,27 V");
-  await expect(result).toContainText("225,7 V");
-  await expect(page.getByText(/Warunek spełniony/)).toBeVisible();
-  // rachunek pokazuje WPROST, skąd wzięła się rezystywność — to jest ta różnica
-  await expect(page.getByText(/0,02137/)).toBeVisible();
+  await expect(page.getByText(/mniej konserwatywne/)).toBeVisible();
 });
 
 test("za mały przekrój na długiej trasie podpowiada konkretny przekrój zamiast samego „nie spełnia”", async ({ page }) => {
   await openCalculators(page);
   await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
 
-  // 16 A na 60 m przy 1,5 mm²: 2·(16·60)/(46,8·1,5) = 27,35 V = 11,89% >> 3%
+  // 16 A na 60 m przy 1,5 mm²: 2·(16·60)·0,0223214/1,5 = 28,6 V = 12,42% >> 3%
   await page.getByLabel("Prąd obciążenia (Ib)").fill("16");
   await page.getByLabel("Długość trasy (w jedną stronę)").fill("60");
   await page.getByLabel("Przekrój żyły").selectOption("1.5");
 
   await expect(page.getByText(/Warunek niespełniony/)).toBeVisible();
-  // 4 mm² daje jeszcze 4,46% (za dużo), 6 mm² już 2,97% — stąd 6 jako pierwszy,
-  // który wchodzi w limit 3%. Przy starej stałej 0,0225 wychodziło 10 mm².
-  await expect(page.locator(".pe-result").first()).toContainText("min. przekrój w limicie 6 mm²");
+  // 6 mm² daje 3,11% (za dużo), 10 mm² już 1,86% — ten sam przekrój, który wybrałby
+  // dobór obwodów. To jest dokładnie ten przypadek, w którym stary rozjazd między
+  // silnikami dawał 6 mm² w kalkulatorze i 10 mm² w Rozdzielnicy.
+  await expect(page.locator(".pe-result").first()).toContainText("min. przekrój w limicie 10 mm²");
 });
 
 /**
@@ -253,7 +264,8 @@ test("wynik pokazuje rachunek krok po kroku z podstawionymi wartościami, zało�
 
   await expect(page.getByText("Rachunek krok po kroku")).toBeVisible();
   // wzór ogólny ORAZ ten sam wzór z liczbami — to jest sedno wymagania
-  await expect(page.getByText("ρ(θ) = ρ₂₀ · [1 + α · (θ − 20)]")).toBeVisible();
+  await expect(page.getByText("ρ = 1,25 · ρ₂₀")).toBeVisible();
+  await expect(page.getByText("ΔU% = ΔU / U · 100%")).toBeVisible();
   await expect(page.getByText("Przyjęte założenia")).toBeVisible();
   await expect(page.getByText(/PN-HD 60364-5-52/).first()).toBeVisible();
   await expect(page.getByText(/Nie zastępuje projektu ani sprawdzenia/).first()).toBeVisible();

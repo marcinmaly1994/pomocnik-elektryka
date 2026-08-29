@@ -10,13 +10,12 @@
  * Zlanie obu skusiłoby do „dopisania brakujących wierszy z pamięci" do tablic
  * normatywnych — czego robić nie wolno (patrz `OSTRZEZENIE_ZAKRES` niżej).
  *
- * UWAGA co do spójności z istniejącym doborem: `lib/panel/norms.ts` liczy spadek
- * napięcia stałą `RHO_CU_70C = 0,0225 Ω·mm²/m` (γ ≈ 44,4). Model temperaturowy
- * poniżej daje dla miedzi przy 70 °C γ ≈ 46,8 (ρ ≈ 0,02137). Różnica ~5% bierze
- * się stąd, że 0,0225 to wartość praktyczna „z zapasem", a nie wynik przeliczenia
- * γ₂₀ = 56 wzorem temperaturowym. Oba podejścia są spotykane; NIE scalam ich
- * po cichu, bo zmiana stałej w `norms.ts` przeliczyłaby dobory w całej zakładce
- * Rozdzielnica. Wymaga świadomej decyzji — patrz raport dla użytkownika.
+ * SPÓJNOŚĆ Z DOBOREM OBWODÓW: `lib/panel/norms.ts` wyprowadza swoje `RHO_CU_70C`
+ * z `rezystywnoscRobocza("Cu", "annexG", …)` poniżej, więc obie warstwy liczą
+ * spadek napięcia jedną i tą samą liczbą. Wcześniej były to dwie niezależne
+ * wartości (0,0225 wpisane ręcznie kontra model temperaturowy) różniące się
+ * o ~5%, co na styku limitu potrafiło dać inny przekrój w Rozdzielnicy niż
+ * w kalkulatorze — patrz `WSP_ROBOCZY_ANNEX_G`.
  */
 
 export type Material = "Cu" | "Al";
@@ -41,6 +40,51 @@ export const TEMP_PRACY: Record<Izolacja, number> = { PVC: 70, XLPE: 90 };
 export function rezystywnosc(material: Material, tempC: number): number {
   const rho20 = 1 / GAMMA_20[material];
   return rho20 * (1 + ALFA[material] * (tempC - 20));
+}
+
+/**
+ * Mnożnik ρ₂₀ dla warunków ruchowych wg PN-HD 60364-5-52 zał. G.
+ *
+ * Norma podaje do sprawdzania SPADKU NAPIĘCIA gotowe uproszczenie: rezystywność
+ * przewodu w warunkach ruchowych przyjmuje się jako 1,25 × rezystywność przy
+ * 20 °C. Jedna liczba niezależna od rodzaju izolacji — dla PVC (70 °C) jest to
+ * wartość konserwatywna, dla XLPE (90 °C) lekko optymistyczna.
+ *
+ * To WYJAŚNIA rozbieżność, która wcześniej istniała w tej aplikacji: stała
+ * `RHO_CU_70C = 0,0225` w `lib/panel/norms.ts` była właśnie tym uproszczeniem
+ * (zaokrąglonym), a nie wynikiem modelu temperaturowego. Oba podejścia pochodzą
+ * z tej samej normy — pierwsze z załącznika G, drugie z zależności fizycznej.
+ * Nie są sprzeczne, odpowiadają na trochę inne pytanie.
+ */
+export const WSP_ROBOCZY_ANNEX_G = 1.25;
+
+/**
+ * Który model rezystywności zastosować.
+ *
+ * `annexG` — uproszczenie normy (1,25·ρ₂₀), OBOWIĄZUJĄCE domyślnie przy
+ * sprawdzaniu spadku napięcia. Wybrane jako domyślne z dwóch powodów: jest
+ * bardziej konserwatywne (na styku limitu przepuszcza mniej), i to ono stoi za
+ * doborem w zakładce Rozdzielnica — dzięki czemu wszystkie miejsca w aplikacji
+ * podają ten sam wynik (wymóg spójności krzyżowej ze specyfikacji, pkt 6.5).
+ *
+ * `temperaturowy` — dokładne ρ(θ) dla ZADANEJ temperatury. Potrzebne tam, gdzie
+ * temperatura jest inna niż ruchowa: pomiar przy 20 °C, XLPE przy 90 °C, albo
+ * przewód nagrzany prądem zwarciowym.
+ */
+export type ModelRezystywnosci = "annexG" | "temperaturowy";
+
+export const MODEL_REZYSTYWNOSCI_LABELS: Record<ModelRezystywnosci, string> = {
+  annexG: "uproszczenie normy: 1,25 × ρ₂₀ (zał. G) — domyślne",
+  temperaturowy: "dokładny model temperaturowy ρ(θ)",
+};
+
+/**
+ * Rezystywność do obliczeń ruchowych [Ω·mm²/m] — jedno miejsce, z którego
+ * korzystają WSZYSTKIE kalkulatory, żeby nie dało się ich rozjechać.
+ */
+export function rezystywnoscRobocza(material: Material, model: ModelRezystywnosci, tempC: number): number {
+  if (model === "annexG") return (1 / GAMMA_20[material]) * WSP_ROBOCZY_ANNEX_G;
+  return rezystywnosc(material, tempC);
 }
 
 /** Konduktywność w temperaturze θ [m/(Ω·mm²)] — odwrotność `rezystywnosc`. */

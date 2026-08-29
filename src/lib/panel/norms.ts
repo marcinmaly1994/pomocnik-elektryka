@@ -12,6 +12,8 @@
  * domowej to ~wszystko). Dla XLPE/gumy wartości są WYŻSZE, więc użycie tych
  * tablic jest wtedy bezpieczne (zaniżone), ale nieoptymalne.
  */
+import { TEMP_PRACY, rezystywnoscRobocza } from "@/lib/norms/conductors";
+
 
 /** Metoda odniesienia wg PN-HD 60364-5-52 tabl. B.52.1 — decyduje o odprowadzaniu ciepła. */
 export type ReferenceMethod = "A1" | "A2" | "B1" | "B2" | "C";
@@ -168,13 +170,21 @@ export const CURVE_MULTIPLIER: Record<Curve, number> = { B: 5, C: 10, D: 20 };
 export const MAX_VOLTAGE_DROP_PCT = { oswietlenie: 3, inne: 5 } as const;
 
 /**
- * Rezystywność miedzi w temperaturze pracy żyły 70 °C [Ω·mm²/m].
+ * Rezystywność miedzi w warunkach ruchowych [Ω·mm²/m] — do spadku napięcia.
  *
  * NIE 0,0175 (to wartość dla 20 °C): spadek napięcia liczy się przy przewodzie
  * nagrzanym prądem roboczym, inaczej wynik jest zaniżony o ~28% i obwód przechodzi
  * kontrolę, której realnie nie spełnia.
+ *
+ * WYPROWADZONA, nie wpisana ręcznie: to uproszczenie z PN-HD 60364-5-52 zał. G
+ * (1,25 × ρ₂₀ przy γ₂₀ = 56), liczone w `lib/norms/conductors.ts`. Wcześniej
+ * stała była tu wpisana jako 0,0225 — zaokrąglenie tej samej wartości — przez co
+ * kalkulatory inżynierskie i dobór obwodów liczyły spadek dwiema różnymi
+ * liczbami. Różnica sięgała 5% i na styku limitu dawała inny przekrój, więc
+ * jedno źródło prawdy jest tu warunkiem, żeby obie części aplikacji nie
+ * przeczyły sobie nawzajem.
  */
-export const RHO_CU_70C = 0.0225;
+export const RHO_CU_70C = rezystywnoscRobocza("Cu", "annexG", TEMP_PRACY.PVC);
 
 /**
  * Maksymalna impedancja pętli zwarcia Zs [Ω] wynika z warunku samoczynnego

@@ -6,7 +6,7 @@ import type { TypUziomu } from "@/lib/calc/earthing";
 import type { Faza } from "@/lib/calc/loadBalance";
 import type { SposobRozruchu } from "@/lib/calc/motor";
 import type { TypSPD } from "@/lib/calc/spd";
-import type { Izolacja, Material, RodzajLinii } from "@/lib/norms/conductors";
+import type { Izolacja, Material, ModelRezystywnosci, RodzajLinii } from "@/lib/norms/conductors";
 import type { LayingMethod } from "@/lib/panel/norms";
 import type { CircuitKind } from "@/lib/panel/sizing";
 
@@ -105,6 +105,7 @@ interface CalculatorsState {
   duCosfi: number;
   duZReaktancja: boolean;
   duRodzajLinii: RodzajLinii;
+  duModel: ModelRezystywnosci;
   duRownolegle: number;
 
   // --- prądy zwarciowe i wytrzymałość zwarciowa cieplna ---
@@ -257,6 +258,7 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       duCosfi: 1,
       duZReaktancja: false,
       duRodzajLinii: "kabel_wielozylowy",
+      duModel: "annexG",
       duRownolegle: 1,
 
       zwCel: "dobor_aparatu",

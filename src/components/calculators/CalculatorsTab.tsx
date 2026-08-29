@@ -40,7 +40,14 @@ import {
   obliczWytrzymaloscZwarciowa,
   type CelZwarcia,
 } from "@/lib/calc/shortCircuit";
-import { RODZAJ_LINII_LABELS, type Izolacja, type Material, type RodzajLinii } from "@/lib/norms/conductors";
+import {
+  MODEL_REZYSTYWNOSCI_LABELS,
+  RODZAJ_LINII_LABELS,
+  type Izolacja,
+  type Material,
+  type ModelRezystywnosci,
+  type RodzajLinii,
+} from "@/lib/norms/conductors";
 import { formatLiczba } from "@/lib/calc/result";
 import { calcLighting, calcPowerBalance, maxGroundingResistance, UL } from "@/lib/electrical";
 import { computeCircuits } from "@/lib/panel/circuits";
@@ -172,6 +179,10 @@ const FAZA_OPTIONS = [
   { value: "3f", label: "3-fazowy" },
 ];
 
+const MODEL_REZ_OPTIONS = (Object.entries(MODEL_REZYSTYWNOSCI_LABELS) as [ModelRezystywnosci, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
 const TYP_SPD_OPTIONS = (Object.entries(TYP_SPD_LABELS) as [TypSPD, string][]).map(([value, label]) => ({ value, label }));
 const UW_OPTIONS = KATEGORIE_PRZEPIECIOWE.map((k) => ({
   value: String(k.Uw_V),
@@ -223,6 +234,7 @@ export function CalculatorsTab() {
   const duZReaktancja = useCalculatorsStore((s) => s.duZReaktancja);
   const duRodzajLinii = useCalculatorsStore((s) => s.duRodzajLinii);
   const duRownolegle = useCalculatorsStore((s) => s.duRownolegle);
+  const duModel = useCalculatorsStore((s) => s.duModel);
   const zwCel = useCalculatorsStore((s) => s.zwCel);
   const zwSnKVA = useCalculatorsStore((s) => s.zwSnKVA);
   const zwUkPct = useCalculatorsStore((s) => s.zwUkPct);
@@ -449,8 +461,9 @@ export function CalculatorsTab() {
         rodzajLinii: duRodzajLinii,
         rownolegle: duRownolegle,
         limit_pct: duLimitPct,
+        modelRezystywnosci: duModel,
       }),
-    [duPhase, duCurrentA, duCosfi, duLength, duMaterial, duSection, duIzolacja, duZReaktancja, duRodzajLinii, duRownolegle, duLimitPct]
+    [duPhase, duCurrentA, duCosfi, duLength, duMaterial, duSection, duIzolacja, duZReaktancja, duRodzajLinii, duRownolegle, duLimitPct, duModel]
   );
 
   // --- prądy zwarciowe ---
@@ -1096,6 +1109,18 @@ export function CalculatorsTab() {
                   value={String(duLimitPct)}
                   onChange={(v) => setDuLimitPct(Number(v))}
                   options={LIMIT_SPADKU_OPCJE}
+                />
+                {/* Wybór modelu rezystywności stoi jawnie w formularzu, bo to on
+                    decyduje o zgodności z doborem w Rozdzielnicy — patrz
+                    `ModelRezystywnosci`. Domyślne uproszczenie zał. G daje
+                    identyczny wynik jak dobór obwodów; model temperaturowy jest
+                    ok. 5% mniej konserwatywny i na styku limitu może dopuścić
+                    cieńszy przewód, więc użytkownik ma to wybierać świadomie. */}
+                <Field
+                  label="Model rezystywności"
+                  value={duModel}
+                  onChange={(v) => patch({ duModel: v as ModelRezystywnosci })}
+                  options={MODEL_REZ_OPTIONS}
                 />
               </div>
 

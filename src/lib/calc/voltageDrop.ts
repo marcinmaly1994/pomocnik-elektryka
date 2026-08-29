@@ -20,10 +20,10 @@ import {
   MIN_PRZEKROJ_Z_REAKTANCJA_MM2,
   TEMP_PRACY,
   X_JEDNOSTKOWA_OHM_KM,
-  konduktywnosc,
-  rezystywnosc,
+  rezystywnoscRobocza,
   type Izolacja,
   type Material,
+  type ModelRezystywnosci,
   type RodzajLinii,
 } from "@/lib/norms/conductors";
 import { bladWyniku, formatLiczba, ocenPodLimitem, type CalcError, type CalcResult, type Krok, type Ocena } from "./result";
@@ -54,8 +54,12 @@ export interface SpadekWejscie {
   material: Material;
   przekroj_mm2: number;
   izolacja: Izolacja;
-  /** Temperatura żyły [°C]. Domyślnie temperatura pracy wg izolacji. */
+  /** Temperatura żyły [°C]. Domyślnie temperatura pracy wg izolacji.
+   *  Ma znaczenie tylko dla modelu `temperaturowy`. */
   tempZyly_C?: number;
+  /** Model rezystywności — domyślnie uproszczenie normy (zał. G), zgodnie
+   *  z doborem obwodów w Rozdzielnicy. Patrz `ModelRezystywnosci`. */
+  modelRezystywnosci?: ModelRezystywnosci;
   /** Czy uwzględniać reaktancję (metoda pełna). */
   zReaktancja: boolean;
   rodzajLinii?: RodzajLinii;
@@ -134,8 +138,9 @@ export function obliczSpadekNapiecia(w: SpadekWejscie): CalcResult<SpadekWynik> 
   if (bledy.length > 0) return bladWyniku(bledy);
 
   const tempZyly = w.tempZyly_C ?? TEMP_PRACY[w.izolacja];
-  const gamma = konduktywnosc(w.material, tempZyly);
-  const rho = rezystywnosc(w.material, tempZyly);
+  const model = w.modelRezystywnosci ?? "annexG";
+  const rho = rezystywnoscRobocza(w.material, model, tempZyly);
+  const gamma = 1 / rho;
   const n = w.rownolegle && w.rownolegle > 0 ? w.rownolegle : 1;
   const k = mnoznikUkladu(w.uklad);
   const kroki: Krok[] = [];
@@ -181,12 +186,21 @@ export function obliczSpadekNapiecia(w: SpadekWejscie): CalcResult<SpadekWynik> 
   const Xjedn = w.zReaktancja ? xJedn_ohm_km / 1000 / n : 0; // [Ω/m]
   const sinfi = Math.sqrt(Math.max(0, 1 - w.cosfi * w.cosfi));
 
-  kroki.push({
-    opis: `Rezystywność miedzi/aluminium w temperaturze żyły ${formatLiczba(tempZyly, 0)} °C`,
-    wzor: "ρ(θ) = ρ₂₀ · [1 + α · (θ − 20)]",
-    podstawienie: `1/${formatLiczba(1 / rezystywnosc(w.material, 20), 0)} · [1 + ${w.material === "Cu" ? "0,00393" : "0,00403"} · (${formatLiczba(tempZyly, 0)} − 20)]`,
-    wynik: `${formatLiczba(rho, 5)} Ω·mm²/m  (γ = ${formatLiczba(gamma, 1)} m/(Ω·mm²))`,
-  });
+  kroki.push(
+    model === "annexG"
+      ? {
+          opis: "Rezystywność w warunkach ruchowych (uproszczenie normy, zał. G)",
+          wzor: "ρ = 1,25 · ρ₂₀",
+          podstawienie: `1,25 · 1/${formatLiczba(w.material === "Cu" ? 56 : 35, 0)}`,
+          wynik: `${formatLiczba(rho, 5)} Ω·mm²/m  (γ = ${formatLiczba(gamma, 1)} m/(Ω·mm²))`,
+        }
+      : {
+          opis: `Rezystywność w temperaturze żyły ${formatLiczba(tempZyly, 0)} °C`,
+          wzor: "ρ(θ) = ρ₂₀ · [1 + α · (θ − 20)]",
+          podstawienie: `1/${formatLiczba(w.material === "Cu" ? 56 : 35, 0)} · [1 + ${w.material === "Cu" ? "0,00393" : "0,00403"} · (${formatLiczba(tempZyly, 0)} − 20)]`,
+          wynik: `${formatLiczba(rho, 5)} Ω·mm²/m  (γ = ${formatLiczba(gamma, 1)} m/(Ω·mm²))`,
+        }
+  );
 
   let spadek_V: number;
   if (w.zReaktancja) {
@@ -230,7 +244,11 @@ export function obliczSpadekNapiecia(w: SpadekWejscie): CalcResult<SpadekWynik> 
 
   const ocena: Ocena = ocenPodLimitem(spadek_pct, w.limit_pct, { co: "Spadek napięcia", jednostka: "%" });
 
-  zalozenia.push(`Temperatura żyły przyjęta na ${formatLiczba(tempZyly, 0)} °C (izolacja ${w.izolacja}).`);
+  zalozenia.push(
+    model === "annexG"
+      ? "Rezystywność wg uproszczenia PN-HD 60364-5-52 zał. G (1,25 × ρ₂₀) — ta sama wartość, którą dobiera obwody zakładka Rozdzielnica, więc oba miejsca podają identyczny wynik. Dla PVC (70 °C) jest to wartość konserwatywna, dla XLPE (90 °C) lekko optymistyczna — przy XLPE rozważ model temperaturowy."
+      : `Rezystywność z modelu temperaturowego dla ${formatLiczba(tempZyly, 0)} °C (izolacja ${w.izolacja}). UWAGA: to podejście jest ok. 5% mniej konserwatywne od uproszczenia zał. G i na styku limitu może dopuścić mniejszy przekrój niż dobór w Rozdzielnicy.`
+  );
   if (n > 1) zalozenia.push(`${n} przewody równoległe na fazę — założono równomierny rozdział prądu (jednakowa długość i przekrój).`);
 
   return {
