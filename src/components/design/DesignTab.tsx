@@ -526,24 +526,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     return () => ro.disconnect();
   }, [pelnyEkran, panelZwiniety]);
 
-  useEffect(() => {
-    if (zoomReczny) return;
-    dopasujZoom();
-    const el = kolumnaPlotnaRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    // Obserwujemy WYŁĄCZNIE szerokość. Dopasowanie zmienia wysokość płótna, ta
-    // zmienia wysokość kolumny, a to znów budzi obserwatora — pętla zwrotna, przez
-    // którą rzut przeskalowywał się w trakcie pracy i element uciekał spod kursora.
-    const ro = new ResizeObserver((wpisy) => {
-      const szer = Math.round(wpisy[0]?.contentRect.width ?? 0);
-      if (szer === ostatniaSzerRef.current) return;
-      ostatniaSzerRef.current = szer;
-      dopasujZoom();
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [dopasujZoom, zoomReczny]);
-
   // --- wgrywanie podkładu ------------------------------------------------------
   const wgrywanie = useFloorPlanUpload();
   const ostatniRzutRef = useRef<string | null>(null);
@@ -576,6 +558,37 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     !onboarding.facts.maSkale &&
     !onboarding.facts.maElement &&
     !onboarding.facts.maNazwanePomieszczenie;
+
+  /**
+   * Dopasowanie zoomu działa też wtedy, gdy kolumna płótna DOPIERO CO się
+   * pojawiła. Dopóki trwa `showEntryScreen` albo przycinanie podkładu, ta
+   * kolumna w ogóle nie jest zamontowana (`kolumnaPlotnaRef.current === null`),
+   * więc efekt uruchomiony tylko raz przy montowaniu KOMPONENTU (nie kolumny)
+   * łapał pustą referencję i już nigdy nie wracał — rzut zostawał na 100%
+   * (pełny rozmiar planu w pikselach) zamiast skurczyć się do dostępnego
+   * miejsca, przez co po wybraniu „Narysuj dom samodzielnie” płótno wychodziło
+   * poza widoczny obszar i trzeba było przewijać. `wgrywanie.stan` i
+   * `showEntryScreen` w zależnościach wymuszają ponowne dopięcie obserwatora
+   * dokładnie w momencie, gdy kolumna faktycznie się pojawia.
+   */
+  useEffect(() => {
+    if (zoomReczny) return;
+    dopasujZoom();
+    const el = kolumnaPlotnaRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    // Obserwujemy WYŁĄCZNIE szerokość. Dopasowanie zmienia wysokość płótna, ta
+    // zmienia wysokość kolumny, a to znów budzi obserwatora — pętla zwrotna, przez
+    // którą rzut przeskalowywał się w trakcie pracy i element uciekał spod kursora.
+    const ro = new ResizeObserver((wpisy) => {
+      const szer = Math.round(wpisy[0]?.contentRect.width ?? 0);
+      if (szer === ostatniaSzerRef.current) return;
+      ostatniaSzerRef.current = szer;
+      dopasujZoom();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [dopasujZoom, zoomReczny, wgrywanie.stan, showEntryScreen]);
+
   const scaleToolRef = useRef<HTMLButtonElement | null>(null);
   const wallToolRef = useRef<HTMLButtonElement | null>(null);
   // Który dymek pokazać — dwa różne narzędzia (linijka / ściany), ten sam popover.
