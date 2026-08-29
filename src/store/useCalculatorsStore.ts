@@ -41,6 +41,8 @@ export type CalcId =
   | "impedancja"
   | "peN"
   | "spd"
+  | "pv"
+  | "ev"
   | "oswietlenie"
   | "rcd";
 
@@ -170,6 +172,36 @@ interface CalculatorsState {
   spdUp: number;
   spdUw: number;
   spdDlugosc: number;
+
+  // --- fotowoltaika: string DC ---
+  pvIsc: number;
+  pvVoc: number;
+  pvVmpp: number;
+  pvImpp: number;
+  pvLiczbaModulow: number;
+  pvBeta: number;
+  pvTempMin: number;
+  pvTempMax: number;
+  pvSprawdzMppt: boolean;
+  pvFalownikVocMax: number;
+  pvFalownikMpptMin: number;
+  pvDlugoscDC: number;
+  pvPrzekrojDC: number;
+  pvMaterialDC: Material;
+  pvLimitSpadkuDC: number;
+  // --- fotowoltaika: strona AC falownika ---
+  pvMocAC: number;
+  pvFazaAC: "1" | "3";
+  pvDlugoscAC: number;
+  pvSposobUlozeniaAC: LayingMethod;
+
+  // --- ładowarka EV ---
+  evMoc: number;
+  evFaza: "1" | "3";
+  evCosfi: number;
+  evDlugosc: number;
+  evSposobUlozenia: LayingMethod;
+  evWbudowanaOchronaDC: boolean;
 
   // --- kompensacja mocy biernej ---
   kmPkW: number;
@@ -316,6 +348,33 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       spdUp: 1500,
       spdUw: 2500,
       spdDlugosc: 0.5,
+
+      pvIsc: 10.5,
+      pvVoc: 41.5,
+      pvVmpp: 34.5,
+      pvImpp: 9.9,
+      pvLiczbaModulow: 12,
+      pvBeta: -0.27,
+      pvTempMin: -15,
+      pvTempMax: 70,
+      pvSprawdzMppt: false,
+      pvFalownikVocMax: 600,
+      pvFalownikMpptMin: 200,
+      pvDlugoscDC: 15,
+      pvPrzekrojDC: 6,
+      pvMaterialDC: "Cu",
+      pvLimitSpadkuDC: 1,
+      pvMocAC: 5000,
+      pvFazaAC: "1",
+      pvDlugoscAC: 10,
+      pvSposobUlozeniaAC: "w_scianie",
+
+      evMoc: 7360,
+      evFaza: "1",
+      evCosfi: 1,
+      evDlugosc: 15,
+      evSposobUlozenia: "w_scianie",
+      evWbudowanaOchronaDC: false,
 
       kmPkW: 100,
       kmCos1: 0.8,

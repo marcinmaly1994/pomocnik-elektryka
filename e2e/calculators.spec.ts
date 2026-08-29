@@ -428,6 +428,73 @@ test("SPD: Up ≥ Uw to zły dobór ogranicznika, którego skracanie przewodów 
   await expect(page.locator(".pe-result")).toHaveCount(0);
 });
 
+/**
+ * Moduł domyślny: Isc 10,5 A, Voc 41,5 V, 12 modułi w szeregu, β = −0,27%/°C.
+ * Sprawdzone ręcznie w `pv.test.ts`: Voc(−15°C) ≈ 551,8 V, prąd projektowy = 1,25×10,5 = 13,13 A.
+ */
+test("PV: prąd projektowy stringu (1,25×Isc) i napięcie w zimnie liczą się poprawnie", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Instalacja fotowoltaiczna/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("551,8 V");
+  await expect(result).toContainText("I projektowy (1,25×Isc) 13,13 A");
+  // domyślny falownik (Voc max 600 V) daje zapas ~8% — to wynik GRANICZNY
+  await expect(page.getByText(/Wynik graniczny/)).toBeVisible();
+});
+
+test("PV: za dużo modułów w szeregu przekracza Voc max falownika — błąd krytyczny, nie ostrzeżenie", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Instalacja fotowoltaiczna/ }).click();
+
+  await page.getByLabel("Liczba modułów w szeregu").fill("16");
+  await expect(page.getByText(/ryzyko zniszczenia falownika/)).toBeVisible();
+  await expect(page.getByText(/Warunek niespełniony/)).toBeVisible();
+});
+
+test("PV: dolna granica MPPT w upale jest sprawdzana tylko po włączeniu opcji", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Instalacja fotowoltaiczna/ }).click();
+
+  await expect(page.getByText(/Nie sprawdzono dolnej granicy/)).toBeVisible();
+  await page.getByLabel(/Sprawdź też dolną granicę/).check();
+  // 12 modułi × Vmpp(70°C) ≈ 363,7 V
+  await expect(page.locator(".pe-result").first()).toContainText("Vmpp w upale 363,7 V");
+});
+
+test("PV: wyjście AC falownika korzysta z tego samego doboru co reszta aplikacji", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Instalacja fotowoltaiczna/ }).click();
+
+  const wyniki = page.locator(".pe-result");
+  await expect(wyniki.nth(1)).toContainText("YDYp 3x4 mm²");
+  await expect(wyniki.nth(1)).toContainText("B25");
+});
+
+/**
+ * Ładowarka domyślna: 7360 W, 1-fazowa, cosφ 1 → Ib = 32 A (typowy tryb 1 EVSE).
+ */
+test("EV: prąd ładowania i dobór przewodu przez ten sam silnik co inne obwody", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Ładowarka pojazdu/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("32,00 A");
+  await expect(result).toContainText("YDYp 3x6 mm²");
+  await expect(result).toContainText("B32");
+});
+
+test("EV: bez wbudowanej ochrony DC wymagany jest RCD typu B albo A+RDC-DD", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Ładowarka pojazdu/ }).click();
+
+  await expect(page.locator(".pe-result").first()).toContainText("wymagany RCD typu B / A+RDC-DD");
+  await expect(page.getByText(/NIE WYSTARCZA/)).toBeVisible();
+
+  await page.getByLabel(/wbudowaną ochronę/).check();
+  await expect(page.locator(".pe-result").first()).toContainText("RCD typu A wystarczy");
+});
+
 test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,88 Ω)", async ({ page }) => {
   await openCalculators(page);
 
@@ -453,7 +520,7 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
 
   // zmiana zakładki na Instalację i powrót — bez utraty ani aktywnego
   // kalkulatora, ani wpisanej nazwy odbiornika
-  await page.getByRole("button", { name: "Instalacja" }).click();
+  await page.getByRole("button", { name: "Instalacja", exact: true }).click();
   await skipEntryScreen(page);
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Bilans mocy budynku" })).toBeVisible();
@@ -478,7 +545,7 @@ test("Wczytaj z projektu wypełnia bilans mocy obwodami wyliczonymi z elementów
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.getByRole("button", { name: "Instalacja" }).click();
+  await page.getByRole("button", { name: "Instalacja", exact: true }).click();
   await skipEntryScreen(page);
 
   // 1 gniazdko (300 W wg ASSUMED_POWER_W) -> obwód gniazdowy

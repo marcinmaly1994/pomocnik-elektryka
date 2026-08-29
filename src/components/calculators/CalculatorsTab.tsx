@@ -19,6 +19,8 @@ import {
   Ruler,
   ShieldCheck,
   ShieldAlert,
+  Sun,
+  BatteryCharging,
   Trash2,
   TrendingDown,
   Zap,
@@ -28,6 +30,8 @@ import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } f
 import { obliczImpedancjePrzewodu, obliczPrzewodyRownolegle } from "@/lib/calc/conductorImpedance";
 import { dobierzN, dobierzPE } from "@/lib/calc/protectiveConductor";
 import { KATEGORIE_PRZEPIECIOWE, obliczKoordynacjeSPD, TYP_SPD_LABELS, type TypSPD } from "@/lib/calc/spd";
+import { dobierzPrzewodACFalownika, obliczStringPV } from "@/lib/calc/pv";
+import { obliczObwodEV } from "@/lib/calc/evCharger";
 import { obliczBilans, type Faza } from "@/lib/calc/loadBalance";
 import { obliczSilnik, SPOSOB_ROZRUCHU_LABELS, type SposobRozruchu } from "@/lib/calc/motor";
 import { CalcResultView } from "./CalcResultView";
@@ -82,6 +86,8 @@ const CALC_LIST: { id: CalcId; label: string; desc: string; icon: LucideIcon }[]
   { id: "impedancja", label: "Impedancja przewodu", desc: "R, X, Z oraz przewody równoległe", icon: Ruler },
   { id: "peN", label: "Dobór przewodu PE i N", desc: "reguła, warunek cieplny, harmoniczne", icon: ShieldCheck },
   { id: "spd", label: "Ochronniki przepięć (SPD)", desc: "koordynacja Up, długość przewodów", icon: ShieldAlert },
+  { id: "pv", label: "Instalacja fotowoltaiczna", desc: "string DC, Voc na zimno, spadek DC, AC falownika", icon: Sun },
+  { id: "ev", label: "Ładowarka pojazdu elektrycznego", desc: "praca ciągła, wymagany typ RCD", icon: BatteryCharging },
   { id: "oswietlenie", label: "Dobór oświetlenia", desc: "strumień świetlny i liczba opraw", icon: Calculator },
   { id: "rcd", label: "Dobór wyłącznika różnicowoprądowego", desc: "zasady doboru RCD", icon: Info },
 ];
@@ -291,6 +297,31 @@ export function CalculatorsTab() {
   const spdUp = useCalculatorsStore((s) => s.spdUp);
   const spdUw = useCalculatorsStore((s) => s.spdUw);
   const spdDlugosc = useCalculatorsStore((s) => s.spdDlugosc);
+  const pvIsc = useCalculatorsStore((s) => s.pvIsc);
+  const pvVoc = useCalculatorsStore((s) => s.pvVoc);
+  const pvVmpp = useCalculatorsStore((s) => s.pvVmpp);
+  const pvImpp = useCalculatorsStore((s) => s.pvImpp);
+  const pvLiczbaModulow = useCalculatorsStore((s) => s.pvLiczbaModulow);
+  const pvBeta = useCalculatorsStore((s) => s.pvBeta);
+  const pvTempMin = useCalculatorsStore((s) => s.pvTempMin);
+  const pvTempMax = useCalculatorsStore((s) => s.pvTempMax);
+  const pvSprawdzMppt = useCalculatorsStore((s) => s.pvSprawdzMppt);
+  const pvFalownikVocMax = useCalculatorsStore((s) => s.pvFalownikVocMax);
+  const pvFalownikMpptMin = useCalculatorsStore((s) => s.pvFalownikMpptMin);
+  const pvDlugoscDC = useCalculatorsStore((s) => s.pvDlugoscDC);
+  const pvPrzekrojDC = useCalculatorsStore((s) => s.pvPrzekrojDC);
+  const pvMaterialDC = useCalculatorsStore((s) => s.pvMaterialDC);
+  const pvLimitSpadkuDC = useCalculatorsStore((s) => s.pvLimitSpadkuDC);
+  const pvMocAC = useCalculatorsStore((s) => s.pvMocAC);
+  const pvFazaAC = useCalculatorsStore((s) => s.pvFazaAC);
+  const pvDlugoscAC = useCalculatorsStore((s) => s.pvDlugoscAC);
+  const pvSposobUlozeniaAC = useCalculatorsStore((s) => s.pvSposobUlozeniaAC);
+  const evMoc = useCalculatorsStore((s) => s.evMoc);
+  const evFaza = useCalculatorsStore((s) => s.evFaza);
+  const evCosfi = useCalculatorsStore((s) => s.evCosfi);
+  const evDlugosc = useCalculatorsStore((s) => s.evDlugosc);
+  const evSposobUlozenia = useCalculatorsStore((s) => s.evSposobUlozenia);
+  const evWbudowanaOchronaDC = useCalculatorsStore((s) => s.evWbudowanaOchronaDC);
   const devices = useCalculatorsStore((s) => s.devices);
   const ks = useCalculatorsStore((s) => s.ks);
   const zCurve = useCalculatorsStore((s) => s.zCurve);
@@ -585,6 +616,69 @@ export function CalculatorsTab() {
   const spd = useMemo(
     () => obliczKoordynacjeSPD({ typ: spdTyp, Up_V: spdUp, Uw_V: spdUw, dlugoscPrzewodow_m: spdDlugosc }),
     [spdTyp, spdUp, spdUw, spdDlugosc]
+  );
+
+  // --- fotowoltaika ---
+  const stringPV = useMemo(
+    () =>
+      obliczStringPV({
+        Isc_A: pvIsc,
+        Voc_V: pvVoc,
+        Vmpp_V: pvVmpp > 0 ? pvVmpp : undefined,
+        Impp_A: pvImpp > 0 ? pvImpp : undefined,
+        liczbaModulowSzeregowo: pvLiczbaModulow,
+        betaNapiecia_pct_na_C: pvBeta,
+        tempMin_C: pvTempMin,
+        tempMax_C: pvSprawdzMppt ? pvTempMax : undefined,
+        falownikVocMax_V: pvFalownikVocMax,
+        falownikMpptMin_V: pvSprawdzMppt ? pvFalownikMpptMin : undefined,
+        dlugoscDC_m: pvDlugoscDC,
+        przekrojDC_mm2: pvPrzekrojDC,
+        materialDC: pvMaterialDC,
+        limitSpadkuDC_pct: pvLimitSpadkuDC,
+      }),
+    [
+      pvIsc,
+      pvVoc,
+      pvVmpp,
+      pvImpp,
+      pvLiczbaModulow,
+      pvBeta,
+      pvTempMin,
+      pvTempMax,
+      pvSprawdzMppt,
+      pvFalownikVocMax,
+      pvFalownikMpptMin,
+      pvDlugoscDC,
+      pvPrzekrojDC,
+      pvMaterialDC,
+      pvLimitSpadkuDC,
+    ]
+  );
+  const falownikAC = useMemo(
+    () =>
+      dobierzPrzewodACFalownika({
+        mocAC_W: pvMocAC,
+        liczba_faz: pvFazaAC,
+        cos_phi: 1,
+        dlugosc_m: pvDlugoscAC,
+        sposob_ulozenia: pvSposobUlozeniaAC,
+      }),
+    [pvMocAC, pvFazaAC, pvDlugoscAC, pvSposobUlozeniaAC]
+  );
+
+  // --- ładowarka EV ---
+  const obwodEV = useMemo(
+    () =>
+      obliczObwodEV({
+        mocLadowania_W: evMoc,
+        liczba_faz: evFaza,
+        cos_phi: evCosfi,
+        dlugosc_m: evDlugosc,
+        sposob_ulozenia: evSposobUlozenia,
+        maWbudowanaOchroneDC: evWbudowanaOchronaDC,
+      }),
+    [evMoc, evFaza, evCosfi, evDlugosc, evSposobUlozenia, evWbudowanaOchronaDC]
   );
 
   // --- kompensacja mocy biernej ---
@@ -1641,6 +1735,181 @@ export function CalculatorsTab() {
                 </div>
               )}
               <CalcResultView wynik={spd} />
+            </Card>
+          )}
+
+          {activeCalc === "pv" && (
+            <Card title={active.label} icon={Sun} tag="string DC">
+              <div className="mb-2 text-xs font-semibold text-slate-600">Moduł i string (dane z karty katalogowej)</div>
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Prąd zwarciowy Isc (STC)" value={pvIsc} onChange={(v) => patch({ pvIsc: Number(v) })} unit="A" step="0.1" />
+                <Field label="Napięcie jałowe Voc (STC)" value={pvVoc} onChange={(v) => patch({ pvVoc: Number(v) })} unit="V" step="0.1" />
+                <Field label="Napięcie Vmpp (STC, opcjonalne)" value={pvVmpp} onChange={(v) => patch({ pvVmpp: Number(v) })} unit="V" step="0.1" />
+                <Field label="Prąd Impp (STC, opcjonalne)" value={pvImpp} onChange={(v) => patch({ pvImpp: Number(v) })} unit="A" step="0.1" />
+                <Field
+                  label="Liczba modułów w szeregu"
+                  value={pvLiczbaModulow}
+                  onChange={(v) => patch({ pvLiczbaModulow: Number(v) })}
+                  step="1"
+                />
+                <Field
+                  label="Współczynnik temperaturowy napięcia β"
+                  value={pvBeta}
+                  onChange={(v) => patch({ pvBeta: Number(v) })}
+                  unit="%/°C"
+                  step="0.01"
+                />
+                <Field label="Temperatura minimalna modułu" value={pvTempMin} onChange={(v) => patch({ pvTempMin: Number(v) })} unit="°C" />
+                <Field label="Maks. napięcie wejściowe falownika" value={pvFalownikVocMax} onChange={(v) => patch({ pvFalownikVocMax: Number(v) })} unit="V" />
+              </div>
+
+              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={pvSprawdzMppt}
+                  onChange={(e) => patch({ pvSprawdzMppt: e.target.checked })}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Sprawdź też dolną granicę zakresu MPPT w upale (wymaga Vmpp)
+              </label>
+              {pvSprawdzMppt && (
+                <div className="grid sm:grid-cols-2 gap-x-4">
+                  <Field label="Temperatura maksymalna modułu" value={pvTempMax} onChange={(v) => patch({ pvTempMax: Number(v) })} unit="°C" />
+                  <Field
+                    label="Minimalne napięcie zakresu MPPT falownika"
+                    value={pvFalownikMpptMin}
+                    onChange={(v) => patch({ pvFalownikMpptMin: Number(v) })}
+                    unit="V"
+                  />
+                </div>
+              )}
+
+              <div className="mb-2 mt-3 text-xs font-semibold text-slate-600">Kabel DC</div>
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Długość trasy DC (w jedną stronę)" value={pvDlugoscDC} onChange={(v) => patch({ pvDlugoscDC: Number(v) })} unit="m" />
+                <Field
+                  label="Przekrój żyły DC"
+                  value={String(pvPrzekrojDC)}
+                  onChange={(v) => patch({ pvPrzekrojDC: Number(v) })}
+                  options={SZEREG_PELNY_OPTIONS}
+                />
+                <Field label="Materiał" value={pvMaterialDC} onChange={(v) => patch({ pvMaterialDC: v as Material })} options={MATERIAL_OPTIONS} />
+                <Field label="Dopuszczalny spadek DC" value={pvLimitSpadkuDC} onChange={(v) => patch({ pvLimitSpadkuDC: Number(v) })} unit="%" step="0.1" />
+              </div>
+
+              {stringPV.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Napięcie stringu w zimnie</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(stringPV.wartosci.VocZimny_V, 1)} V</div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">I projektowy (1,25×Isc) {formatLiczba(stringPV.wartosci.IprojektowyA, 2)} A</span>
+                    <span className="pe-chip pe-tag-blue">spadek DC {formatLiczba(stringPV.wartosci.spadekDC_pct, 2)}%</span>
+                    {stringPV.wartosci.VmppGoracy_V !== null && (
+                      <span className="pe-chip pe-tag-green">Vmpp w upale {formatLiczba(stringPV.wartosci.VmppGoracy_V, 1)} V</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              <CalcResultView wynik={stringPV} />
+
+              <div className="mb-2 mt-4 text-xs font-semibold text-slate-600">Wyjście AC falownika</div>
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Moc AC falownika" value={pvMocAC} onChange={(v) => patch({ pvMocAC: Number(v) })} unit="W" />
+                <Field label="Zasilanie" value={pvFazaAC} onChange={(v) => patch({ pvFazaAC: v as "1" | "3" })} options={PHASE_OPTIONS} />
+                <Field label="Długość trasy AC" value={pvDlugoscAC} onChange={(v) => patch({ pvDlugoscAC: Number(v) })} unit="m" />
+                <Field
+                  label="Sposób ułożenia"
+                  value={pvSposobUlozeniaAC}
+                  onChange={(v) => patch({ pvSposobUlozeniaAC: v as LayingMethod })}
+                  options={LAYING_METHOD_OPTIONS}
+                />
+              </div>
+              {falownikAC.przekroj_mm2 && falownikAC.aparat && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Przewód i zabezpieczenie AC</div>
+                  <div className="mt-1 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">{falownikAC.kabel}</span>
+                    <span className="pe-chip pe-tag-blue">
+                      wyłącznik {falownikAC.aparat.charakterystyka}
+                      {falownikAC.aparat.In_A} {falownikAC.aparat.bieguny}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {!falownikAC.przekroj_mm2 && (
+                <div className="mt-2 flex items-center gap-1 text-sm" style={{ color: "#A2352C" }}>
+                  <AlertTriangle size={14} /> nie udało się dobrać przewodu AC
+                </div>
+              )}
+            </Card>
+          )}
+
+          {activeCalc === "ev" && (
+            <Card title={active.label} icon={BatteryCharging} tag="EVSE">
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Moc ładowania" value={evMoc} onChange={(v) => patch({ evMoc: Number(v) })} unit="W" />
+                <Field label="Zasilanie" value={evFaza} onChange={(v) => patch({ evFaza: v as "1" | "3" })} options={PHASE_OPTIONS} />
+                <Field label="Współczynnik mocy cos φ" value={evCosfi} onChange={(v) => patch({ evCosfi: Number(v) })} step="0.01" />
+                <Field label="Długość trasy" value={evDlugosc} onChange={(v) => patch({ evDlugosc: Number(v) })} unit="m" />
+                <Field
+                  label="Sposób ułożenia"
+                  value={evSposobUlozenia}
+                  onChange={(v) => patch({ evSposobUlozenia: v as LayingMethod })}
+                  options={LAYING_METHOD_OPTIONS}
+                />
+              </div>
+
+              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={evWbudowanaOchronaDC}
+                  onChange={(e) => patch({ evWbudowanaOchronaDC: e.target.checked })}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Ładowarka ma wbudowaną ochronę przed prądem upływu stałym (RDC-DD)
+              </label>
+
+              {obwodEV.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Prąd obliczeniowy</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(obwodEV.wartosci.Ib_A, 2)} A</div>
+                  {obwodEV.wartosci.dobor.kabel && obwodEV.wartosci.dobor.aparat ? (
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      <span className="pe-chip pe-tag-copper">{obwodEV.wartosci.dobor.kabel}</span>
+                      <span className="pe-chip pe-tag-blue">
+                        wyłącznik {obwodEV.wartosci.dobor.aparat.charakterystyka}
+                        {obwodEV.wartosci.dobor.aparat.In_A} {obwodEV.wartosci.dobor.aparat.bieguny}
+                      </span>
+                      <span className="pe-chip pe-tag-green">
+                        {obwodEV.wartosci.wymaganyRCD === "typA_wystarczy" ? "RCD typu A wystarczy" : "wymagany RCD typu B / A+RDC-DD"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex items-center gap-1 text-sm" style={{ color: "#A2352C" }}>
+                      <AlertTriangle size={14} /> nie udało się dobrać — zobacz ostrzeżenia niżej
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {obwodEV.wartosci?.dobor.ostrzezenia && obwodEV.wartosci.dobor.ostrzezenia.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {obwodEV.wartosci.dobor.ostrzezenia.map((o, i) => (
+                    <div
+                      key={i}
+                      className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                      style={{
+                        background: o.level === "error" ? "#C6433A14" : "#C1793F14",
+                        color: o.level === "error" ? "#A2352C" : "#8A5526",
+                      }}
+                    >
+                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                      <div>{o.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <CalcResultView wynik={obwodEV} />
             </Card>
           )}
 
