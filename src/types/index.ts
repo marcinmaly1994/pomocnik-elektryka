@@ -145,7 +145,7 @@ export interface RcdGroup {
 
 /** Czym elektrycznie jest dana trasa (patrz `buildCableRoutes`/`buildControlRoutes`
  *  w loads.ts): „zasilanie" — rozdzielnica → punkt obwodu; „sterowanie" —
- *  łącznik → lampa, którą przełącza (osobna para żył, nie przedłużenie zasilania).
+ *  łącznik → oprawa, którą przełącza (osobna para żył, nie przedłużenie zasilania).
  *  Rysowanie odróżnia je stylem linii, żeby dwie różne role przewodu nie wyglądały
  *  na ten sam kabel. */
 export type CableRouteKind = "zasilanie" | "sterowanie";
@@ -168,7 +168,7 @@ export interface CableRoute {
   /** Czy trasa faktycznie biegnie wzdłuż narysowanych ścian/obrysów pomieszczeń
    *  (`routeAlongWalls`), czy to tylko uproszczony szacunek Manhattan — użyty, gdy na
    *  kondygnacji nie ma geometrii do routingu, albo oba końce (rozdzielnica/łącznik
-   *  i punkt/lampa) siedzą w dwóch niepołączonych jej częściach. Rysowanie odróżnia
+   *  i punkt/oprawa) siedzą w dwóch niepołączonych jej częściach. Rysowanie odróżnia
    *  je stylem linii (ciągła kontra przerywana), żeby nie sugerować pewności co do
    *  trasy, której nie ma. */
   viaWalls: boolean;

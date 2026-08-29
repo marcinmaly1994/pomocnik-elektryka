@@ -149,7 +149,7 @@ describe("buildCableRoutes", () => {
   });
 });
 
-describe("buildCableRoutes — sterowanie (łącznik -> lampa)", () => {
+describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
   const panel = { x: 0, y: 0 };
   function circuit(over: Partial<Circuit> = {}): Circuit {
     return {
@@ -164,7 +164,7 @@ describe("buildCableRoutes — sterowanie (łącznik -> lampa)", () => {
     };
   }
 
-  it("łącznik i lampa w tej samej grupie dostają trasę sterowania — niezależnie od rozdzielnicy", () => {
+  it("łącznik i oprawa w tej samej grupie dostają trasę sterowania — niezależnie od rozdzielnicy", () => {
     const light = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
     const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
     const routes = buildCableRoutes(null, [circuit({ elements: [light] })], [light, control], [], []);
@@ -179,7 +179,7 @@ describe("buildCableRoutes — sterowanie (łącznik -> lampa)", () => {
     });
   });
 
-  it("łącznik grupowy steruje kilkoma lampami — po jednej trasie na parę", () => {
+  it("łącznik grupowy steruje kilkoma oprawami — po jednej trasie na parę", () => {
     const lightA = el("oswietlenie", { x: 50, y: 0, lightGroup: [1] });
     const lightB = el("oswietlenie", { x: 60, y: 10, lightGroup: [1] });
     const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
@@ -194,7 +194,7 @@ describe("buildCableRoutes — sterowanie (łącznik -> lampa)", () => {
     expect(control2.map((r) => r.id).sort()).toEqual([`${control.id}->${lightA.id}`, `${control.id}->${lightB.id}`].sort());
   });
 
-  it("łącznik bez lampy w swojej grupie nie dostaje żadnej trasy", () => {
+  it("łącznik bez oprawy w swojej grupie nie dostaje żadnej trasy", () => {
     const control = el("wlacznik", { x: 0, y: 20, lightGroup: [1] });
     const routes = buildCableRoutes(null, [], [control], [], []);
     expect(routes).toEqual([]);

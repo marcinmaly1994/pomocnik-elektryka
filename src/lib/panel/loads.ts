@@ -141,7 +141,7 @@ export function findPanel(elements: InstallationElement[]): Point | null {
  *  kondygnacji, albo końce siedzą w dwóch niepołączonych kawałkach narysowanej
  *  geometrii). Ten sam kształt trasy co przed dodaniem routingu po ścianach
  *  (krok 1) — wciąż lepszy niż linia prosta po przekątnej pokoju. Używana zarówno
- *  dla tras zasilania (rozdzielnica→punkt), jak i sterowania (łącznik→lampa).
+ *  dla tras zasilania (rozdzielnica→punkt), jak i sterowania (łącznik→oprawa).
  *
  *  Załamanie ma DWIE możliwe orientacje (przez `{to.x, from.y}` albo przez
  *  `{from.x, to.y}`) — bez geometrii ścian nie da się ich porządnie routować, ale
@@ -168,19 +168,19 @@ function polylineLengthUnits(points: Point[]): number {
 }
 
 /**
- * Trasy STEROWANIA: łącznik → lampa, którą przełącza (patrz `computeLightGroups` w
- * lightGroups.ts — wspólny numer grupy łączy łącznik z lampami, które steruje).
+ * Trasy STEROWANIA: łącznik → oprawa, którą przełącza (patrz `computeLightGroups` w
+ * lightGroups.ts — wspólny numer grupy łączy łącznik z oprawami, które steruje).
  *
- * Elektrycznie to inna para żył niż zasilanie z rozdzielnicy: fazę do lampy łączy
+ * Elektrycznie to inna para żył niż zasilanie z rozdzielnicy: fazę do oprawy łączy
  * (i rozłącza) SAM łącznik, więc bez tej trasy rysunek sugerowałby, że łącznik
  * wisi w powietrzu, niepodłączony do niczego — a jest odwrotnie: to jedyny
  * odbiornik/aparat na planie, który nie dostaje WŁASNEJ trasy z rozdzielnicy
  * (patrz pętla niżej: `computeCircuits` celowo nigdy nie wkłada łączników do
- * `circuit.elements`), bo jego zadaniem jest przełączanie już zasilonej lampy,
+ * `circuit.elements`), bo jego zadaniem jest przełączanie już zasilonej oprawy,
  * a nie pobór własnej mocy z osobnego obwodu.
  *
  * `cable`/`breaker`/`circuitId`/`circuitName` przejęte od obwodu, do którego
- * należy STEROWANA LAMPA (nie tworzymy dla sterowania osobnego, zmyślonego
+ * należy STEROWANA OPRAWA (nie tworzymy dla sterowania osobnego, zmyślonego
  * obwodu) — sterowanie fizycznie jedzie tym samym kablem 3-żyłowym co zasilanie
  * (faza, powrót łączony, neutralny), więc to ta sama przynależność obwodowa.
  */
@@ -236,13 +236,13 @@ function buildControlRoutes(elements: InstallationElement[], circuits: Circuit[]
  * dana trasa pochodzi.
  *
  * DWA rodzaje tras, zgodnie z tym, jak faktycznie biegnie przewód (`CableRoute.kind`):
- * - „zasilanie" — rozdzielnica → każdy punkt obwodu (gniazdko, lampa, roleta…).
+ * - „zasilanie" — rozdzielnica → każdy punkt obwodu (gniazdko, oprawa, roleta…).
  *   Obwody RÓŻNYCH rodzajów (oświetleniowy, gniazdowy…) mają WŁASNE, niezależne
  *   trasy — `computeCircuits` nigdy nie miesza ich w jeden obwód, więc nawet gdy
  *   dwie trasy fizycznie biegną tym samym odcinkiem ściany, to i tak dwa osobne
  *   przewody, nie jeden wspólny (patrz rozsuwanie równoległych tras w
  *   DesignCanvas.tsx — bez niego nakładające się trasy wyglądały jak jedna).
- * - „sterowanie" — łącznik → lampa, którą przełącza (patrz `buildControlRoutes`).
+ * - „sterowanie" — łącznik → oprawa, którą przełącza (patrz `buildControlRoutes`).
  *   Sam łącznik NIE dostaje trasy z rozdzielnicy — nie jest samodzielnym obwodem.
  *
  * Osobna funkcja od `estimateRoutes`: tamta liczy WYŁĄCZNIE metry do kosztorysu/doboru
@@ -251,7 +251,7 @@ function buildControlRoutes(elements: InstallationElement[], circuits: Circuit[]
  * jednostkach planu — do narysowania linii nie trzeba znać jej długości w metrach,
  * więc trasy sterowania działają nawet bez skali I bez rozdzielnicy na planie
  * (`panel === null` gasi WYŁĄCZNIE trasy zasilania, nie sterowania — łącznik i
- * lampa nie potrzebują rozdzielnicy, żeby pokazać swoją zależność).
+ * oprawa nie potrzebują rozdzielnicy, żeby pokazać swoją zależność).
  *
  * `circuits`/`elements`/`walls`/`roomShapes` powinny pochodzić z TEJ SAMEJ
  * kondygnacji co `panel` — trasa między kondygnacjami nie ma sensu na płaskim
@@ -371,7 +371,7 @@ export function spreadOverlappingRoutes(routes: CableRoute[]): Map<string, Point
  *
  * Poprawka trzyma WYŁĄCZNIE środkowe punkty (załamania) — bez pierwszego i
  * ostatniego, które zawsze biorą się z aktualnej pozycji rozdzielnicy/łącznika i
- * punktu/lampy (dokładnie tak zaczyna/kończy się `route.points` w `buildCableRoutes`
+ * punktu/oprawy (dokładnie tak zaczyna/kończy się `route.points` w `buildCableRoutes`
  * i `buildControlRoutes`). Dzięki temu przesunięcie elementu na planie nie gubi
  * ręcznie ułożonych zagięć — koniec trasy po prostu podąża za nowym miejscem
  * elementu, tak jak przy trasie automatycznej.

@@ -140,10 +140,10 @@ interface Draft {
   openings: Opening[];
   /**
    * Ręczne poprawki tras przewodów, kluczowane `CableRoute.id` (id elementu dla
-   * zasilania, `"${łącznikId}->${lampaId}"` dla sterowania — patrz `buildCableRoutes`
+   * zasilania, `"${łącznikId}->${oprawaId}"` dla sterowania — patrz `buildCableRoutes`
    * w loads.ts). Trzymają WYŁĄCZNIE środkowe punkty (załamania) narysowane ręcznie
    * przez użytkownika, BEZ pierwszego/ostatniego punktu trasy — te zawsze biorą się
-   * z aktualnej pozycji rozdzielnicy/łącznika i punktu/lampy, żeby przesunięcie
+   * z aktualnej pozycji rozdzielnicy/łącznika i punktu/oprawy, żeby przesunięcie
    * elementu nie gubiło ręcznie ułożonych zagięć (patrz `applyRouteOverrides`).
    */
   routeOverrides: Record<string, Point[]>;
@@ -155,7 +155,7 @@ const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [
  *  (element skasowany albo cała kondygnacja usunięta) — inaczej `routeOverrides`
  *  rosłoby w nieskończoność martwymi wpisami, które nigdy nie trafią w żadną trasę.
  *  Id trasy zasilania to id JEDNEGO elementu; id trasy sterowania to dwa id
- *  rozdzielone `"->"` (łącznik i lampa) — działa dla obu, bo sprawdza KAŻDĄ część. */
+ *  rozdzielone `"->"` (łącznik i oprawa) — działa dla obu, bo sprawdza KAŻDĄ część. */
 function pruneRouteOverrides(overrides: Record<string, Point[]>, elements: InstallationElement[]): Record<string, Point[]> {
   const ids = new Set(elements.map((e) => e.id));
   const out: Record<string, Point[]> = {};

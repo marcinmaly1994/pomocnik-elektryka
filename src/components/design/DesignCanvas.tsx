@@ -1125,7 +1125,7 @@ export function DesignCanvas({
               Manhattan, użyty gdy nie ma po czym routować. Bez tego rozróżnienia
               przerywana linia sugerowałaby pewność, której nie ma.
               `kind` odróżnia dodatkowo ZASILANIE (rozdzielnica → punkt, grubsza linia)
-              od STEROWANIA (łącznik → lampa, cieńsza kropkowana) — to fizycznie inna
+              od STEROWANIA (łącznik → oprawa, cieńsza kropkowana) — to fizycznie inna
               para żył w tym samym kablu, więc nie powinny wyglądać identycznie.
               Punkty do rysowania idą z `spreadRoutePoints`, nie z `r.points` wprost —
               trasy dzielące ten sam odcinek ściany dostają tam boczny offset, żeby się
@@ -1187,7 +1187,7 @@ export function DesignCanvas({
                 />
                 {/* Uchwyty ZAŁAMAŃ trasy — bez pierwszego/ostatniego punktu, bo te są
                     zawsze przypięte do rzeczywistej pozycji rozdzielnicy/łącznika i
-                    punktu/lampy (przeciąga się SAM element, nie koniec trasy). Ten sam
+                    punktu/oprawy (przeciąga się SAM element, nie koniec trasy). Ten sam
                     wzorzec co uchwyty ścian/pomieszczeń: podgląd przeciągania
                     imperatywny (onDragMove), zapis do store'a dopiero na onDragEnd. */}
                 {isSelRoute &&

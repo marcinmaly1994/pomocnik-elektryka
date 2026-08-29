@@ -178,7 +178,7 @@ test("rozdzielnica i gniazdo połączone ścianą: trasa jest CIĄGŁA (routowan
   expect(await routeLineCounts(page)).toEqual({ solid: 1, dashed: 0 });
 });
 
-test("łącznik i lampa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się nawet BEZ rozdzielnicy na planie", async ({ page }) => {
+test("łącznik i oprawa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się nawet BEZ rozdzielnicy na planie", async ({ page }) => {
   await openPlan(page);
 
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
@@ -193,7 +193,7 @@ test("łącznik i lampa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się 
   await page.waitForTimeout(300);
 
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
-  // ŻADNEJ rozdzielnicy na planie — sterowanie łącznik→lampa jest od niej niezależne.
+  // ŻADNEJ rozdzielnicy na planie — sterowanie łącznik→oprawa jest od niej niezależne.
   await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
   await page.waitForTimeout(300);
 
