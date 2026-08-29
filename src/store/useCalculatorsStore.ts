@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { CelZwarcia } from "@/lib/calc/shortCircuit";
 import type { UkladBaterii } from "@/lib/calc/powerFactor";
+import type { TypUziomu } from "@/lib/calc/earthing";
+import type { Faza } from "@/lib/calc/loadBalance";
+import type { SposobRozruchu } from "@/lib/calc/motor";
 import type { Izolacja, Material, RodzajLinii } from "@/lib/norms/conductors";
 import type { LayingMethod } from "@/lib/panel/norms";
 import type { CircuitKind } from "@/lib/panel/sizing";
@@ -31,6 +34,9 @@ export type CalcId =
   | "petla"
   | "wlz"
   | "uziemienieTT"
+  | "uziom"
+  | "bilansFaz"
+  | "silnik"
   | "oswietlenie"
   | "rcd";
 
@@ -38,6 +44,15 @@ export interface CalculatorDevice {
   id: string;
   name: string;
   power: number;
+}
+
+/** Odbiór w bilansie faz — z przypisaniem do fazy (`null` = trójfazowy). */
+export interface OdbiorFazowy {
+  id: string;
+  nazwa: string;
+  mocW: number;
+  cosfi: number;
+  faza: Faza | null;
 }
 
 interface CalculatorsState {
@@ -102,6 +117,31 @@ interface CalculatorsState {
   zwMaterial: Material;
   zwIzolacja: Izolacja;
 
+  // --- uziemienia (geometria uziomu) ---
+  uzTyp: TypUziomu;
+  uzRho: number;
+  uzDlugosc: number;
+  uzSrednicaMm: number;
+  uzSzerokoscMm: number;
+  uzGlebokosc: number;
+  uzLiczba: number;
+  uzEta: number;
+  uzWymagana: number;
+
+  // --- bilans faz i prąd w przewodzie N ---
+  bfOdbiory: OdbiorFazowy[];
+  bfH3Pct: number;
+
+  // --- silniki indukcyjne ---
+  slMocKW: number;
+  slUn: number;
+  slCosfi: number;
+  slSprawnosc: number;
+  slKrotnosc: number;
+  slRozruch: SposobRozruchu;
+  slCzasRozruchu: number;
+  slImpedancja: number;
+
   // --- kompensacja mocy biernej ---
   kmPkW: number;
   kmCos1: number;
@@ -146,12 +186,21 @@ interface CalculatorsActions {
    *  osobnej logiki scalania. */
   patch: (p: Partial<CalculatorsState>) => void;
   setDevices: (updater: (devices: CalculatorDevice[]) => CalculatorDevice[]) => void;
+  setOdbioryFazowe: (updater: (o: OdbiorFazowy[]) => OdbiorFazowy[]) => void;
 }
 
 const DEFAULT_DEVICES: CalculatorDevice[] = [
   { id: crypto.randomUUID(), name: "Gniazda i oświetlenie", power: 6000 },
   { id: crypto.randomUUID(), name: "Kuchenka elektryczna", power: 7000 },
   { id: crypto.randomUUID(), name: "Bojler / pompa ciepła", power: 3000 },
+];
+
+/** Trzy odbiory na różnych fazach — punkt wyjścia pokazujący, po co ten kalkulator
+ *  w ogóle jest (asymetria widoczna od razu, bez wpisywania czegokolwiek). */
+const DEFAULT_ODBIORY_FAZOWE: OdbiorFazowy[] = [
+  { id: crypto.randomUUID(), nazwa: "Gniazda parter", mocW: 2300, cosfi: 1, faza: "L1" },
+  { id: crypto.randomUUID(), nazwa: "Gniazda piętro", mocW: 1800, cosfi: 1, faza: "L2" },
+  { id: crypto.randomUUID(), nazwa: "Oświetlenie LED", mocW: 600, cosfi: 0.95, faza: "L3" },
 ];
 
 export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>()(
@@ -194,6 +243,28 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       zwMaterial: "Cu",
       zwIzolacja: "PVC",
 
+      uzTyp: "pionowy",
+      uzRho: 100,
+      uzDlugosc: 3,
+      uzSrednicaMm: 16,
+      uzSzerokoscMm: 30,
+      uzGlebokosc: 0.8,
+      uzLiczba: 1,
+      uzEta: 0.8,
+      uzWymagana: 30,
+
+      bfOdbiory: DEFAULT_ODBIORY_FAZOWE,
+      bfH3Pct: 0,
+
+      slMocKW: 5.5,
+      slUn: 400,
+      slCosfi: 0.85,
+      slSprawnosc: 0.88,
+      slKrotnosc: 6,
+      slRozruch: "bezposredni",
+      slCzasRozruchu: 5,
+      slImpedancja: 0,
+
       kmPkW: 100,
       kmCos1: 0.8,
       kmCos2: 0.95,
@@ -227,6 +298,7 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
 
       patch: (p) => set(p),
       setDevices: (updater) => set((s) => ({ devices: updater(s.devices) })),
+      setOdbioryFazowe: (updater) => set((s) => ({ bfOdbiory: updater(s.bfOdbiory) })),
     }),
     { name: "pomocnikelektryka_kalkulatory" }
   )

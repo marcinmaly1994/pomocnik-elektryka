@@ -276,6 +276,66 @@ test("metoda uproszczona dla 50 mm² blokuje wynik zamiast go zaniżyć", async 
   await expect(page.locator(".pe-result").first()).toBeVisible();
 });
 
+test("uziom pionowy: R = ρ/(2πL)·ln(4L/d) i potrzebna długość dla wymagania", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Uziom — dobór geometrii/ }).click();
+
+  // 100 Ω·m, pręt 3 m ⌀16 mm: 100/(2π·3)·ln(750) = 35,12 Ω
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("35,12 Ω");
+  await expect(result).toContainText("długość dla 30 Ω");
+  // tablica rezystywności jest ORIENTACYJNA i kalkulator musi to mówić wprost
+  await expect(page.getByText(/POMIAR rezystywności gruntu/)).toBeVisible();
+});
+
+/**
+ * Sedno kalkulatora bilansu: przy odbiorach nieliniowych 3. harmoniczna sumuje
+ * się w przewodzie N arytmetycznie i potrafi przekroczyć prąd fazowy. W przewodzie
+ * neutralnym nie ma wyłącznika, więc to przeciążenie nie ma czym się ujawnić —
+ * dlatego musi być WERDYKTEM, nie notatką.
+ */
+test("bilans faz: 3. harmoniczna podnosi prąd w N ponad prąd fazowy i daje werdykt niespełniony", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Bilans faz i prąd w N/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("6,45 A");
+  await expect(result).toContainText("asymetria 72,5%");
+
+  await page.getByLabel("Udział 3. harmonicznej w prądzie fazowym").fill("50");
+  await expect(result).toContainText("12,14 A");
+  await expect(page.getByText(/PRZEKRACZA największy prąd fazowy/)).toBeVisible();
+});
+
+test("silnik: In = P/(√3·U·cosφ·η), a Y/Δ obniża prąd rozruchowy I moment do 1/3", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Silnik indukcyjny/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("10,61 A");
+  await expect(result).toContainText("prąd rozruchowy 63,7 A");
+  await expect(result).toContainText("moment 100% momentu przy DOL");
+
+  await page.getByLabel("Sposób rozruchu").selectOption("gwiazda_trojkat");
+  await expect(result).toContainText("prąd rozruchowy 21,2 A");
+  await expect(result).toContainText("moment 33% momentu przy DOL");
+  // cena za mniejszy prąd musi być powiedziana wprost
+  await expect(page.getByText(/obniża MOMENT rozruchowy/)).toBeVisible();
+});
+
+test("silnik: spadek napięcia przy rozruchu ponad 15% to warunek niespełniony", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Silnik indukcyjny/ }).click();
+
+  // bez impedancji kalkulator MÓWI, że tego nie sprawdził
+  await expect(page.getByText(/NIE sprawdzono spadku napięcia przy rozruchu/)).toBeVisible();
+
+  await page.getByLabel("Impedancja obwodu zasilającego (0 = pomiń)").fill("1");
+  await expect(page.getByText(/Warunek niespełniony/)).toBeVisible();
+  // pokazujemy skutek dla momentu, nie sam procent
+  await expect(page.getByText(/moment ∝ U²/)).toBeVisible();
+});
+
 test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,88 Ω)", async ({ page }) => {
   await openCalculators(page);
 

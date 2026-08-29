@@ -13,11 +13,17 @@ import {
   Home,
   Info,
   Plus,
+  Scale,
+  Shovel,
+  Cog,
   Trash2,
   TrendingDown,
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
+import { obliczBilans, type Faza } from "@/lib/calc/loadBalance";
+import { obliczSilnik, SPOSOB_ROZRUCHU_LABELS, type SposobRozruchu } from "@/lib/calc/motor";
 import { CalcResultView } from "./CalcResultView";
 import { obliczSpadekNapiecia } from "@/lib/calc/voltageDrop";
 import { obliczKompensacje, UKLAD_BATERII_LABELS, type UkladBaterii } from "@/lib/calc/powerFactor";
@@ -57,6 +63,9 @@ const CALC_LIST: { id: CalcId; label: string; desc: string; icon: LucideIcon }[]
   { id: "wlz", label: "Dobór WLZ (linii zasilającej)", desc: "przekrój kabla od licznika do rozdzielnicy", icon: Cable },
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN", icon: ClipboardCheck },
   { id: "uziemienieTT", label: "Rezystancja uziemienia", desc: "ochrona przeciwporażeniowa — układ TT", icon: Anchor },
+  { id: "uziom", label: "Uziom — dobór geometrii", desc: "pręt, bednarka, otok; potrzebna długość", icon: Shovel },
+  { id: "bilansFaz", label: "Bilans faz i prąd w N", desc: "asymetria, przewód neutralny, 3. harmoniczna", icon: Scale },
+  { id: "silnik", label: "Silnik indukcyjny", desc: "rozruch, zabezpieczenia, spadek przy starcie", icon: Cog },
   { id: "oswietlenie", label: "Dobór oświetlenia", desc: "strumień świetlny i liczba opraw", icon: Calculator },
   { id: "rcd", label: "Dobór wyłącznika różnicowoprądowego", desc: "zasady doboru RCD", icon: Info },
 ];
@@ -135,6 +144,25 @@ const UKLAD_BATERII_OPTIONS = (Object.entries(UKLAD_BATERII_LABELS) as [UkladBat
  * wyboru zamiast wpisywania liczby z pamięci. Edytowalne, bo bywają zaostrzane
  * warunkami przyłączenia (np. wymóg gminy dla oświetlenia drogowego).
  */
+const TYP_UZIOMU_OPTIONS = (Object.entries(TYP_UZIOMU_LABELS) as [TypUziomu, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+const GRUNT_OPTIONS = REZYSTYWNOSC_GRUNTU.map((g) => ({
+  value: String(g.typowa),
+  label: `${g.nazwa} — ok. ${g.typowa} Ω·m (${g.min}–${g.max})`,
+}));
+const ROZRUCH_OPTIONS = (Object.entries(SPOSOB_ROZRUCHU_LABELS) as [SposobRozruchu, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+const FAZA_OPTIONS = [
+  { value: "L1", label: "L1" },
+  { value: "L2", label: "L2" },
+  { value: "L3", label: "L3" },
+  { value: "3f", label: "3-fazowy" },
+];
+
 const LIMIT_SPADKU_OPCJE = [
   { value: "3", label: "3% — oświetlenie (sieć publiczna)" },
   { value: "5", label: "5% — pozostałe odbiorniki (sieć publiczna)" },
@@ -188,6 +216,26 @@ export function CalculatorsTab() {
   const kmUV = useCalculatorsStore((s) => s.kmUV);
   const kmUklad = useCalculatorsStore((s) => s.kmUklad);
   const kmSkKVA = useCalculatorsStore((s) => s.kmSkKVA);
+  const uzTyp = useCalculatorsStore((s) => s.uzTyp);
+  const uzRho = useCalculatorsStore((s) => s.uzRho);
+  const uzDlugosc = useCalculatorsStore((s) => s.uzDlugosc);
+  const uzSrednicaMm = useCalculatorsStore((s) => s.uzSrednicaMm);
+  const uzSzerokoscMm = useCalculatorsStore((s) => s.uzSzerokoscMm);
+  const uzGlebokosc = useCalculatorsStore((s) => s.uzGlebokosc);
+  const uzLiczba = useCalculatorsStore((s) => s.uzLiczba);
+  const uzEta = useCalculatorsStore((s) => s.uzEta);
+  const uzWymagana = useCalculatorsStore((s) => s.uzWymagana);
+  const bfOdbiory = useCalculatorsStore((s) => s.bfOdbiory);
+  const bfH3Pct = useCalculatorsStore((s) => s.bfH3Pct);
+  const setOdbioryFazowe = useCalculatorsStore((s) => s.setOdbioryFazowe);
+  const slMocKW = useCalculatorsStore((s) => s.slMocKW);
+  const slUn = useCalculatorsStore((s) => s.slUn);
+  const slCosfi = useCalculatorsStore((s) => s.slCosfi);
+  const slSprawnosc = useCalculatorsStore((s) => s.slSprawnosc);
+  const slKrotnosc = useCalculatorsStore((s) => s.slKrotnosc);
+  const slRozruch = useCalculatorsStore((s) => s.slRozruch);
+  const slCzasRozruchu = useCalculatorsStore((s) => s.slCzasRozruchu);
+  const slImpedancja = useCalculatorsStore((s) => s.slImpedancja);
   const devices = useCalculatorsStore((s) => s.devices);
   const ks = useCalculatorsStore((s) => s.ks);
   const zCurve = useCalculatorsStore((s) => s.zCurve);
@@ -389,6 +437,54 @@ export function CalculatorsTab() {
         przekroj_mm2: zwPrzekroj,
       }),
     [zwarcie.wartosci?.Ik3_A, zwCzasS, zwMaterial, zwIzolacja, zwPrzekroj]
+  );
+
+  // --- uziom (geometria) ---
+  // Średnica i szerokość podawane w MILIMETRACH (tak są w katalogach), silnik
+  // liczy w metrach — konwersja tutaj, na granicy wejścia, zgodnie z zasadą
+  // „SI w rdzeniu, konwersja tylko na wejściu/wyjściu" (spec pkt 3.1).
+  const uziom = useMemo(
+    () =>
+      obliczUziom({
+        typ: uzTyp,
+        rho_ohm_m: uzRho,
+        dlugosc_m: uzDlugosc,
+        srednica_m: uzSrednicaMm / 1000,
+        szerokosc_m: uzSzerokoscMm / 1000,
+        glebokosc_m: uzGlebokosc,
+        liczba: uzLiczba,
+        wspWykorzystania: uzEta,
+        wymagana_ohm: uzWymagana > 0 ? uzWymagana : undefined,
+      }),
+    [uzTyp, uzRho, uzDlugosc, uzSrednicaMm, uzSzerokoscMm, uzGlebokosc, uzLiczba, uzEta, uzWymagana]
+  );
+
+  // --- bilans faz i prąd w przewodzie neutralnym ---
+  const bilansFaz = useMemo(
+    () =>
+      obliczBilans({
+        odbiory: bfOdbiory.map((o) => ({ nazwa: o.nazwa, moc_W: o.mocW, cosfi: o.cosfi, faza: o.faza })),
+        U0_V: U0,
+        Un_V: 400,
+        udzialH3_pct: bfH3Pct,
+      }),
+    [bfOdbiory, bfH3Pct]
+  );
+
+  // --- silnik indukcyjny ---
+  const silnik = useMemo(
+    () =>
+      obliczSilnik({
+        moc_W: slMocKW * 1000,
+        Un_V: slUn,
+        cosfi: slCosfi,
+        sprawnosc: slSprawnosc,
+        krotnoscRozruchu: slKrotnosc,
+        sposobRozruchu: slRozruch,
+        czasRozruchu_s: slCzasRozruchu > 0 ? slCzasRozruchu : undefined,
+        impedancjaObwodu_ohm: slImpedancja > 0 ? slImpedancja : undefined,
+      }),
+    [slMocKW, slUn, slCosfi, slSprawnosc, slKrotnosc, slRozruch, slCzasRozruchu, slImpedancja]
   );
 
   // --- kompensacja mocy biernej ---
@@ -1048,6 +1144,209 @@ export function CalculatorsTab() {
                 </div>
               )}
               <CalcResultView wynik={wytrzymalosc} />
+            </Card>
+          )}
+
+          {activeCalc === "uziom" && (
+            <Card title={active.label} icon={Shovel} tag="geometria uziomu">
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Typ uziomu" value={uzTyp} onChange={(v) => patch({ uzTyp: v as TypUziomu })} options={TYP_UZIOMU_OPTIONS} />
+                <Field
+                  label="Rodzaj gruntu (wartości orientacyjne)"
+                  value={String(uzRho)}
+                  onChange={(v) => patch({ uzRho: Number(v) })}
+                  options={GRUNT_OPTIONS}
+                />
+                <Field label="Rezystywność gruntu ρ" value={uzRho} onChange={(v) => patch({ uzRho: Number(v) })} unit="Ω·m" />
+                <Field label="Długość uziomu" value={uzDlugosc} onChange={(v) => patch({ uzDlugosc: Number(v) })} unit="m" step="0.1" />
+                {uzTyp === "pionowy" && (
+                  <Field label="Średnica pręta" value={uzSrednicaMm} onChange={(v) => patch({ uzSrednicaMm: Number(v) })} unit="mm" />
+                )}
+                {uzTyp === "poziomy" && (
+                  <>
+                    <Field label="Szerokość bednarki" value={uzSzerokoscMm} onChange={(v) => patch({ uzSzerokoscMm: Number(v) })} unit="mm" />
+                    <Field label="Głębokość ułożenia" value={uzGlebokosc} onChange={(v) => patch({ uzGlebokosc: Number(v) })} unit="m" step="0.1" />
+                  </>
+                )}
+                <Field label="Liczba uziomów równolegle" value={uzLiczba} onChange={(v) => patch({ uzLiczba: Number(v) })} step="1" />
+                {uzLiczba > 1 && (
+                  <Field
+                    label="Wsp. wykorzystania η (0,6–0,9)"
+                    value={uzEta}
+                    onChange={(v) => patch({ uzEta: Number(v) })}
+                    step="0.05"
+                  />
+                )}
+                <Field
+                  label="Wymagana rezystancja (0 = bez oceny)"
+                  value={uzWymagana}
+                  onChange={(v) => patch({ uzWymagana: Number(v) })}
+                  unit="Ω"
+                />
+              </div>
+
+              {uziom.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Rezystancja uziemienia</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(uziom.wartosci.R_wypadkowa_ohm, 2)} Ω</div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    {uzLiczba > 1 && (
+                      <span className="pe-chip pe-tag-copper">
+                        pojedynczy {formatLiczba(uziom.wartosci.R_pojedynczy_ohm, 2)} Ω
+                      </span>
+                    )}
+                    {uziom.wartosci.potrzebnaDlugosc_m !== null && (
+                      <span className="pe-chip pe-tag-green">
+                        długość dla {formatLiczba(uzWymagana, 0)} Ω: {formatLiczba(uziom.wartosci.potrzebnaDlugosc_m, 1)} m
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              <CalcResultView wynik={uziom} />
+            </Card>
+          )}
+
+          {activeCalc === "bilansFaz" && (
+            <Card title={active.label} icon={Scale} tag="asymetria i przewód N">
+              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                Przy odbiorach nieliniowych (zasilacze impulsowe, LED, falowniki) 3. harmoniczna sumuje się w przewodzie
+                neutralnym <strong>arytmetycznie</strong>, zamiast się znosić — prąd w N potrafi wtedy przekroczyć prąd
+                fazowy nawet przy idealnie symetrycznym obciążeniu. W przewodzie N nie ma wyłącznika, więc nic tego
+                przeciążenia nie wyłapie.
+              </div>
+
+              <div className="space-y-2 mb-3">
+                {bfOdbiory.map((o) => (
+                  <div key={o.id} className="flex items-center gap-2">
+                    <input
+                      className="pe-input text-sm flex-1 min-w-0"
+                      value={o.nazwa}
+                      onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, nazwa: e.target.value } : x)))}
+                    />
+                    <input
+                      className="pe-input text-sm w-20 pe-mono"
+                      type="number"
+                      aria-label={`Moc: ${o.nazwa}`}
+                      value={o.mocW}
+                      onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, mocW: Number(e.target.value) } : x)))}
+                    />
+                    <span className="text-xs text-slate-400">W</span>
+                    <input
+                      className="pe-input text-sm w-16 pe-mono"
+                      type="number"
+                      step="0.05"
+                      aria-label={`cos φ: ${o.nazwa}`}
+                      value={o.cosfi}
+                      onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, cosfi: Number(e.target.value) } : x)))}
+                    />
+                    <select
+                      className="pe-input text-sm w-24"
+                      aria-label={`Faza: ${o.nazwa}`}
+                      value={o.faza ?? "3f"}
+                      onChange={(e) =>
+                        setOdbioryFazowe((ds) =>
+                          ds.map((x) => (x.id === o.id ? { ...x, faza: e.target.value === "3f" ? null : (e.target.value as Faza) } : x))
+                        )
+                      }
+                    >
+                      {FAZA_OPTIONS.map((f) => (
+                        <option key={f.value} value={f.value}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button onClick={() => setOdbioryFazowe((ds) => ds.filter((x) => x.id !== o.id))} className="text-slate-400 hover:text-red-500">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() =>
+                    setOdbioryFazowe((ds) => [...ds, { id: crypto.randomUUID(), nazwa: "Nowy odbiór", mocW: 1000, cosfi: 1, faza: "L1" }])
+                  }
+                  className="pe-btn-ghost text-xs px-2.5 py-1.5 flex items-center gap-1"
+                >
+                  <Plus size={13} /> Dodaj odbiór
+                </button>
+              </div>
+              <Field
+                label="Udział 3. harmonicznej w prądzie fazowym"
+                value={bfH3Pct}
+                onChange={(v) => patch({ bfH3Pct: Number(v) })}
+                unit="%"
+                step="5"
+              />
+
+              {bilansFaz.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Prąd w przewodzie neutralnym</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(bilansFaz.wartosci.IN_calkowity_A, 2)} A</div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">
+                      L1 {formatLiczba(bilansFaz.wartosci.prady.L1, 1)} A · L2 {formatLiczba(bilansFaz.wartosci.prady.L2, 1)} A · L3{" "}
+                      {formatLiczba(bilansFaz.wartosci.prady.L3, 1)} A
+                    </span>
+                    <span className="pe-chip pe-tag-blue">asymetria {formatLiczba(bilansFaz.wartosci.asymetria_pct, 1)}%</span>
+                    <span className="pe-chip pe-tag-green">S {formatLiczba(bilansFaz.wartosci.S_VA / 1000, 2)} kVA</span>
+                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                      cosφ {formatLiczba(bilansFaz.wartosci.cosfi, 3)}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <CalcResultView wynik={bilansFaz} />
+            </Card>
+          )}
+
+          {activeCalc === "silnik" && (
+            <Card title={active.label} icon={Cog} tag="rozruch i zabezpieczenia">
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Moc na wale" value={slMocKW} onChange={(v) => patch({ slMocKW: Number(v) })} unit="kW" step="0.1" />
+                <Field label="Napięcie międzyfazowe" value={slUn} onChange={(v) => patch({ slUn: Number(v) })} unit="V" />
+                <Field label="Współczynnik mocy cos φ" value={slCosfi} onChange={(v) => patch({ slCosfi: Number(v) })} step="0.01" />
+                <Field label="Sprawność η" value={slSprawnosc} onChange={(v) => patch({ slSprawnosc: Number(v) })} step="0.01" />
+                <Field
+                  label="Krotność prądu rozruchowego (z tabliczki)"
+                  value={slKrotnosc}
+                  onChange={(v) => patch({ slKrotnosc: Number(v) })}
+                  step="0.5"
+                />
+                <Field label="Sposób rozruchu" value={slRozruch} onChange={(v) => patch({ slRozruch: v as SposobRozruchu })} options={ROZRUCH_OPTIONS} />
+                <Field label="Czas rozruchu (0 = pomiń)" value={slCzasRozruchu} onChange={(v) => patch({ slCzasRozruchu: Number(v) })} unit="s" step="0.5" />
+                <Field
+                  label="Impedancja obwodu zasilającego (0 = pomiń)"
+                  value={slImpedancja}
+                  onChange={(v) => patch({ slImpedancja: Number(v) })}
+                  unit="Ω"
+                  step="0.01"
+                />
+              </div>
+
+              {silnik.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Prąd znamionowy silnika</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(silnik.wartosci.In_A, 2)} A</div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">prąd rozruchowy {formatLiczba(silnik.wartosci.Ir_A, 1)} A</span>
+                    {slRozruch === "gwiazda_trojkat" && (
+                      <span className="pe-chip pe-tag-blue">
+                        przy DOL byłoby {formatLiczba(silnik.wartosci.Ir_bezposredni_A, 1)} A
+                      </span>
+                    )}
+                    <span className="pe-chip pe-tag-blue">stycznik AC-3 ≥ {formatLiczba(silnik.wartosci.stycznikAC3_A, 1)} A</span>
+                    {silnik.wartosci.klasaWyzwalania && (
+                      <span className="pe-chip pe-tag-green">przekaźnik klasy {silnik.wartosci.klasaWyzwalania}</span>
+                    )}
+                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                      moment {formatLiczba(silnik.wartosci.momentWzgledny * 100, 0)}% momentu przy DOL
+                    </span>
+                  </div>
+                </div>
+              )}
+              <CalcResultView wynik={silnik} />
             </Card>
           )}
 
