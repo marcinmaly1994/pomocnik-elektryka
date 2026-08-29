@@ -5,11 +5,12 @@ import { skipEntryScreen } from "./_flow";
  * Kalkulatory w zakładce „Kalkulatory".
  *
  * Sens tych testów to WPIĘCIE, nie matematyka — tak samo jak w `panel-sizing.spec.ts`.
- * Sam silnik doboru (`sizeCircuit`, `zsMaxForBreaker`) ma komplet testów jednostkowych
- * w `src/lib/panel/sizing.test.ts`. Tu sprawdzamy, że „Dobór przewodu i zabezpieczenia"
- * faktycznie woła TEN SAM silnik co Rozdzielnica (a nie osobną, prostszą kopię, jak
- * przed migracją krok 77 — patrz MIGRATION.md), że pola formularza realnie wpływają
- * na wynik, i że błędny dobór pokazuje czytelny komunikat zamiast pustego wyniku.
+ * Sam silnik doboru (`sizeCircuit`, `sizeBreakerForSection`, `zsMaxForBreaker`) ma
+ * komplet testów jednostkowych w `src/lib/panel/sizing.test.ts`. Tu sprawdzamy, że
+ * „Dobór przekroju przewodu" i „Dobór zabezpieczenia" faktycznie wołają TEN SAM
+ * silnik co Rozdzielnica (a nie osobną, prostszą kopię, jak przed migracją krok 77 —
+ * patrz MIGRATION.md), że pola formularza realnie wpływają na wynik, i że błędny
+ * dobór pokazuje czytelny komunikat zamiast pustego wyniku.
  */
 
 async function openCalculators(page: import("@playwright/test").Page) {
@@ -22,29 +23,27 @@ async function planBox(page: import("@playwright/test").Page) {
   return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
 }
 
-test("dobór przewodu dla domyślnych danych zgadza się z silnikiem Rozdzielnicy (2,5 mm² / B16)", async ({ page }) => {
+test("dobór przekroju dla domyślnych danych zgadza się z silnikiem Rozdzielnicy (2,5 mm²)", async ({ page }) => {
   await openCalculators(page);
 
-  // domyślnie: gniazda, 2000 W, 1-fazowe, 15 m, pod tynkiem (B2) — te same założenia,
-  // z którymi liczy `sizeCircuit` w src/lib/panel/sizing.test.ts
+  // domyślnie otwiera się „Dobór przekroju przewodu": gniazda, 2000 W, 1-fazowe,
+  // 15 m, pod tynkiem (B2) — te same założenia, z którymi liczy `sizeCircuit`
+  // w src/lib/panel/sizing.test.ts
   const result = page.locator(".pe-result").first();
-  await expect(result).toContainText("8.70 A");
+  await expect(result).toContainText("2,5 mm²");
   await expect(result).toContainText("YDYp 3x2,5 mm²");
-  await expect(result).toContainText("B16");
+  await expect(result).toContainText("Ib 8.70 A");
   await expect(result).toContainText("obc. dop. 23 A");
 });
 
-test("zmiana rodzaju obwodu na Oświetlenie zmienia dobór (ostrzejszy limit spadku, inny prąd znamionowy)", async ({ page }) => {
+test("zmiana rodzaju obwodu na Oświetlenie zmienia przekrój i limit spadku", async ({ page }) => {
   await openCalculators(page);
 
   await page.getByLabel("Rodzaj obwodu").selectOption("oswietlenie");
   await page.getByLabel("Moc odbiornika").fill("800");
 
   const result = page.locator(".pe-result").first();
-  // 800 W / 230 V = 3,48 A -> mimo tak niskiego prądu obwód oświetleniowy dostaje B10
-  // (wymiarowanie pod docelową obsadę, nie pod dzisiejszy pobór — patrz sizing.ts)
   await expect(result).toContainText("YDYp 3x1,5 mm²");
-  await expect(result).toContainText("B10");
   await expect(result).toContainText("limit 3%");
 });
 
@@ -59,22 +58,85 @@ test("dobór, którego nie da się spełnić, pokazuje czytelny komunikat zamias
 });
 
 /**
- * Kalkulator „Spadek napięcia" wrócił jako osobna pozycja, ale w INNEJ roli niż
- * ten skasowany w kroku 77 (patrz MIGRATION.md). Tamten dublował dobór przewodu
- * z własną, błędną kopią wzoru (ρ dla 20 °C). Ten odpowiada na odwrotne pytanie —
- * przekrój jest DANĄ, nie wynikiem — i liczy tym samym `voltageDropPct` co
- * Rozdzielnica. Test pilnuje właśnie tego rozróżnienia: obie pozycje istnieją
- * obok siebie, a dobór przewodu nadal sam sprawdza spadek.
+ * Sposób ułożenia był polem formularza od dawna, ale jego wpływ pozostawał
+ * niewidoczny. Tabelka porównawcza pokazuje wszystkie cztery warianty naraz —
+ * i to ona jest tu sprawdzana, bo bez niej „weź pod uwagę sposób ułożenia"
+ * sprowadza się do listy, którą użytkownik pomija.
  */
-test("Spadek napięcia jest osobnym kalkulatorem sprawdzającym ZNANY przekrój, a dobór przewodu nadal liczy spadek sam", async ({ page }) => {
+test("dobór przekroju pokazuje, jak sposób ułożenia zmienia obciążalność, i pozwala go zmienić klikiem", async ({ page }) => {
   await openCalculators(page);
 
-  await expect(page.getByText("przekrój, wyłącznik, spadek napięcia")).toBeVisible();
+  const tabela = page.getByText("Jak sposób ułożenia zmienia wynik").locator("..");
+  // 2,5 mm², 2 żyły obciążone: natynkowo (C) = 27 A, pod tynkiem (B2) = 23 A,
+  // ściana ocieplona (A1) = 19,5 A — trzy różne liczby z tablicy B.52.4
+  await expect(tabela).toContainText("27 A");
+  await expect(tabela).toContainText("23 A");
+  await expect(tabela).toContainText("19.5 A");
 
+  // klik w wiersz przestawia założenie w formularzu wyżej
+  await tabela.getByRole("button", { name: /natynkowo/ }).click();
+  await expect(page.getByLabel("Sposób ułożenia")).toHaveValue("natynkowo");
+});
+
+/**
+ * Rozbicie doboru na dwa kalkulatory ma sens tylko wtedy, gdy oba mówią to samo:
+ * przekrój dobrany w pierwszym, wpisany do drugiego, musi dać ten sam aparat co
+ * dawał połączony kalkulator (B16 dla domyślnego obwodu gniazd 2000 W).
+ */
+test("dobór zabezpieczenia do przekroju 2,5 mm² daje B16 i rozpisany warunek Ib ≤ In ≤ Iz", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Dobór zabezpieczenia/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("B16 1P+N");
+  await expect(result).toContainText("Ib 8.70 A");
+  await expect(result).toContainText("Iz 23 A");
+  await expect(result).toContainText("metoda B2");
+
+  await expect(page.getByText(/Warunek doboru spełniony/)).toBeVisible();
+  await expect(page.getByText("8.70 A ≤ 16 A ≤ 23 A")).toBeVisible();
+});
+
+test("zbyt cienki przewód do danego prądu to BŁĄD doboru zabezpieczenia, nie cichy większy wyłącznik", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Dobór zabezpieczenia/ }).click();
+
+  // 1,5 mm² pod tynkiem (B2) = 16,5 A; 6000 W / 230 V = 26,1 A > Iz
+  await page.getByLabel("Przekrój żyły przewodu").selectOption("1.5");
+  await page.getByLabel("Moc odbiornika").fill("6000");
+
+  await expect(page.locator(".pe-result").first()).toContainText("nie udało się dobrać");
+  await expect(page.getByText(/Żaden wyłącznik tego nie naprawi/)).toBeVisible();
+});
+
+/**
+ * Trzy pierwsze kalkulatory to trzy różne pytania o ten sam obwód i łatwo je
+ * zlać w jedno przy kolejnej zmianie. Test przybija kolejność i role:
+ *  1. Spadek napięcia   — przekrój DANY, liczymy ΔU
+ *  2. Dobór przekroju   — przekrój WYNIKIEM (obciążalność + spadek naraz)
+ *  3. Dobór zabezpieczenia — przekrój DANY, wynikiem jest aparat
+ * Kalkulator spadku wrócił jako osobna pozycja po tym, jak w kroku 77
+ * (MIGRATION.md) skasowano jego poprzednika — tamten dublował dobór przewodu
+ * z własną, błędną kopią wzoru (ρ dla 20 °C), ten korzysta z `voltageDropPct`.
+ */
+test("trzy pierwsze kalkulatory stoją w kolejności spadek → przekrój → zabezpieczenie i mają rozdzielone role", async ({ page }) => {
+  await openCalculators(page);
+
+  const pozycje = page.locator("button", { hasText: /^(Spadek napięcia|Dobór przekroju przewodu|Dobór zabezpieczenia)/ });
+  await expect(pozycje.nth(0)).toContainText("Spadek napięcia");
+  await expect(pozycje.nth(1)).toContainText("Dobór przekroju przewodu");
+  await expect(pozycje.nth(2)).toContainText("Dobór zabezpieczenia");
+
+  // w doborze PRZEKROJU przekrój jest wynikiem, więc nie ma go wśród pól wejściowych
+  await expect(page.getByRole("heading", { name: "Dobór przekroju przewodu" })).toBeVisible();
+  await expect(page.getByLabel("Przekrój żyły")).toHaveCount(0);
+
+  // w obu pozostałych jest polem WEJŚCIOWYM — to je odróżnia
   await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
-  await expect(page.getByRole("heading", { name: "Spadek napięcia" })).toBeVisible();
-  // przekrój jest polem WEJŚCIOWYM — to odróżnia ten kalkulator od doboru przewodu
   await expect(page.getByLabel("Przekrój żyły")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Dobór zabezpieczenia/ }).click();
+  await expect(page.getByLabel("Przekrój żyły przewodu")).toBeVisible();
 });
 
 /**
@@ -109,6 +171,31 @@ test("za mały przekrój na długiej trasie podpowiada konkretny przekrój zamia
   // który wchodzi w limit. Test pilnuje, że podpowiedź liczy się z tego samego
   // szeregu przekrojów co dobór (SECTIONS), a nie zaokrągla „na oko".
   await expect(page.getByText(/Najmniejszy przekrój.*10 mm²/)).toBeVisible();
+});
+
+/**
+ * Regresja: identyfikator aktywnego kalkulatora żyje w localStorage, więc po
+ * aktualizacji aplikacji potrafi wskazywać pozycję, która JUŻ NIE ISTNIEJE —
+ * tak było z „przewod" po rozbiciu go na „przekroj" i „zabezpieczenie".
+ * `CALC_LIST.find(...)!` zwracało wtedy `undefined`, a odczyt `.label` wywalał
+ * całą zakładkę białym ekranem — u każdego, kto korzystał z kalkulatorów przed
+ * aktualizacją. Świeży localStorage tego nie pokazuje, stąd jawne zasianie
+ * starej wartości.
+ */
+test("zapisany identyfikator kalkulatora sprzed aktualizacji nie wywraca zakładki", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "pomocnikelektryka_kalkulatory",
+      JSON.stringify({ state: { activeCalc: "przewod" }, version: 0 })
+    )
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
+
+  // zamiast białego ekranu — cofnięcie do pierwszej pozycji z listy
+  await expect(page.getByRole("heading", { name: "Spadek napięcia" })).toBeVisible();
+  await expect(page.locator(".pe-result").first()).toBeVisible();
 });
 
 test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,88 Ω)", async ({ page }) => {

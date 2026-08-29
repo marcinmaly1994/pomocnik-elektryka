@@ -25,6 +25,7 @@ import {
   temperatureFactor,
   type Curve,
   type LayingMethod,
+  type ReferenceMethod,
   type Section,
 } from "./norms";
 
@@ -393,6 +394,142 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
 function round(v: number, digits: number): number {
   const f = 10 ** digits;
   return Math.round(v * f) / f;
+}
+
+// --- dobór samego zabezpieczenia do ZNANEGO przekroju ------------------------
+
+/**
+ * Dobiera wyłącznik nadprądowy, gdy przekrój przewodu jest już PRZESĄDZONY.
+ *
+ * Odwrotna strona `sizeCircuit`: tam przekrój jest wynikiem (funkcja iteruje po
+ * przekrojach, szukając najmniejszego, który spełni obciążalność i spadek naraz),
+ * tutaj jest daną — bo przewód już leży w ścianie albo został narzucony projektem.
+ * `sizeCircuit` nie odpowiada na to pytanie, bo z definicji sama wybiera przekrój.
+ *
+ * Warunek jest ten sam co w `sizeCircuit` (Ib ≤ In ≤ Iz, PN-HD 60364-4-43) i
+ * korzysta z tych samych tablic — więc dla tych samych danych oba dobory podadzą
+ * ten sam aparat. Różnica wyłącznie w tym, co jest wejściem, a co wyjściem.
+ *
+ * Spadek napięcia NIE jest tu liczony: zależy od przekroju i długości, a nie od
+ * doboru aparatu — sprawdza go kalkulator „Spadek napięcia" i `sizeCircuit`.
+ */
+export interface BreakerSpec {
+  /** Prąd obliczeniowy Ib [A]. */
+  prad_A: number;
+  liczba_faz: PhaseCount;
+  /** Przekrój ŻYŁY [mm²] — dana wejściowa, nie wynik. */
+  przekroj_mm2: Section;
+  sposob_ulozenia: LayingMethod;
+  temperatura_otoczenia_C?: number;
+  obwodow_w_wiazce?: number;
+  /** Odbiornik z rozruchem silnikowym → charakterystyka C zamiast B. */
+  rozruch_silnikowy?: boolean;
+  /** Rodzaj obwodu — decyduje o TYPOWYM prądzie znamionowym (`PREFERRED_RATING_FOR`). */
+  typ: CircuitKind;
+}
+
+export interface SizedBreaker {
+  Ib_A: number;
+  /** Obciążalność przewodu po współczynnikach k1·k2 [A]. */
+  Iz_A: number;
+  /** Obciążalność z tablicy, przed współczynnikami [A] — pokazuje wpływ ułożenia. */
+  Iz_bazowa_A: number;
+  metoda_odniesienia: ReferenceMethod;
+  wspolczynniki: { k1_temperatura: number; k2_grupowanie: number };
+  aparat: { charakterystyka: Curve; In_A: number; bieguny: "1P+N" | "3P+N" } | null;
+  Ia_A: number | null;
+  Zs_max_Ohm: number | null;
+  status: SizingStatus;
+  ostrzezenia: SizingWarning[];
+}
+
+export function sizeBreakerForSection(spec: BreakerSpec): SizedBreaker {
+  const warnings: SizingWarning[] = [];
+  const phases = spec.liczba_faz;
+  const ambientC = spec.temperatura_otoczenia_C ?? 30;
+  const bundle = spec.obwodow_w_wiazce ?? 1;
+  const method = REFERENCE_METHOD_FOR[spec.sposob_ulozenia];
+  const loadedCores: 2 | 3 = phases === "3" ? 3 : 2;
+  const curve: Curve = spec.rozruch_silnikowy ? "C" : "B";
+
+  const k1 = temperatureFactor(ambientC);
+  const k2 = groupingFactor(bundle);
+  const IzBase = baseAmpacity(spec.przekroj_mm2, method, loadedCores);
+  const Iz = IzBase * k1 * k2;
+  const Ib = spec.prad_A;
+
+  const common = {
+    Ib_A: round(Ib, 2),
+    Iz_A: round(Iz, 2),
+    Iz_bazowa_A: IzBase,
+    metoda_odniesienia: method,
+    wspolczynniki: { k1_temperatura: round(k1, 3), k2_grupowanie: k2 },
+  };
+
+  if (!(Ib > 0)) {
+    warnings.push({
+      code: "BRAK_PRADU",
+      level: "error",
+      message: "Podaj prąd obliczeniowy (albo moc odbiornika) — bez niego nie ma czego zabezpieczać.",
+    });
+    return { ...common, aparat: null, Ia_A: null, Zs_max_Ohm: null, status: "error", ostrzezenia: warnings };
+  }
+
+  // Ten sam porządek co w `sizeCircuit`: najpierw próbujemy typowy dla rodzaju
+  // obwodu prąd znamionowy (obwód gniazd dostaje B16, nawet gdy dziś pobiera mało),
+  // a dopiero gdy przewód tego nie udźwignie — schodzimy do In wynikającego z Ib.
+  const preferred = PREFERRED_RATING_FOR[spec.typ];
+  let In = BREAKER_RATINGS.find((r) => r >= Math.max(Ib, preferred) && r <= Iz);
+  if (In === undefined) {
+    In = BREAKER_RATINGS.find((r) => r >= Ib && r <= Iz);
+    if (In !== undefined) {
+      warnings.push({
+        code: "IN_PONIZEJ_TYPOWEGO",
+        level: "warn",
+        message: `Dobrano ${curve}${In} zamiast typowego ${curve}${preferred} dla tego rodzaju obwodu — obciążalność przewodu po współczynnikach (${Iz.toFixed(1)} A) nie pozwala na wyższy prąd znamionowy.`,
+      });
+    }
+  }
+
+  if (In === undefined) {
+    warnings.push({
+      code: "PRZEWOD_ZA_SLABY",
+      level: "error",
+      message:
+        Ib > Iz
+          ? `Prąd obliczeniowy ${Ib.toFixed(1)} A przekracza obciążalność tego przewodu (${Iz.toFixed(1)} A przy metodzie ${method}, k1=${k1.toFixed(2)}, k2=${k2.toFixed(2)}). Żaden wyłącznik tego nie naprawi — potrzebny grubszy przewód, lepsze warunki ułożenia albo podział na kilka obwodów.`
+          : `Między prądem obliczeniowym ${Ib.toFixed(1)} A a obciążalnością ${Iz.toFixed(1)} A nie mieści się żaden znormalizowany prąd znamionowy z szeregu. Zwiększ przekrój albo popraw warunki ułożenia.`,
+    });
+    return { ...common, aparat: null, Ia_A: null, Zs_max_Ohm: null, status: "error", ostrzezenia: warnings };
+  }
+
+  if (k2 < 1) {
+    warnings.push({
+      code: "GRUPOWANIE",
+      level: "warn",
+      message: `Uwzględniono współczynnik grupowania k2=${k2.toFixed(2)} (${bundle} obwodów w wiązce) — obciążalność spadła z ${IzBase} A do ${Iz.toFixed(1)} A. Rozdzielenie tras podniosłoby ją z powrotem.`,
+    });
+  }
+  if (ambientC > 30) {
+    warnings.push({
+      code: "TEMPERATURA",
+      level: "warn",
+      message: `Temperatura otoczenia ${ambientC} °C obniża obciążalność (k1=${k1.toFixed(2)}). Przy trasie przez nieocieplone poddasze albo kotłownię sprawdź to założenie.`,
+    });
+  }
+
+  const Ia = CURVE_MULTIPLIER[curve] * In;
+  const poles: "1P+N" | "3P+N" = phases === "3" ? "3P+N" : "1P+N";
+  const hasError = warnings.some((w) => w.level === "error");
+
+  return {
+    ...common,
+    aparat: { charakterystyka: curve, In_A: In, bieguny: poles },
+    Ia_A: Ia,
+    Zs_max_Ohm: round(U0 / Ia, 3),
+    status: hasError ? "error" : warnings.length > 0 ? "warn" : "ok",
+    ostrzezenia: warnings,
+  };
 }
 
 /** Opis słowny przyjętych założeń — do legendy pod schematem. */

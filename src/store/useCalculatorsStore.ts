@@ -18,7 +18,16 @@ import type { CircuitKind } from "@/lib/panel/sizing";
  * strony — mimo że reszta projektu jest zapisywana lokalnie od dawna.
  */
 
-export type CalcId = "przewod" | "spadek" | "moc" | "petla" | "wlz" | "uziemienieTT" | "oswietlenie" | "rcd";
+export type CalcId =
+  | "spadek"
+  | "przekroj"
+  | "zabezpieczenie"
+  | "moc"
+  | "petla"
+  | "wlz"
+  | "uziemienieTT"
+  | "oswietlenie"
+  | "rcd";
 
 export interface CalculatorDevice {
   id: string;
@@ -29,7 +38,15 @@ export interface CalculatorDevice {
 interface CalculatorsState {
   activeCalc: CalcId;
 
-  // --- dobór przewodu, zabezpieczenia i spadku napięcia ---
+  /**
+   * --- dobór przekroju przewodu ORAZ dobór zabezpieczenia ---
+   *
+   * Jeden komplet pól dla obu kalkulatorów, a nie dwa osobne: to te same dane
+   * wejściowe opisujące ten sam obwód (moc, fazy, warunki ułożenia), tylko
+   * pytanie jest inne — „jaki przekrój położyć" kontra „jaki bezpiecznik dać".
+   * Dzięki temu przejście między nimi nie każe przepisywać wszystkiego od nowa,
+   * co przy rozbiciu jednego kalkulatora na dwa byłoby krokiem wstecz.
+   */
   circuitKind: CircuitKind;
   power: number;
   phase: "1" | "3";
@@ -39,6 +56,9 @@ interface CalculatorsState {
   ambientC: number;
   bundleCount: number;
   motorStart: boolean;
+  /** Przekrój ŻYŁY [mm²] — dana wejściowa doboru zabezpieczenia (tam, gdzie
+   *  w doborze przekroju jest wynikiem). Patrz `sizeBreakerForSection`. */
+  breakerSection: number;
 
   /**
    * --- sprawdzenie spadku napięcia na ZNANYM przekroju ---
@@ -102,7 +122,7 @@ const DEFAULT_DEVICES: CalculatorDevice[] = [
 export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>()(
   persist(
     (set) => ({
-      activeCalc: "przewod",
+      activeCalc: "przekroj",
 
       circuitKind: "gniazda",
       power: 2000,
@@ -113,6 +133,7 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       ambientC: 30,
       bundleCount: 1,
       motorStart: false,
+      breakerSection: 2.5,
 
       duCurrentA: 10,
       duPhase: "1",

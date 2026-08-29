@@ -20,7 +20,14 @@ import { calcLighting, calcPowerBalance, maxGroundingResistance, UL } from "@/li
 import { computeCircuits } from "@/lib/panel/circuits";
 import { circuitDemand, kindForElements } from "@/lib/panel/loads";
 import { LAYING_METHOD_LABELS, SECTIONS, U0, type LayingMethod } from "@/lib/panel/norms";
-import { sizeCircuit, sizeFeeder, voltageDropPct, zsMaxForBreaker, type CircuitKind } from "@/lib/panel/sizing";
+import {
+  sizeBreakerForSection,
+  sizeCircuit,
+  sizeFeeder,
+  voltageDropPct,
+  zsMaxForBreaker,
+  type CircuitKind,
+} from "@/lib/panel/sizing";
 import { useCalculatorsStore, type CalcId } from "@/store/useCalculatorsStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Card } from "./Card";
@@ -28,8 +35,9 @@ import { Field } from "./Field";
 import { HowItWorks } from "./HowItWorks";
 
 const CALC_LIST: { id: CalcId; label: string; desc: string; icon: LucideIcon }[] = [
-  { id: "przewod", label: "Dobór przewodu i zabezpieczenia", desc: "przekrój, wyłącznik, spadek napięcia", icon: Zap },
   { id: "spadek", label: "Spadek napięcia", desc: "sprawdzenie trasy o znanym przekroju", icon: TrendingDown },
+  { id: "przekroj", label: "Dobór przekroju przewodu", desc: "przekrój wg obciążalności i spadku", icon: Cable },
+  { id: "zabezpieczenie", label: "Dobór zabezpieczenia", desc: "wyłącznik do znanego przekroju", icon: Zap },
   { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza", icon: Home },
   { id: "wlz", label: "Dobór WLZ (linii zasilającej)", desc: "przekrój kabla od licznika do rozdzielnicy", icon: Cable },
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN", icon: ClipboardCheck },
@@ -88,7 +96,7 @@ export function CalculatorsTab() {
   // pojedynczych pól (zamiast jednego selektora zwracającego obiekt) to ten
   // sam wzorzec co `useProjectStore` w całej aplikacji — każdy komponent
   // subskrybuje tylko to, co faktycznie czyta.
-  const activeCalc = useCalculatorsStore((s) => s.activeCalc);
+  const zapisanyActiveCalc = useCalculatorsStore((s) => s.activeCalc);
   const circuitKind = useCalculatorsStore((s) => s.circuitKind);
   const power = useCalculatorsStore((s) => s.power);
   const phase = useCalculatorsStore((s) => s.phase);
@@ -98,6 +106,7 @@ export function CalculatorsTab() {
   const ambientC = useCalculatorsStore((s) => s.ambientC);
   const bundleCount = useCalculatorsStore((s) => s.bundleCount);
   const motorStart = useCalculatorsStore((s) => s.motorStart);
+  const breakerSection = useCalculatorsStore((s) => s.breakerSection);
   const duCurrentA = useCalculatorsStore((s) => s.duCurrentA);
   const duPhase = useCalculatorsStore((s) => s.duPhase);
   const duLength = useCalculatorsStore((s) => s.duLength);
@@ -125,6 +134,17 @@ export function CalculatorsTab() {
   const patch = useCalculatorsStore((s) => s.patch);
   const setDevices = useCalculatorsStore((s) => s.setDevices);
 
+  /**
+   * Identyfikator wczytany z localStorage może pochodzić ze STARSZEJ wersji, w
+   * której kalkulatory nazywały się inaczej — np. „przewod" sprzed rozbicia na
+   * „przekroj" i „zabezpieczenie". Taki nieznany identyfikator wywracał całą
+   * zakładkę: `CALC_LIST.find(...)!` zwracało `undefined`, a odczyt `.label`
+   * kończył się białym ekranem u KAŻDEGO, kto korzystał z kalkulatorów przed
+   * aktualizacją (świeży localStorage tego nie pokazuje, więc łatwo to przeoczyć).
+   * Cofamy się do pierwszej pozycji zamiast ufać zapisanej wartości.
+   */
+  const activeCalc: CalcId = CALC_LIST.some((c) => c.id === zapisanyActiveCalc) ? zapisanyActiveCalc : CALC_LIST[0].id;
+
   const setActiveCalc = (v: CalcId) => patch({ activeCalc: v });
   const setCircuitKind = (v: CircuitKind) => patch({ circuitKind: v });
   const setPower = (v: number) => patch({ power: v });
@@ -135,6 +155,7 @@ export function CalculatorsTab() {
   const setAmbientC = (v: number) => patch({ ambientC: v });
   const setBundleCount = (v: number) => patch({ bundleCount: v });
   const setMotorStart = (v: boolean) => patch({ motorStart: v });
+  const setBreakerSection = (v: number) => patch({ breakerSection: v });
   const setDuCurrentA = (v: number) => patch({ duCurrentA: v });
   const setDuPhase = (v: "1" | "3") => patch({ duPhase: v });
   const setDuLength = (v: number) => patch({ duLength: v });
@@ -181,7 +202,59 @@ export function CalculatorsTab() {
     [circuitKind, power, phase, cosphi, length, layingMethod, ambientC, bundleCount, motorStart]
   );
 
-  // --- 2. spadek napięcia na ZNANYM przekroju ---
+  /**
+   * Ten sam dobór (`sized`) policzony dla KAŻDEGO sposobu ułożenia — do tabelki
+   * porównawczej pod wynikiem.
+   *
+   * Sposób ułożenia był polem formularza od dawna, ale jego wpływ pozostawał
+   * niewidoczny: użytkownik przestawiał listę i albo wynik się nie zmieniał, albo
+   * zmieniał się bez wyjaśnienia. Tymczasem to jeden z najmocniej działających
+   * parametrów — ta sama żyła 2,5 mm² uniesie 27 A natynkowo i tylko 19,5 A
+   * w ścianie ocieplonej (tabl. B.52.4), czyli różnicę większą niż niejeden stopień
+   * przekroju. Pokazanie wszystkich czterech wariantów naraz robi z tego pola
+   * świadomy wybór zamiast ustawienia, które się pomija.
+   */
+  const layingComparison = useMemo(
+    () =>
+      LAYING_METHOD_OPTIONS.map((opt) => {
+        const r = sizeCircuit({
+          id: "porownanie",
+          nazwa: "Obwód",
+          typ: circuitKind,
+          moc_W: power,
+          liczba_faz: phase,
+          cos_phi: cosphi,
+          dlugosc_m: length > 0 ? length : undefined,
+          sposob_ulozenia: opt.value,
+          temperatura_otoczenia_C: ambientC,
+          obwodow_w_wiazce: bundleCount,
+          rozruch_silnikowy: motorStart,
+        });
+        return { ...opt, przekroj: r.przekroj_mm2, Iz: r.Iz_A };
+      }),
+    [circuitKind, power, phase, cosphi, length, ambientC, bundleCount, motorStart]
+  );
+
+  // --- 3. dobór zabezpieczenia do ZNANEGO przekroju ---
+  // Odwrotna strona `sizeCircuit`: przekrój jest wejściem, aparat wyjściem.
+  // Jednostkowy test w `sizing.test.ts` pilnuje, że dla tych samych danych oba
+  // dobory podają TEN SAM aparat — inaczej dwa kalkulatory przeczyłyby sobie.
+  const sizedBreaker = useMemo(
+    () =>
+      sizeBreakerForSection({
+        prad_A: sized.Ib_A ?? 0,
+        liczba_faz: phase,
+        przekroj_mm2: breakerSection as (typeof SECTIONS)[number],
+        sposob_ulozenia: layingMethod,
+        temperatura_otoczenia_C: ambientC,
+        obwodow_w_wiazce: bundleCount,
+        rozruch_silnikowy: motorStart,
+        typ: circuitKind,
+      }),
+    [sized.Ib_A, phase, breakerSection, layingMethod, ambientC, bundleCount, motorStart, circuitKind]
+  );
+
+  // --- 4. spadek napięcia na ZNANYM przekroju ---
   // Ten sam `voltageDropPct` co `sizeCircuit`/`sizeFeeder` — czyli rezystywność
   // miedzi przy 70 °C, nie 20 °C (patrz `RHO_CU_70C` w norms.ts). To NIE jest
   // kopia wzoru: osobna implementacja spadku napięcia mieszkała już kiedyś w
@@ -272,7 +345,7 @@ export function CalculatorsTab() {
     [roomA, lux, lumPerOpr, mf, uf]
   );
 
-  const active = CALC_LIST.find((c) => c.id === activeCalc)!;
+  const active = CALC_LIST.find((c) => c.id === activeCalc)!; // bezpieczne — `activeCalc` jest wyżej sprowadzone do istniejącej pozycji
 
   return (
     <div className="space-y-5">
@@ -308,8 +381,8 @@ export function CalculatorsTab() {
         </div>
 
         <div style={{ flex: "1 1 480px", minWidth: 320 }}>
-          {activeCalc === "przewod" && (
-            <Card title={active.label} icon={Zap} tag="obwód">
+          {activeCalc === "przekroj" && (
+            <Card title={active.label} icon={Cable} tag="przekrój żyły">
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
                   label="Rodzaj obwodu"
@@ -322,10 +395,7 @@ export function CalculatorsTab() {
                   label="Zasilanie"
                   value={phase}
                   onChange={(v) => setPhase(v as "1" | "3")}
-                  options={[
-                    { value: "1", label: "1-fazowe 230V" },
-                    { value: "3", label: "3-fazowe 400V" },
-                  ]}
+                  options={PHASE_OPTIONS}
                 />
                 <Field label="Współczynnik cos φ" value={cosphi} onChange={(v) => setCosphi(Number(v))} step="0.05" />
               </div>
@@ -403,27 +473,76 @@ export function CalculatorsTab() {
               </label>
 
               <div className="mt-2 p-3 pe-result">
-                <div className="text-xs text-slate-500 mb-1">Prąd obliczeniowy</div>
-                <div className="pe-mono text-lg text-blueprint">{(sized.Ib_A ?? 0).toFixed(2)} A</div>
-                {sized.przekroj_mm2 && sized.aparat ? (
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">{sized.kabel}</span>
-                    <span className="pe-chip pe-tag-blue">
-                      wyłącznik {sized.aparat.charakterystyka}
-                      {sized.aparat.In_A} {sized.aparat.bieguny}
-                    </span>
-                    <span className="pe-chip pe-tag-green">obc. dop. {sized.Iz_A} A</span>
-                    {sized.spadek_napiecia_pct !== null && (
-                      <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
-                        ΔU {sized.spadek_napiecia_pct}% (limit {sized.spadek_napiecia_limit_pct}%)
-                      </span>
-                    )}
-                  </div>
+                <div className="text-xs text-slate-500 mb-1">Wymagany przekrój żyły</div>
+                {sized.przekroj_mm2 ? (
+                  <>
+                    <div className="pe-mono text-lg text-blueprint">
+                      {String(sized.przekroj_mm2).replace(".", ",")} mm²
+                    </div>
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      <span className="pe-chip pe-tag-copper">{sized.kabel}</span>
+                      <span className="pe-chip pe-tag-blue">Ib {(sized.Ib_A ?? 0).toFixed(2)} A</span>
+                      <span className="pe-chip pe-tag-green">obc. dop. {sized.Iz_A} A</span>
+                      {sized.spadek_napiecia_pct !== null && (
+                        <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                          ΔU {sized.spadek_napiecia_pct}% (limit {sized.spadek_napiecia_limit_pct}%)
+                        </span>
+                      )}
+                    </div>
+                  </>
                 ) : (
                   <div className="text-sm mt-2 flex items-center gap-1" style={{ color: "#A2352C" }}>
                     <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
                   </div>
                 )}
+              </div>
+
+              {/* Wpływ sposobu ułożenia — patrz `layingComparison`. Tabelka stoi POD
+                  wynikiem, bo to uzasadnienie wybranej liczby, a nie kolejne pole do
+                  wypełnienia. Aktualnie wybrany wariant jest podświetlony, a każdy
+                  wiersz klikalny — porównanie ma prowadzić do zmiany założenia jednym
+                  kliknięciem, nie do wracania w górę formularza. */}
+              <div className="mt-3 rounded-lg border border-border bg-white/60">
+                <div className="border-b border-border px-3 py-2 text-xs font-semibold text-slate-600">
+                  Jak sposób ułożenia zmienia wynik
+                </div>
+                <div className="px-1.5 py-1.5">
+                  {layingComparison.map((row) => {
+                    const on = row.value === layingMethod;
+                    return (
+                      <button
+                        key={row.value}
+                        type="button"
+                        onClick={() => setLayingMethod(row.value)}
+                        title={`Przyjmij ułożenie: ${row.label}`}
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
+                        style={on ? { background: "#2D5A8C10" } : undefined}
+                      >
+                        <span
+                          className="min-w-0 flex-1 truncate text-[11.5px]"
+                          style={on ? { color: "#2D5A8C", fontWeight: 600 } : { color: "#64748B" }}
+                        >
+                          {row.label}
+                        </span>
+                        <span className="pe-mono shrink-0 text-[11.5px] text-slate-500">
+                          {row.Iz !== null ? `${row.Iz} A` : "—"}
+                        </span>
+                        <span
+                          className="pe-mono w-16 shrink-0 text-right text-[12px] font-semibold"
+                          style={{ color: on ? "#2D5A8C" : "#8A5526" }}
+                        >
+                          {row.przekroj !== null ? `${String(row.przekroj).replace(".", ",")} mm²` : "—"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
+                    Kolumny: obciążalność po współczynnikach i wynikający z niej przekrój. Ciepło musi mieć dokąd uciec —
+                    przewód natynkowy chłodzi się powietrzem, a ten w ścianie ocieplonej termicznie praktycznie nie oddaje
+                    ciepła, więc uniesie najmniej. Pomylenie tych dwóch przypadków to najczęstszy sposób na przegrzanie
+                    przewodu w domu energooszczędnym.
+                  </div>
+                </div>
               </div>
 
               {sized.ostrzezenia.length > 0 && (
@@ -448,16 +567,174 @@ export function CalculatorsTab() {
                 formulas={[
                   { label: "Prąd obliczeniowy — obwód 1-fazowy", eq: "Ib = P / (U × cos φ)", where: "P — moc czynna [W], U = 230 V, cos φ — współczynnik mocy" },
                   { label: "Prąd obliczeniowy — obwód 3-fazowy", eq: "Ib = P / (√3 × U × cos φ)", where: "U = 400 V (napięcie międzyfazowe)" },
-                  { label: "Obciążalność po korekcie", eq: "Iz = Iz₀ × k1 × k2", where: "k1 — współczynnik temperatury otoczenia, k2 — współczynnik grupowania (liczba obwodów we wspólnej trasie)" },
-                  { label: "Warunek doboru zabezpieczenia", eq: "Ib ≤ In ≤ Iz", where: "In — prąd znamionowy wyłącznika" },
+                  { label: "Obciążalność po korekcie", eq: "Iz = Iz₀ × k1 × k2", where: "Iz₀ — obciążalność z tablicy dla METODY ODNIESIENIA wynikającej ze sposobu ułożenia, k1 — wsp. temperatury otoczenia, k2 — wsp. grupowania" },
+                  { label: "Metoda odniesienia wg sposobu ułożenia", eq: "pod tynkiem → B2, w rurce → B1, natynkowo → C, ściana ocieplona → A1", where: "każda metoda ma własny wiersz w tablicy obciążalności (PN-HD 60364-5-52 tabl. B.52.4)" },
                   { label: "Spadek napięcia — 1-fazowy / 3-fazowy", eq: "ΔU = (2·L·Ib·ρ)/S   |   ΔU = (√3·L·Ib·ρ)/S", where: "ρ = 0,0225 Ω·mm²/m — rezystywność miedzi przy 70°C (żyła nagrzana prądem roboczym, nie 20°C)" },
                 ]}
                 notes={[
                   "Kalkulator szuka NAJMNIEJSZEGO przekroju, który jednocześnie spełnia obciążalność (Ib ≤ In ≤ Iz) i limit spadku napięcia — 3% dla obwodów oświetleniowych, 5% dla pozostałych. To ten sam silnik doboru, który automatycznie liczy zakładka „Rozdzielnica” dla obwodów narysowanych na planie, więc oba miejsca zawsze dają ten sam wynik dla tych samych danych.",
-                  "Obwód wymiarowany jest pod docelową obsadę, nie tylko pod dzisiejszą moc — obwód gniazd dostaje typowo B16, a oświetlenia B10, nawet jeśli chwilowy pobór jest dużo niższy.",
-                  "Sposób ułożenia zmienia dopuszczalną obciążalność: przewód w ścianie ocieplonej termicznie grzeje się najbardziej (najostrzejszy przypadek), natynkowy chłodzi się najlepiej.",
+                  "Sposób ułożenia decyduje o tym, ile ciepła przewód może oddać, a więc wprost o obciążalności: ta sama żyła 2,5 mm² uniesie 27 A natynkowo i tylko 19,5 A w ścianie ocieplonej termicznie. Tabelka pod wynikiem pokazuje wszystkie cztery warianty naraz — jeśli nie masz pewności, którym pójdzie trasa, przyjmij ostrzejszy.",
+                  "Przekrój bywa podnoszony ponad wynikający z samej obciążalności — decyduje wtedy spadek napięcia na długiej trasie. Kalkulator mówi o tym wprost w ostrzeżeniu.",
                   "Bez podanej długości trasy (albo przy długości = 0) spadek napięcia NIE jest sprawdzany — dobór pokrywa wtedy wyłącznie obciążalność.",
+                  "Dobrany tu przekrój przenieś do kalkulatora „Dobór zabezpieczenia”, żeby zobaczyć sam wyłącznik wraz z warunkiem Ib ≤ In ≤ Iz i wymaganiem na pętlę zwarcia.",
                   "Wynik jest orientacyjny/edukacyjny — dobór do realizacji i odbioru wykonuje osoba z uprawnieniami, z uwzględnieniem rzeczywistej trasy kabla i warunków otoczenia.",
+                ]}
+              />
+            </Card>
+          )}
+
+          {activeCalc === "zabezpieczenie" && (
+            <Card title={active.label} icon={Zap} tag="wyłącznik nadprądowy">
+              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
+                został narzucony projektem. Jeśli dopiero szukasz przekroju, zacznij od „Dobór przekroju przewodu”;
+                oba kalkulatory dzielą te same pola, więc nic nie trzeba przepisywać.
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field
+                  label="Rodzaj obwodu"
+                  value={circuitKind}
+                  onChange={(v) => setCircuitKind(v as CircuitKind)}
+                  options={CIRCUIT_KIND_OPTIONS}
+                />
+                <Field
+                  label="Przekrój żyły przewodu"
+                  value={String(breakerSection)}
+                  onChange={(v) => setBreakerSection(Number(v))}
+                  options={SECTION_OPTIONS}
+                />
+                <Field label="Moc odbiornika" value={power} onChange={(v) => setPower(Number(v))} unit="W" />
+                <Field label="Zasilanie" value={phase} onChange={(v) => setPhase(v as "1" | "3")} options={PHASE_OPTIONS} />
+                <Field label="Współczynnik cos φ" value={cosphi} onChange={(v) => setCosphi(Number(v))} step="0.05" />
+              </div>
+
+              <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Warunki ułożenia (decydują o obciążalności)</div>
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field
+                  label="Sposób ułożenia"
+                  value={layingMethod}
+                  onChange={(v) => setLayingMethod(v as LayingMethod)}
+                  options={LAYING_METHOD_OPTIONS}
+                />
+                <Field label="Temperatura otoczenia" value={ambientC} onChange={(v) => setAmbientC(Number(v))} unit="°C" />
+                <Field
+                  label="Obwodów we wspólnej trasie"
+                  value={bundleCount}
+                  onChange={(v) => setBundleCount(Number(v))}
+                  step="1"
+                />
+              </div>
+              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={motorStart}
+                  onChange={(e) => setMotorStart(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Odbiornik z rozruchem silnikowym (pompa, lodówka, klimatyzacja) — charakterystyka C
+              </label>
+
+              <div className="mt-2 p-3 pe-result">
+                <div className="text-xs text-slate-500 mb-1">Dobrany wyłącznik nadprądowy</div>
+                {sizedBreaker.aparat ? (
+                  <>
+                    <div className="pe-mono text-lg text-blueprint">
+                      {sizedBreaker.aparat.charakterystyka}
+                      {sizedBreaker.aparat.In_A} {sizedBreaker.aparat.bieguny}
+                    </div>
+                    <div className="mt-2 flex gap-2 flex-wrap">
+                      <span className="pe-chip pe-tag-blue">Ib {sizedBreaker.Ib_A.toFixed(2)} A</span>
+                      <span className="pe-chip pe-tag-green">Iz {sizedBreaker.Iz_A} A</span>
+                      <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                        metoda {sizedBreaker.metoda_odniesienia} · k1 {sizedBreaker.wspolczynniki.k1_temperatura} · k2{" "}
+                        {sizedBreaker.wspolczynniki.k2_grupowanie}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-sm mt-2 flex items-center gap-1" style={{ color: "#A2352C" }}>
+                    <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
+                  </div>
+                )}
+              </div>
+
+              {/* Warunek Ib ≤ In ≤ Iz rozpisany na trzy liczby obok siebie: to JEDYNY
+                  warunek doboru zabezpieczenia i cały sens tego kalkulatora, więc ma
+                  być widoczny wprost, a nie do odtworzenia z chipów wyżej. */}
+              {sizedBreaker.aparat && (
+                <div className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2" style={{ background: "#3B8C631A", color: "#2C6B4A" }}>
+                  <Check size={16} className="shrink-0 mt-0.5" />
+                  <div>
+                    Warunek doboru spełniony:{" "}
+                    <strong className="pe-mono">
+                      {sizedBreaker.Ib_A.toFixed(2)} A ≤ {sizedBreaker.aparat.In_A} A ≤ {sizedBreaker.Iz_A} A
+                    </strong>{" "}
+                    (Ib ≤ In ≤ Iz) — wyłącznik zadziała, zanim przewód się przegrzeje.
+                  </div>
+                </div>
+              )}
+
+              {sizedBreaker.Ia_A !== null && sizedBreaker.Zs_max_Ohm !== null && (
+                <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-slate-500">Prąd zadziałania Ia</div>
+                    <div className="pe-mono">{sizedBreaker.Ia_A.toFixed(0)} A</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Wymagana Zs max</div>
+                    <div className="pe-mono text-copper">{sizedBreaker.Zs_max_Ohm.toFixed(2)} Ω</div>
+                  </div>
+                </div>
+              )}
+
+              {sizedBreaker.ostrzezenia.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {sizedBreaker.ostrzezenia.map((w, i) => (
+                    <div
+                      key={i}
+                      className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                      style={{
+                        background: w.level === "error" ? "#C6433A14" : "#C1793F14",
+                        color: w.level === "error" ? "#A2352C" : "#8A5526",
+                      }}
+                    >
+                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                      <div>{w.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <HowItWorks
+                formulas={[
+                  {
+                    label: "Warunek doboru zabezpieczenia",
+                    eq: "Ib ≤ In ≤ Iz",
+                    where: "Ib — prąd obliczeniowy, In — prąd znamionowy wyłącznika, Iz — obciążalność przewodu po współczynnikach",
+                  },
+                  {
+                    label: "Obciążalność przewodu po korekcie",
+                    eq: "Iz = Iz₀ × k1 × k2",
+                    where: "Iz₀ z tablicy dla metody odniesienia wynikającej ze sposobu ułożenia — to dlatego warunki ułożenia są tu polem obowiązkowym, mimo że przekrój jest już znany",
+                  },
+                  {
+                    label: "Prąd zadziałania wyzwalacza magnetycznego",
+                    eq: "Ia = k × In",
+                    where: "k = 5 dla charakterystyki B, 10 dla C, 20 dla D",
+                  },
+                  {
+                    label: "Wymaganie na pętlę zwarcia",
+                    eq: "Zs max = U₀ / Ia",
+                    where: "U₀ = 230 V — zmierzona Zs nie może przekroczyć tej wartości (patrz kalkulator „Impedancja pętli zwarcia”)",
+                  },
+                ]}
+                notes={[
+                  "Wyłącznik chroni PRZEWÓD, nie odbiornik — dlatego górną granicą jest obciążalność przewodu (Iz), a nie moc urządzenia. Zabezpieczenie dobrane „pod odbiornik”, bez sprawdzenia Iz, to klasyczny sposób na przegrzanie instalacji.",
+                  "Obwód wymiarowany jest pod docelową obsadę, nie tylko pod dzisiejszą moc — obwód gniazd dostaje typowo B16, a oświetlenia B10, nawet jeśli chwilowy pobór jest dużo niższy. Kalkulator schodzi poniżej tej wartości tylko wtedy, gdy obciążalność przewodu na to nie pozwala, i mówi o tym wprost.",
+                  "Charakterystyka C (zamiast B) dla odbiorników z rozruchem silnikowym zapobiega wyłączaniu przy prądzie rozruchowym — ale podnosi Ia dwukrotnie, więc ZAOSTRZA wymaganie na impedancję pętli zwarcia.",
+                  "Warunek Ib ≤ In ≤ Iz to dopiero połowa ochrony: drugą jest samoczynne wyłączenie w wymaganym czasie, czyli warunek na Zs. Sprawdź go w kalkulatorze „Impedancja pętli zwarcia”, wpisując pokazaną tu Zs max.",
+                  "Ten sam silnik doboru co „Dobór przekroju przewodu” i zakładka Rozdzielnica — dla tych samych danych wszystkie trzy miejsca podadzą ten sam aparat.",
                 ]}
               />
             </Card>
@@ -467,8 +744,8 @@ export function CalculatorsTab() {
             <Card title={active.label} icon={TrendingDown} tag="sprawdzenie trasy">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Ten kalkulator sprawdza trasę o <strong>znanym przekroju</strong> — np. kabel, który już jest ułożony
-                albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór przewodu i zabezpieczenia”: tam
-                przekrój jest wynikiem, dobieranym pod obciążalność i spadek naraz.
+                albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór przekroju przewodu”: tam przekrój
+                jest wynikiem, dobieranym pod obciążalność i spadek naraz.
               </div>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
@@ -738,7 +1015,7 @@ export function CalculatorsTab() {
                   { label: "Spadek napięcia — 1-fazowy / 3-fazowy", eq: "ΔU = (2·L·Ib·ρ)/S   |   ΔU = (√3·L·Ib·ρ)/S", where: "ρ = 0,0225 Ω·mm²/m przy 70°C, ten sam wzór co w doborze obwodu odbiorczego" },
                 ]}
                 notes={[
-                  "Ten sam silnik doboru co „Dobór przewodu i zabezpieczenia” i Rozdzielnica (`sizeCircuit`/`sizeFeeder` w `lib/panel/sizing.ts`) — ta sama tablica obciążalności, te same współczynniki poprawkowe.",
+                  "Ten sam silnik doboru co „Dobór przekroju przewodu” i Rozdzielnica (`sizeCircuit`/`sizeFeeder` w `lib/panel/sizing.ts`) — ta sama tablica obciążalności, te same współczynniki poprawkowe.",
                   "Minimalny przekrój WLZ przyjęto na 10 mm² — praktyka projektowa dla domu jednorodzinnego (kabel dźwiga cały budynek), NIE liczba wprost z normy.",
                   "Domyślny limit spadku napięcia na samej WLZ to 2%, węższy niż 3-5% dla obwodu odbiorczego — WLZ to tylko odcinek całej trasy do odbiornika, więc zostawia miejsce na spadek za rozdzielnicą. Można go zmienić powyżej.",
                   "Tablice dotyczą przewodu w budynku (pod tynkiem/w rurce/natynkowo) — NIE kabla ziemnego. Jeśli WLZ biegnie w ziemi od złącza kablowo-pomiarowego, ten kalkulator się nie sprawdzi — potrzebna inna metoda odniesienia.",

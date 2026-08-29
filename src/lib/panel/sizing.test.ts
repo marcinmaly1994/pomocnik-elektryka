@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { baseAmpacity, groupingFactor, temperatureFactor } from "./norms";
-import { currentFromPower, sizeCircuit, sizeFeeder, voltageDropPct, zsMaxForBreaker, type CircuitSpec } from "./sizing";
+import {
+  currentFromPower,
+  sizeBreakerForSection,
+  sizeCircuit,
+  sizeFeeder,
+  voltageDropPct,
+  zsMaxForBreaker,
+  type BreakerSpec,
+  type CircuitSpec,
+} from "./sizing";
 
 /**
  * Testy doboru sprawdzają LICZBY, nie tylko kształt odpowiedzi — bo cała wartość
@@ -317,5 +326,86 @@ describe("sizeFeeder — WLZ (linia zasilająca)", () => {
 
     const nadpisany = sizeFeeder({ prad_A: 15, liczba_faz: "3", sposob_ulozenia: "w_scianie", limit_spadku_pct: 1.5 });
     expect(nadpisany.spadek_napiecia_limit_pct).toBe(1.5);
+  });
+});
+
+/**
+ * `sizeBreakerForSection` to odwrotna strona `sizeCircuit`: przekrój jest DANĄ,
+ * nie wynikiem. Kluczowe wymaganie — dla tych samych danych oba dobory muszą
+ * podać TEN SAM aparat, inaczej kalkulatory „Dobór przekroju" i „Dobór
+ * zabezpieczenia" zaczęłyby sobie przeczyć.
+ */
+describe("sizeBreakerForSection — dobór aparatu do znanego przekroju", () => {
+  function bspec(over: Partial<BreakerSpec> = {}): BreakerSpec {
+    return { prad_A: 8.7, liczba_faz: "1", przekroj_mm2: 2.5, sposob_ulozenia: "w_scianie", typ: "gniazda", ...over };
+  }
+
+  it("zgadza się z sizeCircuit dla tych samych danych — obwód gniazd 2000 W", () => {
+    const pelny = sizeCircuit(spec({ typ: "gniazda", moc_W: 2000, liczba_faz: "1", dlugosc_m: 15 }));
+    const sam = sizeBreakerForSection(bspec({ prad_A: pelny.Ib_A!, przekroj_mm2: pelny.przekroj_mm2! }));
+    expect(sam.aparat).toEqual(pelny.aparat);
+    expect(sam.Iz_A).toBe(pelny.Iz_A);
+  });
+
+  it("Iz bierze z tablicy dla metody wynikającej ze sposobu ułożenia", () => {
+    // 2,5 mm², 2 żyły obciążone: B2 = 23 A, C (natynkowo) = 27 A, A1 = 19,5 A
+    expect(sizeBreakerForSection(bspec({ sposob_ulozenia: "w_scianie" })).Iz_bazowa_A).toBe(23);
+    expect(sizeBreakerForSection(bspec({ sposob_ulozenia: "natynkowo" })).Iz_bazowa_A).toBe(27);
+    expect(sizeBreakerForSection(bspec({ sposob_ulozenia: "w_scianie_ocieplonej" })).Iz_bazowa_A).toBe(19.5);
+    expect(sizeBreakerForSection(bspec({ sposob_ulozenia: "natynkowo" })).metoda_odniesienia).toBe("C");
+  });
+
+  it("obwód gniazd dostaje typowe B16, dopóki przewód to udźwignie", () => {
+    // 2,5 mm² w B2: Iz = 23 A >= 16 A, więc mimo Ib = 8,7 A wchodzi B16
+    const r = sizeBreakerForSection(bspec());
+    expect(r.aparat).toEqual({ charakterystyka: "B", In_A: 16, bieguny: "1P+N" });
+    expect(r.status).toBe("ok");
+  });
+
+  it("gdy przewód nie udźwignie typowego In, schodzi niżej i mówi o tym wprost", () => {
+    // 1,5 mm² w ścianie ocieplonej (A1) = 14,5 A — typowe B16 się nie mieści.
+    // Awaryjnie szukamy NAJMNIEJSZEGO In ≥ Ib (8,7 A) mieszczącego się w Iz,
+    // czyli B10 — a nie największego, jaki jeszcze wejdzie (B13).
+    const r = sizeBreakerForSection(bspec({ przekroj_mm2: 1.5, sposob_ulozenia: "w_scianie_ocieplonej" }));
+    expect(r.aparat?.In_A).toBe(10);
+    expect(r.ostrzezenia.map((w) => w.code)).toContain("IN_PONIZEJ_TYPOWEGO");
+  });
+
+  it("prąd ponad obciążalność przewodu to BŁĄD, a nie cichy dobór większego aparatu", () => {
+    // 1,5 mm² w B2 = 16,5 A; Ib = 25 A nie ma prawa przejść
+    const r = sizeBreakerForSection(bspec({ przekroj_mm2: 1.5, prad_A: 25 }));
+    expect(r.status).toBe("error");
+    expect(r.aparat).toBeNull();
+    expect(r.ostrzezenia.map((w) => w.code)).toContain("PRZEWOD_ZA_SLABY");
+  });
+
+  it("rozruch silnikowy przestawia charakterystykę na C i podnosi Ia", () => {
+    const b = sizeBreakerForSection(bspec());
+    const c = sizeBreakerForSection(bspec({ rozruch_silnikowy: true }));
+    expect(b.aparat?.charakterystyka).toBe("B");
+    expect(c.aparat?.charakterystyka).toBe("C");
+    // Ia = k × In: B16 -> 5×16 = 80 A, C16 -> 10×16 = 160 A
+    expect(b.Ia_A).toBe(80);
+    expect(c.Ia_A).toBe(160);
+    // wyższy Ia to OSTRZEJSZE wymaganie na pętlę zwarcia
+    expect(c.Zs_max_Ohm!).toBeLessThan(b.Zs_max_Ohm!);
+  });
+
+  it("grupowanie i temperatura obniżają Iz i są zgłaszane", () => {
+    const grouped = sizeBreakerForSection(bspec({ obwodow_w_wiazce: 4 }));
+    // 23 A × 0,65 = 14,95 A -> typowe B16 już się nie mieści, zostaje B10
+    expect(grouped.Iz_A).toBeCloseTo(14.95, 2);
+    expect(grouped.aparat?.In_A).toBe(10);
+    expect(grouped.ostrzezenia.map((w) => w.code)).toContain("GRUPOWANIE");
+
+    const hot = sizeBreakerForSection(bspec({ temperatura_otoczenia_C: 45 }));
+    expect(hot.ostrzezenia.map((w) => w.code)).toContain("TEMPERATURA");
+  });
+
+  it("brak prądu daje błąd zamiast zgadywania", () => {
+    const r = sizeBreakerForSection(bspec({ prad_A: 0 }));
+    expect(r.status).toBe("error");
+    expect(r.aparat).toBeNull();
+    expect(r.ostrzezenia.map((w) => w.code)).toContain("BRAK_PRADU");
   });
 });
