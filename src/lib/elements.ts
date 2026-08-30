@@ -4,7 +4,7 @@ import type { ElementType, ElementTypeDef, InstallationElement } from "@/types";
 export const ELEMENT_TYPES: Record<ElementType, ElementTypeDef> = {
   gniazdko: { label: "Gniazdo 230 V", code: "G", color: "#2D5A8C", role: "socket" },
   gniazdkoHerm: { label: "Gniazdko hermetyczne", code: "IP", color: "#2D5A8C", role: "socketWet" },
-  gniazdko400: { label: "Gniazdko 400V", code: "3F", color: "#1F4470", role: "socket3f" },
+  gniazdko400: { label: "Gniazdo Trójfazowe", code: "3F", color: "#1F4470", role: "socket3f" },
   wypustAGD: { label: "Wypust AGD", code: "AGD", color: "#1F4470", role: "dedicated" },
   ladowarkaEV: { label: "Ładowarka EV", code: "EV", color: "#1F4470", role: "ev" },
 
@@ -92,10 +92,10 @@ export const VARIANTS_FOR: Partial<Record<ElementType, number[]>> = {};
 ELEMENT_SECTIONS.forEach((s) => s.items.forEach((i) => { if (i.variants) VARIANTS_FOR[i.key] = i.variants; }));
 
 export const LIB_SUBTITLES: Partial<Record<ElementType, string>> = {
-  gniazdko: "230V · podtynkowe",
+  gniazdko: "230V · pojedyncze",
   gniazdkoHerm: "IP44 · łazienka, taras",
   gniazdko400: "siła · 3-fazowe",
-  wypustAGD: "własny obwód",
+  wypustAGD: "własny obwód · litera edytowalna",
   ladowarkaEV: "wallbox · własny obwód",
   wlacznik: "jeden obwód, jedno miejsce",
   wlacznikDwubiegunowy: "przerywa L i N",

@@ -66,3 +66,26 @@ test("przycisk „Dalej” nie pojawia się poza głównym przepływem (Kalkulat
   await page.getByRole("button", { name: "Kalkulatory" }).click();
   await expect(page.getByRole("button", { name: /^Dalej:/ })).toHaveCount(0);
 });
+
+test("przycisk „Cofnij” wraca po kolei przez wszystkie kroki i znika na pierwszym", async ({ page }) => {
+  await page.goto("/");
+
+  // Na pierwszym kroku ("Instalacja") nie ma dokąd się cofnąć.
+  await expect(page.getByRole("button", { name: /^Cofnij:/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^Dalej:/ }).click();
+  const cofnij = page.getByRole("button", { name: /^Cofnij:/ });
+  await expect(cofnij).toHaveText("Cofnij: Instalacja");
+
+  await page.getByRole("button", { name: /^Dalej:/ }).click();
+  await expect(cofnij).toHaveText("Cofnij: Rozdzielnica");
+
+  await cofnij.click();
+  await expect(page.getByRole("heading", { name: "Rozdzielnica elektryczna" })).toBeVisible();
+});
+
+test("przycisk „Cofnij” nie pojawia się poza głównym przepływem (Kalkulatory)", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Kalkulatory" }).click();
+  await expect(page.getByRole("button", { name: /^Cofnij:/ })).toHaveCount(0);
+});

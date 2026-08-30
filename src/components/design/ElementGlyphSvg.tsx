@@ -6,6 +6,45 @@ interface GlyphProps {
   type: ElementType;
   color: string;
   gangs?: number;
+  /** Litera wpisana w łuk symbolu — dotyczy wyłącznie `wypustAGD` (patrz `agdLetter`
+   *  w `InstallationElement`). Domyślnie „A", żeby nowo postawiony wypust od razu
+   *  pokazywał coś w symbolu, zanim użytkownik wpisze właściwą literę. */
+  agdLetter?: string;
+}
+
+/** Wspólna geometria łuku gniazda: trzon u góry, pozioma kreska, łuk otwarty w dół —
+ *  wg konwencji rysunku instalacyjnego. Używana przez `gniazdko`/`gniazdkoHerm`
+ *  (liczba gniazd w łuku), `gniazdko400` (dopisek „3F" pod łukiem) i `wypustAGD`
+ *  (litera odbiornika w łuku, w tym samym miejscu co liczba gniazd) — jeden kształt
+ *  bazowy, żeby te trzy symbole nie zaczęły z czasem rozjeżdżać się kształtem.
+ */
+function SocketArc({ color, herm, insideLabel, belowLabel }: { color: string; herm?: boolean; insideLabel?: string; belowLabel?: string }) {
+  const r = 9;
+  const stemLen = 12;
+  const half = (stemLen + r) / 2;
+  const stemTopY = -half;
+  const apexY = stemTopY + stemLen;
+  const chordY = apexY + r;
+  return (
+    <>
+      <line x1={0} y1={stemTopY} x2={0} y2={apexY} stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      <line x1={-r} y1={apexY} x2={r} y2={apexY} stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      <path d={`M ${-r} ${chordY} A ${r} ${r} 0 0 1 ${r} ${chordY}`} fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      {herm && (
+        <path d={`M ${-r * 0.6} ${chordY} A ${r * 0.6} ${r * 0.6} 0 0 1 ${r * 0.6} ${chordY}`} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+      )}
+      {insideLabel && (
+        <text x={0} y={chordY + 2} fontSize={10} fontWeight={700} fill={color} textAnchor="middle">
+          {insideLabel}
+        </text>
+      )}
+      {belowLabel && (
+        <text x={0} y={chordY + 12} fontSize={7.5} fontWeight={700} fill={color} textAnchor="middle">
+          {belowLabel}
+        </text>
+      )}
+    </>
+  );
 }
 
 /** Plakietka z branżowym kodem literowym — dla elementów, dla których pełny piktogram
@@ -23,60 +62,24 @@ function CodeBadge({ color, code, w = 26, h = 24 }: { color: string; code: strin
 
 /** Symbole zbliżone do konwencji rysunku instalacyjnego (SVG) — do użycia w bibliotece
  *  elementów i modalu edycji, poza płótnem Konva. Przeniesione z `ElementGlyph` w wersji JS. */
-export function ElementGlyphSvg({ type, color, gangs }: GlyphProps) {
+export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
   switch (type) {
     case "gniazdko":
     case "gniazdkoHerm": {
-      // Symbol gniazda wg konwencji rysunku instalacyjnego (wg obrazka referencyjnego
-      // użytkownika): pionowy trzon u góry, pozioma kreska nad łukiem (na wysokości, gdzie
-      // trzon styka się z wierzchołkiem łuku), i łuk otwarty w dół (nogi łuku rozchodzą się w
-      // dół i na boki) — dokładnie ten kształt łuku, co w pierwszej wersji tego symbolu,
-      // tylko z dopisaną poziomą kreską nad nim.
-      const herm = type === "gniazdkoHerm";
       const g = Math.max(1, Math.min(6, gangs || 1));
-      // Proporcje dobrane pod obrazek referencyjny: trzon wyraźnie dłuższy niż promień łuku
-      // (~1,3×), cienkie linie względem rozmiaru całego symbolu — poprzednia wersja była za
-      // mała i za "gruba" (promień/trzon ledwie różniły się długością), przez co nie
-      // przypominała krojem czystego rysunku technicznego z obrazka.
-      const r = 9;
-      const stemLen = 12;
-      const half = (stemLen + r) / 2;
-      const stemTopY = -half;
-      const apexY = stemTopY + stemLen;
-      const chordY = apexY + r;
-      return (
-        <>
-          <line x1={0} y1={stemTopY} x2={0} y2={apexY} stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-          <line x1={-r} y1={apexY} x2={r} y2={apexY} stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-          <path
-            d={`M ${-r} ${chordY} A ${r} ${r} 0 0 1 ${r} ${chordY}`}
-            fill="none"
-            stroke={color}
-            strokeWidth={1.8}
-            strokeLinecap="round"
-          />
-          {herm && (
-            // wariant hermetyczny (IP44): drugi, mniejszy łuk współśrodkowy wewnątrz
-            // pierwszego, wg obrazka referencyjnego użytkownika — zamiast dotychczasowej
-            // etykiety "IP" nad trzonem
-            <path
-              d={`M ${-r * 0.6} ${chordY} A ${r * 0.6} ${r * 0.6} 0 0 1 ${r * 0.6} ${chordY}`}
-              fill="none"
-              stroke={color}
-              strokeWidth={1.5}
-              strokeLinecap="round"
-            />
-          )}
-          {g > 1 && (
-            // liczba gniazd wyśrodkowana wewnątrz łuku, wg obrazka referencyjnego — nisko przy
-            // dolnej krawędzi łuku, żeby nie nachodzić na poziomą belkę nad nim
-            <text x={0} y={chordY + 2} fontSize={10} fontWeight={700} fill={color} textAnchor="middle">
-              {g}
-            </text>
-          )}
-        </>
-      );
+      return <SocketArc color={color} herm={type === "gniazdkoHerm"} insideLabel={g > 1 ? String(g) : undefined} />;
     }
+
+    case "gniazdko400":
+      // Ten sam symbol co gniazdko 230V (wg prośby użytkownika: to jest to samo
+      // gniazdo, tylko trójfazowe) — jedyna różnica to dopisek „3F" pod łukiem
+      // zamiast osobnej plakietki z kodem.
+      return <SocketArc color={color} belowLabel="3F" />;
+
+    case "wypustAGD":
+      // Też ten sam symbol gniazda 230V, z literą KONKRETNEGO odbiornika w łuku
+      // (domyślnie „A", dopóki użytkownik nie wpisze własnej — patrz `EditElementModal`).
+      return <SocketArc color={color} insideLabel={(agdLetter || "A").slice(0, 2).toUpperCase()} />;
 
     case "oswietlenie":
       return (
@@ -277,12 +280,12 @@ export function ElementGlyphSvg({ type, color, gangs }: GlyphProps) {
 
 /** Gotowy `<svg>` z wyśrodkowanym symbolem, do wstawienia w listach (biblioteka elementów,
  *  wybór typu w modalu edycji) — poza kontekstem `<svg>`, w zwykłym drzewie HTML. */
-export function GlyphPreview({ type, color, gangs, size = 26 }: GlyphProps & { size?: number }) {
+export function GlyphPreview({ type, color, gangs, agdLetter, size = 26 }: GlyphProps & { size?: number }) {
   const { w, h } = glyphBoxSize(type);
   const box = Math.max(w, h) + 12;
   return (
     <svg viewBox={`${-box / 2} ${-box / 2} ${box} ${box}`} width={size} height={size}>
-      <ElementGlyphSvg type={type} color={color} gangs={gangs} />
+      <ElementGlyphSvg type={type} color={color} gangs={gangs} agdLetter={agdLetter} />
     </svg>
   );
 }

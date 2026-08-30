@@ -198,12 +198,16 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    * znak", więc czyta się ją wyszukiwaniem, a nie od góry do dołu.
    */
   const uzyteSymbole = useMemo(() => {
-    const wpisy = new Map<string, { type: ElementType; gangs: number }>();
+    // Wypust AGD niesie własną literę odbiornika w symbolu — dwa wypusty z RÓŻNYMI
+    // literami (np. „L" lodówka, „Z" zmywarka) to WIZUALNIE różne symbole, więc
+    // dostają osobne wpisy w legendzie, tak jak różna liczba gniazd w ramce.
+    const wpisy = new Map<string, { type: ElementType; gangs: number; agdLetter?: string }>();
     for (const el of elements) {
-      wpisy.set(`${el.type}:${el.gangs || 1}`, { type: el.type, gangs: el.gangs || 1 });
+      const litera = el.type === "wypustAGD" ? el.agdLetter || "A" : undefined;
+      wpisy.set(`${el.type}:${el.gangs || 1}:${litera ?? ""}`, { type: el.type, gangs: el.gangs || 1, agdLetter: litera });
     }
     return [...wpisy.values()].sort((a, b) =>
-      ELEMENT_TYPES[a.type].label.localeCompare(ELEMENT_TYPES[b.type].label, "pl")
+      ELEMENT_TYPES[a.type].label.localeCompare(ELEMENT_TYPES[b.type].label, "pl") || (a.agdLetter || "").localeCompare(b.agdLetter || "")
     );
   }, [elements]);
 
@@ -228,13 +232,16 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
 
     const legenda = [];
     for (const sym of uzyteSymbole) {
-      const svg = glifyRef.current?.querySelector<SVGSVGElement>(`[data-glif="${sym.type}:${sym.gangs}"] svg`);
+      const svg = glifyRef.current?.querySelector<SVGSVGElement>(`[data-glif="${sym.type}:${sym.gangs}:${sym.agdLetter ?? ""}"] svg`);
       if (!svg) continue;
       const wariant = libSubtitle(sym.type, sym.gangs);
-      legenda.push({
-        symbol: await plotnoDoPdf(await svgDoPlotna(svg, 96)),
-        opis: wariant && sym.gangs > 1 ? `${ELEMENT_TYPES[sym.type].label} — ${wariant}` : ELEMENT_TYPES[sym.type].label,
-      });
+      const opis =
+        sym.agdLetter !== undefined
+          ? `${ELEMENT_TYPES[sym.type].label} — litera ${sym.agdLetter}`
+          : wariant && sym.gangs > 1
+            ? `${ELEMENT_TYPES[sym.type].label} — ${wariant}`
+            : ELEMENT_TYPES[sym.type].label;
+      legenda.push({ symbol: await plotnoDoPdf(await svgDoPlotna(svg, 96)), opis });
     }
 
     return buildDrawingPdf({
@@ -856,6 +863,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           note: activeType === "gniazdko" && dedicated ? "AGD" : "",
           gangs: gangsForType(activeType),
           rotation: 0,
+          // Domyślna litera przy stawianiu z biblioteki — użytkownik podmienia ją na
+          // właściwą (L, Z, ...) w edycji elementu, patrz `EditElementModal`.
+          agdLetter: activeType === "wypustAGD" ? "A" : undefined,
         },
       ],
     }));
@@ -1520,8 +1530,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           czytnika ekranu to duplikat treści palety. */}
       <div ref={glifyRef} aria-hidden className="pointer-events-none absolute -left-[9999px] top-0 h-0 overflow-hidden">
         {uzyteSymbole.map((s) => (
-          <span key={`${s.type}:${s.gangs}`} data-glif={`${s.type}:${s.gangs}`}>
-            <GlyphPreview type={s.type} color={ELEMENT_TYPES[s.type].color} gangs={s.gangs} size={40} />
+          <span key={`${s.type}:${s.gangs}:${s.agdLetter ?? ""}`} data-glif={`${s.type}:${s.gangs}:${s.agdLetter ?? ""}`}>
+            <GlyphPreview type={s.type} color={ELEMENT_TYPES[s.type].color} gangs={s.gangs} agdLetter={s.agdLetter} size={40} />
           </span>
         ))}
       </div>

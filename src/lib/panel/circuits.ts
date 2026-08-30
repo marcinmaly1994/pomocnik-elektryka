@@ -86,11 +86,13 @@ export function computeCircuits(elements: InstallationElement[]): Circuit[] {
   });
 
   elements.filter((e) => roleOf(e) === "socket3f").forEach((e) => {
-    add({ name: `Gniazdo 400V — ${e.room}`, type: "gniazdko", elements: [e], cable: "YDYp 5x2,5 mm²", breaker: "C16 3-faz.", rcd: true });
+    add({ name: `Gniazdo trójfazowe — ${e.room}`, type: "gniazdko", elements: [e], cable: "YDYp 5x2,5 mm²", breaker: "C16 3-faz.", rcd: true });
   });
 
   elements.filter((e) => roleOf(e) === "dedicated").forEach((e) => {
-    add({ name: `Wypust AGD — ${e.room}`, type: "gniazdko", elements: [e], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true });
+    // Rola "dedicated" niesie tylko wypust AGD (patrz ELEMENT_TYPES) — nazwa odbiornika
+    // (jeśli wpisana) albo sama litera z symbolu odróżniają obwody w tym samym pokoju.
+    add({ name: `Wypust AGD — ${e.room} (${e.note || `litera ${e.agdLetter || "A"}`})`, type: "gniazdko", elements: [e], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true });
   });
 
   elements.filter((e) => roleOf(e) === "socket" && e.dedicated).forEach((e) => {

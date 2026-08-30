@@ -58,6 +58,9 @@ export interface InstallationElement {
    *  TEN obwód dobierany jest automatycznie, więc da się nadpisać jeden, a drugi zostawić
    *  automatowi. Patrz `lib/lightGroups.ts`. */
   lightGroup?: (number | null)[];
+  /** Litera wpisana w łuk symbolu wypustu AGD (np. „L" dla lodówki, „Z" dla zmywarki) —
+   *  wyłącznie dla `type: "wypustAGD"`. Nazwa samego odbiornika idzie do `note`. */
+  agdLetter?: string;
 }
 
 export interface Wall {

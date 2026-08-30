@@ -15,6 +15,8 @@ export interface EditElementPatch {
   /** Po jednej pozycji na obwód; `null` = ten obwód dobierany automatycznie.
    *  `undefined` całości = wszystkie obwody automatyczne. */
   lightGroup?: (number | null)[];
+  /** Litera w symbolu wypustu AGD — patrz `agdLetter` w `InstallationElement`. */
+  agdLetter?: string;
 }
 
 interface EditElementModalProps {
@@ -37,6 +39,12 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
   const [room, setRoom] = useState(element.room);
   const [gangs, setGangs] = useState(element.gangs || 1);
   const [dedicated, setDedicated] = useState(element.dedicated);
+  // Litera w łuku symbolu i nazwa odbiornika — tylko dla wypustu AGD. Nazwa idzie do
+  // `note` (pole tego nie miało dotąd żadnego zastosowania poza AGD), litera do
+  // osobnego `agdLetter`, bo to dwie różne rzeczy: jedna trafia na rysunek, druga
+  // jest opisem w legendzie/nazwie obwodu.
+  const [agdLetter, setAgdLetter] = useState(element.agdLetter || "A");
+  const [agdName, setAgdName] = useState(element.type === "wypustAGD" ? element.note || "" : "");
   // Puste pole = „automatycznie". Trzymane jako tekst, żeby dało się je wyczyścić —
   // liczba nie ma stanu „brak", a to właśnie on przywraca automatyczne przypisanie.
   const [groupInputs, setGroupInputs] = useState<string[]>(() =>
@@ -72,7 +80,8 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
       room: room.trim() || "Salon",
       gangs: variants ? gangs : 1,
       dedicated: type === "gniazdko" ? dedicated : false,
-      note: type === "gniazdko" && dedicated ? "AGD" : "",
+      note: type === "wypustAGD" ? agdName.trim() : type === "gniazdko" && dedicated ? "AGD" : "",
+      agdLetter: type === "wypustAGD" ? agdLetter.trim().slice(0, 2).toUpperCase() || "A" : undefined,
       lightGroup: groupApplies && parsed.some((n) => n != null) ? parsed : undefined,
     });
   }
@@ -100,7 +109,13 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
                           style={active ? { borderColor: def.color, background: `${def.color}14`, color: def.color } : undefined}
                         >
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                            <GlyphPreview type={item.key} color={def.color} gangs={active ? gangs : 1} size={20} />
+                            <GlyphPreview
+                              type={item.key}
+                              color={def.color}
+                              gangs={active ? gangs : 1}
+                              agdLetter={active && item.key === "wypustAGD" ? agdLetter : undefined}
+                              size={20}
+                            />
                           </span>
                           <span className="truncate">{def.label}</span>
                         </button>
@@ -138,6 +153,37 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
               <input type="checkbox" checked={dedicated} onChange={(e) => setDedicated(e.target.checked)} />
               Gniazdo dedykowane (AGD, własny obwód)
             </label>
+          )}
+
+          {type === "wypustAGD" && (
+            <div className="grid grid-cols-[80px_1fr] gap-2">
+              <label className="block">
+                <div className="mb-1 text-xs text-slate-500">Litera w symbolu</div>
+                <input
+                  value={agdLetter}
+                  onChange={(e) => setAgdLetter(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSave();
+                  }}
+                  maxLength={2}
+                  aria-label="Litera w symbolu wypustu AGD"
+                  className="pe-input w-full text-sm uppercase"
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1 text-xs text-slate-500">Nazwa odbiornika (opcjonalnie)</div>
+                <input
+                  value={agdName}
+                  onChange={(e) => setAgdName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSave();
+                  }}
+                  placeholder="np. Lodówka"
+                  aria-label="Nazwa odbiornika wypustu AGD"
+                  className="pe-input w-full text-sm"
+                />
+              </label>
+            </div>
           )}
 
           {groupApplies && (

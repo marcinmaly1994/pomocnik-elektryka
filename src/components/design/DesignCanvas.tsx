@@ -1482,7 +1482,7 @@ export function DesignCanvas({
                 }}
               >
                 {isSel && <SelectionOutlineKonva type={el.type} />}
-                <ElementGlyphKonva type={el.type} color={def.color} gangs={el.gangs} />
+                <ElementGlyphKonva type={el.type} color={def.color} gangs={el.gangs} agdLetter={el.agdLetter} />
                 {/* Numery grup sterowania oświetleniem — ten sam numer przy łączniku i
                     przy punktach, którymi steruje. Stoją OBOK symbolu, poza jego obrysem
                     (patrz `groupLabelAnchors`), i bez obwódki, żeby nie zasłaniać rysunku.

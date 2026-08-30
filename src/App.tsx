@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
+  ArrowLeft,
   ArrowRight,
   ChevronDown,
   ChevronRight,
@@ -592,6 +593,27 @@ export default function App() {
         DesignTab) — w pełnym ekranie chowa się razem z resztą chrome'u, zgodnie
         z sensem tego trybu (skupienie na rysunku, bez elementów nawigacji).
       */}
+      {/*
+        „Cofnij” — lustrzane odbicie przycisku „Dalej” (ten sam styl, przeciwny róg,
+        ta sama logika widoczności): powrót do POPRZEDNIEGO kroku głównego przepływu,
+        bez konieczności sięgania po kafle na górze strony. Nie pokazuje się na
+        pierwszym kroku („Instalacja") — nie ma dokąd się cofnąć.
+      */}
+      {(() => {
+        const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
+        const poprzedni = idx > 0 ? KOLEJNOSC_KROKOW[idx - 1] : undefined;
+        if (!poprzedni) return null;
+        return (
+          <button
+            onClick={() => setTab(poprzedni.id)}
+            className="fixed bottom-5 left-5 z-30 flex items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90"
+          >
+            <ArrowLeft size={15} />
+            Cofnij: {poprzedni.tytul}
+          </button>
+        );
+      })()}
+
       {(() => {
         const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
         const nastepny = idx >= 0 ? KOLEJNOSC_KROKOW[idx + 1] : undefined;

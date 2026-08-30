@@ -7,6 +7,53 @@ interface GlyphProps {
   type: ElementType;
   color: string;
   gangs?: number;
+  /** Litera wpisana w łuk symbolu — dotyczy wyłącznie `wypustAGD`. Domyślnie „A". */
+  agdLetter?: string;
+}
+
+/** Konvowy odpowiednik `SocketArc` z `ElementGlyphSvg.tsx` — ta sama geometria, ten sam
+ *  komentarz o wspólnym kształcie dla gniazdka/gniazdka400/wypustuAGD. */
+function SocketArcKonva({
+  color,
+  herm,
+  insideLabel,
+  belowLabel,
+  hitW,
+  hitH,
+}: {
+  color: string;
+  herm?: boolean;
+  insideLabel?: string;
+  belowLabel?: string;
+  hitW: number;
+  hitH: number;
+}) {
+  const r = 9;
+  const stemLen = 12;
+  const half = (stemLen + r) / 2;
+  const stemTopY = -half;
+  const apexY = stemTopY + stemLen;
+  const chordY = apexY + r;
+  const w = hitW;
+  const h = hitH;
+  return (
+    <>
+      {/* Niewidoczny prostokąt trafień, patrz komentarz w oryginalnej wersji gniazdka niżej. */}
+      <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill="transparent" />
+      <Line points={[0, stemTopY, 0, apexY]} stroke={color} strokeWidth={1.8} lineCap="round" />
+      <Line points={[-r, apexY, r, apexY]} stroke={color} strokeWidth={1.8} lineCap="round" />
+      <Path data={`M ${-r} ${chordY} A ${r} ${r} 0 0 1 ${r} ${chordY}`} stroke={color} strokeWidth={1.8} lineCap="round" />
+      {herm && (
+        <Path data={`M ${-r * 0.6} ${chordY} A ${r * 0.6} ${r * 0.6} 0 0 1 ${r * 0.6} ${chordY}`} stroke={color} strokeWidth={1.5} lineCap="round" />
+      )}
+      {insideLabel && (
+        <Text text={insideLabel} x={-r} y={chordY - 8} width={2 * r} fontSize={10} fontStyle="700" fill={color} align="center" />
+      )}
+      {belowLabel && (
+        <Text text={belowLabel} x={-r - 3} y={chordY + 6} width={2 * r + 6} fontSize={7.5} fontStyle="700" fill={color} align="center" />
+      )}
+    </>
+  );
 }
 
 /** Plakietka z kodem literowym (Konva) — odpowiednik `CodeBadge` z wersji SVG, dla typów
@@ -35,57 +82,25 @@ function CodeBadgeKonva({ color, code, w, h }: { color: string; code: string; w:
  *  rysowania na płótnie projektowania (`DesignCanvas`). Ten sam zestaw kształtów co
  *  `ElementGlyphSvg`, przepisany na `react-konva` zamiast surowego SVG (Stage/Layer w
  *  Konvie nie renderuje węzłów DOM, więc symboli nie da się użyć 1:1). */
-export function ElementGlyphKonva({ type, color, gangs }: GlyphProps) {
+export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps) {
   switch (type) {
     case "gniazdko":
     case "gniazdkoHerm": {
-      // Symbol gniazda wg konwencji rysunku instalacyjnego (wg obrazka referencyjnego
-      // użytkownika): pionowy trzon u góry, pozioma kreska nad łukiem (na wysokości, gdzie
-      // trzon styka się z wierzchołkiem łuku), i łuk otwarty w dół (nogi łuku rozchodzą się w
-      // dół i na boki) — dokładnie ten kształt łuku, co w pierwszej wersji tego symbolu,
-      // tylko z dopisaną poziomą kreską nad nim.
-      const herm = type === "gniazdkoHerm";
       const g = Math.max(1, Math.min(6, gangs || 1));
       const { w, h } = glyphBoxSize(type);
-      // Proporcje dobrane pod obrazek referencyjny: trzon wyraźnie dłuższy niż promień łuku
-      // (~1,3×), cienkie linie względem rozmiaru całego symbolu — poprzednia wersja była za
-      // mała i za "gruba" (promień/trzon ledwie różniły się długością), przez co nie
-      // przypominała krojem czystego rysunku technicznego z obrazka.
-      const r = 9;
-      const stemLen = 12;
-      const half = (stemLen + r) / 2;
-      const stemTopY = -half;
-      const apexY = stemTopY + stemLen;
-      const chordY = apexY + r;
       return (
-        <>
-          {/* Niewidoczny prostokąt trafień — bez tła (usuniętego na prośbę użytkownika, symbol
-              wg konwencji rysunku instalacyjnego rysuje tylko cienkie linie) kliknięcie w puste
-              miejsce między trzonem a łukiem nic by nie zaznaczało. Konva liczy trafienie mimo
-              `fill="transparent"`, więc obszar kliku zostaje taki jak poprzednio, a nic się nie
-              rysuje na ekranie. */}
-          <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill="transparent" />
-          <Line points={[0, stemTopY, 0, apexY]} stroke={color} strokeWidth={1.8} lineCap="round" />
-          <Line points={[-r, apexY, r, apexY]} stroke={color} strokeWidth={1.8} lineCap="round" />
-          <Path data={`M ${-r} ${chordY} A ${r} ${r} 0 0 1 ${r} ${chordY}`} stroke={color} strokeWidth={1.8} lineCap="round" />
-          {herm && (
-            // wariant hermetyczny (IP44): drugi, mniejszy łuk współśrodkowy wewnątrz
-            // pierwszego, wg obrazka referencyjnego użytkownika — zamiast dotychczasowej
-            // etykiety "IP" nad trzonem
-            <Path
-              data={`M ${-r * 0.6} ${chordY} A ${r * 0.6} ${r * 0.6} 0 0 1 ${r * 0.6} ${chordY}`}
-              stroke={color}
-              strokeWidth={1.5}
-              lineCap="round"
-            />
-          )}
-          {g > 1 && (
-            // liczba gniazd wyśrodkowana wewnątrz łuku, wg obrazka referencyjnego — nisko przy
-            // dolnej krawędzi łuku, żeby nie nachodzić na poziomą belkę nad nim
-            <Text text={String(g)} x={-r} y={chordY - 8} width={2 * r} fontSize={10} fontStyle="700" fill={color} align="center" />
-          )}
-        </>
+        <SocketArcKonva color={color} herm={type === "gniazdkoHerm"} insideLabel={g > 1 ? String(g) : undefined} hitW={w} hitH={h} />
       );
+    }
+
+    case "gniazdko400": {
+      const { w, h } = glyphBoxSize(type);
+      return <SocketArcKonva color={color} belowLabel="3F" hitW={w} hitH={h} />;
+    }
+
+    case "wypustAGD": {
+      const { w, h } = glyphBoxSize(type);
+      return <SocketArcKonva color={color} insideLabel={(agdLetter || "A").slice(0, 2).toUpperCase()} hitW={w} hitH={h} />;
     }
 
     case "oswietlenie":
