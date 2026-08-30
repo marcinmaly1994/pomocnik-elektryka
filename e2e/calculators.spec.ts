@@ -495,6 +495,53 @@ test("EV: bez wbudowanej ochrony DC wymagany jest RCD typu B albo A+RDC-DD", asy
   await expect(page.locator(".pe-result").first()).toContainText("RCD typu A wystarczy");
 });
 
+/**
+ * Silnik `pelnyDoborPrzekroju` ma komplet testów jednostkowych z wartościami
+ * potwierdzonymi ręcznie (w tym z użytkownikiem — dane tablic B.52.4/B.52.5
+ * były weryfikowane komórka po komórce). Tu sprawdzamy WPIĘCIE: że zakładka
+ * pokazuje wszystkie cztery kryteria i poprawnie wskazuje, które zadecydowało.
+ */
+test("pełny dobór: domyślne dane — o przekroju decyduje obciążalność, pozostałe kryteria nieocenione bez danych", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Pełny dobór/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("10,0 mm²");
+  await expect(result).toContainText("decyduje: obciążalność długotrwała");
+  await expect(result).toContainText("ochrona przeciwporażeniowa: nieocenione");
+  await expect(result).toContainText("wytrzymałość zwarciowa cieplna: nieocenione");
+});
+
+test("pełny dobór: włączenie ochrony i wytrzymałości zwarciowej podnosi przekrój i zmienia decydujące kryterium", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Pełny dobór/ }).click();
+
+  await page.getByLabel(/Sprawdź też ochronę przeciwporażeniową/).check();
+  await page.getByLabel(/Sprawdź też wytrzymałość zwarciową/).check();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("25,0 mm²");
+  await expect(result).toContainText("decyduje: wytrzymałość zwarciowa cieplna");
+  await expect(result).toContainText("ochrona przeciwporażeniowa: 2,5 mm²");
+});
+
+test("pełny dobór: obwody 1-fazowe są jawnie odrzucone — brak tablicy dla dwóch żył obciążonych", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Pełny dobór/ }).click();
+
+  await expect(page.getByText(/Tylko obwody 3-fazowe/)).toBeVisible();
+  await expect(page.getByText(/tablica dla dwóch żył obciążonych.*nie została jeszcze dostarczona/)).toBeVisible();
+});
+
+test("pełny dobór: metoda gruntowa (D2) pomija korektę temperatury/grupowania i mówi o tym wprost", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Pełny dobór/ }).click();
+
+  await page.getByLabel("Metoda odniesienia").selectOption("D2");
+  await expect(page.getByText(/Metoda gruntowa — bez korekty/)).toBeVisible();
+  await expect(page.getByLabel("Temperatura otoczenia")).toHaveCount(0);
+});
+
 test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,88 Ω)", async ({ page }) => {
   await openCalculators(page);
 

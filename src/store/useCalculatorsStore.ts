@@ -6,6 +6,7 @@ import type { TypUziomu } from "@/lib/calc/earthing";
 import type { Faza } from "@/lib/calc/loadBalance";
 import type { SposobRozruchu } from "@/lib/calc/motor";
 import type { TypSPD } from "@/lib/calc/spd";
+import type { MetodaOdniesienia3 } from "@/lib/norms/ampacity3";
 import type { Izolacja, Material, ModelRezystywnosci, RodzajLinii } from "@/lib/norms/conductors";
 import type { LayingMethod } from "@/lib/panel/norms";
 import type { CircuitKind } from "@/lib/panel/sizing";
@@ -41,6 +42,7 @@ export type CalcId =
   | "impedancja"
   | "peN"
   | "spd"
+  | "pelnyDobor"
   | "pv"
   | "ev"
   | "oswietlenie"
@@ -172,6 +174,25 @@ interface CalculatorsState {
   spdUp: number;
   spdUw: number;
   spdDlugosc: number;
+
+  // --- pełny dobór (4 kryteria, pkt 5.2) ---
+  pdIb: number;
+  pdNapiecie: number;
+  pdMaterial: Material;
+  pdIzolacja: Izolacja;
+  pdMetoda: MetodaOdniesienia3;
+  pdTemperatura: number;
+  pdWiazka: number;
+  pdRozruch: boolean;
+  pdDlugosc: number;
+  pdCosfi: number;
+  pdLimitSpadku: number;
+  pdSprawdzOchrone: boolean;
+  pdImpedancjaZrodla: number;
+  pdUklad: "TN" | "TT";
+  pdObwodOdbiorczy: boolean;
+  pdSprawdzZwarcie: boolean;
+  pdIk: number;
 
   // --- fotowoltaika: string DC ---
   pvIsc: number;
@@ -348,6 +369,24 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       spdUp: 1500,
       spdUw: 2500,
       spdDlugosc: 0.5,
+
+      pdIb: 40,
+      pdNapiecie: 400,
+      pdMaterial: "Cu",
+      pdIzolacja: "PVC",
+      pdMetoda: "B2",
+      pdTemperatura: 30,
+      pdWiazka: 1,
+      pdRozruch: false,
+      pdDlugosc: 30,
+      pdCosfi: 0.9,
+      pdLimitSpadku: 4,
+      pdSprawdzOchrone: false,
+      pdImpedancjaZrodla: 0.3,
+      pdUklad: "TN",
+      pdObwodOdbiorczy: true,
+      pdSprawdzZwarcie: false,
+      pdIk: 3000,
 
       pvIsc: 10.5,
       pvVoc: 41.5,

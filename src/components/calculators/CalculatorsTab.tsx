@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   Sun,
   BatteryCharging,
+  ListChecks,
   Trash2,
   TrendingDown,
   Zap,
@@ -32,6 +33,8 @@ import { dobierzN, dobierzPE } from "@/lib/calc/protectiveConductor";
 import { KATEGORIE_PRZEPIECIOWE, obliczKoordynacjeSPD, TYP_SPD_LABELS, type TypSPD } from "@/lib/calc/spd";
 import { dobierzPrzewodACFalownika, obliczStringPV } from "@/lib/calc/pv";
 import { obliczObwodEV } from "@/lib/calc/evCharger";
+import { KRYTERIUM_LABELS, pelnyDoborPrzekroju } from "@/lib/calc/fullSizing";
+import { METODA_LABELS, type MetodaOdniesienia3 } from "@/lib/norms/ampacity3";
 import { obliczBilans, type Faza } from "@/lib/calc/loadBalance";
 import { obliczSilnik, SPOSOB_ROZRUCHU_LABELS, type SposobRozruchu } from "@/lib/calc/motor";
 import { CalcResultView } from "./CalcResultView";
@@ -76,6 +79,7 @@ const CALC_LIST: { id: CalcId; label: string; desc: string; icon: LucideIcon }[]
   { id: "kompensacja", label: "Kompensacja mocy biernej", desc: "moc baterii, pojemność, rezonans", icon: Gauge },
   { id: "przekroj", label: "Dobór przekroju przewodu", desc: "przekrój wg obciążalności i spadku", icon: Cable },
   { id: "zabezpieczenie", label: "Dobór zabezpieczenia", desc: "wyłącznik do znanego przekroju", icon: Zap },
+  { id: "pelnyDobor", label: "Pełny dobór (4 kryteria)", desc: "obciążalność + spadek + ochrona + zwarcie naraz", icon: ListChecks },
   { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza", icon: Home },
   { id: "wlz", label: "Dobór WLZ (linii zasilającej)", desc: "przekrój kabla od licznika do rozdzielnicy", icon: Cable },
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN", icon: ClipboardCheck },
@@ -185,7 +189,16 @@ const FAZA_OPTIONS = [
   { value: "3f", label: "3-fazowy" },
 ];
 
-const MODEL_REZ_OPTIONS = (Object.entries(MODEL_REZYSTYWNOSCI_LABELS) as [ModelRezystywnosci, string][]).map(([value, label]) => ({
+const METODA3_OPTIONS = (Object.entries(METODA_LABELS) as [MetodaOdniesienia3, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+const UKLAD_OPTIONS = [
+  { value: "TN", label: "TN" },
+  { value: "TT", label: "TT" },
+];
+
+const MODEL_REZ_OPTIONS =(Object.entries(MODEL_REZYSTYWNOSCI_LABELS) as [ModelRezystywnosci, string][]).map(([value, label]) => ({
   value,
   label,
 }));
@@ -297,6 +310,23 @@ export function CalculatorsTab() {
   const spdUp = useCalculatorsStore((s) => s.spdUp);
   const spdUw = useCalculatorsStore((s) => s.spdUw);
   const spdDlugosc = useCalculatorsStore((s) => s.spdDlugosc);
+  const pdIb = useCalculatorsStore((s) => s.pdIb);
+  const pdNapiecie = useCalculatorsStore((s) => s.pdNapiecie);
+  const pdMaterial = useCalculatorsStore((s) => s.pdMaterial);
+  const pdIzolacja = useCalculatorsStore((s) => s.pdIzolacja);
+  const pdMetoda = useCalculatorsStore((s) => s.pdMetoda);
+  const pdTemperatura = useCalculatorsStore((s) => s.pdTemperatura);
+  const pdWiazka = useCalculatorsStore((s) => s.pdWiazka);
+  const pdRozruch = useCalculatorsStore((s) => s.pdRozruch);
+  const pdDlugosc = useCalculatorsStore((s) => s.pdDlugosc);
+  const pdCosfi = useCalculatorsStore((s) => s.pdCosfi);
+  const pdLimitSpadku = useCalculatorsStore((s) => s.pdLimitSpadku);
+  const pdSprawdzOchrone = useCalculatorsStore((s) => s.pdSprawdzOchrone);
+  const pdImpedancjaZrodla = useCalculatorsStore((s) => s.pdImpedancjaZrodla);
+  const pdUklad = useCalculatorsStore((s) => s.pdUklad);
+  const pdObwodOdbiorczy = useCalculatorsStore((s) => s.pdObwodOdbiorczy);
+  const pdSprawdzZwarcie = useCalculatorsStore((s) => s.pdSprawdzZwarcie);
+  const pdIk = useCalculatorsStore((s) => s.pdIk);
   const pvIsc = useCalculatorsStore((s) => s.pvIsc);
   const pvVoc = useCalculatorsStore((s) => s.pvVoc);
   const pvVmpp = useCalculatorsStore((s) => s.pvVmpp);
@@ -616,6 +646,47 @@ export function CalculatorsTab() {
   const spd = useMemo(
     () => obliczKoordynacjeSPD({ typ: spdTyp, Up_V: spdUp, Uw_V: spdUw, dlugoscPrzewodow_m: spdDlugosc }),
     [spdTyp, spdUp, spdUw, spdDlugosc]
+  );
+
+  // --- pełny dobór (4 kryteria) ---
+  const pelnyDobor = useMemo(
+    () =>
+      pelnyDoborPrzekroju({
+        Ib_A: pdIb,
+        napiecie_V: pdNapiecie,
+        material: pdMaterial,
+        izolacja: pdIzolacja,
+        metoda: pdMetoda,
+        temperatura_otoczenia_C: pdTemperatura,
+        obwodow_w_wiazce: pdWiazka,
+        rozruch_silnikowy: pdRozruch,
+        dlugosc_m: pdDlugosc,
+        cosfi: pdCosfi,
+        limitSpadku_pct: pdLimitSpadku,
+        impedancjaZrodla_ohm: pdSprawdzOchrone ? pdImpedancjaZrodla : undefined,
+        uklad: pdUklad,
+        obwodOdbiorczy: pdObwodOdbiorczy,
+        Ik_A: pdSprawdzZwarcie ? pdIk : undefined,
+      }),
+    [
+      pdIb,
+      pdNapiecie,
+      pdMaterial,
+      pdIzolacja,
+      pdMetoda,
+      pdTemperatura,
+      pdWiazka,
+      pdRozruch,
+      pdDlugosc,
+      pdCosfi,
+      pdLimitSpadku,
+      pdSprawdzOchrone,
+      pdImpedancjaZrodla,
+      pdUklad,
+      pdObwodOdbiorczy,
+      pdSprawdzZwarcie,
+      pdIk,
+    ]
   );
 
   // --- fotowoltaika ---
@@ -1158,6 +1229,109 @@ export function CalculatorsTab() {
                   "Ten sam silnik doboru co „Dobór przekroju przewodu” i zakładka Rozdzielnica — dla tych samych danych wszystkie trzy miejsca podadzą ten sam aparat.",
                 ]}
               />
+            </Card>
+          )}
+
+          {activeCalc === "pelnyDobor" && (
+            <Card title={active.label} icon={ListChecks} tag="4 kryteria naraz">
+              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                Cztery kryteria liczone NIEZALEŻNIE — obciążalność, spadek napięcia i (opcjonalnie) ochrona
+                przeciwporażeniowa oraz wytrzymałość zwarciowa. Wynikowy przekrój to <strong>maksimum</strong> z nich, nie
+                pierwszy z brzegu. Tylko obwody <strong>3-fazowe</strong> — tablica dla dwóch żył obciążonych (1-fazowe)
+                nie została jeszcze dostarczona.
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Prąd obliczeniowy Ib" value={pdIb} onChange={(v) => patch({ pdIb: Number(v) })} unit="A" />
+                <Field label="Napięcie międzyfazowe" value={pdNapiecie} onChange={(v) => patch({ pdNapiecie: Number(v) })} unit="V" />
+                <Field label="Materiał żyły" value={pdMaterial} onChange={(v) => patch({ pdMaterial: v as Material })} options={MATERIAL_OPTIONS} />
+                <Field label="Izolacja" value={pdIzolacja} onChange={(v) => patch({ pdIzolacja: v as Izolacja })} options={IZOLACJA_OPTIONS} />
+                <Field
+                  label="Metoda odniesienia"
+                  value={pdMetoda}
+                  onChange={(v) => patch({ pdMetoda: v as MetodaOdniesienia3 })}
+                  options={METODA3_OPTIONS}
+                />
+                <Field label="Długość trasy" value={pdDlugosc} onChange={(v) => patch({ pdDlugosc: Number(v) })} unit="m" />
+                <Field label="cos φ" value={pdCosfi} onChange={(v) => patch({ pdCosfi: Number(v) })} step="0.01" />
+                <Field label="Dopuszczalny spadek napięcia" value={pdLimitSpadku} onChange={(v) => patch({ pdLimitSpadku: Number(v) })} unit="%" step="0.5" />
+              </div>
+
+              {pdMetoda !== "D1" && pdMetoda !== "D2" ? (
+                <div className="grid sm:grid-cols-2 gap-x-4">
+                  <Field label="Temperatura otoczenia" value={pdTemperatura} onChange={(v) => patch({ pdTemperatura: Number(v) })} unit="°C" />
+                  <Field label="Obwodów we wspólnej trasie" value={pdWiazka} onChange={(v) => patch({ pdWiazka: Number(v) })} step="1" />
+                </div>
+              ) : (
+                <div className="mb-3 text-[11px] leading-relaxed text-slate-500">
+                  Metoda gruntowa — bez korekty temperatury/grupowania (brak tablic dla gruntu). Wynik ważny dla 20°C w
+                  gruncie.
+                </div>
+              )}
+              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                <input type="checkbox" checked={pdRozruch} onChange={(e) => patch({ pdRozruch: e.target.checked })} className="h-4 w-4 rounded border-border" />
+                Odbiornik z rozruchem silnikowym — charakterystyka C
+              </label>
+
+              <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={pdSprawdzOchrone}
+                  onChange={(e) => patch({ pdSprawdzOchrone: e.target.checked })}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Sprawdź też ochronę przeciwporażeniową (wymaga impedancji źródła)
+              </label>
+              {pdSprawdzOchrone && (
+                <div className="mb-3 grid sm:grid-cols-2 gap-x-4">
+                  <Field
+                    label="Impedancja źródła i reszty obwodu"
+                    value={pdImpedancjaZrodla}
+                    onChange={(v) => patch({ pdImpedancjaZrodla: Number(v) })}
+                    unit="Ω"
+                    step="0.01"
+                  />
+                  <Field label="Układ sieci" value={pdUklad} onChange={(v) => patch({ pdUklad: v as "TN" | "TT" })} options={UKLAD_OPTIONS} />
+                </div>
+              )}
+
+              <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={pdSprawdzZwarcie}
+                  onChange={(e) => patch({ pdSprawdzZwarcie: e.target.checked })}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Sprawdź też wytrzymałość zwarciową cieplną (wymaga prądu zwarciowego)
+              </label>
+              {pdSprawdzZwarcie && (
+                <Field label="Prąd zwarciowy w tym miejscu" value={pdIk} onChange={(v) => patch({ pdIk: Number(v) })} unit="A" />
+              )}
+
+              {pelnyDobor.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Przekrój wynikowy</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(pelnyDobor.wartosci.przekroj_mm2, 1)} mm²</div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-copper">{pelnyDobor.wartosci.kabel}</span>
+                    <span className="pe-chip pe-tag-blue">In {pelnyDobor.wartosci.In_A} A</span>
+                    <span className="pe-chip pe-tag-green">
+                      decyduje: {pelnyDobor.wartosci.decydujace.map((k) => KRYTERIUM_LABELS[k]).join(" i ")}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-slate-500">
+                    {(Object.entries(pelnyDobor.wartosci.kryteria) as [string, (typeof pelnyDobor.wartosci.kryteria)[keyof typeof pelnyDobor.wartosci.kryteria]][]).map(
+                      ([k, v]) => (
+                        <span key={k} className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                          {KRYTERIUM_LABELS[k as keyof typeof KRYTERIUM_LABELS]}:{" "}
+                          {v.ocenione ? `${formatLiczba(v.minPrzekroj_mm2!, 1)} mm²` : "nieocenione"}
+                        </span>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+              <CalcResultView wynik={pelnyDobor} />
             </Card>
           )}
 
