@@ -542,6 +542,36 @@ test("pełny dobór: metoda gruntowa (D2) pomija korektę temperatury/grupowania
   await expect(page.getByLabel("Temperatura otoczenia")).toHaveCount(0);
 });
 
+test("dobór wkładki gG: domyślne dane (D0gG, 16A, TN odbiorczy) — Imax i Zs max z tablicy Z.10.3", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Dobór wkładki gG/ }).click();
+
+  const result = page.locator(".pe-result").first();
+  await expect(result).toContainText("D0gG (wkładka gwintowa, system D0), In 16 A");
+  await expect(result).toContainText("120,0 A");
+  await expect(result).toContainText("1,920 Ω");
+});
+
+test("dobór wkładki gG: zmiana układu na TT-rozdzielczy zwraca błąd zamiast interpolacji (brak punktu 1s w tablicy)", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Dobór wkładki gG/ }).click();
+
+  await page.getByLabel("Układ sieci").selectOption("TT");
+  await page.getByLabel(/Obwód odbiorczy/).uncheck();
+
+  await expect(page.getByText(/nie zawiera tego czasu/)).toBeVisible();
+});
+
+test("dobór wkładki gG: ocena warunku ochronnego wg zmierzonej Zs", async ({ page }) => {
+  await openCalculators(page);
+  await page.getByRole("button", { name: /^Dobór wkładki gG/ }).click();
+
+  await page.getByLabel(/Oceń warunek ochronny/).check();
+  await page.getByLabel(/Zmierzona impedancja pętli zwarcia/).fill("3");
+
+  await expect(page.getByText(/przekracza dopuszczalne/)).toBeVisible();
+});
+
 test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,88 Ω)", async ({ page }) => {
   await openCalculators(page);
 

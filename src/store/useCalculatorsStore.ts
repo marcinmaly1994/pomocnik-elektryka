@@ -8,6 +8,7 @@ import type { SposobRozruchu } from "@/lib/calc/motor";
 import type { TypSPD } from "@/lib/calc/spd";
 import type { MetodaOdniesienia3 } from "@/lib/norms/ampacity3";
 import type { Izolacja, Material, ModelRezystywnosci, RodzajLinii } from "@/lib/norms/conductors";
+import type { TypWkladkiGG } from "@/lib/norms/gGFuses";
 import type { LayingMethod } from "@/lib/panel/norms";
 import type { CircuitKind } from "@/lib/panel/sizing";
 
@@ -43,6 +44,7 @@ export type CalcId =
   | "peN"
   | "spd"
   | "pelnyDobor"
+  | "gGWkladka"
   | "pv"
   | "ev"
   | "oswietlenie"
@@ -193,6 +195,14 @@ interface CalculatorsState {
   pdObwodOdbiorczy: boolean;
   pdSprawdzZwarcie: boolean;
   pdIk: number;
+
+  // --- dobór wkładki gG (ochrona przeciwporażeniowa) ---
+  ggTyp: TypWkladkiGG;
+  ggIb: number;
+  ggUklad: "TN" | "TT";
+  ggObwodOdbiorczy: boolean;
+  ggSprawdzZs: boolean;
+  ggZmierzonaZs: number;
 
   // --- fotowoltaika: string DC ---
   pvIsc: number;
@@ -387,6 +397,13 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       pdObwodOdbiorczy: true,
       pdSprawdzZwarcie: false,
       pdIk: 3000,
+
+      ggTyp: "D0gG",
+      ggIb: 16,
+      ggUklad: "TN",
+      ggObwodOdbiorczy: true,
+      ggSprawdzZs: false,
+      ggZmierzonaZs: 1.5,
 
       pvIsc: 10.5,
       pvVoc: 41.5,

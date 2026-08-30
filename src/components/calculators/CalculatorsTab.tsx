@@ -22,6 +22,7 @@ import {
   Sun,
   BatteryCharging,
   ListChecks,
+  PlugZap,
   Trash2,
   TrendingDown,
   Zap,
@@ -34,7 +35,9 @@ import { KATEGORIE_PRZEPIECIOWE, obliczKoordynacjeSPD, TYP_SPD_LABELS, type TypS
 import { dobierzPrzewodACFalownika, obliczStringPV } from "@/lib/calc/pv";
 import { obliczObwodEV } from "@/lib/calc/evCharger";
 import { KRYTERIUM_LABELS, pelnyDoborPrzekroju } from "@/lib/calc/fullSizing";
+import { dobierzWkladkeGGOchrona } from "@/lib/calc/gGFuse";
 import { METODA_LABELS, type MetodaOdniesienia3 } from "@/lib/norms/ampacity3";
+import { CZAS_GG_LABELS, TYP_WKLADKI_LABELS, type TypWkladkiGG } from "@/lib/norms/gGFuses";
 import { obliczBilans, type Faza } from "@/lib/calc/loadBalance";
 import { obliczSilnik, SPOSOB_ROZRUCHU_LABELS, type SposobRozruchu } from "@/lib/calc/motor";
 import { CalcResultView } from "./CalcResultView";
@@ -80,6 +83,7 @@ const CALC_LIST: { id: CalcId; label: string; desc: string; icon: LucideIcon }[]
   { id: "przekroj", label: "Dobór przekroju przewodu", desc: "przekrój wg obciążalności i spadku", icon: Cable },
   { id: "zabezpieczenie", label: "Dobór zabezpieczenia", desc: "wyłącznik do znanego przekroju", icon: Zap },
   { id: "pelnyDobor", label: "Pełny dobór (4 kryteria)", desc: "obciążalność + spadek + ochrona + zwarcie naraz", icon: ListChecks },
+  { id: "gGWkladka", label: "Dobór wkładki gG", desc: "ochrona przeciwporażeniowa — zabezpieczenie topikowe", icon: PlugZap },
   { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza", icon: Home },
   { id: "wlz", label: "Dobór WLZ (linii zasilającej)", desc: "przekrój kabla od licznika do rozdzielnicy", icon: Cable },
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN", icon: ClipboardCheck },
@@ -203,6 +207,7 @@ const MODEL_REZ_OPTIONS =(Object.entries(MODEL_REZYSTYWNOSCI_LABELS) as [ModelRe
   label,
 }));
 const TYP_SPD_OPTIONS = (Object.entries(TYP_SPD_LABELS) as [TypSPD, string][]).map(([value, label]) => ({ value, label }));
+const TYP_WKLADKI_OPTIONS = (Object.entries(TYP_WKLADKI_LABELS) as [TypWkladkiGG, string][]).map(([value, label]) => ({ value, label }));
 const UW_OPTIONS = KATEGORIE_PRZEPIECIOWE.map((k) => ({
   value: String(k.Uw_V),
   label: `Kat. ${k.kategoria} — ${k.Uw_V} V (${k.opis})`,
@@ -327,6 +332,12 @@ export function CalculatorsTab() {
   const pdObwodOdbiorczy = useCalculatorsStore((s) => s.pdObwodOdbiorczy);
   const pdSprawdzZwarcie = useCalculatorsStore((s) => s.pdSprawdzZwarcie);
   const pdIk = useCalculatorsStore((s) => s.pdIk);
+  const ggTyp = useCalculatorsStore((s) => s.ggTyp);
+  const ggIb = useCalculatorsStore((s) => s.ggIb);
+  const ggUklad = useCalculatorsStore((s) => s.ggUklad);
+  const ggObwodOdbiorczy = useCalculatorsStore((s) => s.ggObwodOdbiorczy);
+  const ggSprawdzZs = useCalculatorsStore((s) => s.ggSprawdzZs);
+  const ggZmierzonaZs = useCalculatorsStore((s) => s.ggZmierzonaZs);
   const pvIsc = useCalculatorsStore((s) => s.pvIsc);
   const pvVoc = useCalculatorsStore((s) => s.pvVoc);
   const pvVmpp = useCalculatorsStore((s) => s.pvVmpp);
@@ -687,6 +698,19 @@ export function CalculatorsTab() {
       pdSprawdzZwarcie,
       pdIk,
     ]
+  );
+
+  // --- dobór wkładki gG ---
+  const ggWkladka = useMemo(
+    () =>
+      dobierzWkladkeGGOchrona({
+        typ: ggTyp,
+        Ib_A: ggIb,
+        uklad: ggUklad,
+        obwodOdbiorczy: ggObwodOdbiorczy,
+        zmierzonaZs_ohm: ggSprawdzZs ? ggZmierzonaZs : undefined,
+      }),
+    [ggTyp, ggIb, ggUklad, ggObwodOdbiorczy, ggSprawdzZs, ggZmierzonaZs]
   );
 
   // --- fotowoltaika ---
@@ -1332,6 +1356,65 @@ export function CalculatorsTab() {
                 </div>
               )}
               <CalcResultView wynik={pelnyDobor} />
+            </Card>
+          )}
+
+          {activeCalc === "gGWkladka" && (
+            <Card title={active.label} icon={PlugZap} tag="wkładka topikowa">
+              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                Imax i Zs max pochodzą wprost z tablicy czasowo-prądowej wkładki (Poradnik Projektanta Elektryka,
+                tabl. Z.10.3/Z.10.4) — NIE ze wzoru k×In jak dla wyłączników. Tablica pokrywa czasy 0,2 s / 0,4 s / 5 s;
+                nie zawiera 1 s (obwód rozdzielczy w układzie TT) ani 0,1 s.
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Field label="Typ wkładki" value={ggTyp} onChange={(v) => patch({ ggTyp: v as TypWkladkiGG })} options={TYP_WKLADKI_OPTIONS} />
+                <Field label="Prąd obliczeniowy Ib" value={ggIb} onChange={(v) => patch({ ggIb: Number(v) })} unit="A" />
+                <Field label="Układ sieci" value={ggUklad} onChange={(v) => patch({ ggUklad: v as "TN" | "TT" })} options={UKLAD_OPTIONS} />
+                <label className="flex items-center gap-2 text-[13px] text-slate-600 mt-1">
+                  <input
+                    type="checkbox"
+                    checked={ggObwodOdbiorczy}
+                    onChange={(e) => patch({ ggObwodOdbiorczy: e.target.checked })}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Obwód odbiorczy (≤ 63 A) — inaczej rozdzielczy
+                </label>
+              </div>
+
+              <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={ggSprawdzZs}
+                  onChange={(e) => patch({ ggSprawdzZs: e.target.checked })}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Oceń warunek ochronny wg zmierzonej/obliczonej impedancji pętli zwarcia
+              </label>
+              {ggSprawdzZs && (
+                <Field
+                  label="Zmierzona impedancja pętli zwarcia Zs"
+                  value={ggZmierzonaZs}
+                  onChange={(v) => patch({ ggZmierzonaZs: Number(v) })}
+                  unit="Ω"
+                  step="0.01"
+                />
+              )}
+
+              {ggWkladka.wartosci && (
+                <div className="mt-2 p-3 pe-result">
+                  <div className="text-xs text-slate-500 mb-1">Dobrana wkładka</div>
+                  <div className="pe-mono text-lg text-blueprint">
+                    {TYP_WKLADKI_LABELS[ggTyp]}, In {ggWkladka.wartosci.In_A} A
+                  </div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <span className="pe-chip pe-tag-blue">czas {CZAS_GG_LABELS[ggWkladka.wartosci.czas_s === 0.2 ? "0.2" : ggWkladka.wartosci.czas_s === 0.4 ? "0.4" : "5"]}</span>
+                    <span className="pe-chip pe-tag-copper">Imax (Ia) {formatLiczba(ggWkladka.wartosci.Imax_A, 1)} A</span>
+                    <span className="pe-chip pe-tag-green">Zs max {formatLiczba(ggWkladka.wartosci.ZsMax_ohm, 3)} Ω</span>
+                  </div>
+                </div>
+              )}
+              <CalcResultView wynik={ggWkladka} />
             </Card>
           )}
 
