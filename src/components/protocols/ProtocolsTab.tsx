@@ -60,7 +60,6 @@ export function ProtocolsTab() {
    *  wejściu w zakładkę. Stan zwinięcia w localStorage, bo to preferencja widoku,
    *  a nie część protokołu. */
   const [daneZwiniete, setDaneZwiniete] = useState(odczytajDaneZwiniete);
-  const [nazwaObwodu, setNazwaObwodu] = useState("");
 
   const session = useProjectStore((s) => s.session);
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
@@ -110,16 +109,6 @@ export function ProtocolsTab() {
   }
   function removeRow(i: number) {
     update({ rows: rows.filter((_, idx) => idx !== i) });
-  }
-  /** Dokłada komplet wierszy dla jednego obwodu — po jednym na parę pomiarową.
-   *  Nazwa obwodu wpisywana raz, zamiast powtarzania jej w dziesięciu wierszach. */
-  function addGroup(grupa: { pary: string[] }) {
-    const blank: ProtocolRow = {};
-    (def.columns ?? []).forEach((c) => {
-      blank[c.key] = c.default !== undefined ? c.default : "";
-    });
-    update({ rows: [...rows, ...grupa.pary.map((para) => ({ ...blank, obwod: nazwaObwodu, para }))] });
-    setNazwaObwodu("");
   }
   function initChecklist() {
     update({ rows: (def.items ?? []).map((t) => ({ text: t, status: "" })) });
@@ -383,6 +372,7 @@ export function ProtocolsTab() {
               <table className="w-full text-sm" style={{ minWidth: 620 }}>
                 <thead>
                   <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
+                    <th className="w-8 py-2 pr-2">Lp.</th>
                     {def.columns!.map((c) => (
                       <th key={c.key} className="py-2 pr-2">
                         {c.label}
@@ -397,10 +387,11 @@ export function ProtocolsTab() {
                     const ok = def.evaluate!(r, limit);
                     return (
                       <tr key={i} className="border-b last:border-0" style={{ borderColor: "#EEF1F4" }}>
+                        <td className="py-1.5 pr-2 text-xs text-slate-400">{i + 1}</td>
                         {def.columns!.map((c) => (
                           <td key={c.key} className="py-1.5 pr-2">
                             {c.type === "computed" ? (
-                              <span className="pe-mono text-xs text-slate-500">{c.compute!(r)}</span>
+                              <span className="pe-mono text-xs text-slate-500">{c.compute!(r, limit)}</span>
                             ) : c.type === "select" ? (
                               <select
                                 value={String(r[c.key] ?? c.default ?? "")}
@@ -451,31 +442,7 @@ export function ProtocolsTab() {
               <button onClick={addRow} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs">
                 <Plus size={13} /> Dodaj wiersz
               </button>
-              {/* Komplet par jednym kliknięciem. Liczba pomiarów wynika z układu sieci
-                  i łatwo o niej zapomnieć — przycisk pilnuje, żeby żadna para nie wypadła. */}
-              {def.grupy?.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => addGroup(g)}
-                  title={`Dodaje ${g.pary.length} wierszy: ${g.pary.join(", ")}`}
-                  className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs"
-                >
-                  <Plus size={13} /> {g.label}
-                </button>
-              ))}
             </div>
-            {def.grupy && (
-              <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                Nazwa obwodu dla dodawanego kompletu:
-                <input
-                  value={nazwaObwodu}
-                  onChange={(e) => setNazwaObwodu(e.target.value)}
-                  placeholder="np. Obwód gniazd — kuchnia"
-                  aria-label="Nazwa obwodu dla dodawanego kompletu"
-                  className="pe-input w-56 text-sm"
-                />
-              </label>
-            )}
           </>
         )}
 

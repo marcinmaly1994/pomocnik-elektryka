@@ -26,7 +26,14 @@ function zawijajTekst(tekst: string, maxWidth: number, size: number): string[] {
 /** Składa protokół pomiarowy i zwraca gotowe bajty PDF (bez pobierania — testowalne bez DOM-u). */
 export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows: ProtocolRow[], limit: number): Promise<Uint8Array> {
   const def = PROTOCOL_DEFS[key];
-  const doc = createPdfDoc({ footer: (d) => drawTitleBlock(d, header, def.title) });
+  // Izolacja ma teraz kolumnę na każdą parę pomiarową (do 10 naraz, wzór Z.4.4) —
+  // w portretowym A4 nagłówki obcinały się do nieczytelnego "L1-..". Poziomy A4
+  // daje ~250 pt więcej szerokości, tyle wystarcza na czytelne 6-7-znakowe etykiety.
+  const landscape = key === "izolacja";
+  const doc = createPdfDoc({
+    footer: (d) => drawTitleBlock(d, header, def.title),
+    ...(landscape ? { pageW: 841.89, pageH: 595.28 } : {}),
+  });
   const M = doc.margin;
   const W = doc.innerW;
 
@@ -116,7 +123,11 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
       doc.line(M, doc.y + 5, M + W, doc.y + 5, 0.4, 0.86);
     });
   } else {
-    const baseCols = [...def.columns!.map((c) => ({ label: c.label, w: c.w, key: c.key, def: c })), { label: "Ocena", w: 68, key: "__ocena", def: undefined }];
+    const baseCols = [
+      { label: "Lp.", w: 20, key: "__lp", def: undefined },
+      ...def.columns!.map((c) => ({ label: c.label, w: c.w, key: c.key, def: c })),
+      { label: "Ocena", w: 68, key: "__ocena", def: undefined },
+    ];
     const totalW = baseCols.reduce((a, c) => a + c.w, 0);
     const scale = W / totalW;
     const cols = baseCols.map((c) => ({ ...c, w: c.w * scale }));
@@ -154,11 +165,13 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
       let lewa = M;
       cols.forEach((c) => {
         let v: string;
-        if (c.key === "__ocena") {
+        if (c.key === "__lp") {
+          v = String(i + 1);
+        } else if (c.key === "__ocena") {
           const ok = def.evaluate!(r, limit);
           v = ok === null ? "—" : ok ? "pozytywna" : "NEGATYWNA";
         } else if (c.def?.type === "computed") {
-          v = c.def.compute!(r);
+          v = c.def.compute!(r, limit);
         } else {
           v = r[c.key] === undefined || r[c.key] === "" ? "—" : String(r[c.key]);
         }

@@ -10,37 +10,12 @@ export interface ProtocolColumn {
   type: "text" | "number" | "select" | "computed";
   default?: string | number;
   options?: string[];
-  compute?: (row: ProtocolRow) => string;
+  /** `limit` to wartość ogólnego pola kryterium protokołu (np. napięcie
+   *  probiercze dla izolacji) — niektóre kolumny liczą się względem NIEGO,
+   *  nie względem samego wiersza. Opcjonalny, bo większość kolumn (Ia, Zs max)
+   *  liczy się wyłącznie z wiersza. */
+  compute?: (row: ProtocolRow, limit?: number) => string;
 }
-
-/**
- * Zestaw par pomiarowych dla jednego obwodu. Liczba i rodzaj par wynikają z układu
- * sieci, a nie z uznania: w TN-S/TT mierzy się 10 par, w TN-C — 6, bo nie ma tam
- * osobnego N i PE (jest wspólny PEN), więc pomiary do N, do PE i N-PE po prostu
- * nie istnieją.
- */
-export interface GrupaPomiarow {
-  id: string;
-  label: string;
-  pary: string[];
-}
-
-const PARY_MIEDZYFAZOWE = ["L1-L2", "L2-L3", "L1-L3"];
-
-export const GRUPY_IZOLACJI: GrupaPomiarow[] = [
-  {
-    id: "tns",
-    label: "3-fazowy TN-S / TT — 10 pomiarów",
-    pary: [...PARY_MIEDZYFAZOWE, "L1-N", "L2-N", "L3-N", "L1-PE", "L2-PE", "L3-PE", "N-PE"],
-  },
-  {
-    id: "tnc",
-    label: "3-fazowy TN-C — 6 pomiarów",
-    pary: [...PARY_MIEDZYFAZOWE, "L1-PEN", "L2-PEN", "L3-PEN"],
-  },
-  { id: "jedno-tns", label: "1-fazowy TN-S / TT — 3 pomiary", pary: ["L-N", "L-PE", "N-PE"] },
-  { id: "jedno-tnc", label: "1-fazowy TN-C — 1 pomiar", pary: ["L-PEN"] },
-];
 
 export interface ProtocolDef {
   title: string;
@@ -57,10 +32,6 @@ export interface ProtocolDef {
    *  wynikające z typu wyłącznika. Drukowane w protokole pod kryterium głównym,
    *  żeby dokument mówił wprost, wobec czego oceniono wiersze. */
   extraCriterion?: string;
-  /** Gotowe zestawy wierszy dodawane jednym kliknięciem — po jednym wierszu na parę
-   *  pomiarową. Bez tego użytkownik musiałby dodać 10 wierszy ręcznie i sam pamiętać,
-   *  których par nie wolno pominąć. */
-  grupy?: GrupaPomiarow[];
 }
 
 /**
@@ -97,44 +68,51 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
   izolacja: {
     title: "Pomiar rezystancji izolacji",
     norm: "PN-HD 60364-6 zał. D — kontrola po wykonaniu (rezystancja izolacji)",
-    intro: "Pomiar wykonano miernikiem rezystancji izolacji przy odłączonym zasilaniu i odłączonych odbiornikach.",
-    // JEDEN WIERSZ = JEDEN POMIAR PARY, a nie jeden wiersz na obwód z kompletem
-    // kolumn. Pełny zestaw dla TN-S/TT to 10 par, dla TN-C 6 — w układzie „kolumna
-    // na parę" dawałoby to 13 kolumn liczbowych, w większości pustych, bo każdy
-    // obwód używa tylko swojego podzbioru. Wiersz na parę jest wąski, czytelny,
-    // każdy pomiar dostaje własną ocenę i tak samo drukuje się w protokole.
+    intro:
+      "Pomiar wykonano miernikiem rezystancji izolacji przy odłączonym zasilaniu i odłączonych odbiornikach. Wszystkie wartości rezystancji poniżej podane są w megaomach [MΩ].",
+    // JEDEN WIERSZ = JEDEN OBWÓD/URZĄDZENIE, kolumna na każdą parę — układ z wzoru
+    // Z.4.4 (Poradnik Projektanta Elektryka). Obwód wypełnia tylko swój podzbiór par
+    // (np. TN-C nie ma osobnych N/PE) — puste komórki są normalne, nie błędem.
+    // Etykiety par BEZ jednostki (ta jest jedna dla całej tabeli — patrz `intro` —
+    // tak jak we wzorze, gdzie jednostka stoi raz w nagłówku "Rezystancja, w [MΩ]"
+    // nad wszystkimi sub-kolumnami, nie w każdej z osobna): przy dziesięciu wąskich
+    // kolumnach na stronie powtórzone "[MΩ]" w każdej się nie mieściło i obcinało.
     columns: [
-      { key: "obwod", label: "Obwód / miejsce pomiaru", w: 150, type: "text" },
-      { key: "para", label: "Pomiar", w: 70, type: "text" },
-      { key: "u", label: "U pom. [V]", w: 60, type: "select", options: ["250", "500", "1000"], default: "500" },
-      { key: "r", label: "R [MΩ]", w: 62, type: "number" },
+      { key: "typ", label: "Typ przewodu (kabla) lub urządzenia", w: 110, type: "text" },
+      { key: "obwod", label: "Nazwa obwodu / urządzenia oraz symbol wg dokumentacji", w: 150, type: "text" },
+      { key: "l1l2", label: "L1-L2", w: 40, type: "number" },
+      { key: "l1l3", label: "L1-L3", w: 40, type: "number" },
+      { key: "l2l3", label: "L2-L3", w: 40, type: "number" },
+      { key: "l1n", label: "L1-N", w: 36, type: "number" },
+      { key: "l2n", label: "L2-N", w: 36, type: "number" },
+      { key: "l3n", label: "L3-N", w: 36, type: "number" },
+      { key: "l1pe", label: "L1-PE/PEN", w: 54, type: "number" },
+      { key: "l2pe", label: "L2-PE/PEN", w: 54, type: "number" },
+      { key: "l3pe", label: "L3-PE/PEN", w: 54, type: "number" },
+      { key: "npe", label: "N-PE", w: 36, type: "number" },
       {
-        key: "rmin",
-        label: "R min [MΩ]",
-        w: 62,
+        key: "rwym",
+        label: "R wymagana",
+        w: 56,
         type: "computed",
-        compute: (r) => minRezystancjaIzolacji(Number(r.u ?? 500)).toFixed(1),
+        compute: (_r, limit) => minRezystancjaIzolacji(Number(limit) || 500).toFixed(1),
       },
     ],
-    grupy: GRUPY_IZOLACJI,
-    // Próg bierze się z napięcia próby (kolumna „R min"), a nie z tego pola. Zostaje
-    // ono jako WŁASNE, ostrzejsze wymaganie — np. gdy zleceniodawca stawia wyższą
-    // poprzeczkę niż norma. Zero znaczy „oceniaj wyłącznie wg normy".
-    limitLabel: "Własny próg (0 = wg normy)",
-    limitDefault: 0,
-    limitUnit: "MΩ",
+    // Napięcie probiercze jest JEDNO dla całego pomiaru (mierzy się nim wszystkie
+    // pary na raz), więc — tak jak w Z.4.4 — jest polem ogólnym, nie kolumną
+    // w wierszu. Od niego zależy wymagana rezystancja (tabl. 6.1).
+    limitLabel: "Napięcie probiercze",
+    limitDefault: 500,
+    limitUnit: "V",
     extraCriterion:
-      "Minimum wg PN-HD 60364-6 tabl. 6.1: 0,5 MΩ przy 250 V (SELV/PELV), 1,0 MΩ przy 500 V i 1000 V. Komplet pomiarów: TN-S/TT — L1-L2, L2-L3, L1-L3, L1-N, L2-N, L3-N, L1-PE, L2-PE, L3-PE, N-PE (10); TN-C — L1-L2, L2-L3, L1-L3, L1-PEN, L2-PEN, L3-PEN (6), bo brak osobnych N i PE.",
+      "Minimum wg PN-HD 60364-6 tabl. 6.1: 0,5 MΩ przy 250 V (SELV/PELV), 1,0 MΩ przy 500 V i 1000 V. Puste komórki par nieistniejących w danym układzie sieci (np. N/PE w TN-C) nie wpływają na ocenę.",
     evaluate: (r, limit) => {
-      const wymagane = Math.max(minRezystancjaIzolacji(Number(r.u ?? 500)), Number(limit) || 0);
-      // Wiersze zapisane przed przejściem na model „para na wiersz" mają osobne
-      // kolumny L-N/L-PE/N-PE. Czytamy je nadal, żeby stare protokoły nie straciły
-      // ocen — decyduje wtedy najgorszy z zapisanych pomiarów.
-      const stare = [r.ll, r.ln, r.lpe, r.npe].map(Number).filter((v) => !isNaN(v) && v > 0);
-      if (stare.length) return Math.min(...stare) >= wymagane;
-      const v = Number(r.r);
-      if (isNaN(v) || r.r === "" || r.r === undefined) return null;
-      return v >= wymagane;
+      const wymagane = minRezystancjaIzolacji(Number(limit) || 500);
+      const pary = [r.l1l2, r.l1l3, r.l2l3, r.l1n, r.l2n, r.l3n, r.l1pe, r.l2pe, r.l3pe, r.npe]
+        .map(Number)
+        .filter((v) => !isNaN(v) && v > 0);
+      if (!pary.length) return null;
+      return Math.min(...pary) >= wymagane;
     },
   },
 
@@ -225,10 +203,13 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     title: "Pomiar rezystancji uziemienia",
     norm: "PN-HD 60364-5-54 — uziemienia i przewody ochronne",
     intro: "Pomiar rezystancji uziomu wykonano metodą techniczną / cęgową przy odłączonym połączeniu wyrównawczym.",
+    // Układ z wzoru Z.4.5 (Poradnik Projektanta Elektryka): rodzaj uziomu, zmierzona
+    // i dopuszczalna rezystancja obok siebie. Metoda pomiaru jest jedna dla całego
+    // protokołu (dopisuje się ją w uwagach), nie osobną kolumną na uziom.
     columns: [
-      { key: "miejsce", label: "Uziom / miejsce pomiaru", w: 170, type: "text" },
-      { key: "metoda", label: "Metoda", w: 90, type: "select", options: ["3-przewodowa", "4-przewodowa", "cęgowa", "udarowa"], default: "3-przewodowa" },
-      { key: "r", label: "R [Ω]", w: 62, type: "number" },
+      { key: "miejsce", label: "Rodzaj uziomu oraz symbol zgodny z dokumentacją", w: 220, type: "text" },
+      { key: "r", label: "R zmierzona [Ω]", w: 72, type: "number" },
+      { key: "rdop", label: "R dopuszczalna [Ω]", w: 76, type: "computed", compute: (_r, limit) => String(limit) },
     ],
     limitLabel: "Rezystancja maksymalna",
     limitDefault: 30,
@@ -266,8 +247,7 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     checklist: true,
     // Pytania sformułowane pod BADANIE OKRESOWE, nie odbiorcze. Przy odbiorze
     // sprawdza się, czy wykonawca zrobił instalację poprawnie; po pięciu latach
-    // pytanie brzmi inaczej: co się zużyło i co zmieniono. Rozdzielnica, zabezpieczenia
-    // i zgodność z dokumentacją mają własny protokół (`rozdzielnice`).
+    // pytanie brzmi inaczej: co się zużyło i co zmieniono.
     items: [
       "Izolacja przewodów widocznych bez uszkodzeń, pęknięć i przetarć",
       "Brak śladów przegrzania przewodów, zacisków i połączeń",
@@ -281,30 +261,6 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
       "Brak instalacji prowizorycznych i przedłużaczy używanych na stałe",
       "Zmiana sposobu użytkowania pomieszczeń nie narusza wymagań instalacji",
       "Dostęp do aparatury do obsługi i konserwacji niezastawiony",
-    ],
-  },
-
-  rozdzielnice: {
-    title: "Rozdzielnice, zabezpieczenia i oznaczenia",
-    norm: "PN-HD 60364-6 pkt 6.4; art. 62 ust. 1 pkt 2 Prawa budowlanego — sprawność osprzętu i zabezpieczeń",
-    intro:
-      "Sprawdzenie stanu rozdzielnic, doboru i kompletności zabezpieczeń, oznaczeń obwodów oraz zgodności stanu instalacji z dokumentacją.",
-    checklist: true,
-    items: [
-      "Obudowa rozdzielnicy nieuszkodzona, osłony i drzwiczki kompletne",
-      "Brak śladów przegrzań na aparatach, zaciskach i szynach",
-      "Połączenia w rozdzielnicy pewne, bez luzów i przebarwień",
-      "Zabezpieczenia zgodne z dokumentacją (typ, charakterystyka, prąd znamionowy)",
-      "Brak zabezpieczeń wymienionych na inne parametry niż projektowe",
-      "Wyłączniki różnicowoprądowe obecne tam, gdzie są wymagane",
-      "Przycisk TEST wyłączników RCD sprawdzony i działający",
-      "Szyny PE i N kompletne, połączenia pewne, brak korozji",
-      "Oznaczenia przewodów ochronnych i neutralnych prawidłowe",
-      "Opisy obwodów czytelne i ZGODNE ZE STANEM FAKTYCZNYM",
-      "Schemat rozdzielnicy obecny i aktualny",
-      "Stopień ochrony IP rozdzielnicy właściwy dla miejsca zainstalowania",
-      "Instalacja nierozbudowana samowolnie po poprzednim badaniu",
-      "Stan instalacji zgodny z dokumentacją powykonawczą",
     ],
   },
 
@@ -349,7 +305,6 @@ const CIAGLOSC_LPS_MAX = 1;
  */
 export const PROTOCOL_ORDER: ProtocolKey[] = [
   "ogledziny",
-  "rozdzielnice",
   "ciaglosc",
   "izolacja",
   "petla",

@@ -46,16 +46,15 @@ test("Protokoły: lista kontrolna oględzin daje werdykt i pobiera się jako PDF
   expect(download.suggestedFilename()).toBe("protokol-ogledziny-dom-testowy.pdf");
 });
 
-test("Protokoły: komplet ośmiu protokołów wymaganych przy kontroli pięcioletniej", async ({ page }) => {
+test("Protokoły: komplet siedmiu protokołów wymaganych przy kontroli pięcioletniej", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
 
   // Zakres z art. 62 ust. 1 pkt 2 Prawa budowlanego: połączenia, osprzęt,
-  // zabezpieczenia i środki ochrony od porażeń, oporność izolacji, uziemienia —
-  // ORAZ instalacja piorunochronna, wymieniona w tym samym przepisie.
+  // środki ochrony od porażeń, oporność izolacji, uziemienia — ORAZ instalacja
+  // piorunochronna, wymieniona w tym samym przepisie.
   for (const tytul of [
     "Oględziny instalacji",
-    "Rozdzielnice, zabezpieczenia i oznaczenia",
     "Sprawdzenie ciągłości przewodów ochronnych",
     "Pomiar rezystancji izolacji",
     "Pomiar impedancji pętli zwarcia",
@@ -97,7 +96,9 @@ test("Protokoły: wypełnione wiersze trafiają do zapisu projektu", async ({ pa
   await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
   await page.getByText("Pomiar rezystancji izolacji", { exact: true }).click();
   await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
-  await page.locator("tbody tr").first().locator("input").first().fill("Obwód gniazd kuchnia");
+  // Kolumna 0 to „Typ przewodu (kabla) lub urządzenia", kolumna 1 to „Nazwa
+  // obwodu" — w tej kolejności jak we wzorze Z.4.4.
+  await page.locator("tbody tr").first().locator("input").nth(1).fill("Obwód gniazd kuchnia");
 
   await page.waitForTimeout(900); // debounce autozapisu
   // Protokoły są częścią projektu, więc idą tą samą drogą co plan — i tym samym

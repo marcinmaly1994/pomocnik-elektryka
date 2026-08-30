@@ -230,7 +230,6 @@ export type ProtocolKey =
   | "uziemienie"
   | "ciaglosc"
   | "ogledziny"
-  | "rozdzielnice"
   | "odgromowa";
 
 export interface PriceTable {

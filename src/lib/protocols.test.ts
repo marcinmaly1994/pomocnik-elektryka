@@ -1,19 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { GRUPY_IZOLACJI, PROTOCOL_DEFS, protocolVerdict, type ProtocolRow } from "./protocols";
+import { PROTOCOL_DEFS, protocolVerdict, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
 
-  it("rezystancja powyżej progu -> pozytywny", () => {
-    expect(def.evaluate!({ ln: 500, lpe: 400, npe: 300 }, 1.0)).toBe(true);
+  it("wszystkie zmierzone pary powyżej wymaganej rezystancji -> pozytywny", () => {
+    expect(def.evaluate!({ l1n: 500, l1pe: 400, npe: 300 }, 500)).toBe(true);
   });
 
-  it("najgorszy pomiar poniżej progu -> negatywny", () => {
-    expect(def.evaluate!({ ln: 500, lpe: 0.5, npe: 300 }, 1.0)).toBe(false);
+  it("najgorsza para poniżej wymaganej rezystancji -> negatywny", () => {
+    expect(def.evaluate!({ l1n: 500, l1pe: 0.5, npe: 300 }, 500)).toBe(false);
   });
 
   it("brak danych -> null", () => {
-    expect(def.evaluate!({}, 1.0)).toBeNull();
+    expect(def.evaluate!({}, 500)).toBeNull();
+  });
+
+  it("puste pary nieistniejące w danym układzie sieci nie wpływają na ocenę", () => {
+    // TN-C: brak osobnych N/PE, tylko międzyfazowe i do PEN
+    expect(def.evaluate!({ l1l2: 5, l2l3: 5, l1l3: 5 }, 500)).toBe(true);
   });
 });
 
@@ -80,82 +85,47 @@ describe("PROTOCOL_DEFS.rcd.evaluate", () => {
   });
 });
 
-describe("PROTOCOL_DEFS.izolacja — próg zależny od napięcia próby", () => {
+describe("PROTOCOL_DEFS.izolacja — próg zależny od napięcia probierczego (pole ogólne, nie kolumna)", () => {
   const def = PROTOCOL_DEFS.izolacja;
 
-  it("obwód SELV (250 V) z wynikiem 0,7 MΩ jest ZGODNY — wymagane 0,5 MΩ", () => {
-    expect(def.evaluate!({ u: "250", ln: 0.7, lpe: 0.8, npe: 0.9 }, 0)).toBe(true);
+  it("napięcie probiercze 250 V (SELV) z wynikiem 0,7 MΩ jest ZGODNE — wymagane 0,5 MΩ", () => {
+    expect(def.evaluate!({ l1n: 0.7, l1pe: 0.8, npe: 0.9 }, 250)).toBe(true);
   });
 
   it("ten sam wynik przy 500 V jest NIEZGODNY — wymagane 1,0 MΩ", () => {
-    expect(def.evaluate!({ u: "500", ln: 0.7, lpe: 0.8, npe: 0.9 }, 0)).toBe(false);
+    expect(def.evaluate!({ l1n: 0.7, l1pe: 0.8, npe: 0.9 }, 500)).toBe(false);
   });
 
-  it("własny próg zaostrza kryterium ponad wymaganie normy", () => {
-    expect(def.evaluate!({ u: "500", ln: 1.5, lpe: 1.5, npe: 1.5 }, 2)).toBe(false);
-    expect(def.evaluate!({ u: "500", ln: 1.5, lpe: 1.5, npe: 1.5 }, 0)).toBe(true);
+  it("kolumna R wymagana pokazuje próg wynikający z napięcia probierczego", () => {
+    const rwym = def.columns!.find((c) => c.key === "rwym")!;
+    expect(rwym.compute!({}, 250)).toBe("0.5");
+    expect(rwym.compute!({}, 500)).toBe("1.0");
+    expect(rwym.compute!({}, 1000)).toBe("1.0");
   });
 
-  it("kolumna R min pokazuje próg wynikający z napięcia próby", () => {
-    const rmin = def.columns!.find((c) => c.key === "rmin")!;
-    expect(rmin.compute!({ u: "250" })).toBe("0.5");
-    expect(rmin.compute!({ u: "500" })).toBe("1.0");
-    expect(rmin.compute!({ u: "1000" })).toBe("1.0");
-  });
-});
-
-describe("izolacja — komplety pomiarów zależne od układu sieci", () => {
-  const grupa = (id: string) => GRUPY_IZOLACJI.find((g) => g.id === id)!;
-
-  it("TN-S/TT ma 10 par, w tym wszystkie międzyfazowe, do N, do PE i N-PE", () => {
-    expect(grupa("tns").pary).toEqual([
-      "L1-L2",
-      "L2-L3",
-      "L1-L3",
-      "L1-N",
-      "L2-N",
-      "L3-N",
-      "L1-PE",
-      "L2-PE",
-      "L3-PE",
-      "N-PE",
-    ]);
-  });
-
-  it("TN-C ma 6 par — bez pomiarów do N, do PE i N-PE, bo tam jest wspólny PEN", () => {
-    const pary = grupa("tnc").pary;
-    expect(pary).toEqual(["L1-L2", "L2-L3", "L1-L3", "L1-PEN", "L2-PEN", "L3-PEN"]);
-    expect(pary.some((p) => p === "N-PE" || p.endsWith("-N") || p.endsWith("-PE"))).toBe(false);
-  });
-
-  it("każda para występuje tylko raz — komplet bez duplikatów", () => {
-    for (const g of GRUPY_IZOLACJI) expect(new Set(g.pary).size).toBe(g.pary.length);
-  });
-
-  it("ocenia pojedynczy pomiar pary wobec progu z napięcia próby", () => {
-    const def = PROTOCOL_DEFS.izolacja;
-    expect(def.evaluate!({ para: "L1-PE", u: "500", r: 1.2 }, 0)).toBe(true);
-    expect(def.evaluate!({ para: "L1-PE", u: "500", r: 0.7 }, 0)).toBe(false);
+  it("ocenia komplet zmierzonych par wobec progu z napięcia probierczego", () => {
+    expect(def.evaluate!({ l1pe: 1.2 }, 500)).toBe(true);
+    expect(def.evaluate!({ l1pe: 0.7 }, 500)).toBe(false);
     // ten sam wynik w obwodzie SELV badanym 250 V jest zgodny
-    expect(def.evaluate!({ para: "L1-PE", u: "250", r: 0.7 }, 0)).toBe(true);
+    expect(def.evaluate!({ l1pe: 0.7 }, 250)).toBe(true);
   });
 
   it("pusty pomiar nie jest oceniany — wiersz czeka na wypełnienie", () => {
-    expect(PROTOCOL_DEFS.izolacja.evaluate!({ para: "L1-PE", u: "500", r: "" }, 0)).toBeNull();
+    expect(def.evaluate!({ l1pe: "" }, 500)).toBeNull();
   });
 });
 
 describe("obwody 3-fazowe", () => {
-  it("izolacja: pomiar międzyfazowy L-L wchodzi do oceny", () => {
+  it("izolacja: pomiar międzyfazowy L1-L2 wchodzi do oceny", () => {
     const def = PROTOCOL_DEFS.izolacja;
-    // Same pomiary do N i PE są dobre — dopiero L-L ujawnia usterkę.
-    expect(def.evaluate!({ uklad: "3-faz", u: "500", ln: 5, lpe: 5, npe: 5 }, 0)).toBe(true);
-    expect(def.evaluate!({ uklad: "3-faz", u: "500", ll: 0.3, ln: 5, lpe: 5, npe: 5 }, 0)).toBe(false);
+    // Same pomiary do N i PE są dobre — dopiero L1-L2 ujawnia usterkę.
+    expect(def.evaluate!({ l1n: 5, l1pe: 5, npe: 5 }, 500)).toBe(true);
+    expect(def.evaluate!({ l1l2: 0.3, l1n: 5, l1pe: 5, npe: 5 }, 500)).toBe(false);
   });
 
-  it("izolacja: pusta kolumna L-L nie psuje oceny obwodu 1-fazowego", () => {
+  it("izolacja: pusta kolumna L1-L2 nie psuje oceny obwodu 1-fazowego", () => {
     const def = PROTOCOL_DEFS.izolacja;
-    expect(def.evaluate!({ uklad: "1-faz", u: "500", ll: "", ln: 5, lpe: 5, npe: 5 }, 0)).toBe(true);
+    expect(def.evaluate!({ l1l2: "", l1n: 5, l1pe: 5, npe: 5 }, 500)).toBe(true);
   });
 
   it("pętla zwarcia: o ocenie decyduje NAJGORSZA faza, nie pierwsza", () => {
