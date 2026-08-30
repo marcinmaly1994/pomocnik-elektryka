@@ -162,7 +162,7 @@ export function EditorToolbar({
       {/* Rozmiar SYMBOLI, nie powiększenie planu — to dwie różne rzeczy i dlatego
           stoją w osobnych grupach (zoom siedzi po prawej, przy dopasowaniu widoku). */}
       <label className="flex items-center gap-1.5 text-xs text-slate-500" title="Rozmiar symboli na planie">
-        <span className="whitespace-nowrap">Rozmiar</span>
+        <span className="whitespace-nowrap">Rozmiar elementów</span>
         <input
           type="range"
           min={0.6}
