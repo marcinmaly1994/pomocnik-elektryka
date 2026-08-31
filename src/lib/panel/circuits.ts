@@ -1,8 +1,7 @@
-import type { Circuit, InstallationElement, RcdGroup } from "@/types";
+import type { Circuit, InstallationElement, RcdGroup, RoomShape } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
-
-const WET_ROOMS = ["Kuchnia", "Łazienka", "Pralnia", "Kotłownia"];
+import { isWetRoomName } from "@/lib/design";
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -76,7 +75,7 @@ function roleOf(e: InstallationElement) {
  * dedykowane, hermetyczne) dostają osobne obwody; zwykłe gniazda i oświetlenie są
  * grupowane po pomieszczeniu/typie w paczki po kilka sztuk (limit modułowy szyny).
  */
-export function computeCircuits(elements: InstallationElement[]): Circuit[] {
+export function computeCircuits(elements: InstallationElement[], roomShapes: RoomShape[] = []): Circuit[] {
   const circuits: Circuit[] = [];
   let n = 1;
   const add = (c: Omit<Circuit, "id">) => circuits.push({ id: "obw" + n++, ...c });
@@ -106,7 +105,7 @@ export function computeCircuits(elements: InstallationElement[]): Circuit[] {
 
   const regular = elements.filter((e) => roleOf(e) === "socket" && !e.dedicated);
   const byRoom: Record<string, InstallationElement[]> = {};
-  regular.filter((e) => WET_ROOMS.includes(e.room)).forEach((e) => {
+  regular.filter((e) => isWetRoomName(e.room, roomShapes)).forEach((e) => {
     (byRoom[e.room] ??= []).push(e);
   });
   Object.entries(byRoom).forEach(([room, list]) => {
@@ -115,7 +114,7 @@ export function computeCircuits(elements: InstallationElement[]): Circuit[] {
     });
   });
   chunk(
-    regular.filter((e) => !WET_ROOMS.includes(e.room)),
+    regular.filter((e) => !isWetRoomName(e.room, roomShapes)),
     8
   ).forEach((g, i) => {
     add({ name: `Obwód gniazd ogólnych ${i + 1}`, type: "gniazdko", elements: g, cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true });

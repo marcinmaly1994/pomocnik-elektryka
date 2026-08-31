@@ -4,6 +4,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Layers,
   Loader2,
   Pencil,
   Pin,
@@ -21,20 +22,23 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, Point } from "@/types";
+import type { ElementType, Point, RoomType } from "@/types";
 import { computeSanitaryZones, NO_ROOM, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
+  GRID,
   MANUAL_DRAW_SCALE_MPU,
+  ROOM_TYPE_LABELS,
   defaultOpeningWidth,
+  guessRoomType,
   nextRoomName,
   planSizeForImage,
   scaleOf,
 } from "@/lib/design";
-import { pointInPolygon } from "@/lib/geometry";
+import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
@@ -278,7 +282,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [orthoWalls, setOrthoWalls] = useState(false);
   const [drawingRoomPoints, setDrawingRoomPoints] = useState<Point[]>([]);
   const [roomMode, setRoomMode] = useState<RoomDrawMode>("prostokat");
-  const [pendingRoom, setPendingRoom] = useState<{ points: Point[]; name: string } | null>(null);
+  const [pendingRoom, setPendingRoom] = useState<{ points: Point[]; name: string; type: RoomType; typeTouched: boolean } | null>(
+    null
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calibPoints, setCalibPoints] = useState<Point[]>([]);
   /** Potwierdzenie tuż po zatwierdzeniu skali — znika razem z pigułką narzędzia
@@ -834,11 +840,34 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  /** Elementy montowane W ścianie (gniazdka, łączniki — czyli większość instalacji)
+   *  klika się na linii ściany, a obrys pomieszczenia to OSOBNY kształt, rysowany
+   *  ręcznie — rzadko pokrywa się z nią co do piksela. Bez tolerancji taki element
+   *  ląduje tuż OBOK wielokąta pomieszczenia i dostaje „Bez pomieszczenia" mimo że
+   *  wizualnie stoi dokładnie na jego ścianie — a to po cichu psuje grupowanie
+   *  łącznik→lampa (działa tylko w obrębie tego samego pomieszczenia, patrz
+   *  lib/lightGroups.ts) i grupowanie obwodów w rozdzielnicy. Promień w metrach,
+   *  nie w jednostkach planu — inaczej ten sam próg wypadałby raz za ciasno, raz
+   *  za luźno w zależności od skali (zdjęcie rzutu vs rysowanie ręczne). */
+  const ROOM_SNAP_TOLERANCE_M = 0.4;
+
   function detectRoomName(p: Point): string {
     for (const r of roomShapes) {
       if (pointInPolygon(p, r.points)) return r.name;
     }
-    return NO_ROOM;
+    const toleranceUnits = mpu ? ROOM_SNAP_TOLERANCE_M / mpu : GRID;
+    let bestName: string | null = null;
+    let bestDist = toleranceUnits;
+    for (const r of roomShapes) {
+      const nearest = nearestPointOnPolyline(p, [...r.points, r.points[0]]);
+      if (!nearest) continue;
+      const dist = Math.hypot(p.x - nearest.point.x, p.y - nearest.point.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestName = r.name;
+      }
+    }
+    return bestName ?? NO_ROOM;
   }
 
   // Każdy typ z wariantami ma WŁASNY licznik gangów — zmiana jednego nie wpływa na drugi.
@@ -887,6 +916,29 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       }));
     }
     setDrawingWall([]);
+  }
+
+  /** Tworzy ścianę o kształcie IDENTYCZNYM z obrysem pomieszczenia — dla planów, które
+   *  zaczęły się od samego obrysu pokoju (skrót „obrysuj pomieszczenie", bez osobnego
+   *  rysowania ścian) i teraz mają dociągnąć plan do stanu z prawdziwymi ścianami:
+   *  routowanie przewodów wzdłuż ścian (`buildCableRoutes`), grubość na rzucie do PDF
+   *  itd. Zamknięty wielokąt — ostatni punkt domyka się z powrotem do pierwszego, tak
+   *  samo jak ściana zamknięta ręcznie (patrz `finishWall`).
+   *
+   *  Osobny przycisk, NIE automat przy każdym narysowanym pomieszczeniu: automatyczne
+   *  tworzenie ściany zdublowałoby ją u tych, którzy rysują obrys pomieszczenia
+   *  WEWNĄTRZ już postawionych ścian — a to jest częsty, sprawdzony w testach
+   *  przepływ, nie przypadek brzegowy. */
+  function createWallFromRoom(roomId: string) {
+    const room = roomShapes.find((r) => r.id === roomId);
+    if (!room || room.points.length < 3) return;
+    setDraft((d) => ({
+      ...d,
+      walls: [
+        ...d.walls,
+        { id: crypto.randomUUID(), floor: activeFloorId, points: [...room.points, room.points[0]], thickness: wallThickness },
+      ],
+    }));
   }
 
   /** Przesuwa JEDEN narożnik zapisanej ściany — edycja przeciąganiem na planie,
@@ -973,14 +1025,15 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
 
   function finishRoomDrawing() {
     if (drawingRoomPoints.length >= 3) {
-      setPendingRoom({ points: drawingRoomPoints, name: nextRoomName(roomShapes.length) });
+      const name = nextRoomName(roomShapes.length);
+      setPendingRoom({ points: drawingRoomPoints, name, type: guessRoomType(name), typeTouched: false });
     }
     setDrawingRoomPoints([]);
   }
 
   function savePendingRoom() {
     if (!pendingRoom) return;
-    addRoomShape(activeFloorId, pendingRoom.points, pendingRoom.name);
+    addRoomShape(activeFloorId, pendingRoom.points, pendingRoom.name, pendingRoom.type);
     setPendingRoom(null);
   }
 
@@ -1032,7 +1085,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // układzie współrzędnych. Puste trasy zasilania bez rozdzielnicy na planie — trasy
   // sterowania (łącznik→oprawa) działają niezależnie od niej, patrz `buildCableRoutes`.
   const rawCableRoutes = useMemo(
-    () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements), elements, walls, roomShapes) : []),
+    () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes) : []),
     [showRoutes, elements, walls, roomShapes]
   );
   // Ręczne poprawki (przeciągnięte przez użytkownika załamania, patrz DesignCanvas)
@@ -1074,6 +1127,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     multiSelected.length > 0 ||
     toolMode === "sciany" ||
     toolMode === "pomieszczenie" ||
+    toolMode === "otwory" ||
     toolMode === "skala" ||
     (selected?.kind === "wall" && toolMode === "zaznacz" && walls.some((w) => w.id === selected.id)) ||
     (selected?.kind === "route" && toolMode === "zaznacz") ||
@@ -1197,6 +1251,17 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           )}
         </div>
       )}
+      {/* Jedyna podpowiedź, jaką dostaje to narzędzie — bez ustawień typu grubość
+          ściany/kształt pomieszczenia (stąd brak własnego coach-marka jak przy
+          skali/ścianach, patrz `coachMark`), więc bez tej linijki jedyne wyjaśnienie
+          „w co właściwie kliknąć" siedziałoby w tooltipie przycisku paska, widocznym
+          tylko po najechaniu myszą — czego nikt nie robi, zanim spróbuje kliknąć. */}
+      {toolMode === "otwory" && (
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span>Kliknij ścianę albo krawędź pomieszczenia, żeby postawić tam drzwi.</span>
+        </div>
+      )}
+
       {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
           poza nim byłby tylko szumem w pasku narzędzi. */}
       {toolMode === "pomieszczenie" && (
@@ -1760,7 +1825,19 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               onToggleDedicated={setDedicated}
             />
           ) : (
-            <RoomPanel roomShapes={roomShapes} />
+            <div className="space-y-2">
+              {/* Wejście w tę zakładkę było dotąd jedynym sposobem, żeby zobaczyć, że
+                  trzeba wrócić do paska narzędzi po ikonę „Narysuj Pomieszczenie" —
+                  przycisk tutaj skraca to o jeden krok, niezależnie od tego, czy
+                  pomieszczenia już są, czy lista dopiero czeka na pierwsze. */}
+              <button
+                onClick={() => selectTool("pomieszczenie")}
+                className="pe-btn-copper flex w-full items-center justify-center gap-1.5 py-1.5 text-xs"
+              >
+                <Layers size={13} /> Narysuj pomieszczenie
+              </button>
+              <RoomPanel roomShapes={roomShapes} metersPerUnit={mpu} onCreateWall={createWallFromRoom} />
+            </div>
           )}
           </div>
           )}
@@ -1868,7 +1945,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             onAddWallPoint={(p) => setDrawingWall((pts) => [...pts, p])}
             onAddRoomPoint={(p) => setDrawingRoomPoints((pts) => [...pts, p])}
             onRoomRectDrawn={(points) => {
-              setPendingRoom({ points, name: nextRoomName(roomShapes.length) });
+              const name = nextRoomName(roomShapes.length);
+              setPendingRoom({ points, name, type: guessRoomType(name), typeTouched: false });
               // Prostokąt rysowany DWOMA KLIKNIĘCIAMI trzyma narożnik startowy w tej
               // samej tablicy co wielobok (patrz `rectAnchor` w DesignCanvas), więc
               // domknięcie figury musi ją wyczyścić — inaczej kolejny klik liczyłby
@@ -1945,7 +2023,13 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           <input
             autoFocus
             value={pendingRoom?.name ?? ""}
-            onChange={(e) => setPendingRoom((p) => (p ? { ...p, name: e.target.value } : p))}
+            onChange={(e) => {
+              const name = e.target.value;
+              // Podpowiedź typu śledzi nazwę tylko dopóki użytkownik sam niczego nie
+              // wybrał z listy — inaczej ręczny wybór zostałby cicho nadpisany przy
+              // kolejnej literze wpisywanej w polu nazwy.
+              setPendingRoom((p) => (p ? { ...p, name, type: p.typeTouched ? p.type : guessRoomType(name) } : p));
+            }}
             // Enter zatwierdza nazwę i dodaje pomieszczenie — bez tego trzeba było
             // sięgnąć po mysz mimo trwającej pracy klawiaturą (wpisywanie nazwy).
             onKeyDown={(e) => {
@@ -1954,8 +2038,24 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                 savePendingRoom();
               }
             }}
-            className="mb-4 w-full rounded border border-border px-3 py-1.5 text-sm"
+            className="mb-3 w-full rounded border border-border px-3 py-1.5 text-sm"
           />
+          <label className="mb-1 block text-xs font-medium text-slate-500">Typ pomieszczenia</label>
+          <select
+            value={pendingRoom?.type ?? "inne"}
+            onChange={(e) => setPendingRoom((p) => (p ? { ...p, type: e.target.value as RoomType, typeTouched: true } : p))}
+            className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
+          >
+            {(Object.entries(ROOM_TYPE_LABELS) as [RoomType, string][]).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <p className="mb-4 text-xs text-slate-400">
+            Kuchnia, łazienka, pralnia i kotłownia rządzą się swoimi zasadami (gniazda hermetyczne, strefa mokra w
+            doborze przewodu) — wybierz zgodnie z rzeczywistością, niezależnie od tego, jak nazwiesz pomieszczenie.
+          </p>
           <Button variant="copper" className="w-full" onClick={savePendingRoom}>
             Dodaj pomieszczenie
           </Button>

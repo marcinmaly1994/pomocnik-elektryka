@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type { ElementType } from "@/types";
-import { ELEMENT_SECTIONS, ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
+import { ELEMENT_SECTIONS, ELEMENT_TYPES, SEARCH_KEYWORDS, libSubtitle } from "@/lib/elements";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
 
 interface ElementLibraryProps {
@@ -37,7 +37,10 @@ export function ElementLibrary({
     ? ELEMENT_SECTIONS.map((s) => ({
         ...s,
         items: s.items.filter(
-          (i) => ELEMENT_TYPES[i.key].label.toLowerCase().includes(query) || (libSubtitle(i.key, 1) || "").toLowerCase().includes(query)
+          (i) =>
+            ELEMENT_TYPES[i.key].label.toLowerCase().includes(query) ||
+            (libSubtitle(i.key, 1) || "").toLowerCase().includes(query) ||
+            (SEARCH_KEYWORDS[i.key] ?? []).some((k) => k.toLowerCase().includes(query))
         ),
       })).filter((s) => s.items.length > 0)
     : ELEMENT_SECTIONS;

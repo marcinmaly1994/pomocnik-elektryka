@@ -428,6 +428,7 @@ function FinalCircuitsTable({ columns }: { columns: Column[] }) {
  */
 export function SchemaTab() {
   const elements = useProjectStore((s) => s.draft.elements);
+  const roomShapes = useProjectStore((s) => s.draft.roomShapes);
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const projectName = useProjectStore((s) => s.projectName);
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
@@ -497,7 +498,10 @@ export function SchemaTab() {
   // Te same obwody co w Rozdzielnicy — z doborem, nie ze stałymi z `computeCircuits`.
   // Inaczej schemat jednokreskowy pokazywałby inny przekrój niż front rozdzielnicy.
   const mpu = scaleOf(scales, activeFloorId);
-  const { circuits } = useMemo(() => computeSizedCircuits(elements, { metersPerUnit: mpu }), [elements, mpu]);
+  const { circuits } = useMemo(
+    () => computeSizedCircuits(elements, { metersPerUnit: mpu }, roomShapes),
+    [elements, mpu, roomShapes]
+  );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   /**
    * Aparaty bierzemy z ROZDZIELNICY, nie budujemy własnych.

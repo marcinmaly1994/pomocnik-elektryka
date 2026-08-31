@@ -3,6 +3,7 @@ import type {
   InstallationElement,
   Wall,
   RoomShape,
+  RoomType,
   Opening,
   Floor,
   DocumentHeader,
@@ -336,8 +337,9 @@ interface ProjectState {
   nowyZestawProtokolow: () => void;
   setLimitBlokada: (b: { rodzaj: RodzajDokumentu; komunikat: string } | null) => void;
 
-  addRoomShape: (floor: string, points: Point[], name?: string) => void;
+  addRoomShape: (floor: string, points: Point[], name?: string, type?: RoomType) => void;
   renameRoomShape: (id: string, newName: string) => void;
+  setRoomShapeType: (id: string, type: RoomType) => void;
   /** Przesuwa JEDEN narożnik obrysu — do edycji kształtu przeciąganiem na planie. */
   moveRoomShapePoint: (id: string, index: number, point: Point) => void;
   recolorRoomShape: (id: string) => void;
@@ -859,7 +861,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  addRoomShape: (floor, points, name) => {
+  addRoomShape: (floor, points, name, type) => {
     const { draft, setDraft } = get();
     const countHere = draft.roomShapes.filter((r) => r.floor === floor).length;
     const room: RoomShape = {
@@ -868,8 +870,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       name: name?.trim() || nextRoomName(countHere),
       color: roomColorForIndex(countHere),
       points,
+      type,
     };
     setDraft((d) => ({ ...d, roomShapes: [...d.roomShapes, room] }));
+  },
+
+  setRoomShapeType: (id, type) => {
+    const { setDraft } = get();
+    setDraft((d) => ({ ...d, roomShapes: d.roomShapes.map((r) => (r.id === id ? { ...r, type } : r)) }));
   },
 
   // Zmiana nazwy pomieszczenia synchronizuje też już postawione w nim elementy —

@@ -8,11 +8,12 @@
  * wiedzieć nic o tablicach obciążalności.
  */
 
-import type { Circuit, InstallationElement } from "@/types";
+import type { Circuit, InstallationElement, RoomShape } from "@/types";
 import { computeCircuits } from "./circuits";
 import { circuitDemand, estimateRoutes, findPanel, kindForElements } from "./loads";
 import { sizeCircuit, type PhaseAssignment, type SizedCircuit } from "./sizing";
 import type { LayingMethod } from "./norms";
+import { isWetRoomName } from "@/lib/design";
 
 export interface ProjectSizingOptions {
   /** Metry na jednostkę planu z kalibracji skali; `null` = brak kalibracji. */
@@ -27,7 +28,8 @@ export interface ProjectSizingOptions {
 export function sizeProjectCircuits(
   circuits: Circuit[],
   allElements: InstallationElement[],
-  opts: ProjectSizingOptions
+  opts: ProjectSizingOptions,
+  roomShapes: RoomShape[] = []
 ): SizedCircuit[] {
   const panel = findPanel(allElements);
   return circuits.map((c) => {
@@ -42,7 +44,7 @@ export function sizeProjectCircuits(
       nazwa: c.name,
       typ: kind,
       pomieszczenie: c.elements[0]?.room,
-      strefa_mokra: /łazienk|pralni|kuchni/i.test(c.elements[0]?.room ?? ""),
+      strefa_mokra: isWetRoomName(c.elements[0]?.room ?? "", roomShapes),
       moc_W: demand.powerW,
       liczba_faz: phases,
       dlugosc_m: routes?.worstCaseM,
@@ -85,10 +87,11 @@ export function applySizing(circuits: Circuit[], sized: SizedCircuit[]): Circuit
  */
 export function computeSizedCircuits(
   elements: InstallationElement[],
-  opts: ProjectSizingOptions
+  opts: ProjectSizingOptions,
+  roomShapes: RoomShape[] = []
 ): { circuits: Circuit[]; sized: SizedCircuit[] } {
-  const raw = computeCircuits(elements);
-  const sized = sizeProjectCircuits(raw, elements, opts);
+  const raw = computeCircuits(elements, roomShapes);
+  const sized = sizeProjectCircuits(raw, elements, opts, roomShapes);
   return { circuits: applySizing(raw, sized), sized };
 }
 

@@ -16,6 +16,7 @@ import { downloadBlob, projectFileName } from "@/lib/pdf/download";
  */
 export function CostsTab() {
   const elements = useProjectStore((s) => s.draft.elements);
+  const roomShapes = useProjectStore((s) => s.draft.roomShapes);
   const prices = useProjectStore((s) => s.prices);
   const setPrice = useProjectStore((s) => s.setPrice);
   const setPrices = useProjectStore((s) => s.setPrices);
@@ -27,7 +28,10 @@ export function CostsTab() {
   // Te same obwody co w Rozdzielnicy/Schemacie — przekroje z doboru trafiają wprost
   // do pozycji kosztorysu, więc zamawiany materiał zgadza się z rysunkiem.
   const mpu = scaleOf(scales, activeFloorId);
-  const { circuits } = useMemo(() => computeSizedCircuits(elements, { metersPerUnit: mpu }), [elements, mpu]);
+  const { circuits } = useMemo(
+    () => computeSizedCircuits(elements, { metersPerUnit: mpu }, roomShapes),
+    [elements, mpu, roomShapes]
+  );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const { quantities, cableLengthSource } = useMemo(
     () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: routeLengths(circuits, elements, mpu) }),

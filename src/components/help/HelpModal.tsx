@@ -20,7 +20,7 @@ const KROKI: { tytul: string; opis: string }[] = [
   },
   {
     tytul: "Obrysuj i nazwij pomieszczenia",
-    opis: "Narzędziem „Narysuj Pomieszczenie” obrysuj każde pomieszczenie i nadaj mu nazwę. Łazienka i kuchnia mają własne wymagania — aplikacja uwzględni je automatycznie po rozpoznaniu nazwy.",
+    opis: "Narzędziem „Narysuj Pomieszczenie” obrysuj każde pomieszczenie, nadaj mu nazwę i wybierz typ z listy. Kuchnia, łazienka, pralnia i kotłownia mają własne wymagania — aplikacja uwzględni je automatycznie na podstawie wybranego typu.",
   },
   {
     tytul: "Rozstaw gniazdka, łączniki i oświetlenie",

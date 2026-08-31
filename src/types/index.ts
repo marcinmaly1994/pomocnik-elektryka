@@ -29,8 +29,8 @@ export type ElementType =
   | "wlacznik" | "wlacznikDwubiegunowy" | "wlacznikGrupowy" | "wlacznikSchodowy" | "wlacznikKrzyzowy"
   | "sciemniacz" | "czujnikRuchu"
   | "oswietlenie" | "kinkiet" | "oswietlenieZewn" | "tasmaLed"
-  | "roleta" | "wentylator" | "termostat"
-  | "rj45" | "rtvsat" | "domofon" | "dzwonek" | "czujnikDymu"
+  | "roleta" | "napedBramy" | "wentylator" | "termostat"
+  | "rj45" | "rtvsat" | "domofon" | "dzwonek" | "czujnikDymu" | "czujnikCzadu"
   | "rozdzielnica" | "puszka"
   | "wanna" | "prysznic" | "umywalka";
 
@@ -112,12 +112,31 @@ export interface Opening {
   flip?: boolean;
 }
 
+/** Kuchnia/łazienka/pralnia/kotłownia liczą się jako pomieszczenia „mokre" — patrz
+ *  `isWetRoomName` w lib/design.ts. Pozostałe (salon/sypialnia/pokój/garaż) służą
+ *  tylko czytelności listy — nie wpływają na dobór. */
+export type RoomType =
+  | "inne"
+  | "kuchnia"
+  | "lazienka"
+  | "pralnia"
+  | "kotlownia"
+  | "salon"
+  | "sypialnia"
+  | "pokoj"
+  | "garaz";
+
 export interface RoomShape {
   id: string;
   floor: string;
   name: string;
   color: string;
   points: Point[];
+  /** Jawny typ pomieszczenia, wybrany w oknie „Nazwij pomieszczenie" albo w panelu
+   *  pomieszczeń — niezależny od tego, jak dokładnie ktoś je nazwał. Opcjonalne:
+   *  zapisy sprzed dodania tego pola go nie mają, więc te pomieszczenia wracają do
+   *  starego zgadywania typu po nazwie (`guessRoomType`). */
+  type?: RoomType;
 }
 
 export interface Point {

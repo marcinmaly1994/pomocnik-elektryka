@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
+import { ELEMENT_TYPES, NO_ROOM } from "@/lib/elements";
 import {
   balancePhases,
   buildPanelDevices,
@@ -45,6 +46,20 @@ const nextManualUid = () => `manual-${++manualSeq}`;
  */
 export function PanelTab() {
   const elements = useProjectStore((s) => s.draft.elements); // cały budynek, nie tylko bieżąca kondygnacja
+  const roomShapes = useProjectStore((s) => s.draft.roomShapes);
+
+  // Element bez rozpoznanego pomieszczenia grupuje się do ogólnego kubła zamiast
+  // do właściwego obwodu, a łącznik nie połączy się z lampą w grupę sterowania
+  // (patrz lib/lightGroups.ts) — bez tego licznika użytkownik nie ma jak się o tym
+  // dowiedzieć, bo nic na planie tego nie sygnalizuje. Infrastruktura (rozdzielnica,
+  // puszka) i wyposażenie sanitarne (wanna/prysznic/umywalka — nie generują obwodu,
+  // służą tylko do stref ochronnych) świadomie pominięte: brak pomieszczenia jest
+  // dla nich normalny, nie błędem do naprawienia.
+  const unassignedCount = useMemo(
+    () =>
+      elements.filter((e) => e.room === NO_ROOM && !["infra", "sanitary"].includes(ELEMENT_TYPES[e.type]?.role ?? "")).length,
+    [elements]
+  );
   const rawDocHeader = useProjectStore((s) => s.docHeader);
   const projectName = useProjectStore((s) => s.projectName);
   // Nazwa projektu jako domyślny „Obiekt" — patrz resolveDocHeader; dzięki temu legenda
@@ -99,8 +114,8 @@ export function PanelTab() {
   const scales = useProjectStore((s) => s.scales);
   const mpu = scaleOf(scales, activeFloorId);
   const { circuits, sized: sizedRaw } = useMemo(
-    () => computeSizedCircuits(elements, { metersPerUnit: mpu }),
-    [elements, mpu]
+    () => computeSizedCircuits(elements, { metersPerUnit: mpu }, roomShapes),
+    [elements, mpu, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const sized = useMemo(() => assignPhases(sizedRaw, supply3f), [sizedRaw, supply3f]);
@@ -284,6 +299,18 @@ export function PanelTab() {
         </p>
       </div>
 
+      {unassignedCount > 0 && (
+        <div className="flex items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: "3px solid #C1793F", paddingLeft: 12 }}>
+          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-copper" />
+          <span>
+            {unassignedCount} {unassignedCount === 1 ? "element" : "elementów"} bez rozpoznanego pomieszczenia na planie
+            (grupuje się do obwodów ogólnych zamiast trafić do właściwego pokoju, a łącznik nie połączy się z lampą w tym
+            samym pomieszczeniu). Zwykle wystarczy w zakładce „Instalacja" trochę powiększyć obrys pomieszczenia albo
+            poprawić pole „Pomieszczenie" w edycji elementu.
+          </span>
+        </div>
+      )}
+
       <div className="pe-card flex flex-wrap items-end gap-4 p-4">
         {/* Źródło aparatów rozstrzyga, czy rozdzielnica sama się odświeża, czy jest
             wyłączną własnością użytkownika. Stoi PRZED resztą ustawień, bo zmienia
@@ -327,6 +354,19 @@ export function PanelTab() {
             ))}
           </select>
         </label>
+        {/* Te dwie wartości są punktem wyjścia CAŁEGO doboru poniżej (bilans faz, dobór
+            przewodu, wyłącznik główny) — a aplikacja nie ma jak ich zmierzyć sama, więc
+            startuje z domysłem (3-fazowe 400/230 V, 40 A). Bez tej podpowiedzi laik nie
+            wie, że akurat te dwa pola trzeba zweryfikować u operatora/na liczniku, zanim
+            zaufa reszcie wyników — w przeciwieństwie do pól obok, które da się zmienić
+            bez konsekwencji dla poprawności. */}
+        <div className="flex w-full items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: "3px solid #C1793F", paddingLeft: 12 }}>
+          <AlertTriangle size={15} className="mt-0.5 shrink-0 text-copper" />
+          <span>
+            „Zasilanie" i „Rozłącznik główny" aplikacja przyjmuje jako domysł — sprawdź je w umowie z zakładem
+            energetycznym albo na tabliczce licznika, zanim zaufasz doborowi zabezpieczeń poniżej.
+          </span>
+        </div>
         {/* Jedyną drogą do cofnięcia ręcznej zmiany (kasowanie aparatu, przesunięcie,
             edycja) było wcześniej „Odbuduj z rzutu" — a to liczy WSZYSTKO od zera,
             więc cofnięcie jednego kasowania kosztowało utratę reszty pracy. Ta para
@@ -566,14 +606,51 @@ export function PanelTab() {
             <thead>
               <tr className="text-slate-400">
                 <th className="py-1 pr-3 font-medium">Obwód</th>
-                <th className="py-1 pr-3 font-medium">Faza</th>
-                <th className="py-1 pr-3 text-right font-medium">Ib</th>
-                <th className="py-1 pr-3 text-right font-medium">Przekrój</th>
-                <th className="py-1 pr-3 font-medium">Aparat</th>
-                <th className="py-1 pr-3 text-right font-medium">Iz</th>
-                <th className="py-1 pr-3 text-right font-medium">ΔU</th>
-                <th className="py-1 pr-3 text-right font-medium">Zs max</th>
-                <th className="py-1 pr-3 font-medium">RCD</th>
+                <th className="py-1 pr-3 font-medium" title="Do którego przewodu fazowego (L1/L2/L3) podłączony jest obwód — rozkłada obciążenie równomiernie między fazy.">
+                  Faza
+                </th>
+                <th
+                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
+                  title="Prąd obliczeniowy — ile prądu faktycznie pobiorą odbiorniki podłączone do tego obwodu."
+                >
+                  Ib
+                </th>
+                <th
+                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
+                  title="Przekrój żyły przewodu (mm²) — na tyle duży, żeby bezpiecznie przenieść prąd Ib bez przegrzania."
+                >
+                  Przekrój
+                </th>
+                <th
+                  className="cursor-help py-1 pr-3 font-medium underline decoration-dotted"
+                  title="Dobrany wyłącznik nadprądowy (bezpiecznik) — jego prąd znamionowy chroni przewód przed przeciążeniem."
+                >
+                  Aparat
+                </th>
+                <th
+                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
+                  title="Obciążalność prądowa przewodu — maksymalny prąd, jaki może bezpiecznie przenieść przy tym sposobie ułożenia."
+                >
+                  Iz
+                </th>
+                <th
+                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
+                  title="Spadek napięcia na trasie od rozdzielnicy do najdalszego punktu obwodu — im dłuższy przewód, tym większy; norma ogranicza go do 3–5%."
+                >
+                  ΔU
+                </th>
+                <th
+                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
+                  title="Maksymalna impedancja pętli zwarcia, przy której zabezpieczenie zdąży zadziałać wystarczająco szybko przy zwarciu."
+                >
+                  Zs max
+                </th>
+                <th
+                  className="cursor-help py-1 pr-3 font-medium underline decoration-dotted"
+                  title="Typ wyłącznika różnicowoprądowego wymagany dla tego obwodu — chroni przed porażeniem prądem w razie uszkodzenia izolacji."
+                >
+                  RCD
+                </th>
               </tr>
             </thead>
             <tbody>

@@ -4,7 +4,7 @@
  * dało się przetestować bez montowania canvasu.
  */
 
-import type { RoomShape } from "@/types";
+import type { RoomShape, RoomType } from "@/types";
 
 /** Domyślny logiczny rozmiar planu i skok siatki — jak VB_DEFAULT/GRID w wersji JS.
  *  Domyślny, bo obszar planu jest teraz zapisywany w projekcie (`planSize` w store)
@@ -117,6 +117,55 @@ export const NO_ROOM_COLOR = "#94A3B8";
  */
 export function colorForRoomName(roomName: string, roomShapes: RoomShape[]): string {
   return roomShapes.find((r) => r.name === roomName)?.color ?? NO_ROOM_COLOR;
+}
+
+export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
+  salon: "Salon",
+  sypialnia: "Sypialnia",
+  pokoj: "Pokój",
+  kuchnia: "Kuchnia",
+  lazienka: "Łazienka / WC",
+  pralnia: "Pralnia",
+  kotlownia: "Kotłownia",
+  garaz: "Garaż",
+  inne: "Inne",
+};
+
+const WET_ROOM_TYPES: readonly RoomType[] = ["kuchnia", "lazienka", "pralnia", "kotlownia"];
+
+/** Podpowiedź typu pomieszczenia na podstawie nazwy — startowa wartość w oknie
+ *  „Nazwij pomieszczenie", żeby nie zaczynać zawsze od „Inne". Użytkownik może ją
+ *  swobodnie nadpisać wyborem z listy; to tylko domysł, nie źródło prawdy. */
+export function guessRoomType(name: string): RoomType {
+  if (/łazienk/i.test(name)) return "lazienka";
+  if (/kuchni/i.test(name)) return "kuchnia";
+  if (/pralni/i.test(name)) return "pralnia";
+  if (/kotłowni/i.test(name)) return "kotlownia";
+  if (/salon/i.test(name)) return "salon";
+  if (/sypialni/i.test(name)) return "sypialnia";
+  if (/gara/i.test(name)) return "garaz";
+  if (/pok(ó|o)j/i.test(name)) return "pokoj";
+  return "inne";
+}
+
+/**
+ * Czy pomieszczenie o danej nazwie jest „mokre" (kuchnia/łazienka/pralnia/kotłownia) —
+ * od tego zależy grupowanie obwodów gniazd (`computeCircuits`) i flaga strefy mokrej
+ * w doborze przekroju (`sizeProjectCircuits`).
+ *
+ * Najpierw sprawdza jawny `RoomShape.type` narysowanego pomieszczenia o tej nazwie —
+ * ustawiony w oknie „Nazwij pomieszczenie" albo w panelu pomieszczeń, niezależny od
+ * tego, jak dokładnie ktoś je nazwał (poprzednio ta funkcja i tak polegała tylko na
+ * dopasowaniu tekstu, więc „łazienka" pisana małą literą albo „Łazienka rodziców"
+ * czasem wypadała z grupowania). Gdy nazwa elementu nie pasuje do ŻADNEGO narysowanego
+ * obrysu — pole „Pomieszczenie" na elemencie to wolny tekst, patrz `EditElementModal`
+ * — albo obrys pochodzi ze starego zapisu bez pola `type`, wraca do zgadywania po
+ * samej nazwie (`guessRoomType`), czyli do zachowania sprzed dodania tego pola.
+ */
+export function isWetRoomName(roomName: string, roomShapes: RoomShape[]): boolean {
+  const shape = roomShapes.find((r) => r.name === roomName);
+  if (shape?.type) return WET_ROOM_TYPES.includes(shape.type);
+  return WET_ROOM_TYPES.includes(guessRoomType(roomName));
 }
 
 /** Skala kondygnacji (metrów na jednostkę planu) albo `null`, jeśli nie skalibrowana. */

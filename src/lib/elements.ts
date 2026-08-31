@@ -25,6 +25,11 @@ export const ELEMENT_TYPES: Record<ElementType, ElementTypeDef> = {
   tasmaLed: { label: "Taśma LED", code: "LED", color: "#C1793F", role: "light" },
 
   roleta: { label: "Roleta / napęd", code: "R", color: "#7C5CBF", role: "blind" },
+  // Rola "blind" (nie "lv"!) celowo — silnik bramy to odbiornik 230V potrzebujący
+  // własnego zabezpieczenia, tak samo jak roleta, więc trafia do tego samego
+  // grupowania obwodów w `computeCircuits` ("Obwód rolet"). "lv" pominęłoby go
+  // przy doborze zabezpieczeń, tak jak pomija RJ45/RTV/domofon.
+  napedBramy: { label: "Napęd bramy garażowej", code: "BG", color: "#7C5CBF", role: "blind" },
   wentylator: { label: "Wentylator", code: "WEN", color: "#7C5CBF", role: "light" },
   termostat: { label: "Termostat", code: "T", color: "#7C5CBF", role: "control" },
 
@@ -33,6 +38,7 @@ export const ELEMENT_TYPES: Record<ElementType, ElementTypeDef> = {
   domofon: { label: "Domofon", code: "DOM", color: "#0F8A9E", role: "lv" },
   dzwonek: { label: "Dzwonek", code: "DZW", color: "#0F8A9E", role: "lv" },
   czujnikDymu: { label: "Czujnik dymu", code: "SD", color: "#0F8A9E", role: "lv" },
+  czujnikCzadu: { label: "Czujnik czadu (CO)", code: "CO", color: "#0F8A9E", role: "lv" },
 
   rozdzielnica: { label: "Rozdzielnica", code: "TG", color: "#16202B", role: "infra" },
   puszka: { label: "Puszka rozgał.", code: "J", color: "#16202B", role: "infra" },
@@ -81,8 +87,11 @@ export const ELEMENT_SECTIONS: ElementSection[] = [
     ],
   },
   { title: "Oświetlenie", items: [{ key: "oswietlenie" }, { key: "kinkiet" }, { key: "oswietlenieZewn" }, { key: "tasmaLed" }] },
-  { title: "Rolety i klimat", items: [{ key: "roleta" }, { key: "wentylator" }, { key: "termostat" }] },
-  { title: "Teletechnika", items: [{ key: "rj45" }, { key: "rtvsat" }, { key: "domofon" }, { key: "dzwonek" }, { key: "czujnikDymu" }] },
+  { title: "Rolety i klimat", items: [{ key: "roleta" }, { key: "napedBramy" }, { key: "wentylator" }, { key: "termostat" }] },
+  {
+    title: "Teletechnika",
+    items: [{ key: "rj45" }, { key: "rtvsat" }, { key: "domofon" }, { key: "dzwonek" }, { key: "czujnikDymu" }, { key: "czujnikCzadu" }],
+  },
   { title: "Rozdział", items: [{ key: "rozdzielnica" }, { key: "puszka" }] },
   { title: "Wyposażenie sanitarne", items: [{ key: "wanna" }, { key: "prysznic" }, { key: "umywalka" }] },
 ];
@@ -109,6 +118,7 @@ export const LIB_SUBTITLES: Partial<Record<ElementType, string>> = {
   oswietlenieZewn: "elewacja, taras",
   tasmaLed: "listwa / podświetlenie",
   roleta: "napęd rolety",
+  napedBramy: "własny obwód",
   wentylator: "wywiew łazienkowy",
   termostat: "ogrzewanie podłogowe",
   rj45: "sieć komputerowa",
@@ -116,11 +126,33 @@ export const LIB_SUBTITLES: Partial<Record<ElementType, string>> = {
   domofon: "wideodomofon",
   dzwonek: "przycisk / gong",
   czujnikDymu: "detekcja pożaru",
+  czujnikCzadu: "detekcja tlenku węgla",
   rozdzielnica: "tablica główna",
   puszka: "połączenia przewodów",
-  wanna: "wyznacza strefy ochronne",
-  prysznic: "wyznacza strefy ochronne",
-  umywalka: "wymaga 0,6 m odstępu",
+  wanna: "wyznacza strefy ochronne, nie tworzy obwodu",
+  prysznic: "wyznacza strefy ochronne, nie tworzy obwodu",
+  umywalka: "0,6 m odstępu, nie tworzy obwodu",
+};
+
+/**
+ * Dodatkowe słowa kluczowe dla wyszukiwarki biblioteki elementów (`ElementLibrary`) —
+ * synonimy/potoczne nazwy, którymi ktoś szuka elementu, nie znając fachowej etykiety.
+ * Wyszukiwarka i tak dopasowuje po `label`/`libSubtitle` — to tylko rozszerza pulę
+ * dopasowań o wpisy, które inaczej dałyby zero wyników mimo że element istnieje.
+ * Przykład, który to wymusił: „Oświetlenie" łapało wyłącznie „Oświetlenie zewn.",
+ * bo najczęściej stawiany „Punkt sufitowy" nie ma słowa „oświetlenie" w etykiecie.
+ */
+export const SEARCH_KEYWORDS: Partial<Record<ElementType, string[]>> = {
+  oswietlenie: ["oświetlenie", "lampa", "żarówka", "światło"],
+  kinkiet: ["oświetlenie", "lampa", "światło"],
+  oswietlenieZewn: ["lampa", "światło"],
+  tasmaLed: ["oświetlenie", "led", "światło"],
+  gniazdko: ["kontakt", "wtyczka"],
+  gniazdkoHerm: ["kontakt", "wtyczka"],
+  wlacznik: ["kontakt", "przełącznik"],
+  wlacznikDwubiegunowy: ["kontakt", "przełącznik"],
+  czujnikCzadu: ["czad", "tlenek węgla", "co"],
+  napedBramy: ["garaż", "brama"],
 };
 
 export function libSubtitle(key: ElementType, gangs: number): string {

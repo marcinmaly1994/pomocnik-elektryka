@@ -975,19 +975,35 @@ export function DesignCanvas({
                   points={pts}
                   stroke={isSel ? "#C1793F" : "#16202B"}
                   strokeWidth={(w.thickness ?? DEFAULT_WALL_THICKNESS) + (isSel ? 2 : 0)}
+                  // Hit-test SZERSZY niż to, co widać — cienka ściana (typowo kilka-kilkanaście
+                  // jednostek) jest przy zwykłym powiększeniu grubości pojedynczych pikseli,
+                  // a właśnie w nią trzeba trafić, żeby zaznaczyć ścianę albo dostawić drzwi
+                  // (tryb „otwory"). Bezpieczne odkąd klik w innych trybach i tak przechodzi
+                  // na wylot do sceny (patrz `onClick` niżej) — szerszy hit nie kradnie już
+                  // kliknięć narzędziu „Wstaw Element". Ten sam wzorzec co `hitStrokeWidth`
+                  // przy krawędzi pomieszczenia, niżej w tym pliku.
+                  hitStrokeWidth={20}
                   lineCap="round"
                   lineJoin="round"
                   onClick={(e) => {
-                    e.cancelBubble = true;
                     // W trybie „otwory" klik w ścianę dokłada na niej drzwi
                     // zamiast ją zaznaczać — patrz `onWallClickForOpening`.
                     if (toolMode === "otwory") {
+                      e.cancelBubble = true;
                       const stage = e.target.getStage();
                       const p = stage && planPoint(stage, planSize);
                       const nearest = p && nearestPointOnPolyline(p, w.points);
                       if (nearest) onWallClickForOpening(w.id, nearest.point, nearest.angle);
                       return;
                     }
+                    // Poza trybem „Zaznacz" (i „otwory" wyżej) klik NIE jest przechwytywany —
+                    // inaczej stawianie gniazdek/łączników byłoby ślepe akurat tam, gdzie
+                    // realnie się je stawia: na ścianie. Bez tego wyjątku trafienie idealnie
+                    // w linię ściany w trybie „Wstaw Element" po cichu ZAZNACZAŁO ścianę
+                    // zamiast postawić element — ten sam wzorzec wykluczenia co przy
+                    // pomieszczeniach (patrz `roomInteractive` niżej).
+                    if (toolMode !== "zaznacz") return;
+                    e.cancelBubble = true;
                     onSelectWall(w.id);
                   }}
                   onContextMenu={(e) => {
