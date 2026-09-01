@@ -2043,7 +2043,16 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           <label className="mb-1 block text-xs font-medium text-slate-500">Typ pomieszczenia</label>
           <select
             value={pendingRoom?.type ?? "inne"}
-            onChange={(e) => setPendingRoom((p) => (p ? { ...p, type: e.target.value as RoomType, typeTouched: true } : p))}
+            onChange={(e) => {
+              const type = e.target.value as RoomType;
+              // Wybór z listy ustawia też nazwę na etykietę tego typu — dla
+              // zdecydowanej większości pomieszczeń to i tak docelowa nazwa („Kuchnia",
+              // „Łazienka"...), więc bez tego trzeba było wpisać to samo słowo DWA razy:
+              // raz w polu nazwy, raz w tej liście. Kto chce inną nazwę (np. „Łazienka
+              // rodziców"), nadal może ją dopisać w polu wyżej PO wybraniu typu — pole
+              // nazwy zostaje zwykłym tekstem, nic mu tego nie zabrania.
+              setPendingRoom((p) => (p ? { ...p, type, typeTouched: true, name: ROOM_TYPE_LABELS[type] } : p));
+            }}
             className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
           >
             {(Object.entries(ROOM_TYPE_LABELS) as [RoomType, string][]).map(([value, label]) => (
@@ -2083,7 +2092,12 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       <OnboardingChecklist
         steps={onboarding.steps}
         complete={onboarding.complete}
-        open={onboarding.showCard}
+        // Zwinięta do samego „?" na czas aktywnego coach-marka (dymek przy narzędziu
+        // skali/ścian) — oba stoją w tym samym, lewym dolnym rogu i przy pełnej
+        // karcie potrafiły się częściowo nakładać. Coach-mark i tak tłumaczy,
+        // co robić DALEJ w tym samym kroku, więc pełna karta pod spodem jest w tej
+        // chwili zbędna, nie tylko ciasna — wraca sama, gdy dymek zniknie.
+        open={onboarding.showCard && !coachMark}
         compact={shouldShowCompact(seenBefore, {
           krok1Done: onboarding.steps[0].status === "done",
           krok2Done: onboarding.steps[1].status === "done",
@@ -2187,16 +2201,27 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                 </button>
               </>
             ) : contextMenu.kind === "room" ? (
-              <button
-                onClick={() => {
-                  deleteRoomShape(contextMenu.id);
-                  setSelected(null);
-                  setContextMenu(null);
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
-              >
-                <Trash2 size={14} /> Usuń pomieszczenie
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    createWallFromRoom(contextMenu.id);
+                    setContextMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
+                >
+                  <Layers size={14} /> Utwórz ścianę z obrysu
+                </button>
+                <button
+                  onClick={() => {
+                    deleteRoomShape(contextMenu.id);
+                    setSelected(null);
+                    setContextMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 size={14} /> Usuń pomieszczenie
+                </button>
+              </>
             ) : contextMenu.kind === "wallDraw" ? (
               <button
                 onClick={() => {

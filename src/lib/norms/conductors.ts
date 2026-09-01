@@ -165,7 +165,9 @@ export function minPrzekrojPE(przekrojFazowy_mm2: number): number {
 
 /**
  * Maksymalne czasy wyłączenia wg PN-HD 60364-4-41 tabl. 41.1 dla U₀ = 230 V.
- * `obwodOdbiorczy` = obwód końcowy o prądzie znamionowym ≤ 63 A.
+ * `obwodOdbiorczy` = obwód końcowy o prądzie znamionowym ≤ 32 A (nie 63 A —
+ * tabl. 41.1 rozróżnia dokładnie tę granicę; obwód końcowy > 32 A traktuje się
+ * jak rozdzielczy, czyli dłuższy dopuszczalny czas wyłączenia).
  */
 export type UkladSieci = "TN" | "TT" | "IT";
 

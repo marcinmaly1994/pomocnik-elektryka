@@ -1,33 +1,5 @@
 import { useMemo } from "react";
-import {
-  AlertTriangle,
-  Anchor,
-  Cable,
-  Calculator,
-  Check,
-  ChevronRight,
-  ClipboardCheck,
-  Download,
-  Flame,
-  Gauge,
-  Home,
-  Info,
-  Plus,
-  Scale,
-  Shovel,
-  Cog,
-  Ruler,
-  ShieldCheck,
-  ShieldAlert,
-  Sun,
-  BatteryCharging,
-  ListChecks,
-  PlugZap,
-  Trash2,
-  TrendingDown,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
 import { obliczImpedancjePrzewodu, obliczPrzewodyRownolegle } from "@/lib/calc/conductorImpedance";
 import { dobierzN, dobierzPE } from "@/lib/calc/protectiveConductor";
@@ -73,31 +45,44 @@ import {
 import { useCalculatorsStore, type CalcId } from "@/store/useCalculatorsStore";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Card } from "./Card";
-import { Field } from "./Field";
+import { Field, HintButton } from "./Field";
 import { HowItWorks } from "./HowItWorks";
 
-const CALC_LIST: { id: CalcId; label: string; desc: string; icon: LucideIcon }[] = [
-  { id: "spadek", label: "Spadek napięcia", desc: "sprawdzenie trasy o znanym przekroju", icon: TrendingDown },
-  { id: "zwarcie", label: "Prądy zwarciowe", desc: "Ik, prąd udarowy, wytrzymałość cieplna", icon: Flame },
-  { id: "kompensacja", label: "Kompensacja mocy biernej", desc: "moc baterii, pojemność, rezonans", icon: Gauge },
-  { id: "przekroj", label: "Dobór przekroju przewodu", desc: "przekrój wg obciążalności i spadku", icon: Cable },
-  { id: "zabezpieczenie", label: "Dobór zabezpieczenia", desc: "wyłącznik do znanego przekroju", icon: Zap },
-  { id: "pelnyDobor", label: "Pełny dobór (4 kryteria)", desc: "obciążalność + spadek + ochrona + zwarcie naraz", icon: ListChecks },
-  { id: "gGWkladka", label: "Dobór wkładki gG", desc: "ochrona przeciwporażeniowa — zabezpieczenie topikowe", icon: PlugZap },
-  { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza", icon: Home },
-  { id: "wlz", label: "Dobór WLZ (linii zasilającej)", desc: "przekrój kabla od licznika do rozdzielnicy", icon: Cable },
-  { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN", icon: ClipboardCheck },
-  { id: "uziemienieTT", label: "Rezystancja uziemienia", desc: "ochrona przeciwporażeniowa — układ TT", icon: Anchor },
-  { id: "uziom", label: "Uziom — dobór geometrii", desc: "pręt, bednarka, otok; potrzebna długość", icon: Shovel },
-  { id: "bilansFaz", label: "Bilans faz i prąd w N", desc: "asymetria, przewód neutralny, 3. harmoniczna", icon: Scale },
-  { id: "silnik", label: "Silnik indukcyjny", desc: "rozruch, zabezpieczenia, spadek przy starcie", icon: Cog },
-  { id: "impedancja", label: "Impedancja przewodu", desc: "R, X, Z oraz przewody równoległe", icon: Ruler },
-  { id: "peN", label: "Dobór przewodu PE i N", desc: "reguła, warunek cieplny, harmoniczne", icon: ShieldCheck },
-  { id: "spd", label: "Ochronniki przepięć (SPD)", desc: "koordynacja Up, długość przewodów", icon: ShieldAlert },
-  { id: "pv", label: "Instalacja fotowoltaiczna", desc: "string DC, Voc na zimno, spadek DC, AC falownika", icon: Sun },
-  { id: "ev", label: "Ładowarka pojazdu elektrycznego", desc: "praca ciągła, wymagany typ RCD", icon: BatteryCharging },
-  { id: "oswietlenie", label: "Dobór oświetlenia", desc: "strumień świetlny i liczba opraw", icon: Calculator },
-  { id: "rcd", label: "Dobór wyłącznika różnicowoprądowego", desc: "zasady doboru RCD", icon: Info },
+/**
+ * Kolejność grupowana wg fazy pracy elektryka, nie wg tego, kiedy który kalkulator
+ * powstał (patrz przegląd — sesja porządkująca zakładkę Kalkulatory):
+ *  1. Bilans i zasilanie budynku — od ogółu (moc) do szczegółu (WLZ).
+ *  2. Codzienny dobór obwodu — przekrój/zabezpieczenie/pełny dobór/wkładka gG,
+ *     a na końcu spadek napięcia: to narzędzie WERYFIKUJE gotową trasę
+ *     („sprawdzenie trasy o znanym przekroju”), więc pasuje za doborem, nie przed nim.
+ *  3. Dane wejściowe do ochrony — impedancja przewodu i prądy zwarciowe, w tej
+ *     kolejności: pierwsze jest budulcem drugiego (Zk do liczenia Ik).
+ *  4. Ochrona przeciwporażeniowa — pętla TN, uziemienie TT, uziom, RCD, PE/N.
+ *  5. Obciążenia specjalne i jakość zasilania.
+ *  6. Instalacje specjalne (opcjonalne, coraz częstsze) — PV, EV, oświetlenie.
+ */
+const CALC_LIST: { id: CalcId; label: string; desc: string }[] = [
+  { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza" },
+  { id: "wlz", label: "Dobór WLZ (linii zasilającej)", desc: "przekrój kabla od licznika do rozdzielnicy" },
+  { id: "przekroj", label: "Dobór przekroju przewodu", desc: "przekrój wg obciążalności i spadku" },
+  { id: "zabezpieczenie", label: "Dobór zabezpieczenia", desc: "wyłącznik do znanego przekroju" },
+  { id: "pelnyDobor", label: "Pełny dobór (4 kryteria)", desc: "obciążalność + spadek + ochrona + zwarcie naraz" },
+  { id: "gGWkladka", label: "Dobór wkładki gG", desc: "ochrona przeciwporażeniowa — zabezpieczenie topikowe" },
+  { id: "spadek", label: "Spadek napięcia", desc: "sprawdzenie trasy o znanym przekroju" },
+  { id: "impedancja", label: "Impedancja przewodu", desc: "R, X, Z oraz przewody równoległe" },
+  { id: "zwarcie", label: "Prądy zwarciowe", desc: "Ik, prąd udarowy, wytrzymałość cieplna" },
+  { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN" },
+  { id: "uziemienieTT", label: "Rezystancja uziemienia", desc: "ochrona przeciwporażeniowa — układ TT" },
+  { id: "uziom", label: "Uziom — dobór geometrii", desc: "pręt, bednarka, otok; potrzebna długość" },
+  { id: "rcd", label: "Dobór wyłącznika różnicowoprądowego", desc: "zasady doboru RCD" },
+  { id: "peN", label: "Dobór przewodu PE i N", desc: "reguła, warunek cieplny, harmoniczne" },
+  { id: "bilansFaz", label: "Bilans faz i prąd w N", desc: "asymetria, przewód neutralny, 3. harmoniczna" },
+  { id: "kompensacja", label: "Kompensacja mocy biernej", desc: "moc baterii, pojemność, rezonans" },
+  { id: "silnik", label: "Silnik indukcyjny", desc: "rozruch, zabezpieczenia, spadek przy starcie" },
+  { id: "spd", label: "Ochronniki przepięć (SPD)", desc: "koordynacja Up, długość przewodów" },
+  { id: "pv", label: "Instalacja fotowoltaiczna", desc: "string DC, Voc na zimno, spadek DC, AC falownika" },
+  { id: "ev", label: "Ładowarka pojazdu elektrycznego", desc: "praca ciągła, wymagany typ RCD" },
+  { id: "oswietlenie", label: "Dobór oświetlenia", desc: "strumień świetlny i liczba opraw" },
 ];
 
 const CIRCUIT_KIND_OPTIONS: { value: CircuitKind; label: string }[] = [
@@ -875,16 +860,14 @@ export function CalculatorsTab() {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
         <div className="space-y-1.5" style={{ width: 260, flexShrink: 0, flexGrow: 0 }}>
           {CALC_LIST.map((c) => {
-            const Icon = c.icon;
             const on = activeCalc === c.id;
             return (
               <button
                 key={c.id}
                 onClick={() => setActiveCalc(c.id)}
-                className="w-full text-left p-3 rounded-lg flex items-start gap-2.5"
+                className="w-full text-left p-3 rounded-lg"
                 style={on ? { background: "#2D5A8C10", border: "1px solid #2D5A8C" } : { background: "#fff", border: "1px solid #DCE2E8" }}
               >
-                <Icon size={16} className="shrink-0 mt-0.5" style={{ color: on ? "#2D5A8C" : "#94A3B8" }} />
                 <div className="min-w-0">
                   <div className="text-[13px] font-medium" style={{ color: on ? "#2D5A8C" : "#16202B" }}>
                     {c.label}
@@ -898,7 +881,7 @@ export function CalculatorsTab() {
 
         <div style={{ flex: "1 1 480px", minWidth: 320 }}>
           {activeCalc === "przekroj" && (
-            <Card title={active.label} icon={Cable} tag="przekrój żyły">
+            <Card title={active.label} tag="przekrój żyły">
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
                   label="Rodzaj obwodu"
@@ -906,14 +889,25 @@ export function CalculatorsTab() {
                   onChange={(v) => setCircuitKind(v as CircuitKind)}
                   options={CIRCUIT_KIND_OPTIONS}
                 />
-                <Field label="Moc odbiornika" value={power} onChange={(v) => setPower(Number(v))} unit="W" />
+                <Field
+                  label="Moc odbiornika"
+                  value={power}
+                  onChange={(v) => setPower(Number(v))}
+                  unit="W"
+                />
                 <Field
                   label="Zasilanie"
                   value={phase}
                   onChange={(v) => setPhase(v as "1" | "3")}
                   options={PHASE_OPTIONS}
                 />
-                <Field label="Współczynnik cos φ" value={cosphi} onChange={(v) => setCosphi(Number(v))} step="0.05" />
+                <Field
+                  label="Współczynnik cos φ"
+                  value={cosphi}
+                  onChange={(v) => setCosphi(Number(v))}
+                  step="0.05"
+                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej albo karty katalogowej. Nie znasz wartości? Rozwiń podpowiedź „Nie znasz cos φ?” poniżej."
+                />
               </div>
 
               {/* Ściąga cos φ — patrz `COSPHI_EXAMPLES`. Wiersze są KLIKALNE i wpisują
@@ -970,12 +964,18 @@ export function CalculatorsTab() {
                   onChange={(v) => setLayingMethod(v as LayingMethod)}
                   options={LAYING_METHOD_OPTIONS}
                 />
-                <Field label="Temperatura otoczenia" value={ambientC} onChange={(v) => setAmbientC(Number(v))} unit="°C" />
+                <Field
+                  label="Temperatura otoczenia"
+                  value={ambientC}
+                  onChange={(v) => setAmbientC(Number(v))}
+                  unit="°C"
+                />
                 <Field
                   label="Obwodów we wspólnej trasie"
                   value={bundleCount}
                   onChange={(v) => setBundleCount(Number(v))}
                   step="1"
+                  hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy. Więcej przewodów obok siebie gorzej oddaje ciepło, więc obniża dopuszczalną obciążalność każdego z nich."
                 />
               </div>
               <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
@@ -1100,7 +1100,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "zabezpieczenie" && (
-            <Card title={active.label} icon={Zap} tag="wyłącznik nadprądowy">
+            <Card title={active.label} tag="wyłącznik nadprądowy">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
                 został narzucony projektem. Jeśli dopiero szukasz przekroju, zacznij od „Dobór przekroju przewodu”;
@@ -1120,9 +1120,25 @@ export function CalculatorsTab() {
                   onChange={(v) => setBreakerSection(Number(v))}
                   options={SECTION_OPTIONS}
                 />
-                <Field label="Moc odbiornika" value={power} onChange={(v) => setPower(Number(v))} unit="W" />
-                <Field label="Zasilanie" value={phase} onChange={(v) => setPhase(v as "1" | "3")} options={PHASE_OPTIONS} />
-                <Field label="Współczynnik cos φ" value={cosphi} onChange={(v) => setCosphi(Number(v))} step="0.05" />
+                <Field
+                  label="Moc odbiornika"
+                  value={power}
+                  onChange={(v) => setPower(Number(v))}
+                  unit="W"
+                />
+                <Field
+                  label="Zasilanie"
+                  value={phase}
+                  onChange={(v) => setPhase(v as "1" | "3")}
+                  options={PHASE_OPTIONS}
+                />
+                <Field
+                  label="Współczynnik cos φ"
+                  value={cosphi}
+                  onChange={(v) => setCosphi(Number(v))}
+                  step="0.05"
+                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
+                />
               </div>
 
               <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Warunki ułożenia (decydują o obciążalności)</div>
@@ -1133,12 +1149,18 @@ export function CalculatorsTab() {
                   onChange={(v) => setLayingMethod(v as LayingMethod)}
                   options={LAYING_METHOD_OPTIONS}
                 />
-                <Field label="Temperatura otoczenia" value={ambientC} onChange={(v) => setAmbientC(Number(v))} unit="°C" />
+                <Field
+                  label="Temperatura otoczenia"
+                  value={ambientC}
+                  onChange={(v) => setAmbientC(Number(v))}
+                  unit="°C"
+                />
                 <Field
                   label="Obwodów we wspólnej trasie"
                   value={bundleCount}
                   onChange={(v) => setBundleCount(Number(v))}
                   step="1"
+                  hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy — więcej obok siebie obniża obciążalność każdego z nich."
                 />
               </div>
               <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
@@ -1257,7 +1279,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "pelnyDobor" && (
-            <Card title={active.label} icon={ListChecks} tag="4 kryteria naraz">
+            <Card title={active.label} tag="4 kryteria naraz">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Cztery kryteria liczone NIEZALEŻNIE — obciążalność, spadek napięcia i (opcjonalnie) ochrona
                 przeciwporażeniowa oraz wytrzymałość zwarciowa. Wynikowy przekrój to <strong>maksimum</strong> z nich, nie
@@ -1266,25 +1288,77 @@ export function CalculatorsTab() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Prąd obliczeniowy Ib" value={pdIb} onChange={(v) => patch({ pdIb: Number(v) })} unit="A" />
-                <Field label="Napięcie międzyfazowe" value={pdNapiecie} onChange={(v) => patch({ pdNapiecie: Number(v) })} unit="V" />
-                <Field label="Materiał żyły" value={pdMaterial} onChange={(v) => patch({ pdMaterial: v as Material })} options={MATERIAL_OPTIONS} />
-                <Field label="Izolacja" value={pdIzolacja} onChange={(v) => patch({ pdIzolacja: v as Izolacja })} options={IZOLACJA_OPTIONS} />
+                <Field
+                  label="Prąd obliczeniowy Ib"
+                  value={pdIb}
+                  onChange={(v) => patch({ pdIb: Number(v) })}
+                  unit="A"
+                  hint="Prąd, jaki faktycznie popłynie tym obwodem przy pełnym obciążeniu — z bilansu mocy odbiorników (Ib = P / (√3 · U · cosφ) dla 3 faz) albo wprost z projektu."
+                />
+                <Field
+                  label="Napięcie międzyfazowe"
+                  value={pdNapiecie}
+                  onChange={(v) => patch({ pdNapiecie: Number(v) })}
+                  unit="V"
+                  hint="Napięcie między dwiema fazami — w polskiej sieci nn to standardowo 400 V."
+                />
+                <Field
+                  label="Materiał żyły"
+                  value={pdMaterial}
+                  onChange={(v) => patch({ pdMaterial: v as Material })}
+                  options={MATERIAL_OPTIONS}
+                />
+                <Field
+                  label="Izolacja"
+                  value={pdIzolacja}
+                  onChange={(v) => patch({ pdIzolacja: v as Izolacja })}
+                  options={IZOLACJA_OPTIONS}
+                  hint="Rodzaj izolacji przewodu — sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE). Wyższa dopuszczalna temperatura żyły XLPE daje większą obciążalność."
+                />
                 <Field
                   label="Metoda odniesienia"
                   value={pdMetoda}
                   onChange={(v) => patch({ pdMetoda: v as MetodaOdniesienia3 })}
                   options={METODA3_OPTIONS}
                 />
-                <Field label="Długość trasy" value={pdDlugosc} onChange={(v) => patch({ pdDlugosc: Number(v) })} unit="m" />
-                <Field label="cos φ" value={pdCosfi} onChange={(v) => patch({ pdCosfi: Number(v) })} step="0.01" />
-                <Field label="Dopuszczalny spadek napięcia" value={pdLimitSpadku} onChange={(v) => patch({ pdLimitSpadku: Number(v) })} unit="%" step="0.5" />
+                <Field
+                  label="Długość trasy"
+                  value={pdDlugosc}
+                  onChange={(v) => patch({ pdDlugosc: Number(v) })}
+                  unit="m"
+                />
+                <Field
+                  label="cos φ"
+                  value={pdCosfi}
+                  onChange={(v) => patch({ pdCosfi: Number(v) })}
+                  step="0.01"
+                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
+                />
+                <Field
+                  label="Dopuszczalny spadek napięcia"
+                  value={pdLimitSpadku}
+                  onChange={(v) => patch({ pdLimitSpadku: Number(v) })}
+                  unit="%"
+                  step="0.5"
+                  hint="Standardowo 5% dla obwodów siłowych i 3% dla oświetlenia przy zasilaniu z sieci publicznej — pełną listę progów (też dla własnej stacji trafo) znajdziesz w kalkulatorze „Spadek napięcia”."
+                />
               </div>
 
               {pdMetoda !== "D1" && pdMetoda !== "D2" ? (
                 <div className="grid sm:grid-cols-2 gap-x-4">
-                  <Field label="Temperatura otoczenia" value={pdTemperatura} onChange={(v) => patch({ pdTemperatura: Number(v) })} unit="°C" />
-                  <Field label="Obwodów we wspólnej trasie" value={pdWiazka} onChange={(v) => patch({ pdWiazka: Number(v) })} step="1" />
+                  <Field
+                    label="Temperatura otoczenia"
+                    value={pdTemperatura}
+                    onChange={(v) => patch({ pdTemperatura: Number(v) })}
+                    unit="°C"
+                  />
+                  <Field
+                    label="Obwodów we wspólnej trasie"
+                    value={pdWiazka}
+                    onChange={(v) => patch({ pdWiazka: Number(v) })}
+                    step="1"
+                    hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy — więcej obok siebie obniża obciążalność każdego z nich."
+                  />
                 </div>
               ) : (
                 <div className="mb-3 text-[11px] leading-relaxed text-slate-500">
@@ -1314,8 +1388,15 @@ export function CalculatorsTab() {
                     onChange={(v) => patch({ pdImpedancjaZrodla: Number(v) })}
                     unit="Ω"
                     step="0.01"
+                    hint="Impedancja CAŁEJ sieci przed tym miejscem — transformatora, WLZ i wszystkiego dotąd. Weź z pomiaru pętli zwarcia w rozdzielnicy zasilającej ten odcinek albo policz w kalkulatorze „Impedancja przewodu”."
                   />
-                  <Field label="Układ sieci" value={pdUklad} onChange={(v) => patch({ pdUklad: v as "TN" | "TT" })} options={UKLAD_OPTIONS} />
+                  <Field
+                    label="Układ sieci"
+                    value={pdUklad}
+                    onChange={(v) => patch({ pdUklad: v as "TN" | "TT" })}
+                    options={UKLAD_OPTIONS}
+                    hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce w budynkach zasilanych z sieci operatora). TT — własny uziom budynku, niezależny od sieci."
+                  />
                 </div>
               )}
 
@@ -1329,7 +1410,40 @@ export function CalculatorsTab() {
                 Sprawdź też wytrzymałość zwarciową cieplną (wymaga prądu zwarciowego)
               </label>
               {pdSprawdzZwarcie && (
-                <Field label="Prąd zwarciowy w tym miejscu" value={pdIk} onChange={(v) => patch({ pdIk: Number(v) })} unit="A" />
+                <>
+                  {/* Czas wyłączenia (kryterium 4) zależy od układu sieci i od tego, czy to
+                      obwód KOŃCOWY (≤ 32 A) czy rozdzielczy — inaczej niż przy kryterium 3
+                      (ochrona przeciwporażeniowa), które go nie potrzebuje. Bez tych dwóch pól
+                      kalkulator MILCZĄCO zakładał TN + obwód odbiorczy (0,4 s) — dla realnego
+                      obwodu rozdzielczego (5 s) to zaniża wymagany przekrój z kryterium 4,
+                      a ten kalkulator celuje właśnie w duże przekroje/prądy, gdzie obwody
+                      rozdzielcze są normą, nie wyjątkiem. */}
+                  <div className="grid sm:grid-cols-2 gap-x-4">
+                    <Field
+                      label="Układ sieci"
+                      value={pdUklad}
+                      onChange={(v) => patch({ pdUklad: v as "TN" | "TT" })}
+                      options={UKLAD_OPTIONS}
+                      hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce). TT — własny uziom budynku, niezależny od sieci."
+                    />
+                    <Field
+                      label="Prąd zwarciowy w tym miejscu"
+                      value={pdIk}
+                      onChange={(v) => patch({ pdIk: Number(v) })}
+                      unit="A"
+                      hint="Prąd zwarcia jednofazowego (L-PE) w tym miejscu instalacji — z pomiaru, z kalkulatora „Prądy zwarciowe” albo z dokumentacji projektowej."
+                    />
+                  </div>
+                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={pdObwodOdbiorczy}
+                      onChange={(e) => patch({ pdObwodOdbiorczy: e.target.checked })}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    Obwód odbiorczy (≤ 32 A) — inaczej rozdzielczy
+                  </label>
+                </>
               )}
 
               {pelnyDobor.wartosci && (
@@ -1360,7 +1474,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "gGWkladka" && (
-            <Card title={active.label} icon={PlugZap} tag="wkładka topikowa">
+            <Card title={active.label} tag="wkładka topikowa">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Imax i Zs max pochodzą wprost z tablicy czasowo-prądowej wkładki (Poradnik Projektanta Elektryka,
                 tabl. Z.10.3/Z.10.4) — NIE ze wzoru k×In jak dla wyłączników. Tablica pokrywa czasy 0,2 s / 0,4 s / 5 s;
@@ -1368,9 +1482,26 @@ export function CalculatorsTab() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Typ wkładki" value={ggTyp} onChange={(v) => patch({ ggTyp: v as TypWkladkiGG })} options={TYP_WKLADKI_OPTIONS} />
-                <Field label="Prąd obliczeniowy Ib" value={ggIb} onChange={(v) => patch({ ggIb: Number(v) })} unit="A" />
-                <Field label="Układ sieci" value={ggUklad} onChange={(v) => patch({ ggUklad: v as "TN" | "TT" })} options={UKLAD_OPTIONS} />
+                <Field
+                  label="Typ wkładki"
+                  value={ggTyp}
+                  onChange={(v) => patch({ ggTyp: v as TypWkladkiGG })}
+                  options={TYP_WKLADKI_OPTIONS}
+                />
+                <Field
+                  label="Prąd obliczeniowy Ib"
+                  value={ggIb}
+                  onChange={(v) => patch({ ggIb: Number(v) })}
+                  unit="A"
+                  hint="Prąd, jaki faktycznie popłynie tym obwodem przy pełnym obciążeniu."
+                />
+                <Field
+                  label="Układ sieci"
+                  value={ggUklad}
+                  onChange={(v) => patch({ ggUklad: v as "TN" | "TT" })}
+                  options={UKLAD_OPTIONS}
+                  hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce). TT — własny uziom budynku, niezależny od sieci."
+                />
                 <label className="flex items-center gap-2 text-[13px] text-slate-600 mt-1">
                   <input
                     type="checkbox"
@@ -1378,7 +1509,7 @@ export function CalculatorsTab() {
                     onChange={(e) => patch({ ggObwodOdbiorczy: e.target.checked })}
                     className="h-4 w-4 rounded border-border"
                   />
-                  Obwód odbiorczy (≤ 63 A) — inaczej rozdzielczy
+                  Obwód odbiorczy (≤ 32 A) — inaczej rozdzielczy
                 </label>
               </div>
 
@@ -1398,6 +1529,7 @@ export function CalculatorsTab() {
                   onChange={(v) => patch({ ggZmierzonaZs: Number(v) })}
                   unit="Ω"
                   step="0.01"
+                  hint="Wynik pomiaru pętli zwarcia L-PE miernikiem instalacyjnym w danym punkcie obwodu — albo wartość obliczona w kalkulatorze „Impedancja pętli zwarcia”."
                 />
               )}
 
@@ -1419,7 +1551,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "spadek" && (
-            <Card title={active.label} icon={TrendingDown} tag="sprawdzenie trasy">
+            <Card title={active.label} tag="sprawdzenie trasy">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Ten kalkulator sprawdza trasę o <strong>znanym przekroju</strong> — np. kabel, który już jest ułożony
                 albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór przekroju przewodu”: tam przekrój
@@ -1427,10 +1559,33 @@ export function CalculatorsTab() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Prąd obciążenia (Ib)" value={duCurrentA} onChange={(v) => setDuCurrentA(Number(v))} unit="A" step="0.1" />
-                <Field label="Zasilanie" value={duPhase} onChange={(v) => setDuPhase(v as "1" | "3")} options={PHASE_OPTIONS} />
-                <Field label="Współczynnik cos φ" value={duCosfi} onChange={(v) => patch({ duCosfi: Number(v) })} step="0.05" />
-                <Field label="Długość trasy (w jedną stronę)" value={duLength} onChange={(v) => setDuLength(Number(v))} unit="m" />
+                <Field
+                  label="Prąd obciążenia (Ib)"
+                  value={duCurrentA}
+                  onChange={(v) => setDuCurrentA(Number(v))}
+                  unit="A"
+                  step="0.1"
+                  hint="Prąd, jaki faktycznie popłynie tą trasą przy pełnym obciążeniu — z bilansu mocy odbiorników albo z pomiaru."
+                />
+                <Field
+                  label="Zasilanie"
+                  value={duPhase}
+                  onChange={(v) => setDuPhase(v as "1" | "3")}
+                  options={PHASE_OPTIONS}
+                />
+                <Field
+                  label="Współczynnik cos φ"
+                  value={duCosfi}
+                  onChange={(v) => patch({ duCosfi: Number(v) })}
+                  step="0.05"
+                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
+                />
+                <Field
+                  label="Długość trasy (w jedną stronę)"
+                  value={duLength}
+                  onChange={(v) => setDuLength(Number(v))}
+                  unit="m"
+                />
                 <Field
                   label="Przekrój żyły"
                   value={String(duSection)}
@@ -1448,6 +1603,7 @@ export function CalculatorsTab() {
                   value={duIzolacja}
                   onChange={(v) => patch({ duIzolacja: v as Izolacja })}
                   options={IZOLACJA_OPTIONS}
+                  hint="Sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE) — wpływa nieznacznie na rezystywność przy modelu temperaturowym."
                 />
                 <Field
                   label="Przewody równoległe na fazę"
@@ -1472,6 +1628,7 @@ export function CalculatorsTab() {
                   value={duModel}
                   onChange={(v) => patch({ duModel: v as ModelRezystywnosci })}
                   options={MODEL_REZ_OPTIONS}
+                  hint="Jak dokładnie liczyć rezystywność miedzi/aluminium w warunkach ruchowych. Zostaw domyślne uproszczenie normy, żeby wynik zgadzał się z automatycznym doborem w Rozdzielnicy."
                 />
               </div>
 
@@ -1493,6 +1650,7 @@ export function CalculatorsTab() {
                   value={duRodzajLinii}
                   onChange={(v) => patch({ duRodzajLinii: v as RodzajLinii })}
                   options={RODZAJ_LINII_OPTIONS}
+                  hint="Jak fizycznie wygląda trasa — kabel wielożyłowy w jednej powłoce, kable jednożyłowe osobno, czy linia napowietrzna. Wybierz opis najbliższy rzeczywistości; przy kablach jednożyłowych i liniach gołych realna wartość zależy dodatkowo od rozstawu żył."
                 />
               )}
 
@@ -1519,32 +1677,70 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "zwarcie" && (
-            <Card title={active.label} icon={Flame} tag="PN-EN 60909">
+            <Card title={active.label} tag="PN-EN 60909">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Współczynnik napięciowy <strong>c wynika z celu obliczenia</strong>, a nie z osobnego pola: do doboru
                 aparatów liczy się najgorszy przypadek największego prądu (c = 1,05), a do ochrony przeciwporażeniowej —
                 najmniejszego (c = 0,95). Pomylenie ich daje wynik pozornie poprawny i całkowicie nieprzydatny.
               </div>
 
-              <Field label="Cel obliczenia" value={zwCel} onChange={(v) => patch({ zwCel: v as CelZwarcia })} options={CEL_ZWARCIA_OPTIONS} />
+              <Field
+                label="Cel obliczenia"
+                value={zwCel}
+                onChange={(v) => patch({ zwCel: v as CelZwarcia })}
+                options={CEL_ZWARCIA_OPTIONS}
+              />
 
               <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Transformator zasilający</div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Moc znamionowa Sn" value={zwSnKVA} onChange={(v) => patch({ zwSnKVA: Number(v) })} unit="kVA" />
-                <Field label="Napięcie zwarcia uk" value={zwUkPct} onChange={(v) => patch({ zwUkPct: Number(v) })} unit="%" step="0.1" />
-                <Field label="Napięcie międzyfazowe Un" value={zwUnV} onChange={(v) => patch({ zwUnV: Number(v) })} unit="V" />
+                <Field
+                  label="Moc znamionowa Sn"
+                  value={zwSnKVA}
+                  onChange={(v) => patch({ zwSnKVA: Number(v) })}
+                  unit="kVA"
+                  hint="Moc pozorna transformatora — z jego tabliczki znamionowej (typowo 100–1000 kVA dla stacji SN/nn zasilających budynki)."
+                />
+                <Field
+                  label="Napięcie zwarcia uk"
+                  value={zwUkPct}
+                  onChange={(v) => patch({ zwUkPct: Number(v) })}
+                  unit="%"
+                  step="0.1"
+                  hint="Z tabliczki znamionowej transformatora (oznaczenie „uk” albo „Uz”) — typowo 4–6% dla transformatorów rozdzielczych SN/nn. Mówi, jaką część napięcia znamionowego trzeba przyłożyć, żeby popłynął prąd znamionowy przy zwartym uzwojeniu wtórnym: im MNIEJSZE uk, tym WIĘKSZY prąd zwarcia."
+                />
+                <Field
+                  label="Napięcie międzyfazowe Un"
+                  value={zwUnV}
+                  onChange={(v) => patch({ zwUnV: Number(v) })}
+                  unit="V"
+                  hint="Napięcie znamionowe strony wtórnej (nn) transformatora — w Polsce standardowo 400 V."
+                />
                 <Field
                   label="Straty obciążeniowe ΔPCu (0 = pomiń)"
                   value={zwStratyCuW}
                   onChange={(v) => patch({ zwStratyCuW: Number(v) })}
                   unit="W"
+                  hint="Straty mocy w uzwojeniach przy obciążeniu znamionowym — z tabliczki znamionowej albo protokołu prób transformatora. Bez tej wartości wynik pomija rezystancję transformatora, co lekko zawyża obliczony prąd zwarcia."
                 />
               </div>
 
               <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Miejsce zwarcia</div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Impedancja pętli Zs (0 = pomiń Ik1)" value={zwZsOhm} onChange={(v) => patch({ zwZsOhm: Number(v) })} unit="Ω" step="0.01" />
-                <Field label="Stosunek R/X (do prądu udarowego)" value={zwRdoX} onChange={(v) => patch({ zwRdoX: Number(v) })} step="0.01" />
+                <Field
+                  label="Impedancja pętli Zs (0 = pomiń Ik1)"
+                  value={zwZsOhm}
+                  onChange={(v) => patch({ zwZsOhm: Number(v) })}
+                  unit="Ω"
+                  step="0.01"
+                  hint="Impedancja pętli zwarcia L-PE w miejscu zwarcia — z pomiaru miernikiem instalacyjnym albo z kalkulatora „Impedancja pętli zwarcia”. Zostaw 0, żeby pominąć obliczenie zwarcia jednofazowego Ik1."
+                />
+                <Field
+                  label="Stosunek R/X (do prądu udarowego)"
+                  value={zwRdoX}
+                  onChange={(v) => patch({ zwRdoX: Number(v) })}
+                  step="0.01"
+                  hint="Stosunek rezystancji do reaktancji całego obwodu od źródła do miejsca zwarcia — policzysz go w kalkulatorze „Impedancja przewodu”. Wpływa tylko na prąd udarowy, nie na wartość skuteczną zwarcia."
+                />
               </div>
 
               {trafo.wartosci && zwarcie.wartosci && (
@@ -1580,15 +1776,33 @@ export function CalculatorsTab() {
                 Wytrzymałość zwarciowa cieplna przewodu (S ≥ I·√t / k)
               </div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Czas trwania zwarcia" value={zwCzasS} onChange={(v) => patch({ zwCzasS: Number(v) })} unit="s" step="0.01" />
+                <Field
+                  label="Czas trwania zwarcia"
+                  value={zwCzasS}
+                  onChange={(v) => patch({ zwCzasS: Number(v) })}
+                  unit="s"
+                  step="0.01"
+                  hint="Rzeczywisty czas, przez jaki płynie prąd zwarciowy zanim zabezpieczenie zadziała — odczytaj z charakterystyki wyzwalania wyłącznika/wkładki dla tego prądu, albo przyjmij maksymalny czas wyłączenia wg normy (0,4 s dla obwodu odbiorczego TN)."
+                />
                 <Field
                   label="Przekrój żyły"
                   value={String(zwPrzekroj)}
                   onChange={(v) => patch({ zwPrzekroj: Number(v) })}
                   options={SZEREG_PELNY_OPTIONS}
                 />
-                <Field label="Materiał" value={zwMaterial} onChange={(v) => patch({ zwMaterial: v as Material })} options={MATERIAL_OPTIONS} />
-                <Field label="Izolacja" value={zwIzolacja} onChange={(v) => patch({ zwIzolacja: v as Izolacja })} options={IZOLACJA_OPTIONS} />
+                <Field
+                  label="Materiał"
+                  value={zwMaterial}
+                  onChange={(v) => patch({ zwMaterial: v as Material })}
+                  options={MATERIAL_OPTIONS}
+                />
+                <Field
+                  label="Izolacja"
+                  value={zwIzolacja}
+                  onChange={(v) => patch({ zwIzolacja: v as Izolacja })}
+                  options={IZOLACJA_OPTIONS}
+                  hint="Sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE) — decyduje o współczynniku k wytrzymałości zwarciowej."
+                />
               </div>
               {wytrzymalosc.wartosci && (
                 <div className="mt-2 p-3 pe-result">
@@ -1611,33 +1825,77 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "uziom" && (
-            <Card title={active.label} icon={Shovel} tag="geometria uziomu">
+            <Card title={active.label} tag="geometria uziomu">
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Typ uziomu" value={uzTyp} onChange={(v) => patch({ uzTyp: v as TypUziomu })} options={TYP_UZIOMU_OPTIONS} />
+                <Field
+                  label="Typ uziomu"
+                  value={uzTyp}
+                  onChange={(v) => patch({ uzTyp: v as TypUziomu })}
+                  options={TYP_UZIOMU_OPTIONS}
+                />
                 <Field
                   label="Rodzaj gruntu (wartości orientacyjne)"
                   value={String(uzRho)}
                   onChange={(v) => patch({ uzRho: Number(v) })}
                   options={GRUNT_OPTIONS}
+                  hint="Skrót do pola „Rezystywność gruntu” niżej — wybierz najbliższy opis, żeby wstawić typową wartość. To tylko orientacyjny punkt startowy: do projektu wykonawczego rezystywność trzeba ZMIERZYĆ na działce."
                 />
-                <Field label="Rezystywność gruntu ρ" value={uzRho} onChange={(v) => patch({ uzRho: Number(v) })} unit="Ω·m" />
-                <Field label="Długość uziomu" value={uzDlugosc} onChange={(v) => patch({ uzDlugosc: Number(v) })} unit="m" step="0.1" />
+                <Field
+                  label="Rezystywność gruntu ρ"
+                  value={uzRho}
+                  onChange={(v) => patch({ uzRho: Number(v) })}
+                  unit="Ω·m"
+                  hint="Im mniejsza wartość, tym lepiej przewodzący grunt i mniejsza rezystancja uziomu. Z pomiaru miernikiem rezystywności gruntu — albo orientacyjnie z listy „Rodzaj gruntu” obok."
+                />
+                <Field
+                  label="Długość uziomu"
+                  value={uzDlugosc}
+                  onChange={(v) => patch({ uzDlugosc: Number(v) })}
+                  unit="m"
+                  step="0.1"
+                />
                 {uzTyp === "pionowy" && (
-                  <Field label="Średnica pręta" value={uzSrednicaMm} onChange={(v) => patch({ uzSrednicaMm: Number(v) })} unit="mm" />
+                  <Field
+                    label="Średnica pręta"
+                    value={uzSrednicaMm}
+                    onChange={(v) => patch({ uzSrednicaMm: Number(v) })}
+                    unit="mm"
+                    hint="Średnica pręta uziomowego — typowo 16–20 mm dla prętów stalowych ocynkowanych/miedziowanych."
+                  />
                 )}
                 {uzTyp === "poziomy" && (
                   <>
-                    <Field label="Szerokość bednarki" value={uzSzerokoscMm} onChange={(v) => patch({ uzSzerokoscMm: Number(v) })} unit="mm" />
-                    <Field label="Głębokość ułożenia" value={uzGlebokosc} onChange={(v) => patch({ uzGlebokosc: Number(v) })} unit="m" step="0.1" />
+                    <Field
+                      label="Szerokość bednarki"
+                      value={uzSzerokoscMm}
+                      onChange={(v) => patch({ uzSzerokoscMm: Number(v) })}
+                      unit="mm"
+                      hint="Szerokość taśmy (bednarki) uziomowej — typowo 25 lub 30 mm."
+                    />
+                    <Field
+                      label="Głębokość ułożenia"
+                      value={uzGlebokosc}
+                      onChange={(v) => patch({ uzGlebokosc: Number(v) })}
+                      unit="m"
+                      step="0.1"
+                      hint="Głębokość, na jakiej bednarka leży w wykopie — typowo 0,6–0,8 m, poniżej strefy przemarzania."
+                    />
                   </>
                 )}
-                <Field label="Liczba uziomów równolegle" value={uzLiczba} onChange={(v) => patch({ uzLiczba: Number(v) })} step="1" />
+                <Field
+                  label="Liczba uziomów równolegle"
+                  value={uzLiczba}
+                  onChange={(v) => patch({ uzLiczba: Number(v) })}
+                  step="1"
+                  hint="Ile identycznych uziomów połączono ze sobą — więcej obniża wypadkową rezystancję, ale coraz mniej przy zbyt bliskim rozstawie (patrz współczynnik wykorzystania η niżej)."
+                />
                 {uzLiczba > 1 && (
                   <Field
                     label="Wsp. wykorzystania η (0,6–0,9)"
                     value={uzEta}
                     onChange={(v) => patch({ uzEta: Number(v) })}
                     step="0.05"
+                    hint="Im uziomy stoją bliżej siebie, tym bardziej sobie „przeszkadzają” i tym niższą wartość przyjmij z zakresu 0,6–0,9. Przy rozstawie większym niż dwie długości uziomu bliżej 0,9."
                   />
                 )}
                 <Field
@@ -1645,6 +1903,7 @@ export function CalculatorsTab() {
                   value={uzWymagana}
                   onChange={(v) => patch({ uzWymagana: Number(v) })}
                   unit="Ω"
+                  hint="Docelowa maksymalna rezystancja uziemienia, np. z warunku ochrony w układzie TT (patrz kalkulator „Rezystancja uziemienia”) albo z wymagań instalacji odgromowej. Zostaw 0, żeby policzyć samą rezystancję bez oceny."
                 />
               </div>
 
@@ -1671,7 +1930,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "bilansFaz" && (
-            <Card title={active.label} icon={Scale} tag="asymetria i przewód N">
+            <Card title={active.label} tag="asymetria i przewód N">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Przy odbiorach nieliniowych (zasilacze impulsowe, LED, falowniki) 3. harmoniczna sumuje się w przewodzie
                 neutralnym <strong>arytmetycznie</strong>, zamiast się znosić — prąd w N potrafi wtedy przekroczyć prąd
@@ -1691,6 +1950,7 @@ export function CalculatorsTab() {
                       className="pe-input text-sm w-20 pe-mono"
                       type="number"
                       aria-label={`Moc: ${o.nazwa}`}
+                      title="Moc czynna odbioru [W] — z tabliczki znamionowej."
                       value={o.mocW}
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, mocW: Number(e.target.value) } : x)))}
                     />
@@ -1700,12 +1960,14 @@ export function CalculatorsTab() {
                       type="number"
                       step="0.05"
                       aria-label={`cos φ: ${o.nazwa}`}
+                      title="Współczynnik mocy odbiornika — z tabliczki znamionowej (1,0 dla grzałek, niżej dla silników i elektroniki)."
                       value={o.cosfi}
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, cosfi: Number(e.target.value) } : x)))}
                     />
                     <select
                       className="pe-input text-sm w-24"
                       aria-label={`Faza: ${o.nazwa}`}
+                      title="Do której fazy podłączony jest ten odbiór — albo „3-fazowy”, jeśli obciąża wszystkie trzy równo."
                       value={o.faza ?? "3f"}
                       onChange={(e) =>
                         setOdbioryFazowe((ds) =>
@@ -1741,6 +2003,7 @@ export function CalculatorsTab() {
                 onChange={(v) => patch({ bfH3Pct: Number(v) })}
                 unit="%"
                 step="5"
+                hint="0% dla odbiorów LINIOWYCH (grzałki, silniki bez elektroniki). Dla zasilaczy impulsowych, opraw LED i falowników realnie to często 60–90% — bez tej wartości prąd w przewodzie N wyjdzie zaniżony."
               />
 
               {bilansFaz.wartosci && (
@@ -1765,26 +2028,66 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "silnik" && (
-            <Card title={active.label} icon={Cog} tag="rozruch i zabezpieczenia">
+            <Card title={active.label} tag="rozruch i zabezpieczenia">
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Moc na wale" value={slMocKW} onChange={(v) => patch({ slMocKW: Number(v) })} unit="kW" step="0.1" />
-                <Field label="Napięcie międzyfazowe" value={slUn} onChange={(v) => patch({ slUn: Number(v) })} unit="V" />
-                <Field label="Współczynnik mocy cos φ" value={slCosfi} onChange={(v) => patch({ slCosfi: Number(v) })} step="0.01" />
-                <Field label="Sprawność η" value={slSprawnosc} onChange={(v) => patch({ slSprawnosc: Number(v) })} step="0.01" />
+                <Field
+                  label="Moc na wale"
+                  value={slMocKW}
+                  onChange={(v) => patch({ slMocKW: Number(v) })}
+                  unit="kW"
+                  step="0.1"
+                  hint="Moc MECHANICZNA silnika z tabliczki znamionowej (oznaczenie „Pn” albo „kW”) — to NIE jest moc pobierana z sieci, ta jest o 1/η większa."
+                />
+                <Field
+                  label="Napięcie międzyfazowe"
+                  value={slUn}
+                  onChange={(v) => patch({ slUn: Number(v) })}
+                  unit="V"
+                  hint="Napięcie znamionowe silnika z tabliczki — dla silnika 3-fazowego w Polsce zwykle 400 V (połączenie w gwiazdę)."
+                />
+                <Field
+                  label="Współczynnik mocy cos φ"
+                  value={slCosfi}
+                  onChange={(v) => patch({ slCosfi: Number(v) })}
+                  step="0.01"
+                  hint="Z tabliczki znamionowej silnika (oznaczenie „cos φ”) — typowo 0,80–0,90 dla silników klatkowych przy pełnym obciążeniu."
+                />
+                <Field
+                  label="Sprawność η"
+                  value={slSprawnosc}
+                  onChange={(v) => patch({ slSprawnosc: Number(v) })}
+                  step="0.01"
+                  hint="Sprawność silnika z tabliczki znamionowej (oznaczenie „η”, w procentach — wpisz jako ułamek, np. 0,88 dla 88%)."
+                />
                 <Field
                   label="Krotność prądu rozruchowego (z tabliczki)"
                   value={slKrotnosc}
                   onChange={(v) => patch({ slKrotnosc: Number(v) })}
                   step="0.5"
+                  hint="Stosunek Ir/In z tabliczki znamionowej (oznaczenie „Ir/In” albo „Isr/In”) — dla silników klatkowych zwykle 5–8. Nie zgaduj: poza tym zakresem odczytaj wartość wprost z tabliczki."
                 />
-                <Field label="Sposób rozruchu" value={slRozruch} onChange={(v) => patch({ slRozruch: v as SposobRozruchu })} options={ROZRUCH_OPTIONS} />
-                <Field label="Czas rozruchu (0 = pomiń)" value={slCzasRozruchu} onChange={(v) => patch({ slCzasRozruchu: Number(v) })} unit="s" step="0.5" />
+                <Field
+                  label="Sposób rozruchu"
+                  value={slRozruch}
+                  onChange={(v) => patch({ slRozruch: v as SposobRozruchu })}
+                  options={ROZRUCH_OPTIONS}
+                  hint="Jak silnik jest uruchamiany — bezpośredni (DOL) daje pełny prąd i moment rozruchowy; gwiazda-trójkąt obniża oba do 1/3, więc nadaje się tylko do napędów ruszających bez dużego obciążenia."
+                />
+                <Field
+                  label="Czas rozruchu (0 = pomiń)"
+                  value={slCzasRozruchu}
+                  onChange={(v) => patch({ slCzasRozruchu: Number(v) })}
+                  unit="s"
+                  step="0.5"
+                  hint="Ile realnie trwa rozruch tego napędu — z pomiaru albo doświadczenia z podobną maszyną. Potrzebne do doboru klasy wyzwalania przekaźnika termicznego."
+                />
                 <Field
                   label="Impedancja obwodu zasilającego (0 = pomiń)"
                   value={slImpedancja}
                   onChange={(v) => patch({ slImpedancja: Number(v) })}
                   unit="Ω"
                   step="0.01"
+                  hint="Impedancja przewodu i źródła od rozdzielnicy do silnika — policzysz ją w kalkulatorze „Impedancja przewodu”. Potrzebna do sprawdzenia spadku napięcia w chwili rozruchu."
                 />
               </div>
 
@@ -1814,22 +2117,39 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "impedancja" && (
-            <Card title={active.label} icon={Ruler} tag="R, X, Z">
+            <Card title={active.label} tag="R, X, Z">
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Długość przewodu" value={imDlugosc} onChange={(v) => patch({ imDlugosc: Number(v) })} unit="m" />
+                <Field
+                  label="Długość przewodu"
+                  value={imDlugosc}
+                  onChange={(v) => patch({ imDlugosc: Number(v) })}
+                  unit="m"
+                />
                 <Field
                   label="Przekrój żyły"
                   value={String(imPrzekroj)}
                   onChange={(v) => patch({ imPrzekroj: Number(v) })}
                   options={SZEREG_PELNY_OPTIONS}
                 />
-                <Field label="Materiał" value={imMaterial} onChange={(v) => patch({ imMaterial: v as Material })} options={MATERIAL_OPTIONS} />
-                <Field label="Izolacja" value={imIzolacja} onChange={(v) => patch({ imIzolacja: v as Izolacja })} options={IZOLACJA_OPTIONS} />
+                <Field
+                  label="Materiał"
+                  value={imMaterial}
+                  onChange={(v) => patch({ imMaterial: v as Material })}
+                  options={MATERIAL_OPTIONS}
+                />
+                <Field
+                  label="Izolacja"
+                  value={imIzolacja}
+                  onChange={(v) => patch({ imIzolacja: v as Izolacja })}
+                  options={IZOLACJA_OPTIONS}
+                  hint="Sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE) — decyduje o temperaturze żyły przyjętej do liczenia rezystancji."
+                />
                 <Field
                   label="Rodzaj linii (X′)"
                   value={imRodzajLinii}
                   onChange={(v) => patch({ imRodzajLinii: v as RodzajLinii })}
                   options={RODZAJ_LINII_OPTIONS}
+                  hint="Jak fizycznie wygląda trasa — kabel wielożyłowy, kable jednożyłowe osobno, czy linia napowietrzna. Wybierz opis najbliższy rzeczywistości."
                 />
               </div>
 
@@ -1858,16 +2178,25 @@ export function CalculatorsTab() {
                 stąd normowy wymóg jednakowej długości i przekroju.
               </div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Prąd całkowity obwodu" value={imRownoleglePrad} onChange={(v) => patch({ imRownoleglePrad: Number(v) })} unit="A" />
+                <Field
+                  label="Prąd całkowity obwodu"
+                  value={imRownoleglePrad}
+                  onChange={(v) => patch({ imRownoleglePrad: Number(v) })}
+                  unit="A"
+                />
                 <Field
                   label="Obciążalność jednej żyły (0 = bez oceny)"
                   value={imRownolegleIz}
                   onChange={(v) => patch({ imRownolegleIz: Number(v) })}
                   unit="A"
+                  hint="Dopuszczalny prąd długotrwały POJEDYNCZEJ żyły po współczynnikach korekcyjnych — z kalkulatora „Dobór przekroju przewodu” albo z Rozdzielnicy. Zostaw 0, żeby zobaczyć sam podział prądu bez oceny."
                 />
               </div>
               <label className="mb-3 block">
-                <div className="mb-1 text-xs text-slate-500">Długości poszczególnych żył (po przecinku)</div>
+                <div className="mb-1 flex items-center gap-1 text-xs text-slate-500">
+                  Długości poszczególnych żył (po przecinku)
+                  <HintButton hint="Wpisz długość KAŻDEJ żyły biegnącej równolegle, oddzieloną przecinkiem — np. dla dwóch żył o różnej długości: 40, 60. Różne długości to właśnie ten problem, który ten kalkulator pokazuje liczbowo." />
+                </div>
                 <input
                   className="pe-input pe-mono w-full text-sm"
                   value={imRownolegleDlugosci}
@@ -1896,7 +2225,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "peN" && (
-            <Card title={active.label} icon={ShieldCheck} tag="PE i N">
+            <Card title={active.label} tag="PE i N">
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
                   label="Przekrój przewodu fazowego"
@@ -1904,15 +2233,34 @@ export function CalculatorsTab() {
                   onChange={(v) => patch({ peFazowy: Number(v) })}
                   options={SZEREG_PELNY_OPTIONS}
                 />
-                <Field label="Materiał" value={peMaterial} onChange={(v) => patch({ peMaterial: v as Material })} options={MATERIAL_OPTIONS} />
-                <Field label="Izolacja" value={peIzolacja} onChange={(v) => patch({ peIzolacja: v as Izolacja })} options={IZOLACJA_OPTIONS} />
+                <Field
+                  label="Materiał"
+                  value={peMaterial}
+                  onChange={(v) => patch({ peMaterial: v as Material })}
+                  options={MATERIAL_OPTIONS}
+                />
+                <Field
+                  label="Izolacja"
+                  value={peIzolacja}
+                  onChange={(v) => patch({ peIzolacja: v as Izolacja })}
+                  options={IZOLACJA_OPTIONS}
+                  hint="Sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE) — decyduje o współczynniku k wytrzymałości zwarciowej."
+                />
                 <Field
                   label="Prąd zwarcia doziemnego (0 = pomiń warunek cieplny)"
                   value={pePradZwarciowy}
                   onChange={(v) => patch({ pePradZwarciowy: Number(v) })}
                   unit="A"
+                  hint="Prąd zwarcia L-PE w tym miejscu — z pomiaru, z kalkulatora „Prądy zwarciowe” albo z dokumentacji projektowej. Bez niego sprawdzany jest tylko sam warunek tabelaryczny."
                 />
-                <Field label="Czas wyłączenia" value={peCzas} onChange={(v) => patch({ peCzas: Number(v) })} unit="s" step="0.1" />
+                <Field
+                  label="Czas wyłączenia"
+                  value={peCzas}
+                  onChange={(v) => patch({ peCzas: Number(v) })}
+                  unit="s"
+                  step="0.1"
+                  hint="Rzeczywisty czas zadziałania zabezpieczenia tego obwodu przy podanym prądzie zwarciowym — z charakterystyki wyzwalania albo maksymalny czas wg normy (0,4 s dla obwodu odbiorczego TN)."
+                />
               </div>
 
               {przewodPE.wartosci && (
@@ -1934,8 +2282,20 @@ export function CalculatorsTab() {
 
               <div className="mb-2 mt-4 text-xs font-semibold text-slate-600">Przewód neutralny N</div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Prąd fazowy" value={pnPradFazowy} onChange={(v) => patch({ pnPradFazowy: Number(v) })} unit="A" />
-                <Field label="Udział 3. harmonicznej" value={pnH3Pct} onChange={(v) => patch({ pnH3Pct: Number(v) })} unit="%" step="5" />
+                <Field
+                  label="Prąd fazowy"
+                  value={pnPradFazowy}
+                  onChange={(v) => patch({ pnPradFazowy: Number(v) })}
+                  unit="A"
+                />
+                <Field
+                  label="Udział 3. harmonicznej"
+                  value={pnH3Pct}
+                  onChange={(v) => patch({ pnH3Pct: Number(v) })}
+                  unit="%"
+                  step="5"
+                  hint="0% dla odbiorów liniowych. Dla zasilaczy impulsowych, opraw LED i falowników realnie to często 60–90% — bez tej wartości prąd w N wyjdzie zaniżony."
+                />
               </div>
               {przewodN.wartosci && (
                 <div className="mt-2 p-3 pe-result">
@@ -1951,7 +2311,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "spd" && (
-            <Card title={active.label} icon={ShieldAlert} tag="koordynacja ochrony">
+            <Card title={active.label} tag="koordynacja ochrony">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Skuteczny poziom ochrony <strong>nie równa się Up z tabliczki</strong> — dochodzi do niego spadek
                 indukcyjny na przewodach przyłączeniowych, rzędu 1 kV na metr przy udarze 8/20 µs. Stąd bierze się reguła
@@ -1959,13 +2319,25 @@ export function CalculatorsTab() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Typ ogranicznika" value={spdTyp} onChange={(v) => patch({ spdTyp: v as TypSPD })} options={TYP_SPD_OPTIONS} />
-                <Field label="Poziom ochrony Up (z tabliczki)" value={spdUp} onChange={(v) => patch({ spdUp: Number(v) })} unit="V" />
+                <Field
+                  label="Typ ogranicznika"
+                  value={spdTyp}
+                  onChange={(v) => patch({ spdTyp: v as TypSPD })}
+                  options={TYP_SPD_OPTIONS}
+                />
+                <Field
+                  label="Poziom ochrony Up (z tabliczki)"
+                  value={spdUp}
+                  onChange={(v) => patch({ spdUp: Number(v) })}
+                  unit="V"
+                  hint="Napięciowy poziom ochrony ogranicznika — z jego tabliczki znamionowej albo karty katalogowej (oznaczenie „Up”)."
+                />
                 <Field
                   label="Wytrzymałość udarowa urządzenia U_w"
                   value={String(spdUw)}
                   onChange={(v) => patch({ spdUw: Number(v) })}
                   options={UW_OPTIONS}
+                  hint="Wpisz wartość z karty katalogowej chronionego urządzenia, jeśli ją znasz — w przeciwnym razie wybierz kategorię przepięciową odpowiadającą jego miejscu w instalacji (im dalej od wejścia, tym niższa kategoria i mniejsza wytrzymałość)."
                 />
                 <Field
                   label="Długość przewodów przyłączeniowych (łącznie)"
@@ -1973,6 +2345,7 @@ export function CalculatorsTab() {
                   onChange={(v) => patch({ spdDlugosc: Number(v) })}
                   unit="m"
                   step="0.1"
+                  hint="Suma długości przewodu doprowadzającego i odprowadzającego ogranicznik (faza + PE) — nie tylko jednego z nich."
                 />
               </div>
 
@@ -1996,18 +2369,47 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "pv" && (
-            <Card title={active.label} icon={Sun} tag="string DC">
+            <Card title={active.label} tag="string DC">
               <div className="mb-2 text-xs font-semibold text-slate-600">Moduł i string (dane z karty katalogowej)</div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Prąd zwarciowy Isc (STC)" value={pvIsc} onChange={(v) => patch({ pvIsc: Number(v) })} unit="A" step="0.1" />
-                <Field label="Napięcie jałowe Voc (STC)" value={pvVoc} onChange={(v) => patch({ pvVoc: Number(v) })} unit="V" step="0.1" />
-                <Field label="Napięcie Vmpp (STC, opcjonalne)" value={pvVmpp} onChange={(v) => patch({ pvVmpp: Number(v) })} unit="V" step="0.1" />
-                <Field label="Prąd Impp (STC, opcjonalne)" value={pvImpp} onChange={(v) => patch({ pvImpp: Number(v) })} unit="A" step="0.1" />
+                <Field
+                  label="Prąd zwarciowy Isc (STC)"
+                  value={pvIsc}
+                  onChange={(v) => patch({ pvIsc: Number(v) })}
+                  unit="A"
+                  step="0.1"
+                  hint="Prąd zwarciowy modułu w warunkach standardowych (STC) — z karty katalogowej modułu, oznaczenie „Isc”."
+                />
+                <Field
+                  label="Napięcie jałowe Voc (STC)"
+                  value={pvVoc}
+                  onChange={(v) => patch({ pvVoc: Number(v) })}
+                  unit="V"
+                  step="0.1"
+                  hint="Napięcie jałowe (bez obciążenia) modułu w warunkach STC — z karty katalogowej, oznaczenie „Voc”."
+                />
+                <Field
+                  label="Napięcie Vmpp (STC, opcjonalne)"
+                  value={pvVmpp}
+                  onChange={(v) => patch({ pvVmpp: Number(v) })}
+                  unit="V"
+                  step="0.1"
+                  hint="Napięcie w punkcie mocy maksymalnej — z karty katalogowej (oznaczenie „Vmpp”/„Vmp”). Bez niego spadek % liczony jest względem Voc, mniej dokładnie."
+                />
+                <Field
+                  label="Prąd Impp (STC, opcjonalne)"
+                  value={pvImpp}
+                  onChange={(v) => patch({ pvImpp: Number(v) })}
+                  unit="A"
+                  step="0.1"
+                  hint="Prąd w punkcie mocy maksymalnej — z karty katalogowej. Bez niego spadek napięcia liczony jest prądem Isc, co go zawyża (bezpieczna, ale mniej dokładna strona)."
+                />
                 <Field
                   label="Liczba modułów w szeregu"
                   value={pvLiczbaModulow}
                   onChange={(v) => patch({ pvLiczbaModulow: Number(v) })}
                   step="1"
+                  hint="Ile modułów jest połączonych szeregowo w jednym stringu podłączonym do jednego wejścia MPPT falownika."
                 />
                 <Field
                   label="Współczynnik temperaturowy napięcia β"
@@ -2015,9 +2417,22 @@ export function CalculatorsTab() {
                   onChange={(v) => patch({ pvBeta: Number(v) })}
                   unit="%/°C"
                   step="0.01"
+                  hint="Z karty katalogowej modułu (oznaczenie „temperature coefficient of Voc”) — zwykle wartość UJEMNA, ok. −0,25 do −0,35 %/°C: napięcie modułu ROŚNIE, gdy robi się zimno."
                 />
-                <Field label="Temperatura minimalna modułu" value={pvTempMin} onChange={(v) => patch({ pvTempMin: Number(v) })} unit="°C" />
-                <Field label="Maks. napięcie wejściowe falownika" value={pvFalownikVocMax} onChange={(v) => patch({ pvFalownikVocMax: Number(v) })} unit="V" />
+                <Field
+                  label="Temperatura minimalna modułu"
+                  value={pvTempMin}
+                  onChange={(v) => patch({ pvTempMin: Number(v) })}
+                  unit="°C"
+                  hint="Najniższa spodziewana temperatura w lokalizacji instalacji — moduł na słońcu w mrozie osiąga temperaturę zbliżoną do temperatury powietrza."
+                />
+                <Field
+                  label="Maks. napięcie wejściowe falownika"
+                  value={pvFalownikVocMax}
+                  onChange={(v) => patch({ pvFalownikVocMax: Number(v) })}
+                  unit="V"
+                  hint="Maksymalne dopuszczalne napięcie DC na wejściu falownika — z jego karty katalogowej. Przekroczenie grozi zniszczeniem falownika."
+                />
               </div>
 
               <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
@@ -2031,27 +2446,52 @@ export function CalculatorsTab() {
               </label>
               {pvSprawdzMppt && (
                 <div className="grid sm:grid-cols-2 gap-x-4">
-                  <Field label="Temperatura maksymalna modułu" value={pvTempMax} onChange={(v) => patch({ pvTempMax: Number(v) })} unit="°C" />
+                  <Field
+                    label="Temperatura maksymalna modułu"
+                    value={pvTempMax}
+                    onChange={(v) => patch({ pvTempMax: Number(v) })}
+                    unit="°C"
+                    hint="Najwyższa spodziewana temperatura modułu w pełnym słońcu — zwykle wyraźnie wyższa niż temperatura powietrza, typowo 60–70°C."
+                  />
                   <Field
                     label="Minimalne napięcie zakresu MPPT falownika"
                     value={pvFalownikMpptMin}
                     onChange={(v) => patch({ pvFalownikMpptMin: Number(v) })}
                     unit="V"
+                    hint="Dolna granica zakresu MPPT z karty katalogowej falownika (oznaczenie „MPPT voltage range”)."
                   />
                 </div>
               )}
 
               <div className="mb-2 mt-3 text-xs font-semibold text-slate-600">Kabel DC</div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Długość trasy DC (w jedną stronę)" value={pvDlugoscDC} onChange={(v) => patch({ pvDlugoscDC: Number(v) })} unit="m" />
+                <Field
+                  label="Długość trasy DC (w jedną stronę)"
+                  value={pvDlugoscDC}
+                  onChange={(v) => patch({ pvDlugoscDC: Number(v) })}
+                  unit="m"
+                />
                 <Field
                   label="Przekrój żyły DC"
                   value={String(pvPrzekrojDC)}
                   onChange={(v) => patch({ pvPrzekrojDC: Number(v) })}
                   options={SZEREG_PELNY_OPTIONS}
+                  hint="Przekrój kabla solarnego DC — typowo 4 lub 6 mm² dla pojedynczego stringu."
                 />
-                <Field label="Materiał" value={pvMaterialDC} onChange={(v) => patch({ pvMaterialDC: v as Material })} options={MATERIAL_OPTIONS} />
-                <Field label="Dopuszczalny spadek DC" value={pvLimitSpadkuDC} onChange={(v) => patch({ pvLimitSpadkuDC: Number(v) })} unit="%" step="0.1" />
+                <Field
+                  label="Materiał"
+                  value={pvMaterialDC}
+                  onChange={(v) => patch({ pvMaterialDC: v as Material })}
+                  options={MATERIAL_OPTIONS}
+                />
+                <Field
+                  label="Dopuszczalny spadek DC"
+                  value={pvLimitSpadkuDC}
+                  onChange={(v) => patch({ pvLimitSpadkuDC: Number(v) })}
+                  unit="%"
+                  step="0.1"
+                  hint="W praktyce projektowej instalacji PV przyjmuje się zwykle do 1% — większy spadek to bezpowrotna strata energii z produkcji."
+                />
               </div>
 
               {stringPV.wartosci && (
@@ -2071,9 +2511,24 @@ export function CalculatorsTab() {
 
               <div className="mb-2 mt-4 text-xs font-semibold text-slate-600">Wyjście AC falownika</div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Moc AC falownika" value={pvMocAC} onChange={(v) => patch({ pvMocAC: Number(v) })} unit="W" />
-                <Field label="Zasilanie" value={pvFazaAC} onChange={(v) => patch({ pvFazaAC: v as "1" | "3" })} options={PHASE_OPTIONS} />
-                <Field label="Długość trasy AC" value={pvDlugoscAC} onChange={(v) => patch({ pvDlugoscAC: Number(v) })} unit="m" />
+                <Field
+                  label="Moc AC falownika"
+                  value={pvMocAC}
+                  onChange={(v) => patch({ pvMocAC: Number(v) })}
+                  unit="W"
+                />
+                <Field
+                  label="Zasilanie"
+                  value={pvFazaAC}
+                  onChange={(v) => patch({ pvFazaAC: v as "1" | "3" })}
+                  options={PHASE_OPTIONS}
+                />
+                <Field
+                  label="Długość trasy AC"
+                  value={pvDlugoscAC}
+                  onChange={(v) => patch({ pvDlugoscAC: Number(v) })}
+                  unit="m"
+                />
                 <Field
                   label="Sposób ułożenia"
                   value={pvSposobUlozeniaAC}
@@ -2102,12 +2557,34 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "ev" && (
-            <Card title={active.label} icon={BatteryCharging} tag="EVSE">
+            <Card title={active.label} tag="EVSE">
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Moc ładowania" value={evMoc} onChange={(v) => patch({ evMoc: Number(v) })} unit="W" />
-                <Field label="Zasilanie" value={evFaza} onChange={(v) => patch({ evFaza: v as "1" | "3" })} options={PHASE_OPTIONS} />
-                <Field label="Współczynnik mocy cos φ" value={evCosfi} onChange={(v) => patch({ evCosfi: Number(v) })} step="0.01" />
-                <Field label="Długość trasy" value={evDlugosc} onChange={(v) => patch({ evDlugosc: Number(v) })} unit="m" />
+                <Field
+                  label="Moc ładowania"
+                  value={evMoc}
+                  onChange={(v) => patch({ evMoc: Number(v) })}
+                  unit="W"
+                  hint="Moc ładowania z tabliczki/dokumentacji ładowarki (np. 3,7 kW dla 1-fazowej 16 A, 11 kW albo 22 kW dla 3-fazowej)."
+                />
+                <Field
+                  label="Zasilanie"
+                  value={evFaza}
+                  onChange={(v) => patch({ evFaza: v as "1" | "3" })}
+                  options={PHASE_OPTIONS}
+                />
+                <Field
+                  label="Współczynnik mocy cos φ"
+                  value={evCosfi}
+                  onChange={(v) => patch({ evCosfi: Number(v) })}
+                  step="0.01"
+                  hint="Nowoczesne ładowarki z korekcją współczynnika mocy (PFC) mają cos φ bliski 1,0 — sprawdź w karcie katalogowej, jeśli chcesz dokładniejszą wartość."
+                />
+                <Field
+                  label="Długość trasy"
+                  value={evDlugosc}
+                  onChange={(v) => patch({ evDlugosc: Number(v) })}
+                  unit="m"
+                />
                 <Field
                   label="Sposób ułożenia"
                   value={evSposobUlozenia}
@@ -2171,12 +2648,35 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "kompensacja" && (
-            <Card title={active.label} icon={Gauge} tag="moc bierna">
+            <Card title={active.label} tag="moc bierna">
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Moc czynna odbioru" value={kmPkW} onChange={(v) => setKm({ kmPkW: Number(v) })} unit="kW" />
-                <Field label="Napięcie (międzyfazowe)" value={kmUV} onChange={(v) => setKm({ kmUV: Number(v) })} unit="V" />
-                <Field label="cos φ przed kompensacją" value={kmCos1} onChange={(v) => setKm({ kmCos1: Number(v) })} step="0.01" />
-                <Field label="cos φ docelowy" value={kmCos2} onChange={(v) => setKm({ kmCos2: Number(v) })} step="0.01" />
+                <Field
+                  label="Moc czynna odbioru"
+                  value={kmPkW}
+                  onChange={(v) => setKm({ kmPkW: Number(v) })}
+                  unit="kW"
+                />
+                <Field
+                  label="Napięcie (międzyfazowe)"
+                  value={kmUV}
+                  onChange={(v) => setKm({ kmUV: Number(v) })}
+                  unit="V"
+                  hint="Napięcie międzyfazowe sieci zasilającej — w Polsce standardowo 400 V."
+                />
+                <Field
+                  label="cos φ przed kompensacją"
+                  value={kmCos1}
+                  onChange={(v) => setKm({ kmCos1: Number(v) })}
+                  step="0.01"
+                  hint="Obecny współczynnik mocy instalacji — z pomiaru analizatorem sieci albo z faktury za energię (zakład energetyczny często go tam podaje, jeśli nalicza opłatę za energię bierną)."
+                />
+                <Field
+                  label="cos φ docelowy"
+                  value={kmCos2}
+                  onChange={(v) => setKm({ kmCos2: Number(v) })}
+                  step="0.01"
+                  hint="Współczynnik mocy, jaki chcesz uzyskać po kompensacji — zwykle 0,93–0,95, żeby uniknąć opłat za energię bierną (sprawdź próg w umowie z operatorem)."
+                />
                 <Field
                   label="Układ połączeń baterii"
                   value={kmUklad}
@@ -2188,6 +2688,7 @@ export function CalculatorsTab() {
                   value={kmSkKVA}
                   onChange={(v) => setKm({ kmSkKVA: Number(v) })}
                   unit="kVA"
+                  hint="Moc zwarciowa sieci w punkcie przyłączenia baterii — podaje ją zakład energetyczny w warunkach przyłączenia, albo policzysz ją z impedancji transformatora (kalkulator „Prądy zwarciowe”: Sk ≈ Un²/Zk). Potrzebna do sprawdzenia ryzyka rezonansu z harmonicznymi."
                 />
               </div>
 
@@ -2216,7 +2717,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "moc" && (
-            <Card title={active.label} icon={Home} tag="bilans mocy">
+            <Card title={active.label} tag="bilans mocy">
               <div className="space-y-2 mb-3">
                 {devices.map((d) => (
                   <div key={d.id} className="flex items-center gap-2">
@@ -2228,6 +2729,7 @@ export function CalculatorsTab() {
                     <input
                       className="pe-input text-sm w-24 pe-mono"
                       type="number"
+                      title="Moc znamionowa tego odbiornika [W] — z tabliczki znamionowej."
                       value={d.power}
                       onChange={(e) => setDevices((ds) => ds.map((x) => (x.id === d.id ? { ...x, power: Number(e.target.value) } : x)))}
                     />
@@ -2258,7 +2760,13 @@ export function CalculatorsTab() {
                   <Download size={13} /> Wczytaj z projektu
                 </button>
               </div>
-              <Field label="Współczynnik jednoczesności (ks)" value={ks} onChange={(v) => setKs(Number(v))} step="0.05" />
+              <Field
+                label="Współczynnik jednoczesności (ks)"
+                value={ks}
+                onChange={(v) => setKs(Number(v))}
+                step="0.05"
+                hint="Odzwierciedla, że nie wszystkie odbiorniki pracują naraz z pełną mocą. Orientacyjnie 0,6–0,8 dla domu jednorodzinnego — im więcej odbiorników, tym niższy. Podnieś go, jeśli masz pompę ciepła, ładowarkę EV albo kuchenkę indukcyjną (te potrafią pracować długo i równocześnie)."
+              />
               <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-xs text-slate-500">Moc zainstalowana</div>
@@ -2296,10 +2804,16 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "wlz" && (
-            <Card title={active.label} icon={Cable} tag="WLZ">
+            <Card title={active.label} tag="WLZ">
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <div>
-                  <Field label="Prąd obliczeniowy" value={wlzCurrentA} onChange={(v) => setWlzCurrentA(Number(v))} unit="A" />
+                  <Field
+                    label="Prąd obliczeniowy"
+                    value={wlzCurrentA}
+                    onChange={(v) => setWlzCurrentA(Number(v))}
+                    unit="A"
+                    hint="Prąd zapotrzebowany całego budynku (nie suma mocy zainstalowanej!) — wczytaj go przyciskiem poniżej z kalkulatora „Bilans mocy budynku” albo wpisz wartość z wniosku o przyłączenie."
+                  />
                   <button
                     type="button"
                     onClick={loadWlzCurrentFromBalance}
@@ -2321,19 +2835,31 @@ export function CalculatorsTab() {
 
               <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Trasa i warunki ułożenia</div>
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Długość trasy (w jedną stronę)" value={wlzLength} onChange={(v) => setWlzLength(Number(v))} unit="m" />
+                <Field
+                  label="Długość trasy (w jedną stronę)"
+                  value={wlzLength}
+                  onChange={(v) => setWlzLength(Number(v))}
+                  unit="m"
+                />
                 <Field
                   label="Sposób ułożenia"
                   value={wlzLayingMethod}
                   onChange={(v) => setWlzLayingMethod(v as LayingMethod)}
                   options={LAYING_METHOD_OPTIONS}
+                  hint="Jak kabel WLZ jest ułożony WEWNĄTRZ budynku (pod tynkiem, w rurce, natynkowo…) — te tablice nie obejmują kabla ułożonego w ziemi."
                 />
-                <Field label="Temperatura otoczenia" value={wlzAmbientC} onChange={(v) => setWlzAmbientC(Number(v))} unit="°C" />
+                <Field
+                  label="Temperatura otoczenia"
+                  value={wlzAmbientC}
+                  onChange={(v) => setWlzAmbientC(Number(v))}
+                  unit="°C"
+                />
                 <Field
                   label="Obwodów we wspólnej trasie"
                   value={wlzBundleCount}
                   onChange={(v) => setWlzBundleCount(Number(v))}
                   step="1"
+                  hint="Ile innych obwodów biegnie razem z WLZ w tej samej rurce/korytku na dłuższym odcinku trasy."
                 />
                 <Field
                   label="Dopuszczalny spadek napięcia na WLZ"
@@ -2341,6 +2867,7 @@ export function CalculatorsTab() {
                   onChange={(v) => setWlzDropLimit(Number(v))}
                   unit="%"
                   step="0.5"
+                  hint="Domyślnie 2% — węższy limit niż 3–5% dla obwodu odbiorczego, bo WLZ to tylko odcinek całej trasy i musi zostawić zapas na spadek za rozdzielnicą."
                 />
               </div>
 
@@ -2401,7 +2928,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "petla" && (
-            <Card title={active.label} icon={ClipboardCheck} tag="ochrona przeciwporażeniowa">
+            <Card title={active.label} tag="ochrona przeciwporażeniowa">
               <div className="grid sm:grid-cols-3 gap-x-4">
                 <Field
                   label="Charakterystyka"
@@ -2412,9 +2939,22 @@ export function CalculatorsTab() {
                     { value: "C", label: "C (10×In)" },
                     { value: "D", label: "D (20×In)" },
                   ]}
+                  hint="Litera wydrukowana na wyłączniku obok prądu znamionowego (np. „B16”, „C16”) — B do zwykłych obwodów, C dla odbiorników z rozruchem silnikowym (pompy, lodówki), D dla silników o dużym prądzie rozruchowym."
                 />
-                <Field label="Prąd znamionowy In" value={zIn} onChange={(v) => setZIn(Number(v))} unit="A" />
-                <Field label="Zmierzona Zs" value={zMeasured} onChange={(v) => setZMeasured(Number(v))} unit="Ω" step="0.01" />
+                <Field
+                  label="Prąd znamionowy In"
+                  value={zIn}
+                  onChange={(v) => setZIn(Number(v))}
+                  unit="A"
+                />
+                <Field
+                  label="Zmierzona Zs"
+                  value={zMeasured}
+                  onChange={(v) => setZMeasured(Number(v))}
+                  unit="Ω"
+                  step="0.01"
+                  hint="Wynik pomiaru pętli zwarcia L-PE miernikiem instalacyjnym w danym punkcie obwodu. Zostaw puste/0, żeby zobaczyć samo Zs max bez oceny."
+                />
               </div>
               <div className="mt-2 p-3 pe-result grid grid-cols-3 gap-3">
                 <div>
@@ -2460,7 +3000,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "uziemienieTT" && (
-            <Card title={active.label} icon={Anchor} tag="ochrona przeciwporażeniowa">
+            <Card title={active.label} tag="ochrona przeciwporażeniowa">
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
                   label="Prąd różnicowy RCD (IΔn)"
@@ -2472,8 +3012,16 @@ export function CalculatorsTab() {
                     { value: "300", label: "300 mA" },
                     { value: "500", label: "500 mA" },
                   ]}
+                  hint="Prąd zadziałania wyłącznika różnicowoprądowego chroniącego ten obwód — sprawdź na obudowie RCD (oznaczenie „IΔn”). 30 mA to standard dla obwodów odbiorczych, wyższe wartości typowe dla wyłączników na początku instalacji."
                 />
-                <Field label="Zmierzona rezystancja uziemienia RA" value={ttMeasuredRa} onChange={(v) => setTtMeasuredRa(Number(v))} unit="Ω" step="0.5" />
+                <Field
+                  label="Zmierzona rezystancja uziemienia RA"
+                  value={ttMeasuredRa}
+                  onChange={(v) => setTtMeasuredRa(Number(v))}
+                  unit="Ω"
+                  step="0.5"
+                  hint="Wynik pomiaru uziomu miernikiem rezystancji uziemienia — patrz protokół „Pomiar rezystancji uziemienia” w zakładce Protokoły."
+                />
               </div>
               <div className="mt-2 p-3 pe-result">
                 <div className="text-xs text-slate-500 mb-1">Maksymalna dopuszczalna RA</div>
@@ -2506,13 +3054,42 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "oswietlenie" && (
-            <Card title={active.label} icon={Calculator} tag="natężenie oświetlenia">
+            <Card title={active.label} tag="natężenie oświetlenia">
               <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field label="Powierzchnia pomieszczenia" value={roomA} onChange={(v) => setRoomA(Number(v))} unit="m²" />
-                <Field label="Wymagane natężenie" value={lux} onChange={(v) => setLux(Number(v))} unit="lx" />
-                <Field label="Strumień jednej oprawy" value={lumPerOpr} onChange={(v) => setLumPerOpr(Number(v))} unit="lm" />
-                <Field label="Wsp. utrzymania (MF)" value={mf} onChange={(v) => setMf(Number(v))} step="0.05" />
-                <Field label="Wsp. wykorzystania (UF)" value={uf} onChange={(v) => setUf(Number(v))} step="0.05" />
+                <Field
+                  label="Powierzchnia pomieszczenia"
+                  value={roomA}
+                  onChange={(v) => setRoomA(Number(v))}
+                  unit="m²"
+                />
+                <Field
+                  label="Wymagane natężenie"
+                  value={lux}
+                  onChange={(v) => setLux(Number(v))}
+                  unit="lx"
+                  hint="Docelowe natężenie oświetlenia na płaszczyźnie roboczej — orientacyjne wartości podane pod wynikiem (np. 150–300 lx dla pokoju dziennego, 500 lx dla blatu w kuchni)."
+                />
+                <Field
+                  label="Strumień jednej oprawy"
+                  value={lumPerOpr}
+                  onChange={(v) => setLumPerOpr(Number(v))}
+                  unit="lm"
+                  hint="Strumień świetlny pojedynczej oprawy — z karty katalogowej albo opakowania żarówki/opraw LED (oznaczenie „lm”, nie moc w watach)."
+                />
+                <Field
+                  label="Wsp. utrzymania (MF)"
+                  value={mf}
+                  onChange={(v) => setMf(Number(v))}
+                  step="0.05"
+                  hint="Uwzględnia spadek strumienia świetlnego w czasie (starzenie się źródeł, zabrudzenie opraw) — typowo 0,8 dla pomieszczeń czyszczonych regularnie."
+                />
+                <Field
+                  label="Wsp. wykorzystania (UF)"
+                  value={uf}
+                  onChange={(v) => setUf(Number(v))}
+                  step="0.05"
+                  hint="Zależy od geometrii pomieszczenia i odbicia ścian/sufitu — typowo 0,4–0,7. Dla jasnego pokoju o zwykłych proporcjach przyjmij 0,6."
+                />
               </div>
               <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
                 <div>
@@ -2543,7 +3120,7 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "rcd" && (
-            <Card title={active.label} icon={Info} tag="bezpieczeństwo">
+            <Card title={active.label} tag="bezpieczeństwo">
               <ul className="text-sm space-y-2.5 text-slate-700">
                 <li className="flex gap-2">
                   <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Obwody gniazd wtyczkowych — RCD 30 mA (typ AC/A), obowiązkowo.
