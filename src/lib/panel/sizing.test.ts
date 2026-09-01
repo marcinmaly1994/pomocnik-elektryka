@@ -64,7 +64,7 @@ describe("sizeCircuit — obwody typowe", () => {
     expect(r.Ib_A).toBeCloseTo(3.66, 1);
     expect(r.przekroj_mm2).toBe(1.5);
     expect(r.kabel).toBe("YDYp 3x1,5 mm²");
-    expect(r.aparat).toEqual({ charakterystyka: "B", In_A: 10, bieguny: "1P+N" });
+    expect(r.aparat).toEqual({ charakterystyka: "B", In_A: 10, bieguny: "1P" });
     expect(r.spadek_napiecia_pct).toBeCloseTo(0.72, 1);
     expect(r.ostrzezenia).toEqual([]);
   });
@@ -95,7 +95,7 @@ describe("sizeCircuit — obwody typowe", () => {
     expect(r.Ib_A).toBeCloseTo(10.68, 1);
     expect(r.przekroj_mm2).toBe(2.5);
     expect(r.kabel).toBe("YDYp 5x2,5 mm²");
-    expect(r.aparat?.bieguny).toBe("3P+N");
+    expect(r.aparat?.bieguny).toBe("3P");
     expect(r.aparat?.In_A).toBe(16);
   });
 
@@ -265,7 +265,7 @@ describe("sizeFeeder — WLZ (linia zasilająca)", () => {
     expect(r.przekroj_mm2).toBe(10);
     expect(r.kabel).toBe("YDYp 5x10 mm²");
     // 16,17 A mieści się między szczeblami 16 A i 20 A -> pierwszy STOPIEŃ NAD Ib
-    expect(r.aparat).toEqual({ charakterystyka: "B", In_A: 20, bieguny: "3P+N" });
+    expect(r.aparat).toEqual({ charakterystyka: "B", In_A: 20, bieguny: "3P" });
     expect(r.spadek_napiecia_pct).toBeLessThanOrEqual(2);
     expect(r.status).toBe("ok");
   });
@@ -358,7 +358,7 @@ describe("sizeBreakerForSection — dobór aparatu do znanego przekroju", () => 
   it("obwód gniazd dostaje typowe B16, dopóki przewód to udźwignie", () => {
     // 2,5 mm² w B2: Iz = 23 A >= 16 A, więc mimo Ib = 8,7 A wchodzi B16
     const r = sizeBreakerForSection(bspec());
-    expect(r.aparat).toEqual({ charakterystyka: "B", In_A: 16, bieguny: "1P+N" });
+    expect(r.aparat).toEqual({ charakterystyka: "B", In_A: 16, bieguny: "1P" });
     expect(r.status).toBe("ok");
   });
 

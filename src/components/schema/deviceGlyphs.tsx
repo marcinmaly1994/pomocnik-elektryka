@@ -181,7 +181,32 @@ const GENERIC: GlyphSpec = {
   ),
 };
 
-export const GLYPHS = { mcb: MCB, main: MAIN_SWITCH, spd: SPD, rcd: RCD, generic: GENERIC };
+/**
+ * Lampka sygnalizacyjna — okrąg z wpisanym krzyżykiem (IEC 60617-06, symbol lampki
+ * kontrolnej). W odróżnieniu od reszty katalogu (stycznik, przekaźnik, zasilacz, CZF,
+ * rozłącznik ppoż…) to symbol narysowany wprost wg normy, nie zastępczy placeholder —
+ * lampka na schemacie stoi w tym samym rzędzie co RCD/SPD (odejście wprost z szyny
+ * głównej), a nie w rzędzie wyłączników obwodowych, więc dostaje własny `GlyphSpec`
+ * zamiast iść przez `GLYPHS.generic`. Współrzędne własne (nie z pliku CAD), w siatce
+ * 0–100 dopasowanej stylem do reszty (`GENERIC` niżej korzysta z tej samej siatki).
+ */
+const LAMPKA: GlyphSpec = {
+  axisX: 50,
+  topY: 0,
+  bottomY: 100,
+  rightX: 50 + 16,
+  Paths: () => (
+    <GlyphGroup>
+      <path d="M50 0L50 34" />
+      <path d="M50 66L50 100" />
+      <circle cx={50} cy={50} r={16} />
+      <path d="M42 42L58 58" />
+      <path d="M58 42L42 58" />
+    </GlyphGroup>
+  ),
+};
+
+export const GLYPHS = { mcb: MCB, main: MAIN_SWITCH, spd: SPD, rcd: RCD, lampka: LAMPKA, generic: GENERIC };
 
 /**
  * Wstawia symbol na oś `x`, rozciągnięty dokładnie od `top` do `bottom`. Skala wynika

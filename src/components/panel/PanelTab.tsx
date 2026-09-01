@@ -35,8 +35,18 @@ const SELECTIVITY_STYLE: Record<SelectivityLevel, { bg: string; fg: string; Icon
 const PER_ROW_OPTIONS = [8, 12, 18, 24];
 const MAIN_RATING_OPTIONS = [25, 32, 40, 63, 80];
 
-let manualSeq = 0;
-const nextManualUid = () => `manual-${++manualSeq}`;
+/** Kolejny wolny `uid` dla ręcznie dodawanego aparatu, wyliczony z AKTUALNEJ listy —
+ *  nie z licznika modułowego. Licznik przeżywał tylko do przeładowania strony: aparaty
+ *  są trwałe (w store/projekcie), więc po odświeżeniu i dodaniu kolejnego aparatu
+ *  liczenie od zera nadawało `manual-1` po raz drugi — dwa aparaty z tym samym `uid`
+ *  psuły edycję/usuwanie/przenoszenie (React nie odróżniał ich po kluczu). */
+function nextManualUid(existing: PanelDevice[]): string {
+  const numery = existing
+    .map((d) => /^manual-(\d+)$/.exec(d.uid)?.[1])
+    .filter((n): n is string => n !== undefined)
+    .map(Number);
+  return `manual-${(numery.length ? Math.max(...numery) : 0) + 1}`;
+}
 
 /**
  * Rozdzielnica elektryczna: rzut czołowy budowany automatycznie z obwodów
@@ -240,7 +250,7 @@ export function PanelTab() {
       return [
         ...prev,
         {
-          uid: nextManualUid(),
+          uid: nextManualUid(prev),
           kind: def.key,
           manual: true,
           tag,

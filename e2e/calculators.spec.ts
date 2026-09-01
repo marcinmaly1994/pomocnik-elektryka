@@ -88,7 +88,7 @@ test("dobór zabezpieczenia do przekroju 2,5 mm² daje B16 i rozpisany warunek I
   await page.getByRole("button", { name: /^Dobór zabezpieczenia/ }).click();
 
   const result = page.locator(".pe-result").first();
-  await expect(result).toContainText("B16 1P+N");
+  await expect(result).toContainText("B16 1P");
   await expect(result).toContainText("Ib 8.70 A");
   await expect(result).toContainText("Iz 23 A");
   await expect(result).toContainText("metoda B2");

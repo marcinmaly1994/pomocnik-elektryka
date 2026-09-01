@@ -23,7 +23,7 @@ const DEVICE_H = 124;
 const TAG_H = 34; // pas nad aparatami: oznaczenie + klamra RCD
 /** Pas pod aparatami: przekrój, faza i nazwa obwodu. Wysoki, bo przy aparatach
  *  1-modułowych nazwa nie mieści się poziomo i jest pisana pionowo. */
-const LABEL_H = 82;
+const LABEL_H = 90;
 /** Poniżej tej szerokości nazwa obwodu idzie pionowo — inaczej podpisy sąsiednich
  *  aparatów nachodzą na siebie i zlewają się w nieczytelny ciąg. */
 const NARROW_W = 62;
@@ -164,15 +164,17 @@ function DeviceFace({ device, w, accent }: { device: PanelDevice; w: number; acc
   }
 
   if (device.kind === "lampka") {
-    // Lampka sygnalizacyjna: kolorowy klosz, nie dźwignia. Wariant 3-fazowy
-    // (etykieta „L1-L2-L3”) dostaje trzy małe klosze w barwach faz, pojedynczy
-    // obwód — jeden większy klosz w kolorze aparatu.
+    // Lampka sygnalizacyjna: kolorowy klosz, nie dźwignia. Zawsze zielona —
+    // to kolor „załączone/OK", niezależnie od tego, czy klosz jest jeden
+    // (obwód pojedynczy), czy trzy (wariant 3-fazowy „L1-L2-L3"). Wcześniej
+    // wariant 3-fazowy dostawał barwy żył (brąz/czarny/szary) — myliło to
+    // kolor lampki z kolorem przewodu, którego tu w ogóle nie widać.
     const trojfazowa = device.label.includes("L1");
     return trojfazowa ? (
       <>
         {(["L1", "L2", "L3"] as const).map((p, i) => (
           <g key={p}>
-            <circle cx={w / 2 + (i - 1) * 9} cy={leverY} r={4.4} fill={PHASE_COLORS[p]} />
+            <circle cx={w / 2 + (i - 1) * 9} cy={leverY} r={4.4} fill={accent} />
             <circle cx={w / 2 + (i - 1) * 9 - 1.3} cy={leverY - 1.3} r={1.3} fill="#fff" fillOpacity={0.6} />
           </g>
         ))}
@@ -468,7 +470,14 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                           Poziomo pod szerokim aparatem, pionowo pod wąskim. */}
                       {(() => {
                         const waski = w < NARROW_W;
-                        const naLinie = waski ? 20 : Math.max(6, Math.floor(w / 3.7));
+                        // Przy wąskim aparacie podpis stoi pionowo, obrócony o 90° — jego
+                        // długość zjada wysokość PASA POD APARATEM, nie jego szerokość.
+                        // 20 znaków (budżet dla poziomego podpisu) było za dużo: podpis
+                        // w granicach 12–20 znaków mieścił się w jednej linii wg tego progu,
+                        // ale ta jedna, nieskrócona kolumna i tak wystawała poniżej `LABEL_H`
+                        // i zachodziła na rząd aparatów niżej. 12 znaków to w przybliżeniu
+                        // to, co faktycznie mieści się w dostępnej wysokości przy tym foncie.
+                        const naLinie = waski ? 12 : Math.max(6, Math.floor(w / 3.7));
                         const [l1, l2] = zawijNaDwieLinie(d.caption, naLinie);
                         if (waski) {
                           return (

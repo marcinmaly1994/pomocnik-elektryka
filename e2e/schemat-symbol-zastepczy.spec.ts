@@ -63,7 +63,6 @@ for (const [kind, prefix] of [
   ["ppoz", "Q"],
   ["przekaznik", "K"],
   ["zasilacz", "T"],
-  ["lampka", "P"],
 ]) {
   test(`„${kind}" dodany ręcznie trafia na schemat (prefiks ${prefix})`, async ({ page }) => {
     await zbudujReczniePustaRozdzielnice(page);
@@ -82,4 +81,41 @@ test("rezerwa (zaślepka) NIE dostaje gałęzi na schemacie — nie ma czego rys
   await page.getByRole("button", { name: "Schemat", exact: true }).click();
   const svg = page.locator("svg:has(#incoming-supply)");
   await expect(svg.locator('[id^="circuit-"]')).toHaveCount(0);
+});
+
+/**
+ * Lampka sygnalizacyjna dostała WŁASNY symbol (okrąg z krzyżykiem, IEC 60617-06) i
+ * własne miejsce na schemacie — odejście wprost z szyny głównej, w tym samym rzędzie
+ * co RCD/SPD, a nie w rzędzie wyłączników obwodowych (`circuit-…`). Zgłoszenie
+ * użytkownika: lampka miała się znaleźć „na tej samej wysokości co RCD lub ogranicznik
+ * przepięć".
+ */
+test("lampka sygnalizacyjna: własny symbol, na wysokości RCD — nie w rzędzie wyłączników obwodowych", async ({ page }) => {
+  await zbudujReczniePustaRozdzielnice(page);
+  await dodajReczny(page, "mcb"); // F1 — punkt odniesienia: rząd wyłączników obwodowych
+  await dodajReczny(page, "lampka"); // P1
+
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
+  const svg = page.locator("svg:has(#incoming-supply)");
+
+  // Lampka NIE idzie już przez symbol zastępczy w rzędzie MCB.
+  await expect(svg.locator('[id^="circuit-P"]')).toHaveCount(0);
+  const lampkaGroup = svg.locator('[id^="lampka-P"]');
+  await expect(lampkaGroup).toHaveCount(1);
+  await expect(lampkaGroup).toBeVisible();
+  await expect(lampkaGroup.locator("text").first()).toHaveText("P1");
+
+  // Symbol: okrąg z wpisanym krzyżykiem — odróżnialny zarówno od pełnego glifu MCB
+  // (same ścieżki/okręgi, bez krzyżyka), jak i od przerywanej ramki placeholdera.
+  await expect(lampkaGroup.locator("circle")).toHaveCount(1);
+  await expect(lampkaGroup.locator("rect")).toHaveCount(0);
+
+  // Sedno zgłoszenia: lampka stoi WYŻEJ (mniejsze y) niż wyłącznik obwodowy F1 —
+  // w rzędzie RCD/SPD pod szyną główną, nie w rzędzie wyłączników.
+  const circuitGroup = svg.locator('[id^="circuit-F"]');
+  const lampkaBox = await lampkaGroup.boundingBox();
+  const circuitBox = await circuitGroup.boundingBox();
+  expect(lampkaBox).toBeTruthy();
+  expect(circuitBox).toBeTruthy();
+  expect(lampkaBox!.y).toBeLessThan(circuitBox!.y);
 });

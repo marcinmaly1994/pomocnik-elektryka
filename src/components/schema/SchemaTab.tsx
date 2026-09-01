@@ -19,6 +19,7 @@ const MUTED = "#6B7684";
 const LEAF_W = 96;
 const RCD_MIN_W = 130;
 const SPD_COL_W = 108;
+const LAMPKA_COL_W = 90;
 const GROUP_GAP = 50;
 const MARGIN_X = 50;
 
@@ -54,6 +55,13 @@ const Y_TERMINAL_TEXT = Y_WIRE_END + 14;
 // bo należy do topologii schematu, a nie do samego aparatu.
 const Y_SPD_BOTTOM = Y_BUS + SPD_H;
 const Y_SPD_GROUND = Y_SPD_BOTTOM + 12;
+// Lampka sygnalizacyjna stoi w TYM SAMYM rzędzie co RCD/SPD (odejście wprost z szyny
+// głównej), nie w rzędzie wyłączników obwodowych — stąd własna wysokość zaczepiona o
+// Y_BUS, a nie o Y_SUBBUS. Rozmiar symbolu jak przy SPD (prosty aparat bez podszyny
+// na dalsze odejścia); dalej w dół idzie już tylko przewód do szyn N/PE, jak przy
+// zwykłym obwodzie odbiorczym.
+const LAMPKA_H = SPD_H;
+const Y_LAMPKA_BOTTOM = Y_BUS + LAMPKA_H;
 
 const MCB_LABEL_DX = labelOffset(GLYPHS.mcb, Y_SUBBUS, Y_MCB_BOTTOM);
 // Odsunięcie etykiety przy symbolu zastępczym (GLYPHS.generic) — liczone osobno, bo ta
@@ -181,6 +189,29 @@ function SpdBranch({ col, device }: { col: Column; device: PanelDevice }) {
   );
 }
 
+/**
+ * Lampka sygnalizacyjna — odejście wprost z szyny głównej, na tej samej wysokości co
+ * RCD i SPD (patrz komentarz przy `LAMPKA_H`), a nie w rzędzie wyłączników obwodowych.
+ * Przewód ciągnie się dalej w dół, przez szyny N/PE, aż do zwykłego zakończenia — tak
+ * jak przy każdym innym odbiorniku jednofazowym.
+ */
+function LampkaBranch({ col, device }: { col: Column; device: PanelDevice }) {
+  const x = col.cx;
+  const dx = labelOffset(GLYPHS.lampka, Y_BUS, Y_LAMPKA_BOTTOM);
+  return (
+    <g id={`lampka-${device.tag}`}>
+      <CadGlyph spec={GLYPHS.lampka} x={x} top={Y_BUS} bottom={Y_LAMPKA_BOTTOM} />
+      <line x1={x} y1={Y_LAMPKA_BOTTOM} x2={x} y2={Y_WIRE_END} stroke={STROKE} strokeWidth={LINE_W} />
+      <text x={x + dx} y={Y_BUS + 34} fontSize={10.5} fontWeight={700} fill={STROKE}>
+        {device.tag}
+      </text>
+      <text x={x + dx} y={Y_BUS + 46} fontSize={9} fill={MUTED}>
+        {opisZBiegunami(device)}
+      </text>
+    </g>
+  );
+}
+
 /** Wyłącznik różnicowoprądowy — symbol wgrany przez użytkownika (RCD.svg). */
 function RcdBranch({ col, device }: { col: Column; device: PanelDevice }) {
   const x = col.cx;
@@ -259,15 +290,17 @@ function PeTaps({ columns }: { columns: Column[] }) {
 }
 
 /**
- * Czy aparat rysujemy jako gałąź odpływową pod szyną (MCB, RCBO, stycznik, lampka…).
- * Wyklucza aparaty, które mają już własne, osobne miejsce na schemacie (main/spd/rcd)
- * oraz `blank` — zaślepka nie jest prawdziwym aparatem, nie ma czego rysować. Wcześniej
- * ten filtr sprawdzał wyłącznie `kind === "mcb"`, więc cały reszta katalogu (stycznik,
- * przekaźnik, zasilacz, lampka, CZF, rozłącznik ppoż, RCBO…) po prostu znikała ze
- * schematu bez żadnego ostrzeżenia.
+ * Czy aparat rysujemy jako gałąź odpływową pod szyną (MCB, RCBO, stycznik…).
+ * Wyklucza aparaty, które mają już własne, osobne miejsce na schemacie (main/spd/rcd/
+ * lampka) oraz `blank` — zaślepka nie jest prawdziwym aparatem, nie ma czego rysować.
+ * Wcześniej ten filtr sprawdzał wyłącznie `kind === "mcb"`, więc cały reszta katalogu
+ * (stycznik, przekaźnik, zasilacz, lampka, CZF, rozłącznik ppoż, RCBO…) po prostu
+ * znikała ze schematu bez żadnego ostrzeżenia. Lampka dostała WŁASNE miejsce (patrz
+ * `LampkaBranch`) zamiast rzędu wyłączników obwodowych, więc wypadła z tego filtru tak
+ * samo jak main/spd/rcd.
  */
 function jestOdplywem(d: PanelDevice): boolean {
-  return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank";
+  return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank" && d.kind !== "lampka";
 }
 
 /** Jeden obwód odbiorczy: wyłącznik nadprądowy (symbol MCB użytkownika), znacznik przewodu i nazwa odbiornika. */
@@ -318,11 +351,13 @@ interface RcdBlock {
 }
 
 interface Column {
-  kind: "spd" | "rcd";
+  kind: "spd" | "rcd" | "lampka";
   width: number;
   x0: number;
   cx: number;
   block?: RcdBlock;
+  /** Tylko dla `kind: "lampka"` — jedna kolumna na jeden aparat. */
+  device?: PanelDevice;
 }
 
 /**
@@ -339,6 +374,12 @@ function circuitX(col: Column, i: number): number {
 function circuitXs(columns: Column[]): number[] {
   const out: number[] = [];
   columns.forEach((col) => {
+    // Lampka kończy się jak zwykły odbiornik — przewodem do szyn N/PE — więc dostaje
+    // odczep PE tak samo jak każdy obwód, mimo że stoi w rzędzie RCD/SPD, nie MCB.
+    if (col.kind === "lampka") {
+      out.push(col.cx);
+      return;
+    }
     if (col.kind !== "rcd" || !col.block) return;
     col.block.mcbs.forEach((_, i) => out.push(circuitX(col, i)));
   });
@@ -525,6 +566,7 @@ export function SchemaTab() {
   const mainDevice = devices.find((d) => d.kind === "main");
   const spdDevice = devices.find((d) => d.kind === "spd");
   const rcdDevices = devices.filter((d) => d.kind === "rcd");
+  const lampkaDevices = devices.filter((d) => d.kind === "lampka");
 
   /**
    * Grupy różnicówek wyprowadzone z SAMYCH APARATÓW (po `rcdTag`), a nie z obwodów
@@ -547,7 +589,7 @@ export function SchemaTab() {
   );
   if (pozaRcd.length) rcdBlocks.push({ device: undefined, mcbs: pozaRcd });
 
-  const pusty = !mainDevice || rcdBlocks.every((b) => b.mcbs.length === 0);
+  const pusty = !mainDevice || (rcdBlocks.every((b) => b.mcbs.length === 0) && lampkaDevices.length === 0);
   if (pusty) {
     return (
       <div className="pe-card p-8 text-center">
@@ -569,6 +611,13 @@ export function SchemaTab() {
     columns.push({ kind: "spd", width: SPD_COL_W, x0: cursorX, cx: cursorX + SPD_COL_W / 2 });
     cursorX += SPD_COL_W + GROUP_GAP;
   }
+  // Lampki stoją obok SPD, w tym samym rzędzie (odejście wprost z szyny głównej) —
+  // przed grupami RCD, tak jak SPD, bo to też ochrona/sygnalizacja całej rozdzielnicy,
+  // nie pojedynczy obwód odbiorczy.
+  lampkaDevices.forEach((device) => {
+    columns.push({ kind: "lampka", width: LAMPKA_COL_W, x0: cursorX, cx: cursorX + LAMPKA_COL_W / 2, device });
+    cursorX += LAMPKA_COL_W + GROUP_GAP;
+  });
   rcdBlocks.forEach((block) => {
     const w = Math.max(block.mcbs.length * LEAF_W, RCD_MIN_W);
     columns.push({ kind: "rcd", width: w, x0: cursorX, cx: cursorX + w / 2, block });
@@ -629,6 +678,8 @@ export function SchemaTab() {
           {columns.map((col) =>
             col.kind === "spd" && spdDevice ? (
               <SpdBranch key="spd" col={col} device={spdDevice} />
+            ) : col.kind === "lampka" && col.device ? (
+              <LampkaBranch key={col.device.uid} col={col} device={col.device} />
             ) : col.block ? (
               <g key={col.block.device?.uid ?? `bez-rcd-${col.x0}`}>
                 {col.block.device && <RcdBranch col={col} device={col.block.device} />}

@@ -51,7 +51,7 @@ export const MANUAL_DEVICE_TYPES: ManualDeviceType[] = [
   { key: "stycznik", label: "Stycznik modułowy", prefix: "K", modules: 2, poles: "2P", defLabel: "20A", accent: "#3B8C63", ratings: ["16A", "20A", "25A", "40A", "63A"] },
   { key: "przekaznik", label: "Przekaźnik bistabilny", prefix: "K", modules: 1, poles: "1P", defLabel: "16A", accent: "#3B8C63", ratings: ["10A", "16A"] },
   { key: "zasilacz", label: "Zasilacz modułowy", prefix: "T", modules: 2, poles: "—", defLabel: "12V DC", accent: "#0F8A9E", ratings: ["12V DC", "24V DC", "24V AC"] },
-  { key: "lampka", label: "Lampka sygnalizacyjna", prefix: "P", modules: 1, poles: "3P", defLabel: "L1-L2-L3", accent: "#B98C2F", ratings: ["L1-L2-L3", "230V"] },
+  { key: "lampka", label: "Lampka sygnalizacyjna", prefix: "P", modules: 1, poles: "3P", defLabel: "L1-L2-L3", accent: "#3B8C63", ratings: ["L1-L2-L3", "230V"] },
   { key: "blank", label: "Rezerwa (zaślepka)", prefix: "", modules: 1, poles: "—", defLabel: "", accent: "#94A3B8", ratings: [""] },
 ];
 

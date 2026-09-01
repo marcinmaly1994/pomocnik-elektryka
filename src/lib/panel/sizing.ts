@@ -82,7 +82,7 @@ export interface SizedCircuit {
   aparat: {
     charakterystyka: Curve;
     In_A: number;
-    bieguny: "1P" | "1P+N" | "3P" | "3P+N";
+    bieguny: "1P" | "3P";
   } | null;
   /** Obciążalność po współczynnikach k1·k2 [A]. */
   Iz_A: number | null;
@@ -363,7 +363,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
   }
 
   const Ia = CURVE_MULTIPLIER[curve] * chosen.In;
-  const poles: "1P+N" | "3P+N" = phases === "3" ? "3P+N" : "1P+N";
+  const poles: "1P" | "3P" = phases === "3" ? "3P" : "1P";
 
   const hasError = warnings.some((w) => w.level === "error");
   const status: SizingStatus = hasError ? "error" : warnings.length > 0 ? "warn" : "ok";
@@ -436,7 +436,7 @@ export interface SizedBreaker {
   Iz_bazowa_A: number;
   metoda_odniesienia: ReferenceMethod;
   wspolczynniki: { k1_temperatura: number; k2_grupowanie: number };
-  aparat: { charakterystyka: Curve; In_A: number; bieguny: "1P+N" | "3P+N" } | null;
+  aparat: { charakterystyka: Curve; In_A: number; bieguny: "1P" | "3P" } | null;
   Ia_A: number | null;
   Zs_max_Ohm: number | null;
   status: SizingStatus;
@@ -519,7 +519,7 @@ export function sizeBreakerForSection(spec: BreakerSpec): SizedBreaker {
   }
 
   const Ia = CURVE_MULTIPLIER[curve] * In;
-  const poles: "1P+N" | "3P+N" = phases === "3" ? "3P+N" : "1P+N";
+  const poles: "1P" | "3P" = phases === "3" ? "3P" : "1P";
   const hasError = warnings.some((w) => w.level === "error");
 
   return {
@@ -593,7 +593,7 @@ export interface FeederSpec {
 export interface SizedFeeder {
   przekroj_mm2: Section | null;
   kabel: string | null;
-  aparat: { charakterystyka: Curve; In_A: number; bieguny: "1P+N" | "3P+N" } | null;
+  aparat: { charakterystyka: Curve; In_A: number; bieguny: "1P" | "3P" } | null;
   /** Obciążalność po współczynnikach k1·k2 [A]. */
   Iz_A: number | null;
   wspolczynniki: { k1_temperatura: number; k2_grupowanie: number };
@@ -712,7 +712,7 @@ export function sizeFeeder(spec: FeederSpec): SizedFeeder {
   return {
     przekroj_mm2: chosen.section,
     kabel: cableLabel(chosen.section, phases),
-    aparat: { charakterystyka: curve, In_A: chosen.In, bieguny: phases === "3" ? "3P+N" : "1P+N" },
+    aparat: { charakterystyka: curve, In_A: chosen.In, bieguny: phases === "3" ? "3P" : "1P" },
     Iz_A: round(chosen.Iz, 2),
     wspolczynniki: { k1_temperatura: round(k1, 3), k2_grupowanie: k2 },
     spadek_napiecia_pct: chosen.drop === null ? null : round(chosen.drop, 2),

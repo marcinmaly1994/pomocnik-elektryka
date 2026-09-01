@@ -54,11 +54,11 @@ test("rozdzielnica pokazuje przekrój i zabezpieczenie policzone, a nie wpisane 
   // działał, oba miałyby tę samą stałą z `computeCircuits`
   const socketRow = card.locator("tr", { hasText: "Obwód gniazd" }).first();
   await expect(socketRow).toContainText("2,5 mm²");
-  await expect(socketRow).toContainText("B16 1P+N");
+  await expect(socketRow).toContainText("B16 1P");
 
   const lightRow = card.locator("tr", { hasText: "Obwód oświetlenia" }).first();
   await expect(lightRow).toContainText("1,5 mm²");
-  await expect(lightRow).toContainText("B10 1P+N");
+  await expect(lightRow).toContainText("B10 1P");
 
   // Zs max wynika z charakterystyki: B10 → 230/(5·10) = 4,6 Ω, B16 → 230/(5·16) = 2,875 Ω
   await expect(lightRow).toContainText("4.6 Ω");

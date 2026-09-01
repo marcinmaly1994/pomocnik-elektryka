@@ -30,7 +30,7 @@ function sizedStub(over: Partial<SizedCircuit>): SizedCircuit {
     Ib_A: 10,
     przekroj_mm2: 2.5,
     kabel: "YDYp 3x2,5 mm²",
-    aparat: { charakterystyka: "B", In_A: 16, bieguny: "1P+N" },
+    aparat: { charakterystyka: "B", In_A: 16, bieguny: "1P" },
     Iz_A: 23,
     wspolczynniki: { k1_temperatura: 1, k2_grupowanie: 1 },
     spadek_napiecia_pct: 1,

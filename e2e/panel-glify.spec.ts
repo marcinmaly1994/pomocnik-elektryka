@@ -70,22 +70,24 @@ for (const kind of ["ovr", "ppoz", "stycznik", "przekaznik", "zasilacz", "lampka
   });
 }
 
-test("lampka sygnalizacyjna: wariant 3-fazowy rysuje trzy klosze w barwach faz", async ({ page }) => {
+test("lampka sygnalizacyjna: wariant 3-fazowy rysuje trzy klosze, wszystkie zielone (nie w barwach faz)", async ({ page }) => {
   await zbudujReczniePustaRozdzielnice(page);
   const svg = await dodajIZnajdzGrupe(page, "lampka"); // domyślna nastawa: L1-L2-L3
 
-  const kolory = await svg.evaluate((el) => {
-    const brazowy = el.querySelectorAll('circle[fill="#7B4B2A"]').length; // L1
-    const czarny = el.querySelectorAll('circle[fill="#2B2B2B"]').length; // L2
-    const szary = el.querySelectorAll('circle[fill="#8A8A8A"]').length; // L3
-    return { brazowy, czarny, szary };
-  });
-  expect(kolory.brazowy).toBeGreaterThan(0);
-  expect(kolory.czarny).toBeGreaterThan(0);
-  expect(kolory.szary).toBeGreaterThan(0);
+  // Kolor lampki (#3B8C63 — zielony, „załączone/OK") jest ten sam w KAŻDYM wariancie —
+  // wcześniej trzy klosze wariantu 3-fazowego dostawały barwy żył (brąz/czarny/szary),
+  // co myliło kolor lampki z kolorem przewodu. r=4.4 jest promieniem WYŁĄCZNIE klosza
+  // lampki (DeviceFace) — odróżnia go od kropki fazy przy opisie obwodu (r=3) i od
+  // kropek legendy L1/L2/L3 na dole rysunku, które inaczej dałyby fałszywy pozytyw.
+  const kolory = await svg.evaluate((el) => ({
+    zielone: el.querySelectorAll('circle[r="4.4"][fill="#3B8C63"]').length,
+    fazowe: el.querySelectorAll('circle[r="4.4"][fill="#7B4B2A"], circle[r="4.4"][fill="#2B2B2B"], circle[r="4.4"][fill="#8A8A8A"]').length,
+  }));
+  expect(kolory.zielone).toBe(3);
+  expect(kolory.fazowe).toBe(0);
 });
 
-test("lampka sygnalizacyjna: wariant 230V rysuje pojedynczy klosz", async ({ page }) => {
+test("lampka sygnalizacyjna: wariant 230V rysuje pojedynczy zielony klosz", async ({ page }) => {
   await zbudujReczniePustaRozdzielnice(page);
   const kindSel = page.locator("select").filter({ has: page.locator('option:has-text("Wyłącznik nadprądowy")') });
   await kindSel.selectOption("lampka");
@@ -94,8 +96,8 @@ test("lampka sygnalizacyjna: wariant 230V rysuje pojedynczy klosz", async ({ pag
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
   const svg = page.getByRole("img", { name: "Widok czołowy rozdzielnicy" });
-  // Jeden klosz w kolorze aparatu (#B98C2F — bursztynowy, katalogowy akcent lampki),
-  // BEZ trzech osobnych klosz faz.
-  const klosze = await svg.evaluate((el) => el.querySelectorAll('circle[fill="#B98C2F"]').length);
+  // Jeden klosz w kolorze lampki (#3B8C63 — zielony, „załączone/OK"), BEZ trzech
+  // osobnych klosz faz.
+  const klosze = await svg.evaluate((el) => el.querySelectorAll('circle[fill="#3B8C63"]').length);
   expect(klosze).toBeGreaterThan(0);
 });
