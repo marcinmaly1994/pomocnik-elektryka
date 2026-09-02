@@ -119,7 +119,7 @@ test("element da się przeciągnąć w narzędziu „Wstaw element”, bez prze�
   await pustyProjekt(page);
   // Bez przyciągania do siatki: postawiony element ląduje DOKŁADNIE pod kursorem,
   // więc test może wrócić w to samo miejsce ekranu, żeby go złapać do przeciągnięcia.
-  await page.getByLabel("Przyciągaj do siatki").uncheck();
+  await page.getByLabel("Przyciągaj ściany do siatki").uncheck();
   await page.getByRole("button", { name: "Wstaw Element" }).click();
 
   const wrap = page.locator("div.overflow-auto.rounded-card.border").first();

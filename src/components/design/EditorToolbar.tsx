@@ -44,6 +44,10 @@ export interface EditorToolbarProps {
   /** Widoczność siatki — osobno od `snapOn`, patrz komentarz przy obu kontrolkach. */
   gridOn: boolean;
   onGridChange: (v: boolean) => void;
+  /** Ile metrów ma jedno oczko siatki, gotowe do wyświetlenia (np. „1 kratka = 1 m”).
+   *  `null`, gdy skala nie jest ustawiona — wtedy kratka nie znaczy żadnej długości.
+   *  Liczy rodzic, bo to on zna skalę kondygnacji; pasek tylko pokazuje. */
+  opisKrokuSiatki: string | null;
   pelnyEkran: boolean;
   onTogglePelnyEkran: () => void;
   /** Ręczny zapis projektu. `null`, gdy użytkownik nie jest zalogowany — wtedy
@@ -76,6 +80,7 @@ export function EditorToolbar({
   snapOn,
   onSnapChange,
   gridOn,
+  opisKrokuSiatki,
   onGridChange,
   onZapisz,
   onPdf,
@@ -148,15 +153,31 @@ export function EditorToolbar({
         <Grid3x3 size={15} className={gridOn ? "text-copper" : undefined} />
       </Button>
 
-      <label className="flex items-center gap-1.5 text-xs text-slate-500" title="Przyciągaj do siatki">
+      <label
+        className="flex items-center gap-1.5 text-xs text-slate-500"
+        title={
+          // Zakres wypisany wprost: przyciąganie NIE dotyczy elementów instalacji
+          // ani drzwi (patrz `withSnap` w DesignCanvas) — gniazdko przy futrynie
+          // miałoby przez nie odskakiwać nawet o pół metra.
+          `Przyciąga ściany i obrysy pomieszczeń do siatki — nie dotyczy gniazdek, łączników ani drzwi${
+            opisKrokuSiatki ? ` (${opisKrokuSiatki})` : ""
+          }`
+        }
+      >
         <input
           type="checkbox"
           checked={snapOn}
           onChange={(e) => onSnapChange(e.target.checked)}
-          aria-label="Przyciągaj do siatki"
+          aria-label="Przyciągaj ściany do siatki"
           className="accent-copper"
         />
-        Przyciągaj do siatki
+        Przyciągaj ściany do siatki
+        {/* Ile metrów ma oczko — WIDOCZNIE, nie tylko w tooltipie. Bez tego siatka
+            jest wyłącznie ozdobą: przy rysowaniu od zera jedna kratka to równo metr,
+            czyli najprostsza dostępna miarka, ale nikt się o tym nie dowiadywał i
+            dom wychodził w przypadkowej skali. Chowane na wąskim pasku, gdzie miejsca
+            starcza ledwie na same nazwy kontrolek. */}
+        {opisKrokuSiatki && <span className="hidden whitespace-nowrap text-slate-400 lg:inline">· {opisKrokuSiatki}</span>}
       </label>
 
       {/* Rozmiar SYMBOLI, nie powiększenie planu — to dwie różne rzeczy i dlatego

@@ -182,6 +182,24 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const clearScale = useProjectStore((s) => s.clearScale);
   const mpu = scaleOf(scales, activeFloorId); // metrów na jednostkę planu (null = brak kalibracji)
 
+  /**
+   * Ile metrów ma jedno oczko siatki — miarka podpisana wprost przy przełączniku
+   * przyciągania (patrz `EditorToolbar`).
+   *
+   * Przy rysowaniu od zera wychodzi równo 1 m i to jest cała pointa: siatka jest
+   * wtedy linijką, po której da się odmierzyć pokój, zamiast być samą kratką
+   * w tle. Dla wgranego, skalibrowanego rzutu wypada dowolna liczba — dlatego
+   * liczona ze skali, a nie wpisana na sztywno.
+   *
+   * Zera po przecinku obcinane, żeby najczęstszy przypadek czytał się „1 m",
+   * a nie „1,00 m”.
+   */
+  const opisKrokuSiatki = useMemo(() => {
+    if (mpu === null || !(mpu > 0)) return null;
+    const metry = (GRID * mpu).toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+    return `1 kratka = ${metry.replace(".", ",")} m`;
+  }, [mpu]);
+
   const floors = useProjectStore((s) => s.floors);
   const floorName = floors.find((f) => f.id === activeFloorId)?.name ?? "Kondygnacja";
 
@@ -266,6 +284,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [activeType, setActiveType] = useState<ElementType>("gniazdko");
   const [dedicated, setDedicated] = useState(false);
   const [gangsByType, setGangsByType] = useState<Partial<Record<ElementType, number>>>({});
+  /** Przyciąganie do siatki. Domyślnie WYŁĄCZONE, bo na wgranym podkładzie ściany
+   *  budynku nie leżą na oczkach siatki i przyciąganie tylko odciągałoby od rzutu.
+   *  Rysowanie od zera włącza je jawnie — patrz `startManualDrawing`. */
   const [snapOn, setSnapOn] = useState(false);
   /** Widoczność siatki — osobno od przyciągania. Domyślnie włączona, bo bez rzutu
    *  pod spodem to jedyny punkt odniesienia przy rysowaniu od zera. */
@@ -573,6 +594,23 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     !onboarding.facts.maNazwanePomieszczenie;
 
   /**
+   * Czy na TEJ kondygnacji nic jeszcze nie narysowano. Baner „Zacznij od wgrania
+   * rzutu" pytał dotąd wyłącznie o brak podkładu (`bgImageUrl`), więc po wybraniu
+   * drugiej, równorzędnej drogi startu („Narysuj dom samodzielnie") wisiał dalej —
+   * nad gotowymi ścianami, pomieszczeniami i elementami namawiał do wgrania rzutu,
+   * którego użytkownik świadomie nie ma. Podkład to podpowiedź na START, więc
+   * propozycja gaśnie z chwilą, gdy start faktycznie nastąpił.
+   *
+   * Liczy się KAŻDY narysowany obiekt, nie tylko elementy instalacji: same ściany
+   * bez ani jednego gniazdka to już rozpoczęty rzut.
+   *
+   * Świadomie per kondygnacja, nie per projekt — nowe piętro startuje puste i tam
+   * podkład znowu bywa najkrótszą drogą (patrz baner `needsRoomConfirmation` niżej,
+   * który działa dokładnie w tej samej sytuacji).
+   */
+  const kondygnacjaPusta = elements.length === 0 && walls.length === 0 && roomShapes.length === 0;
+
+  /**
    * Dopasowanie zoomu działa też wtedy, gdy kolumna płótna DOPIERO CO się
    * pojawiła. Dopóki trwa `showEntryScreen` albo przycinanie podkładu, ta
    * kolumna w ogóle nie jest zamontowana (`kolumnaPlotnaRef.current === null`),
@@ -640,6 +678,13 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   function startManualDrawing() {
     markOnboardingSeen();
     setScale(activeFloorId, MANUAL_DRAW_SCALE_MPU);
+    // Przy TEJ skali jedno oczko siatki to równo 1 metr (patrz MANUAL_DRAW_SCALE_MPU),
+    // więc przyciąganie przestaje być „pomocą w wyrównywaniu", a staje się sposobem
+    // rysowania w pełnych metrach — bez niego dom rysowany od zera wychodzi
+    // w przypadkowych wymiarach (4,37 m zamiast 4,40), których nikt nie zamierzał.
+    // Włączamy je tu, a nie w domyślnym stanie `snapOn`, bo na wgranym podkładzie
+    // przyciąganie przeszkadza: ściany na zdjęciu nie leżą na oczkach siatki.
+    setSnapOn(true);
     setToolMode("sciany");
     setCoachMark("sciany");
   }
@@ -1457,8 +1502,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           w pierwszym ekranie tak samo jak wcześniej — plan-upload.spec.ts pilnuje tylko
           POZYCJI (nad biblioteką, bez scrollowania), nie konkretnego kontenera.
           Zgaszony na czas `showEntryScreen`, który oferuje DOKŁADNIE ten sam wybór —
-          inaczej stałby POD nim i dublował go, czyli wracał do zgłoszonej bolączki. */}
-      {!bgImageUrl && !showEntryScreen && (
+          inaczej stałby POD nim i dublował go, czyli wracał do zgłoszonej bolączki.
+          Zgaszony też, gdy na kondygnacji cokolwiek już stoi (`kondygnacjaPusta`):
+          propozycja podkładu dotyczy STARTU, a po nim jest już tylko szumem. */}
+      {!bgImageUrl && !showEntryScreen && kondygnacjaPusta && (
         <div
           role="status"
           className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
@@ -1638,6 +1685,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         snapOn={snapOn}
         gridOn={gridOn}
         onGridChange={setGridOn}
+        opisKrokuSiatki={opisKrokuSiatki}
         onZapisz={session ? () => void saveToCloud({ reczny: true }) : null}
         zapisTrwa={cloudBusy}
         onSnapChange={setSnapOn}
