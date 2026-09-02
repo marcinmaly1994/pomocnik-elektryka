@@ -207,6 +207,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const rawDocHeader = useProjectStore((st) => st.docHeader);
   const projectName = useProjectStore((st) => st.projectName);
   const stageRef = useRef<Konva.Stage | null>(null);
+  /** Porzucenie podglądów żyjących WEWNĄTRZ płótna (prostokąt pomieszczenia, ramka
+   *  zaznaczania) — patrz `anulujPodgladRef` w DesignCanvas. Escape obsługujemy tutaj,
+   *  a tamten stan jest lokalny, więc bez tego kanału nie dało się go dosięgnąć. */
+  const anulujPodgladRef = useRef<(() => boolean) | null>(null);
   const glifyRef = useRef<HTMLDivElement>(null);
   const [podgladPdf, setPodgladPdf] = useState(false);
   const docHeader = resolveDocHeader(rawDocHeader, projectName);
@@ -840,7 +844,13 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         // i dopiero gdy nie ma czego porzucić — wychodzi z pełnego ekranu. Inaczej
         // jedno wciśnięcie kasowałoby niedokończoną ścianę I wyrzucało z trybu,
         // czyli karałoby za pomyłkę dwa razy.
+        // Najpierw płótno — jego podglądy (prostokąt pomieszczenia w trakcie
+        // przeciągania, ramka zaznaczania) żyją w stanie lokalnym DesignCanvas,
+        // więc czyszczenie stanu tutaj samo z siebie ich nie dotykało: narysowany
+        // obszar zostawał na ekranie mimo wciśniętego Escape.
+        const porzuconyPodglad = anulujPodgladRef.current?.() ?? false;
         const bylCosDoPorzucenia =
+          porzuconyPodglad ||
           drawingWall.length > 0 || drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
         setDrawingWall([]);
         setDrawingRoomPoints([]);
@@ -1916,6 +1926,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         >
           <DesignCanvas
             stageRef={stageRef}
+            anulujPodgladRef={anulujPodgladRef}
             elements={elements}
             walls={walls}
             roomShapes={roomShapes}

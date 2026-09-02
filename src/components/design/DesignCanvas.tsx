@@ -73,6 +73,21 @@ interface DesignCanvasProps {
    *  (rasteryzacja przez `stage.toCanvas()`). Rysowaniem steruje nadal wyłącznie
    *  ten komponent; ref jest tu podglądem, nie kanałem sterowania. */
   stageRef?: React.MutableRefObject<Konva.Stage | null>;
+  /**
+   * Kanał do PORZUCENIA podglądów rysowanych wewnątrz tego komponentu — płótno
+   * wstawia tu swoją funkcję, rodzic ją wywołuje (zwraca `true`, jeśli faktycznie
+   * było co porzucić).
+   *
+   * Potrzebny, bo Escape obsługuje DesignTab, a prostokąt pomieszczenia i ramka
+   * zaznaczania żyją w stanie LOKALNYM płótna — celowo, bo zmieniają się przy każdym
+   * ruchu myszy i wyniesienie ich wyżej przerysowywałoby całą zakładkę na każdą
+   * klatkę przeciągania. Bez tego kanału Escape czyścił stan rodzica, a narysowany
+   * prostokąt zostawał na ekranie.
+   *
+   * Ten sam wzorzec co `stageRef` wyżej: zwykły ref w propsie, nie `forwardRef` —
+   * żeby oba wyjścia z płótna wyglądały tak samo.
+   */
+  anulujPodgladRef?: React.MutableRefObject<(() => boolean) | null>;
   elements: InstallationElement[];
   walls: Wall[];
   roomShapes: RoomShape[];
@@ -253,6 +268,7 @@ function centroid(points: Point[]): Point {
 
 export function DesignCanvas({
   stageRef,
+  anulujPodgladRef,
   elements,
   walls,
   roomShapes,
@@ -379,6 +395,48 @@ export function DesignCanvas({
   /** Prostokąt domknięty przeciągnięciem — gasi `click`, który Konva wysyła zaraz
    *  po `mouseup` (patrz `handleStageMouseUp`). */
   const roomRectJustDrawnRef = useRef(false);
+
+  /**
+   * Porzuca WSZYSTKO, co jest w trakcie rysowania wewnątrz płótna: podgląd prostokąta
+   * pomieszczenia i ramkę zaznaczania. Zwraca, czy faktycznie było co porzucać —
+   * rodzic potrzebuje tego do reguły „Escape robi jedną rzecz naraz" (najpierw
+   * porzuca rysowanie, dopiero potem wychodzi z pełnego ekranu).
+   *
+   * Zerowanie KOTWIC (`*StartRef`), nie tylko widocznego podglądu, jest tu istotne:
+   * Escape wciśnięty z wciąż wciśniętym przyciskiem myszy zostawiał kotwicę, więc
+   * puszczenie przycisku i tak zakładało pomieszczenie — mimo że użytkownik właśnie
+   * powiedział „anuluj". `handleStageMouseUp` wychodzi bez efektu, gdy kotwica jest
+   * pusta, więc samo jej wyczyszczenie wystarczy.
+   */
+  function anulujPodglad(): boolean {
+    const przeciaganieProstokata = roomRectStartRef.current !== null;
+    const bylo = przeciaganieProstokata || roomRect !== null || marqueeStartRef.current !== null || marqueeRect !== null;
+
+    // Po `mouseup` Konva wyśle jeszcze `click`. Tylko przy PRZERWANYM PRZECIĄGANIU
+    // trzeba go zjeść — inaczej puszczenie przycisku od razu stawiałoby kotwicę
+    // nowego prostokąta w tym samym miejscu. Przy anulowaniu bez wciśniętej myszy
+    // (tryb dwóch kliknięć) tej flagi NIE wolno ustawiać, bo zjadłaby następne,
+    // całkiem już zamierzone kliknięcie użytkownika.
+    if (przeciaganieProstokata) roomRectJustDrawnRef.current = true;
+
+    roomRectStartRef.current = null;
+    roomRectRef.current = null;
+    marqueeStartRef.current = null;
+    marqueeRectRef.current = null;
+    setRoomRect(null);
+    setMarqueeRect(null);
+    return bylo;
+  }
+
+  // Bez tablicy zależności — funkcja domyka się nad świeżym stanem przy każdym
+  // renderze, więc ref musi wskazywać na tę najnowszą wersję, a nie na pierwszą.
+  useEffect(() => {
+    if (!anulujPodgladRef) return;
+    anulujPodgladRef.current = anulujPodglad;
+    return () => {
+      anulujPodgladRef.current = null;
+    };
+  });
   // Pozycja kursora w trybie wieloboku — do „gumowej" linii od ostatniego punktu i do
   // podświetlenia punktu startowego, gdy kolejny klik zamknie figurę.
   const [roomCursor, setRoomCursor] = useState<Point | null>(null);
