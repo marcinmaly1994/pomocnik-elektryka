@@ -161,6 +161,16 @@ export interface Circuit {
 
 export interface RcdGroup {
   id: string;
+  /**
+   * Znamionowy prąd RÓŻNICOWY grupy („30mA") — sama czułość, BEZ prądu
+   * znamionowego aparatu.
+   *
+   * Amper dobiera się do rozłącznika głównego (`rcdRatingFor` w lib/panel/devices.ts)
+   * i tam jest jego jedyne źródło. Dopóki to pole niosło pełne oznaczenie „40A/30mA",
+   * były dwa: aparat wychodził na froncie rozdzielnicy z etykietą „63A" i podpisem
+   * „Wyłącznik różnicowoprądowy 40A/30mA", czyli z dwiema różnymi wartościami tej
+   * samej wielkości — a podpis jest tym, z czym idzie się do sklepu.
+   */
   rating: string;
   circuits: Circuit[];
 }

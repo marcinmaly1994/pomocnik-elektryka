@@ -164,11 +164,13 @@ export function computeLowVoltage(elements: InstallationElement[]): LowVoltageSu
   }));
 }
 
-/** Grupuje obwody po maks. 6 na jeden wyłącznik różnicowoprądowy 40A/30mA. */
+/** Grupuje obwody po maks. 6 na jeden wyłącznik różnicowoprądowy 30 mA.
+ *  Prąd ZNAMIONOWY aparatu dobiera `rcdRatingFor` w devices.ts wg rozłącznika
+ *  głównego — tu ustalamy tylko czułość (patrz `RcdGroup.rating`). */
 export function computeRcdGroups(circuits: Circuit[]): RcdGroup[] {
   const groups: RcdGroup[] = [];
   for (let i = 0; i < circuits.length; i += 6) {
-    groups.push({ id: "rcd" + (groups.length + 1), rating: "40A/30mA", circuits: circuits.slice(i, i + 6) });
+    groups.push({ id: "rcd" + (groups.length + 1), rating: "30mA", circuits: circuits.slice(i, i + 6) });
   }
   return groups;
 }

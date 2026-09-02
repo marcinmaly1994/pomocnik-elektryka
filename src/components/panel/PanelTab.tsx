@@ -175,6 +175,24 @@ export function PanelTab() {
   );
   const maxPhase = Math.max(phaseLoad.L1, phaseLoad.L2, phaseLoad.L3, 1);
   const phaseSpread = Math.round((maxPhase - Math.min(phaseLoad.L1, phaseLoad.L2, phaseLoad.L3)) * 10) / 10;
+  /**
+   * Czy obciążenie faktycznie jest rozłożone równo — liczone z UDZIAŁÓW
+   * (`spreadPct`), nie z amperów.
+   *
+   * Sam próg amperowy (`phaseSpread > 32`) mówi tylko, czy asymetria zagraża
+   * przewodowi N i przyłączu, i przy domowej instalacji nie zadziała nigdy. Brany
+   * za miarę „równomierności" twierdził rzeczy wprost sprzeczne z tabelką nad nim:
+   * dwa obwody po 6.5 A dawały L1 50% / L2 50% / L3 0% i podpis „obciążenie
+   * rozłożone równomiernie".
+   *
+   * 15 pkt proc. przy trzech fazach to odchyłka rzędu 40/33/27% — jeszcze bez
+   * znaczenia praktycznego, a już wyraźnie inna od 50/50/0.
+   */
+  const rozlozoneRowno = balance.spreadPct <= 15;
+  /** Faza, na której jest najwięcej miejsca — konkretna wskazówka zamiast samego
+   *  „rozważ przepięcie". Przy remisie bierze pierwszą, kolejność L1→L3 jest tu
+   *  bez znaczenia, bo obie są tak samo dobre. */
+  const najlzejszaFaza = (["L1", "L2", "L3"] as const).reduce((a, b) => (phaseLoad[b] < phaseLoad[a] ? b : a));
 
   function autoBalance() {
     commitPanelSnapshot();
@@ -500,7 +518,13 @@ export function PanelTab() {
             <div className="mt-2 text-[11px]" style={{ color: phaseSpread > 32 ? "#A2352C" : "#64748B" }}>
               {phaseSpread > 32
                 ? `Różnica między najbardziej i najmniej obciążoną fazą wynosi ${phaseSpread} A — rozważ przepięcie obwodów lub użyj „Wyrównaj fazy”.`
-                : `Rozrzut między fazami: ${phaseSpread} A (${balance.spreadPct} pkt proc.) — obciążenie rozłożone równomiernie.`}
+                : rozlozoneRowno
+                  ? `Rozrzut między fazami: ${phaseSpread} A (${balance.spreadPct} pkt proc.) — obciążenie rozłożone równomiernie.`
+                  : // Świadomie BEZ namawiania do przepinania: przy dwóch obwodach na trzy fazy
+                    // jedna zostanie pusta niezależnie od tego, jak je poprzekładać, więc rada
+                    // „wyrównaj" byłaby nie do wykonania. Przy tak małych prądach asymetria i
+                    // tak nie zmienia doboru — liczy się dopiero przy dokładaniu kolejnych obwodów.
+                    `Rozrzut między fazami: ${phaseSpread} A (${balance.spreadPct} pkt proc.) — obciążenie nierówne, ale przy tych prądach bez wpływu na dobór. Kolejne obwody dokładaj od fazy ${najlzejszaFaza}.`}
             </div>
           </div>
         )}

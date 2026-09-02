@@ -143,7 +143,10 @@ export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevices
       modules: supply3f ? 4 : 2,
       label: `${rcdRating}A`,
       poles: supply3f ? "4P" : "2P",
-      caption: `Wyłącznik różnicowoprądowy ${r.rating}`,
+      // Pełne oznaczenie składane z JEDNEGO źródła prądu znamionowego (`rcdRating`,
+      // ten sam, co trafia na etykietę aparatu) i czułości grupy — inaczej front
+      // rozdzielnicy i podpis pod nim podawały dwa różne ampery.
+      caption: `Wyłącznik różnicowoprądowy ${rcdRating}A/${r.rating}`,
       phase: supply3f ? "3F" : "L1",
       key: `rcd-${r.id}`,
     });
