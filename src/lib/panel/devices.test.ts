@@ -91,6 +91,21 @@ describe("buildPanelDevices", () => {
     const uids = new Set(devices.map((d) => d.uid));
     expect(uids.size).toBe(devices.length);
   });
+
+  it("prąd znamionowy różnicówki rośnie razem z rozłącznikiem głównym", () => {
+    // Wcześniej różnicówka miała rating na sztywno 63A (3-fazowe) / 40A (1-fazowe),
+    // niezależnie od wybranego rozłącznika głównego — przy 80 A dawało to różnicówkę
+    // słabszą niż aparat nadrzędny, czyli dokładnie błąd, który wykrywa reguła 3
+    // w `computeSelectivity` („Różnicówka niezabezpieczona przed przeciążeniem").
+    const rcd80 = buildPanelDevices(rcdGroups, { supply3f: true, mainRating: 80 }).find((d) => d.kind === "rcd");
+    expect(rcd80?.label).toBe("80A");
+
+    const rcd40main = buildPanelDevices(rcdGroups, { supply3f: true, mainRating: 40 }).find((d) => d.kind === "rcd");
+    expect(rcd40main?.label).toBe("63A"); // nie schodzi poniżej typowego minimum dla 3-fazowej
+
+    const rcd1f80 = buildPanelDevices(rcdGroups, { supply3f: false, mainRating: 80 }).find((d) => d.kind === "rcd");
+    expect(rcd1f80?.label).toBe("80A");
+  });
 });
 
 describe("computePhaseLoad", () => {

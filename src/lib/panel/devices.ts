@@ -34,6 +34,11 @@ export interface ManualDeviceType {
  *  T — zasilacze/transformatory, P — sygnalizacja. */
 export const MANUAL_DEVICE_TYPES: ManualDeviceType[] = [
   { key: "mcb", label: "Wyłącznik nadprądowy", prefix: "F", modules: 1, poles: "1P", defLabel: "B16", accent: "#2D5A8C", ratings: ["B6", "B10", "B13", "B16", "B20", "B25", "C10", "C16", "C20", "C25", "C32"] },
+  // Domyślnie 3P/3 moduły (wariant 3-fazowy) — przy zmianie na 1P w edycji aparatu
+  // `SUGEROWANE_MODULY` w EditDeviceModal sam przeliczy szerokość na 1 moduł. Liczba
+  // biegunów wybiera też symbol na schemacie: `GLYPHS.rozBezp3f` z trzema kreskami
+  // wkładki dla 3P, `rozBezp1f` z jedną dla reszty (patrz `CircuitBranch` w SchemaTab).
+  { key: "rozBezp", label: "Rozłącznik izolacyjny bezpiecznikowy", prefix: "Q", modules: 3, poles: "3P", defLabel: "gG 63A", accent: "#2D5A8C", ratings: ["gG 16A", "gG 20A", "gG 25A", "gG 32A", "gG 40A", "gG 63A", "gG 80A", "gG 100A", "gG 125A"] },
   { key: "rcbo", label: "Wyłącznik różnicowo-nadprądowy", prefix: "F", modules: 2, poles: "1P+N", defLabel: "B16/30mA", accent: "#C1793F", ratings: ["B10/30mA", "B16/30mA", "B20/30mA", "C16/30mA"] },
   { key: "rcd", label: "Wyłącznik różnicowoprądowy", prefix: "FI", modules: 2, poles: "2P", defLabel: "40A/30mA", accent: "#C1793F", ratings: ["25A/30mA", "40A/30mA", "63A/30mA", "40A/300mA", "63A/300mA"] },
   // Domyślnie 4P/4 moduły jak przy zasilaniu 3-fazowym — przy dodawaniu ręcznym
@@ -90,6 +95,26 @@ export interface BuildPanelDevicesOptions {
   mainRating?: number;
 }
 
+/** Szereg prądów znamionowych, w jakich faktycznie produkuje się wyłączniki
+ *  różnicowoprądowe (2- i 4-biegunowe modułowe). */
+const RCD_RATINGS = [25, 40, 63, 80, 100];
+
+/**
+ * Prąd znamionowy różnicówki dla danego rozłącznika głównego — musi być ≥ prądowi
+ * rozłącznika głównego, inaczej różnicówka (bez własnego zabezpieczenia zwarciowego)
+ * nie jest chroniona przed przeciążeniem od aparatu nadrzędnego (patrz reguła 3 w
+ * `computeSelectivity`). Wcześniej rating był na sztywno „63A"/„40A" niezależnie od
+ * wyboru rozłącznika głównego — przy 80 A rozdzielnica generowała z automatu
+ * niepoprawny dobór i własne ostrzeżenie o nim, mimo że nikt niczego źle nie wybrał.
+ * Dolny próg (63 A dla 3-fazowego zasilania, 40 A dla 1-fazowego) to najmniejszy
+ * rozmiar typowo dostępny w tej klasie aparatu — mniejszy rozłącznik główny nie
+ * schodzi poniżej niego. */
+function rcdRatingFor(mainRating: number, supply3f: boolean): number {
+  const floor = supply3f ? 63 : 40;
+  const need = Math.max(mainRating, floor);
+  return RCD_RATINGS.find((r) => r >= need) ?? RCD_RATINGS[RCD_RATINGS.length - 1];
+}
+
 /** Zamienia obwody na listę aparatów rozdzielnicy. Oznaczenia wg IEC 81346:
  *  Q — łączniki (rozłącznik główny), F — zabezpieczenia, FI — różnicowoprądowe.
  *
@@ -109,13 +134,14 @@ export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevices
   devices.push({ uid: "", kind: "main", tag: "Q1", modules: mod, label: `${mainRating}A`, caption: "Rozłącznik izolacyjny główny", poles: p, phase: supply3f ? "3F" : "L1", key: "main" });
 
   let mcbNo = 0;
+  const rcdRating = rcdRatingFor(mainRating, supply3f);
   rcdGroups.forEach((r, gi) => {
     devices.push({
       uid: "",
       kind: "rcd",
       tag: `FI${gi + 1}`,
       modules: supply3f ? 4 : 2,
-      label: supply3f ? "63A" : "40A",
+      label: `${rcdRating}A`,
       poles: supply3f ? "4P" : "2P",
       caption: `Wyłącznik różnicowoprądowy ${r.rating}`,
       phase: supply3f ? "3F" : "L1",

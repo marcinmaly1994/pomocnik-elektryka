@@ -155,9 +155,92 @@ const RCD: GlyphSpec = {
 };
 
 /**
+ * Rozłącznik izolacyjny bezpiecznikowy (Downloads/Rozłącznik izolacyjny
+ * bezpiecznikowy_3F.svg i _1F.svg): pierścień przegubu ostrza, belka styku stałego,
+ * dwuramienne ramię łącznika i korpus wkładki topikowej narysowany jako
+ * równoległobok (cały mechanizm stoi pod kątem, tak jak ostrze w MAIN_SWITCH) z
+ * ukośnymi kreskami wewnątrz — po jednej na fazę. Reszta geometrii jest identyczna
+ * w obu plikach źródłowych — różni je wyłącznie liczba kresek wkładki (3 albo 1),
+ * stąd wspólna `RozlacznikBezpWspolne` i dwa cienkie `GlyphSpec` nad nią.
+ */
+
+/**
+ * Dogrubienie kreski, kompensujące skalę tego symbolu.
+ *
+ * `vector-effect: non-scaling-stroke` na wspólnym `GlyphGroup` NIE działa na jego
+ * dzieci — ta właściwość w SVG się nie dziedziczy — więc grubość kreski skaluje się
+ * razem z resztą geometrii przy dopasowywaniu symbolu do wysokości rzędu (patrz
+ * `CadGlyph`). Źródłowa wysokość tego symbolu (~743 jedn., 37,16–780,41) jest ok.
+ * 7,3 raza większa niż MCB (~101 jedn.), a oba trafiają w TĘ SAMĄ wysokość rzędu
+ * wyłączników obwodowych (`MCB_H` w SchemaTab.tsx) — bez kompensacji kreska
+ * wychodziłaby więc ok. 7x cieńsza niż w MCB: podpikselowa, wyglądająca na ekranie
+ * na wyblakłą, prawie szarą zamiast czarnej. Mnożnik dobrany tak, żeby po
+ * przeskalowaniu wyjść na tę samą grubość co MCB (101,41 / 743,251744 × 7,33).
+ */
+const ROZLACZNIK_BEZP_STROKE_W = 8.06;
+
+function RozlacznikBezpWspolne() {
+  return (
+    <>
+      {/* przewód od szyny do przegubu ostrza */}
+      <path d="M 233.993466 37.162587 L 233.993466 322.236533" />
+      {/* pierścień przegubu ostrza */}
+      <circle cx={233.993466} cy={354.88138} r={32.645} />
+      {/* belka styku stałego */}
+      <path d="M 193.093925 322.236533 L 274.909091 322.236533" />
+      {/* dwuramienne ramię łącznika, łączące przegub z korpusem wkładki */}
+      <path d="M 21.277251 354.949733 L 62.176792 436.780983" />
+      <path d="M 111.278758 412.238041 L 13.090909 461.323924" />
+      {/* korpus wkładki topikowej — zamknięty równoległobok */}
+      <path d="M 119.449017 428.594641 L 233.993466 657.68354 L 135.8217 706.769423 L 21.277251 477.680524 Z" />
+      {/* wewnętrzne krawędzie korpusu wkładki */}
+      <path d="M 70.363134 453.137583 L 184.907583 682.226481" />
+      <path d="M 242.179808 674.04014 L 144.008042 723.142106" />
+      {/* przewód wyjściowy spod wkładki */}
+      <path d="M 193.093925 698.591123 L 233.993466 780.414331" />
+    </>
+  );
+}
+
+const ROZLACZNIK_BEZP_3F: GlyphSpec = {
+  axisX: 233.993466,
+  topY: 37.162587,
+  bottomY: 780.414331,
+  rightX: 274.909091,
+  Paths: () => (
+    <GlyphGroup>
+      <g strokeWidth={ROZLACZNIK_BEZP_STROKE_W}>
+        <RozlacznikBezpWspolne />
+        {/* trzy kreski wkładki — po jednej na fazę */}
+        <path d="M 201.264183 530.86762 L 94.906075 686.31161" />
+        <path d="M 180.822454 489.951995 L 74.448263 645.412069" />
+        <path d="M 160.364642 449.052453 L 54.006534 604.496444" />
+      </g>
+    </GlyphGroup>
+  ),
+};
+
+const ROZLACZNIK_BEZP_1F: GlyphSpec = {
+  axisX: 233.993466,
+  topY: 37.162587,
+  bottomY: 780.414331,
+  rightX: 274.909091,
+  Paths: () => (
+    <GlyphGroup>
+      <g strokeWidth={ROZLACZNIK_BEZP_STROKE_W}>
+        <RozlacznikBezpWspolne />
+        {/* jedna kreska wkładki — jedna faza */}
+        <path d="M 180.822454 489.951995 L 74.448263 645.412069" />
+      </g>
+    </GlyphGroup>
+  ),
+};
+
+/**
  * Symbol zastępczy — dla rodzajów aparatów, których nikt jeszcze nie odwzorował z
- * pliku CAD (stycznik, przekaźnik, zasilacz, lampka, czujnik zaniku faz, rozłącznik
- * przeciwpożarowy…). Bez niego takie aparaty po prostu ZNIKAŁY ze schematu —
+ * pliku CAD ani narysował wprost wg normy jak lampkę (stycznik, przekaźnik, zasilacz,
+ * czujnik zaniku faz, rozłącznik przeciwpożarowy…). Bez niego takie aparaty po prostu
+ * ZNIKAŁY ze schematu —
  * `SchemaTab` rysował gałąź tylko dla `kind === "mcb"`, więc reszta katalogu nie
  * miała czym się narysować i cichutko wypadała z rysunku.
  *
@@ -193,12 +276,17 @@ const GENERIC: GlyphSpec = {
 const LAMPKA: GlyphSpec = {
   axisX: 50,
   topY: 0,
-  bottomY: 100,
+  // Kończy się na dolnej krawędzi okręgu (cy 50 + r 16), nie na umownej siatce 0–100
+  // jak `GENERIC` niżej — bez odnogi pod spodem nie ma już nic dalej do zmieszczenia,
+  // a ciągnięcie `bottomY` do 100 zostawiłoby pod symbolem pusty margines.
+  bottomY: 66,
   rightX: 50 + 16,
+  // Bez odnogi pod okręgiem: układ kończy się na symbolu (patrz `LampkaBranch` w
+  // SchemaTab.tsx) — dolny „ogonek" prowadziłby donikąd, bo nie ma już przewodu, do
+  // którego miałby się podłączyć.
   Paths: () => (
     <GlyphGroup>
       <path d="M50 0L50 34" />
-      <path d="M50 66L50 100" />
       <circle cx={50} cy={50} r={16} />
       <path d="M42 42L58 58" />
       <path d="M58 42L42 58" />
@@ -206,7 +294,16 @@ const LAMPKA: GlyphSpec = {
   ),
 };
 
-export const GLYPHS = { mcb: MCB, main: MAIN_SWITCH, spd: SPD, rcd: RCD, lampka: LAMPKA, generic: GENERIC };
+export const GLYPHS = {
+  mcb: MCB,
+  main: MAIN_SWITCH,
+  spd: SPD,
+  rcd: RCD,
+  lampka: LAMPKA,
+  rozBezp3f: ROZLACZNIK_BEZP_3F,
+  rozBezp1f: ROZLACZNIK_BEZP_1F,
+  generic: GENERIC,
+};
 
 /**
  * Wstawia symbol na oś `x`, rozciągnięty dokładnie od `top` do `bottom`. Skala wynika

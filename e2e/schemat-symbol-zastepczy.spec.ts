@@ -119,3 +119,83 @@ test("lampka sygnalizacyjna: własny symbol, na wysokości RCD — nie w rzędzi
   expect(circuitBox).toBeTruthy();
   expect(lampkaBox!.y).toBeLessThan(circuitBox!.y);
 });
+
+/**
+ * Zgłoszenie użytkownika (ze zrzutu ekranu): między RCD a wyłącznikiem nadprądowym
+ * spoza jej zasięgu brakowało kreski — wyłącznik wisiał w powietrzu, odcięty od szyny
+ * głównej. Przyczyna: RCD/SPD rysują odcinek od szyny głównej do swojej podszyny jako
+ * CZĘŚĆ WŁASNEGO glifu (`RcdBranch`/`SpdBranch`, `top={Y_BUS}`), ale odejście BEZ
+ * różnicówki (`col.block.device` puste — np. obwód przeciwpożarowy) nie ma żadnego
+ * symbolu w tym miejscu, więc nic tego odcinka nie rysowało. Fix: jawna kreska
+ * łącząca szynę główną z podszyną, gdy w kolumnie nie ma aparatu RCD.
+ */
+test("obwód spoza różnicówki jest połączony z szyną główną, nie wisi w powietrzu", async ({ page }) => {
+  await zbudujReczniePustaRozdzielnice(page);
+  await dodajReczny(page, "rcd"); // FI1 — dla kontrastu: kolumna, która MA różnicówkę
+  await dodajReczny(page, "mcb"); // F1 — ręcznie dodany, bez przypisanej różnicówki -> „poza RCD"
+
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
+  const svg = page.locator("svg:has(#incoming-supply)");
+
+  const rcdGroup = svg.locator('[id^="rcd-FI"]');
+  const circuitWrapper = svg.locator('xpath=//*[starts-with(@id,"circuit-F")]/..');
+  await expect(rcdGroup).toHaveCount(1);
+  await expect(circuitWrapper).toHaveCount(1);
+
+  // RCD rysuje własny odcinek od szyny głównej jako część glifu — jej górna krawędź
+  // jest więc punktem odniesienia: „na szynie głównej". Kolumna BEZ różnicówki musi
+  // teraz sięgać do tej samej wysokości (kreska dodana w fixie), a nie zaczynać się
+  // dopiero przy samym wyłączniku, wyraźnie niżej.
+  const rcdBox = await rcdGroup.boundingBox();
+  const circuitWrapperBox = await circuitWrapper.boundingBox();
+  expect(rcdBox).toBeTruthy();
+  expect(circuitWrapperBox).toBeTruthy();
+  expect(Math.abs(circuitWrapperBox!.y - rcdBox!.y)).toBeLessThan(3);
+});
+
+/**
+ * Rozłącznik izolacyjny bezpiecznikowy dostał WŁASNY symbol (z pliku CAD, jak MCB) —
+ * pierścień przegubu, belka styku, ramię łącznika i korpus wkładki topikowej z
+ * kreskami w środku, po jednej na fazę. Wariant wybiera liczba biegunów aparatu:
+ * 3P -> trzy kreski, każdy inny -> jedna.
+ */
+test("rozłącznik izolacyjny bezpiecznikowy: własny symbol, wariant wg liczby biegunów (3P -> trzy kreski wkładki, 1P -> jedna)", async ({
+  page,
+}) => {
+  await zbudujReczniePustaRozdzielnice(page);
+  await dodajReczny(page, "rozBezp"); // Q1, domyślnie 3P
+
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
+  let svg = page.locator("svg:has(#incoming-supply)");
+  let galaz = svg.locator('[id^="circuit-Q"]');
+  await expect(galaz).toHaveCount(1);
+  // Prawdziwy symbol, nie zastępczy placeholder: bez przerywanej ramki, za to z
+  // pierścieniem przegubu ostrza.
+  await expect(galaz.locator("rect")).toHaveCount(0);
+  await expect(galaz.locator("circle")).toHaveCount(1);
+  const sciezek3f = await galaz.locator("path").count();
+  // Tag NIE jest "Q1" — ten ma już rozłącznik główny, więc ręcznie dodany aparat
+  // z tym samym prefiksem dostaje kolejny wolny numer (patrz `addManualDevice`).
+  // Odczytany dynamicznie, żeby test nie zakładał konkretnego numeru na sztywno.
+  const tag = (await galaz.getAttribute("id"))!.replace("circuit-", "");
+
+  // Zmiana biegunów na 1P (edycja aparatu na widoku czołowym rozdzielnicy)
+  // przełącza wariant symbolu na schemacie.
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  const tagText = page.getByRole("img", { name: "Widok czołowy rozdzielnicy" }).locator("text", { hasText: tag }).first();
+  await tagText.scrollIntoViewIfNeeded();
+  const box = await tagText.boundingBox();
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + 60);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByLabel("Liczba biegunów").selectOption("1P");
+  await page.getByRole("button", { name: "Zapisz zmiany" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
+  svg = page.locator("svg:has(#incoming-supply)");
+  galaz = svg.locator('[id^="circuit-Q"]');
+  const sciezek1f = await galaz.locator("path").count();
+  // Reszta geometrii identyczna w obu wariantach — różnica to dokładnie dwie
+  // kreski wkładki (3 -> 1).
+  expect(sciezek3f - sciezek1f).toBe(2);
+});

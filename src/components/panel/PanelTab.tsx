@@ -234,16 +234,24 @@ export function PanelTab() {
     const def = MANUAL_DEVICE_TYPES.find((t) => t.key === addForm.kind);
     if (!def) return;
     commitPanelSnapshot();
-    // SPD musi mieć tyle biegunów, ile przewodów fazowych i N dochodzi do rozdzielnicy
-    // — dokładnie ten sam wzór, którym `buildPanelDevices` liczy rozłącznik główny.
-    // Katalog trzyma 4P/4 moduły jako domyślny (typowy) wariant 3-fazowy; przy
+    // SPD, RCD i rozłącznik przeciwpożarowy rozłączają WSZYSTKIE przewody robocze
+    // dochodzące do rozdzielnicy (L+N albo L1L2L3+N) — ich liczba biegunów wynika
+    // z zasilania CAŁEJ rozdzielnicy, dokładnie tym samym wzorem, którym
+    // `buildPanelDevices` liczy rozłącznik główny i automatycznie generowaną
+    // różnicówkę. Katalog trzyma 4P jako domyślny (typowy) wariant 3-fazowy; przy
     // zasilaniu 1-fazowym trzeba to przeliczyć, inaczej aparat 2-biegunowy dostałby
-    // szerokość 4-biegunowego. Reszta katalogu tego nie potrzebuje: pozostałe
+    // oznaczenie 4-biegunowego. Reszta katalogu tego nie potrzebuje: pozostałe
     // zabezpieczenia mają liczbę biegunów wynikającą z SAMEGO OBWODU, który
     // zabezpieczają (np. RCBO zawsze 1P+N), a nie z zasilania całej rozdzielnicy.
-    const dynamiczneBieguny = def.key === "spd";
-    const poles = dynamiczneBieguny ? (supply3f ? "4P" : "2P") : def.poles;
-    const modules = dynamiczneBieguny ? (supply3f ? 4 : 2) : def.modules;
+    const skalowaneBiegunyZeZasilania = def.key === "spd" || def.key === "rcd" || def.key === "ppoz";
+    // Szerokość rośnie razem z biegunami TYLKO tam, gdzie 1 biegun realnie = 1 moduł
+    // (SPD, RCD). Rozłącznik przeciwpożarowy ma kompaktowe warianty 4-biegunowe,
+    // które mieszczą się w tych samych modułach co warianty 2-biegunowe (patrz
+    // komentarz o „SUGEROWANE_MODULY" w EditDeviceModal.tsx) — jego szerokość
+    // zostaje więc katalogową wartością niezależnie od liczby biegunów.
+    const skalowanaSzerokosc = def.key === "spd" || def.key === "rcd";
+    const poles = skalowaneBiegunyZeZasilania ? (supply3f ? "4P" : "2P") : def.poles;
+    const modules = skalowanaSzerokosc ? (supply3f ? 4 : 2) : def.modules;
     setDevices((prev) => {
       const used = prev.filter((d) => String(d.tag || "").startsWith(def.prefix)).length;
       const tag = def.prefix ? `${def.prefix}${used + 1}` : "";

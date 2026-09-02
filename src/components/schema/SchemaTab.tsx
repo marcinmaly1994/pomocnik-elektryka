@@ -57,16 +57,23 @@ const Y_SPD_BOTTOM = Y_BUS + SPD_H;
 const Y_SPD_GROUND = Y_SPD_BOTTOM + 12;
 // Lampka sygnalizacyjna stoi w TYM SAMYM rzędzie co RCD/SPD (odejście wprost z szyny
 // głównej), nie w rzędzie wyłączników obwodowych — stąd własna wysokość zaczepiona o
-// Y_BUS, a nie o Y_SUBBUS. Rozmiar symbolu jak przy SPD (prosty aparat bez podszyny
-// na dalsze odejścia); dalej w dół idzie już tylko przewód do szyn N/PE, jak przy
-// zwykłym obwodzie odbiorczym.
-const LAMPKA_H = SPD_H;
+// Y_BUS, a nie o Y_SUBBUS. W odróżnieniu od SPD i zwykłych obwodów układ KOŃCZY SIĘ
+// na symbolu — bez przewodu do szyn N/PE i bez odczepu PE (patrz `circuitXs`): to sam
+// obwód zasilający lampkę ma je zapewnić, nie schemat rozdzielnicy. Wysokość liczona
+// tak, żeby okrąg wyszedł tej samej wielkości co przy pudełku SPD (`SPD_H`), ale bez
+// pustego marginesu pod nim — glif lampki (patrz `GLYPHS.lampka`) kończy się na
+// dolnej krawędzi okręgu (66/100 wysokości źródłowej), nie na umownej siatce 0–100.
+const LAMPKA_H = Math.round((SPD_H * 66) / 100);
 const Y_LAMPKA_BOTTOM = Y_BUS + LAMPKA_H;
 
 const MCB_LABEL_DX = labelOffset(GLYPHS.mcb, Y_SUBBUS, Y_MCB_BOTTOM);
 // Odsunięcie etykiety przy symbolu zastępczym (GLYPHS.generic) — liczone osobno, bo ta
 // ramka jest węższa niż glif MCB, więc ten sam MCB_LABEL_DX zostawiałby zbędną pustkę.
 const GENERIC_LABEL_DX = labelOffset(GLYPHS.generic, Y_SUBBUS, Y_MCB_BOTTOM);
+// Rozłącznik izolacyjny bezpiecznikowy — jeden wspólny odsuw dla obu wariantów
+// (3-fazowego i 1-fazowego): różni je tylko liczba kresek wkładki wewnątrz, oś i
+// najdalej wysunięty w prawo punkt (`rightX`) są identyczne w obu plikach źródłowych.
+const ROZBEZP_LABEL_DX = labelOffset(GLYPHS.rozBezp3f, Y_SUBBUS, Y_MCB_BOTTOM);
 
 // Tabela odpływów końcowych pod schematem — tylko obwody (nie W1/SPD/RCD), każda
 // komórka dokładnie pod swoją gałęzią powyżej (te same współrzędne x co CircuitBranch).
@@ -192,8 +199,8 @@ function SpdBranch({ col, device }: { col: Column; device: PanelDevice }) {
 /**
  * Lampka sygnalizacyjna — odejście wprost z szyny głównej, na tej samej wysokości co
  * RCD i SPD (patrz komentarz przy `LAMPKA_H`), a nie w rzędzie wyłączników obwodowych.
- * Przewód ciągnie się dalej w dół, przez szyny N/PE, aż do zwykłego zakończenia — tak
- * jak przy każdym innym odbiorniku jednofazowym.
+ * Układ KOŃCZY SIĘ na symbolu — bez przewodu do szyn N/PE (w odróżnieniu od zwykłego
+ * odbiornika jednofazowego czy SPD, które mają swoje uziemienie narysowane wprost).
  */
 function LampkaBranch({ col, device }: { col: Column; device: PanelDevice }) {
   const x = col.cx;
@@ -201,7 +208,6 @@ function LampkaBranch({ col, device }: { col: Column; device: PanelDevice }) {
   return (
     <g id={`lampka-${device.tag}`}>
       <CadGlyph spec={GLYPHS.lampka} x={x} top={Y_BUS} bottom={Y_LAMPKA_BOTTOM} />
-      <line x1={x} y1={Y_LAMPKA_BOTTOM} x2={x} y2={Y_WIRE_END} stroke={STROKE} strokeWidth={LINE_W} />
       <text x={x + dx} y={Y_BUS + 34} fontSize={10.5} fontWeight={700} fill={STROKE}>
         {device.tag}
       </text>
@@ -305,13 +311,17 @@ function jestOdplywem(d: PanelDevice): boolean {
 
 /** Jeden obwód odbiorczy: wyłącznik nadprądowy (symbol MCB użytkownika), znacznik przewodu i nazwa odbiornika. */
 function CircuitBranch({ x, device }: { x: number; device: PanelDevice }) {
-  // Tylko wyłącznik nadprądowy ma symbol odwzorowany z pliku CAD — reszta katalogu
-  // (stycznik, przekaźnik, zasilacz, lampka, CZF, rozłącznik ppoż…) dostaje na razie
-  // symbol zastępczy (patrz komentarz przy GLYPHS.generic w deviceGlyphs.tsx), żeby nic
-  // już nie znikało po cichu ze schematu, tak jak wcześniej.
+  // Wyłącznik nadprądowy i rozłącznik izolacyjny bezpiecznikowy mają symbol
+  // odwzorowany z pliku CAD — reszta katalogu (stycznik, przekaźnik, zasilacz,
+  // CZF, rozłącznik ppoż…) dostaje na razie symbol zastępczy (patrz komentarz przy
+  // GLYPHS.generic w deviceGlyphs.tsx), żeby nic już nie znikało po cichu ze
+  // schematu, tak jak wcześniej. Rozłącznik bezpiecznikowy ma DWA warianty symbolu
+  // (liczba kresek wkładki) — wybrane po liczbie biegunów aparatu, nie po zasilaniu
+  // całej rozdzielnicy, bo to jego WŁASNA nastawa (tak jak przy MCB).
   const isMcb = device.kind === "mcb";
-  const spec = isMcb ? GLYPHS.mcb : GLYPHS.generic;
-  const labelDx = isMcb ? MCB_LABEL_DX : GENERIC_LABEL_DX;
+  const isRozBezp = device.kind === "rozBezp";
+  const spec = isMcb ? GLYPHS.mcb : isRozBezp ? (device.poles === "3P" ? GLYPHS.rozBezp3f : GLYPHS.rozBezp1f) : GLYPHS.generic;
+  const labelDx = isMcb ? MCB_LABEL_DX : isRozBezp ? ROZBEZP_LABEL_DX : GENERIC_LABEL_DX;
   return (
     <g id={`circuit-${device.tag}`}>
       <CadGlyph spec={spec} x={x} top={Y_SUBBUS} bottom={Y_MCB_BOTTOM} />
@@ -374,12 +384,8 @@ function circuitX(col: Column, i: number): number {
 function circuitXs(columns: Column[]): number[] {
   const out: number[] = [];
   columns.forEach((col) => {
-    // Lampka kończy się jak zwykły odbiornik — przewodem do szyn N/PE — więc dostaje
-    // odczep PE tak samo jak każdy obwód, mimo że stoi w rzędzie RCD/SPD, nie MCB.
-    if (col.kind === "lampka") {
-      out.push(col.cx);
-      return;
-    }
+    // Lampka NIE dostaje odczepu PE — układ kończy się na jej symbolu, nie ciągnie
+    // się do szyn N/PE (patrz `LampkaBranch`), więc nie ma czego odczepiać.
     if (col.kind !== "rcd" || !col.block) return;
     col.block.mcbs.forEach((_, i) => out.push(circuitX(col, i)));
   });
@@ -682,7 +688,16 @@ export function SchemaTab() {
               <LampkaBranch key={col.device.uid} col={col} device={col.device} />
             ) : col.block ? (
               <g key={col.block.device?.uid ?? `bez-rcd-${col.x0}`}>
-                {col.block.device && <RcdBranch col={col} device={col.block.device} />}
+                {col.block.device ? (
+                  <RcdBranch col={col} device={col.block.device} />
+                ) : (
+                  // Odejścia spoza zasięgu różnicówki (np. obwód przeciwpożarowy) idą
+                  // WPROST z szyny głównej — bez RCD nie ma tu żadnego symbolu, który
+                  // sam narysowałby ten odcinek (RCD/SPD robią to jako część własnego
+                  // glifu), więc bez tej kreski wyłącznik wisiałby w powietrzu,
+                  // odcięty od szyny głównej powyżej.
+                  <line x1={col.cx} y1={Y_BUS} x2={col.cx} y2={Y_SUBBUS} stroke={STROKE} strokeWidth={LINE_W} />
+                )}
                 {col.block.mcbs.length > 1 && (
                   <line
                     x1={col.x0 + (col.width - col.block.mcbs.length * LEAF_W) / 2 + LEAF_W / 2}
