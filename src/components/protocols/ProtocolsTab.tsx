@@ -8,6 +8,8 @@ import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { LIMIT_ZAPISOW } from "@/lib/dokumenty";
 import type { ProtocolKey } from "@/types";
+import { useRoute } from "@/hooks/useRoute";
+import { dopasujParam } from "@/lib/routing";
 
 const HEADER_FIELDS: [string, string][] = [
   ["obiekt", "Obiekt / nazwa instalacji"], ["adres", "Adres obiektu"], ["zleceniodawca", "Zleceniodawca"],
@@ -53,7 +55,24 @@ export function ProtocolsTab() {
   const protocols = useProjectStore((s) => s.protocols);
   const setProtocolState = useProjectStore((s) => s.setProtocolState);
 
-  const [active, setActive] = useState<ProtocolKey>("ogledziny");
+  /**
+   * Który protokół jest otwarty — trzymany WYŁĄCZNIE w adresie („/protokoly/izolacja”),
+   * bez kopii w stanie komponentu. Inaczej niż w kalkulatorach nie ma tu czego
+   * uzgadniać: wybór protokołu nigdy nie był zapisywany między wizytami, więc adres
+   * może być jedynym źródłem prawdy, a nie jednym z dwóch.
+   *
+   * Nieznany klucz w adresie cofa do pierwszego protokołu, tak samo jak nieznana
+   * zakładka cofa do strony startowej — literówka ma pokazać coś sensownego.
+   */
+  const [route, nawiguj] = useRoute();
+  const active: ProtocolKey = dopasujParam(route.tab === "protokoly" ? route.param : null, PROTOCOL_ORDER) ?? PROTOCOL_ORDER[0];
+  const setActive = (k: ProtocolKey) => nawiguj("protokoly", k);
+
+  // Uzupełnienie adresu przy wejściu na samo „/protokoly" — `replace`, bo to
+  // porządkowanie adresu, nie przejście (patrz ten sam wzorzec w kalkulatorach).
+  useEffect(() => {
+    if (route.tab === "protokoly" && route.param !== active) nawiguj("protokoly", active, { replace: true });
+  }, [route.tab, route.param, active, nawiguj]);
   const [blocked, setBlocked] = useState(false);
   const [podglad, setPodglad] = useState(false);
   /** Dane ogólne wypełnia się RAZ na zlecenie, a potem przewija się je przy każdym
