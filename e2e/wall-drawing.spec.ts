@@ -206,3 +206,119 @@ test("rysowanie ortogonalne wymusza kąt prosty względem poprzedniego punktu", 
   expect(p1.y).toBe(p0.y);
   expect(p1.x).not.toBe(p0.x);
 });
+
+/**
+ * Czwarty punkt ściany, w trybie ortogonalnym, przyciąga się do narożnika, który
+ * domyka pierwsze trzy punkty w prostokąt (równoległe ściany) — patrz
+ * `zPrzyciaganiemDoNaroznika`/`sugerowanyNaroznik` w DesignCanvas.tsx. Promień
+ * przyciągania jest celowo mały (`WALL_RECT_SNAP_RADIUS`), więc klik „tuż obok"
+ * (kilka pikseli, przy domyślnym powiększeniu ≈ tyle samo jednostek planu) ma
+ * wystarczyć, a klik wyraźnie dalej — nie.
+ */
+test("czwarty punkt ściany przyciąga się do narożnika domykającego prostokąt", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.getByTestId("wall-ortho-checkbox").check();
+  await page.mouse.click(box.x + 100, box.y + 100); // p0
+  await page.mouse.click(box.x + 300, box.y + 100); // p1 — ściana 1, pozioma
+  await page.mouse.click(box.x + 300, box.y + 250); // p2 — ściana 2, pionowa (ortho)
+  // Klik TUŻ OBOK właściwego narożnika (100,250), nie dokładnie w nim.
+  await page.mouse.click(box.x + 104, box.y + 246);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+  await page.waitForTimeout(900);
+
+  const walls = await page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
+  });
+  expect(walls).toHaveLength(1);
+  const [p0, , p2, p3] = walls[0].points;
+  // Prostokąt domknięty: 4. narożnik leży dokładnie pod 1. (ta sama x) i na
+  // wysokości 3. (ta sama y) — mimo że klik trafił kilka pikseli obok.
+  expect(p3.x).toBe(p0.x);
+  expect(p3.y).toBe(p2.y);
+});
+
+test("czwarty punkt ściany NIE przyciąga się, gdy klik jest wyraźnie dalej od narożnika", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.getByTestId("wall-ortho-checkbox").check();
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await page.mouse.click(box.x + 300, box.y + 100);
+  await page.mouse.click(box.x + 300, box.y + 250);
+  await page.mouse.click(box.x + 140, box.y + 260); // wyraźnie z dala od (100,250)
+  await page.getByRole("button", { name: "Zakończ" }).click();
+  await page.waitForTimeout(900);
+
+  const walls = await page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
+  });
+  const [p0, , , p3] = walls[0].points;
+  expect(p3.x).not.toBe(p0.x);
+});
+
+/**
+ * Zamykanie wieloboku ściany — ten sam pomysł co domykanie pomieszczenia
+ * (`closesPolygon`), tylko dla `drawingWall`: klik blisko PIERWSZEGO postawionego
+ * punktu przyciąga dokładnie do niego, więc ostatni punkt wychodzi identyczny z
+ * pierwszym, zamiast być "prawie" tam. Niezależne od trybu ortogonalnego — to inne
+ * przyciąganie niż narożnik prostokąta wyżej. Taki klik ZATWIERDZA ścianę od razu
+ * (`onCloseWall`) — bez osobnego „Zakończ": kształt jest już kompletny, więc kazanie
+ * użytkownikowi kliknąć drugi przycisk byłoby zbędnym krokiem.
+ */
+test("kliknięcie blisko pierwszego punktu ściany przyciąga do niego i od razu zamyka/zatwierdza wielobok", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.mouse.click(box.x + 100, box.y + 100); // p0
+  await page.mouse.click(box.x + 300, box.y + 100); // p1
+  await page.mouse.click(box.x + 300, box.y + 250); // p2
+  // Klik TUŻ OBOK pierwszego punktu (100,100), nie dokładnie w nim.
+  await page.mouse.click(box.x + 104, box.y + 96);
+  await page.waitForTimeout(900);
+
+  // Zatwierdzone bez klikania „Zakończ" — pasek rysowania (i sam przycisk) znika sam.
+  await expect(page.getByText(/Rysowanie ściany/)).toBeHidden();
+  await expect(page.getByRole("button", { name: "Zakończ" })).toBeHidden();
+
+  const walls = await page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
+  });
+  expect(walls).toHaveLength(1);
+  const pts = walls[0].points;
+  expect(pts).toHaveLength(4);
+  expect(pts[3]).toEqual(pts[0]);
+});
+
+test("kliknięcie wyraźnie dalej od pierwszego punktu ściany NIE zamyka wieloboku", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await page.mouse.click(box.x + 300, box.y + 100);
+  await page.mouse.click(box.x + 300, box.y + 250);
+  await page.mouse.click(box.x + 150, box.y + 260); // wyraźnie z dala od (100,100)
+  await page.getByRole("button", { name: "Zakończ" }).click();
+  await page.waitForTimeout(900);
+
+  const walls = await page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
+  });
+  const pts = walls[0].points;
+  expect(pts[3]).not.toEqual(pts[0]);
+});
+
+test("zamknięcie wieloboku ściany wymaga co najmniej 3 postawionych punktów — z dwóch nie domyka", async ({ page }) => {
+  const box = await openPlan(page);
+  await page.mouse.click(box.x + 100, box.y + 100); // p0
+  await page.mouse.click(box.x + 300, box.y + 100); // p1
+  // Klik blisko p0, ale mamy dopiero 2 punkty — nie ma czego zamykać.
+  await page.mouse.click(box.x + 103, box.y + 97);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+  await page.waitForTimeout(900);
+
+  const walls = await page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
+  });
+  const pts = walls[0].points;
+  expect(pts).toHaveLength(3);
+  expect(pts[2]).not.toEqual(pts[0]);
+});

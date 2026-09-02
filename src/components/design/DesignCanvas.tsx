@@ -16,10 +16,19 @@ export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route"; id
 /** Sposób rysowania pomieszczenia: prostokąt przeciągnięciem albo wielobok klikaniem. */
 export type RoomDrawMode = "prostokat" | "wielobok";
 
-/** Promień (w jednostkach planu) przyciągania do pierwszego punktu wieloboku. Dobrany
- *  tak, by dało się trafić myszką bez powiększania, ale żeby nie zamykać figury
- *  przypadkiem przy stawianiu punktu tuż obok startu. */
-const ROOM_CLOSE_RADIUS = 12;
+/** Promień (w jednostkach planu) przyciągania do pierwszego punktu wieloboku —
+ *  wieloboku pomieszczenia (`drawingRoomPoints`) i wieloboku ściany (`drawingWall`),
+ *  ten sam próg dla obu. Dobrany tak, by dało się trafić myszką bez powiększania,
+ *  ale żeby nie zamykać figury przypadkiem przy stawianiu punktu tuż obok startu. */
+const POLYGON_CLOSE_RADIUS = 12;
+/** Promień (w jednostkach planu) przyciągania czwartego punktu ściany do narożnika,
+ *  który domykałby prostokąt (patrz `zPrzyciaganiem`) — wyraźnie mniejszy
+ *  niż `POLYGON_CLOSE_RADIUS`: użytkownik prosił o przyciąganie w BARDZO bliskiej
+ *  odległości, żeby nie domykało przypadkiem, gdy naprawdę chce postawić punkt obok.
+ *  To przyciąganie do NIEOZNACZONEGO, wyliczonego punktu — inaczej niż zamknięcie
+ *  wieloboku (`closesPolygon`/`closesWall`), które celuje w punkt już WIDOCZNY na
+ *  rysunku, więc może pozwolić sobie na normalny, większy promień. */
+const WALL_RECT_SNAP_RADIUS = 6;
 /** Poniżej tego rozmiaru (w jednostkach planu) przeciągnięcie traktujemy jak przypadkowe
  *  drgnięcie myszy przy kliknięciu, a nie jak chęć narysowania prostokąta. */
 const MIN_ROOM_SIZE = 8;
@@ -165,6 +174,13 @@ interface DesignCanvasProps {
   onMoveElement: (id: string, x: number, y: number) => void;
   onMoveElements: (moves: { id: string; x: number; y: number }[]) => void;
   onAddWallPoint: (p: Point) => void;
+  /** Klik, który zamyka wielobok ściany (przyciągnięty do jej pierwszego punktu —
+   *  patrz `closesWall`) — zatwierdza ścianę od razu z podanym punktem domykającym
+   *  dołożonym na koniec, bez czekania na osobne „Zakończ". Ten sam wzorzec co
+   *  `onCloseRoomPolygon`, tylko że ściana (w odróżnieniu od pomieszczenia) nie ma
+   *  osobnej reprezentacji „zamkniętej" — zamknięcie to zwykły ostatni punkt równy
+   *  pierwszemu (patrz `finishWall`/`createWallFromRoom` w DesignTab). */
+  onCloseWall: (p: Point) => void;
   onAddRoomPoint: (p: Point) => void;
   /** Prostokąt narysowany przeciągnięciem — gotowe 4 wierzchołki. */
   onRoomRectDrawn: (points: Point[]) => void;
@@ -289,6 +305,7 @@ export function DesignCanvas({
   onMoveElement,
   onMoveElements,
   onAddWallPoint,
+  onCloseWall,
   onAddRoomPoint,
   onRoomRectDrawn,
   onCloseRoomPolygon,
@@ -399,6 +416,42 @@ export function DesignCanvas({
     return dx >= dy ? { x: p.x, y: last.y } : { x: last.x, y: p.y };
   }
 
+  /**
+   * Narożnik, który domknąłby prostokąt zaczęty punktami `p0`→`p1`→`p2` — leżący
+   * naprzeciw `p1`. W trybie ortogonalnym `p1→p2` jest już prostopadłe do `p0→p1`
+   * (patrz `orthoSnap`), więc ten punkt daje prawdziwy prostokąt (równoległe ściany),
+   * nie tylko równoległobok.
+   */
+  function sugerowanyNaroznik(p0: Point, p1: Point, p2: Point): Point {
+    return { x: p0.x + (p2.x - p1.x), y: p0.y + (p2.y - p1.y) };
+  }
+
+  /**
+   * Przyciąganie punktu ściany do dwóch celów — sprawdzanych w tej kolejności:
+   *
+   * 1. Zamknięcie wieloboku: kursor blisko PIERWSZEGO postawionego punktu (patrz
+   *    `closesWall`) — to punkt już WIDOCZNY na rysunku, więc ma pierwszeństwo przed
+   *    poniższym, bo bliskość niego prawie na pewno oznacza „chcę zamknąć figurę
+   *    tutaj", niezależnie od trybu ortogonalnego (zamknięcie wieloboku pomieszczenia
+   *    też nie jest z niczym warunkowane).
+   * 2. Czwarty punkt (`drawingWall.length === 3`) dostaje przyciąganie do narożnika,
+   *    który domknąłby prostokąt zaczęty pierwszymi trzema — bez niego trzeba było
+   *    trafić w niego co do piksela, żeby ściana 4 wyszła dokładnie równoległa do
+   *    ściany 2. Promień CELOWO mały (patrz `WALL_RECT_SNAP_RADIUS`): to poprawka
+   *    drobnej niedokładności kliknięcia, nie zamiennik świadomego stawiania punktu
+   *    w pobliżu — inaczej niż (1), bo to punkt WYLICZONY, nigdzie nie narysowany.
+   *
+   * Poza tymi dwoma przypadkami zwraca `p` bez zmian.
+   */
+  function zPrzyciaganiem(p: Point): Point {
+    if (closesWall(p)) return drawingWall[0];
+    if (orthoWalls && drawingWall.length === 3) {
+      const naroznik = sugerowanyNaroznik(drawingWall[0], drawingWall[1], drawingWall[2]);
+      if (Math.hypot(p.x - naroznik.x, p.y - naroznik.y) <= WALL_RECT_SNAP_RADIUS) return naroznik;
+    }
+    return p;
+  }
+
   /** Długość odcinka w jednostkach planu, sformatowana do etykiety: metry, jeśli
    *  skala jest ustawiona, inaczej same jednostki planu — ten sam wybór co pasek
    *  stanu (`EditorStatusBar`), żeby liczby w aplikacji mówiły jednym językiem. */
@@ -412,7 +465,18 @@ export function DesignCanvas({
   function closesPolygon(p: Point): boolean {
     if (drawingRoomPoints.length < 3) return false;
     const first = drawingRoomPoints[0];
-    return Math.hypot(p.x - first.x, p.y - first.y) <= ROOM_CLOSE_RADIUS;
+    return Math.hypot(p.x - first.x, p.y - first.y) <= POLYGON_CLOSE_RADIUS;
+  }
+
+  /** To samo co `closesPolygon`, tylko dla wieloboku RYSOWANEJ ŚCIANY — ściana nie ma
+   *  osobnego „zamkniętego" stanu jak pomieszczenie (`Wall` to zwykła lista punktów),
+   *  więc zamknięcie w pętlę polega na tym, że OSTATNI postawiony punkt pokrywa się z
+   *  PIERWSZYM — to przyciąganie tylko o to dba, samo zatwierdzenie zostaje takie samo
+   *  (Enter / „Zakończ” / PPM), jak przy każdej innej ścianie. */
+  function closesWall(p: Point): boolean {
+    if (drawingWall.length < 3) return false;
+    const first = drawingWall[0];
+    return Math.hypot(p.x - first.x, p.y - first.y) <= POLYGON_CLOSE_RADIUS;
   }
 
   function rectCorners(r: MarqueeRect): Point[] {
@@ -492,7 +556,8 @@ export function DesignCanvas({
         return;
       }
       const snapped = withSnap(raw);
-      setWallCursor(orthoWalls ? orthoSnap(drawingWall[drawingWall.length - 1], snapped) : snapped);
+      const ortho = orthoWalls ? orthoSnap(drawingWall[drawingWall.length - 1], snapped) : snapped;
+      setWallCursor(zPrzyciaganiem(ortho));
       return;
     }
 
@@ -592,8 +657,16 @@ export function DesignCanvas({
     }
 
     if (toolMode === "sciany") {
-      const point = orthoWalls && drawingWall.length > 0 ? orthoSnap(drawingWall[drawingWall.length - 1], p) : p;
-      onAddWallPoint(point);
+      const ortho = orthoWalls && drawingWall.length > 0 ? orthoSnap(drawingWall[drawingWall.length - 1], p) : p;
+      // Klik, który zamyka wielobok (przyciągnięty do pierwszego punktu — patrz
+      // `closesWall`), od razu ZATWIERDZA ścianę, tak jak zamknięcie wieloboku
+      // pomieszczenia (`onCloseRoomPolygon`) — bez osobnego klikania „Zakończ" na
+      // figurze, która i tak jest już kompletna.
+      if (closesWall(ortho)) {
+        onCloseWall(drawingWall[0]);
+      } else {
+        onAddWallPoint(zPrzyciaganiem(ortho));
+      }
       return;
     }
     if (toolMode === "pomieszczenie") {
@@ -1296,9 +1369,25 @@ export function DesignCanvas({
                 strokeWidth={newWallThickness}
                 dash={[6, 4]}
               />
-              {drawingWall.map((p, i) => (
-                <Circle key={i} x={p.x} y={p.y} radius={4} fill="#2D5A8C" listening={false} />
-              ))}
+              {drawingWall.map((p, i) => {
+                // Pierwszy punkt rośnie i zmienia się w pierścień, gdy kolejny klik
+                // zamknie figurę — ten sam sygnał co przy zamykaniu wieloboku
+                // pomieszczenia niżej, żeby oba „zamknięcia" czytały się tak samo.
+                const isFirst = i === 0;
+                const zamknie = isFirst && !!wallCursor && closesWall(wallCursor);
+                return (
+                  <Circle
+                    key={i}
+                    x={p.x}
+                    y={p.y}
+                    radius={zamknie ? 8 : 4}
+                    fill={zamknie ? "#fff" : "#2D5A8C"}
+                    stroke="#2D5A8C"
+                    strokeWidth={zamknie ? 3 : 1.5}
+                    listening={false}
+                  />
+                );
+              })}
               {wallCursor &&
                 (() => {
                   const ostatni = drawingWall[drawingWall.length - 1];
@@ -1332,6 +1421,46 @@ export function DesignCanvas({
                     </>
                   );
                 })()}
+              {/* Propozycja narożnika: przy 3. punkcie (drugi odcinek jeszcze w ruchu)
+                  i przy 4. (już postawiony, tylko czeka na przyciągnięty klik) pokazuje
+                  cieniutką, bledszą przerywaną linią, gdzie musiałby stanąć czwarty
+                  narożnik, żeby cztery ściany złożyły się w prostokąt — patrz
+                  `sugerowanyNaroznik`/`zPrzyciaganiem` wyżej. Przy 4. punkcie
+                  kółko narożnika wypełnia się, gdy kursor jest już w nim przyciągnięty. */}
+              {orthoWalls && wallCursor && (drawingWall.length === 2 || drawingWall.length === 3) && (
+                <>
+                  {(() => {
+                    const [p0, p1, p2fixed] = drawingWall;
+                    const p2 = drawingWall.length === 3 ? p2fixed : wallCursor;
+                    const naroznik = sugerowanyNaroznik(p0, p1, p2);
+                    const przyciagniety = drawingWall.length === 3 && wallCursor.x === naroznik.x && wallCursor.y === naroznik.y;
+                    return (
+                      <>
+                        <Line
+                          points={[p2.x, p2.y, naroznik.x, naroznik.y, p0.x, p0.y]}
+                          stroke="#2D5A8C"
+                          strokeWidth={1}
+                          dash={[2, 4]}
+                          opacity={0.4}
+                          listening={false}
+                        />
+                        {drawingWall.length === 3 && (
+                          <Circle
+                            x={naroznik.x}
+                            y={naroznik.y}
+                            radius={przyciagniety ? 5 : 3.5}
+                            fill={przyciagniety ? "#2D5A8C" : "#fff"}
+                            stroke="#2D5A8C"
+                            strokeWidth={1.2}
+                            opacity={0.8}
+                            listening={false}
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
+                </>
+              )}
             </>
           )}
           {/* Wielobok w trakcie rysowania: odcinki już postawione, „gumowa" linia do

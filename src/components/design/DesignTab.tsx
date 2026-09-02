@@ -918,6 +918,24 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setDrawingWall([]);
   }
 
+  /**
+   * Klik, który zamyka wielobok ściany (przyciągnięty do jej pierwszego punktu —
+   * `onCloseWall` z DesignCanvas), zatwierdza ścianę OD RAZU, z domykającym punktem
+   * dołożonym na koniec — bez czekania na osobne „Zakończ"/Enter. Nie da się tu użyć
+   * `finishWall`: ten czyta `drawingWall` ze stanu, które w momencie tego kliknięcia
+   * jeszcze NIE zawiera punktu domykającego (`setDrawingWall` jest asynchroniczny),
+   * więc zamknięcie buduje listę punktów jawnie, tak jak `createWallFromRoom`. */
+  function closeWall(p: Point) {
+    const points = [...drawingWall, p];
+    if (points.length >= 2) {
+      setDraft((d) => ({
+        ...d,
+        walls: [...d.walls, { id: crypto.randomUUID(), floor: activeFloorId, points, thickness: wallThickness }],
+      }));
+    }
+    setDrawingWall([]);
+  }
+
   /** Tworzy ścianę o kształcie IDENTYCZNYM z obrysem pomieszczenia — dla planów, które
    *  zaczęły się od samego obrysu pokoju (skrót „obrysuj pomieszczenie", bez osobnego
    *  rysowania ścian) i teraz mają dociągnąć plan do stanu z prawdziwymi ścianami:
@@ -1943,6 +1961,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               }))
             }
             onAddWallPoint={(p) => setDrawingWall((pts) => [...pts, p])}
+            onCloseWall={closeWall}
             onAddRoomPoint={(p) => setDrawingRoomPoints((pts) => [...pts, p])}
             onRoomRectDrawn={(points) => {
               const name = nextRoomName(roomShapes.length);
