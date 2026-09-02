@@ -110,22 +110,28 @@ test("zbyt cienki przewód do danego prądu to BŁĄD doboru zabezpieczenia, nie
 });
 
 /**
- * Trzy pierwsze kalkulatory to trzy różne pytania o ten sam obwód i łatwo je
+ * Trzy kalkulatory tego samego obwodu, zadające trzy RÓŻNE pytania — łatwo je
  * zlać w jedno przy kolejnej zmianie. Test przybija kolejność i role:
- *  1. Spadek napięcia   — przekrój DANY, liczymy ΔU
- *  2. Dobór przekroju   — przekrój WYNIKIEM (obciążalność + spadek naraz)
- *  3. Dobór zabezpieczenia — przekrój DANY, wynikiem jest aparat
+ *  1. Dobór przekroju      — przekrój WYNIKIEM (obciążalność + spadek naraz)
+ *  2. Dobór zabezpieczenia — przekrój DANY, wynikiem jest aparat
+ *  3. Spadek napięcia      — przekrój DANY, liczymy ΔU
+ *
+ * Spadek stoi ZA doborem, nie przed nim: to narzędzie WERYFIKUJE gotową trasę
+ * („sprawdzenie trasy o znanym przekroju”), więc w liście ułożonej wg etapu pracy
+ * wypada po tym, co przekrój ustala — patrz komentarz nad `CALC_LIST`. Wcześniej
+ * ten test wymagał kolejności odwrotnej i to on, a nie aplikacja, był nieaktualny.
+ *
  * Kalkulator spadku wrócił jako osobna pozycja po tym, jak w kroku 77
  * (MIGRATION.md) skasowano jego poprzednika — tamten dublował dobór przewodu
  * z własną, błędną kopią wzoru (ρ dla 20 °C), ten korzysta z `voltageDropPct`.
  */
-test("trzy pierwsze kalkulatory stoją w kolejności spadek → przekrój → zabezpieczenie i mają rozdzielone role", async ({ page }) => {
+test("dobór przekroju, zabezpieczenia i spadek napięcia stoją w kolejności etapów pracy i mają rozdzielone role", async ({ page }) => {
   await openCalculators(page);
 
   const pozycje = page.locator("button", { hasText: /^(Spadek napięcia|Dobór przekroju przewodu|Dobór zabezpieczenia)/ });
-  await expect(pozycje.nth(0)).toContainText("Spadek napięcia");
-  await expect(pozycje.nth(1)).toContainText("Dobór przekroju przewodu");
-  await expect(pozycje.nth(2)).toContainText("Dobór zabezpieczenia");
+  await expect(pozycje.nth(0)).toContainText("Dobór przekroju przewodu");
+  await expect(pozycje.nth(1)).toContainText("Dobór zabezpieczenia");
+  await expect(pozycje.nth(2)).toContainText("Spadek napięcia");
 
   // w doborze PRZEKROJU przekrój jest wynikiem, więc nie ma go wśród pól wejściowych
   await expect(page.getByRole("heading", { name: "Dobór przekroju przewodu" })).toBeVisible();
@@ -213,8 +219,10 @@ test("zapisany identyfikator kalkulatora sprzed aktualizacji nie wywraca zakład
   await page.reload();
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
 
-  // zamiast białego ekranu — cofnięcie do pierwszej pozycji z listy
-  await expect(page.getByRole("heading", { name: "Spadek napięcia" })).toBeVisible();
+  // zamiast białego ekranu — cofnięcie do PIERWSZEJ pozycji z listy, czyli
+  // `CALC_LIST[0]` (patrz fallback w CalculatorsTab). Od czasu ułożenia listy wg
+  // etapu pracy jest nią bilans mocy, a nie spadek napięcia.
+  await expect(page.getByRole("heading", { name: "Bilans mocy budynku" })).toBeVisible();
   await expect(page.locator(".pe-result").first()).toBeVisible();
 });
 

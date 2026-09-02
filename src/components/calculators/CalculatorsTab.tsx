@@ -2192,18 +2192,22 @@ export function CalculatorsTab() {
                   hint="Dopuszczalny prąd długotrwały POJEDYNCZEJ żyły po współczynnikach korekcyjnych — z kalkulatora „Dobór przekroju przewodu” albo z Rozdzielnicy. Zostaw 0, żeby zobaczyć sam podział prądu bez oceny."
                 />
               </div>
-              <label className="mb-3 block">
+              {/* Jawne htmlFor/id z tego samego powodu co w `Field` — przycisk „i" jest
+                  elementem etykietowalnym i przy owinięciu obu w <label> przejąłby
+                  powiązanie, zostawiając pole bez nazwy dostępnej. */}
+              <div className="mb-3">
                 <div className="mb-1 flex items-center gap-1 text-xs text-slate-500">
-                  Długości poszczególnych żył (po przecinku)
+                  <label htmlFor="im-rownolegle-dlugosci">Długości poszczególnych żył (po przecinku)</label>
                   <HintButton hint="Wpisz długość KAŻDEJ żyły biegnącej równolegle, oddzieloną przecinkiem — np. dla dwóch żył o różnej długości: 40, 60. Różne długości to właśnie ten problem, który ten kalkulator pokazuje liczbowo." />
                 </div>
                 <input
+                  id="im-rownolegle-dlugosci"
                   className="pe-input pe-mono w-full text-sm"
                   value={imRownolegleDlugosci}
                   onChange={(e) => patch({ imRownolegleDlugosci: e.target.value })}
                   placeholder="np. 40, 60"
                 />
-              </label>
+              </div>
 
               {rownolegle.wartosci && (
                 <div className="mt-2 p-3 pe-result">
