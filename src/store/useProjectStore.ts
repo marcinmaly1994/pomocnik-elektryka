@@ -18,6 +18,7 @@ import {
   nextRoomColor,
   nextRoomName,
   reassignRoomsOnFloor,
+  reconcileRoomsOnLoad,
   roomColorForIndex,
   scaleOf,
   type PlanSize,
@@ -207,6 +208,19 @@ interface ProjectState {
   planSize: PlanSize;
   onboarding: OnboardingState;
 
+  /**
+   * Ile elementów dostało poprawione przypisanie do pomieszczenia przy ostatnim
+   * wczytaniu projektu (patrz `reconcileRoomsOnLoad`) — 0, gdy zapis był spójny.
+   *
+   * Stan ULOTNY, świadomie poza `ProjectPayload`: to nie jest własność projektu,
+   * tylko wynik jednego wczytania, i po odświeżeniu strony na poprawionych już
+   * danych ma wyjść zero. Zakładka Instalacja robi z tego jednorazowy komunikat,
+   * żeby remont zapisu nie odbywał się po cichu.
+   */
+  roomsFixedOnLoad: number;
+  /** Zamyka komunikat o poprawionych przypisaniach — użytkownik go przyjął. */
+  dismissRoomsFixedOnLoad: () => void;
+
   /** Sesja Supabase (konto + zapis w chmurze) — `null`, gdy niezalogowany lub
    *  backend nieskonfigurowany. Utrzymywana też w localStorage, żeby przetrwać
    *  odświeżenie strony. */
@@ -376,6 +390,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   panelOverrides: {},
   planSize: DEFAULT_PLAN_SIZE,
   onboarding: INITIAL_ONBOARDING,
+  roomsFixedOnLoad: 0,
+  dismissRoomsFixedOnLoad: () => set({ roomsFixedOnLoad: 0 }),
   session: loadStoredSession(),
   cloudId: null,
   protokolyId: null,
@@ -475,6 +491,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       panelOverrides: {},
       planSize: DEFAULT_PLAN_SIZE,
       onboarding: INITIAL_ONBOARDING,
+      // Nowy, pusty projekt nie ma czego prostować — komunikat po poprzednim
+      // wczytaniu nie może mu zostać na ekranie.
+      roomsFixedOnLoad: 0,
       docHeader: {
         ...state.docHeader,
         obiekt: "",
@@ -493,12 +512,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     return { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
   },
 
-  loadProjectPayload: (payload) =>
+  loadProjectPayload: (payload) => {
+    // `{...emptyDraft, ...payload.draft}` — zapisy sprzed dodania `openings`
+    // (pole nowe w tym kroku) nie mają go w ogóle, więc bez tego fallbacku
+    // każdy odczyt `draft.openings` na starym projekcie rzucałby na `undefined`.
+    const draft = { ...emptyDraft, ...payload.draft };
+    // Remont przypisań do pomieszczeń — patrz `reconcileRoomsOnLoad`. Wchodzi TU,
+    // a nie w komponencie, bo to jedyne wejście dla obu dróg wczytania (autozapis
+    // w localStorage i projekt z chmury), więc poprawka nie zależy od tego, którą
+    // z nich użytkownik akurat wszedł. Po przeliczeniu historia i tak startuje
+    // pusta (`past`/`future` niżej), więc poprawione dane SĄ punktem wyjścia
+    // projektu — nie stanem pośrednim, który dałoby się przypadkiem cofnąć.
+    const { elements, poprawione } = reconcileRoomsOnLoad(draft.elements, draft.roomShapes, payload.scales);
     set({
-      // `{...emptyDraft, ...payload.draft}` — zapisy sprzed dodania `openings`
-      // (pole nowe w tym kroku) nie mają go w ogóle, więc bez tego fallbacku
-      // każdy odczyt `draft.openings` na starym projekcie rzucałby na `undefined`.
-      draft: { ...emptyDraft, ...payload.draft },
+      draft: { ...draft, elements },
+      roomsFixedOnLoad: poprawione,
       floors: payload.floors.length ? payload.floors : [{ id: "f1", name: "Parter" }],
       activeFloorId: payload.activeFloorId || payload.floors[0]?.id || "f1",
       bgImages: payload.bgImages,
@@ -528,7 +556,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       future: [],
       panelPast: [],
       panelFuture: [],
-    }),
+    });
+  },
 
   setActiveFloorId: (id) => set({ activeFloorId: id }),
 
@@ -856,7 +885,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Migawka właśnie wczytana z chmury jest z definicji zgodna z chmurą —
       // bez tego automatyczny zapis w tle odpaliłby zbędny request od razu
       // po wczytaniu, mimo że nic się jeszcze nie zmieniło.
-      lastCloudSavedJson = JSON.stringify(getProjectPayload());
+      //
+      // WYJĄTEK: gdy wczytanie coś POPRAWIŁO (`reconcileRoomsOnLoad`), stan w pamięci
+      // różni się od wiersza w bazie i ten skrót byłby nieprawdą — poprawka utknęłaby
+      // w tej karcie do najbliższej innej zmiany, a każde kolejne otwarcie projektu
+      // prostowałoby to samo od nowa i pokazywało ten sam komunikat. Zostawiamy wtedy
+      // poprzednią migawkę, żeby autozapis zobaczył różnicę i odesłał poprawkę.
+      // (Odpowiednik zapisu tuż po wczytaniu autozapisu lokalnego — patrz niżej.)
+      if (get().roomsFixedOnLoad === 0) {
+        lastCloudSavedJson = JSON.stringify(getProjectPayload());
+      }
       // Nazwa wczytanego projektu liczy się jako „ostatnio zapisana" — inaczej
       // pierwszy autozapis po wczytaniu uznałby ją za zmienioną i niepotrzebnie
       // pobierał listę, żeby sprawdzić kolizję z samym sobą.
@@ -1025,6 +1063,24 @@ if (autosavedProject) {
 
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 let lastAutosavedJson: string | null = autosavedProject ? JSON.stringify(autosavedProject) : null;
+
+/**
+ * Poprawki przypisań do pomieszczeń (`reconcileRoomsOnLoad`) trafiają do zapisu OD RAZU.
+ *
+ * Wczytanie leci przed `subscribe` niżej, a punktem odniesienia autozapisu jest surowa
+ * migawka z pliku — czyli ta SPRZED przeliczenia. Bez tego zapisu poprawka żyłaby więc
+ * wyłącznie w pamięci karty i czekała na dowolną inną zmianę, a do tego czasu każde
+ * otwarcie projektu prostowałoby to samo od nowa i pokazywało ten sam komunikat.
+ * Zapisujemy tylko wtedy, gdy faktycznie było co poprawiać.
+ */
+if (autosavedProject && useProjectStore.getState().roomsFixedOnLoad > 0) {
+  lastAutosavedJson = JSON.stringify(useProjectStore.getState().getProjectPayload());
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, lastAutosavedJson);
+  } catch {
+    // patrz komentarz w subskrybencie niżej — brak zapisu nie psuje pracy w tej karcie
+  }
+}
 
 useProjectStore.subscribe(() => {
   if (autosaveTimer) clearTimeout(autosaveTimer);

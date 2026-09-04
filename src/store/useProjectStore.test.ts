@@ -267,4 +267,51 @@ describe("useProjectStore", () => {
     undo(); // nie powinno nic zmienić — historia jest pusta
     expect(useProjectStore.getState().draft.elements.map((e) => e.id)).toEqual(["e1"]);
   });
+
+  describe("remont przypisań do pomieszczeń przy wczytaniu projektu", () => {
+    // Kwadrat 100×100 jedn. w lewym górnym rogu; skala jak przy rysowaniu od zera.
+    const kuchnia = {
+      id: "r1", floor: "f1", name: "Kuchnia", color: "#C1793F",
+      points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }],
+    };
+
+    function payloadZ(elements: (typeof sampleElement)[]) {
+      const { getProjectPayload } = useProjectStore.getState();
+      const base = getProjectPayload();
+      return {
+        ...base,
+        scales: { f1: 0.05 },
+        draft: { ...base.draft, elements, roomShapes: [kuchnia] },
+      };
+    }
+
+    it("prostuje element opisany starym pokojem i mówi, ilu poprawek dokonano", () => {
+      // Zapis sprzed poprawki: gniazdko stoi w kuchni, ale twierdzi, że jest w salonie.
+      const { loadProjectPayload } = useProjectStore.getState();
+      loadProjectPayload(payloadZ([{ ...sampleElement, x: 50, y: 50, room: "Salon" }]));
+
+      const state = useProjectStore.getState();
+      expect(state.draft.elements[0].room).toBe("Kuchnia");
+      expect(state.roomsFixedOnLoad).toBe(1);
+      // Poprawka jest punktem WYJŚCIA projektu, nie krokiem do cofnięcia.
+      expect(state.past).toHaveLength(0);
+    });
+
+    it("spójny zapis nie jest ruszany i nie pokazuje komunikatu", () => {
+      const { loadProjectPayload } = useProjectStore.getState();
+      loadProjectPayload(payloadZ([{ ...sampleElement, x: 50, y: 50, room: "Kuchnia" }]));
+
+      expect(useProjectStore.getState().draft.elements[0].room).toBe("Kuchnia");
+      expect(useProjectStore.getState().roomsFixedOnLoad).toBe(0);
+    });
+
+    it("komunikat da się zamknąć i nie wraca do końca sesji", () => {
+      const { loadProjectPayload } = useProjectStore.getState();
+      loadProjectPayload(payloadZ([{ ...sampleElement, x: 50, y: 50, room: "Salon" }]));
+      expect(useProjectStore.getState().roomsFixedOnLoad).toBe(1);
+
+      useProjectStore.getState().dismissRoomsFixedOnLoad();
+      expect(useProjectStore.getState().roomsFixedOnLoad).toBe(0);
+    });
+  });
 });

@@ -158,6 +158,8 @@ export interface DesignTabProps {
 
 export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const session = useProjectStore((s) => s.session);
+  const roomsFixedOnLoad = useProjectStore((s) => s.roomsFixedOnLoad);
+  const dismissRoomsFixedOnLoad = useProjectStore((s) => s.dismissRoomsFixedOnLoad);
   const saveToCloud = useProjectStore((s) => s.saveToCloud);
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
@@ -1414,6 +1416,35 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           próbował go kliknąć, bo sam input mieszkał w kolumnie edytora, ukrytej
           podczas weryfikacji. */}
       <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleBgFile} />
+
+      {/* Jednorazowa informacja o remoncie przypisań przy wczytaniu projektu (patrz
+          `reconcileRoomsOnLoad`). Aplikacja poprawiła tu ZAPISANE dane użytkownika i
+          zaraz odłoży je autozapisem — o czymś takim trzeba powiedzieć wprost, bo
+          zmiana jest niewidoczna na rysunku (symbole stoją tam, gdzie stały; zmieniło
+          się to, do jakiego obwodu trafią w rozdzielnicy). Do zamknięcia i bez powrotu:
+          po poprawieniu danych następne wczytanie i tak naliczy zero. */}
+      {roomsFixedOnLoad > 0 && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+          style={{ background: "#2D5A8C12", color: "#2D5A8C" }}
+        >
+          <Check size={14} className="shrink-0" />
+          <span>
+            Poprawiono przypisanie {roomsFixedOnLoad}{" "}
+            {roomsFixedOnLoad === 1 ? "elementu" : "elementów"} do pomieszczeń — po przeniesieniu na planie zostały
+            w starych pokojach. Sprawdź obwody w Rozdzielnicy.
+          </span>
+          <button
+            onClick={dismissRoomsFixedOnLoad}
+            className="ml-auto shrink-0 opacity-60 hover:opacity-100"
+            title="Rozumiem"
+            aria-label="Zamknij informację o poprawionych przypisaniach"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Trwały baner ryzyka: projekt bez konta żyje WYŁĄCZNIE w localStorage tej
           przeglądarki — apka wcześniej milczała na ten temat, więc wyczyszczenie

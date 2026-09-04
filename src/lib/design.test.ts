@@ -17,6 +17,7 @@ import {
   DEFAULT_OPENING_WIDTH_UNITS,
   detectRoomName,
   reassignRoomsOnFloor,
+  reconcileRoomsOnLoad,
   roomNameAfterMove,
 } from "./design";
 
@@ -242,5 +243,55 @@ describe("reassignRoomsOnFloor", () => {
   it("zwraca tę samą tablicę, gdy nic się nie zmieniło", () => {
     const elements = [el({ id: "a", x: 50, y: 50, room: "Kuchnia" })];
     expect(reassignRoomsOnFloor(elements, OBRYSY, "f1", MPU, ["Kuchnia"])).toBe(elements);
+  });
+});
+
+describe("reconcileRoomsOnLoad", () => {
+  const SKALE = { f1: MPU };
+
+  it("prostuje element, który został w starym pokoju po przeniesieniu", () => {
+    // Zapis sprzed poprawki: gniazdko fizycznie w łazience, opisane jako kuchenne.
+    const elements = [el({ id: "a", x: 250, y: 50, room: "Kuchnia" })];
+    const out = reconcileRoomsOnLoad(elements, OBRYSY, SKALE);
+    expect(out.poprawione).toBe(1);
+    expect(out.elements[0].room).toBe("Łazienka");
+  });
+
+  it("element wyprowadzony poza wszystkie obrysy traci nieaktualne przypisanie", () => {
+    const elements = [el({ id: "a", x: 150, y: 50, room: "Kuchnia" })];
+    expect(reconcileRoomsOnLoad(elements, OBRYSY, SKALE).elements[0].room).toBe(NO_ROOM);
+  });
+
+  it("nie rusza nazw wpisanych ręcznie, dla których nie ma obrysu", () => {
+    const elements = [el({ id: "a", x: 150, y: 50, room: "Garderoba" })];
+    const out = reconcileRoomsOnLoad(elements, OBRYSY, SKALE);
+    expect(out.poprawione).toBe(0);
+    expect(out.elements[0].room).toBe("Garderoba");
+  });
+
+  it("liczy skalę i obrysy OSOBNO dla każdej kondygnacji", () => {
+    // Ta sama nazwa („Kuchnia") na dwóch piętrach to dwa różne pokoje — element
+    // z piętra nie ma prawa dopasować się do obrysu z parteru.
+    const kuchniaNaPietrze: RoomShape = { ...kuchniaObrys, id: "r3", floor: "f2" };
+    const elements = [
+      el({ id: "a", x: 50, y: 50, room: "Kuchnia", floor: "f1" }),
+      el({ id: "b", x: 250, y: 50, room: NO_ROOM, floor: "f2" }),
+    ];
+    const out = reconcileRoomsOnLoad(elements, [...OBRYSY, kuchniaNaPietrze], { f1: MPU, f2: MPU });
+    expect(out.poprawione).toBe(0);
+    expect(out.elements[1].room).toBe(NO_ROOM);
+  });
+
+  it("spójny zapis zwraca tę samą tablicę i zero poprawek", () => {
+    const elements = [el({ id: "a", x: 50, y: 50, room: "Kuchnia" })];
+    const out = reconcileRoomsOnLoad(elements, OBRYSY, SKALE);
+    expect(out.poprawione).toBe(0);
+    expect(out.elements).toBe(elements);
+  });
+
+  it("jest idempotentne — drugie wczytanie już nic nie poprawia", () => {
+    const elements = [el({ id: "a", x: 250, y: 50, room: "Kuchnia" })];
+    const raz = reconcileRoomsOnLoad(elements, OBRYSY, SKALE);
+    expect(reconcileRoomsOnLoad(raz.elements, OBRYSY, SKALE).poprawione).toBe(0);
   });
 });

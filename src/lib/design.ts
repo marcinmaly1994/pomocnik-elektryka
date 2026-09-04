@@ -222,6 +222,50 @@ export function reassignRoomsOnFloor(
   return changed ? next : elements;
 }
 
+export interface RoomReconciliation {
+  elements: InstallationElement[];
+  /** Ile elementów miało w zapisie inne pomieszczenie, niż wynika z ich położenia. */
+  poprawione: number;
+}
+
+/**
+ * Jednorazowy remont przypisań przy wczytaniu projektu — dla zapisów zrobionych,
+ * zanim `room` zaczęło jechać za elementem (`roomNameAfterMove`).
+ *
+ * Przez długi czas przypisanie liczyło się WYŁĄCZNIE w chwili postawienia elementu,
+ * więc każde późniejsze przeciągnięcie zostawiało w projekcie gniazdko twierdzące, że
+ * jest w pokoju, z którego dawno wyszło. Sama poprawka na przyszłość tego nie leczy:
+ * błędne dane siedzą w zapisanych projektach i dalej psują obwody w rozdzielnicy,
+ * strefę mokrą w doborze przekroju i kosztorys. Stąd przeliczenie na wejściu.
+ *
+ * Reguła jest ta sama co przy przeciąganiu, razem z ochroną nazw wpisanych ręcznie:
+ * pokój bez obrysu na planie („Garderoba") zostaje nietknięty, bo nic na rysunku mu
+ * nie przeczy. Przepisujemy tylko tam, gdzie geometria mówi coś innego niż zapis.
+ *
+ * Zwraca liczbę poprawek, żeby dało się o nich POWIEDZIEĆ — cicha zmiana cudzych
+ * danych przy otwarciu pliku jest gorsza niż sam błąd, który naprawia.
+ */
+export function reconcileRoomsOnLoad(
+  elements: InstallationElement[],
+  roomShapes: RoomShape[],
+  scales: Record<string, number>
+): RoomReconciliation {
+  const shapesByFloor = new Map<string, RoomShape[]>();
+  for (const r of roomShapes) {
+    const list = shapesByFloor.get(r.floor);
+    if (list) list.push(r);
+    else shapesByFloor.set(r.floor, [r]);
+  }
+  let poprawione = 0;
+  const next = elements.map((e) => {
+    const room = roomNameAfterMove(e, e.room, shapesByFloor.get(e.floor) ?? [], scaleOf(scales, e.floor));
+    if (room === e.room) return e;
+    poprawione++;
+    return { ...e, room };
+  });
+  return { elements: poprawione > 0 ? next : elements, poprawione };
+}
+
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   salon: "Salon",
   sypialnia: "Sypialnia",
