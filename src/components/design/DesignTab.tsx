@@ -747,6 +747,31 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setCalibPoints([]);
   }, [toolMode]);
 
+  /**
+   * Zmiana kondygnacji zeruje WSZYSTKO, co wskazuje na obiekty z poprzedniego piętra.
+   *
+   * Płótno pokazuje tylko aktywną kondygnację (`useActiveFloor*`), ale te stany trzymają
+   * gołe `id` i punkty — bez filtra po piętrze. Zaznaczenie przeżywające przełączenie
+   * było więc bronią wycelowaną w rzeczy poza ekranem: pigułka kontrolek dalej pokazywała
+   * „Usuń zaznaczone (4)”, a klik (albo Delete) kasował cztery elementy na piętrze, na
+   * które użytkownik właśnie przestał patrzeć — bez żadnego widocznego skutku, więc i bez
+   * szansy, żeby zauważyć pomyłkę i cofnąć.
+   *
+   * Ten sam problem, tylko odwrócony, miały niedokończone figury: `finishWall` czyta
+   * `drawingWall` i zapisuje ścianę na AKTYWNEJ kondygnacji, więc przełączenie piętra
+   * w połowie rysowania przeniosłoby narysowane punkty na nowe piętro.
+   */
+  useEffect(() => {
+    setSelected(null);
+    setMultiSelected([]);
+    setCalibPoints([]);
+    setDrawingWall([]);
+    setDrawingRoomPoints([]);
+    setContextMenu(null);
+    setRoomNameEdit(null);
+    setEditingId(null);
+  }, [activeFloorId]);
+
   function deleteSelection() {
     if (multiSelected.length > 0) {
       removeElements(multiSelected);
