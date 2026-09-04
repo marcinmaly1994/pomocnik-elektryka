@@ -4,7 +4,9 @@
  * dało się przetestować bez montowania canvasu.
  */
 
-import type { RoomShape, RoomType } from "@/types";
+import type { InstallationElement, Point, RoomShape, RoomType } from "@/types";
+import { NO_ROOM } from "@/lib/elements";
+import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
 
 /** Domyślny logiczny rozmiar planu i skok siatki — jak VB_DEFAULT/GRID w wersji JS.
  *  Domyślny, bo obszar planu jest teraz zapisywany w projekcie (`planSize` w store)
@@ -117,6 +119,151 @@ export const NO_ROOM_COLOR = "#94A3B8";
  */
 export function colorForRoomName(roomName: string, roomShapes: RoomShape[]): string {
   return roomShapes.find((r) => r.name === roomName)?.color ?? NO_ROOM_COLOR;
+}
+
+/** Elementy montowane W ścianie (gniazdka, łączniki — czyli większość instalacji)
+ *  klika się na linii ściany, a obrys pomieszczenia to OSOBNY kształt, rysowany
+ *  ręcznie — rzadko pokrywa się z nią co do piksela. Bez tolerancji taki element
+ *  ląduje tuż OBOK wielokąta pomieszczenia i dostaje „Bez pomieszczenia" mimo że
+ *  wizualnie stoi dokładnie na jego ścianie — a to po cichu psuje grupowanie
+ *  łącznik→lampa (działa tylko w obrębie tego samego pomieszczenia, patrz
+ *  lib/lightGroups.ts) i grupowanie obwodów w rozdzielnicy. Promień w metrach,
+ *  nie w jednostkach planu — inaczej ten sam próg wypadałby raz za ciasno, raz
+ *  za luźno w zależności od skali (zdjęcie rzutu vs rysowanie ręczne). */
+export const ROOM_SNAP_TOLERANCE_M = 0.4;
+
+/**
+ * W którym narysowanym pomieszczeniu leży punkt planu — wnętrze obrysu, a gdy
+ * poza nim, to najbliższa krawędź w promieniu `ROOM_SNAP_TOLERANCE_M`.
+ * `NO_ROOM`, gdy nic nie pasuje.
+ *
+ * `roomShapes` MUSZĄ być już przefiltrowane do jednej kondygnacji — nazwy
+ * pomieszczeń powtarzają się między piętrami („Łazienka" na parterze i na
+ * piętrze to dwa różne pokoje), więc szukanie po całym projekcie przypisywałoby
+ * elementy do obrysów z innego poziomu.
+ */
+export function detectRoomName(p: Point, roomShapes: RoomShape[], metersPerUnit: number | null): string {
+  for (const r of roomShapes) {
+    if (pointInPolygon(p, r.points)) return r.name;
+  }
+  const toleranceUnits = metersPerUnit ? ROOM_SNAP_TOLERANCE_M / metersPerUnit : GRID;
+  let bestName: string | null = null;
+  let bestDist = toleranceUnits;
+  for (const r of roomShapes) {
+    const nearest = nearestPointOnPolyline(p, [...r.points, r.points[0]]);
+    if (!nearest) continue;
+    const dist = Math.hypot(p.x - nearest.point.x, p.y - nearest.point.y);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestName = r.name;
+    }
+  }
+  return bestName ?? NO_ROOM;
+}
+
+/**
+ * Nazwa pomieszczenia dla elementu, który WŁAŚNIE zmienił położenie na planie.
+ *
+ * Przypisanie musi iść za elementem, bo `room` to nie etykieta opisowa, tylko
+ * dana wejściowa: decyduje o grupowaniu obwodów (`computeCircuits`), o strefie
+ * mokrej w doborze przekroju (`isWetRoomName`) i o grupach oświetlenia. Gniazdko
+ * przeciągnięte z salonu do łazienki, które nadal twierdzi, że jest w salonie,
+ * po cichu psuje wszystkie trzy.
+ *
+ * Jedyny wyjątek to nazwa WPISANA RĘCZNIE (patrz pole „Pomieszczenie" w
+ * `EditElementModal`), której nie odpowiada żaden obrys na planie: skoro nic na
+ * rysunku jej nie zaprzecza, przesunięcie elementu o kilka pikseli nie ma prawa
+ * jej skasować. Przypisanie zdejmujemy dopiero wtedy, gdy element faktycznie
+ * wyszedł z narysowanego obrysu.
+ */
+export function roomNameAfterMove(
+  p: Point,
+  currentRoom: string,
+  roomShapes: RoomShape[],
+  metersPerUnit: number | null
+): string {
+  const detected = detectRoomName(p, roomShapes, metersPerUnit);
+  if (detected !== NO_ROOM) return detected;
+  return roomShapes.some((r) => r.name === currentRoom) ? NO_ROOM : currentRoom;
+}
+
+/**
+ * Przelicza przypisanie elementów po zmianie GEOMETRII pomieszczeń (dorysowanie,
+ * przesunięcie narożnika, usunięcie obrysu) — odwrotna strona `roomNameAfterMove`,
+ * gdzie ruszył się nie element, tylko pomieszczenie pod nim.
+ *
+ * Zasięg zawężony do `touchedRoomNames` + „Bez pomieszczenia" i to on chroni
+ * ręcznie wpisane nazwy: przeliczamy wyłącznie elementy, które należały do
+ * ruszonego obrysu (mogły z niego wypaść) albo do niczego (mogły zostać przez
+ * niego objęte). Element opisany ręcznie jako „Garderoba" nie jest niczyj i nie
+ * ma go po co ruszać przy edycji sąsiedniego pokoju.
+ *
+ * `roomShapes` i `elements` to pełne, wielopiętrowe listy z draftu — filtrowanie
+ * po `floorId` siedzi tutaj, żeby wołający (store) nie musiał tego powtarzać.
+ * Zwraca tę samą tablicę, gdy nic się nie zmieniło.
+ */
+export function reassignRoomsOnFloor(
+  elements: InstallationElement[],
+  roomShapes: RoomShape[],
+  floorId: string,
+  metersPerUnit: number | null,
+  touchedRoomNames: string[]
+): InstallationElement[] {
+  const scope = new Set([NO_ROOM, ...touchedRoomNames]);
+  const shapesHere = roomShapes.filter((r) => r.floor === floorId);
+  let changed = false;
+  const next = elements.map((e) => {
+    if (e.floor !== floorId || !scope.has(e.room)) return e;
+    const room = detectRoomName(e, shapesHere, metersPerUnit);
+    if (room === e.room) return e;
+    changed = true;
+    return { ...e, room };
+  });
+  return changed ? next : elements;
+}
+
+export interface RoomReconciliation {
+  elements: InstallationElement[];
+  /** Ile elementów miało w zapisie inne pomieszczenie, niż wynika z ich położenia. */
+  poprawione: number;
+}
+
+/**
+ * Jednorazowy remont przypisań przy wczytaniu projektu — dla zapisów zrobionych,
+ * zanim `room` zaczęło jechać za elementem (`roomNameAfterMove`).
+ *
+ * Przez długi czas przypisanie liczyło się WYŁĄCZNIE w chwili postawienia elementu,
+ * więc każde późniejsze przeciągnięcie zostawiało w projekcie gniazdko twierdzące, że
+ * jest w pokoju, z którego dawno wyszło. Sama poprawka na przyszłość tego nie leczy:
+ * błędne dane siedzą w zapisanych projektach i dalej psują obwody w rozdzielnicy,
+ * strefę mokrą w doborze przekroju i kosztorys. Stąd przeliczenie na wejściu.
+ *
+ * Reguła jest ta sama co przy przeciąganiu, razem z ochroną nazw wpisanych ręcznie:
+ * pokój bez obrysu na planie („Garderoba") zostaje nietknięty, bo nic na rysunku mu
+ * nie przeczy. Przepisujemy tylko tam, gdzie geometria mówi coś innego niż zapis.
+ *
+ * Zwraca liczbę poprawek, żeby dało się o nich POWIEDZIEĆ — cicha zmiana cudzych
+ * danych przy otwarciu pliku jest gorsza niż sam błąd, który naprawia.
+ */
+export function reconcileRoomsOnLoad(
+  elements: InstallationElement[],
+  roomShapes: RoomShape[],
+  scales: Record<string, number>
+): RoomReconciliation {
+  const shapesByFloor = new Map<string, RoomShape[]>();
+  for (const r of roomShapes) {
+    const list = shapesByFloor.get(r.floor);
+    if (list) list.push(r);
+    else shapesByFloor.set(r.floor, [r]);
+  }
+  let poprawione = 0;
+  const next = elements.map((e) => {
+    const room = roomNameAfterMove(e, e.room, shapesByFloor.get(e.floor) ?? [], scaleOf(scales, e.floor));
+    if (room === e.room) return e;
+    poprawione++;
+    return { ...e, room };
+  });
+  return { elements: poprawione > 0 ? next : elements, poprawione };
 }
 
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {

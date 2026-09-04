@@ -13,7 +13,16 @@ import type {
   PanelConfig,
   PanelDevice,
 } from "@/types";
-import { DEFAULT_PLAN_SIZE, nextRoomColor, nextRoomName, roomColorForIndex, scaleOf, type PlanSize } from "@/lib/design";
+import {
+  DEFAULT_PLAN_SIZE,
+  nextRoomColor,
+  nextRoomName,
+  reassignRoomsOnFloor,
+  reconcileRoomsOnLoad,
+  roomColorForIndex,
+  scaleOf,
+  type PlanSize,
+} from "@/lib/design";
 import { DEFAULT_PRICES } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
@@ -199,6 +208,19 @@ interface ProjectState {
   planSize: PlanSize;
   onboarding: OnboardingState;
 
+  /**
+   * Ile elementów dostało poprawione przypisanie do pomieszczenia przy ostatnim
+   * wczytaniu projektu (patrz `reconcileRoomsOnLoad`) — 0, gdy zapis był spójny.
+   *
+   * Stan ULOTNY, świadomie poza `ProjectPayload`: to nie jest własność projektu,
+   * tylko wynik jednego wczytania, i po odświeżeniu strony na poprawionych już
+   * danych ma wyjść zero. Zakładka Instalacja robi z tego jednorazowy komunikat,
+   * żeby remont zapisu nie odbywał się po cichu.
+   */
+  roomsFixedOnLoad: number;
+  /** Zamyka komunikat o poprawionych przypisaniach — użytkownik go przyjął. */
+  dismissRoomsFixedOnLoad: () => void;
+
   /** Sesja Supabase (konto + zapis w chmurze) — `null`, gdy niezalogowany lub
    *  backend nieskonfigurowany. Utrzymywana też w localStorage, żeby przetrwać
    *  odświeżenie strony. */
@@ -368,6 +390,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   panelOverrides: {},
   planSize: DEFAULT_PLAN_SIZE,
   onboarding: INITIAL_ONBOARDING,
+  roomsFixedOnLoad: 0,
+  dismissRoomsFixedOnLoad: () => set({ roomsFixedOnLoad: 0 }),
   session: loadStoredSession(),
   cloudId: null,
   protokolyId: null,
@@ -467,6 +491,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       panelOverrides: {},
       planSize: DEFAULT_PLAN_SIZE,
       onboarding: INITIAL_ONBOARDING,
+      // Nowy, pusty projekt nie ma czego prostować — komunikat po poprzednim
+      // wczytaniu nie może mu zostać na ekranie.
+      roomsFixedOnLoad: 0,
       docHeader: {
         ...state.docHeader,
         obiekt: "",
@@ -485,12 +512,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     return { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
   },
 
-  loadProjectPayload: (payload) =>
+  loadProjectPayload: (payload) => {
+    // `{...emptyDraft, ...payload.draft}` — zapisy sprzed dodania `openings`
+    // (pole nowe w tym kroku) nie mają go w ogóle, więc bez tego fallbacku
+    // każdy odczyt `draft.openings` na starym projekcie rzucałby na `undefined`.
+    const draft = { ...emptyDraft, ...payload.draft };
+    // Remont przypisań do pomieszczeń — patrz `reconcileRoomsOnLoad`. Wchodzi TU,
+    // a nie w komponencie, bo to jedyne wejście dla obu dróg wczytania (autozapis
+    // w localStorage i projekt z chmury), więc poprawka nie zależy od tego, którą
+    // z nich użytkownik akurat wszedł. Po przeliczeniu historia i tak startuje
+    // pusta (`past`/`future` niżej), więc poprawione dane SĄ punktem wyjścia
+    // projektu — nie stanem pośrednim, który dałoby się przypadkiem cofnąć.
+    const { elements, poprawione } = reconcileRoomsOnLoad(draft.elements, draft.roomShapes, payload.scales);
     set({
-      // `{...emptyDraft, ...payload.draft}` — zapisy sprzed dodania `openings`
-      // (pole nowe w tym kroku) nie mają go w ogóle, więc bez tego fallbacku
-      // każdy odczyt `draft.openings` na starym projekcie rzucałby na `undefined`.
-      draft: { ...emptyDraft, ...payload.draft },
+      draft: { ...draft, elements },
+      roomsFixedOnLoad: poprawione,
       floors: payload.floors.length ? payload.floors : [{ id: "f1", name: "Parter" }],
       activeFloorId: payload.activeFloorId || payload.floors[0]?.id || "f1",
       bgImages: payload.bgImages,
@@ -520,7 +556,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       future: [],
       panelPast: [],
       panelFuture: [],
-    }),
+    });
+  },
 
   setActiveFloorId: (id) => set({ activeFloorId: id }),
 
@@ -848,7 +885,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Migawka właśnie wczytana z chmury jest z definicji zgodna z chmurą —
       // bez tego automatyczny zapis w tle odpaliłby zbędny request od razu
       // po wczytaniu, mimo że nic się jeszcze nie zmieniło.
-      lastCloudSavedJson = JSON.stringify(getProjectPayload());
+      //
+      // WYJĄTEK: gdy wczytanie coś POPRAWIŁO (`reconcileRoomsOnLoad`), stan w pamięci
+      // różni się od wiersza w bazie i ten skrót byłby nieprawdą — poprawka utknęłaby
+      // w tej karcie do najbliższej innej zmiany, a każde kolejne otwarcie projektu
+      // prostowałoby to samo od nowa i pokazywało ten sam komunikat. Zostawiamy wtedy
+      // poprzednią migawkę, żeby autozapis zobaczył różnicę i odesłał poprawkę.
+      // (Odpowiednik zapisu tuż po wczytaniu autozapisu lokalnego — patrz niżej.)
+      if (get().roomsFixedOnLoad === 0) {
+        lastCloudSavedJson = JSON.stringify(getProjectPayload());
+      }
       // Nazwa wczytanego projektu liczy się jako „ostatnio zapisana" — inaczej
       // pierwszy autozapis po wczytaniu uznałby ją za zmienioną i niepotrzebnie
       // pobierał listę, żeby sprawdzić kolizję z samym sobą.
@@ -872,7 +918,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       points,
       type,
     };
-    setDraft((d) => ({ ...d, roomShapes: [...d.roomShapes, room] }));
+    // Świeżo obrysowane pomieszczenie przygarnia elementy, które już w nim stoją.
+    // Kolejność „najpierw postaw gniazdka, potem obrysuj pokój" jest normalna przy
+    // pracy na wgranym rzucie (widać ściany, więc nie trzeba nic obrysowywać, żeby
+    // zacząć) — a bez tego wszystkie takie elementy zostawały „Bez pomieszczenia"
+    // na zawsze, bo przypisanie liczyło się wyłącznie w chwili postawienia.
+    const mpu = scaleOf(get().scales, floor);
+    setDraft((d) => {
+      const roomShapes = [...d.roomShapes, room];
+      return { ...d, roomShapes, elements: reassignRoomsOnFloor(d.elements, roomShapes, floor, mpu, []) };
+    });
   },
 
   setRoomShapeType: (id, type) => {
@@ -897,14 +952,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     });
   },
 
+  // Przeciągnięcie narożnika potrafi wypchnąć element z pomieszczenia albo wciągnąć
+  // do niego sąsiada — przypisanie musi za tym nadążyć, tak samo jak przy zmianie
+  // nazwy wyżej. Zawężone do TEGO pomieszczenia i elementów niczyich (patrz
+  // `reassignRoomsOnFloor`), żeby edycja jednego pokoju nie ruszała reszty planu.
   moveRoomShapePoint: (id, index, point) => {
-    const { setDraft } = get();
-    setDraft((d) => ({
-      ...d,
-      roomShapes: d.roomShapes.map((r) =>
+    const { setDraft, scales } = get();
+    setDraft((d) => {
+      const room = d.roomShapes.find((r) => r.id === id);
+      if (!room) return d;
+      const roomShapes = d.roomShapes.map((r) =>
         r.id === id ? { ...r, points: r.points.map((p, i) => (i === index ? point : p)) } : r
-      ),
-    }));
+      );
+      return {
+        ...d,
+        roomShapes,
+        elements: reassignRoomsOnFloor(d.elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
+      };
+    });
   },
 
   recolorRoomShape: (id) => {
@@ -918,15 +983,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteRoomShape: (id) => {
-    const { setDraft } = get();
+    const { setDraft, scales } = get();
     // Kasuje też otwory postawione na krawędzi TEGO pomieszczenia — inaczej zostałyby
     // osierocone (roomId wskazujący na nieistniejące pomieszczenie), tak samo jak przy
     // kasowaniu ściany i jej otworów w DesignTab.
-    setDraft((d) => ({
-      ...d,
-      roomShapes: d.roomShapes.filter((r) => r.id !== id),
-      openings: d.openings.filter((o) => o.roomId !== id),
-    }));
+    // Elementy stojące w kasowanym pomieszczeniu to ta sama klasa osieroceń, tylko po
+    // nazwie zamiast po id: bez przeliczenia zostawały z nazwą pokoju, którego już nie
+    // ma na planie, i dalej tworzyły „jego" obwód w rozdzielnicy. Trafiają teraz albo
+    // do pomieszczenia, które faktycznie je obejmuje, albo do „Bez pomieszczenia".
+    setDraft((d) => {
+      const room = d.roomShapes.find((r) => r.id === id);
+      if (!room) return d;
+      const roomShapes = d.roomShapes.filter((r) => r.id !== id);
+      return {
+        ...d,
+        roomShapes,
+        openings: d.openings.filter((o) => o.roomId !== id),
+        elements: reassignRoomsOnFloor(d.elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
+      };
+    });
   },
 
   removeElements: (ids) => {
@@ -988,6 +1063,24 @@ if (autosavedProject) {
 
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 let lastAutosavedJson: string | null = autosavedProject ? JSON.stringify(autosavedProject) : null;
+
+/**
+ * Poprawki przypisań do pomieszczeń (`reconcileRoomsOnLoad`) trafiają do zapisu OD RAZU.
+ *
+ * Wczytanie leci przed `subscribe` niżej, a punktem odniesienia autozapisu jest surowa
+ * migawka z pliku — czyli ta SPRZED przeliczenia. Bez tego zapisu poprawka żyłaby więc
+ * wyłącznie w pamięci karty i czekała na dowolną inną zmianę, a do tego czasu każde
+ * otwarcie projektu prostowałoby to samo od nowa i pokazywało ten sam komunikat.
+ * Zapisujemy tylko wtedy, gdy faktycznie było co poprawiać.
+ */
+if (autosavedProject && useProjectStore.getState().roomsFixedOnLoad > 0) {
+  lastAutosavedJson = JSON.stringify(useProjectStore.getState().getProjectPayload());
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, lastAutosavedJson);
+  } catch {
+    // patrz komentarz w subskrybencie niżej — brak zapisu nie psuje pracy w tej karcie
+  }
+}
 
 useProjectStore.subscribe(() => {
   if (autosaveTimer) clearTimeout(autosaveTimer);

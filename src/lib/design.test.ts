@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { RoomShape } from "@/types";
+import type { InstallationElement, RoomShape } from "@/types";
+import { NO_ROOM } from "./elements";
 import {
   ROOM_COLORS,
   roomColorForIndex,
@@ -14,6 +15,10 @@ import {
   defaultOpeningWidth,
   DEFAULT_DOOR_WIDTH_CM,
   DEFAULT_OPENING_WIDTH_UNITS,
+  detectRoomName,
+  reassignRoomsOnFloor,
+  reconcileRoomsOnLoad,
+  roomNameAfterMove,
 } from "./design";
 
 describe("roomColorForIndex", () => {
@@ -124,5 +129,169 @@ describe("defaultOpeningWidth", () => {
   it("nieprawidłowa skala (0 lub ujemna) też spada na fallback", () => {
     expect(defaultOpeningWidth(0)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
     expect(defaultOpeningWidth(-1)).toBe(DEFAULT_OPENING_WIDTH_UNITS);
+  });
+});
+
+/** Dwa sąsiadujące pokoje 100×100 jedn.: kuchnia po lewej, łazienka po prawej.
+ *  Skala jak przy rysowaniu od zera (1 jedn. = 5 cm), więc próg przyciągania do
+ *  krawędzi (ROOM_SNAP_TOLERANCE_M = 0,4 m) wypada na 8 jedn. */
+const MPU = 0.05;
+const kuchniaObrys: RoomShape = {
+  id: "r1",
+  floor: "f1",
+  name: "Kuchnia",
+  color: "#C1793F",
+  points: [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+    { x: 0, y: 100 },
+  ],
+};
+const lazienkaObrys: RoomShape = {
+  id: "r2",
+  floor: "f1",
+  name: "Łazienka",
+  color: "#2D5A8C",
+  points: [
+    { x: 200, y: 0 },
+    { x: 300, y: 0 },
+    { x: 300, y: 100 },
+    { x: 200, y: 100 },
+  ],
+};
+const OBRYSY = [kuchniaObrys, lazienkaObrys];
+
+function el(over: Partial<InstallationElement>): InstallationElement {
+  return {
+    id: "e1",
+    type: "gniazdko",
+    x: 50,
+    y: 50,
+    room: "Kuchnia",
+    floor: "f1",
+    dedicated: false,
+    note: "",
+    gangs: 1,
+    ...over,
+  };
+}
+
+describe("detectRoomName", () => {
+  it("punkt wewnątrz obrysu dostaje jego nazwę", () => {
+    expect(detectRoomName({ x: 50, y: 50 }, OBRYSY, MPU)).toBe("Kuchnia");
+    expect(detectRoomName({ x: 250, y: 50 }, OBRYSY, MPU)).toBe("Łazienka");
+  });
+
+  it("punkt tuż za krawędzią przyciąga się do pomieszczenia (osprzęt w ścianie)", () => {
+    expect(detectRoomName({ x: 105, y: 50 }, OBRYSY, MPU)).toBe("Kuchnia");
+  });
+
+  it("punkt dalej niż próg tolerancji jest niczyj", () => {
+    expect(detectRoomName({ x: 150, y: 50 }, OBRYSY, MPU)).toBe(NO_ROOM);
+  });
+
+  it("bez obrysów wszystko jest niczyje", () => {
+    expect(detectRoomName({ x: 50, y: 50 }, [], MPU)).toBe(NO_ROOM);
+  });
+});
+
+describe("roomNameAfterMove", () => {
+  it("element przeciągnięty do innego pomieszczenia zmienia przypisanie", () => {
+    expect(roomNameAfterMove({ x: 250, y: 50 }, "Kuchnia", OBRYSY, MPU)).toBe("Łazienka");
+  });
+
+  it("element wyprowadzony poza wszystkie obrysy traci przypisanie", () => {
+    expect(roomNameAfterMove({ x: 150, y: 50 }, "Kuchnia", OBRYSY, MPU)).toBe(NO_ROOM);
+  });
+
+  it("nazwa wpisana ręcznie (bez obrysu na planie) przeżywa przesunięcie", () => {
+    // „Garderoba" nie ma obrysu, więc nic na rysunku jej nie zaprzecza — samo
+    // drgnięcie elementu nie ma prawa skasować tego, co użytkownik wpisał.
+    expect(roomNameAfterMove({ x: 150, y: 50 }, "Garderoba", OBRYSY, MPU)).toBe("Garderoba");
+  });
+
+  it("ale wjazd w narysowany obrys wygrywa nawet z nazwą wpisaną ręcznie", () => {
+    expect(roomNameAfterMove({ x: 250, y: 50 }, "Garderoba", OBRYSY, MPU)).toBe("Łazienka");
+  });
+});
+
+describe("reassignRoomsOnFloor", () => {
+  it("dorysowane pomieszczenie przygarnia elementy niczyje", () => {
+    const elements = [el({ id: "a", x: 50, y: 50, room: NO_ROOM })];
+    const out = reassignRoomsOnFloor(elements, OBRYSY, "f1", MPU, []);
+    expect(out[0].room).toBe("Kuchnia");
+  });
+
+  it("nie rusza elementów spoza zasięgu zmiany", () => {
+    // Łazienkowe gniazdko zostaje łazienkowe, choć przeliczamy po edycji kuchni.
+    const elements = [el({ id: "a", x: 250, y: 50, room: "Łazienka" })];
+    expect(reassignRoomsOnFloor(elements, OBRYSY, "f1", MPU, ["Kuchnia"])).toBe(elements);
+  });
+
+  it("po usunięciu obrysu elementy tracą nazwę nieistniejącego pokoju", () => {
+    const elements = [el({ id: "a", x: 50, y: 50, room: "Kuchnia" })];
+    const out = reassignRoomsOnFloor(elements, [lazienkaObrys], "f1", MPU, ["Kuchnia"]);
+    expect(out[0].room).toBe(NO_ROOM);
+  });
+
+  it("nie dotyka innych kondygnacji", () => {
+    const elements = [el({ id: "a", x: 50, y: 50, room: NO_ROOM, floor: "f2" })];
+    expect(reassignRoomsOnFloor(elements, OBRYSY, "f1", MPU, [])).toBe(elements);
+  });
+
+  it("zwraca tę samą tablicę, gdy nic się nie zmieniło", () => {
+    const elements = [el({ id: "a", x: 50, y: 50, room: "Kuchnia" })];
+    expect(reassignRoomsOnFloor(elements, OBRYSY, "f1", MPU, ["Kuchnia"])).toBe(elements);
+  });
+});
+
+describe("reconcileRoomsOnLoad", () => {
+  const SKALE = { f1: MPU };
+
+  it("prostuje element, który został w starym pokoju po przeniesieniu", () => {
+    // Zapis sprzed poprawki: gniazdko fizycznie w łazience, opisane jako kuchenne.
+    const elements = [el({ id: "a", x: 250, y: 50, room: "Kuchnia" })];
+    const out = reconcileRoomsOnLoad(elements, OBRYSY, SKALE);
+    expect(out.poprawione).toBe(1);
+    expect(out.elements[0].room).toBe("Łazienka");
+  });
+
+  it("element wyprowadzony poza wszystkie obrysy traci nieaktualne przypisanie", () => {
+    const elements = [el({ id: "a", x: 150, y: 50, room: "Kuchnia" })];
+    expect(reconcileRoomsOnLoad(elements, OBRYSY, SKALE).elements[0].room).toBe(NO_ROOM);
+  });
+
+  it("nie rusza nazw wpisanych ręcznie, dla których nie ma obrysu", () => {
+    const elements = [el({ id: "a", x: 150, y: 50, room: "Garderoba" })];
+    const out = reconcileRoomsOnLoad(elements, OBRYSY, SKALE);
+    expect(out.poprawione).toBe(0);
+    expect(out.elements[0].room).toBe("Garderoba");
+  });
+
+  it("liczy skalę i obrysy OSOBNO dla każdej kondygnacji", () => {
+    // Ta sama nazwa („Kuchnia") na dwóch piętrach to dwa różne pokoje — element
+    // z piętra nie ma prawa dopasować się do obrysu z parteru.
+    const kuchniaNaPietrze: RoomShape = { ...kuchniaObrys, id: "r3", floor: "f2" };
+    const elements = [
+      el({ id: "a", x: 50, y: 50, room: "Kuchnia", floor: "f1" }),
+      el({ id: "b", x: 250, y: 50, room: NO_ROOM, floor: "f2" }),
+    ];
+    const out = reconcileRoomsOnLoad(elements, [...OBRYSY, kuchniaNaPietrze], { f1: MPU, f2: MPU });
+    expect(out.poprawione).toBe(0);
+    expect(out.elements[1].room).toBe(NO_ROOM);
+  });
+
+  it("spójny zapis zwraca tę samą tablicę i zero poprawek", () => {
+    const elements = [el({ id: "a", x: 50, y: 50, room: "Kuchnia" })];
+    const out = reconcileRoomsOnLoad(elements, OBRYSY, SKALE);
+    expect(out.poprawione).toBe(0);
+    expect(out.elements).toBe(elements);
+  });
+
+  it("jest idempotentne — drugie wczytanie już nic nie poprawia", () => {
+    const elements = [el({ id: "a", x: 250, y: 50, room: "Kuchnia" })];
+    const raz = reconcileRoomsOnLoad(elements, OBRYSY, SKALE);
+    expect(reconcileRoomsOnLoad(raz.elements, OBRYSY, SKALE).poprawione).toBe(0);
   });
 });

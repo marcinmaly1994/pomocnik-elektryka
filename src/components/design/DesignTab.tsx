@@ -23,7 +23,7 @@ import {
   useProjectStore,
 } from "@/store/useProjectStore";
 import type { ElementType, Point, RoomType } from "@/types";
-import { computeSanitaryZones, NO_ROOM, VARIANTS_FOR } from "@/lib/elements";
+import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
@@ -33,12 +33,13 @@ import {
   MANUAL_DRAW_SCALE_MPU,
   ROOM_TYPE_LABELS,
   defaultOpeningWidth,
+  detectRoomName,
   guessRoomType,
   nextRoomName,
   planSizeForImage,
+  roomNameAfterMove,
   scaleOf,
 } from "@/lib/design";
-import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
@@ -157,6 +158,8 @@ export interface DesignTabProps {
 
 export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const session = useProjectStore((s) => s.session);
+  const roomsFixedOnLoad = useProjectStore((s) => s.roomsFixedOnLoad);
+  const dismissRoomsFixedOnLoad = useProjectStore((s) => s.dismissRoomsFixedOnLoad);
   const saveToCloud = useProjectStore((s) => s.saveToCloud);
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
@@ -746,6 +749,31 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setCalibPoints([]);
   }, [toolMode]);
 
+  /**
+   * Zmiana kondygnacji zeruje WSZYSTKO, co wskazuje na obiekty z poprzedniego piętra.
+   *
+   * Płótno pokazuje tylko aktywną kondygnację (`useActiveFloor*`), ale te stany trzymają
+   * gołe `id` i punkty — bez filtra po piętrze. Zaznaczenie przeżywające przełączenie
+   * było więc bronią wycelowaną w rzeczy poza ekranem: pigułka kontrolek dalej pokazywała
+   * „Usuń zaznaczone (4)”, a klik (albo Delete) kasował cztery elementy na piętrze, na
+   * które użytkownik właśnie przestał patrzeć — bez żadnego widocznego skutku, więc i bez
+   * szansy, żeby zauważyć pomyłkę i cofnąć.
+   *
+   * Ten sam problem, tylko odwrócony, miały niedokończone figury: `finishWall` czyta
+   * `drawingWall` i zapisuje ścianę na AKTYWNEJ kondygnacji, więc przełączenie piętra
+   * w połowie rysowania przeniosłoby narysowane punkty na nowe piętro.
+   */
+  useEffect(() => {
+    setSelected(null);
+    setMultiSelected([]);
+    setCalibPoints([]);
+    setDrawingWall([]);
+    setDrawingRoomPoints([]);
+    setContextMenu(null);
+    setRoomNameEdit(null);
+    setEditingId(null);
+  }, [activeFloorId]);
+
   function deleteSelection() {
     if (multiSelected.length > 0) {
       removeElements(multiSelected);
@@ -895,36 +923,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  /** Elementy montowane W ścianie (gniazdka, łączniki — czyli większość instalacji)
-   *  klika się na linii ściany, a obrys pomieszczenia to OSOBNY kształt, rysowany
-   *  ręcznie — rzadko pokrywa się z nią co do piksela. Bez tolerancji taki element
-   *  ląduje tuż OBOK wielokąta pomieszczenia i dostaje „Bez pomieszczenia" mimo że
-   *  wizualnie stoi dokładnie na jego ścianie — a to po cichu psuje grupowanie
-   *  łącznik→lampa (działa tylko w obrębie tego samego pomieszczenia, patrz
-   *  lib/lightGroups.ts) i grupowanie obwodów w rozdzielnicy. Promień w metrach,
-   *  nie w jednostkach planu — inaczej ten sam próg wypadałby raz za ciasno, raz
-   *  za luźno w zależności od skali (zdjęcie rzutu vs rysowanie ręczne). */
-  const ROOM_SNAP_TOLERANCE_M = 0.4;
-
-  function detectRoomName(p: Point): string {
-    for (const r of roomShapes) {
-      if (pointInPolygon(p, r.points)) return r.name;
-    }
-    const toleranceUnits = mpu ? ROOM_SNAP_TOLERANCE_M / mpu : GRID;
-    let bestName: string | null = null;
-    let bestDist = toleranceUnits;
-    for (const r of roomShapes) {
-      const nearest = nearestPointOnPolyline(p, [...r.points, r.points[0]]);
-      if (!nearest) continue;
-      const dist = Math.hypot(p.x - nearest.point.x, p.y - nearest.point.y);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestName = r.name;
-      }
-    }
-    return bestName ?? NO_ROOM;
-  }
-
   // Każdy typ z wariantami ma WŁASNY licznik gangów — zmiana jednego nie wpływa na drugi.
   function gangsForType(t: ElementType): number {
     if (!VARIANTS_FOR[t]) return 1;
@@ -941,7 +939,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           type: activeType,
           x: p.x,
           y: p.y,
-          room: detectRoomName(p),
+          room: detectRoomName(p, roomShapes, mpu),
           floor: activeFloorId,
           dedicated: activeType === "gniazdko" ? dedicated : false,
           note: activeType === "gniazdko" && dedicated ? "AGD" : "",
@@ -1418,6 +1416,35 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           próbował go kliknąć, bo sam input mieszkał w kolumnie edytora, ukrytej
           podczas weryfikacji. */}
       <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleBgFile} />
+
+      {/* Jednorazowa informacja o remoncie przypisań przy wczytaniu projektu (patrz
+          `reconcileRoomsOnLoad`). Aplikacja poprawiła tu ZAPISANE dane użytkownika i
+          zaraz odłoży je autozapisem — o czymś takim trzeba powiedzieć wprost, bo
+          zmiana jest niewidoczna na rysunku (symbole stoją tam, gdzie stały; zmieniło
+          się to, do jakiego obwodu trafią w rozdzielnicy). Do zamknięcia i bez powrotu:
+          po poprawieniu danych następne wczytanie i tak naliczy zero. */}
+      {roomsFixedOnLoad > 0 && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+          style={{ background: "#2D5A8C12", color: "#2D5A8C" }}
+        >
+          <Check size={14} className="shrink-0" />
+          <span>
+            Poprawiono przypisanie {roomsFixedOnLoad}{" "}
+            {roomsFixedOnLoad === 1 ? "elementu" : "elementów"} do pomieszczeń — po przeniesieniu na planie zostały
+            w starych pokojach. Sprawdź obwody w Rozdzielnicy.
+          </span>
+          <button
+            onClick={dismissRoomsFixedOnLoad}
+            className="ml-auto shrink-0 opacity-60 hover:opacity-100"
+            title="Rozumiem"
+            aria-label="Zamknij informację o poprawionych przypisaniach"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Trwały baner ryzyka: projekt bez konta żyje WYŁĄCZNIE w localStorage tej
           przeglądarki — apka wcześniej milczała na ten temat, więc wyczyszczenie
@@ -2009,13 +2036,26 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               setSelected(null);
             }}
             onPlaceElement={handlePlaceElement}
-            onMoveElement={(id, x, y) => setDraft((d) => ({ ...d, elements: d.elements.map((e) => (e.id === id ? { ...e, x, y } : e)) }))}
+            /* Przypisanie do pomieszczenia jedzie RAZEM z elementem — patrz
+               `roomNameAfterMove`. Bez tego gniazdko przeciągnięte z salonu do
+               łazienki nadal raportowało się jako salonowe i po cichu trafiało do
+               złego obwodu, bez strefy mokrej w doborze przekroju. Oba callbacki
+               lecą raz na gest (drag end w DesignCanvas), więc to jeden wpis
+               w historii cofania, nie jeden na klatkę. */
+            onMoveElement={(id, x, y) =>
+              setDraft((d) => ({
+                ...d,
+                elements: d.elements.map((e) =>
+                  e.id === id ? { ...e, x, y, room: roomNameAfterMove({ x, y }, e.room, roomShapes, mpu) } : e
+                ),
+              }))
+            }
             onMoveElements={(moves) =>
               setDraft((d) => ({
                 ...d,
                 elements: d.elements.map((e) => {
                   const m = moves.find((mv) => mv.id === e.id);
-                  return m ? { ...e, x: m.x, y: m.y } : e;
+                  return m ? { ...e, x: m.x, y: m.y, room: roomNameAfterMove(m, e.room, roomShapes, mpu) } : e;
                 }),
               }))
             }
