@@ -13,7 +13,15 @@ import type {
   PanelConfig,
   PanelDevice,
 } from "@/types";
-import { DEFAULT_PLAN_SIZE, nextRoomColor, nextRoomName, roomColorForIndex, scaleOf, type PlanSize } from "@/lib/design";
+import {
+  DEFAULT_PLAN_SIZE,
+  nextRoomColor,
+  nextRoomName,
+  reassignRoomsOnFloor,
+  roomColorForIndex,
+  scaleOf,
+  type PlanSize,
+} from "@/lib/design";
 import { DEFAULT_PRICES } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
@@ -872,7 +880,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       points,
       type,
     };
-    setDraft((d) => ({ ...d, roomShapes: [...d.roomShapes, room] }));
+    // Świeżo obrysowane pomieszczenie przygarnia elementy, które już w nim stoją.
+    // Kolejność „najpierw postaw gniazdka, potem obrysuj pokój" jest normalna przy
+    // pracy na wgranym rzucie (widać ściany, więc nie trzeba nic obrysowywać, żeby
+    // zacząć) — a bez tego wszystkie takie elementy zostawały „Bez pomieszczenia"
+    // na zawsze, bo przypisanie liczyło się wyłącznie w chwili postawienia.
+    const mpu = scaleOf(get().scales, floor);
+    setDraft((d) => {
+      const roomShapes = [...d.roomShapes, room];
+      return { ...d, roomShapes, elements: reassignRoomsOnFloor(d.elements, roomShapes, floor, mpu, []) };
+    });
   },
 
   setRoomShapeType: (id, type) => {
@@ -897,14 +914,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     });
   },
 
+  // Przeciągnięcie narożnika potrafi wypchnąć element z pomieszczenia albo wciągnąć
+  // do niego sąsiada — przypisanie musi za tym nadążyć, tak samo jak przy zmianie
+  // nazwy wyżej. Zawężone do TEGO pomieszczenia i elementów niczyich (patrz
+  // `reassignRoomsOnFloor`), żeby edycja jednego pokoju nie ruszała reszty planu.
   moveRoomShapePoint: (id, index, point) => {
-    const { setDraft } = get();
-    setDraft((d) => ({
-      ...d,
-      roomShapes: d.roomShapes.map((r) =>
+    const { setDraft, scales } = get();
+    setDraft((d) => {
+      const room = d.roomShapes.find((r) => r.id === id);
+      if (!room) return d;
+      const roomShapes = d.roomShapes.map((r) =>
         r.id === id ? { ...r, points: r.points.map((p, i) => (i === index ? point : p)) } : r
-      ),
-    }));
+      );
+      return {
+        ...d,
+        roomShapes,
+        elements: reassignRoomsOnFloor(d.elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
+      };
+    });
   },
 
   recolorRoomShape: (id) => {
@@ -918,15 +945,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteRoomShape: (id) => {
-    const { setDraft } = get();
+    const { setDraft, scales } = get();
     // Kasuje też otwory postawione na krawędzi TEGO pomieszczenia — inaczej zostałyby
     // osierocone (roomId wskazujący na nieistniejące pomieszczenie), tak samo jak przy
     // kasowaniu ściany i jej otworów w DesignTab.
-    setDraft((d) => ({
-      ...d,
-      roomShapes: d.roomShapes.filter((r) => r.id !== id),
-      openings: d.openings.filter((o) => o.roomId !== id),
-    }));
+    // Elementy stojące w kasowanym pomieszczeniu to ta sama klasa osieroceń, tylko po
+    // nazwie zamiast po id: bez przeliczenia zostawały z nazwą pokoju, którego już nie
+    // ma na planie, i dalej tworzyły „jego" obwód w rozdzielnicy. Trafiają teraz albo
+    // do pomieszczenia, które faktycznie je obejmuje, albo do „Bez pomieszczenia".
+    setDraft((d) => {
+      const room = d.roomShapes.find((r) => r.id === id);
+      if (!room) return d;
+      const roomShapes = d.roomShapes.filter((r) => r.id !== id);
+      return {
+        ...d,
+        roomShapes,
+        openings: d.openings.filter((o) => o.roomId !== id),
+        elements: reassignRoomsOnFloor(d.elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
+      };
+    });
   },
 
   removeElements: (ids) => {
