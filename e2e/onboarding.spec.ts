@@ -55,12 +55,29 @@ test("ekran startowy prowadzi od wgrania rzutu przez skalę do pierwszego elemen
   await page.getByRole("button", { name: "Pomiń — użyj całego rzutu" }).click();
   await expect(page.getByText(/Podkład: rzut.png/)).toBeVisible();
 
-  // podkład jest już wgrany — karta „3 kroki" przejmuje teraz krok 1 (skala)
-  await expect(card(page)).toBeVisible();
-  await card(page).getByRole("button", { name: "Ustaw skalę" }).click();
+  // Podkład wgrany — aplikacja sama wchodzi w krok 1 (skala) i tłumaczy go dymkiem
+  // przy linijce, bez czekania, aż użytkownik znajdzie CTA w karcie.
   const coach = page.getByRole("dialog", { name: "Podpowiedź" });
   await expect(coach).toBeVisible();
   await expect(coach).toContainText("dwa punkty o znanej odległości");
+  // Karta „3 kroki" jest na ten czas ZWINIĘTA do samego przycisku: oba elementy
+  // stoją w lewym dolnym rogu i przy pełnej karcie nakładały się na siebie (patrz
+  // `open={onboarding.showCard && !coachMark}` w DesignTab.tsx). Prowadzi teraz
+  // dymek, nie karta — dublowanie tej samej podpowiedzi byłoby szumem.
+  await expect(card(page)).toHaveCount(0);
+
+  // Zamknięcie dymka oddaje scenę karcie — z krokiem 1 (skala) jako aktywnym.
+  await coach.getByRole("button", { name: "Rozumiem" }).click();
+  await expect(coach).toBeHidden();
+  await expect(card(page)).toBeVisible();
+  await expect(card(page).getByRole("button", { name: "Ustaw skalę" })).toBeVisible();
+
+  // CTA kroku 1 w karcie prowadzi do TEGO SAMEGO miejsca — kto zamknął dymek za
+  // wcześnie, ma jak wrócić do wyjaśnienia. Dymek pojawia się wtedy ponownie,
+  // a karta znowu ustępuje mu miejsca.
+  await card(page).getByRole("button", { name: "Ustaw skalę" }).click();
+  await expect(coach).toBeVisible();
+  await expect(card(page)).toHaveCount(0);
   await coach.getByRole("button", { name: "Rozumiem" }).click();
   await expect(coach).toBeHidden();
 
@@ -242,8 +259,19 @@ test("„Narysuj dom samodzielnie” z EKRANU STARTOWEGO ustawia standardową sk
 
   // narzędzie ścian jest od razu aktywne, gotowe do klikania — bez ekranu kalibracji
   await expect(page.getByRole("button", { name: "Narysuj Ścianę", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  // Rysowanie ścian tłumaczy dymek przy narzędziu, a karta „3 kroki" jest na ten
+  // czas zwinięta, żeby oba nie nakładały się w lewym dolnym rogu (patrz
+  // `open={onboarding.showCard && !coachMark}` w DesignTab.tsx). Zamykamy dymek —
+  // karta wraca sama i dopiero wtedy widać w niej stan kroków.
+  const coach = page.getByRole("dialog", { name: "Podpowiedź" });
+  await expect(coach).toBeVisible();
+  await coach.getByRole("button", { name: "Rozumiem" }).click();
+  await expect(coach).toBeHidden();
+
   // dom 20×20 m ma się zmieścić w domyślnym obszarze planu przy standardowej skali —
   // sprawdzamy pośrednio: skala jest już ustawiona, więc krok 1 karty jest ukończony
+  await expect(card(page)).toBeVisible();
   await expect(card(page).getByRole("button", { name: "Narysuj dom samodzielnie" })).toHaveCount(0);
   await expect(card(page).getByRole("button", { name: "Obrysuj pomieszczenie" })).toBeVisible();
 
