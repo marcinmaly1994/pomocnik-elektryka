@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
 import { obliczImpedancjePrzewodu, obliczPrzewodyRownolegle } from "@/lib/calc/conductorImpedance";
@@ -43,6 +43,8 @@ import {
   type CircuitKind,
 } from "@/lib/panel/sizing";
 import { useCalculatorsStore, type CalcId } from "@/store/useCalculatorsStore";
+import { useRoute } from "@/hooks/useRoute";
+import { dopasujParam } from "@/lib/routing";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Card } from "./Card";
 import { Field, HintButton } from "./Field";
@@ -379,9 +381,57 @@ export function CalculatorsTab() {
    * aktualizacją (świeży localStorage tego nie pokazuje, więc łatwo to przeoczyć).
    * Cofamy się do pierwszej pozycji zamiast ufać zapisanej wartości.
    */
-  const activeCalc: CalcId = CALC_LIST.some((c) => c.id === zapisanyActiveCalc) ? zapisanyActiveCalc : CALC_LIST[0].id;
+  /**
+   * Który kalkulator jest otwarty — z pierwszeństwem dla ADRESU.
+   *
+   * Trzy źródła, w tej właśnie kolejności:
+   *  1. parametr z URL („/kalkulatory/spadek") — bo link przysłany przez kogoś ma
+   *     otworzyć TO, co w nim jest, a nie to, co akurat siedzi w localStorage;
+   *  2. wartość zapisana z poprzedniej wizyty — wejście na samo „/kalkulatory"
+   *     wraca tam, gdzie się skończyło;
+   *  3. pierwsza pozycja listy — patrz komentarz o białym ekranie wyżej.
+   */
+  const [route, nawiguj] = useRoute();
+  const zParamu = dopasujParam(
+    route.tab === "kalkulatory" ? route.param : null,
+    CALC_LIST.map((c) => c.id)
+  );
+  const activeCalc: CalcId =
+    zParamu ?? (CALC_LIST.some((c) => c.id === zapisanyActiveCalc) ? zapisanyActiveCalc : CALC_LIST[0].id);
 
-  const setActiveCalc = (v: CalcId) => patch({ activeCalc: v });
+  /**
+   * Doprowadza adres do postaci KANONICZNEJ. Trzy przypadki, jeden warunek:
+   * wejście na samo „/kalkulatory", parametr wskazujący na nieistniejący kalkulator
+   * oraz poprawny, ale inaczej zapisany („/kalkulatory/ggwkladka" zamiast
+   * „…/gGWkladka" — patrz `dopasujParam`). W każdym z nich w pasku ma zostać jedna,
+   * przewidywalna postać adresu, bo to ją użytkownik skopiuje i wyśle dalej.
+   *
+   * `replace`, nie `push`: użytkownik nigdzie nie przeszedł, więc „wstecz" nie ma go
+   * zawracać na adres, który natychmiast przekieruje z powrotem.
+   */
+  useEffect(() => {
+    if (route.tab === "kalkulatory" && route.param !== activeCalc) {
+      nawiguj("kalkulatory", activeCalc, { replace: true });
+    }
+  }, [route.tab, route.param, activeCalc, nawiguj]);
+
+  // Wybór z listy tylko NAWIGUJE — zapisem zajmuje się efekt niżej, jedną drogą dla
+  // wszystkich sposobów otwarcia kalkulatora.
+  const setActiveCalc = (v: CalcId) => nawiguj("kalkulatory", v);
+
+  /**
+   * Zapamiętuje otwarty kalkulator na kolejną wizytę (samo „/kalkulatory" wraca do
+   * niego zamiast do pierwszej pozycji listy).
+   *
+   * Zapis siedzi w EFEKCIE, a nie w obsłudze kliknięcia, bo kalkulator otwiera się
+   * na dwa sposoby: klikiem w listę i wprost z adresu — a link przysłany przez kogoś
+   * to też „ostatnio używany". Przy zapisie tylko przy kliknięciu wejście z linku na
+   * „/kalkulatory/zwarcie", a potem na samo „/kalkulatory", odsyłało do czegoś zupełnie
+   * innego, mimo że pomiędzy nie było żadnego wyboru.
+   */
+  useEffect(() => {
+    if (route.tab === "kalkulatory" && zapisanyActiveCalc !== activeCalc) patch({ activeCalc });
+  }, [route.tab, activeCalc, zapisanyActiveCalc, patch]);
   const setCircuitKind = (v: CircuitKind) => patch({ circuitKind: v });
   const setPower = (v: number) => patch({ power: v });
   const setPhase = (v: "1" | "3") => patch({ phase: v });
@@ -2192,18 +2242,22 @@ export function CalculatorsTab() {
                   hint="Dopuszczalny prąd długotrwały POJEDYNCZEJ żyły po współczynnikach korekcyjnych — z kalkulatora „Dobór przekroju przewodu” albo z Rozdzielnicy. Zostaw 0, żeby zobaczyć sam podział prądu bez oceny."
                 />
               </div>
-              <label className="mb-3 block">
+              {/* Jawne htmlFor/id z tego samego powodu co w `Field` — przycisk „i" jest
+                  elementem etykietowalnym i przy owinięciu obu w <label> przejąłby
+                  powiązanie, zostawiając pole bez nazwy dostępnej. */}
+              <div className="mb-3">
                 <div className="mb-1 flex items-center gap-1 text-xs text-slate-500">
-                  Długości poszczególnych żył (po przecinku)
+                  <label htmlFor="im-rownolegle-dlugosci">Długości poszczególnych żył (po przecinku)</label>
                   <HintButton hint="Wpisz długość KAŻDEJ żyły biegnącej równolegle, oddzieloną przecinkiem — np. dla dwóch żył o różnej długości: 40, 60. Różne długości to właśnie ten problem, który ten kalkulator pokazuje liczbowo." />
                 </div>
                 <input
+                  id="im-rownolegle-dlugosci"
                   className="pe-input pe-mono w-full text-sm"
                   value={imRownolegleDlugosci}
                   onChange={(e) => patch({ imRownolegleDlugosci: e.target.value })}
                   placeholder="np. 40, 60"
                 />
-              </label>
+              </div>
 
               {rownolegle.wartosci && (
                 <div className="mt-2 p-3 pe-result">

@@ -17,6 +17,8 @@ import {
   UserRound,
 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
+import { useRoute } from "@/hooks/useRoute";
+import { ZAKLADKA_DOMYSLNA, type AppTab as AppTabRoute } from "@/lib/routing";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -200,7 +202,10 @@ function ToolTab({ id, label, active, onPick }: TabButtonProps) {
   );
 }
 
-type AppTab = "kalkulatory" | "projekt" | "rozdzielnica" | "protokoly" | "schemat" | "kosztorys";
+/** Typ mieszka teraz w `lib/routing.ts` — od kiedy zakładki mają własne adresy,
+ *  to routing jest właścicielem ich słownika. Reeksport, żeby nie przepisywać
+ *  importu w każdym miejscu w tym pliku, które się do niego odwołuje. */
+type AppTab = AppTabRoute;
 
 /** Kolejność głównego przepływu 1→2→3→4 (patrz kafle „FlowCard” niżej) — osobno od
  *  „Kalkulatory”/„Protokoły pomiarowe”, które są narzędziami OBOK przepływu, nie jego
@@ -318,7 +323,21 @@ function NewProjectButton({ onConfirm, elementCount }: { onConfirm: () => void; 
  * store'em Zustand, plus logowanie i zapis projektu w chmurze (Supabase).
  */
 export default function App() {
-  const [tab, setTab] = useState<AppTab>("projekt");
+  // Zakładka wynika z ADRESU, nie ze stanu komponentu — dzięki temu każdy widok da
+  // się podlinkować, „wstecz" cofa o krok zamiast wychodzić ze strony, a odświeżenie
+  // wraca tam, gdzie użytkownik był. Parametr (`route.param`) czytają zakładki, które
+  // go używają: kalkulatory i protokoły.
+  const [route, nawiguj] = useRoute();
+  const tab = route.tab;
+  const setTab = (t: AppTab) => nawiguj(t);
+
+  // Adres, którego nie dało się rozpoznać, pokazuje stronę startową — więc niech i
+  // pasek adresu to przyzna, zamiast twierdzić, że jesteśmy pod „/literowka".
+  // `replace`, bo to sprostowanie, a nie przejście: „wstecz" nie ma wracać na adres,
+  // który natychmiast sprostuje się ponownie.
+  useEffect(() => {
+    if (!route.rozpoznana) nawiguj(ZAKLADKA_DOMYSLNA, null, { replace: true });
+  }, [route.rozpoznana, nawiguj]);
 
   const session = useProjectStore((s) => s.session);
   const setSession = useProjectStore((s) => s.setSession);

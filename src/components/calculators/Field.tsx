@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Info } from "lucide-react";
 
 interface FieldOption {
@@ -49,8 +49,10 @@ export function HintButton({ hint }: { hint: string }) {
       <button
         type="button"
         onClick={(e) => {
-          // Wewnątrz `<label>` klik normalnie przekazywałby fokus na powiązane pole —
-          // tu chodzi wyłącznie o dymek, więc nie pozwalamy zdarzeniu polecieć dalej.
+          // Zatrzymane na wszelki wypadek: gdyby ten przycisk trafił kiedyś do wnętrza
+          // `<label>`, klik przekazywałby fokus na powiązane pole, a tu chodzi wyłącznie
+          // o dymek. Samo owijanie etykietą jest zresztą niewskazane — przycisk jest
+          // elementem etykietowalnym i przejmuje powiązanie (patrz `Field` niżej).
           e.preventDefault();
           e.stopPropagation();
           setOpen((o) => !o);
@@ -74,15 +76,24 @@ export function HintButton({ hint }: { hint: string }) {
 }
 
 export function Field({ label, value, onChange, unit, type = "number", step, options, hint }: FieldProps) {
+  // Powiązanie etykiety z polem JAWNIE (htmlFor/id), a nie przez owinięcie obu w
+  // <label>. Owinięcie działa tylko dopóki pole jest JEDYNYM elementem etykietowalnym
+  // w środku: przycisk „i" też jest etykietowalny i stoi przed inputem, więc od
+  // momentu dołożenia podpowiedzi to on stawał się „kontrolką etykiety", a input
+  // zostawał zupełnie bez nazwy dostępnej. Dotyczyło to każdego pola z `hint`
+  // (w kalkulatorach kilkudziesięciu): czytnik ekranu czytał „edycja, pusty" zamiast
+  // „Współczynnik cos φ", a testy nie potrafiły trafić w pole po jego etykiecie.
+  const id = useId();
   return (
-    <label className="mb-3 block">
+    <div className="mb-3">
       <div className="mb-1 flex items-center gap-1 text-xs text-slate-500">
-        {label}
+        <label htmlFor={id}>{label}</label>
         {hint && <HintButton hint={hint} />}
       </div>
       <div className="flex items-center gap-2">
         {options ? (
           <select
+            id={id}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="pe-input w-full text-sm"
@@ -95,6 +106,7 @@ export function Field({ label, value, onChange, unit, type = "number", step, opt
           </select>
         ) : (
           <input
+            id={id}
             type={type}
             step={step || "any"}
             value={value}
@@ -104,6 +116,6 @@ export function Field({ label, value, onChange, unit, type = "number", step, opt
         )}
         {unit && <span className="w-14 text-xs text-slate-500">{unit}</span>}
       </div>
-    </label>
+    </div>
   );
 }

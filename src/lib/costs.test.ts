@@ -106,7 +106,7 @@ describe("computeCosts", () => {
 
   it("rozdzielnica i wyłącznik główny liczone raz, gdy są jakiekolwiek obwody", () => {
     const circuits: Circuit[] = [{ id: "obw1", name: "x", type: "gniazdko", elements: [], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true }];
-    const rcdGroups: RcdGroup[] = [{ id: "rcd1", rating: "40A/30mA", circuits }];
+    const rcdGroups: RcdGroup[] = [{ id: "rcd1", rating: "30mA", circuits }];
     const { quantities } = computeCosts([], circuits, rcdGroups);
     expect(quantities.glowny).toBe(1);
     expect(quantities.rozdzielnica).toBe(1);

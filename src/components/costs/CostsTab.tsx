@@ -198,10 +198,16 @@ export function CostsTab() {
         </div>
       )}
 
+      {/* O METRACH KABLA mówi wyłącznie notka nad tabelą, bo tylko ona zna
+          `cableLengthSource` — raz jest to ryczałt, raz pomiar z tras po planie.
+          Ta notka podawała ryczałt („5 mb na punkt + 10 mb na obwód") jako jedyną
+          prawdę, więc przy metrażu policzonym z planu dwa zdania na jednej stronie
+          tłumaczyły tę samą liczbę na dwa wykluczające się sposoby — i to właśnie
+          w miejscu, na podstawie którego kupuje się materiał. Zostaje tu tylko to,
+          co jest szacunkiem ZAWSZE, niezależnie od skali i tras. */}
       <div className="text-xs text-slate-400">
-        Ilość przewodów i puszek jest szacowana na podstawie liczby punktów instalacyjnych i wygenerowanych obwodów
-        (ok. 5 mb kabla na punkt + 10 mb do rozdzielnicy na obwód). Zweryfikuj długości na realnym rzucie budynku
-        przed zakupem materiału.
+        Liczba puszek jest szacowana z liczby punktów instalacyjnych (podtynkowe) i pomieszczeń (rozgałęźne).
+        Zweryfikuj ilości na realnym rzucie budynku przed zakupem materiału.
       </div>
     </div>
   );

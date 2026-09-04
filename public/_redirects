@@ -1,0 +1,12 @@
+# Aplikacja jednostronicowa z routingiem po History API: adresy takie jak
+# /kalkulatory/spadek czy /protokoly/izolacja NIE mają odpowiadających im plików
+# na dysku. Bez tej reguły host (Cloudflare Pages) zwracałby na nie 404 — czyli
+# każdy przysłany link otwierałby się tylko wtedy, gdy wejdzie się przez stronę
+# główną i kliknie, a to znaczyłoby, że routingu de facto nie ma.
+#
+# 200, nie 301: adres ma ZOSTAĆ w pasku (to on niesie widok), a przeglądarka ma
+# tylko dostać index.html i dalej rozstrzygnąć go po stronie klienta.
+#
+# Vite kopiuje zawartość public/ do dist/ przy budowaniu, więc plik trafia na
+# hosting sam, bez dodatkowego kroku we wdrożeniu.
+/*    /index.html   200

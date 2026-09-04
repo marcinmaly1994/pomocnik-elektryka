@@ -284,3 +284,69 @@ test("zaznaczanie obszarem działa, gdy start jest wewnątrz narysowanego pomies
   });
   expect(rotation).toBe(90);
 });
+
+/**
+ * Escape ma porzucać ZACZĘTY prostokąt — także ten, którego jeszcze nie zatwierdzono.
+ *
+ * Podgląd prostokąta (i ramka zaznaczania) żyją w stanie LOKALNYM `DesignCanvas`,
+ * bo zmieniają się przy każdym ruchu myszy, a Escape obsługuje `DesignTab`. Przez to
+ * czyszczenie stanu rodzica nie dotykało tego, co widać: obszar zostawał narysowany
+ * na ekranie mimo wciśniętego Escape. Płótno dostało na to osobny kanał
+ * (`anulujPodgladRef`) i te testy pilnują OBU dróg rysowania prostokąta.
+ */
+
+/** Prostokąty podglądu na scenie — półprzezroczyste wypełnienie miedzią, wyłącznie
+ *  dla figury RYSOWANEJ (zatwierdzone pomieszczenie ma kolor własny). */
+async function previewRects(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const k = (window as unknown as { Konva?: { stages: { find(s: string): { fill(): string }[] }[] } }).Konva;
+    return (k?.stages[0]?.find("Rect") ?? []).filter((r) => r.fill() === "#C1793F1A").length;
+  });
+}
+
+test("Escape porzuca prostokąt zaczęty pierwszym kliknięciem (tryb dwóch kliknięć)", async ({ page }) => {
+  const box = await openPlan(page);
+
+  await page.mouse.click(box.x + 120, box.y + 100); // kotwica
+  await page.mouse.move(box.x + 320, box.y + 260); // podgląd rozciąga się za kursorem
+  expect(await previewRects(page)).toBe(1);
+
+  await page.keyboard.press("Escape");
+
+  expect(await previewRects(page)).toBe(0);
+  expect(await roomCount(page)).toBe(0);
+});
+
+test("Escape w trakcie przeciągania porzuca prostokąt, a puszczenie myszy NIE tworzy pomieszczenia", async ({ page }) => {
+  const box = await openPlan(page);
+
+  await page.mouse.move(box.x + 120, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 320, box.y + 260, { steps: 10 });
+  expect(await previewRects(page)).toBe(1);
+
+  // Escape z WCIĄŻ wciśniętym przyciskiem myszy — bez wyczyszczenia kotwicy
+  // późniejsze `mouseup` i tak zakładało pomieszczenie, mimo anulowania.
+  await page.keyboard.press("Escape");
+  expect(await previewRects(page)).toBe(0);
+
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  expect(await roomCount(page)).toBe(0);
+  expect(await previewRects(page)).toBe(0);
+});
+
+test("po anulowaniu Escape kolejne kliknięcie normalnie zaczyna nowy prostokąt", async ({ page }) => {
+  const box = await openPlan(page);
+
+  await page.mouse.click(box.x + 120, box.y + 100);
+  await page.mouse.move(box.x + 320, box.y + 260);
+  await page.keyboard.press("Escape");
+
+  // Anulowanie przerwanego PRZECIĄGANIA zjada echo kliknięcia (patrz
+  // `roomRectJustDrawnRef`); anulowanie w trybie dwóch kliknięć nie ma prawa zjeść
+  // następnego, całkiem już zamierzonego kliknięcia użytkownika.
+  await page.mouse.click(box.x + 140, box.y + 120);
+  await page.mouse.move(box.x + 300, box.y + 240);
+  expect(await previewRects(page)).toBe(1);
+});

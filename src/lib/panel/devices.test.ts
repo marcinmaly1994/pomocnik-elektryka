@@ -45,12 +45,26 @@ describe("buildPanelDevices", () => {
   const circuits: Circuit[] = [
     { id: "obw1", name: "Gniazda salon", type: "gniazdko", elements: [], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true },
   ];
-  const rcdGroups: RcdGroup[] = [{ id: "rcd1", rating: "40A/30mA", circuits }];
+  const rcdGroups: RcdGroup[] = [{ id: "rcd1", rating: "30mA", circuits }];
 
   it("zawsze zawiera rozłącznik główny", () => {
     const devices = buildPanelDevices(rcdGroups);
     expect(devices[0].kind).toBe("main");
     expect(devices[0].tag).toBe("Q1");
+  });
+
+  it("podpis różnicówki podaje TEN SAM prąd znamionowy co jej etykieta", () => {
+    // Regresja: `RcdGroup.rating` niósł kiedyś pełne „40A/30mA", a etykietę aparatu
+    // liczyło `rcdRatingFor` z rozłącznika głównego — przy zasilaniu 3-fazowym
+    // wychodziło 63 A i aparat pokazywał się jako „63A" z podpisem „…40A/30mA".
+    // Podpis jest tym, z czym idzie się do sklepu, więc nie może przeczyć etykiecie.
+    const rcd = buildPanelDevices(rcdGroups, { supply3f: true, mainRating: 40 }).find((d) => d.kind === "rcd")!;
+    expect(rcd.label).toBe("63A");
+    expect(rcd.caption).toBe("Wyłącznik różnicowoprądowy 63A/30mA");
+
+    // ...i tak samo, gdy rozłącznik główny podnosi dobór wyżej
+    const wiekszy = buildPanelDevices(rcdGroups, { supply3f: true, mainRating: 80 }).find((d) => d.kind === "rcd")!;
+    expect(wiekszy.caption).toBe(`Wyłącznik różnicowoprądowy ${wiekszy.label}/30mA`);
   });
 
   it("NIE dokłada bezpiecznika przedlicznikowego — to szafka operatora, nie rozdzielnica", () => {

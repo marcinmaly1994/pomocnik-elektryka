@@ -396,6 +396,6 @@ test("kondygnacje mieszkają w jednym pasku razem z podkładem i siatką", async
   const pasek = page.getByRole("button", { name: "Parter" }).locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]");
   await expect(pasek.getByRole("button", { name: "+ Dodaj kondygnację" })).toBeVisible();
   await expect(pasek.getByRole("button", { name: "Wgraj podkład" })).toBeVisible();
-  await expect(pasek.getByLabel("Przyciągaj do siatki")).toBeVisible();
+  await expect(pasek.getByLabel("Przyciągaj ściany do siatki")).toBeVisible();
   await expect(pasek.getByLabel("Rozmiar elementów")).toBeVisible();
 });

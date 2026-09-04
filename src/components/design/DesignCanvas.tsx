@@ -6,7 +6,7 @@ import type { CableRoute, InstallationElement, Opening, Point, RoomShape, Wall }
 import { ELEMENT_TYPES, type SanitaryZone } from "@/lib/elements";
 import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
-import { clampNum, nearestPointOnPolyline, snap } from "@/lib/geometry";
+import { clampNum, nearestPointOnPolyline, polygonAreaM2, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { groupLabelAnchors } from "@/lib/glyphs";
 
@@ -73,6 +73,21 @@ interface DesignCanvasProps {
    *  (rasteryzacja przez `stage.toCanvas()`). Rysowaniem steruje nadal wyłącznie
    *  ten komponent; ref jest tu podglądem, nie kanałem sterowania. */
   stageRef?: React.MutableRefObject<Konva.Stage | null>;
+  /**
+   * Kanał do PORZUCENIA podglądów rysowanych wewnątrz tego komponentu — płótno
+   * wstawia tu swoją funkcję, rodzic ją wywołuje (zwraca `true`, jeśli faktycznie
+   * było co porzucić).
+   *
+   * Potrzebny, bo Escape obsługuje DesignTab, a prostokąt pomieszczenia i ramka
+   * zaznaczania żyją w stanie LOKALNYM płótna — celowo, bo zmieniają się przy każdym
+   * ruchu myszy i wyniesienie ich wyżej przerysowywałoby całą zakładkę na każdą
+   * klatkę przeciągania. Bez tego kanału Escape czyścił stan rodzica, a narysowany
+   * prostokąt zostawał na ekranie.
+   *
+   * Ten sam wzorzec co `stageRef` wyżej: zwykły ref w propsie, nie `forwardRef` —
+   * żeby oba wyjścia z płótna wyglądały tak samo.
+   */
+  anulujPodgladRef?: React.MutableRefObject<(() => boolean) | null>;
   elements: InstallationElement[];
   walls: Wall[];
   roomShapes: RoomShape[];
@@ -253,6 +268,7 @@ function centroid(points: Point[]): Point {
 
 export function DesignCanvas({
   stageRef,
+  anulujPodgladRef,
   elements,
   walls,
   roomShapes,
@@ -379,6 +395,48 @@ export function DesignCanvas({
   /** Prostokąt domknięty przeciągnięciem — gasi `click`, który Konva wysyła zaraz
    *  po `mouseup` (patrz `handleStageMouseUp`). */
   const roomRectJustDrawnRef = useRef(false);
+
+  /**
+   * Porzuca WSZYSTKO, co jest w trakcie rysowania wewnątrz płótna: podgląd prostokąta
+   * pomieszczenia i ramkę zaznaczania. Zwraca, czy faktycznie było co porzucać —
+   * rodzic potrzebuje tego do reguły „Escape robi jedną rzecz naraz" (najpierw
+   * porzuca rysowanie, dopiero potem wychodzi z pełnego ekranu).
+   *
+   * Zerowanie KOTWIC (`*StartRef`), nie tylko widocznego podglądu, jest tu istotne:
+   * Escape wciśnięty z wciąż wciśniętym przyciskiem myszy zostawiał kotwicę, więc
+   * puszczenie przycisku i tak zakładało pomieszczenie — mimo że użytkownik właśnie
+   * powiedział „anuluj". `handleStageMouseUp` wychodzi bez efektu, gdy kotwica jest
+   * pusta, więc samo jej wyczyszczenie wystarczy.
+   */
+  function anulujPodglad(): boolean {
+    const przeciaganieProstokata = roomRectStartRef.current !== null;
+    const bylo = przeciaganieProstokata || roomRect !== null || marqueeStartRef.current !== null || marqueeRect !== null;
+
+    // Po `mouseup` Konva wyśle jeszcze `click`. Tylko przy PRZERWANYM PRZECIĄGANIU
+    // trzeba go zjeść — inaczej puszczenie przycisku od razu stawiałoby kotwicę
+    // nowego prostokąta w tym samym miejscu. Przy anulowaniu bez wciśniętej myszy
+    // (tryb dwóch kliknięć) tej flagi NIE wolno ustawiać, bo zjadłaby następne,
+    // całkiem już zamierzone kliknięcie użytkownika.
+    if (przeciaganieProstokata) roomRectJustDrawnRef.current = true;
+
+    roomRectStartRef.current = null;
+    roomRectRef.current = null;
+    marqueeStartRef.current = null;
+    marqueeRectRef.current = null;
+    setRoomRect(null);
+    setMarqueeRect(null);
+    return bylo;
+  }
+
+  // Bez tablicy zależności — funkcja domyka się nad świeżym stanem przy każdym
+  // renderze, więc ref musi wskazywać na tę najnowszą wersję, a nie na pierwszą.
+  useEffect(() => {
+    if (!anulujPodgladRef) return;
+    anulujPodgladRef.current = anulujPodglad;
+    return () => {
+      anulujPodgladRef.current = null;
+    };
+  });
   // Pozycja kursora w trybie wieloboku — do „gumowej" linii od ostatniego punktu i do
   // podświetlenia punktu startowego, gdy kolejny klik zamknie figurę.
   const [roomCursor, setRoomCursor] = useState<Point | null>(null);
@@ -403,6 +461,22 @@ export function DesignCanvas({
     [cableRoutes, routeOverrides]
   );
 
+  /**
+   * Przyciągnięcie do siatki — dla GEOMETRII BUDYNKU (ściany i obrysy pomieszczeń,
+   * rysowane i przeciągane za uchwyty), nie dla elementów instalacji.
+   *
+   * Otwory (drzwi) są poza tym podziałem celowo: przypinają się do LINII ŚCIANY
+   * przez `nearestPointOnPolyline`, bo drzwi mają siedzieć w ścianie, a nie na
+   * najbliższym oczku siatki obok niej.
+   *
+   * To rozróżnienie jest celowe. Oczko siatki przy rysowaniu od zera to równo 1 metr
+   * (patrz MANUAL_DRAW_SCALE_MPU), co jest właściwą podziałką dla ścian — dom ma
+   * wymiary w pełnych/połówkowych metrach. Dla gniazdka czy łącznika ta sama podziałka
+   * jest absurdalnie zgrubna: punkt kliknięty przy framudze odskakiwałby nawet o pół
+   * metra, na środek ściany. Element ląduje więc dokładnie tam, gdzie kliknięto —
+   * o resztę dba `ROOM_SNAP_TOLERANCE_M` w DesignTab, która przypisuje go do
+   * właściwego pomieszczenia, gdy wypadł tuż obok jego obrysu (nie przesuwa go).
+   */
   function withSnap(p: Point): Point {
     return snapOn ? { x: snap(p.x, GRID), y: snap(p.y, GRID) } : p;
   }
@@ -452,12 +526,60 @@ export function DesignCanvas({
     return p;
   }
 
+  /**
+   * Punkt ściany po WSZYSTKICH przyciąganiach, w kolejności, która ma znaczenie:
+   * siatka → kąt prosty → domknięcie/narożnik.
+   *
+   * Jedna funkcja dla PODGLĄDU („gumowy" odcinek z etykietą długości) i dla KLIKNIĘCIA,
+   * które punkt zatwierdza. Dotąd były to dwie osobne ścieżki i rozjechały się:
+   * podgląd przyciągał do siatki, klik nie — więc przy włączonym przyciąganiu etykieta
+   * pokazywała równe „4,00 m", a do projektu trafiał odcinek 3,91 m. Wymiar, który
+   * kłamie w momencie rysowania, jest gorszy niż brak wymiaru.
+   *
+   * Kolejność jest wymuszona: siatka MUSI iść pierwsza, bo `zPrzyciaganiem` zwraca
+   * albo dokładnie pierwszy punkt ściany (domknięcie), albo wyliczony narożnik —
+   * dosnapowanie ich po fakcie odsunęłoby figurę od punktu, do którego miała trafić.
+   */
+  function punktSciany(raw: Point): Point {
+    const naSiatce = withSnap(raw);
+    const ostatni = drawingWall[drawingWall.length - 1];
+    const ortho = orthoWalls && ostatni ? orthoSnap(ostatni, naSiatce) : naSiatce;
+    return zPrzyciaganiem(ortho);
+  }
+
   /** Długość odcinka w jednostkach planu, sformatowana do etykiety: metry, jeśli
    *  skala jest ustawiona, inaczej same jednostki planu — ten sam wybór co pasek
    *  stanu (`EditorStatusBar`), żeby liczby w aplikacji mówiły jednym językiem. */
   function formatDlugosc(jednostki: number): string {
     if (metersPerUnit !== null) return `${(jednostki * metersPerUnit).toFixed(2).replace(".", ",")} m`;
     return `${Math.round(jednostki)} jedn.`;
+  }
+
+  /**
+   * Powierzchnia obrysu, sformatowana do etykiety — ta sama zasada co
+   * `formatDlugosc`: metry kwadratowe, gdy skala jest znana, inaczej nic (`null`),
+   * bo „82000 jedn.²" nie mówi nikomu niczego, a przy metrach kwadratowych chodzi
+   * właśnie o rozpoznanie „to za duże jak na łazienkę".
+   *
+   * Przeliczenie zostawione `polygonAreaM2` (geometry.ts) zamiast mnożenia przez
+   * `metersPerUnit` na miejscu: skalowanie powierzchni jest KWADRATOWE i ma z tego
+   * powodu siedzieć w jednym miejscu — patrz komentarz przy tamtej funkcji.
+   */
+  function formatPowierzchnia(points: Point[]): string | null {
+    const m2 = polygonAreaM2(points, metersPerUnit);
+    if (m2 === null) return null;
+    return `${m2.toFixed(1).replace(".", ",")} m²`;
+  }
+
+  /** Cztery narożniki prostokąta podglądu jako obrys — żeby powierzchnia liczyła się
+   *  tą samą drogą co dla wieloboku i dla gotowego pomieszczenia. */
+  function rogiProstokata(r: MarqueeRect): Point[] {
+    return [
+      { x: r.x, y: r.y },
+      { x: r.x + r.w, y: r.y },
+      { x: r.x + r.w, y: r.y + r.h },
+      { x: r.x, y: r.y + r.h },
+    ];
   }
 
   /** Czy punkt trafia w pierwszy wierzchołek wieloboku na tyle blisko, by go zamknąć.
@@ -555,9 +677,7 @@ export function DesignCanvas({
         setWallCursor(null);
         return;
       }
-      const snapped = withSnap(raw);
-      const ortho = orthoWalls ? orthoSnap(drawingWall[drawingWall.length - 1], snapped) : snapped;
-      setWallCursor(zPrzyciaganiem(ortho));
+      setWallCursor(punktSciany(raw));
       return;
     }
 
@@ -657,15 +777,16 @@ export function DesignCanvas({
     }
 
     if (toolMode === "sciany") {
-      const ortho = orthoWalls && drawingWall.length > 0 ? orthoSnap(drawingWall[drawingWall.length - 1], p) : p;
+      // Ta sama droga co podgląd — patrz `punktSciany`.
+      const punkt = punktSciany(p);
       // Klik, który zamyka wielobok (przyciągnięty do pierwszego punktu — patrz
       // `closesWall`), od razu ZATWIERDZA ścianę, tak jak zamknięcie wieloboku
       // pomieszczenia (`onCloseRoomPolygon`) — bez osobnego klikania „Zakończ" na
       // figurze, która i tak jest już kompletna.
-      if (closesWall(ortho)) {
+      if (closesWall(punkt)) {
         onCloseWall(drawingWall[0]);
       } else {
-        onAddWallPoint(zPrzyciaganiem(ortho));
+        onAddWallPoint(punkt);
       }
       return;
     }
@@ -703,7 +824,9 @@ export function DesignCanvas({
       return;
     }
     if (toolMode === "elementy") {
-      onPlaceElement(snapOn ? { x: snap(p.x, GRID), y: snap(p.y, GRID) } : p);
+      // Bez przyciągania do siatki — patrz `withSnap`. Gniazdko ma stanąć dokładnie
+      // tam, gdzie się w nie celowało: przy futrynie, nad blatem, obok umywalki.
+      onPlaceElement(p);
     }
   }
 
@@ -1121,6 +1244,43 @@ export function DesignCanvas({
                       }}
                     />
                   ))}
+                {/* Długości odcinków ZAZNACZONEJ ściany. Podczas rysowania wymiar było
+                    widać (patrz „gumowy" odcinek niżej), ale po zatwierdzeniu znikał
+                    bezpowrotnie — nie dało się sprawdzić, czy ściana wyszła na 4,20 m,
+                    ani zweryfikować cudzego rzutu. Tylko dla zaznaczonej, bo wymiary
+                    przy wszystkich naraz zamieniają rzut w ścianę tekstu.
+                    Etykiety przy WSZYSTKICH odcinkach łamanej, nie tylko przy pierwszym:
+                    jedna ściana bywa całym obrysem domu. */}
+                {isSel &&
+                  w.points.slice(0, -1).map((p, i) => {
+                    const q = w.points[i + 1];
+                    const dlugosc = Math.hypot(q.x - p.x, q.y - p.y);
+                    if (!(dlugosc > 0)) return null;
+                    // Napis układa się WZDŁUŻ odcinka i zawsze „czyta się" od lewej:
+                    // bez obrócenia o 180° dla kątów rozwartych połowa wymiarów na
+                    // obrysie domu stałaby do góry nogami.
+                    let kat = (Math.atan2(q.y - p.y, q.x - p.x) * 180) / Math.PI;
+                    if (kat > 90 || kat < -90) kat += 180;
+                    return (
+                      <Text
+                        key={`wym-${i}`}
+                        x={(p.x + q.x) / 2}
+                        y={(p.y + q.y) / 2}
+                        offsetX={dlugosc / 2}
+                        // Odsunięcie od osi ściany, żeby napis nie leżał na jej
+                        // pociągnięciu (ściana bywa gruba — domyślnie 25 cm).
+                        offsetY={10}
+                        width={dlugosc}
+                        rotation={kat}
+                        align="center"
+                        text={formatDlugosc(dlugosc)}
+                        fontSize={11}
+                        fontStyle="bold"
+                        fill="#8A5526"
+                        listening={false}
+                      />
+                    );
+                  })}
               </Group>
             );
           })}
@@ -1490,6 +1650,55 @@ export function DesignCanvas({
                   listening={false}
                 />
               )}
+              {/* Długość ciągnionego boku — dokładnie ten sam sygnał, co przy rysowaniu
+                  ściany. Wielobok obrysowuje pomieszczenia o nieregularnym kształcie,
+                  gdzie „na oko" myli jeszcze bardziej niż przy prostokącie. */}
+              {roomCursor &&
+                (() => {
+                  const ostatni = drawingRoomPoints[drawingRoomPoints.length - 1];
+                  const dlugosc = Math.hypot(roomCursor.x - ostatni.x, roomCursor.y - ostatni.y);
+                  if (!(dlugosc > 0)) return null;
+                  return (
+                    <Text
+                      x={(ostatni.x + roomCursor.x) / 2 - 40}
+                      y={(ostatni.y + roomCursor.y) / 2 - 18}
+                      width={80}
+                      align="center"
+                      text={formatDlugosc(dlugosc)}
+                      fontSize={11}
+                      fontStyle="bold"
+                      fill="#8A5526"
+                      listening={false}
+                    />
+                  );
+                })()}
+              {/* Powierzchnia figury, którą dałoby domknięcie w tym miejscu — od
+                  trzeciego punktu, bo wcześniej nie ma jeszcze żadnego pola.
+                  `polygonArea` liczy po wzorze na wielokąt, więc działa i dla
+                  kształtów wklęsłych (L-ki, wnęki). */}
+              {roomCursor &&
+                drawingRoomPoints.length >= 2 &&
+                (() => {
+                  const figura = [...drawingRoomPoints, roomCursor];
+                  const opis = formatPowierzchnia(figura);
+                  if (!opis) return null;
+                  const cx = figura.reduce((a, p) => a + p.x, 0) / figura.length;
+                  const cy = figura.reduce((a, p) => a + p.y, 0) / figura.length;
+                  return (
+                    <Text
+                      x={cx - 40}
+                      y={cy - 6}
+                      width={80}
+                      align="center"
+                      text={opis}
+                      fontSize={12}
+                      fontStyle="bold"
+                      fill="#8A5526"
+                      opacity={0.85}
+                      listening={false}
+                    />
+                  );
+                })()}
               {drawingRoomPoints.map((p, i) => {
                 const isFirst = i === 0;
                 const willClose = isFirst && !!roomCursor && closesPolygon(roomCursor);
@@ -1509,19 +1718,74 @@ export function DesignCanvas({
             </>
           )}
 
-          {/* Podgląd prostokąta w trakcie przeciągania. */}
+          {/* Podgląd prostokąta w trakcie przeciągania — z WYMIARAMI, tak samo jak
+              rysowana ściana (patrz `formatDlugosc` wyżej). Bez nich pomieszczenie
+              obrysowywało się wyłącznie „na oko": przy domyślnym obszarze planu
+              (50 m szerokości) prostokąt wyglądający jak pokój wychodził łazienką
+              o powierzchni 117 m², a dowiadywało się o tym dopiero po zatwierdzeniu,
+              z listy pomieszczeń. To właśnie ta figura decyduje o metrażu i o
+              przypisaniu elementów do pokoi, więc milczała najważniejsza z trzech. */}
           {roomRect && (roomRect.w > 0 || roomRect.h > 0) && (
-            <Rect
-              x={roomRect.x}
-              y={roomRect.y}
-              width={roomRect.w}
-              height={roomRect.h}
-              fill="#C1793F1A"
-              stroke="#C1793F"
-              strokeWidth={2}
-              dash={[6, 4]}
-              listening={false}
-            />
+            <>
+              <Rect
+                x={roomRect.x}
+                y={roomRect.y}
+                width={roomRect.w}
+                height={roomRect.h}
+                fill="#C1793F1A"
+                stroke="#C1793F"
+                strokeWidth={2}
+                dash={[6, 4]}
+                listening={false}
+              />
+              {/* Szerokość NAD górną krawędzią, wysokość obok LEWEJ — czyli tam, gdzie
+                  stoją wymiary na rysunku budowlanym, i poza wnętrzem figury, żeby nie
+                  zderzały się z etykietą powierzchni w środku. */}
+              <Text
+                x={roomRect.x}
+                y={roomRect.y - 15}
+                width={roomRect.w}
+                align="center"
+                text={formatDlugosc(roomRect.w)}
+                fontSize={11}
+                fontStyle="bold"
+                fill="#8A5526"
+                listening={false}
+              />
+              {/* Obrócona o 90°, żeby czytała się wzdłuż mierzonej krawędzi — w tę samą
+                  stronę co wymiary ścian (patrz etykiety zaznaczonej ściany wyżej), czyli
+                  „od prawej" jak na rysunku budowlanym. Dwa kierunki czytania wymiarów na
+                  jednym rzucie to sygnał, że rysunek składano z przypadkowych kawałków.
+                  Konva obraca wokół (x, y), więc kotwica idzie na GÓRĘ krawędzi, a `width`
+                  równe wysokości prostokąta wyśrodkowuje napis na jej długości. */}
+              <Text
+                x={roomRect.x - 15}
+                y={roomRect.y}
+                width={roomRect.h}
+                rotation={90}
+                align="center"
+                text={formatDlugosc(roomRect.h)}
+                fontSize={11}
+                fontStyle="bold"
+                fill="#8A5526"
+                listening={false}
+              />
+              {/* Powierzchnia tylko wtedy, gdy prostokąt ma już sensowne pole — przy
+                  pierwszych pikselach przeciągania „0,0 m²" tylko miga. */}
+              {roomRect.w > 0 && roomRect.h > 0 && formatPowierzchnia(rogiProstokata(roomRect)) && (
+                <Text
+                  x={roomRect.x}
+                  y={roomRect.y + roomRect.h / 2 - 6}
+                  width={roomRect.w}
+                  align="center"
+                  text={formatPowierzchnia(rogiProstokata(roomRect))!}
+                  fontSize={12}
+                  fontStyle="bold"
+                  fill="#8A5526"
+                  listening={false}
+                />
+              )}
+            </>
           )}
 
           {calibPoints.length === 2 && (
@@ -1609,10 +1873,11 @@ export function DesignCanvas({
                     const dy = e.target.y() - draggedStart.y;
                     const moves = group.ids.map((id) => {
                       const start = group.start[id];
-                      const rawX = start.x + dx;
-                      const rawY = start.y + dy;
-                      const x = snapOn ? snap(rawX, GRID) : rawX;
-                      const y = snapOn ? snap(rawY, GRID) : rawY;
+                      // Bez przyciągania do siatki (patrz `withSnap`): przesuwanie
+                      // zaznaczenia ma zachować WZAJEMNE odstępy elementów, a snap
+                      // każdego z osobna zlepiłby sąsiadujące gniazdka w jedno oczko.
+                      const x = start.x + dx;
+                      const y = start.y + dy;
                       const node = elementNodesRef.current.get(id);
                       if (node) node.position({ x, y });
                       return { id, x, y };
@@ -1620,8 +1885,9 @@ export function DesignCanvas({
                     onMoveElements(moves);
                     return;
                   }
-                  const x = snapOn ? snap(e.target.x(), GRID) : e.target.x();
-                  const y = snapOn ? snap(e.target.y(), GRID) : e.target.y();
+                  // Bez przyciągania do siatki — patrz `withSnap`.
+                  const x = e.target.x();
+                  const y = e.target.y();
                   e.target.position({ x, y });
                   onMoveElement(el.id, x, y);
                 }}
