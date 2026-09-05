@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCosts, parsePriceCsv } from "./costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny } from "./costs";
 import type { Circuit, InstallationElement, RcdGroup } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -145,5 +145,62 @@ describe("parsePriceCsv", () => {
 
   it("pusty plik -> brak aktualizacji", () => {
     expect(parsePriceCsv("")).toEqual({});
+  });
+});
+
+describe("kosztorysRows — wartosc pozycji", () => {
+  const ilosci = { gniazdko: 12, robocizna: 30 };
+  const ceny = { gniazdko: 15, robocizna: 0 };
+
+  it("bez nadpisan liczy ilosc razy cena", () => {
+    const rows = kosztorysRows(ilosci, ceny);
+    expect(rows.map((r) => [r.key, r.value, r.overridden])).toEqual([
+      ["gniazdko", 180, false],
+      ["robocizna", 0, false],
+    ]);
+  });
+
+  it("pomija pozycje o zerowej ilosci — nie ma czego wyceniac", () => {
+    expect(kosztorysRows({ gniazdko: 0 }, ceny)).toHaveLength(0);
+  });
+
+  /** Realne oferty podaja czesc pozycji ryczaltem — robocizna za mieszkanie, a nie
+   *  za punkt — i takiej kwoty nie da sie sensownie rozbic na sztuki. */
+  it("wpisana wartosc zastepuje caly rachunek, nie tylko cene", () => {
+    const rows = kosztorysRows(ilosci, ceny, { robocizna: 4500 });
+    const robocizna = rows.find((r) => r.key === "robocizna")!;
+    expect(robocizna.value).toBe(4500);
+    expect(robocizna.overridden).toBe(true);
+    // Ilosc i cena zostaja widoczne — to nadal informacja, ile punktow policzono.
+    expect(robocizna.qty).toBe(30);
+    expect(robocizna.price).toBe(0);
+  });
+
+  it("zero jest wartoscia, nie brakiem — pozycja moze byc w cenie czegos innego", () => {
+    const rows = kosztorysRows(ilosci, ceny, { gniazdko: 0 });
+    const gniazdko = rows.find((r) => r.key === "gniazdko")!;
+    expect(gniazdko.value).toBe(0);
+    expect(gniazdko.overridden).toBe(true);
+  });
+
+  it("nadpisanie pozycji, ktorej nie ma w rzucie, nie wskrzesza jej w tabeli", () => {
+    expect(kosztorysRows({ gniazdko: 2 }, ceny, { rcd: 999 }).map((r) => r.key)).toEqual(["gniazdko"]);
+  });
+});
+
+describe("pozycjeBezCeny", () => {
+  /** Liczy sie WARTOSC, nie cena jednostkowa: pozycja wyceniona ryczaltem ma prawo
+   *  miec zerowa cene za sztuke i nadal wchodzic do kosztorysu pelna kwota. */
+  it("ryczalt zdejmuje ostrzezenie, mimo zerowej ceny jednostkowej", () => {
+    const bez = kosztorysRows({ robocizna: 30 }, { robocizna: 0 });
+    expect(pozycjeBezCeny(bez)).toEqual(["Robocizna za punkt instalacyjny"]);
+
+    const zRyczaltem = kosztorysRows({ robocizna: 30 }, { robocizna: 0 }, { robocizna: 4500 });
+    expect(pozycjeBezCeny(zRyczaltem)).toEqual([]);
+  });
+
+  it("wyzerowana recznie pozycja nadal jest zgloszona jako poza suma", () => {
+    const rows = kosztorysRows({ gniazdko: 12 }, { gniazdko: 15 }, { gniazdko: 0 });
+    expect(pozycjeBezCeny(rows)).toEqual(["Gniazdko 230V podtynkowe"]);
   });
 });

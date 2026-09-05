@@ -1,18 +1,20 @@
 import { useMemo, useRef, type ChangeEvent } from "react";
-import { AlertTriangle, Download, Info, Upload } from "lucide-react";
+import { AlertTriangle, Download, Info, Upload, X } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, routeLengths } from "@/lib/panel/project";
 import { scaleOf } from "@/lib/design";
-import { computeCosts, parsePriceCsv, PRICE_LABELS, VAT_RATE } from "@/lib/costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, VAT_RATE } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 
 /**
  * Kosztorys instalacji elektrycznej — ilości materiałów i robocizny szacowane
  * z elementów na planie i obwodów (ta sama heurystyka co Rozdzielnica/Schemat,
  * kroki 6-8), ceny edytowalne ręcznie lub importowalne z CSV (`nazwa;cena`,
- * dopasowanie po słowach kluczowych). Ceny trzymane w store (`prices`), więc
- * przetrwają przełączanie zakładek.
+ * dopasowanie po słowach kluczowych). Wartość pojedynczej pozycji da się też wpisać
+ * wprost — wtedy zastępuje rachunek ilość × cena (patrz `CostOverrides`), bo oferty
+ * podają część pozycji ryczałtem. Ceny i nadpisania trzymane w store (`prices`,
+ * `costOverrides`), więc przetrwają przełączanie zakładek i zapis projektu.
  */
 export function CostsTab() {
   const elements = useProjectStore((s) => s.draft.elements);
@@ -20,6 +22,8 @@ export function CostsTab() {
   const prices = useProjectStore((s) => s.prices);
   const setPrice = useProjectStore((s) => s.setPrice);
   const setPrices = useProjectStore((s) => s.setPrices);
+  const costOverrides = useProjectStore((s) => s.costOverrides);
+  const setCostOverride = useProjectStore((s) => s.setCostOverride);
   const projectName = useProjectStore((s) => s.projectName);
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const scales = useProjectStore((s) => s.scales);
@@ -38,17 +42,15 @@ export function CostsTab() {
     [elements, circuits, rcdGroups, mpu]
   );
 
-  const rows = Object.keys(PRICE_LABELS)
-    .filter((k) => quantities[k] > 0)
-    .map((k) => ({ key: k, label: PRICE_LABELS[k], qty: quantities[k], price: prices[k] ?? 0, total: quantities[k] * (prices[k] ?? 0) }));
+  const rows = kosztorysRows(quantities, prices, costOverrides);
 
-  const grandTotal = rows.reduce((a, r) => a + r.total, 0);
+  const grandTotal = rows.reduce((a, r) => a + r.value, 0);
   const vat = grandTotal * (VAT_RATE / 100);
   const gross = grandTotal + vat;
-  // Pozycje z ceną 0 nie wchodzą do sumy, więc „RAZEM" potrafi wyglądać na komplet,
-  // choć brakuje w nim np. całej robocizny. Zbieramy je, żeby powiedzieć to wprost —
-  // aplikacja jest adresowana głównie do laików, którzy nie wychwycą tego sami.
-  const unpriced = rows.filter((r) => r.qty > 0 && r.price === 0).map((r) => r.label.replace(/\s*\(.*?\)\s*$/, ""));
+  // Pozycje o zerowej wartości nie wchodzą do sumy, więc „RAZEM" potrafi wyglądać na
+  // komplet, choć brakuje w nim np. całej robocizny. Zbieramy je, żeby powiedzieć to
+  // wprost — aplikacja jest adresowana głównie do laików, którzy nie wychwycą tego sami.
+  const unpriced = pozycjeBezCeny(rows);
 
   function handleCsvImport(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -68,12 +70,16 @@ export function CostsTab() {
   }
 
   function exportCsv() {
-    const header = "Pozycja;Ilość;Cena jedn. (zł);Wartość (zł)\n";
-    const body = rows.map((r) => `${r.label};${r.qty};${r.price.toFixed(2)};${r.total.toFixed(2)}`).join("\n");
+    // Kolumna „Uwaga" jest po to, żeby odbiorca pliku nie mnożył ilości przez cenę
+    // i nie dziwił się, że nie wychodzi mu wartość — pozycja ryczałtowa mówi to wprost.
+    const header = "Pozycja;Ilość;Cena jedn. (zł);Wartość (zł);Uwaga\n";
+    const body = rows
+      .map((r) => `${r.label};${r.qty};${r.price.toFixed(2)};${r.value.toFixed(2)};${r.overridden ? "wartość wpisana ręcznie (ryczałt)" : ""}`)
+      .join("\n");
     const summary =
-      `\nRazem netto;;;${grandTotal.toFixed(2)}` +
-      `\nVAT ${VAT_RATE}%;;;${vat.toFixed(2)}` +
-      `\nRAZEM brutto;;;${gross.toFixed(2)}`;
+      `\nRazem netto;;;${grandTotal.toFixed(2)};` +
+      `\nVAT ${VAT_RATE}%;;;${vat.toFixed(2)};` +
+      `\nRAZEM brutto;;;${gross.toFixed(2)};`;
     const blob = new Blob(["﻿" + header + body + summary], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, projectFileName("kosztorys", projectName, "csv"));
   }
@@ -83,7 +89,10 @@ export function CostsTab() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="pe-display mb-1 text-xl">Kosztorys instalacji elektrycznej</h2>
-          <p className="text-sm text-slate-500">Ceny domyślne są orientacyjne — edytuj je ręcznie lub zaimportuj z własnego cennika (CSV).</p>
+          <p className="text-sm text-slate-500">
+            Ceny domyślne są orientacyjne — edytuj je ręcznie, zaimportuj z własnego cennika (CSV) albo wpisz
+            gotową wartość pozycji, jeśli masz ją z oferty ryczałtem.
+          </p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => fileRef.current?.click()} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
@@ -142,7 +151,7 @@ export function CostsTab() {
                 <th className="p-3">Pozycja</th>
                 <th className="w-24 p-3">Ilość</th>
                 <th className="w-32 p-3">Cena jedn.</th>
-                <th className="w-32 p-3 text-right">Wartość</th>
+                <th className="w-44 p-3 text-right">Wartość</th>
               </tr>
             </thead>
             <tbody>
@@ -154,12 +163,50 @@ export function CostsTab() {
                     <input
                       type="number"
                       value={r.price}
-                      onChange={(e) => setPrice(r.key, Number(e.target.value) || 0)}
+                      // Ruszenie ceny jednostkowej ZDEJMUJE ryczałt. Inaczej zostawałaby
+                      // pozycja, w której użytkownik właśnie zmienił cenę, a wartość
+                      // stoi w miejscu — czyli kontrolka, która nic nie robi.
+                      onChange={(e) => {
+                        setPrice(r.key, Number(e.target.value) || 0);
+                        if (r.overridden) setCostOverride(r.key, null);
+                      }}
+                      aria-label={`Cena jednostkowa: ${r.label}`}
                       className="pe-input pe-mono w-24 text-sm"
+                      style={r.overridden ? { color: "#94A3B8" } : undefined}
+                      title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
                       step="0.5"
                     />
                   </td>
-                  <td className="pe-mono p-3 text-right">{r.total.toFixed(2)} zł</td>
+                  {/* Wartość pozycji do wpisania wprost. Realne oferty podają część
+                      pozycji ryczałtem (robocizna za mieszkanie, rozdzielnica „pod
+                      klucz"), a takiej kwoty nie da się sensownie rozbić na sztuki.
+                      Puste pole = wartość liczona z ilości i ceny — ten sam zapis co
+                      przy wysokości montażu elementu. */}
+                  <td className="p-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <input
+                        type="number"
+                        value={r.overridden ? r.value : ""}
+                        onChange={(e) => setCostOverride(r.key, e.target.value === "" ? null : Number(e.target.value) || 0)}
+                        placeholder={r.value.toFixed(2)}
+                        aria-label={`Wartość pozycji: ${r.label}`}
+                        className="pe-input pe-mono w-28 text-right text-sm"
+                        style={r.overridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
+                        step="1"
+                      />
+                      <span className="text-xs text-slate-400">zł</span>
+                      {/* Krzyżyk tylko przy nadpisanej pozycji: przy liczonej nie miałby
+                          czego cofać, a stały „×" w każdym wierszu byłby szumem. */}
+                      <button
+                        onClick={() => setCostOverride(r.key, null)}
+                        aria-label={`Przywróć liczoną wartość: ${r.label}`}
+                        title="Wróć do liczenia ilość × cena"
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink ${r.overridden ? "" : "invisible"}`}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -191,9 +238,9 @@ export function CostsTab() {
         <div className="flex gap-2.5 rounded-md p-3 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
           <AlertTriangle size={15} className="mt-0.5 shrink-0" />
           <div>
-            <strong>Suma nie obejmuje wszystkiego.</strong> Pozycje z ceną 0 zł nie wchodzą do kosztorysu:{" "}
-            {unpriced.join(", ")}. Uzupełnij ich ceny — zwłaszcza robocizna potrafi być większą częścią kosztu niż
-            sam materiał.
+            <strong>Suma nie obejmuje wszystkiego.</strong> Pozycje o zerowej wartości nie wchodzą do kosztorysu:{" "}
+            {unpriced.join(", ")}. Uzupełnij cenę jednostkową albo wpisz wartość pozycji — zwłaszcza robocizna potrafi
+            być większą częścią kosztu niż sam materiał.
           </div>
         </div>
       )}

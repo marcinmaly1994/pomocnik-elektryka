@@ -153,6 +153,71 @@ export function computeCosts(
   return { quantities: q, cableLengthSource: hasMeasured ? "plan" : "ryczalt" };
 }
 
+/**
+ * Ręcznie wpisane WARTOŚCI pozycji [zł netto], per klucz cennika.
+ *
+ * Osobno od cen jednostkowych, bo to inny rodzaj informacji: cena jednostkowa mnoży się
+ * przez policzoną ilość, a wartość zastępuje cały ten rachunek. Tak wyglądają realne
+ * oferty — robocizna bywa podana ryczałtem za mieszkanie, a nie „za punkt”, i nie da się
+ * jej wtedy sensownie rozbić na sztuki.
+ *
+ * `0` jest pełnoprawną wartością („ta pozycja jest w cenie czegoś innego”), więc brak
+ * nadpisania to brak klucza, nie zero — ten sam zapis co przy `heightM` elementu.
+ */
+export type CostOverrides = Record<string, number>;
+
+export interface CostRow {
+  key: string;
+  label: string;
+  qty: number;
+  /** Cena jednostkowa z cennika [zł]. Przy pozycji ryczałtowej dalej widoczna,
+   *  ale nieużyta — patrz `overridden`. */
+  price: number;
+  /** Wartość pozycji [zł netto]: ilość × cena albo kwota wpisana ręcznie. */
+  value: number;
+  /** Wartość pochodzi z ręcznego wpisu, nie z mnożenia. */
+  overridden: boolean;
+}
+
+/**
+ * Wiersze kosztorysu: pozycje o niezerowej ilości, z wartością policzoną albo wpisaną.
+ *
+ * Wydzielone ze składnika, bo to jedyne miejsce, w którym decyduje się, co wchodzi do
+ * sumy — a suma jest tym, po co ktoś tu przychodzi.
+ */
+export function kosztorysRows(
+  quantities: Record<string, number>,
+  prices: Record<string, number>,
+  overrides: CostOverrides = {}
+): CostRow[] {
+  return Object.keys(PRICE_LABELS)
+    .filter((k) => (quantities[k] ?? 0) > 0)
+    .map((k) => {
+      const qty = quantities[k];
+      const price = prices[k] ?? 0;
+      const nadpisana = typeof overrides[k] === "number" && Number.isFinite(overrides[k]);
+      return {
+        key: k,
+        label: PRICE_LABELS[k],
+        qty,
+        price,
+        value: nadpisana ? overrides[k] : qty * price,
+        overridden: nadpisana,
+      };
+    });
+}
+
+/**
+ * Pozycje, których BRAK w sumie — ilość jest, a wartość zerowa.
+ *
+ * Liczy się wartość, nie cena jednostkowa: pozycja wyceniona ryczałtem ma prawo mieć
+ * zerową cenę za sztukę i nadal wchodzić do kosztorysu pełną kwotą. Pilnowanie ceny
+ * jednostkowej kazałoby uzupełniać cenę czegoś, co użytkownik już wycenił.
+ */
+export function pozycjeBezCeny(rows: CostRow[]): string[] {
+  return rows.filter((r) => r.value === 0).map((r) => r.label.replace(/\s*\(.*?\)\s*$/, ""));
+}
+
 /** Dopasowuje pozycje cennika CSV (nazwa;cena) po słowach kluczowych w nazwie. */
 const CSV_KEYWORD_MAP: Record<string, string[]> = {
   gniazdko: ["gniazdko", "gniazdo podtynkowe"],

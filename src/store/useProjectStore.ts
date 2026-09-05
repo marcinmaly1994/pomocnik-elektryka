@@ -23,7 +23,7 @@ import {
   scaleOf,
   type PlanSize,
 } from "@/lib/design";
-import { DEFAULT_PRICES } from "@/lib/costs";
+import { DEFAULT_PRICES, type CostOverrides } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
 import { decyzjaZapisu, type RodzajDokumentu } from "@/lib/dokumenty";
@@ -90,6 +90,8 @@ export interface ProjectPayload {
   bgImages: Record<string, string>;
   scales: Record<string, number>;
   prices: PriceTable;
+  /** Recznie wpisane WARTOSCI pozycji kosztorysu [zl netto] — patrz `CostOverrides`. */
+  costOverrides: CostOverrides;
   docHeader: DocumentHeader;
   protocols: Partial<Record<ProtocolKey, ProtocolState>>;
   projectName: string;
@@ -192,6 +194,8 @@ interface ProjectState {
   /** Metrów na jednostkę planu, per kondygnacja — brak wpisu = brak kalibracji. */
   scales: Record<string, number>;
   prices: PriceTable;
+  /** Recznie wpisane WARTOSCI pozycji kosztorysu [zl netto] — patrz `CostOverrides`. */
+  costOverrides: CostOverrides;
   docHeader: DocumentHeader;
   projectName: string;
   protocols: Partial<Record<ProtocolKey, ProtocolState>>;
@@ -320,6 +324,8 @@ interface ProjectState {
   setScale: (floorId: string, metersPerUnit: number) => void;
   clearScale: (floorId: string) => void;
   setPrice: (key: string, value: number) => void;
+  /** Wpisuje wartosc pozycji kosztorysu recznie; `null` przywraca ilosc x cena. */
+  setCostOverride: (key: string, value: number | null) => void;
   setPrices: (patch: Record<string, number>) => void;
   setDocHeader: (patch: Partial<DocumentHeader>) => void;
   setProjectName: (name: string) => void;
@@ -383,6 +389,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   bgImages: {},
   scales: {},
   prices: { ...DEFAULT_PRICES },
+  costOverrides: {},
   projectName: "Mój dom",
   protocols: {},
   panelConfig: { supply3f: true, mainRating: 40 },
@@ -479,6 +486,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       bgImages: {},
       scales: {},
       prices: { ...DEFAULT_PRICES },
+      costOverrides: {},
       protocols: {},
       cloudId: null,
       lastCloudSaveAt: null,
@@ -510,8 +518,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   getProjectPayload: () => {
-    const { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding } = get();
-    return { draft, floors, activeFloorId, bgImages, scales, prices, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
+    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding } = get();
+    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
   },
 
   loadProjectPayload: (payload) => {
@@ -534,6 +542,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       bgImages: payload.bgImages,
       scales: payload.scales,
       prices: { ...DEFAULT_PRICES, ...payload.prices },
+      // Zapisy sprzed tej zmiany nie maja tego pola — pusta mapa znaczy "wszystko liczone".
+      costOverrides: payload.costOverrides ?? {},
       docHeader: payload.docHeader,
       protocols: payload.protocols,
       projectName: payload.projectName || "Projekt",
@@ -705,6 +715,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setPrices: (patch) =>
     set((state) => ({ prices: { ...state.prices, ...patch } })),
+
+  setCostOverride: (key, value) =>
+    set((state) => {
+      const next = { ...state.costOverrides };
+      if (value === null) delete next[key];
+      else next[key] = value;
+      return { costOverrides: next };
+    }),
 
   setDocHeader: (patch) =>
     set((state) => ({ docHeader: { ...state.docHeader, ...patch } })),
