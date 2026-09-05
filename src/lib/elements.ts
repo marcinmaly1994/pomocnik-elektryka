@@ -294,3 +294,22 @@ export function mountingHeightM(e: Pick<InstallationElement, "type" | "heightM">
   if (typeof e.heightM === "number" && e.heightM >= 0) return e.heightM;
   return MOUNTING_HEIGHTS_M[e.type] ?? DEFAULT_MOUNTING_HEIGHT_M;
 }
+
+/** Typy, dla których `gangs` oznacza LICZBĘ MECHANIZMÓW w ramce, a nie wariant symbolu. */
+const TYPY_WIELOKROTNE: ElementType[] = ["gniazdko", "gniazdkoHerm", "wlacznik", "wlacznikSchodowy"];
+
+/**
+ * Ile SZTUK osprzętu niesie jeden punkt na rysunku.
+ *
+ * Gniazdo podwójne to jeden symbol na planie, ale dwa mechanizmy do kupienia
+ * i podłączenia. Łączniki nie mają już wariantów (liczbę biegunów niesie typ symbolu),
+ * ale zostają na liście, żeby projekty zapisane przed tą zmianą — gdzie podwójny
+ * łącznik był zapisany jako `gangs: 2` — liczyły się tak samo jak wtedy.
+ *
+ * Wspólne dla kosztorysu i zestawienia ilościowego: dwie kopie tej reguły prędzej czy
+ * później rozjechałyby się o jedną sztukę, a wtedy zestawienie i wycena tego samego
+ * rzutu podawałyby różne liczby i nie dałoby się rozstrzygnąć, która kłamie.
+ */
+export function mechanizmowWElemencie(e: Pick<InstallationElement, "type" | "gangs">): number {
+  return TYPY_WIELOKROTNE.includes(e.type) ? Math.max(1, e.gangs || 1) : 1;
+}

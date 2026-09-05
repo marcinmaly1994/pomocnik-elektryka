@@ -36,6 +36,7 @@ import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
+import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
@@ -68,6 +69,7 @@ import { ToolRail } from "./ToolRail";
 import { ElementLibrary } from "./ElementLibrary";
 import { RoomPanel } from "./RoomPanel";
 import { PlanCheckPanel } from "./PlanCheckPanel";
+import { QuantitiesPanel } from "./QuantitiesPanel";
 import { EditElementModal } from "./EditElementModal";
 import type Konva from "konva";
 import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
@@ -346,6 +348,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       header: docHeader,
       rysunek: await plotnoDoPdf(naBieli),
       legenda,
+      // Rozbicie „rodzaj × pomieszczenie", nie sama suma per rodzaj: monter kupuje
+      // według sumy, ale montuje pokój po pokoju i to jemu potrzebny jest podział.
+      zestawienie: pozycjeZestawieniaDoPdf(elements),
     });
   }
   const walls = useActiveFloorWalls();
@@ -1332,6 +1337,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // Grupy sterowania oświetleniem liczone z elementów bieżącej kondygnacji — numer
   // pokazywany jest zarówno przy łączniku, jak i przy sterowanych przez niego punktach.
   const lightGroups = useMemo(() => computeLightGroups(elements), [elements]);
+  /** Zestawienie ilościowe TEJ kondygnacji — te same liczby, które trafiają do kosztorysu. */
+  const zestawienie = useMemo(() => summarizeFloor(elements), [elements]);
+
   /** Sprawdzenie rzutu — liczone z TEJ kondygnacji, patrz komentarz przy `checkPlan`. */
   const planIssues = useMemo(
     () => checkPlan({ elements, roomShapes, metersPerUnit: mpu }),
@@ -2407,6 +2415,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               okno, a paski zwijają się do krawędzi; karta z akapitami o normie jest
               dokładnie tym, czego ten tryb się pozbywa. Wraca po wyjściu. */}
           {!pelnyEkran && <PlanCheckPanel issues={planIssues} onShowElements={pokazElementyNaPlanie} />}
+          {!pelnyEkran && <QuantitiesPanel zestawienie={zestawienie} />}
         </div>
       </div>
 

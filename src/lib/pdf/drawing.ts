@@ -1,5 +1,5 @@
 import type { DocumentHeader } from "@/types";
-import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfImage } from "./engine";
+import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc, type PdfImage } from "./engine";
 import { drawTitleBlock, TITLE_BLOCK_H } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
 
@@ -29,12 +29,22 @@ export interface PozycjaLegendy {
   opis: string;
 }
 
+/** Wiersz zestawienia ilościowego — jeden rodzaj osprzętu w jednym pomieszczeniu. */
+export interface PozycjaZestawienia {
+  element: string;
+  pomieszczenie: string;
+  ilosc: number;
+}
+
 export interface RysunekPdfOpcje {
   /** Tytuł trafiający do tabliczki rysunkowej. */
   tytul: string;
   header: DocumentHeader;
   rysunek: PdfImage;
   legenda?: PozycjaLegendy[];
+  /** Zestawienie ilościowe na osobnej stronie za rysunkiem. Pominięte, gdy puste —
+   *  pusta strona z samym nagłówkiem to gorszy dokument niż jego brak. */
+  zestawienie?: PozycjaZestawienia[];
 }
 
 // A4 poziomo. Rysunki są szersze niż wyższe — i schemat jednokreskowy, i rzut
@@ -69,7 +79,7 @@ function dwieLinie(tekst: string, maxW: number, size: number): [string, string |
   return [pierwsza, reszta ? pdfFitText(reszta, maxW, size, false) : null];
 }
 
-export function buildDrawingPdf({ tytul, header, rysunek, legenda }: RysunekPdfOpcje): Promise<Uint8Array> {
+export function buildDrawingPdf({ tytul, header, rysunek, legenda, zestawienie }: RysunekPdfOpcje): Promise<Uint8Array> {
   const doc = createPdfDoc({
     pageW: STRONA_W,
     pageH: STRONA_H,
@@ -140,7 +150,66 @@ export function buildDrawingPdf({ tytul, header, rysunek, legenda }: RysunekPdfO
     }
   }
 
+  if (zestawienie?.length) rysujZestawienie(doc, zestawienie);
+
   return doc.finish();
+}
+
+/**
+ * Zestawienie ilościowe na OSOBNEJ STRONIE, za rysunkiem.
+ *
+ * Świadomie nie w legendzie: patrz komentarz przy `PozycjaLegendy`. Legenda objaśnia
+ * znaki i ta decyzja zostaje — liczba doklejona do symbolu miesza dwa różne dokumenty
+ * w jednym miejscu. Osobna strona nie ma tego problemu: jest podpisana, da się ją
+ * pominąć przy drukowaniu samego rysunku, a przede wszystkim nie odbiera rysunkowi
+ * ani milimetra kartki.
+ *
+ * Powstała, bo zestawienia do druku nie było NIGDZIE — Kosztorys eksportuje CSV
+ * z cenami, a to inny dokument i inny odbiorca: monter potrzebuje listy „co kupić
+ * i ile", bez stawek.
+ */
+function rysujZestawienie(doc: PdfDoc, pozycje: PozycjaZestawienia[]): void {
+  // Wymuszenie nowej strony: `ensure` z wysokością większą niż cała kartka nie ma
+  // szans się zmieścić, więc zamyka bieżącą stronę (razem z tabliczką) i otwiera nową.
+  doc.ensure(STRONA_H);
+
+  doc.text("ZESTAWIENIE ELEMENTÓW", MARGINES, doc.y - 12, 11, true);
+  doc.y -= 30;
+
+  const kolIlosc = STRONA_W - MARGINES - 60;
+  const kolPokoj = kolIlosc - 150;
+
+  doc.text("Element", MARGINES, doc.y, 8, true, 0.35);
+  doc.text("Pomieszczenie", kolPokoj, doc.y, 8, true, 0.35);
+  doc.text("Ilość", kolIlosc, doc.y, 8, true, 0.35);
+  doc.y -= 6;
+  doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.6, 0.55);
+  doc.y -= 12;
+
+  for (const p of pozycje) {
+    // Nagłówek tabeli powtarzany na każdej nowej stronie — bez tego druga strona
+    // zestawienia to trzy kolumny liczb bez wyjaśnienia, co znaczą.
+    if (doc.ensure(16)) {
+      doc.y -= 8;
+      doc.text("Element", MARGINES, doc.y, 8, true, 0.35);
+      doc.text("Pomieszczenie", kolPokoj, doc.y, 8, true, 0.35);
+      doc.text("Ilość", kolIlosc, doc.y, 8, true, 0.35);
+      doc.y -= 6;
+      doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.6, 0.55);
+      doc.y -= 12;
+    }
+    doc.text(pdfFitText(p.element, kolPokoj - MARGINES - 10, 8.5, false), MARGINES, doc.y, 8.5);
+    doc.text(pdfFitText(p.pomieszczenie, kolIlosc - kolPokoj - 10, 8.5, false), kolPokoj, doc.y, 8.5);
+    doc.text(`${p.ilosc} szt.`, kolIlosc, doc.y, 8.5);
+    doc.y -= 8;
+    doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.3, 0.9);
+    doc.y -= 8;
+  }
+
+  const razem = pozycje.reduce((s, p) => s + p.ilosc, 0);
+  doc.y -= 4;
+  doc.text("RAZEM", MARGINES, doc.y, 9, true);
+  doc.text(`${razem} szt.`, kolIlosc, doc.y, 9, true);
 }
 
 export async function downloadDrawingPdf(opcje: RysunekPdfOpcje, bazaNazwy: string): Promise<boolean> {
