@@ -15,6 +15,8 @@ import {
   defaultOpeningWidth,
   DEFAULT_DOOR_WIDTH_CM,
   DEFAULT_OPENING_WIDTH_UNITS,
+  contentBounds,
+  MARGINES_KADROWANIA,
   detectRoomName,
   reassignRoomsOnFloor,
   reconcileRoomsOnLoad,
@@ -310,5 +312,43 @@ describe("defaultOpeningWidth — rodzaj otworu", () => {
   it("bez skali oba rodzaje spadają na ten sam fallback — nie ma z czego liczyć cm", () => {
     expect(defaultOpeningWidth(null, "okno")).toBe(DEFAULT_OPENING_WIDTH_UNITS);
     expect(defaultOpeningWidth(null, "drzwi")).toBe(DEFAULT_OPENING_WIDTH_UNITS);
+  });
+});
+
+describe("contentBounds", () => {
+  const PLAN = { w: 1000, h: 700 };
+  const sciana = { points: [{ x: 200, y: 200 }, { x: 400, y: 200 }, { x: 400, y: 300 }] };
+
+  it("obejmuje całą geometrię z marginesem", () => {
+    const b = contentBounds(PLAN, [sciana], [], [], [])!;
+    expect(b.x).toBe(200 - MARGINES_KADROWANIA);
+    expect(b.y).toBe(200 - MARGINES_KADROWANIA);
+    expect(b.x + b.w).toBe(400 + MARGINES_KADROWANIA);
+    expect(b.y + b.h).toBe(300 + MARGINES_KADROWANIA);
+  });
+
+  it("bierze pod uwagę wszystkie rodzaje treści, nie tylko ściany", () => {
+    const b = contentBounds(PLAN, [sciana], [], [{ x: 700, y: 500 }], [])!;
+    expect(b.x + b.w).toBe(700 + MARGINES_KADROWANIA);
+    expect(b.y + b.h).toBe(500 + MARGINES_KADROWANIA);
+  });
+
+  it("nie wychodzi poza obszar planu — inaczej eksport złapałby pas pustki", () => {
+    const przyKrawedzi = { points: [{ x: 5, y: 5 }, { x: 995, y: 695 }] };
+    const b = contentBounds(PLAN, [przyKrawedzi], [], [], [])!;
+    expect(b.x).toBe(0);
+    expect(b.y).toBe(0);
+    expect(b.x + b.w).toBe(PLAN.w);
+    expect(b.y + b.h).toBe(PLAN.h);
+  });
+
+  it("pusta kondygnacja nie ma czego kadrować", () => {
+    expect(contentBounds(PLAN, [], [], [], [])).toBeNull();
+  });
+
+  it("pojedynczy punkt daje kadr o rozmiarze marginesu, nie zerowy", () => {
+    const b = contentBounds(PLAN, [], [], [{ x: 500, y: 350 }], [])!;
+    expect(b.w).toBe(MARGINES_KADROWANIA * 2);
+    expect(b.h).toBe(MARGINES_KADROWANIA * 2);
   });
 });

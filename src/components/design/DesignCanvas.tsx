@@ -6,7 +6,7 @@ import type { CableRoute, InstallationElement, Opening, Point, RoomShape, Wall }
 import { ELEMENT_TYPES, type SanitaryZone } from "@/lib/elements";
 import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
-import { clampNum, nearestPointOnPolyline, polygonAreaM2, snap } from "@/lib/geometry";
+import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { groupLabelAnchors } from "@/lib/glyphs";
 
@@ -112,6 +112,9 @@ interface DesignCanvasProps {
   bgImageUrl: string | null;
   calibPoints: Point[];
   zones: SanitaryZone[];
+  /** Tryb wymiarowania: dlugosci WSZYSTKICH scian i wymiary prostokatnych pomieszczen.
+   *  Ustawienie widoku, wlaczane w pasku edytora — patrz komentarze przy obu miejscach. */
+  pokazWymiary: boolean;
   /** Wizualne trasy przewodów (rozdzielnica → punkt), patrz `buildCableRoutes` —
    *  pusta tablica, gdy na kondygnacji nie ma rozdzielnicy albo widoczność wyłączona. */
   cableRoutes: CableRoute[];
@@ -286,6 +289,7 @@ export function DesignCanvas({
   bgImageUrl,
   calibPoints,
   zones,
+  pokazWymiary,
   cableRoutes,
   routeOverrides,
   lightGroups,
@@ -569,6 +573,15 @@ export function DesignCanvas({
     const m2 = polygonAreaM2(points, metersPerUnit);
     if (m2 === null) return null;
     return `${m2.toFixed(1).replace(".", ",")} m²`;
+  }
+
+  /** Podpis „3,45 × 4,20 m" dla prostokątnego obrysu — sama detekcja i przeliczenie
+   *  siedzą w `rectangleSizeM` (geometry.ts), tutaj zostaje wyłącznie formatowanie. */
+  function formatWymiaryProstokata(points: Point[]): string | null {
+    const rozmiar = rectangleSizeM(points, metersPerUnit);
+    if (!rozmiar) return null;
+    const f = (v: number) => v.toFixed(2).replace(".", ",");
+    return `${f(rozmiar.w)} × ${f(rozmiar.h)} m`;
   }
 
   /** Cztery narożniki prostokąta podglądu jako obrys — żeby powierzchnia liczyła się
@@ -983,7 +996,12 @@ export function DesignCanvas({
             tworzy plotno warstwy od nowa, wiec stan zawsze zgadza sie z widokiem.
             Koszt jest znikomy: to gest uzytkownika, nie cos, co dzieje sie w petli. */}
         <Layer listening={false} key={gridOn ? "tlo-z-siatka" : "tlo-bez-siatki"} ref={warstwaTlaRef}>
-          <Rect x={0} y={0} width={planSize.w} height={planSize.h} fill="#F7F9FB" />
+          {/* `name="tylko-ekran"` na rzeczach, które są pomocą PRZY RYSOWANIU, a nie
+              treścią rysunku: szare tło obszaru, siatka i obwódka obszaru roboczego.
+              Eksport do PDF chowa je po nazwie (patrz `zbudujPdfRzutu`) — na rysunku
+              budowlanym nie ma ani kratki, ani ramki „dokąd wolno stawiać elementy".
+              Podkład ZOSTAJE: to wgrany rzut mieszkania, czyli treść. */}
+          <Rect name="tylko-ekran" x={0} y={0} width={planSize.w} height={planSize.h} fill="#F7F9FB" />
           {bgImage && <KonvaImage image={bgImage} x={0} y={0} width={planSize.w} height={planSize.h} opacity={0.85} />}
           {/* Siatkę da się wyłączyć niezależnie od przyciągania. To dwie różne rzeczy:
               przyciąganie porządkuje RYSOWANIE, a siatka jest tylko widoczna — i przy
@@ -996,15 +1014,15 @@ export function DesignCanvas({
               odrysowanie, więc przełącznik działa natychmiast. */}
           {gridOn &&
             Array.from({ length: Math.floor(planSize.w / GRID) + 1 }, (_, i) => i * GRID).map((x) => (
-              <Line key={`gx${x}`} points={[x, 0, x, planSize.h]} stroke="#E1E7EC" strokeWidth={1} />
+              <Line name="tylko-ekran" key={`gx${x}`} points={[x, 0, x, planSize.h]} stroke="#E1E7EC" strokeWidth={1} />
             ))}
           {gridOn &&
             Array.from({ length: Math.floor(planSize.h / GRID) + 1 }, (_, i) => i * GRID).map((y) => (
-              <Line key={`gy${y}`} points={[0, y, planSize.w, y]} stroke="#E1E7EC" strokeWidth={1} />
+              <Line name="tylko-ekran" key={`gy${y}`} points={[0, y, planSize.w, y]} stroke="#E1E7EC" strokeWidth={1} />
             ))}
           {/* Widoczna granica obszaru roboczego — po oddaleniu widoku wokół planu robi się
               puste tło i bez obwódki nie było wiadomo, dokąd wolno stawiać elementy. */}
-          <Rect x={0} y={0} width={planSize.w} height={planSize.h} stroke="#C3CDD7" strokeWidth={1.5} />
+          <Rect name="tylko-ekran" x={0} y={0} width={planSize.w} height={planSize.h} stroke="#C3CDD7" strokeWidth={1.5} />
         </Layer>
 
         <Layer ref={layerRef}>
@@ -1088,6 +1106,34 @@ export function DesignCanvas({
                     onRoomContextMenu(r.id, e.evt.clientX, e.evt.clientY);
                   }}
                 />
+
+                {/* Wymiary pomieszczenia jako JEDEN podpis „3,45 × 4,20 m" pod nazwą,
+                    a nie etykieta przy każdej krawędzi — tak robią to rysunki budowlane
+                    i tylko tak da się to utrzymać czytelnym: przy czterech pokojach
+                    etykiety krawędziowe dołożyłyby szesnaście napisów do i tak już
+                    wymiarowanych ścian.
+                    Tylko dla obrysów PROSTOKĄTNYCH: dla litery L czy wykusza „a × b"
+                    z obrysu opisywałoby prostokąt, którego na rysunku nie ma. Tam
+                    zostaje sama powierzchnia, która jest prawdziwa niezależnie od
+                    kształtu. */}
+                {pokazWymiary &&
+                  (() => {
+                    const wym = formatWymiaryProstokata(r.points);
+                    if (!wym) return null;
+                    return (
+                      <Text
+                        x={c.x - 50}
+                        y={c.y + 18}
+                        width={100}
+                        align="center"
+                        text={wym}
+                        fontSize={10}
+                        fontStyle="bold"
+                        fill="#8A5526"
+                        listening={false}
+                      />
+                    );
+                  })()}
 
                 <Text
                   x={c.x - 40}
@@ -1244,14 +1290,17 @@ export function DesignCanvas({
                       }}
                     />
                   ))}
-                {/* Długości odcinków ZAZNACZONEJ ściany. Podczas rysowania wymiar było
-                    widać (patrz „gumowy" odcinek niżej), ale po zatwierdzeniu znikał
-                    bezpowrotnie — nie dało się sprawdzić, czy ściana wyszła na 4,20 m,
-                    ani zweryfikować cudzego rzutu. Tylko dla zaznaczonej, bo wymiary
-                    przy wszystkich naraz zamieniają rzut w ścianę tekstu.
+                {/* Długości odcinków ściany. Podczas rysowania wymiar było widać (patrz
+                    „gumowy" odcinek niżej), ale po zatwierdzeniu znikał bezpowrotnie —
+                    nie dało się sprawdzić, czy ściana wyszła na 4,20 m, ani zweryfikować
+                    cudzego rzutu.
+                    Domyślnie tylko dla ZAZNACZONEJ, bo wymiary przy wszystkich naraz
+                    zamieniają rzut w ścianę tekstu. Tryb wymiarowania (`pokazWymiary`)
+                    włącza je wszystkie świadomie — na wydruku rzut bez ani jednego
+                    wymiaru nie jest dokumentem, tylko obrazkiem.
                     Etykiety przy WSZYSTKICH odcinkach łamanej, nie tylko przy pierwszym:
                     jedna ściana bywa całym obrysem domu. */}
-                {isSel &&
+                {(isSel || pokazWymiary) &&
                   w.points.slice(0, -1).map((p, i) => {
                     const q = w.points[i + 1];
                     const dlugosc = Math.hypot(q.x - p.x, q.y - p.y);

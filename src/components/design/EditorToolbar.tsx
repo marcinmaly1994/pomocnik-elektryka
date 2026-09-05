@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Save, Scan, Undo2 } from "lucide-react";
+import { Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
 import { FloorBar } from "./FloorBar";
@@ -33,6 +33,9 @@ export interface EditorToolbarProps {
    *  `buildCableRoutes`. Puste, gdy na kondygnacji nie ma rozdzielnicy. */
   showRoutes: boolean;
   onToggleRoutes: () => void;
+  /** Tryb wymiarowania — długości wszystkich ścian i wymiary prostokątnych pomieszczeń. */
+  showDimensions: boolean;
+  onToggleDimensions: () => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -92,6 +95,8 @@ export function EditorToolbar({
   onToggleZones,
   showRoutes,
   onToggleRoutes,
+  showDimensions,
+  onToggleDimensions,
   canUndo,
   canRedo,
   onUndo,
@@ -219,6 +224,20 @@ export function EditorToolbar({
         aria-pressed={showRoutes}
       >
         <Cable size={15} className={showRoutes ? "text-copper" : undefined} />
+      </Button>
+
+      {/* Wymiary WSZYSTKICH ścian naraz. Domyślnie wyłączone, bo przy rysowaniu
+          przeszkadzają — a włączone są tym, co odróżnia wydrukowany rzut od obrazka:
+          bez ani jednego wymiaru nie da się z niego nic wytyczyć na budowie. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggleDimensions}
+        title={showDimensions ? "Ukryj wymiary ścian i pomieszczeń" : "Pokaż wymiary ścian i pomieszczeń"}
+        aria-label={showDimensions ? "Ukryj wymiary" : "Pokaż wymiary"}
+        aria-pressed={showDimensions}
+      >
+        <Ruler size={15} className={showDimensions ? "text-copper" : undefined} />
       </Button>
 
       <div className="flex items-center">

@@ -128,3 +128,67 @@ export function svgDoPlotna(svg: SVGSVGElement, szerokoscPx: number): Promise<HT
     img.src = url;
   });
 }
+
+/** Sensowne długości podziałki [m] — takie, jakie czyta się bez liczenia. */
+const DLUGOSCI_PODZIALKI = [0.5, 1, 2, 5, 10, 20, 50, 100];
+
+/**
+ * Rysuje PODZIAŁKĘ LINIOWĄ w lewym dolnym rogu gotowego rastra rzutu.
+ *
+ * Podziałka graficzna, a nie napis „1:100", i to jest cała pointa: rysunek jest
+ * wpasowywany w pole na kartce z zachowaniem proporcji (patrz `buildDrawingPdf`), więc
+ * skala mianowana nie wychodzi na okrągłą liczbę i zależy od tego, ile miejsca zostało
+ * obok legendy. Podziałka narysowana WEWNĄTRZ obrazu skaluje się razem z nim, więc
+ * pozostaje prawdziwa niezależnie od formatu i od tego, czy ktoś wydrukuje kartkę
+ * „dopasuj do strony".
+ *
+ * Rysowana w pikselach rastra — stąd `pxNaMetr`, który wołający zna z przelicznika
+ * skali planu i użytego powiększenia.
+ */
+export function rysujPodzialke(canvas: HTMLCanvasElement, pxNaMetr: number): void {
+  if (!(pxNaMetr > 0)) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  // Docelowo podziałka ma zajmować ok. 1/5 szerokości rysunku: krótsza jest nieczytelna,
+  // dłuższa zaczyna zasłaniać rzut.
+  const docelowaPx = canvas.width / 5;
+  const metry =
+    DLUGOSCI_PODZIALKI.find((m) => m * pxNaMetr >= docelowaPx) ??
+    DLUGOSCI_PODZIALKI[DLUGOSCI_PODZIALKI.length - 1];
+  const dlugoscPx = metry * pxNaMetr;
+  // Podziałka dłuższa od samego rysunku nie ma sensu — lepiej jej nie rysować wcale
+  // niż wypuścić poza kadr.
+  if (dlugoscPx > canvas.width * 0.9) return;
+
+  const skala = canvas.width / 900; // grubości i odstępy proporcjonalne do rozdzielczości
+  const marg = 14 * skala;
+  const wysBelki = 7 * skala;
+  const font = Math.max(9, 11 * skala);
+  const y = canvas.height - marg - wysBelki - font * 1.4;
+  const x = marg;
+
+  // Białe podłoże: podziałka bywa nad rysunkiem, a przezroczysta byłaby nieczytelna.
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x - 6 * skala, y - font * 1.5, dlugoscPx + 12 * skala, wysBelki + font * 2.4);
+
+  // Belka w czterech polach, na przemian czarne i białe — klasyczna podziałka rysunkowa.
+  const pola = 4;
+  const szerPola = dlugoscPx / pola;
+  for (let i = 0; i < pola; i++) {
+    ctx.fillStyle = i % 2 === 0 ? "#16202B" : "#fff";
+    ctx.fillRect(x + i * szerPola, y, szerPola, wysBelki);
+  }
+  ctx.strokeStyle = "#16202B";
+  ctx.lineWidth = Math.max(1, skala);
+  ctx.strokeRect(x, y, dlugoscPx, wysBelki);
+
+  ctx.fillStyle = "#16202B";
+  ctx.font = `${font}px sans-serif`;
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  ctx.fillText("0", x, y - font * 0.4);
+  ctx.textAlign = "right";
+  const etykieta = metry >= 1 ? `${metry} m` : `${String(metry).replace(".", ",")} m`;
+  ctx.fillText(etykieta, x + dlugoscPx, y - font * 0.4);
+}

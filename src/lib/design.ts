@@ -324,3 +324,54 @@ export function scaleOf(scales: Record<string, number>, floorId: string): number
   const v = scales[floorId];
   return typeof v === "number" && v > 0 ? v : null;
 }
+
+/**
+ * Margines wokół narysowanej treści przy kadrowaniu rzutu do druku [jedn. planu].
+ *
+ * Musi zmieścić to, co wystaje POZA punkty geometrii: symbol elementu (największy,
+ * wanna, ma ~36 jedn. szerokości, czyli 18 od środka), strefę ochronną wokół niej,
+ * etykiety wymiarów i numery grup sterowania. Stąd wartość z zapasem — obcięty
+ * o pół symbolu rysunek wygląda na zepsuty, a kilka pustych jednostek nie kosztuje nic.
+ */
+export const MARGINES_KADROWANIA = 60;
+
+export interface Obszar {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Prostokąt obejmujący całą narysowaną treść kondygnacji [jedn. planu], z marginesem.
+ * `null`, gdy nie ma czego kadrować.
+ *
+ * Po co: eksport do PDF brał dotąd CAŁY obszar planu (1000 × 700 jedn. = 50 × 35 m przy
+ * rysowaniu od zera), więc mieszkanie 10 × 8 m zajmowało jedną piątą kartki, a resztę
+ * wypełniała pusta siatka. Wydruk wychodził nieczytelny nie dlatego, że rysunek jest
+ * zły, tylko dlatego, że pokazywaliśmy głównie tło.
+ *
+ * Wynik jest PRZYCINANY do obszaru planu: margines dodany przy krawędzi wyszedłby poza
+ * scenę, a `toCanvas` zwróciłby wtedy pas przezroczystych pikseli.
+ */
+export function contentBounds(
+  planSize: PlanSize,
+  walls: { points: Point[] }[],
+  roomShapes: { points: Point[] }[],
+  elements: Point[],
+  openings: Point[]
+): Obszar | null {
+  const punkty: Point[] = [
+    ...walls.flatMap((w) => w.points),
+    ...roomShapes.flatMap((r) => r.points),
+    ...elements,
+    ...openings,
+  ];
+  if (punkty.length === 0) return null;
+
+  const minX = Math.max(0, Math.min(...punkty.map((p) => p.x)) - MARGINES_KADROWANIA);
+  const minY = Math.max(0, Math.min(...punkty.map((p) => p.y)) - MARGINES_KADROWANIA);
+  const maxX = Math.min(planSize.w, Math.max(...punkty.map((p) => p.x)) + MARGINES_KADROWANIA);
+  const maxY = Math.min(planSize.h, Math.max(...punkty.map((p) => p.y)) + MARGINES_KADROWANIA);
+  return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
+}

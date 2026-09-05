@@ -99,3 +99,26 @@ export function distanceToRect(
   const oy = Math.max(Math.abs(ly) - h / 2, 0);
   return Math.hypot(ox, oy);
 }
+
+/**
+ * Wymiary obrysu [m], jeśli jest PROSTOKĄTEM równoległym do osi — inaczej `null`.
+ *
+ * Prostokątność sprawdzamy naprawdę (cztery wierzchołki, dwie różne wartości X i dwie
+ * Y), a nie po samej liczbie punktów: dla litery L czy wykusza wymiary wzięte z obrysu
+ * opisywałyby prostokąt, którego na rysunku nie ma — a podpis, który kłamie, jest
+ * gorszy od braku podpisu. Tam zostaje sama powierzchnia, prawdziwa dla każdego
+ * kształtu (patrz `polygonAreaM2`).
+ *
+ * Porównanie po zaokrągleniu do 1/1000 jednostki, bo narożniki bywają wynikiem
+ * przeciągania myszą i różnią się o wartości niewidoczne na rysunku.
+ */
+export function rectangleSizeM(points: Point[], metersPerUnit: number | null): { w: number; h: number } | null {
+  if (metersPerUnit === null || !(metersPerUnit > 0) || points.length !== 4) return null;
+  const xs = [...new Set(points.map((p) => Math.round(p.x * 1000)))];
+  const ys = [...new Set(points.map((p) => Math.round(p.y * 1000)))];
+  if (xs.length !== 2 || ys.length !== 2) return null;
+  return {
+    w: (Math.abs(xs[1] - xs[0]) / 1000) * metersPerUnit,
+    h: (Math.abs(ys[1] - ys[0]) / 1000) * metersPerUnit,
+  };
+}

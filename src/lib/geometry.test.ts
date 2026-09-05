@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect } from "./geometry";
+import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM } from "./geometry";
 
 describe("snap", () => {
   it("zaokrągla do siatki 20", () => {
@@ -146,5 +146,50 @@ describe("distanceToRect", () => {
 
   it("obrót o 180° nic nie zmienia dla prostokąta", () => {
     expect(d(13, 10, 180)).toBeCloseTo(d(13, 10, 0), 10);
+  });
+});
+
+describe("rectangleSizeM", () => {
+  const prostokat = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 60 },
+    { x: 0, y: 60 },
+  ];
+
+  it("przelicza boki prostokąta na metry", () => {
+    expect(rectangleSizeM(prostokat, 0.05)).toEqual({ w: 5, h: 3 });
+  });
+
+  it("kolejność wierzchołków nie ma znaczenia", () => {
+    const odwrotnie = [...prostokat].reverse();
+    expect(rectangleSizeM(odwrotnie, 0.05)).toEqual({ w: 5, h: 3 });
+  });
+
+  it("kształt inny niż prostokąt nie dostaje wymiarów — podpis, który kłamie, jest gorszy od braku", () => {
+    const litera_L = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 30 },
+      { x: 50, y: 30 },
+      { x: 50, y: 60 },
+      { x: 0, y: 60 },
+    ];
+    expect(rectangleSizeM(litera_L, 0.05)).toBeNull();
+  });
+
+  it("czworokąt nieprostokątny (trapez) też odpada", () => {
+    const trapez = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 80, y: 60 },
+      { x: 20, y: 60 },
+    ];
+    expect(rectangleSizeM(trapez, 0.05)).toBeNull();
+  });
+
+  it("bez skali nie ma czego przeliczać", () => {
+    expect(rectangleSizeM(prostokat, null)).toBeNull();
+    expect(rectangleSizeM(prostokat, 0)).toBeNull();
   });
 });
