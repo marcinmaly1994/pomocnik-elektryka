@@ -47,6 +47,7 @@ import {
   detectRoomName,
   guessRoomType,
   nextRoomName,
+  contentBounds,
   planSizeForImage,
   roomNameAfterMove,
   scaleOf,
@@ -72,7 +73,7 @@ import type Konva from "konva";
 import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
 import { buildDrawingPdf } from "@/lib/pdf/drawing";
-import { bialePlotno, plotnoDoPdf, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
+import { bialePlotno, plotnoDoPdf, rysujPodzialke, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
 import { projectFileName } from "@/lib/pdf/download";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { PdfPreview } from "@/components/ui/PdfPreview";
@@ -283,12 +284,48 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     const stage = stageRef.current;
     if (!stage) throw new Error("Rzut nie jest jeszcze gotowy.");
 
-    // Pole rysunku obok legendy, przeliczone na piksele druku.
-    const docelowaSzer = Math.round(600 * PIKSELI_NA_PUNKT);
-    const plotno = stage.toCanvas({ pixelRatio: docelowaSzer / stage.width() }) as HTMLCanvasElement;
-    // Scena Konvy jest przezroczysta — bez podłożenia bieli wychodzi czarna płachta.
-    const naBieli = bialePlotno(plotno.width, plotno.height);
-    naBieli.getContext("2d")!.drawImage(plotno, 0, 0);
+    /**
+     * Kadrowanie do NARYSOWANEJ TREŚCI, nie do całego obszaru planu.
+     *
+     * Obszar roboczy to 1000 × 700 jedn., czyli 50 × 35 m przy rysowaniu od zera —
+     * mieszkanie 10 × 8 m zajmowało więc jedną piątą kartki, a resztę wypełniała pusta
+     * siatka. Wydruk był nieczytelny nie dlatego, że rysunek jest zły, tylko dlatego,
+     * że pokazywaliśmy głównie tło.
+     */
+    const kadr = contentBounds(planSize, walls, roomShapes, elements, openings) ?? {
+      x: 0,
+      y: 0,
+      w: planSize.w,
+      h: planSize.h,
+    };
+
+    /**
+     * Rzeczy pomocnicze EKRANU, których nie ma na rysunku budowlanym: siatka, szare tło
+     * obszaru roboczego i jego obwódka. Chowamy je na czas eksportu i przywracamy
+     * w `finally` — inaczej wyjątek przy budowaniu PDF-a zostawiłby użytkownika
+     * z płótnem bez siatki i bez wyjaśnienia dlaczego.
+     */
+    const pomocnicze = stage.find(".tylko-ekran");
+    pomocnicze.forEach((n) => n.visible(false));
+
+    let naBieli: HTMLCanvasElement;
+    try {
+      // Pole rysunku obok legendy, przeliczone na piksele druku.
+      const docelowaSzer = Math.round(600 * PIKSELI_NA_PUNKT);
+      const kadrPx = { x: kadr.x * zoom, y: kadr.y * zoom, width: kadr.w * zoom, height: kadr.h * zoom };
+      const pixelRatio = docelowaSzer / kadrPx.width;
+      const plotno = stage.toCanvas({ ...kadrPx, pixelRatio }) as HTMLCanvasElement;
+      // Scena Konvy jest przezroczysta — bez podłożenia bieli wychodzi czarna płachta.
+      naBieli = bialePlotno(plotno.width, plotno.height);
+      naBieli.getContext("2d")!.drawImage(plotno, 0, 0);
+      // Podziałka DOKŁADANA DO RASTRA, więc skaluje się razem z rysunkiem przy
+      // wpasowywaniu go w kartkę — patrz `rysujPodzialke`. Bez skali nie ma czego
+      // odmierzać, więc jej po prostu nie ma.
+      if (mpu !== null && mpu > 0) rysujPodzialke(naBieli, (zoom * pixelRatio) / mpu);
+    } finally {
+      pomocnicze.forEach((n) => n.visible(true));
+      stage.batchDraw();
+    }
 
     const legenda = [];
     for (const sym of uzyteSymbole) {
@@ -363,6 +400,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    *  zawsze potrzebna, i bez rozdzielnicy postawionej na planie i tak jest pusta
    *  (patrz `cableRoutes` niżej), więc nie ma po co narzucać jej od razu. */
   const [showRoutes, setShowRoutes] = useState(false);
+  /** Tryb wymiarowania — domyslnie WYLACZONY: przy rysowaniu wymiary przeszkadzaja,
+   *  a potrzebne sa przy sprawdzaniu i przed wydrukiem. */
+  const [showDimensions, setShowDimensions] = useState(false);
   // Skala samych symboli na planie (nie powiększenie widoku) — ustawienie widoku, więc
   // stan lokalny jak snapOn/showZones, a nie część zapisywanego projektu.
   const [elementScale, setElementScale] = useState(DEFAULT_ELEMENT_SCALE);
@@ -1994,6 +2034,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         onToggleZones={() => setShowZones((z) => !z)}
         showRoutes={showRoutes}
         onToggleRoutes={() => setShowRoutes((r) => !r)}
+        showDimensions={showDimensions}
+        onToggleDimensions={() => setShowDimensions((d) => !d)}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}
@@ -2232,6 +2274,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             bgImageUrl={bgImageUrl}
             calibPoints={calibPoints}
             zones={zones}
+            pokazWymiary={showDimensions}
             cableRoutes={cableRoutes}
             routeOverrides={routeOverrides}
             lightGroups={lightGroups}
