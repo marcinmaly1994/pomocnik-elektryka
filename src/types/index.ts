@@ -66,6 +66,16 @@ export interface InstallationElement {
    *  Wchodzi w długość przewodu: pion od rozdzielnicy pod strop i zejście do
    *  osprzętu zależy od tego, na jakiej wysokości ten osprzęt wisi. */
   heightM?: number;
+  /**
+   * Rzeczywiste wymiary przyboru sanitarnego [m] — nadpisanie wartosci typowej
+   * (patrz `SANITARY_FIXTURES` w lib/elements.ts). `undefined` = wartosc typowa.
+   *
+   * Dotyczy wylacznie wanny, brodzika i umywalki i nie jest kosmetyka: obrys przyboru
+   * JEST strefa 1 wg PN-HD 60364-7-701, wiec te dwie liczby decyduja o tym, ktore
+   * gniazdo walidator zglosi jako blad. Dluzszy bok lezy wzdluz osi X symbolu.
+   */
+  widthM?: number;
+  depthM?: number;
 }
 
 export interface Wall {

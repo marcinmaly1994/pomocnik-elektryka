@@ -9,6 +9,10 @@ interface GlyphProps {
   gangs?: number;
   /** Litera wpisana w łuk symbolu — dotyczy wyłącznie `wypustAGD`. Domyślnie „A". */
   agdLetter?: string;
+  /** Rzeczywiste wymiary przyboru sanitarnego [m] — tylko dla wanny/brodzika/umywalki
+   *  (patrz `fixtureSizeM`). Bez nich rysują się wymiary typowe, co jest właściwe
+   *  w legendzie i w podglądzie biblioteki, gdzie nie ma konkretnego elementu. */
+  wymiaryM?: { widthM: number; depthM: number };
 }
 
 /** Konvowy odpowiednik `SocketArc` z `ElementGlyphSvg.tsx` — ta sama geometria, ten sam
@@ -82,24 +86,24 @@ function CodeBadgeKonva({ color, code, w, h }: { color: string; code: string; w:
  *  rysowania na płótnie projektowania (`DesignCanvas`). Ten sam zestaw kształtów co
  *  `ElementGlyphSvg`, przepisany na `react-konva` zamiast surowego SVG (Stage/Layer w
  *  Konvie nie renderuje węzłów DOM, więc symboli nie da się użyć 1:1). */
-export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps) {
+export function ElementGlyphKonva({ type, color, gangs, agdLetter, wymiaryM }: GlyphProps) {
   switch (type) {
     case "gniazdko":
     case "gniazdkoHerm": {
       const g = Math.max(1, Math.min(6, gangs || 1));
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <SocketArcKonva color={color} herm={type === "gniazdkoHerm"} insideLabel={g > 1 ? String(g) : undefined} hitW={w} hitH={h} />
       );
     }
 
     case "gniazdko400": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return <SocketArcKonva color={color} belowLabel="3F" hitW={w} hitH={h} />;
     }
 
     case "wypustAGD": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return <SocketArcKonva color={color} insideLabel={(agdLetter || "A").slice(0, 2).toUpperCase()} hitW={w} hitH={h} />;
     }
 
@@ -144,7 +148,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
       );
 
     case "tasmaLed": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <Rect x={-w / 2} y={-h / 2} width={w} height={h} cornerRadius={3} fill="#fff" stroke={color} strokeWidth={2} />
@@ -195,7 +199,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
       );
 
     case "wanna": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <Rect x={-w / 2} y={-h / 2} width={w} height={h} cornerRadius={9} fill="#fff" stroke={color} strokeWidth={2} />
@@ -206,7 +210,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
     }
 
     case "prysznic": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <Rect x={-w / 2} y={-h / 2} width={w} height={h} cornerRadius={3} fill="#fff" stroke={color} strokeWidth={2} />
@@ -228,7 +232,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
     }
 
     case "umywalka": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           {/* Zaokrąglenie ograniczone połową wysokości — patrz komentarz w wersji SVG. */}
@@ -240,7 +244,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
     }
 
     case "rozdzielnica": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <Rect x={-w / 2} y={-h / 2} width={w} height={h} cornerRadius={3} fill="#fff" stroke={color} strokeWidth={2.4} />
@@ -250,7 +254,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
     }
 
     case "roleta": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <Rect x={-w / 2} y={-h / 2} width={w} height={h} cornerRadius={4} fill="#fff" stroke={color} strokeWidth={2.2} />
@@ -267,7 +271,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
     case "wlacznikSchodowy":
     case "wlacznikKrzyzowy": {
       const { r, segments } = switchGlyph(type);
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           {/* Niewidoczny cel trafień — bez wypełnienia Konva łapie klik wyłącznie na
@@ -283,7 +287,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
 
     default: {
       const def = ELEMENT_TYPES[type];
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return <CodeBadgeKonva color={color} code={def?.code || "?"} w={w} h={h} />;
     }
   }
@@ -291,8 +295,8 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
 
 /** Przerywana obwódka zaznaczenia dopasowana do rozmiaru symbolu (okrąg dla punktu
  *  sufitowego, zaokrąglony prostokąt dla reszty). Przeniesione z `SelectionOutline`. */
-export function SelectionOutlineKonva({ type }: { type: ElementType }) {
-  const { w, h } = glyphBoxSize(type);
+export function SelectionOutlineKonva({ type, wymiaryM }: { type: ElementType; wymiaryM?: { widthM: number; depthM: number } }) {
+  const { w, h } = glyphBoxSize(type, wymiaryM);
   if (type === "oswietlenie") {
     return <Circle radius={w / 2 + 6} stroke="#C1793F" strokeWidth={2} dash={[3, 3]} listening={false} />;
   }

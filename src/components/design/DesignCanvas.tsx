@@ -3,7 +3,7 @@ import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
-import { ELEMENT_TYPES, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
+import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
@@ -1067,7 +1067,7 @@ export function DesignCanvas({
             ))}
             {podklad.elements.map((el) => (
               <Group key={el.id} x={el.x} y={el.y} rotation={el.rotation ?? 0} scaleX={skalaSymbolu(el.type)} scaleY={skalaSymbolu(el.type)}>
-                <ElementGlyphKonva type={el.type} color="#64748B" gangs={el.gangs} agdLetter={el.agdLetter} />
+                <ElementGlyphKonva type={el.type} color="#64748B" gangs={el.gangs} agdLetter={el.agdLetter} wymiaryM={fixtureSizeM(el) ?? undefined} />
               </Group>
             ))}
           </Layer>
@@ -2029,8 +2029,14 @@ export function DesignCanvas({
                   onMoveElement(el.id, x, y);
                 }}
               >
-                {isSel && <SelectionOutlineKonva type={el.type} />}
-                <ElementGlyphKonva type={el.type} color={def.color} gangs={el.gangs} agdLetter={el.agdLetter} />
+                {isSel && <SelectionOutlineKonva type={el.type} wymiaryM={fixtureSizeM(el) ?? undefined} />}
+                <ElementGlyphKonva
+                  type={el.type}
+                  color={def.color}
+                  gangs={el.gangs}
+                  agdLetter={el.agdLetter}
+                  wymiaryM={fixtureSizeM(el) ?? undefined}
+                />
                 {/* Wysokość montażu POD symbolem — numery grup sterowania stoją z prawej
                     (`groupLabelAnchors`), więc te dwie adnotacje się nie zderzają.
                     Bez obwódki i w szarości, żeby czytać rysunek, a nie opisy. Obrócona

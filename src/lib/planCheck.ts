@@ -1,5 +1,5 @@
 import type { InstallationElement, RoomShape, RoomType } from "@/types";
-import { ELEMENT_TYPES, NO_ROOM, SANITARY_FIXTURES } from "@/lib/elements";
+import { ELEMENT_TYPES, fixtureSizeM, NO_ROOM, SANITARY_FIXTURES } from "@/lib/elements";
 import { guessRoomType, ROOM_TYPE_LABELS } from "@/lib/design";
 import { distanceToRect } from "@/lib/geometry";
 import { isLightControl, isLightPoint } from "@/lib/lightGroups";
@@ -170,14 +170,18 @@ export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInpu
       let wU: string | null = null;
       for (const s of sanitarne) {
         const f = SANITARY_FIXTURES[s.type]!;
+        // Wymiary KONKRETNEGO przyboru, nie katalogowe: użytkownik mógł podać własne
+        // (patrz `fixtureSizeM`), a wtedy rysunek pokazuje jeden obrys, a strefa liczy
+        // się od drugiego — czyli sprawdzenie kłamie dokładnie tam, gdzie ma nie kłamać.
+        const wymiary = fixtureSizeM(s)!;
         // Wymiary w metrach, więc i punkt przeliczamy na metry — inaczej trzeba by
         // dzielić każdy bok przez `mpu` przy każdym porównaniu.
         const odlM = distanceToRect(
           { x: e.x * mpu, y: e.y * mpu },
           s.x * mpu,
           s.y * mpu,
-          f.widthM,
-          f.depthM,
+          wymiary.widthM,
+          wymiary.depthM,
           s.rotation ?? 0
         );
         if (f.hasZone1) {

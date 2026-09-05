@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeSanitaryZones, mountingHeightM, mountingLabel } from "./elements";
+import { computeSanitaryZones, fixtureSizeM, MAX_WYMIAR_PRZYBORU_M, mountingHeightM, mountingLabel } from "./elements";
 import type { InstallationElement } from "@/types";
 
 const wanna: InstallationElement = {
@@ -104,5 +104,38 @@ describe("mountingLabel", () => {
 
   it("zero jest wartością, nie brakiem — gniazdo podłogowe ma prawo stać na +0", () => {
     expect(mountingLabel(e("gniazdko", 0))).toBe("+0");
+  });
+});
+
+describe("fixtureSizeM", () => {
+  it("bez nadpisania zwraca wymiary typowe", () => {
+    expect(fixtureSizeM(wanna)).toEqual({ widthM: 1.7, depthM: 0.75 });
+  });
+
+  it("nic nie zwraca dla tego, co nie jest przyborem", () => {
+    expect(fixtureSizeM(gniazdko)).toBeNull();
+  });
+
+  /** Ktoś, kto zna tylko długość wanny, ma poprawić jedną liczbę i zostać przy
+   *  typowej głębokości — stąd dwa niezależne nadpisania, nie jedna para. */
+  it("nadpisania działają niezależnie", () => {
+    expect(fixtureSizeM({ ...wanna, widthM: 1.5 })).toEqual({ widthM: 1.5, depthM: 0.75 });
+    expect(fixtureSizeM({ ...wanna, depthM: 0.8 })).toEqual({ widthM: 1.7, depthM: 0.8 });
+  });
+
+  it("bzdurna wartość wraca do typowej, zamiast rozdymać strefę na pół mieszkania", () => {
+    expect(fixtureSizeM({ ...wanna, widthM: 0 })!.widthM).toBe(1.7);
+    expect(fixtureSizeM({ ...wanna, widthM: -2 })!.widthM).toBe(1.7);
+    expect(fixtureSizeM({ ...wanna, widthM: MAX_WYMIAR_PRZYBORU_M + 0.01 })!.widthM).toBe(1.7);
+    // ...ale wartość na samej granicy jest jeszcze dobra.
+    expect(fixtureSizeM({ ...wanna, widthM: MAX_WYMIAR_PRZYBORU_M })!.widthM).toBe(MAX_WYMIAR_PRZYBORU_M);
+  });
+
+  /** Sedno: to nie kosmetyka rysunku, tylko wejście do sprawdzenia rzutu. */
+  it("własny wymiar przesuwa strefę ochronną, nie tylko symbol", () => {
+    const krotsza = computeSanitaryZones([{ ...wanna, widthM: 1.5 }], "f1", 0.02)[0];
+    expect(krotsza.w).toBeCloseTo(1.5 / 0.02, 5);
+    // Zasięg strefy 2 poza krawędź się nie zmienia — zmienia się krawędź.
+    expect(krotsza.zone2).toBeCloseTo(0.6 / 0.02, 5);
   });
 });

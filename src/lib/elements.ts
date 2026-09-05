@@ -194,6 +194,34 @@ export const SANITARY_FIXTURES: Partial<
   umywalka: { widthM: 0.6, depthM: 0.45, zone2M: 0.6, hasZone1: false, label: "umywalka" },
 };
 
+/**
+ * Rzeczywiste wymiary przyboru [m]: wpisane przez użytkownika albo typowe dla typu.
+ * `null` dla wszystkiego, co nie jest przyborem sanitarnym.
+ *
+ * Typowe wymiary są punktem wyjścia, nie prawdą: wanien 1,50 i 1,80 m jest w sprzedaży
+ * tyle samo co 1,70, a od tej liczby zależy zasięg strefy 2 — czyli to, czy gniazdo
+ * obok wanny walidator zgłosi, czy przemilczy. Skoro obrys jest rysowany w prawdziwej
+ * skali (patrz `symbolScale.ts`), musi też dać się poprawić.
+ *
+ * Nadpisania działają NIEZALEŻNIE: ktoś, kto zna tylko długość wanny, poprawia jedną
+ * liczbę i zostaje przy typowej głębokości.
+ */
+export function fixtureSizeM(
+  e: Pick<InstallationElement, "type" | "widthM" | "depthM">
+): { widthM: number; depthM: number } | null {
+  const f = SANITARY_FIXTURES[e.type];
+  if (!f) return null;
+  const poprawny = (v: number | undefined) => typeof v === "number" && v > 0 && v <= MAX_WYMIAR_PRZYBORU_M;
+  return {
+    widthM: poprawny(e.widthM) ? e.widthM! : f.widthM,
+    depthM: poprawny(e.depthM) ? e.depthM! : f.depthM,
+  };
+}
+
+/** Górna granica wymiaru przyboru [m]. Wanna dłuższa niż 3 m to nie wanna, tylko
+ *  literówka — a literówka w tej liczbie rozdyma strefę ochronną na pół mieszkania. */
+export const MAX_WYMIAR_PRZYBORU_M = 3;
+
 export interface SanitaryZone {
   id: string;
   type: ElementType;
@@ -220,6 +248,9 @@ export function computeSanitaryZones(elements: InstallationElement[], floorId: s
     .filter((e) => e.floor === floorId && SANITARY_FIXTURES[e.type])
     .map((e) => {
       const f = SANITARY_FIXTURES[e.type]!;
+      // Wymiary z elementu, nie z katalogu — użytkownik mógł podać własne (patrz
+      // `fixtureSizeM`), a strefa ma odpowiadać temu, co naprawdę stoi w łazience.
+      const wymiary = fixtureSizeM(e)!;
       return {
         id: e.id,
         type: e.type,
@@ -227,8 +258,8 @@ export function computeSanitaryZones(elements: InstallationElement[], floorId: s
         x: e.x,
         y: e.y,
         rotation: e.rotation ?? 0,
-        w: f.widthM / m,
-        h: f.depthM / m,
+        w: wymiary.widthM / m,
+        h: wymiary.depthM / m,
         zone2: f.zone2M / m,
         hasZone1: f.hasZone1,
         calibrated: !!mpu,
