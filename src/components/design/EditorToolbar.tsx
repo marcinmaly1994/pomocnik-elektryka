@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, Undo2 } from "lucide-react";
+import { ArrowUpFromLine, Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
 import { FloorBar } from "./FloorBar";
@@ -40,6 +40,8 @@ export interface EditorToolbarProps {
   /** Tryb wymiarowania — długości wszystkich ścian i wymiary prostokątnych pomieszczeń. */
   showDimensions: boolean;
   onToggleDimensions: () => void;
+  showHeights: boolean;
+  onToggleHeights: () => void;
   /** Podgląd kondygnacji poniżej. `null` na najniższej — nie ma czego pokazać, więc
    *  przycisk się nie renderuje, zamiast być wyszarzony bez wyjaśnienia (ten sam
    *  wzorzec co usuwanie ostatniej kondygnacji w `FloorBar`). */
@@ -108,6 +110,8 @@ export function EditorToolbar({
   onToggleRoutes,
   showDimensions,
   onToggleDimensions,
+  showHeights,
+  onToggleHeights,
   showUnderlay,
   onToggleUnderlay,
   canUndo,
@@ -272,6 +276,21 @@ export function EditorToolbar({
         aria-pressed={showDimensions}
       >
         <Ruler size={15} className={showDimensions ? "text-copper" : undefined} />
+      </Button>
+
+      {/* Wysokości montażu przy osprzęcie. Osobny przełącznik od wymiarów ścian: tamte
+          opisują BUDYNEK, te INSTALACJĘ — na jednym wydruku chce się zwykle albo jedno,
+          albo drugie, a razem robi się gęsto. Domyślnie wyłączone z tego samego powodu
+          co wymiary: przy rysowaniu przeszkadzają, a przy wydruku są niezbędne. */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggleHeights}
+        title={showHeights ? "Ukryj wysokości montażu" : "Pokaż wysokości montażu przy osprzęcie (+30, +110…)"}
+        aria-label={showHeights ? "Ukryj wysokości montażu" : "Pokaż wysokości montażu"}
+        aria-pressed={showHeights}
+      >
+        <ArrowUpFromLine size={15} className={showHeights ? "text-copper" : undefined} />
       </Button>
 
       {/* Podgląd kondygnacji poniżej — bez niego piętro rysuje się w ciemno i nie da

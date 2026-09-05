@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeSanitaryZones, mountingHeightM } from "./elements";
+import { computeSanitaryZones, mountingHeightM, mountingLabel } from "./elements";
 import type { InstallationElement } from "@/types";
 
 const wanna: InstallationElement = {
@@ -73,5 +73,36 @@ describe("mountingHeightM", () => {
 
   it("typ bez wpisu (przybór sanitarny) dostaje wartość zapasową", () => {
     expect(mountingHeightM(e("wanna"))).toBe(0.3);
+  });
+});
+
+describe("mountingLabel", () => {
+  const e = (type: Parameters<typeof mountingLabel>[0]["type"], heightM?: number) => ({ type, heightM });
+
+  it("podaje wysokość w centymetrach, konwencją rysunku instalacyjnego", () => {
+    expect(mountingLabel(e("gniazdko"))).toBe("+30");
+    expect(mountingLabel(e("wlacznik"))).toBe("+110");
+  });
+
+  it("własna wartość wypiera typową", () => {
+    expect(mountingLabel(e("gniazdko", 1.15))).toBe("+115");
+  });
+
+  /** Przybory sanitarne nie są osprzętem — ich `mountingHeightM` to tylko wartość
+   *  zapasowa i wypisanie jej na rzucie byłoby zmyśloną informacją. */
+  it("przybór sanitarny nie dostaje etykiety", () => {
+    expect(mountingLabel(e("wanna"))).toBeNull();
+    expect(mountingLabel(e("umywalka"))).toBeNull();
+  });
+
+  it("punkt sufitowy i czujnik dymu milczą — dopóki ktoś nie poda własnej wysokości", () => {
+    expect(mountingLabel(e("oswietlenie"))).toBeNull();
+    expect(mountingLabel(e("czujnikDymu"))).toBeNull();
+    // Sufit podwieszany albo skos to już informacja, nie powtórzenie oczywistości.
+    expect(mountingLabel(e("oswietlenie", 2.45))).toBe("+245");
+  });
+
+  it("zero jest wartością, nie brakiem — gniazdo podłogowe ma prawo stać na +0", () => {
+    expect(mountingLabel(e("gniazdko", 0))).toBe("+0");
   });
 });
