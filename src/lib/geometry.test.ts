@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline } from "./geometry";
+import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect } from "./geometry";
 
 describe("snap", () => {
   it("zaokrągla do siatki 20", () => {
@@ -105,5 +105,46 @@ describe("nearestPointOnPolyline", () => {
   it("łamana bez segmentów (0 lub 1 punkt) zwraca null", () => {
     expect(nearestPointOnPolyline({ x: 0, y: 0 }, [])).toBeNull();
     expect(nearestPointOnPolyline({ x: 0, y: 0 }, [{ x: 5, y: 5 }])).toBeNull();
+  });
+});
+
+describe("distanceToRect", () => {
+  // Prostokąt 4 × 2 wyśrodkowany w (10, 10): boki od 8 do 12 w X i od 9 do 11 w Y.
+  const R = { cx: 10, cy: 10, w: 4, h: 2 };
+  const d = (x: number, y: number, rot = 0) => distanceToRect({ x, y }, R.cx, R.cy, R.w, R.h, rot);
+
+  it("punkt wewnątrz ma odległość zero", () => {
+    expect(d(10, 10)).toBe(0);
+    expect(d(11.9, 10.9)).toBe(0);
+  });
+
+  it("na krawędzi też zero", () => {
+    expect(d(12, 10)).toBe(0);
+  });
+
+  it("mierzy od KRAWĘDZI, nie od środka", () => {
+    // 3 jedn. od środka wzdłuż dłuższego boku to 1 jedn. od krawędzi
+    expect(d(13, 10)).toBeCloseTo(1, 10);
+    expect(d(10, 12)).toBeCloseTo(1, 10);
+  });
+
+  it("przy narożniku liczy po przekątnej", () => {
+    // (15, 14) → 3 w prawo i 3 w dół od narożnika (12, 11)
+    expect(d(15, 14)).toBeCloseTo(Math.hypot(3, 3), 10);
+  });
+
+  it("obrót zamienia osie prostokąta", () => {
+    // Prostokąt 4 × 2: bez obrotu dłuższy bok (połowa 2) leży poziomo, po obrocie
+    // o 90° pionowo. Ta sama para punktów, 1,5 jedn. od środka, zamienia się więc
+    // rolami: co było wewnątrz, wychodzi za krawędź i odwrotnie.
+    expect(d(11.5, 10, 0)).toBe(0); // wzdłuż dłuższego boku
+    expect(d(10, 11.5, 0)).toBeCloseTo(0.5, 10); // wzdłuż krótszego
+
+    expect(d(10, 11.5, 90)).toBe(0); // teraz dłuższy bok jest pionowy
+    expect(d(11.5, 10, 90)).toBeCloseTo(0.5, 10);
+  });
+
+  it("obrót o 180° nic nie zmienia dla prostokąta", () => {
+    expect(d(13, 10, 180)).toBeCloseTo(d(13, 10, 0), 10);
   });
 });

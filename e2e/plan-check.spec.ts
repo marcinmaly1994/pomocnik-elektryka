@@ -47,12 +47,10 @@ async function postaw(page: Page, szukaj: string, nazwa: RegExp, x: number, y: n
  * Przenosi element w miejsce docelowe PRZECIĄGNIĘCIEM, zamiast stawiać go od razu
  * tam, gdzie ma stać.
  *
- * Wymusza to geometria: symbol wanny ma 52 × 26 jedn. glifu (`glyphBoxSize`), co po
- * przeskalowaniu daje ~36 jedn. szerokości planu, a promień strefy 1 przy skali
- * „1 kratka = 1 m" to 0,65 m = 13 jedn. Cała strefa 1 leży więc POD symbolem wanny
- * i każde kliknięcie w nią trafia w wannę — w trybie „Wstaw element" zaczyna jej
- * przeciąganie, a nie stawia nowego elementu. Upuszczenie w to samo miejsce jest
- * niezależne od tego, co leży pod spodem, więc działa.
+ * Wymusza to model stref: strefa 1 to OBRYS wanny (patrz `SANITARY_FIXTURES`), więc
+ * z definicji leży pod jej symbolem. Każde kliknięcie w strefę 1 trafia w wannę —
+ * w trybie „Wstaw element" zaczyna jej przeciąganie, a nie stawia nowego elementu.
+ * Upuszczenie w to miejsce jest niezależne od tego, co leży pod spodem, więc działa.
  */
 async function przeciagnij(page: Page, zX: number, zY: number, doX: number, doY: number) {
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();

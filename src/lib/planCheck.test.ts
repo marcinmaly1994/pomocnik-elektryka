@@ -229,3 +229,39 @@ describe("podsumowanieProblemow", () => {
     expect(podsumowanieProblemow([iss("info"), iss("ok")])).toBe("bez zastrzeżeń");
   });
 });
+
+describe("checkPlan — strefy liczone od KRAWĘDZI przyboru", () => {
+  // Typowa wanna to 1,7 × 0,75 m, więc od jej środka do krótszego końca jest 0,85 m,
+  // a do dłuższego boku 0,375 m. Przy MPU = 0,05 to 17 i 7,5 jedn. planu.
+  const wanna = el("wanna", 100, 100);
+
+  it("gniazdo nad KOŃCEM wanny jest w strefie 1, choć od środka dzieli je 0,8 m", () => {
+    // Stary model (promień 0,65 m od środka) mówił tu „strefa 2" — a gniazdo wisi
+    // dosłownie nad wanną.
+    const wynik = sprawdz([wanna, el("gniazdko", 116, 100)]); // 16 jedn. = 0,8 m
+    expect(reguly(wynik)).toContain("strefa1");
+    expect(reguly(wynik)).not.toContain("strefa2");
+  });
+
+  it("gniazdo 1,4 m od środka wanny nadal jest w strefie 2", () => {
+    // 1,4 m od środka to 0,55 m od krawędzi, czyli wewnątrz 0,6 m strefy 2.
+    // Stary model (zasięg 1,25 m od środka) nie zgłaszał tu NIC.
+    const wynik = sprawdz([wanna, el("gniazdko", 128, 100)]); // 28 jedn. = 1,4 m
+    expect(reguly(wynik)).toContain("strefa2");
+  });
+
+  it("dopiero za 0,6 m od krawędzi jest czysto", () => {
+    // 1,5 m od środka = 0,65 m od krawędzi — tuż poza strefą 2.
+    const wynik = reguly(sprawdz([wanna, el("gniazdko", 130, 100)]));
+    expect(wynik).not.toContain("strefa1");
+    expect(wynik).not.toContain("strefa2");
+  });
+
+  it("strefa obraca się razem z wanną", () => {
+    // Gniazdo 0,8 m NAD wanną: przy wannie leżącej poziomo to 0,42 m za dłuższym
+    // bokiem (strefa 2), a po obróceniu wanny o 90° — nad jej końcem (strefa 1).
+    const gniazdo = el("gniazdko", 100, 116);
+    expect(reguly(sprawdz([wanna, gniazdo]))).toContain("strefa2");
+    expect(reguly(sprawdz([{ ...wanna, rotation: 90 }, gniazdo]))).toContain("strefa1");
+  });
+});

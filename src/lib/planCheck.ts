@@ -1,6 +1,7 @@
 import type { InstallationElement, RoomShape, RoomType } from "@/types";
-import { ELEMENT_TYPES, NO_ROOM, SANITARY_ZONES } from "@/lib/elements";
+import { ELEMENT_TYPES, NO_ROOM, SANITARY_FIXTURES } from "@/lib/elements";
 import { guessRoomType, ROOM_TYPE_LABELS } from "@/lib/design";
+import { distanceToRect } from "@/lib/geometry";
 import { isLightControl, isLightPoint } from "@/lib/lightGroups";
 
 /**
@@ -119,7 +120,7 @@ export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInpu
    * Lepiej powiedzieć wprost, że tej części nie sprawdzamy.
    */
   const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : null;
-  const sanitarne = elements.filter((e) => SANITARY_ZONES[e.type]);
+  const sanitarne = elements.filter((e) => SANITARY_FIXTURES[e.type]);
 
   if (mpu === null && sanitarne.length > 0) {
     out.push({
@@ -148,10 +149,14 @@ export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInpu
      * pętli po przyborach to samo gniazdo lądowało w dwóch spostrzeżeniach
      * jednocześnie i użytkownik dostawał podwojoną listę zamiast jednej diagnozy.
      *
-     * Umywalka jest liczona osobno, bo w modelu aplikacji ma `zone1 = 0` — nie ma
-     * nad nią strefy 1, jest tylko wymagany odstęp (`zone2` = 0,6 m). Wrzucenie
-     * jej do tego samego worka co wanna dawało komunikat o transformatorze
-     * separacyjnym przy umywalce, czyli poradę nie na temat.
+     * Odległość mierzymy od KRAWĘDZI przyboru (`distanceToRect`), bo tak liczy je
+     * norma: strefa 1 to przestrzeń nad samą wanną, a strefa 2 sięga 0,6 m poza jej
+     * obrys. Stąd `odlM === 0` (punkt nad wanną) oznacza strefę 1.
+     *
+     * Umywalka jest liczona osobno, bo nie tworzy stref 701 (`hasZone1: false`) —
+     * obowiązuje przy niej praktyczny odstęp. Wrzucenie jej do tego samego worka co
+     * wanna dawało komunikat o transformatorze separacyjnym przy umywalce, czyli
+     * poradę nie na temat.
      */
     for (const e of elements) {
       const rola = ELEMENT_TYPES[e.type]?.role;
@@ -164,13 +169,22 @@ export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInpu
       let w2: string | null = null;
       let wU: string | null = null;
       for (const s of sanitarne) {
-        const z = SANITARY_ZONES[s.type]!;
-        const odlM = Math.hypot(e.x - s.x, e.y - s.y) * mpu;
-        if (z.zone1 > 0) {
-          if (odlM <= z.zone1) w1 = w1 ?? z.label;
-          else if (odlM <= z.zone2 && gniazdo) w2 = w2 ?? z.label;
-        } else if (odlM <= z.zone2 && gniazdo) {
-          wU = wU ?? z.label;
+        const f = SANITARY_FIXTURES[s.type]!;
+        // Wymiary w metrach, więc i punkt przeliczamy na metry — inaczej trzeba by
+        // dzielić każdy bok przez `mpu` przy każdym porównaniu.
+        const odlM = distanceToRect(
+          { x: e.x * mpu, y: e.y * mpu },
+          s.x * mpu,
+          s.y * mpu,
+          f.widthM,
+          f.depthM,
+          s.rotation ?? 0
+        );
+        if (f.hasZone1) {
+          if (odlM === 0) w1 = w1 ?? f.label;
+          else if (odlM <= f.zone2M && gniazdo) w2 = w2 ?? f.label;
+        } else if (odlM <= f.zone2M && gniazdo) {
+          wU = wU ?? f.label;
         }
       }
       if (w1) strefa1.push({ el: e, zrodlo: w1 });

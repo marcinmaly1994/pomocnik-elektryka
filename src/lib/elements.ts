@@ -168,13 +168,30 @@ export function libSubtitle(key: ElementType, gangs: number): string {
 /** Element bez przypisanego (rozpoznanego) pomieszczenia na planie. */
 export const NO_ROOM = "Bez pomieszczenia";
 
-/** Promienie stref ochronnych [m] liczone od środka urządzenia (uproszczenie rzutu 2D).
- *  Wg PN-HD 60364-7-701: strefa 1 obejmuje przestrzeń nad wanną/brodzikiem, strefa 2 sięga
- *  0,6 m poza strefę 1. Dla umywalki stosuje się praktyczną zasadę 0,6 m odstępu. */
-export const SANITARY_ZONES: Partial<Record<ElementType, { zone1: number; zone2: number; label: string }>> = {
-  wanna: { zone1: 0.65, zone2: 1.25, label: "wanna" },
-  prysznic: { zone1: 0.65, zone2: 1.25, label: "prysznic" },
-  umywalka: { zone1: 0, zone2: 0.6, label: "umywalka" },
+/**
+ * Przybory sanitarne wyznaczające strefy ochronne: typowe wymiary [m] i zasięg
+ * strefy 2 liczony OD KRAWĘDZI przyboru.
+ *
+ * Wg PN-HD 60364-7-701 strefa 1 to przestrzeń NAD wanną/brodzikiem — czyli jej własny
+ * obrys, a nie okrąg o promieniu odmierzonym od środka — a strefa 2 sięga 0,6 m poza
+ * nią w poziomie. Poprzedni model (promienie 0,65 / 1,25 m od punktu) zaniżał obie:
+ * dla typowej wanny 1,7 × 0,75 m strefa 1 kończyła się 0,65 m od środka, czyli 0,2 m
+ * PRZED jej własnym końcem, a strefa 2 sięgała 1,25 m zamiast 1,45 m. Gniazdo tuż za
+ * krótszym bokiem wanny wypadało więc „poza strefami", choć realnie stoi w strefie 2.
+ *
+ * Wymiary są TYPOWE, nie deklarowane przez użytkownika — aplikacja nie pyta o rozmiar
+ * wanny. Dłuższy bok leży wzdłuż osi X symbolu, więc obrót elementu (`rotation`)
+ * obraca też strefę.
+ *
+ * Umywalka nie tworzy stref 701 (nie jest wanną ani brodzikiem) — obowiązuje przy niej
+ * praktyczny odstęp 0,6 m od krawędzi, stąd `hasZone1: false`.
+ */
+export const SANITARY_FIXTURES: Partial<
+  Record<ElementType, { widthM: number; depthM: number; zone2M: number; hasZone1: boolean; label: string }>
+> = {
+  wanna: { widthM: 1.7, depthM: 0.75, zone2M: 0.6, hasZone1: true, label: "wanna" },
+  prysznic: { widthM: 0.9, depthM: 0.9, zone2M: 0.6, hasZone1: true, label: "prysznic" },
+  umywalka: { widthM: 0.6, depthM: 0.45, zone2M: 0.6, hasZone1: false, label: "umywalka" },
 };
 
 export interface SanitaryZone {
@@ -183,8 +200,14 @@ export interface SanitaryZone {
   label: string;
   x: number;
   y: number;
-  r1: number;
-  r2: number;
+  /** Obrót przyboru w stopniach — strefa obraca się razem z nim. */
+  rotation: number;
+  /** Obrys przyboru w jednostkach planu. Dla wanny/brodzika JEST strefą 1. */
+  w: number;
+  h: number;
+  /** Zasięg strefy 2 poza krawędź obrysu, w jednostkach planu. */
+  zone2: number;
+  hasZone1: boolean;
   calibrated: boolean;
 }
 
@@ -194,9 +217,21 @@ export function computeSanitaryZones(elements: InstallationElement[], floorId: s
   const FALLBACK_MPU = 0.02; // ~2 cm na jednostkę planu
   const m = mpu || FALLBACK_MPU;
   return elements
-    .filter((e) => e.floor === floorId && SANITARY_ZONES[e.type])
+    .filter((e) => e.floor === floorId && SANITARY_FIXTURES[e.type])
     .map((e) => {
-      const z = SANITARY_ZONES[e.type]!;
-      return { id: e.id, type: e.type, label: z.label, x: e.x, y: e.y, r1: z.zone1 / m, r2: z.zone2 / m, calibrated: !!mpu };
+      const f = SANITARY_FIXTURES[e.type]!;
+      return {
+        id: e.id,
+        type: e.type,
+        label: f.label,
+        x: e.x,
+        y: e.y,
+        rotation: e.rotation ?? 0,
+        w: f.widthM / m,
+        h: f.depthM / m,
+        zone2: f.zone2M / m,
+        hasZone1: f.hasZone1,
+        calibrated: !!mpu,
+      };
     });
 }
