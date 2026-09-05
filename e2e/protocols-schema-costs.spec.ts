@@ -253,8 +253,10 @@ test("Kosztorys: rozbija sumę na netto/VAT/brutto i ostrzega o pozycjach bez ce
   expect(Math.abs(netto * 0.23 - vat)).toBeLessThan(0.02);
   expect(Math.abs(netto + vat - brutto)).toBeLessThan(0.02);
 
-  // uzupełnienie brakującej ceny zdejmuje ostrzeżenie
-  const labour = page.getByRole("row", { name: /Robocizna/ }).locator("input");
+  // Uzupełnienie brakującej ceny zdejmuje ostrzeżenie. Wiersz ma teraz DWA pola —
+  // cenę jednostkową i wartość pozycji (patrz `CostOverrides`) — więc celujemy
+  // w konkretne, zamiast brać pierwsze z brzegu.
+  const labour = page.getByLabel(/Cena jednostkowa: Robocizna/);
   await labour.fill("50");
   await labour.blur();
   await expect(page.getByText(/Suma nie obejmuje wszystkiego/)).toBeHidden();
