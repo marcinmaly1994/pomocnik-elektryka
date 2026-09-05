@@ -204,6 +204,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const moveRoomShapePoint = useProjectStore((s) => s.moveRoomShapePoint);
   const removeElements = useProjectStore((s) => s.removeElements);
   const routeOverrides = useProjectStore((s) => s.draft.routeOverrides);
+  // Pełne listy (wszystkie kondygnacje) — potrzebne WYŁĄCZNIE do podkładu z piętra
+  // poniżej; reszta widoku pracuje na przefiltrowanych `useActiveFloor*`.
+  const wszystkieSciany = useProjectStore((s) => s.draft.walls);
+  const wszystkiePomieszczenia = useProjectStore((s) => s.draft.roomShapes);
+  const wszystkieElementy = useProjectStore((s) => s.draft.elements);
   const setRouteOverride = useProjectStore((s) => s.setRouteOverride);
   const clearRouteOverride = useProjectStore((s) => s.clearRouteOverride);
   const cofnijZatwierdzone = useProjectStore((s) => s.undo);
@@ -408,6 +413,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   /** Tryb wymiarowania — domyslnie WYLACZONY: przy rysowaniu wymiary przeszkadzaja,
    *  a potrzebne sa przy sprawdzaniu i przed wydrukiem. */
   const [showDimensions, setShowDimensions] = useState(false);
+  /** Podglad kondygnacji ponizej — domyslnie WYLACZONY: na parterze nie ma czego
+   *  pokazac, a przy jednej kondygnacji przelacznik byloby samym szumem. */
+  const [showUnderlay, setShowUnderlay] = useState(false);
   // Skala samych symboli na planie (nie powiększenie widoku) — ustawienie widoku, więc
   // stan lokalny jak snapOn/showZones, a nie część zapisywanego projektu.
   const [elementScale, setElementScale] = useState(DEFAULT_ELEMENT_SCALE);
@@ -1337,6 +1345,28 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // Grupy sterowania oświetleniem liczone z elementów bieżącej kondygnacji — numer
   // pokazywany jest zarówno przy łączniku, jak i przy sterowanych przez niego punktach.
   const lightGroups = useMemo(() => computeLightGroups(elements), [elements]);
+  /**
+   * Geometria kondygnacji PONIŻEJ — do przygaszonego podkładu na płótnie.
+   *
+   * „Poniżej" znaczy POPRZEDNIA NA LIŚCIE, a nie żadna wyliczona wysokość: kolejność
+   * kondygnacji ustawia użytkownik, dodając je po kolei (Parter, Piętro 1…), i to
+   * jedyny porządek, jaki aplikacja zna. Najniższa kondygnacja nie ma czego pokazać,
+   * więc dostaje `null` i przełącznik się przy niej nie pojawia.
+   */
+  const idPonizej = useMemo(() => {
+    const i = floors.findIndex((f) => f.id === activeFloorId);
+    return i > 0 ? floors[i - 1].id : null;
+  }, [floors, activeFloorId]);
+
+  const podklad = useMemo(() => {
+    if (!showUnderlay || !idPonizej) return null;
+    return {
+      walls: wszystkieSciany.filter((w) => w.floor === idPonizej),
+      roomShapes: wszystkiePomieszczenia.filter((r) => r.floor === idPonizej),
+      elements: wszystkieElementy.filter((e) => e.floor === idPonizej),
+    };
+  }, [showUnderlay, idPonizej, wszystkieSciany, wszystkiePomieszczenia, wszystkieElementy]);
+
   /** Zestawienie ilościowe TEJ kondygnacji — te same liczby, które trafiają do kosztorysu. */
   const zestawienie = useMemo(() => summarizeFloor(elements), [elements]);
 
@@ -2044,6 +2074,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         onToggleRoutes={() => setShowRoutes((r) => !r)}
         showDimensions={showDimensions}
         onToggleDimensions={() => setShowDimensions((d) => !d)}
+        showUnderlay={showUnderlay}
+        onToggleUnderlay={idPonizej ? () => setShowUnderlay((u) => !u) : null}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}
@@ -2282,6 +2314,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             bgImageUrl={bgImageUrl}
             calibPoints={calibPoints}
             zones={zones}
+            podklad={podklad}
             pokazWymiary={showDimensions}
             cableRoutes={cableRoutes}
             routeOverrides={routeOverrides}

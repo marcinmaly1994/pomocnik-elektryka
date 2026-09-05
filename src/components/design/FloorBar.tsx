@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, Trash2 } from "lucide-react";
+import { Copy, Layers, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
@@ -54,9 +54,12 @@ export function FloorBar() {
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const setActiveFloorId = useProjectStore((s) => s.setActiveFloorId);
   const addFloor = useProjectStore((s) => s.addFloor);
+  const duplicateFloor = useProjectStore((s) => s.duplicateFloor);
   const removeFloor = useProjectStore((s) => s.removeFloor);
   const elements = useProjectStore((s) => s.draft.elements);
   const [newFloorName, setNewFloorName] = useState("Piętro 1");
+  const aktywna = floors.find((f) => f.id === activeFloorId);
+  const [nazwaKopii, setNazwaKopii] = useState("");
 
   const counts = elements.reduce<Record<string, number>>((acc, e) => {
     acc[e.floor] = (acc[e.floor] ?? 0) + 1;
@@ -79,6 +82,48 @@ export function FloorBar() {
           )}
         </span>
       ))}
+
+      {/* Duplikowanie BIEŻĄCEJ kondygnacji. Piętra w budynku wielorodzinnym bywają
+          identyczne albo różnią się kilkoma elementami — przerysowywanie ich od zera to
+          najdłuższa i najbardziej bezmyślna czynność w całej aplikacji, a przy okazji
+          jedyna, przy której piony na pewno się rozjadą. */}
+      <Dialog>
+        <DialogTrigger asChild>
+          {/* Nazwa proponowana przy OTWARCIU okna, nie w stanie początkowym: bieżąca
+              kondygnacja zmienia się w trakcie pracy, a propozycja ma dotyczyć tej,
+              którą użytkownik właśnie kopiuje. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Skopiuj bieżącą kondygnację razem z geometrią i osprzętem"
+            onClick={() => setNazwaKopii(`${aktywna?.name ?? "Kondygnacja"} — kopia`)}
+          >
+            <Copy size={13} /> Duplikuj
+          </Button>
+        </DialogTrigger>
+        <DialogContent title="Nazwij kopię kondygnacji">
+          <input
+            autoFocus
+            value={nazwaKopii}
+            onChange={(e) => setNazwaKopii(e.target.value)}
+            aria-label="Nazwa kopii kondygnacji"
+            className="mb-3 w-full rounded border border-border px-3 py-1.5 text-sm"
+          />
+          <p className="mb-4 text-xs text-slate-400">
+            Kopia dostaje wszystkie ściany, pomieszczenia, drzwi, okna i elementy z „{aktywna?.name}", a także
+            jej skalę i podkład. Ręczne poprawki tras przewodów nie są kopiowane — trasy policzą się od nowa.
+          </p>
+          <DialogTrigger asChild>
+            <Button
+              variant="copper"
+              className="w-full"
+              onClick={() => duplicateFloor(activeFloorId, nazwaKopii || `${aktywna?.name ?? "Kondygnacja"} — kopia`)}
+            >
+              Duplikuj kondygnację
+            </Button>
+          </DialogTrigger>
+        </DialogContent>
+      </Dialog>
 
       <Dialog>
         <DialogTrigger asChild>
