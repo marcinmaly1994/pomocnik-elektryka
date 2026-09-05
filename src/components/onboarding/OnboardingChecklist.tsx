@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, HelpCircle, X } from "lucide-react";
 import type { Step, StepId } from "@/lib/onboarding";
 
@@ -81,10 +81,27 @@ export function OnboardingChecklist({
 }: OnboardingChecklistProps) {
   const [leaving, setLeaving] = useState(false);
 
+  /**
+   * Poprzednia wartość `complete` — pożegnanie ma być reakcją na PRZEJŚCIE
+   * „jeszcze nie skończone" → „skończone", a nie na sam stan „skończone".
+   *
+   * Bez tego rozróżnienia przycisk „Otwórz przewodnik" na gotowym projekcie zostawał
+   * martwy nawet po poprawce w `shouldShowCard`: karta owszem wracała, ale ten sam
+   * efekt zwijał ją półtorej sekundy później. Ponowne otwarcie to świadoma decyzja
+   * użytkownika i ma być silniejsza od pożegnania sprzed kilku minut — zamyka się je
+   * krzyżykiem, nie stoperem.
+   *
+   * Startuje od bieżącej wartości, więc wczytanie ukończonego projektu też nie liczy
+   * się jako przejście.
+   */
+  const bylUkonczony = useRef(complete);
+
   // Ukończenie wszystkich kroków chowa kartę — z krótkim wyjściem, żeby ostatni
   // checkmark był widoczny, zanim karta odjedzie.
   useEffect(() => {
-    if (!complete || !open) return;
+    const domkniete = complete && !bylUkonczony.current;
+    bylUkonczony.current = complete;
+    if (!open || !domkniete) return;
     if (prefersReducedMotion()) {
       onCollapse();
       return;

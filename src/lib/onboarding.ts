@@ -35,6 +35,20 @@ export interface OnboardingState {
    * bo przełączenie zakładki i powrót odmontowuje/montuje DesignTab na nowo.
    */
   ekranStartowyPominiety: boolean;
+  /**
+   * Kartę otworzył RĘCZNIE przycisk „Otwórz przewodnik", a nie sam przepływ.
+   *
+   * Bez tego rozróżnienia przycisk „?" na ukończonym projekcie był martwy:
+   * `reopen()` ustawiał `ostatnioOtwarty`, ale `shouldShowCard` i tak odmawiał,
+   * bo kroki są ukończone. Klikało się i nie działo się nic. Nie da się tego
+   * załatwić samym `ostatnioOtwarty`, bo ta flaga jest ZAPISYWANA z projektem —
+   * skończony projekt wczytywałby się z kartą na ekranie, czyli dokładnie
+   * z natrętnością, której `shouldShowCard` miało zapobiegać.
+   *
+   * Opcjonalna, bo zapisy sprzed tej zmiany jej nie mają (patrz `loadProjectPayload`,
+   * który bierze `payload.onboarding` wprost, bez scalania z `INITIAL_ONBOARDING`).
+   */
+  otwartyRecznie?: boolean;
 }
 
 export const INITIAL_ONBOARDING: OnboardingState = {
@@ -45,6 +59,7 @@ export const INITIAL_ONBOARDING: OnboardingState = {
   ostatnioOtwarty: true,
   skalaNieaktualna: false,
   ekranStartowyPominiety: false,
+  otwartyRecznie: false,
 };
 
 /** Co da się sprawdzić w projekcie niezależnie od zapisanych flag. */
@@ -134,7 +149,9 @@ export function stepsFor(s: OnboardingState): Step[] {
  */
 export function shouldShowCard(s: OnboardingState): boolean {
   if (!s.ostatnioOtwarty) return false;
-  return !s.pominiety && !isComplete(s);
+  if (s.pominiety) return false;
+  // Ukończony przewodnik nie wraca SAM, ale wraca NA ŻĄDANIE — patrz `otwartyRecznie`.
+  return !isComplete(s) || s.otwartyRecznie === true;
 }
 
 /** Skrócona wersja dla kogoś, kto onboarding już kiedyś widział (flaga w localStorage). */
