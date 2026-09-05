@@ -1,5 +1,5 @@
 import type { Circuit, ElementType, InstallationElement, PriceTable, RcdGroup } from "@/types";
-import { ELEMENT_TYPES } from "@/lib/elements";
+import { ELEMENT_TYPES, mechanizmowWElemencie } from "@/lib/elements";
 
 export const DEFAULT_PRICES: PriceTable = {
   gniazdko: 15, gniazdkoHerm: 25, gniazdko400: 45, wypustAGD: 8, ladowarkaEV: 0,
@@ -112,7 +112,7 @@ export function computeCosts(
     // wariantów (liczbę biegunów niesie typ symbolu), ale `wlacznik`/`wlacznikSchodowy`
     // zostają na tej liście, żeby projekty zapisane przed tą zmianą — gdzie podwójny
     // łącznik był zapisany jako `gangs: 2` — nadal wyceniały się tak samo jak wtedy.
-    const count = ["gniazdko", "gniazdkoHerm", "wlacznik", "wlacznikSchodowy"].includes(e.type) ? Math.max(1, e.gangs || 1) : 1;
+    const count = mechanizmowWElemencie(e);
     if (key) q[key] += count;
   });
 
