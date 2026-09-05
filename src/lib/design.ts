@@ -4,7 +4,7 @@
  * dało się przetestować bez montowania canvasu.
  */
 
-import type { InstallationElement, Point, RoomShape, RoomType } from "@/types";
+import type { InstallationElement, OpeningKind, Point, RoomShape, RoomType } from "@/types";
 import { NO_ROOM } from "@/lib/elements";
 import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
 
@@ -34,16 +34,20 @@ export const MANUAL_DRAW_SCALE_MPU = 0.05;
 /** Domyślna szerokość drzwi w REALNYCH centymetrach (typowy wymiar stolarki) —
  *  przeliczana na jednostki planu przy stawianiu, patrz `defaultOpeningWidth`. */
 export const DEFAULT_DOOR_WIDTH_CM = 90;
+/** Domyślna szerokość okna [cm] — typowe okno jednoskrzydłowe. Osobno od drzwi, bo
+ *  okna są zwykle szersze, a szerokość i tak da się poprawić po postawieniu. */
+export const DEFAULT_WINDOW_WIDTH_CM = 120;
 /** Fallback w jednostkach planu, gdy nie ma ŻADNEJ skali (ani wgranego rzutu, ani
  *  `MANUAL_DRAW_SCALE_MPU`) — rzadki przypadek, bo tryb „Otwory" wymaga najpierw
  *  narysowanej ściany, a ściana zwykle idzie w parze z jakąś skalą. */
 export const DEFAULT_OPENING_WIDTH_UNITS = 18;
 
-/** Szerokość NOWYCH drzwi (jedn. planu), z uwzględnieniem bieżącej skali —
+/** Szerokość NOWEGO otworu (jedn. planu), z uwzględnieniem bieżącej skali —
  *  centymetry, gdy skala jest znana, inaczej stały fallback. */
-export function defaultOpeningWidth(metersPerUnit: number | null): number {
+export function defaultOpeningWidth(metersPerUnit: number | null, kind: OpeningKind = "drzwi"): number {
   if (metersPerUnit === null || !(metersPerUnit > 0)) return DEFAULT_OPENING_WIDTH_UNITS;
-  return DEFAULT_DOOR_WIDTH_CM / 100 / metersPerUnit;
+  const cm = kind === "okno" ? DEFAULT_WINDOW_WIDTH_CM : DEFAULT_DOOR_WIDTH_CM;
+  return cm / 100 / metersPerUnit;
 }
 
 export interface PlanSize {

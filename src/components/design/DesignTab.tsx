@@ -22,7 +22,7 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, Point, RoomType } from "@/types";
+import type { ElementType, OpeningKind, Point, RoomType } from "@/types";
 import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { checkPlan } from "@/lib/planCheck";
@@ -93,6 +93,11 @@ const DEFAULT_ELEMENT_SCALE = 1;
  * kilka pikseli i cieńszy pas dawał się „przestrzelić" bez efektu.
  */
 const PAS_WYZWALAJACY = 24;
+
+const OPENING_KINDS: { id: OpeningKind; label: string }[] = [
+  { id: "drzwi", label: "Drzwi" },
+  { id: "okno", label: "Okno" },
+];
 
 const ROOM_MODES: { id: RoomDrawMode; label: string; hint: string }[] = [
   { id: "prostokat", label: "Prostokąt", hint: "przeciągnij z wciśniętym przyciskiem albo kliknij dwa przeciwległe narożniki" },
@@ -312,6 +317,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [orthoWalls, setOrthoWalls] = useState(false);
   const [drawingRoomPoints, setDrawingRoomPoints] = useState<Point[]>([]);
   const [roomMode, setRoomMode] = useState<RoomDrawMode>("prostokat");
+  /** Rodzaj NOWEGO otworu — ustawienie edytora, jak grubosc sciany, nie czesc projektu. */
+  const [openingKind, setOpeningKind] = useState<OpeningKind>("drzwi");
   const [pendingRoom, setPendingRoom] = useState<{ points: Point[]; name: string; type: RoomType; typeTouched: boolean } | null>(
     null
   );
@@ -1046,6 +1053,13 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setDraft((d) => ({ ...d, walls: d.walls.map((w) => (w.id === id ? { ...w, thickness } : w)) }));
   }
 
+  /** Szerokość JUŻ POSTAWIONEGO otworu — ten sam wzorzec co grubość ściany wyżej.
+   *  Drzwi balkonowe, brama garażowa i okno tarasowe różnią się od siebie właśnie
+   *  szerokością, a ta była do tej pory zabetonowana na wartości domyślnej. */
+  function setOpeningWidth(id: string, width: number) {
+    setDraft((d) => ({ ...d, openings: d.openings.map((o) => (o.id === id ? { ...o, width } : o)) }));
+  }
+
   /** Dokłada drzwi w miejscu kliknięcia w ścianę (`point`/`angle` już
    *  policzone w DesignCanvas — patrz `nearestPointOnPolyline`). Podobnie jak
    *  ściany, otwory nie mają własnych akcji w store — jeden `setDraft`.
@@ -1061,7 +1075,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       ...d,
       openings: [
         ...d.openings,
-        { id, floor: activeFloorId, wallId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(mpu), kind: "drzwi" },
+        { id, floor: activeFloorId, wallId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(mpu, openingKind), kind: openingKind },
       ],
     }));
     setSelected({ kind: "opening", id });
@@ -1077,7 +1091,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       ...d,
       openings: [
         ...d.openings,
-        { id, floor: activeFloorId, roomId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(mpu), kind: "drzwi" },
+        { id, floor: activeFloorId, roomId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(mpu, openingKind), kind: openingKind },
       ],
     }));
     setSelected({ kind: "opening", id });
@@ -1241,6 +1255,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     toolMode === "otwory" ||
     toolMode === "skala" ||
     (selected?.kind === "wall" && toolMode === "zaznacz" && walls.some((w) => w.id === selected.id)) ||
+    (selected?.kind === "opening" && toolMode === "zaznacz" && openings.some((o) => o.id === selected.id)) ||
     (selected?.kind === "route" && toolMode === "zaznacz") ||
     // `toolMode !== "skala"` pominięte celowo: powyżej już wykluczyliśmy ten
     // przypadek (`toolMode === "skala"` zwróciłoby true wcześniej w tym samym `||`).
@@ -1368,10 +1383,52 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           „w co właściwie kliknąć" siedziałoby w tooltipie przycisku paska, widocznym
           tylko po najechaniu myszą — czego nikt nie robi, zanim spróbuje kliknąć. */}
       {toolMode === "otwory" && (
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span>Kliknij ścianę albo krawędź pomieszczenia, żeby postawić tam drzwi.</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+          <span className="font-medium text-slate-600">Rodzaj:</span>
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
+            {OPENING_KINDS.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setOpeningKind(id)}
+                className="rounded-md px-2.5 py-1 text-xs"
+                style={openingKind === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="min-w-0 basis-full text-slate-500">
+            Kliknij ścianę albo krawędź pomieszczenia, żeby wstawić tam {openingKind === "okno" ? "okno" : "drzwi"}.
+            Szerokość poprawisz po zaznaczeniu otworu.
+          </span>
         </div>
       )}
+
+      {/* Szerokość ZAZNACZONEGO otworu — ten sam wzorzec co grubość zaznaczonej ściany
+          wyżej. Wcześniej każdy otwór miał na sztywno 90 cm i nie było jak tego zmienić,
+          więc drzwi balkonowe i okno tarasowe rysowały się jak zwykłe drzwi wewnętrzne. */}
+      {selected?.kind === "opening" && toolMode === "zaznacz" && (() => {
+        const o = openings.find((x) => x.id === selected.id);
+        if (!o) return null;
+        return (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500">Szerokość otworu:</span>
+            <input
+              data-testid="opening-width-input"
+              type="number"
+              min={1}
+              step={mpu !== null ? 5 : 1}
+              value={thicknessToDisplay(o.width)}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v > 0) setOpeningWidth(o.id, thicknessFromDisplay(v));
+              }}
+              className="w-16 rounded border border-border px-1.5 py-0.5"
+            />
+            {mpu !== null ? "cm" : "jedn."}
+          </div>
+        );
+      })()}
 
       {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
           poza nim byłby tylko szumem w pasku narzędzi. */}

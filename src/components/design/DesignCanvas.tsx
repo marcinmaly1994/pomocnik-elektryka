@@ -1286,9 +1286,9 @@ export function DesignCanvas({
           })}
 
           {/* Otwory: „wycięcie" w kolorze tła planu nad ścianą plus glif — łuk skrzydła
-              dla drzwi. Gałąź `o.kind !== "drzwi"` (podwójna linia szyby okna) rysuje
-              już tylko STARE otwory z zapisów sprzed usunięcia opcji okna — narzędzie
-              stawia od tej pory wyłącznie drzwi, patrz `OpeningKind` w types/index.ts.
+              dla drzwi, podwójna linia szyby dla okna (gałąź `o.kind !== "drzwi"`).
+              Narzędzie stawia oba rodzaje, wybierane w pigułce kontrolek — patrz
+              `OPENING_KINDS` w DesignTab.tsx i `OpeningKind` w types/index.ts.
               Ściana pod spodem zostaje NIETKNIĘTA (żaden segment nie jest faktycznie
               dzielony) — to czysto wizualne przykrycie, więc edycja ściany
               (przeciąganie narożnika, zmiana grubości) działa bez zmian. */}

@@ -30,7 +30,7 @@ test("skróty V/E/P/W/D/H/S przełączają narzędzia zgodnie z literą w toolti
     { key: "e", tool: "Wstaw Element" },
     { key: "p", tool: "Narysuj Pomieszczenie" },
     { key: "w", tool: "Narysuj Ścianę" },
-    { key: "d", tool: "Drzwi" },
+    { key: "d", tool: "Drzwi i okna" },
     { key: "h", tool: "Przesuń widok" },
     { key: "s", tool: "Kalibracja skali" },
     { key: "v", tool: "Zaznacz" },
@@ -51,7 +51,7 @@ test("tooltip każdego narzędzia wymienia literę zgodną z faktycznym skrótem
     { tool: "Wstaw Element", key: "e" },
     { tool: "Narysuj Pomieszczenie", key: "p" },
     { tool: "Narysuj Ścianę", key: "w" },
-    { tool: "Drzwi", key: "d" },
+    { tool: "Drzwi i okna", key: "d" },
     { tool: "Przesuń widok", key: "h" },
     { tool: "Kalibracja skali", key: "s" },
   ];

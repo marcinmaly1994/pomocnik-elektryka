@@ -80,7 +80,7 @@ test("kliknięcie w ścianę w trybie Drzwi dodaje otwór w najbliższym miejscu
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(900);
@@ -99,7 +99,7 @@ test("PPM na otworze pokazuje „Usuń otwór” i go kasuje", async ({ page }) 
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(900);
@@ -120,7 +120,7 @@ test("usunięcie ściany kasuje też jej otwory (nie zostają osierocone)", asyn
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(900);
@@ -160,7 +160,7 @@ test("klik w krawędź pomieszczenia w trybie Drzwi dodaje otwór, gdy nie ma os
   await openPlan(page);
   await drawRectRoom(page, 100, 100, 400, 250);
 
-  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
   // górna krawędź pomieszczenia jest pozioma na y=100 (jedn. planu) — klikamy blisko
   // środka górnego boku, z dala od narożników.
   const box = await planBox(page);
@@ -179,7 +179,7 @@ test("usunięcie pomieszczenia kasuje też otwory na jego krawędzi (nie zostaj�
   await openPlan(page);
   await drawRectRoom(page, 100, 100, 400, 250);
 
-  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 250, box.y + 100);
   await page.waitForTimeout(900);
@@ -204,7 +204,7 @@ test("świeżo postawione drzwi są od razu zaznaczone — R działa BEZ dodatko
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(300);
@@ -224,7 +224,7 @@ test("Obrót drzwi o 180° przez menu kontekstowe i przez klawisz R", async ({ p
   await openPlan(page);
   await drawHorizontalWall(page);
 
-  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
   await page.waitForTimeout(900);
@@ -243,4 +243,70 @@ test("Obrót drzwi o 180° przez menu kontekstowe i przez klawisz R", async ({ p
   await page.keyboard.press("r");
   await page.waitForTimeout(900);
   expect((await projectState(page)).openings[0].flip).toBe(false);
+});
+
+/** Plan ZE SKALĄ — bez niej szerokości otworów spadają na wspólny fallback
+ *  w jednostkach planu (DEFAULT_OPENING_WIDTH_UNITS) i rodzaj otworu nie ma
+ *  jak wpłynąć na wymiar w centymetrach. */
+async function openPlanZeSkala(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+  await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
+  const rozumiem = page.getByRole("button", { name: "Rozumiem" });
+  if (await rozumiem.count()) await rozumiem.click();
+}
+
+test("narzędzie stawia OKNO, gdy wybrany jest ten rodzaj — z własną szerokością domyślną", async ({ page }) => {
+  await openPlanZeSkala(page);
+  await drawHorizontalWall(page);
+
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
+  // Domyślnie stawiane są drzwi; okno wymaga świadomego wyboru rodzaju.
+  await page.getByRole("button", { name: "Okno", exact: true }).click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 200, box.y + 100);
+  await page.waitForTimeout(900);
+
+  const poOknie = await projectState(page);
+  expect(poOknie.openings).toHaveLength(1);
+  expect(poOknie.openings[0].kind).toBe("okno");
+  const szerokoscOkna = poOknie.openings[0].width;
+
+  // Powrót do drzwi stawia drzwi — wybór nie zostaje „na zawsze".
+  await page.getByRole("button", { name: "Drzwi", exact: true }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 320, box.y + 100);
+  await page.waitForTimeout(900);
+
+  const poDrzwiach = await projectState(page);
+  expect(poDrzwiach.openings).toHaveLength(2);
+  const drzwi = poDrzwiach.openings.find((o: { kind: string }) => o.kind === "drzwi");
+  expect(drzwi).toBeTruthy();
+  // Okno jest szersze od drzwi (120 vs 90 cm) — dowód, że rodzaj wpływa na wymiar.
+  expect(szerokoscOkna).toBeGreaterThan(drzwi.width);
+});
+
+test("szerokość postawionego otworu da się poprawić", async ({ page }) => {
+  await openPlanZeSkala(page);
+  await drawHorizontalWall(page);
+
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
+  const box = await planBox(page);
+  await page.mouse.click(box.x + 200, box.y + 100);
+  await page.waitForTimeout(900);
+
+  const przed = (await projectState(page)).openings[0].width;
+
+  // Świeżo postawiony otwór jest już zaznaczony, ale pole szerokości mieszka
+  // w trybie „Zaznacz" — tak jak grubość zaznaczonej ściany.
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  const pole = page.getByTestId("opening-width-input");
+  await expect(pole).toBeVisible();
+  await pole.fill("200"); // drzwi balkonowe / brama
+  await page.waitForTimeout(900);
+
+  const po = (await projectState(page)).openings[0].width;
+  expect(po).toBeGreaterThan(przed);
 });

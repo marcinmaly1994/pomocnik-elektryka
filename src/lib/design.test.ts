@@ -295,3 +295,20 @@ describe("reconcileRoomsOnLoad", () => {
     expect(reconcileRoomsOnLoad(raz.elements, OBRYSY, SKALE).poprawione).toBe(0);
   });
 });
+
+describe("defaultOpeningWidth — rodzaj otworu", () => {
+  const mpu = 0.05;
+
+  it("okno jest szersze od drzwi", () => {
+    expect(defaultOpeningWidth(mpu, "okno")).toBeGreaterThan(defaultOpeningWidth(mpu, "drzwi"));
+  });
+
+  it("bez podania rodzaju stawiamy drzwi — zachowanie sprzed dodania okien", () => {
+    expect(defaultOpeningWidth(mpu)).toBe(defaultOpeningWidth(mpu, "drzwi"));
+  });
+
+  it("bez skali oba rodzaje spadają na ten sam fallback — nie ma z czego liczyć cm", () => {
+    expect(defaultOpeningWidth(null, "okno")).toBe(DEFAULT_OPENING_WIDTH_UNITS);
+    expect(defaultOpeningWidth(null, "drzwi")).toBe(DEFAULT_OPENING_WIDTH_UNITS);
+  });
+});
