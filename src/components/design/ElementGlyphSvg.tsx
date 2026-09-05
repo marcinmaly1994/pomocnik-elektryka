@@ -10,6 +10,10 @@ interface GlyphProps {
    *  w `InstallationElement`). Domyślnie „A", żeby nowo postawiony wypust od razu
    *  pokazywał coś w symbolu, zanim użytkownik wpisze właściwą literę. */
   agdLetter?: string;
+  /** Rzeczywiste wymiary przyboru sanitarnego [m] — tylko dla wanny/brodzika/umywalki
+   *  (patrz `fixtureSizeM`). Bez nich rysują się wymiary typowe, co jest właściwe
+   *  w legendzie i w podglądzie biblioteki, gdzie nie ma konkretnego elementu. */
+  wymiaryM?: { widthM: number; depthM: number };
 }
 
 /** Wspólna geometria łuku gniazda: trzon u góry, pozioma kreska, łuk otwarty w dół —
@@ -62,7 +66,7 @@ function CodeBadge({ color, code, w = 26, h = 24 }: { color: string; code: strin
 
 /** Symbole zbliżone do konwencji rysunku instalacyjnego (SVG) — do użycia w bibliotece
  *  elementów i modalu edycji, poza płótnem Konva. Przeniesione z `ElementGlyph` w wersji JS. */
-export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
+export function ElementGlyphSvg({ type, color, gangs, agdLetter, wymiaryM }: GlyphProps) {
   switch (type) {
     case "gniazdko":
     case "gniazdkoHerm": {
@@ -125,7 +129,7 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
       );
 
     case "tasmaLed": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={3} fill="#fff" stroke={color} strokeWidth={2} />
@@ -176,7 +180,7 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
       );
 
     case "wanna": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={9} fill="#fff" stroke={color} strokeWidth={2} />
@@ -187,7 +191,7 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
     }
 
     case "prysznic": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={3} fill="#fff" stroke={color} strokeWidth={2} />
@@ -212,7 +216,7 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
     }
 
     case "umywalka": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           {/* Zaokrąglenie ograniczone połową wysokości: umywalka to najmniejszy z przyborów
@@ -226,7 +230,7 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
     }
 
     case "rozdzielnica": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={3} fill="#fff" stroke={color} strokeWidth={2.4} />
@@ -242,7 +246,7 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
     }
 
     case "roleta": {
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={4} fill="#fff" stroke={color} strokeWidth={2.2} />
@@ -259,7 +263,7 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
     case "wlacznikSchodowy":
     case "wlacznikKrzyzowy": {
       const { r, segments } = switchGlyph(type);
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <>
           {/* Niewidoczny cel trafień — symbol jest samą kreską, więc bez wypełnionego
@@ -275,7 +279,7 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
 
     default: {
       const def = ELEMENT_TYPES[type];
-      const { w, h } = glyphBoxSize(type);
+      const { w, h } = glyphBoxSize(type, wymiaryM);
       return <CodeBadge color={color} code={def?.code || "?"} w={w} h={h} />;
     }
   }
@@ -283,6 +287,8 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
 
 /** Gotowy `<svg>` z wyśrodkowanym symbolem, do wstawienia w listach (biblioteka elementów,
  *  wybór typu w modalu edycji) — poza kontekstem `<svg>`, w zwykłym drzewie HTML. */
+// Podglad w listach zawsze rysuje wymiar TYPOWY — to symbol katalogowy, nie konkretna
+// wanna z projektu, wiec nie przyjmuje nadpisanych wymiarow.
 export function GlyphPreview({ type, color, gangs, agdLetter, size = 26 }: GlyphProps & { size?: number }) {
   const { w, h } = glyphBoxSize(type);
   const box = Math.max(w, h) + 12;

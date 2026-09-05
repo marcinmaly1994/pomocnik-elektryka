@@ -265,3 +265,29 @@ describe("checkPlan — strefy liczone od KRAWĘDZI przyboru", () => {
     expect(reguly(sprawdz([{ ...wanna, rotation: 90 }, gniazdo]))).toContain("strefa1");
   });
 });
+
+describe("wlasne wymiary przyboru", () => {
+  /**
+   * Sedno: rysunek i sprawdzenie musza liczyc od TEGO SAMEGO obrysu. Zanim ta reguła
+   * czytała wymiary z elementu, plan pokazywał wannę 2,20 m, a walidator mierzył strefy
+   * od katalogowej 1,70 — czyli milczał dokładnie tam, gdzie miał ostrzegać.
+   */
+  it("dluzsza wanna wciaga gniazdo w strefe 2, choc gniazdo stoi w miejscu", () => {
+    const wanna: InstallationElement = {
+      id: "w1", type: "wanna", x: 0, y: 0, room: "Łazienka", floor: "f1",
+      dedicated: false, note: "", gangs: 1,
+    };
+    // 1,55 m od srodka: typowa wanna 1,70 konczy strefe 2 na 1,45 m, wanna 2,20 — na 1,70.
+    const gniazdo: InstallationElement = {
+      id: "g1", type: "gniazdko", x: 31, y: 0, room: "Łazienka", floor: "f1",
+      dedicated: false, note: "", gangs: 1,
+    };
+    const wejscie = (w?: number) => ({
+      elements: [{ ...wanna, widthM: w }, gniazdo],
+      roomShapes: [],
+      metersPerUnit: 0.05,
+    });
+    expect(checkPlan(wejscie()).some((i) => i.rule === "strefa2")).toBe(false);
+    expect(checkPlan(wejscie(2.2)).some((i) => i.rule === "strefa2")).toBe(true);
+  });
+});

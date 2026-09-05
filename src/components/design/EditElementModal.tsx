@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ElementType, InstallationElement } from "@/types";
-import { ELEMENT_SECTIONS, ELEMENT_TYPES, MOUNTING_HEIGHTS_M, VARIANTS_FOR } from "@/lib/elements";
+import { ELEMENT_SECTIONS, ELEMENT_TYPES, MAX_WYMIAR_PRZYBORU_M, MOUNTING_HEIGHTS_M, SANITARY_FIXTURES, VARIANTS_FOR } from "@/lib/elements";
 import { circuitCount, isLightControl, isLightPoint, manualGroups } from "@/lib/lightGroups";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,9 @@ export interface EditElementPatch {
   agdLetter?: string;
   /** Wysokość montażu [m]; `undefined` = wartość typowa dla typu. */
   heightM?: number;
+  /** Wymiary przyboru sanitarnego [m]; `undefined` = wartość typowa. */
+  widthM?: number;
+  depthM?: number;
 }
 
 interface EditElementModalProps {
@@ -49,11 +52,21 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
   const [agdName, setAgdName] = useState(element.type === "wypustAGD" ? element.note || "" : "");
   // Puste = wartość typowa dla typu; patrz komentarz przy polu w formularzu.
   const [height, setHeight] = useState(typeof element.heightM === "number" ? String(element.heightM) : "");
+  // Wymiary przyboru — w CENTYMETRACH, bo tak podaje je każdy katalog („wanna 170 × 75”)
+  // i tak je czyta ktoś, kto stoi w łazience z miarką. Puste = wartość typowa.
+  const naCm = (v: number | undefined) => (typeof v === "number" ? String(Math.round(v * 100)) : "");
+  const [szer, setSzer] = useState(naCm(element.widthM));
+  const [glab, setGlab] = useState(naCm(element.depthM));
   // Puste pole = „automatycznie". Trzymane jako tekst, żeby dało się je wyczyścić —
   // liczba nie ma stanu „brak", a to właśnie on przywraca automatyczne przypisanie.
   const [groupInputs, setGroupInputs] = useState<string[]>(() =>
     manualGroups(element).map((n) => (n != null ? String(n) : ""))
   );
+
+  /** Przybory sanitarne maja WYMIARY, a nie wysokosc montazu — to jedyne elementy,
+   *  ktorych obrys jest jednoczesnie strefa ochronna. */
+  const przybornik = SANITARY_FIXTURES[type];
+  const przyborem = !!przybornik;
 
   const variants = VARIANTS_FOR[type];
   const maxGangs = variants ? variants[variants.length - 1] : 1;
@@ -92,7 +105,19 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
       agdLetter: type === "wypustAGD" ? agdLetter.trim().slice(0, 2).toUpperCase() || "A" : undefined,
       lightGroup: groupApplies && parsed.some((n) => n != null) ? parsed : undefined,
       heightM: parsedHeight,
+      widthM: przyborem ? zCm(szer) : undefined,
+      depthM: przyborem ? zCm(glab) : undefined,
     });
+  }
+
+  /** Centymetry z pola na metry w projekcie. Nieliczba i wartość spoza sensownego
+   *  zakresu wracają do „typowej" — literówka w tej liczbie rozdyma strefę ochronną,
+   *  więc lepiej zignorować wpis niż zapisać wannę długą na dwadzieścia metrów. */
+  function zCm(raw: string): number | undefined {
+    const cm = parseFloat(raw.replace(",", "."));
+    if (!Number.isFinite(cm) || cm <= 0) return undefined;
+    const m = cm / 100;
+    return m <= MAX_WYMIAR_PRZYBORU_M ? m : undefined;
   }
 
   return (
@@ -232,11 +257,57 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
             </div>
           )}
 
+          {/* Przybory sanitarne dostają WYMIARY zamiast wysokości montażu. Wanny nie
+              montuje się na wysokości, za to jej obrys JEST strefą 1 wg
+              PN-HD 60364-7-701 — a wanien 1,50 i 1,80 m sprzedaje się tyle samo co
+              1,70. Bez tych dwóch pól walidator sprawdzałby strefę wanny, której
+              w tej łazience nie ma. */}
+          {przyborem && (
+            <div>
+              <div className="mb-1 text-xs text-slate-500">Wymiary przyboru [cm]</div>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_WYMIAR_PRZYBORU_M * 100}
+                  step={1}
+                  value={szer}
+                  onChange={(e) => setSzer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSave();
+                  }}
+                  placeholder={`dł. ${Math.round(przybornik!.widthM * 100)}`}
+                  aria-label="Długość przyboru w centymetrach"
+                  className="pe-input w-full text-sm"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_WYMIAR_PRZYBORU_M * 100}
+                  step={1}
+                  value={glab}
+                  onChange={(e) => setGlab(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSave();
+                  }}
+                  placeholder={`szer. ${Math.round(przybornik!.depthM * 100)}`}
+                  aria-label="Szerokość przyboru w centymetrach"
+                  className="pe-input w-full text-sm"
+                />
+              </div>
+              <p className="mt-1 text-[11px] leading-snug text-slate-400">
+                Obrys przyboru jest jednocześnie strefą ochronną, więc te wymiary decydują, które
+                gniazdo sprawdzenie rzutu zgłosi. Puste pola oznaczają wymiary typowe. Dłuższy bok
+                leży wzdłuż symbolu — obrót elementu obraca też strefę.
+              </p>
+            </div>
+          )}
+
           {/* Wysokość montażu — puste pole znaczy „wartość typowa dla tego typu"
               (patrz `MOUNTING_HEIGHTS_M`), tak jak puste pole grupy znaczy „auto".
               Trzymane jako TEKST z tego samego powodu: liczba nie ma stanu „brak",
               a to on przywraca wartość domyślną po ręcznej zmianie. */}
-          <label className="block">
+          <label className={przyborem ? "hidden" : "block"}>
             <div className="mb-1 text-xs text-slate-500">Wysokość montażu [m]</div>
             <input
               type="number"

@@ -131,7 +131,7 @@ export function groupLabelAnchors(type: ElementType): { x: number; y: number }[]
 /** Rozmiar „płytki” danego typu — używany zarówno do rysowania symbolu, jak i obwódki
  *  zaznaczenia. Rozmiar zależy już wyłącznie od typu: gniazda wielokrotne rysują się jak
  *  pojedyncze (liczba w łuku), a łączniki mają jedno pudełko dla wszystkich wariantów. */
-export function glyphBoxSize(type: ElementType): { w: number; h: number } {
+export function glyphBoxSize(type: ElementType, wymiaryM?: { widthM: number; depthM: number }): { w: number; h: number } {
   // Wszystkie łączniki mają jedno pudełko: dźwignie odchodzą w różne strony zależnie od
   // typu, więc symetryczny obrys jest jedynym, który obejmuje każdy z nich tak samo.
   if (isSwitchType(type)) return { w: 36, h: 36 };
@@ -158,7 +158,13 @@ export function glyphBoxSize(type: ElementType): { w: number; h: number } {
   // wcześniej „na oko” pudełka rozjeżdżały się ze strefą nawet o jedną piątą
   // (wanna 52 × 26 jedn. to 1,82 × 0,91 m zamiast 1,70 × 0,75 m), więc rysunek
   // pokazywał inny obrys niż ten, który aplikacja sprawdza.
-  const przybor = SANITARY_FIXTURES[type];
+  // `wymiaryM` to wymiary KONKRETNEGO przyboru (uzytkownik moze je poprawic, patrz
+  // `fixtureSizeM`); bez nich zostaja typowe z katalogu — tak rysuje sie legenda
+  // i podglad w bibliotece, gdzie nie ma zadnego konkretnego elementu.
+  // O tym, czy to w ogóle przybór, decyduje TYP — `wymiaryM` tylko podmienia liczby.
+  // Inaczej podanie ich przez pomyłkę przy gniazdku zamieniłoby je w prostokąt.
+  const katalogowy = SANITARY_FIXTURES[type];
+  const przybor = katalogowy ? wymiaryM ?? katalogowy : undefined;
   if (przybor) return { w: przybor.widthM * JEDNOSTKI_NA_METR, h: przybor.depthM * JEDNOSTKI_NA_METR };
   if ((["oswietlenie", "kinkiet", "oswietlenieZewn", "puszka", "czujnikRuchu", "czujnikDymu", "wentylator"] as ElementType[]).includes(type)) {
     return { w: 26, h: 26 };
