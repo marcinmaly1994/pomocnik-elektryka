@@ -37,6 +37,7 @@ import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
+import { przyscienny, snapToWall } from "@/lib/wallSnap";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
@@ -416,6 +417,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   /** Podglad kondygnacji ponizej — domyslnie WYLACZONY: na parterze nie ma czego
    *  pokazac, a przy jednej kondygnacji przelacznik byloby samym szumem. */
   const [showUnderlay, setShowUnderlay] = useState(false);
+  /** Przyciaganie osprzetu do scian. Domyslnie WLACZONE: to najczestsza czynnosc
+   *  w calej aplikacji, a bez obrotu symbole stoja byle jak. Wylaczalne, bo nie kazdy
+   *  element montuje sie w scianie (gniazdo podlogowe, wyspa kuchenna). */
+  const [wallSnapOn, setWallSnapOn] = useState(true);
   // Skala samych symboli na planie (nie powiększenie widoku) — ustawienie widoku, więc
   // stan lokalny jak snapOn/showZones, a nie część zapisywanego projektu.
   const [elementScale, setElementScale] = useState(DEFAULT_ELEMENT_SCALE);
@@ -1059,7 +1064,31 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     return gangsByType[t] || 1;
   }
 
+  /**
+   * Zasięg przyciągania do ściany [m] — trochę ciaśniej niż tolerancja przypisania do
+   * pomieszczenia (`ROOM_SNAP_TOLERANCE_M`), bo tamta tylko OPISUJE element, a ta go
+   * PRZESUWA. Za szeroka ściągałaby na ścianę gniazdo postawione świadomie w podłodze
+   * albo w wyspie kuchennej.
+   */
+  const WALL_SNAP_TOLERANCE_M = 0.35;
+
+  /**
+   * Pozycja i obrót elementu po ewentualnym przyklejeniu do ściany.
+   *
+   * Wspólne dla stawiania i przeciągania POJEDYNCZEGO elementu. Świadomie NIE dla
+   * przeciągania grupy: przyciąganie każdego elementu z osobna rozerwałoby wzajemne
+   * odstępy, które użytkownik właśnie ustawił wyrównaniem — a to jest dokładnie ten
+   * sam powód, dla którego przeciąganie grupy nie przyciąga się też do siatki
+   * (patrz `withSnap` w DesignCanvas).
+   */
+  function zPrzyciaganiemDoSciany(p: Point, type: ElementType, obecnyObrot = 0) {
+    if (!wallSnapOn || !przyscienny(type)) return { x: p.x, y: p.y, rotation: obecnyObrot };
+    const tolerancja = mpu ? WALL_SNAP_TOLERANCE_M / mpu : GRID / 2;
+    return snapToWall(p, walls, roomShapes, tolerancja) ?? { x: p.x, y: p.y, rotation: obecnyObrot };
+  }
+
   function handlePlaceElement(p: Point) {
+    const m = zPrzyciaganiemDoSciany(p, activeType);
     setDraft((d) => ({
       ...d,
       elements: [
@@ -1067,14 +1096,16 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         {
           id: crypto.randomUUID(),
           type: activeType,
-          x: p.x,
-          y: p.y,
-          room: detectRoomName(p, roomShapes, mpu),
+          x: m.x,
+          y: m.y,
+          // Pomieszczenie liczone z pozycji PO przyciągnięciu — element ląduje wtedy
+          // dokładnie na linii obrysu, gdzie decyduje tolerancja z `detectRoomName`.
+          room: detectRoomName(m, roomShapes, mpu),
           floor: activeFloorId,
           dedicated: activeType === "gniazdko" ? dedicated : false,
           note: activeType === "gniazdko" && dedicated ? "AGD" : "",
           gangs: gangsForType(activeType),
-          rotation: 0,
+          rotation: m.rotation,
           // Domyślna litera przy stawianiu z biblioteki — użytkownik podmienia ją na
           // właściwą (L, Z, ...) w edycji elementu, patrz `EditElementModal`.
           agdLetter: activeType === "wypustAGD" ? "A" : undefined,
@@ -2065,6 +2096,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         onZapisz={session ? () => void saveToCloud({ reczny: true }) : null}
         zapisTrwa={cloudBusy}
         onSnapChange={setSnapOn}
+        wallSnapOn={wallSnapOn}
+        onWallSnapChange={setWallSnapOn}
         elementScale={elementScale}
         onElementScaleChange={setElementScale}
         defaultElementScale={DEFAULT_ELEMENT_SCALE}
@@ -2390,9 +2423,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             onMoveElement={(id, x, y) =>
               setDraft((d) => ({
                 ...d,
-                elements: d.elements.map((e) =>
-                  e.id === id ? { ...e, x, y, room: roomNameAfterMove({ x, y }, e.room, roomShapes, mpu) } : e
-                ),
+                elements: d.elements.map((e) => {
+                  if (e.id !== id) return e;
+                  const m = zPrzyciaganiemDoSciany({ x, y }, e.type, e.rotation ?? 0);
+                  return { ...e, x: m.x, y: m.y, rotation: m.rotation, room: roomNameAfterMove(m, e.room, roomShapes, mpu) };
+                }),
               }))
             }
             onMoveElements={przesunElementy}
