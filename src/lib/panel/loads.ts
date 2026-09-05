@@ -9,7 +9,7 @@
  */
 
 import type { CableRoute, Circuit, ElementType, InstallationElement, Point, RoomShape, Wall } from "@/types";
-import { ELEMENT_TYPES } from "@/lib/elements";
+import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM } from "@/lib/elements";
 import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
 import { crossesGeometry, routeAlongWalls } from "./routing";
 
@@ -95,6 +95,22 @@ const CEILING_RUN_M = 2.8;
 /** Zapas na zejście do osprzętu i zapas montażowy w puszce [m]. */
 const SLACK_M = 1.5;
 
+/**
+ * Naddatek pionowy trasy [m]: wyjście z rozdzielnicy pod strop i zejście do osprzętu.
+ *
+ * Wcześniej była tu jedna stała `CEILING_RUN_M` doliczana każdemu punktowi tak samo —
+ * gniazdo przy podłodze i punkt sufitowy dostawały identyczne 2,8 m, choć do pierwszego
+ * przewód schodzi przez całą wysokość kondygnacji, a do drugiego nie schodzi wcale.
+ * Teraz liczymy oba odcinki z rzeczywistych wysokości montażu (patrz `mountingHeightM`):
+ * podejście od rozdzielnicy w górę i zejście w dół do odbiornika.
+ *
+ * `Math.max(0, …)` bo osprzęt bywa MONTOWANY pod stropem (punkt sufitowy na 2,8 m,
+ * czujnik dymu) — wtedy zejścia nie ma, ale ujemna długość przewodu nie istnieje.
+ */
+function pionM(panelHeightM: number, deviceHeightM: number): number {
+  return Math.max(0, CEILING_RUN_M - panelHeightM) + Math.max(0, CEILING_RUN_M - deviceHeightM);
+}
+
 export interface RouteEstimate {
   /** Trasa do NAJDALSZEGO punktu obwodu [m] — to ona decyduje o spadku napięcia. */
   worstCaseM: number;
@@ -116,14 +132,17 @@ export interface RouteEstimate {
 export function estimateRoutes(
   panel: Point | null,
   elements: InstallationElement[],
-  metersPerUnit: number | null
+  metersPerUnit: number | null,
+  /** Wysokość montażu rozdzielnicy [m] — punkt startu pionu. Domyślnie wartość typowa
+   *  dla rozdzielnicy; przekazywana jawnie tam, gdzie na planie stoi konkretna. */
+  panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5
 ): RouteEstimate | null {
   if (!panel || metersPerUnit === null || !(metersPerUnit > 0) || elements.length === 0) return null;
   let worst = 0;
   let total = 0;
   for (const e of elements) {
     const manhattanUnits = Math.abs(e.x - panel.x) + Math.abs(e.y - panel.y);
-    const runM = manhattanUnits * metersPerUnit + CEILING_RUN_M + SLACK_M;
+    const runM = manhattanUnits * metersPerUnit + pionM(panelHeightM, mountingHeightM(e)) + SLACK_M;
     total += runM;
     if (runM > worst) worst = runM;
   }

@@ -69,3 +69,33 @@ export function pointInPolygon(pt: Point, points: Point[]): boolean {
   }
   return inside;
 }
+
+/**
+ * Odległość punktu od PROSTOKĄTA obróconego o `rotationDeg` (środek w `cx`/`cy`).
+ * `0`, gdy punkt leży wewnątrz prostokąta.
+ *
+ * Potrzebne do stref ochronnych: norma mierzy je od KRAWĘDZI wanny czy brodzika, a nie
+ * od punktu w jej środku (patrz `SANITARY_FIXTURES`). Zbiór punktów w zadanej odległości
+ * od prostokąta to prostokąt o zaokrąglonych narożnikach — dlatego strefa 2 rysuje się
+ * jako `Rect` z `cornerRadius` równym jej zasięgowi, a nie jako okrąg.
+ *
+ * Liczone w układzie WŁASNYM prostokąta: obracamy punkt o `-rotationDeg`, dzięki czemu
+ * dalej wystarczy porównanie z połową boków.
+ */
+export function distanceToRect(
+  p: Point,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  rotationDeg = 0
+): number {
+  const a = (-rotationDeg * Math.PI) / 180;
+  const dx = p.x - cx;
+  const dy = p.y - cy;
+  const lx = dx * Math.cos(a) - dy * Math.sin(a);
+  const ly = dx * Math.sin(a) + dy * Math.cos(a);
+  const ox = Math.max(Math.abs(lx) - w / 2, 0);
+  const oy = Math.max(Math.abs(ly) - h / 2, 0);
+  return Math.hypot(ox, oy);
+}

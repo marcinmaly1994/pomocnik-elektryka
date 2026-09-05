@@ -1286,9 +1286,9 @@ export function DesignCanvas({
           })}
 
           {/* Otwory: „wycięcie" w kolorze tła planu nad ścianą plus glif — łuk skrzydła
-              dla drzwi. Gałąź `o.kind !== "drzwi"` (podwójna linia szyby okna) rysuje
-              już tylko STARE otwory z zapisów sprzed usunięcia opcji okna — narzędzie
-              stawia od tej pory wyłącznie drzwi, patrz `OpeningKind` w types/index.ts.
+              dla drzwi, podwójna linia szyby dla okna (gałąź `o.kind !== "drzwi"`).
+              Narzędzie stawia oba rodzaje, wybierane w pigułce kontrolek — patrz
+              `OPENING_KINDS` w DesignTab.tsx i `OpeningKind` w types/index.ts.
               Ściana pod spodem zostaje NIETKNIĘTA (żaden segment nie jest faktycznie
               dzielony) — to czysto wizualne przykrycie, więc edycja ściany
               (przeciąganie narożnika, zmiana grubości) działa bez zmian. */}
@@ -1390,21 +1390,61 @@ export function DesignCanvas({
             );
           })}
 
-          {zones.map((z) => (
-            <Group key={z.id} listening={false}>
-              <Circle x={z.x} y={z.y} radius={z.r2} fill="#C1793F14" stroke="#C1793F" strokeWidth={1} dash={[5, 4]} />
-              {z.r1 > 0 && <Circle x={z.x} y={z.y} radius={z.r1} fill="#C6433A1A" stroke="#C6433A" strokeWidth={1.2} dash={[3, 3]} />}
-              <Text
-                x={z.x - 60}
-                y={z.y - z.r2 - 14}
-                width={120}
-                align="center"
-                text={`strefy: ${z.label}${!z.calibrated ? " (bez skali)" : ""}`}
-                fontSize={8}
-                fill="#8A5526"
-              />
-            </Group>
-          ))}
+          {/* Strefy ochronne rysowane jako PROSTOKĄTY obrysu przyboru, nie okręgi wokół
+              jego środka — norma mierzy je od krawędzi wanny/brodzika (patrz
+              `SANITARY_FIXTURES`). Strefa 2 to zbiór punktów w odległości ≤ 0,6 m od tego
+              obrysu, czyli prostokąt o narożnikach zaokrąglonych właśnie tym promieniem;
+              `cornerRadius={z.zone2}` odwzorowuje dokładnie to, co liczy `distanceToRect`,
+              więc rysunek i sprawdzenie rzutu nie mogą się rozjechać.
+              `offset` przesuwa początek układu na środek kształtu, żeby `rotation` obracał
+              strefę wokół przyboru, a nie wokół jego lewego górnego rogu. */}
+          {zones.map((z) => {
+            // Zapas na etykietę liczony z WIĘKSZEGO boku: przy obrocie o 90° to szerokość
+            // wchodzi w pion, więc stała oparta na wysokości kładłaby napis na strefie.
+            const zasieg = Math.max(z.w, z.h) / 2 + z.zone2;
+            return (
+              <Group key={z.id} listening={false}>
+                <Rect
+                  x={z.x}
+                  y={z.y}
+                  offsetX={z.w / 2 + z.zone2}
+                  offsetY={z.h / 2 + z.zone2}
+                  width={z.w + 2 * z.zone2}
+                  height={z.h + 2 * z.zone2}
+                  cornerRadius={z.zone2}
+                  rotation={z.rotation}
+                  fill="#C1793F14"
+                  stroke="#C1793F"
+                  strokeWidth={1}
+                  dash={[5, 4]}
+                />
+                {z.hasZone1 && (
+                  <Rect
+                    x={z.x}
+                    y={z.y}
+                    offsetX={z.w / 2}
+                    offsetY={z.h / 2}
+                    width={z.w}
+                    height={z.h}
+                    rotation={z.rotation}
+                    fill="#C6433A1A"
+                    stroke="#C6433A"
+                    strokeWidth={1.2}
+                    dash={[3, 3]}
+                  />
+                )}
+                <Text
+                  x={z.x - 60}
+                  y={z.y - zasieg - 14}
+                  width={120}
+                  align="center"
+                  text={`strefy: ${z.label}${!z.calibrated ? " (bez skali)" : ""}`}
+                  fontSize={8}
+                  fill="#8A5526"
+                />
+              </Group>
+            );
+          })}
 
           {/* Trasy przewodów: od rozdzielnicy do każdego punktu obwodu, kolorowane jak
               POMIESZCZENIE punktu docelowego (`colorForRoomName`) — ten sam kolor co

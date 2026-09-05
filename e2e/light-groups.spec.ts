@@ -173,7 +173,9 @@ test("ręczna zmiana grupy z okna edycji nadpisuje automat", async ({ page }) =>
   await dwuklikWElement(page, "oswietlenie");
   await expect(page.getByText("Edytuj element")).toBeVisible();
 
-  const groupField = page.getByRole("spinbutton");
+  // Okno edycji ma teraz wiecej niz jedno pole liczbowe (doszla wysokosc montazu),
+  // wiec pole grupy trzeba wskazac po nazwie, a nie "tym jedynym spinbuttonem".
+  const groupField = page.getByRole("spinbutton", { name: "Grupa sterowania oświetleniem" });
   await expect(groupField).toBeVisible();
   // podpowiedź pokazuje numer dobrany automatycznie
   await expect(groupField).toHaveAttribute("placeholder", /auto: \d+/);
@@ -187,7 +189,7 @@ test("ręczna zmiana grupy z okna edycji nadpisuje automat", async ({ page }) =>
 
   // wyczyszczenie pola przywraca automat
   await dwuklikWElement(page, "oswietlenie");
-  await page.getByRole("spinbutton").fill("");
+  await page.getByRole("spinbutton", { name: "Grupa sterowania oświetleniem" }).fill("");
   await page.getByRole("button", { name: "Zapisz" }).click();
   const after = await groups(page);
   expect(after.find((e: { type: string }) => e.type === "oswietlenie")!.manual).toBeNull();

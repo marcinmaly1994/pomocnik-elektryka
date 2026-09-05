@@ -56,11 +56,15 @@ describe("circuitDemand", () => {
 describe("estimateRoutes", () => {
   const panel = { x: 0, y: 0 };
 
+  /** Pion + zapas dla gniazda na 0,3 m przy rozdzielnicy na 1,5 m i kondygnacji 2,8 m:
+   *  podejście (2,8 − 1,5) + zejście (2,8 − 0,3) + zapas 1,5 = 5,3 m. */
+  const NADDATEK_GNIAZDO = 5.3;
+
   it("liczy trasę po obrysie (Manhattan), nie po przekątnej", () => {
-    // punkt (30,40) przy skali 0,1 m/jedn.: (30+40)·0,1 = 7 m + 2,8 + 1,5 = 11,3 m
+    // punkt (30,40) przy skali 0,1 m/jedn.: (30+40)·0,1 = 7 m + naddatek pionowy
     // po przekątnej byłoby 50·0,1 = 5 m — zaniżenie o 40%
     const r = estimateRoutes(panel, [el("gniazdko", { x: 30, y: 40 })], 0.1);
-    expect(r!.worstCaseM).toBeCloseTo(11.3, 1);
+    expect(r!.worstCaseM).toBeCloseTo(7 + NADDATEK_GNIAZDO, 1);
   });
 
   it("o spadku napięcia decyduje punkt najdalszy, a nie suma tras", () => {
@@ -69,9 +73,24 @@ describe("estimateRoutes", () => {
       [el("gniazdko", { x: 10, y: 0 }), el("gniazdko", { x: 100, y: 0 })],
       0.1
     );
-    expect(r!.worstCaseM).toBeCloseTo(10 + 4.3, 1); // 100·0,1 + 2,8 + 1,5
-    expect(r!.totalM).toBeCloseTo(1 + 4.3 + 10 + 4.3, 1); // suma obu tras
+    expect(r!.worstCaseM).toBeCloseTo(10 + NADDATEK_GNIAZDO, 1);
+    expect(r!.totalM).toBeCloseTo(1 + NADDATEK_GNIAZDO + 10 + NADDATEK_GNIAZDO, 1);
     expect(r!.totalM).toBeGreaterThan(r!.worstCaseM);
+  });
+
+  it("naddatek pionowy zależy od WYSOKOŚCI MONTAŻU, nie jest jedną stałą", () => {
+    // Do punktu sufitowego (2,8 m) przewód nie schodzi wcale, do gniazda (0,3 m)
+    // schodzi przez całą kondygnację — wcześniej oba dostawały te same 2,8 m.
+    const gniazdo = estimateRoutes(panel, [el("gniazdko", { x: 10, y: 0 })], 0.1)!;
+    const sufit = estimateRoutes(panel, [el("oswietlenie", { x: 10, y: 0 })], 0.1)!;
+    expect(gniazdo.worstCaseM - sufit.worstCaseM).toBeCloseTo(2.5, 1); // 2,8 − 0,3
+  });
+
+  it("wysokość wpisana ręcznie na elemencie wygrywa z wartością typową", () => {
+    const domyslne = estimateRoutes(panel, [el("gniazdko", { x: 10, y: 0 })], 0.1)!;
+    // To samo gniazdo, ale nad blatem w kuchni (1,15 m) — zejście krótsze o 0,85 m.
+    const nadBlatem = estimateRoutes(panel, [el("gniazdko", { x: 10, y: 0, heightM: 1.15 })], 0.1)!;
+    expect(domyslne.worstCaseM - nadBlatem.worstCaseM).toBeCloseTo(0.85, 1);
   });
 
   it("bez kalibracji skali zwraca null zamiast zmyślonej długości", () => {
