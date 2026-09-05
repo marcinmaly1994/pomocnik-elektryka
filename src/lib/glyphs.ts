@@ -1,4 +1,6 @@
 import type { ElementType } from "@/types";
+import { SANITARY_FIXTURES } from "@/lib/elements";
+import { JEDNOSTKI_NA_METR } from "@/lib/symbolScale";
 
 /** Geometria siatki gniazd w ramce (1–6 gniazd: do 2 w kolumnie, więcej w rzędzie). Przeniesione 1:1 z `socketGridMetrics`. */
 export interface SocketGridMetrics {
@@ -150,9 +152,14 @@ export function glyphBoxSize(type: ElementType): { w: number; h: number } {
   if (type === "roleta") return { w: 24, h: 20 };
   if (type === "tasmaLed") return { w: 28, h: 14 };
   if (type === "rozdzielnica") return { w: 28, h: 26 };
-  if (type === "wanna") return { w: 52, h: 26 };
-  if (type === "prysznic") return { w: 30, h: 30 };
-  if (type === "umywalka") return { w: 26, h: 20 };
+  // Przybory sanitarne NIE mają rozmiaru umownego — rysujemy je w ich prawdziwych
+  // wymiarach (`SANITARY_FIXTURES`), bo obrys wanny i brodzika JEST strefą 1 wg
+  // PN-HD 60364-7-701 i walidator mierzy odległości dokładnie od niego. Dobrane
+  // wcześniej „na oko” pudełka rozjeżdżały się ze strefą nawet o jedną piątą
+  // (wanna 52 × 26 jedn. to 1,82 × 0,91 m zamiast 1,70 × 0,75 m), więc rysunek
+  // pokazywał inny obrys niż ten, który aplikacja sprawdza.
+  const przybor = SANITARY_FIXTURES[type];
+  if (przybor) return { w: przybor.widthM * JEDNOSTKI_NA_METR, h: przybor.depthM * JEDNOSTKI_NA_METR };
   if ((["oswietlenie", "kinkiet", "oswietlenieZewn", "puszka", "czujnikRuchu", "czujnikDymu", "wentylator"] as ElementType[]).includes(type)) {
     return { w: 26, h: 26 };
   }

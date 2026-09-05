@@ -359,7 +359,15 @@ export function contentBounds(
   walls: { points: Point[] }[],
   roomShapes: { points: Point[] }[],
   elements: Point[],
-  openings: Point[]
+  openings: Point[],
+  /**
+   * Margines w jednostkach planu. Podawany z zewnątrz, bo od czasu skalowania symboli
+   * ze skalą rzutu (`autoSymbolScale`) sam symbol zajmuje różną liczbę jednostek:
+   * przy rzucie skalibrowanym gęściej wanna wystaje poza swój punkt o kilkaset
+   * jednostek, a stała wartość obcięłaby ją w połowie. Domyślnie wartość bazowa,
+   * żeby wywołania bez skali zachowywały się jak dotąd.
+   */
+  margines: number = MARGINES_KADROWANIA
 ): Obszar | null {
   const punkty: Point[] = [
     ...walls.flatMap((w) => w.points),
@@ -369,9 +377,9 @@ export function contentBounds(
   ];
   if (punkty.length === 0) return null;
 
-  const minX = Math.max(0, Math.min(...punkty.map((p) => p.x)) - MARGINES_KADROWANIA);
-  const minY = Math.max(0, Math.min(...punkty.map((p) => p.y)) - MARGINES_KADROWANIA);
-  const maxX = Math.min(planSize.w, Math.max(...punkty.map((p) => p.x)) + MARGINES_KADROWANIA);
-  const maxY = Math.min(planSize.h, Math.max(...punkty.map((p) => p.y)) + MARGINES_KADROWANIA);
+  const minX = Math.max(0, Math.min(...punkty.map((p) => p.x)) - margines);
+  const minY = Math.max(0, Math.min(...punkty.map((p) => p.y)) - margines);
+  const maxX = Math.min(planSize.w, Math.max(...punkty.map((p) => p.x)) + margines);
+  const maxY = Math.min(planSize.h, Math.max(...punkty.map((p) => p.y)) + margines);
   return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
 }

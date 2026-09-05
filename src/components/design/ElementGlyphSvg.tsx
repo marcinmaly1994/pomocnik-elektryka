@@ -215,7 +215,10 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter }: GlyphProps) {
       const { w, h } = glyphBoxSize(type);
       return (
         <>
-          <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={7} fill="#fff" stroke={color} strokeWidth={2} />
+          {/* Zaokrąglenie ograniczone połową wysokości: umywalka to najmniejszy z przyborów
+              (0,60 × 0,45 m), a promień większy od połowy boku daje kształt nie do
+              przewidzenia — inny w SVG, inny w Konvie. */}
+          <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={Math.min(7, h / 2)} fill="#fff" stroke={color} strokeWidth={2} />
           <circle cx={0} cy={1.5} r={3} fill="none" stroke={color} strokeWidth={1.1} />
           <line x1={0} y1={-h / 2 + 2} x2={0} y2={-h / 2 + 5.5} stroke={color} strokeWidth={1.6} strokeLinecap="round" />
         </>

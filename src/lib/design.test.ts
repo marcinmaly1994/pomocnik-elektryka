@@ -351,4 +351,13 @@ describe("contentBounds", () => {
     expect(b.w).toBe(MARGINES_KADROWANIA * 2);
     expect(b.h).toBe(MARGINES_KADROWANIA * 2);
   });
+
+  /** Symbole rosną w jednostkach planu razem z gęstością kalibracji (patrz
+   *  `autoSymbolScale`), więc margines musi dać się powiększyć — inaczej wanna
+   *  na gęsto skalibrowanym rzucie wychodzi z kadru obcięta w połowie. */
+  it("margines da się podać z zewnątrz, żeby zmieścić powiększone symbole", () => {
+    const b = contentBounds(PLAN, [], [], [{ x: 500, y: 350 }], [], 300)!;
+    expect(b.w).toBe(600);
+    expect(b.x).toBe(200);
+  });
 });

@@ -231,7 +231,8 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter }: GlyphProps)
       const { w, h } = glyphBoxSize(type);
       return (
         <>
-          <Rect x={-w / 2} y={-h / 2} width={w} height={h} cornerRadius={7} fill="#fff" stroke={color} strokeWidth={2} />
+          {/* Zaokrąglenie ograniczone połową wysokości — patrz komentarz w wersji SVG. */}
+          <Rect x={-w / 2} y={-h / 2} width={w} height={h} cornerRadius={Math.min(7, h / 2)} fill="#fff" stroke={color} strokeWidth={2} />
           <Circle x={0} y={1.5} radius={3} stroke={color} strokeWidth={1.1} />
           <Line points={[0, -h / 2 + 2, 0, -h / 2 + 5.5]} stroke={color} strokeWidth={1.6} lineCap="round" />
         </>

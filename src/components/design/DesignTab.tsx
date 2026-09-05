@@ -44,6 +44,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   GRID,
   MANUAL_DRAW_SCALE_MPU,
+  MARGINES_KADROWANIA,
   ROOM_TYPE_LABELS,
   defaultOpeningWidth,
   detectRoomName,
@@ -54,6 +55,12 @@ import {
   roomNameAfterMove,
   scaleOf,
 } from "@/lib/design";
+import {
+  autoSymbolScale,
+  DEFAULT_ELEMENT_SCALE,
+  elementRenderScale,
+  sanitaryRenderScale,
+} from "@/lib/symbolScale";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
@@ -83,17 +90,6 @@ import { PdfPreview } from "@/components/ui/PdfPreview";
 
 const DEFAULT_ROOM_SUGGESTIONS = ["Salon", "Kuchnia", "Łazienka", "Sypialnia", "Korytarz"];
 
-
-/** Bazowa geometria glifów okazała się za duża w skali planu (symbole zlewały się przy
- *  gęściej rozstawionych punktach), więc RENDER zawsze mnożymy przez ten współczynnik —
- *  niezależnie od tego, co pokazuje suwak. Suwak ma pokazywać „1.0×" jako punkt
- *  odniesienia (czyli „bez zmian względem domyślnego"), a nie bazową, zbyt dużą geometrię. */
-const BASE_ELEMENT_SCALE = 0.7;
-
-/** Wartość suwaka, od której użytkownik startuje i do której wraca „reset". To mnożnik
- *  WZGLĘDEM BASE_ELEMENT_SCALE, nie bezpośredni rozmiar renderu — patrz przeliczenie
- *  `elementScale * BASE_ELEMENT_SCALE` przekazywane do DesignCanvas. */
-const DEFAULT_ELEMENT_SCALE = 1;
 
 /**
  * Szerokość pasa przy krawędzi okna, który w pełnym ekranie wysuwa schowany pasek —
@@ -300,7 +296,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
      * siatka. Wydruk był nieczytelny nie dlatego, że rysunek jest zły, tylko dlatego,
      * że pokazywaliśmy głównie tło.
      */
-    const kadr = contentBounds(planSize, walls, roomShapes, elements, openings) ?? {
+    const kadr = contentBounds(planSize, walls, roomShapes, elements, openings, MARGINES_KADROWANIA * autoSymbolScale(mpu)) ?? {
       x: 0,
       y: 0,
       w: planSize.w,
@@ -2352,7 +2348,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             cableRoutes={cableRoutes}
             routeOverrides={routeOverrides}
             lightGroups={lightGroups}
-            elementScale={elementScale * BASE_ELEMENT_SCALE}
+            elementScale={elementRenderScale(mpu, elementScale)}
+            sanitaryScale={sanitaryRenderScale(mpu)}
             planSize={planSize}
             metersPerUnit={mpu}
             onOutsidePlan={flashOutsideHint}
