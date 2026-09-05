@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeSanitaryZones } from "./elements";
+import { computeSanitaryZones, mountingHeightM } from "./elements";
 import type { InstallationElement } from "@/types";
 
 const wanna: InstallationElement = {
@@ -47,5 +47,31 @@ describe("computeSanitaryZones", () => {
   it("pomija elementy z innych kondygnacji", () => {
     const zones = computeSanitaryZones([{ ...wanna, floor: "f2" }], "f1", null);
     expect(zones).toHaveLength(0);
+  });
+});
+
+describe("mountingHeightM", () => {
+  const e = (type: Parameters<typeof mountingHeightM>[0]["type"], heightM?: number) => ({ type, heightM });
+
+  it("bierze wartość typową dla typu", () => {
+    expect(mountingHeightM(e("gniazdko"))).toBe(0.3);
+    expect(mountingHeightM(e("wlacznik"))).toBe(1.1);
+    expect(mountingHeightM(e("oswietlenie"))).toBe(2.8);
+  });
+
+  it("wartość wpisana ręcznie wygrywa", () => {
+    expect(mountingHeightM(e("gniazdko", 1.15))).toBe(1.15);
+  });
+
+  it("zero jest poprawną wysokością (gniazdo podłogowe), nie brakiem wartości", () => {
+    expect(mountingHeightM(e("gniazdko", 0))).toBe(0);
+  });
+
+  it("wartość ujemna jest ignorowana — wraca typowa", () => {
+    expect(mountingHeightM(e("gniazdko", -1))).toBe(0.3);
+  });
+
+  it("typ bez wpisu (przybór sanitarny) dostaje wartość zapasową", () => {
+    expect(mountingHeightM(e("wanna"))).toBe(0.3);
   });
 });

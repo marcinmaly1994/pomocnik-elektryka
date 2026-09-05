@@ -61,6 +61,11 @@ export interface InstallationElement {
   /** Litera wpisana w łuk symbolu wypustu AGD (np. „L" dla lodówki, „Z" dla zmywarki) —
    *  wyłącznie dla `type: "wypustAGD"`. Nazwa samego odbiornika idzie do `note`. */
   agdLetter?: string;
+  /** Wysokość montażu nad podłogą [m] — nadpisanie wartości typowej dla typu
+   *  (patrz `MOUNTING_HEIGHTS_M` w lib/elements.ts). `undefined` = wartość typowa.
+   *  Wchodzi w długość przewodu: pion od rozdzielnicy pod strop i zejście do
+   *  osprzętu zależy od tego, na jakiej wysokości ten osprzęt wisi. */
+  heightM?: number;
 }
 
 export interface Wall {

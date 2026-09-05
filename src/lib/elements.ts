@@ -235,3 +235,62 @@ export function computeSanitaryZones(elements: InstallationElement[], floorId: s
       };
     });
 }
+
+/**
+ * Typowe wysokości montażu nad podłogą [m], per typ elementu.
+ *
+ * To WARTOŚCI DOMYŚLNE, nie wymagania normy: praktyka montażowa jest tu szeroka
+ * (gniazdo w salonie 0,3 m, nad blatem w kuchni 1,15 m — ten sam typ elementu),
+ * więc każdy element da się nadpisać własną wartością w oknie edycji
+ * (`InstallationElement.heightM`). Aplikacja podaje punkt wyjścia, nie werdykt.
+ *
+ * Po co w ogóle: przewód nie biegnie po podłodze w linii prostej — idzie pod strop
+ * i schodzi do puszki. Zejście jest tym dłuższe, im NIŻEJ wisi osprzęt, więc bez tej
+ * liczby gniazdo na 0,3 m i łącznik na 1,1 m dostawały identyczny naddatek pionowy
+ * (patrz `estimateRoutes` w panel/loads.ts).
+ */
+export const MOUNTING_HEIGHTS_M: Partial<Record<ElementType, number>> = {
+  gniazdko: 0.3,
+  gniazdkoHerm: 1.4,
+  gniazdko400: 1.4,
+  wypustAGD: 0.3,
+  ladowarkaEV: 1.2,
+
+  wlacznik: 1.1,
+  wlacznikDwubiegunowy: 1.1,
+  wlacznikGrupowy: 1.1,
+  wlacznikSchodowy: 1.1,
+  wlacznikKrzyzowy: 1.1,
+  sciemniacz: 1.1,
+  czujnikRuchu: 2.2,
+
+  oswietlenie: 2.8,
+  kinkiet: 2.0,
+  oswietlenieZewn: 2.2,
+  tasmaLed: 2.2,
+
+  roleta: 1.1,
+  napedBramy: 2.2,
+  wentylator: 2.3,
+  termostat: 1.4,
+
+  rj45: 0.3,
+  rtvsat: 0.3,
+  domofon: 1.4,
+  dzwonek: 1.4,
+  czujnikDymu: 2.8,
+  czujnikCzadu: 1.5,
+
+  rozdzielnica: 1.5,
+  puszka: 0.3,
+};
+
+/** Domyślna wysokość dla typu bez wpisu w `MOUNTING_HEIGHTS_M` — przybory sanitarne
+ *  nie są osprzętem elektrycznym i nie mają czego montować na wysokości. */
+const DEFAULT_MOUNTING_HEIGHT_M = 0.3;
+
+/** Wysokość montażu elementu [m]: nadpisana przez użytkownika albo typowa dla typu. */
+export function mountingHeightM(e: Pick<InstallationElement, "type" | "heightM">): number {
+  if (typeof e.heightM === "number" && e.heightM >= 0) return e.heightM;
+  return MOUNTING_HEIGHTS_M[e.type] ?? DEFAULT_MOUNTING_HEIGHT_M;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ElementType, InstallationElement } from "@/types";
-import { ELEMENT_SECTIONS, ELEMENT_TYPES, VARIANTS_FOR } from "@/lib/elements";
+import { ELEMENT_SECTIONS, ELEMENT_TYPES, MOUNTING_HEIGHTS_M, VARIANTS_FOR } from "@/lib/elements";
 import { circuitCount, isLightControl, isLightPoint, manualGroups } from "@/lib/lightGroups";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ export interface EditElementPatch {
   lightGroup?: (number | null)[];
   /** Litera w symbolu wypustu AGD — patrz `agdLetter` w `InstallationElement`. */
   agdLetter?: string;
+  /** Wysokość montażu [m]; `undefined` = wartość typowa dla typu. */
+  heightM?: number;
 }
 
 interface EditElementModalProps {
@@ -45,6 +47,8 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
   // jest opisem w legendzie/nazwie obwodu.
   const [agdLetter, setAgdLetter] = useState(element.agdLetter || "A");
   const [agdName, setAgdName] = useState(element.type === "wypustAGD" ? element.note || "" : "");
+  // Puste = wartość typowa dla typu; patrz komentarz przy polu w formularzu.
+  const [height, setHeight] = useState(typeof element.heightM === "number" ? String(element.heightM) : "");
   // Puste pole = „automatycznie". Trzymane jako tekst, żeby dało się je wyczyścić —
   // liczba nie ma stanu „brak", a to właśnie on przywraca automatyczne przypisanie.
   const [groupInputs, setGroupInputs] = useState<string[]>(() =>
@@ -71,6 +75,10 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
   }, [circuits]);
 
   function handleSave() {
+    // Nieliczba albo wartość spoza sensownego zakresu wraca do „typowej", zamiast
+    // wpisywać do projektu wysokość, której nie da się zmontować.
+    const h = parseFloat(height.replace(",", "."));
+    const parsedHeight = Number.isFinite(h) && h >= 0 && h <= 5 ? h : undefined;
     const parsed = Array.from({ length: circuits }, (_, i) => {
       const n = parseInt(groupInputs[i] ?? "", 10);
       return Number.isFinite(n) && n > 0 ? n : null;
@@ -83,6 +91,7 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
       note: type === "wypustAGD" ? agdName.trim() : type === "gniazdko" && dedicated ? "AGD" : "",
       agdLetter: type === "wypustAGD" ? agdLetter.trim().slice(0, 2).toUpperCase() || "A" : undefined,
       lightGroup: groupApplies && parsed.some((n) => n != null) ? parsed : undefined,
+      heightM: parsedHeight,
     });
   }
 
@@ -222,6 +231,32 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
               </p>
             </div>
           )}
+
+          {/* Wysokość montażu — puste pole znaczy „wartość typowa dla tego typu"
+              (patrz `MOUNTING_HEIGHTS_M`), tak jak puste pole grupy znaczy „auto".
+              Trzymane jako TEKST z tego samego powodu: liczba nie ma stanu „brak",
+              a to on przywraca wartość domyślną po ręcznej zmianie. */}
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Wysokość montażu [m]</div>
+            <input
+              type="number"
+              min={0}
+              max={5}
+              step={0.05}
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+              }}
+              placeholder={`typowa: ${MOUNTING_HEIGHTS_M[type] ?? 0.3}`}
+              aria-label="Wysokość montażu w metrach"
+              className="pe-input w-full text-sm"
+            />
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              Wchodzi w długość przewodu (zejście od stropu do puszki) i w kosztorys. Puste pole
+              oznacza wartość typową dla tego typu osprzętu.
+            </p>
+          </label>
 
           <label className="block">
             <div className="mb-1 text-xs text-slate-500">Pomieszczenie</div>
