@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
   AlertTriangle,
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndVertical,
+  AlignHorizontalSpaceAround,
+  AlignLeft,
+  AlignRight,
+  AlignStartVertical,
+  AlignVerticalSpaceAround,
   Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Layers,
   Loader2,
   Pencil,
@@ -25,6 +34,7 @@ import {
 import type { ElementType, OpeningKind, Point, RoomType } from "@/types";
 import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
+import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
@@ -93,6 +103,20 @@ const DEFAULT_ELEMENT_SCALE = 1;
  * kilka pikseli i cieńszy pas dawał się „przestrzelić" bez efektu.
  */
 const PAS_WYZWALAJACY = 24;
+
+const WYROWNANIA: { mode: AlignMode; label: string; Icon: typeof AlignLeft }[] = [
+  { mode: "lewo", label: "Wyrównaj do lewej", Icon: AlignLeft },
+  { mode: "srodekX", label: "Wyśrodkuj w pionie", Icon: AlignCenterHorizontal },
+  { mode: "prawo", label: "Wyrównaj do prawej", Icon: AlignRight },
+  { mode: "gora", label: "Wyrównaj do góry", Icon: AlignStartVertical },
+  { mode: "srodekY", label: "Wyśrodkuj w poziomie", Icon: AlignCenterVertical },
+  { mode: "dol", label: "Wyrównaj do dołu", Icon: AlignEndVertical },
+];
+
+const ROZLOZENIA: { axis: DistributeAxis; label: string; Icon: typeof AlignLeft }[] = [
+  { axis: "x", label: "Rozłóż równomiernie w poziomie", Icon: AlignHorizontalSpaceAround },
+  { axis: "y", label: "Rozłóż równomiernie w pionie", Icon: AlignVerticalSpaceAround },
+];
 
 const OPENING_KINDS: { id: OpeningKind; label: string }[] = [
   { id: "drzwi", label: "Drzwi" },
@@ -881,6 +905,35 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           selectTool(tool);
         }
       }
+      /**
+       * Strzałki przesuwają zaznaczenie o JEDNĄ jednostkę planu, a z Shiftem o całe
+       * oczko siatki (`GRID`). Bez tego jedynym sposobem na poprawienie gniazdka
+       * o centymetr było przeciąganie myszą, czyli operacja z dokładnością do piksela
+       * ekranu — przy oddalonym widoku jeden piksel to kilka centymetrów planu.
+       *
+       * `preventDefault` obowiązkowo: strzałki bez tego przewijają stronę, a płótno
+       * odjeżdża spod kursora w trakcie poprawiania.
+       */
+      const STRZALKI: Record<string, Point> = {
+        ArrowLeft: { x: -1, y: 0 },
+        ArrowRight: { x: 1, y: 0 },
+        ArrowUp: { x: 0, y: -1 },
+        ArrowDown: { x: 0, y: 1 },
+      };
+      const kierunek = STRZALKI[e.key];
+      if (kierunek && tag !== "INPUT" && tag !== "TEXTAREA" && zaznaczoneElementy.length > 0) {
+        e.preventDefault();
+        const krok = e.shiftKey ? GRID : 1;
+        przesunElementy(offsetMoves(elements, zaznaczoneElementy, kierunek.x * krok, kierunek.y * krok));
+      }
+
+      // Ctrl/Cmd+D — duplikuj zaznaczenie. Odsunięte o pół oczka siatki, żeby kopia
+      // nie schowała się dokładnie pod oryginałem i dało się ją od razu przeciągnąć.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d" && tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        if (zaznaczoneElementy.length > 0) duplikujZaznaczenie();
+      }
+
       if ((e.key === "r" || e.key === "R") && tag !== "INPUT" && tag !== "TEXTAREA") {
         const ids = multiSelected.length > 0 ? multiSelected : selected?.kind === "el" ? [selected.id] : [];
         if (ids.length) {
@@ -975,6 +1028,64 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         },
       ],
     }));
+  }
+
+  /**
+   * Zastosowanie listy ruchów `{id, x, y}` — JEDNA droga dla wszystkiego, co przesuwa
+   * elementy: przeciągnięcia grupy myszą, strzałek, duplikowania i wyrównywania.
+   *
+   * Wspólna, bo każde z nich musi przeliczyć przypisanie do pomieszczenia
+   * (`roomNameAfterMove`). Wyrównanie rzędu gniazdek potrafi przesunąć skrajne o pół
+   * metra — czyli akurat tyle, żeby wyjechały z pokoju — a osobne ścieżki zapisu
+   * prędzej czy później rozjechałyby się w tym, która o tym pamięta.
+   *
+   * Pusta lista nie dotyka store'a: „Wyrównaj" na już równym rzędzie nie ma czego
+   * zapisać i nie powinno zostawiać po sobie pustego kroku w historii cofania.
+   */
+  const przesunElementy = useCallback(
+    (moves: Move[]) => {
+      if (moves.length === 0) return;
+      setDraft((d) => ({
+        ...d,
+        elements: d.elements.map((e) => {
+          const m = moves.find((mv) => mv.id === e.id);
+          return m ? { ...e, x: m.x, y: m.y, room: roomNameAfterMove(m, e.room, roomShapes, mpu) } : e;
+        }),
+      }));
+    },
+    [setDraft, roomShapes, mpu]
+  );
+
+  /** Id, których dotyczy operacja na zaznaczeniu — wielokrotne ma pierwszeństwo,
+   *  a pojedyncze liczy się tylko dla elementów (ściany i trasy się nie wyrównują). */
+  const zaznaczoneElementy = useMemo(
+    () => (multiSelected.length > 0 ? multiSelected : selected?.kind === "el" ? [selected.id] : []),
+    [multiSelected, selected]
+  );
+
+  /**
+   * Duplikuje zaznaczone elementy, odsunięte o pół oczka siatki.
+   *
+   * Kopie dostają nowe `id` i przeliczone pomieszczenie (mogły wylądować w innym),
+   * a zaznaczenie przechodzi na NIE — tak działa duplikowanie w każdym edytorze
+   * i dzięki temu można od razu ciągnąć nową grupę w docelowe miejsce albo
+   * powtórzyć skrót, żeby zrobić rząd.
+   */
+  function duplikujZaznaczenie() {
+    const ids = zaznaczoneElementy;
+    if (ids.length === 0) return;
+    const odsuniecie = GRID / 2;
+    const kopie = elements
+      .filter((e) => ids.includes(e.id))
+      .map((e) => {
+        const x = e.x + odsuniecie;
+        const y = e.y + odsuniecie;
+        return { ...e, id: crypto.randomUUID(), x, y, room: roomNameAfterMove({ x, y }, e.room, roomShapes, mpu) };
+      });
+    if (kopie.length === 0) return;
+    setDraft((d) => ({ ...d, elements: [...d.elements, ...kopie] }));
+    setSelected(null);
+    setMultiSelected(kopie.map((k) => k.id));
   }
 
   /** Obraca element(y) o 90° (w prawo) — np. gniazdko/łącznik przy skośnej ścianie. */
@@ -1289,9 +1400,62 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const kontekstoweTresc = (
     <>
       {multiSelected.length > 0 && (
-        <button onClick={deleteSelection} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600">
-          <Trash2 size={13} /> Usuń zaznaczone ({multiSelected.length})
-        </button>
+        <div className="flex min-w-0 flex-col items-start gap-1.5">
+          <span className="text-xs font-medium text-slate-600">Zaznaczono: {multiSelected.length}</span>
+
+          {/* Wyrównywanie i rozkładanie — do tej pory JEDYNĄ operacją na zaznaczeniu
+              wielokrotnym było „Usuń", więc równanie rzędu gniazdek wzdłuż ściany
+              robiło się przeciąganiem każdego z osobna, na oko. Ikony zamiast podpisów,
+              bo sześć przycisków z nazwami nie mieści się w kolumnie 268 px; nazwa
+              siedzi w `title` i `aria-label`, więc czytniki i testy ją widzą. */}
+          {/* Dwa JAWNE rzędy, nie jeden zawijany: osiem przycisków po 28 px z odstępami
+              przekracza szerokość kolumny o kilka pikseli, więc zawijanie łamało je
+              w przypadkowym miejscu (7 + 1) i rozdzielało grupy wbrew ich znaczeniu.
+              Wyrównanie i rozkładanie to dwie różne operacje — niech i wyglądają na dwie. */}
+          <div className="flex items-center gap-1">
+            {WYROWNANIA.map(({ mode, label, Icon }) => (
+              <button
+                key={mode}
+                onClick={() => przesunElementy(alignMoves(elements, multiSelected, mode))}
+                title={label}
+                aria-label={label}
+                className="pe-btn-ghost flex h-7 w-7 items-center justify-center"
+              >
+                <Icon size={14} />
+              </button>
+            ))}
+          </div>
+
+          {/* Rozkładanie ma sens dopiero od trzech — przy dwóch nie ma czego rozkładać
+              (patrz `distributeMoves`), więc przyciski się nie pokazują, zamiast
+              milczeć po kliknięciu. */}
+          {multiSelected.length >= 3 && (
+            <div className="flex items-center gap-1">
+              {ROZLOZENIA.map(({ axis, label, Icon }) => (
+                <button
+                  key={axis}
+                  onClick={() => przesunElementy(distributeMoves(elements, multiSelected, axis))}
+                  title={label}
+                  aria-label={label}
+                  className="pe-btn-ghost flex h-7 w-7 items-center justify-center"
+                >
+                  <Icon size={14} />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-1">
+            <button onClick={duplikujZaznaczenie} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs">
+              <Copy size={13} /> Duplikuj
+            </button>
+            <button onClick={deleteSelection} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs text-red-600">
+              <Trash2 size={13} /> Usuń zaznaczone ({multiSelected.length})
+            </button>
+          </div>
+
+          <span className="text-[11px] text-slate-400">Strzałki przesuwają o 1 jedn., z Shiftem o kratkę.</span>
+        </div>
       )}
 
       {/* Grubość i ortogonalność ustawia się PRZED pierwszym kliknięciem, nie tylko
@@ -2147,15 +2311,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                 ),
               }))
             }
-            onMoveElements={(moves) =>
-              setDraft((d) => ({
-                ...d,
-                elements: d.elements.map((e) => {
-                  const m = moves.find((mv) => mv.id === e.id);
-                  return m ? { ...e, x: m.x, y: m.y, room: roomNameAfterMove(m, e.room, roomShapes, mpu) } : e;
-                }),
-              }))
-            }
+            onMoveElements={przesunElementy}
             onAddWallPoint={(p) => setDrawingWall((pts) => [...pts, p])}
             onCloseWall={closeWall}
             onAddRoomPoint={(p) => setDrawingRoomPoints((pts) => [...pts, p])}
