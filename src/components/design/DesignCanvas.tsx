@@ -3,12 +3,12 @@ import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
-import { ELEMENT_TYPES, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
+import { ELEMENT_TYPES, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
-import { groupLabelAnchors } from "@/lib/glyphs";
+import { glyphBoxSize, groupLabelAnchors } from "@/lib/glyphs";
 
 export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "pan" | "skala";
 export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route"; id: string } | null;
@@ -118,6 +118,10 @@ interface DesignCanvasProps {
   /** Tryb wymiarowania: dlugosci WSZYSTKICH scian i wymiary prostokatnych pomieszczen.
    *  Ustawienie widoku, wlaczane w pasku edytora — patrz komentarze przy obu miejscach. */
   pokazWymiary: boolean;
+  /** Wysokości montażu przy symbolach osprzętu („+30", „+110" — patrz `mountingLabel`).
+   *  Osobny przełącznik od wymiarów ścian: tamte opisują BUDYNEK, te INSTALACJĘ, i na
+   *  gotowym rzucie chce się je zwykle widzieć osobno. */
+  pokazWysokosci: boolean;
   /** Wizualne trasy przewodów (rozdzielnica → punkt), patrz `buildCableRoutes` —
    *  pusta tablica, gdy na kondygnacji nie ma rozdzielnicy albo widoczność wyłączona. */
   cableRoutes: CableRoute[];
@@ -298,6 +302,7 @@ export function DesignCanvas({
   zones,
   podklad,
   pokazWymiary,
+  pokazWysokosci,
   cableRoutes,
   routeOverrides,
   lightGroups,
@@ -2026,6 +2031,35 @@ export function DesignCanvas({
               >
                 {isSel && <SelectionOutlineKonva type={el.type} />}
                 <ElementGlyphKonva type={el.type} color={def.color} gangs={el.gangs} agdLetter={el.agdLetter} />
+                {/* Wysokość montażu POD symbolem — numery grup sterowania stoją z prawej
+                    (`groupLabelAnchors`), więc te dwie adnotacje się nie zderzają.
+                    Bez obwódki i w szarości, żeby czytać rysunek, a nie opisy. Obrócona
+                    przeciwnie do elementu, tak jak numery grup: po obróceniu symbolu
+                    klawiszem „R" liczba ma dalej stać prosto. */}
+                {pokazWysokosci &&
+                  (() => {
+                    const opis = mountingLabel(el);
+                    if (!opis) return null;
+                    const { h } = glyphBoxSize(el.type);
+                    return (
+                      <Text
+                        x={0}
+                        y={h / 2 + 9}
+                        rotation={-(el.rotation ?? 0)}
+                        text={opis}
+                        fontSize={8.5}
+                        fontStyle="700"
+                        fill="#64748B"
+                        width={40}
+                        height={12}
+                        offsetX={20}
+                        offsetY={6}
+                        align="center"
+                        verticalAlign="middle"
+                        listening={false}
+                      />
+                    );
+                  })()}
                 {/* Numery grup sterowania oświetleniem — ten sam numer przy łączniku i
                     przy punktach, którymi steruje. Stoją OBOK symbolu, poza jego obrysem
                     (patrz `groupLabelAnchors`), i bez obwódki, żeby nie zasłaniać rysunku.

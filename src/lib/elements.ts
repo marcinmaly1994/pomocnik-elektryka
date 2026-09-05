@@ -295,6 +295,35 @@ export function mountingHeightM(e: Pick<InstallationElement, "type" | "heightM">
   return MOUNTING_HEIGHTS_M[e.type] ?? DEFAULT_MOUNTING_HEIGHT_M;
 }
 
+/**
+ * Typy montowane pod stropem. Na rysunku instalacyjnym nie wymiaruje się ich wysokości,
+ * bo to po prostu sufit — a „+280" przy każdym punkcie świetlnym w mieszkaniu to
+ * kilkanaście liczb, które nic nie wnoszą i zaśmiecają rzut. Etykieta pojawia się przy
+ * nich tylko wtedy, gdy użytkownik świadomie wpisał WŁASNĄ wartość (np. sufit
+ * podwieszany albo skos) — wtedy jest to informacja, a nie powtórzenie oczywistości.
+ */
+const POD_STROPEM: readonly ElementType[] = ["oswietlenie", "czujnikDymu"];
+
+/**
+ * Etykieta wysokości montażu przy symbolu na rzucie — w CENTYMETRACH nad podłogą,
+ * konwencją rysunku instalacyjnego („+30", „+110"). `null`, gdy nie ma czego pisać.
+ *
+ * Po co na rzucie, skoro wysokość jest w oknie edycji i w zestawieniu: elektryk na
+ * budowie czyta rzut, nie tabelkę. Bez tej liczby rysunek mówi GDZIE, ale nie NA JAKIEJ
+ * WYSOKOŚCI — a to jedyna informacja, której brak zmusza do dzwonienia do projektanta
+ * albo do zgadywania (i kucia drugi raz).
+ *
+ * Centymetry, nie metry: „+30" jest krótsze od „+0,30 m” i tak właśnie opisuje się
+ * wysokości na rysunkach instalacyjnych. Przybory sanitarne nie dostają nic — nie są
+ * osprzętem i ich `mountingHeightM` to tylko fallback (patrz `DEFAULT_MOUNTING_HEIGHT_M`).
+ */
+export function mountingLabel(e: Pick<InstallationElement, "type" | "heightM">): string | null {
+  if (MOUNTING_HEIGHTS_M[e.type] === undefined) return null;
+  const wlasnaWartosc = typeof e.heightM === "number" && e.heightM >= 0;
+  if (POD_STROPEM.includes(e.type) && !wlasnaWartosc) return null;
+  return `+${Math.round(mountingHeightM(e) * 100)}`;
+}
+
 /** Typy, dla których `gangs` oznacza LICZBĘ MECHANIZMÓW w ramce, a nie wariant symbolu. */
 const TYPY_WIELOKROTNE: ElementType[] = ["gniazdko", "gniazdkoHerm", "wlacznik", "wlacznikSchodowy"];
 

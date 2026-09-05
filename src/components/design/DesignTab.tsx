@@ -410,6 +410,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   /** Tryb wymiarowania — domyslnie WYLACZONY: przy rysowaniu wymiary przeszkadzaja,
    *  a potrzebne sa przy sprawdzaniu i przed wydrukiem. */
   const [showDimensions, setShowDimensions] = useState(false);
+  /** Wysokosci montazu przy osprzecie — domyslnie WYLACZONE z tego samego powodu co
+   *  wymiary. Osobno od nich, bo wymiary opisuja BUDYNEK, a te INSTALACJE. */
+  const [showHeights, setShowHeights] = useState(false);
   /** Podglad kondygnacji ponizej — domyslnie WYLACZONY: na parterze nie ma czego
    *  pokazac, a przy jednej kondygnacji przelacznik byloby samym szumem. */
   const [showUnderlay, setShowUnderlay] = useState(false);
@@ -2107,6 +2110,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         onToggleRoutes={() => setShowRoutes((r) => !r)}
         showDimensions={showDimensions}
         onToggleDimensions={() => setShowDimensions((d) => !d)}
+        showHeights={showHeights}
+        onToggleHeights={() => setShowHeights((h) => !h)}
         showUnderlay={showUnderlay}
         onToggleUnderlay={idPonizej ? () => setShowUnderlay((u) => !u) : null}
         canUndo={canUndo}
@@ -2350,6 +2355,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             zones={zones}
             podklad={podklad}
             pokazWymiary={showDimensions}
+            pokazWysokosci={showHeights}
             cableRoutes={cableRoutes}
             routeOverrides={routeOverrides}
             lightGroups={lightGroups}

@@ -96,3 +96,54 @@ test("wyczyszczenie pola wraca do wartości typowej, nie zapisuje zera", async (
   // `null` w zapisie = brak nadpisania, czyli powrót do 0,3 m dla gniazdka.
   expect(await wysokoscWProjekcie(page)).toBeNull();
 });
+
+/** Wybor z biblioteki przez szukajke — sekcje poza pierwsza sa zwiniete, wiec sam
+ *  `getByRole` ich nie widzi. */
+async function postawZBiblioteki(page: Page, szukaj: string, nazwa: RegExp, x: number, y: number) {
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByPlaceholder(/Szukaj elementu/).fill(szukaj);
+  await page.getByRole("button", { name: nazwa }).click();
+  const box = await planBox(page);
+  await page.mouse.click(box.x + x, box.y + y);
+}
+
+/** Etykiety „+30" / „+110" narysowane na plotnie — czytane wprost z Konvy, bo to
+ *  ksztalty na canvasie, a nie wezly DOM. */
+async function etykietyNaPlanie(page: Page) {
+  return page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { find(s: string): { text(): string }[] }[] } }).Konva;
+    return k.stages[0]
+      .find("Text")
+      .map((t) => t.text())
+      .filter((t) => /^\+\d+$/.test(t));
+  });
+}
+
+test("wysokosci montazu pojawiaja sie na rzucie dopiero po wlaczeniu i pomijaja punkt sufitowy", async ({ page }) => {
+  await pustyProjekt(page);
+  await postawGniazdko(page, 150, 150);
+  await postawZBiblioteki(page, "sufit", /Punkt sufitowy/, 300, 150);
+
+  // Domyslnie wylaczone — na rysowanym wlasnie rzucie liczby przeszkadzaja.
+  expect(await etykietyNaPlanie(page)).toEqual([]);
+
+  await page.getByRole("button", { name: "Pokaż wysokości montażu" }).click();
+  // Gniazdko dostaje „+30". Punkt sufitowy NIE dostaje nic: jego wysokosc to po prostu
+  // sufit, a „+280" przy kazdej oprawie to kilkanascie liczb bez tresci.
+  expect(await etykietyNaPlanie(page)).toEqual(["+30"]);
+});
+
+test("wlasna wysokosc odzywa sie takze tam, gdzie typowa milczy", async ({ page }) => {
+  await pustyProjekt(page);
+  await postawZBiblioteki(page, "sufit", /Punkt sufitowy/, 200, 150);
+  await page.getByRole("button", { name: "Pokaż wysokości montażu" }).click();
+  expect(await etykietyNaPlanie(page)).toEqual([]);
+
+  // Sufit podwieszany albo skos to juz informacja, nie powtorzenie oczywistosci —
+  // wpisana wartosc ma wiec przebic regule „pod stropem nie wymiarujemy".
+  await otworzEdycje(page, "oswietlenie");
+  await page.getByLabel(/Wysokość montażu/).fill("2.45");
+  await page.getByRole("button", { name: "Zapisz" }).click();
+
+  expect(await etykietyNaPlanie(page)).toEqual(["+245"]);
+});
