@@ -25,6 +25,7 @@ import {
 import type { ElementType, Point, RoomType } from "@/types";
 import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
+import { checkPlan } from "@/lib/planCheck";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
@@ -55,6 +56,7 @@ import { EditorStatusBar } from "./EditorStatusBar";
 import { ToolRail } from "./ToolRail";
 import { ElementLibrary } from "./ElementLibrary";
 import { RoomPanel } from "./RoomPanel";
+import { PlanCheckPanel } from "./PlanCheckPanel";
 import { EditElementModal } from "./EditElementModal";
 import type Konva from "konva";
 import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
@@ -744,7 +746,22 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const [roomNameEdit, setRoomNameEdit] = useState<{ x: number; y: number; id: string; value: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Zmiana narzędzia PRZYNOSZĄCA ze sobą gotowe zaznaczenie — skok ze spostrzeżenia
+   * „Pokaż na planie" (patrz `pokazElementyNaPlanie`).
+   *
+   * Efekt niżej reaguje na KAŻDĄ zmianę `toolMode`, a React uruchamia efekty dopiero
+   * po zatwierdzeniu wszystkich `setState` z jednej obsługi zdarzenia — więc bez tej
+   * flagi czyszczenie wykonywało się PO ustawieniu zaznaczenia i kasowało je w tym
+   * samym kliknięciu. Efekt: przycisk przełączał narzędzie i nie zaznaczał niczego.
+   */
+  const zaznaczenieZeSkokuRef = useRef(false);
+
   useEffect(() => {
+    if (zaznaczenieZeSkokuRef.current) {
+      zaznaczenieZeSkokuRef.current = false;
+      return;
+    }
     setMultiSelected([]);
     setCalibPoints([]);
   }, [toolMode]);
@@ -1150,6 +1167,29 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // Grupy sterowania oświetleniem liczone z elementów bieżącej kondygnacji — numer
   // pokazywany jest zarówno przy łączniku, jak i przy sterowanych przez niego punktach.
   const lightGroups = useMemo(() => computeLightGroups(elements), [elements]);
+  /** Sprawdzenie rzutu — liczone z TEJ kondygnacji, patrz komentarz przy `checkPlan`. */
+  const planIssues = useMemo(
+    () => checkPlan({ elements, roomShapes, metersPerUnit: mpu }),
+    [elements, roomShapes, mpu]
+  );
+
+  /**
+   * „Pokaż na planie" z listy spostrzeżeń. Zaznacza wskazane elementy i przełącza na
+   * narzędzie zaznaczania — bez tego zaznaczenie byłoby samą obwódką, której nie da
+   * się ruszyć ani skasować, a klik na płótnie w trybie „Wstaw element" postawiłby
+   * kolejne gniazdko zamiast poprawić to zgłoszone.
+   */
+  const pokazElementyNaPlanie = useCallback(
+    (ids: string[]) => {
+      // Flagę stawiamy TYLKO przy faktycznej zmianie narzędzia — inaczej zostałaby
+      // podniesiona na zapas i zjadła czyszczenie przy następnym, zwykłym przełączeniu.
+      if (toolMode !== "zaznacz") zaznaczenieZeSkokuRef.current = true;
+      setToolMode("zaznacz");
+      setSelected(null);
+      setMultiSelected(ids);
+    },
+    [toolMode]
+  );
   // Trasy przewodów — WYŁĄCZNIE z elementów/ścian/pomieszczeń TEJ kondygnacji
   // (wszystkie trzy już przefiltrowane przez `useActiveFloor*`), więc rozdzielnica,
   // punkty i sieć, po której routuje `buildCableRoutes`, zawsze mieszkają w tym samym
@@ -2106,6 +2146,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             )}
           </div>
           </div>
+
+          {/* Sprawdzenie rzutu — poza trybem pełnoekranowym. Tam plan ma dostać CAŁE
+              okno, a paski zwijają się do krawędzi; karta z akapitami o normie jest
+              dokładnie tym, czego ten tryb się pozbywa. Wraca po wyjściu. */}
+          {!pelnyEkran && <PlanCheckPanel issues={planIssues} onShowElements={pokazElementyNaPlanie} />}
         </div>
       </div>
 
