@@ -24,6 +24,10 @@ export interface EditorToolbarProps {
   onClearBg: () => void;
   snapOn: boolean;
   onSnapChange: (v: boolean) => void;
+  /** Przyciąganie OSPRZĘTU do ścian, z obrotem symbolu — osobno od siatki, bo
+   *  porządkuje co innego (patrz komentarz przy obu kontrolkach). */
+  wallSnapOn: boolean;
+  onWallSnapChange: (v: boolean) => void;
   elementScale: number;
   onElementScaleChange: (v: number) => void;
   defaultElementScale: number;
@@ -87,6 +91,8 @@ export function EditorToolbar({
   onClearBg,
   snapOn,
   onSnapChange,
+  wallSnapOn,
+  onWallSnapChange,
   gridOn,
   opisKrokuSiatki,
   onGridChange,
@@ -190,6 +196,24 @@ export function EditorToolbar({
             dom wychodził w przypadkowej skali. Chowane na wąskim pasku, gdzie miejsca
             starcza ledwie na same nazwy kontrolek. */}
         {opisKrokuSiatki && <span className="hidden whitespace-nowrap text-slate-400 lg:inline">· {opisKrokuSiatki}</span>}
+      </label>
+
+      {/* Drugie przyciąganie, obok siatkowego, bo to ta sama kategoria ustawienia —
+          ale DOTYCZY CZEGO INNEGO: siatka porządkuje ściany i obrysy, to porządkuje
+          osprzęt. Zakres wypisany w tooltipie, bo bez tego „przyciągaj do ścian"
+          sugerowałoby, że dotyczy też punktów sufitowych. */}
+      <label
+        className="flex items-center gap-1.5 text-xs text-slate-500"
+        title="Przykleja stawiany i przeciągany osprzęt do najbliższej ściany albo krawędzi pomieszczenia i obraca symbol prostopadle do niej. Nie dotyczy punktów sufitowych, czujników dymu ani wyposażenia sanitarnego."
+      >
+        <input
+          type="checkbox"
+          checked={wallSnapOn}
+          onChange={(e) => onWallSnapChange(e.target.checked)}
+          aria-label="Przyciągaj osprzęt do ścian"
+          className="accent-copper"
+        />
+        Przyciągaj osprzęt do ścian
       </label>
 
       {/* Rozmiar SYMBOLI, nie powiększenie planu — to dwie różne rzeczy i dlatego
