@@ -115,8 +115,8 @@ export function useOnboardingProgress(): OnboardingProgress {
     setOnboarding({ pominiety: true, ostatnioOtwarty: false });
   }, [setOnboarding]);
 
-  const reopen = useCallback(() => setOnboarding({ pominiety: false, ostatnioOtwarty: true }), [setOnboarding]);
-  const collapse = useCallback(() => setOnboarding({ ostatnioOtwarty: false }), [setOnboarding]);
+  const reopen = useCallback(() => setOnboarding({ pominiety: false, ostatnioOtwarty: true, otwartyRecznie: true }), [setOnboarding]);
+  const collapse = useCallback(() => setOnboarding({ ostatnioOtwarty: false, otwartyRecznie: false }), [setOnboarding]);
   const dismissScaleStale = useCallback(() => setOnboarding({ skalaNieaktualna: false }), [setOnboarding]);
   const dismissEntryScreen = useCallback(() => {
     // Pominięcie ekranu startowego pomija onboarding W CAŁOŚCI (nie tylko jego

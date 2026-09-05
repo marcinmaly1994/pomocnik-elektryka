@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type { ElementType } from "@/types";
 import { ELEMENT_SECTIONS, ELEMENT_TYPES, SEARCH_KEYWORDS, libSubtitle } from "@/lib/elements";
@@ -14,7 +14,27 @@ interface ElementLibraryProps {
   /** Lista ma wypełnić wysokość rodzica zamiast kończyć się na 560 px. Włączane
    *  w trybie pełnoekranowym, gdzie panel ma znaną, pełną wysokość okna. */
   wypelnijWysokosc?: boolean;
+  /**
+   * Górna krawędź pływającej karty przewodnika „Zacznij w 3 krokach" [px okna];
+   * `null`, gdy karty nie ma na ekranie.
+   *
+   * Karta jest `fixed` w lewym dolnym rogu, czyli DOKŁADNIE nad tą listą, i kładła się
+   * na jej dolnej połowie: przy kroku „Postaw pierwszy element" zasłaniała listę, z
+   * której ten element trzeba wybrać. Pozycji karty nie da się poprawić — każde inne
+   * miejsce zasłania rysunek albo przycisk „Dalej" (patrz komentarz w
+   * OnboardingChecklist.tsx) — więc to lista kończy się wyżej, dopóki karta wisi.
+   */
+  goraKarty?: number | null;
 }
+
+/** Docelowa wysokość listy, gdy nic jej nie ogranicza — dawna sztywna wartość. */
+const MAX_WYSOKOSC_LISTY = 560;
+/** Poniżej tego lista przestaje być listą, więc na bardzo niskich oknach wolimy
+ *  przykrycie kartą niż okienko na dwie pozycje. */
+const MIN_WYSOKOSC_LISTY = 200;
+/** Przeswit miedzy dolem kolumny a karta: 8 px na oddech plus 8 px wlasnego
+ *  paddingu panelu, ktory idzie POD lista i tez musi sie zmiescic. */
+const ODSTEP_OD_KARTY = 16;
 
 /** Biblioteka elementów do umieszczania na planie: akordeon sekcji, szukajka,
  *  wybór liczby gniazd/klawiszy w ramce tam, gdzie dany typ na to pozwala. */
@@ -26,7 +46,45 @@ export function ElementLibrary({
   dedicated,
   onToggleDedicated,
   wypelnijWysokosc = false,
+  goraKarty = null,
 }: ElementLibraryProps) {
+  /**
+   * Miejsce, które lista oddaje karcie przewodnika: skrócony limit wysokości w widoku
+   * zwykłym, plus zapas na dole na wypadek, gdyby skrócenie nie wystarczyło.
+   *
+   * Liczone od górnej krawędzi listy w układzie DOKUMENTU (`+ window.scrollY`), a nie
+   * w oknie. Karta jest przyklejona do dołu okna, więc przewinięcie strony w dół
+   * odsuwa ją od listy — najciaśniej jest zawsze na samej górze strony i pod ten
+   * przypadek liczymy. Dzięki temu wynik nie zmienia się przy przewijaniu, a lista
+   * nie skacze pod palcami.
+   */
+  const listaRef = useRef<HTMLDivElement>(null);
+  const stopkaRef = useRef<HTMLDivElement>(null);
+  const [miejsce, setMiejsce] = useState({ limit: MAX_WYSOKOSC_LISTY, zapas: 0 });
+  useLayoutEffect(() => {
+    const zmierz = () => {
+      const el = listaRef.current;
+      if (!el) return;
+      if (goraKarty === null) {
+        setMiejsce({ limit: MAX_WYSOKOSC_LISTY, zapas: 0 });
+        return;
+      }
+      const gora = el.getBoundingClientRect().top + window.scrollY;
+      // Pod listą stoi jeszcze podpowiedź „kliknij, aby wybrać element" — ona też jest
+      // częścią kolumny i też wpadała pod kartę, więc jej wysokość wchodzi w rachunek.
+      const stopka = stopkaRef.current ? stopkaRef.current.getBoundingClientRect().height + 16 : 0;
+      const limit = Math.max(MIN_WYSOKOSC_LISTY, Math.min(MAX_WYSOKOSC_LISTY, goraKarty - gora - stopka - ODSTEP_OD_KARTY));
+      // Na bardzo niskim oknie kolumna zaczyna się tak nisko, że listy NIE DA SIĘ
+      // zmieścić nad kartą — limit opiera się wtedy o minimum i przykrycie zostaje.
+      // Ten zapas go nie usuwa, ale sprawia, że każdą pozycję da się spod karty
+      // wyprzewijać bez ruszania całą stroną.
+      setMiejsce({ limit, zapas: Math.max(0, gora + limit + stopka - goraKarty + ODSTEP_OD_KARTY) });
+    };
+    zmierz();
+    window.addEventListener("resize", zmierz);
+    return () => window.removeEventListener("resize", zmierz);
+  }, [goraKarty]);
+
   const [openSection, setOpenSection] = useState<string | null>(
     () => ELEMENT_SECTIONS.find((s) => s.items.some((i) => i.key === activeType))?.title ?? ELEMENT_SECTIONS[0].title
   );
@@ -72,7 +130,8 @@ export function ElementLibrary({
             ? "pe-bez-suwaka min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1"
             : "pe-bez-suwaka space-y-1.5 overflow-y-auto pr-1"
         }
-        style={wypelnijWysokosc ? undefined : { maxHeight: 560 }}
+        ref={listaRef}
+        style={wypelnijWysokosc ? { paddingBottom: miejsce.zapas } : { maxHeight: miejsce.limit, paddingBottom: miejsce.zapas }}
       >
         {visibleSections.map((section) => {
           const isOpen = !!query || openSection === section.title;
@@ -153,10 +212,15 @@ export function ElementLibrary({
         {visibleSections.length === 0 && <p className="px-1 py-2 text-xs text-slate-400">Brak wyników dla „{search}”.</p>}
       </div>
 
-      <div className="mt-4 border-t pt-4 text-[11px] leading-relaxed text-slate-400" style={{ borderColor: "#EEF1F4" }}>
-        Kliknij, aby wybrać element, następnie kliknij na planie, żeby go postawić. Pomieszczenie
-        dobiera się automatycznie na podstawie tego, gdzie na planie element wyląduje.
-      </div>
+      {/* Podpowiedź stoi się na czas przewodnika. Mówi to samo, co karta „Zacznij
+          w 3 krokach" w kroku trzecim, a zajmuje prawie 90 px w kolumnie, w której
+          właśnie o te 90 px toczy się gra — dwa razy to samo, za cenę połowy listy. */}
+      {goraKarty === null && (
+        <div ref={stopkaRef} className="mt-4 border-t pt-4 text-[11px] leading-relaxed text-slate-400" style={{ borderColor: "#EEF1F4" }}>
+          Kliknij, aby wybrać element, następnie kliknij na planie, żeby go postawić. Pomieszczenie
+          dobiera się automatycznie na podstawie tego, gdzie na planie element wyląduje.
+        </div>
+      )}
     </div>
   );
 }

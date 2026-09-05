@@ -654,6 +654,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     return () => ro.disconnect();
   }, [pelnyEkran, panelZwiniety]);
 
+  /** Górna krawędź pływającej karty przewodnika — biblioteka elementów kończy się nad
+   *  tą linią, żeby karta jej nie zasłaniała (patrz `goraKarty` w ElementLibrary.tsx). */
+  const [goraPrzewodnika, setGoraPrzewodnika] = useState<number | null>(null);
+
   // --- wgrywanie podkładu ------------------------------------------------------
   const wgrywanie = useFloorPlanUpload();
   const ostatniRzutRef = useRef<string | null>(null);
@@ -2289,6 +2293,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           {sidebarTab === "elementy" ? (
             <ElementLibrary
               wypelnijWysokosc={pelnyEkran}
+              goraKarty={goraPrzewodnika}
               activeType={activeType}
               onPick={(type) => {
                 setActiveType(type);
@@ -2606,6 +2611,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         onSkip={onboarding.skip}
         onReopen={onboarding.reopen}
         onCollapse={onboarding.collapse}
+        onGora={setGoraPrzewodnika}
       />
       )}
 

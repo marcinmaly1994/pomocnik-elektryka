@@ -113,6 +113,29 @@ describe("widoczność karty", () => {
     expect(shouldShowCard(state({ ostatnioOtwarty: true }))).toBe(true);
   });
 
+  /** Bez tego przycisk „Otwórz przewodnik" na skończonym projekcie był martwy:
+   *  ustawiał `ostatnioOtwarty`, a karta i tak się nie pokazywała. */
+  it("ukończony przewodnik wraca na ŻĄDANIE, choć sam się nie pokazuje", () => {
+    const zrobione = { krok1Done: true, krok2Done: true, krok3Done: true };
+    expect(shouldShowCard(state(zrobione))).toBe(false);
+    expect(shouldShowCard(state({ ...zrobione, otwartyRecznie: true }))).toBe(true);
+  });
+
+  it("ręczne otwarcie nie przebija ani zwinięcia, ani pominięcia", () => {
+    const zrobione = { krok1Done: true, krok2Done: true, krok3Done: true, otwartyRecznie: true };
+    // Zwinięcie krzyżykiem zeruje `otwartyRecznie` (patrz `collapse`), ale nawet gdyby
+    // gdzieś przeciekło, sama zwinięta karta ma zostać zwinięta.
+    expect(shouldShowCard(state({ ...zrobione, ostatnioOtwarty: false }))).toBe(false);
+    expect(shouldShowCard(state({ ...zrobione, pominiety: true }))).toBe(false);
+  });
+
+  /** Zapisy sprzed dodania flagi nie mają jej wcale — `undefined` ma znaczyć „nie". */
+  it("stary zapis bez flagi zachowuje się jak dotąd", () => {
+    const stary: OnboardingState = { ...state({ krok1Done: true, krok2Done: true, krok3Done: true }) };
+    delete stary.otwartyRecznie;
+    expect(shouldShowCard(stary)).toBe(false);
+  });
+
   it("kto widział onboarding wcześniej, dostaje wersję skróconą", () => {
     expect(shouldShowCompact(true, state())).toBe(true);
     expect(shouldShowCompact(false, state())).toBe(false);
