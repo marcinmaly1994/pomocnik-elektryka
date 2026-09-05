@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEven
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import type { CableRoute, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
-import { ELEMENT_TYPES, type SanitaryZone } from "@/lib/elements";
+import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
+import { ELEMENT_TYPES, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
@@ -129,8 +129,12 @@ interface DesignCanvasProps {
   routeOverrides: Record<string, Point[]>;
   /** Numery grup sterowania oświetleniem, wyliczone w DesignTab (lib/lightGroups.ts). */
   lightGroups: Map<string, (number | undefined)[]>;
-  /** Mnożnik rozmiaru symboli elementów (1 = rozmiar bazowy). */
+  /** Skala renderu symboli osprzętu — suwak razy wyrównanie do skali rzutu
+   *  (patrz `elementRenderScale`). */
   elementScale: number;
+  /** Skala renderu przyborów sanitarnych. Osobna, bo ich obrys ma odpowiadać
+   *  PRAWDZIWYM wymiarom wanny/brodzika — patrz `sanitaryRenderScale`. */
+  sanitaryScale: number;
   /** Obszar roboczy planu — dopasowany do proporcji wgranego rzutu (patrz store). */
   planSize: PlanSize;
   /** Metrów na jednostkę planu — `null` bez kalibracji. Do etykiety wymiaru
@@ -298,6 +302,7 @@ export function DesignCanvas({
   routeOverrides,
   lightGroups,
   elementScale,
+  sanitaryScale,
   planSize,
   metersPerUnit,
   onOutsidePlan,
@@ -335,6 +340,10 @@ export function DesignCanvas({
   onCloseRoomPolygon,
   onAddCalibPoint,
 }: DesignCanvasProps) {
+  /** Osprzęt idzie za suwakiem „Rozmiar elementów", przybory sanitarne nie — ich obrys
+   *  jest strefą 1 i musi zgadzać się z tym, co liczy walidator (patrz `sanitaryRenderScale`). */
+  const skalaSymbolu = (type: ElementType) => (SANITARY_FIXTURES[type] ? sanitaryScale : elementScale);
+
   /**
    * Wymuszone przerysowanie warstwy tła po przełączeniu siatki.
    *
@@ -1052,7 +1061,7 @@ export function DesignCanvas({
               />
             ))}
             {podklad.elements.map((el) => (
-              <Group key={el.id} x={el.x} y={el.y} rotation={el.rotation ?? 0} scaleX={elementScale} scaleY={elementScale}>
+              <Group key={el.id} x={el.x} y={el.y} rotation={el.rotation ?? 0} scaleX={skalaSymbolu(el.type)} scaleY={skalaSymbolu(el.type)}>
                 <ElementGlyphKonva type={el.type} color="#64748B" gangs={el.gangs} agdLetter={el.agdLetter} />
               </Group>
             ))}
@@ -1931,8 +1940,8 @@ export function DesignCanvas({
                 x={el.x}
                 y={el.y}
                 rotation={el.rotation ?? 0}
-                scaleX={elementScale}
-                scaleY={elementScale}
+                scaleX={skalaSymbolu(el.type)}
+                scaleY={skalaSymbolu(el.type)}
                 // Przeciąganie działa też w narzędziu „Wstaw element” — kliknięcie na
                 // JUŻ POSTAWIONY element (gniazdko, łącznik…) w tym trybie tylko go
                 // zaznacza (patrz `onClick` niżej, `cancelBubble` gasi kliknięcie
