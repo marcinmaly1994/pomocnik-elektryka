@@ -314,4 +314,73 @@ describe("useProjectStore", () => {
       expect(useProjectStore.getState().roomsFixedOnLoad).toBe(0);
     });
   });
+
+  describe("duplikowanie kondygnacji", () => {
+    function parterZGeometria() {
+      const { setDraft } = useProjectStore.getState();
+      setDraft((d) => ({
+        ...d,
+        walls: [{ id: "w1", floor: "f1", thickness: 5, points: [{ x: 0, y: 0 }, { x: 100, y: 0 }] }],
+        roomShapes: [{ id: "r1", floor: "f1", name: "Salon", color: "#3B8C63", points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }] }],
+        openings: [
+          { id: "o1", floor: "f1", wallId: "w1", x: 50, y: 0, angle: 0, width: 18, kind: "drzwi" as const },
+          { id: "o2", floor: "f1", roomId: "r1", x: 25, y: 0, angle: 0, width: 18, kind: "okno" as const },
+        ],
+        elements: [{ ...sampleElement, id: "e1", floor: "f1" }],
+      }));
+    }
+
+    it("kopiuje cala geometrie i osprzet na nowa kondygnacje", () => {
+      parterZGeometria();
+      useProjectStore.getState().duplicateFloor("f1", "Pietro 1");
+      const s = useProjectStore.getState();
+      const nowa = s.activeFloorId;
+      expect(nowa).not.toBe("f1");
+      expect(s.draft.walls.filter((w) => w.floor === nowa)).toHaveLength(1);
+      expect(s.draft.roomShapes.filter((r) => r.floor === nowa)).toHaveLength(1);
+      expect(s.draft.openings.filter((o) => o.floor === nowa)).toHaveLength(2);
+      expect(s.draft.elements.filter((e) => e.floor === nowa)).toHaveLength(1);
+      // Orygital zostaje nietkniety.
+      expect(s.draft.walls.filter((w) => w.floor === "f1")).toHaveLength(1);
+    });
+
+    it("otwory wskazuja na KOPIE scian i pokoi, nie na oryginaly", () => {
+      parterZGeometria();
+      useProjectStore.getState().duplicateFloor("f1", "Pietro 1");
+      const s = useProjectStore.getState();
+      const nowa = s.activeFloorId;
+      const kopieOtworow = s.draft.openings.filter((o) => o.floor === nowa);
+      const kopiaSciany = s.draft.walls.find((w) => w.floor === nowa)!;
+      const kopiaPokoju = s.draft.roomShapes.find((r) => r.floor === nowa)!;
+      // Bez przemapowania drzwi z pietra wisialyby na scianie z parteru i kasowaly sie
+      // razem z nia — na pietrze, ktorego nikt nie dotykal.
+      expect(kopieOtworow.find((o) => o.wallId)!.wallId).toBe(kopiaSciany.id);
+      expect(kopieOtworow.find((o) => o.roomId)!.roomId).toBe(kopiaPokoju.id);
+      expect(kopiaSciany.id).not.toBe("w1");
+    });
+
+    it("dziedziczy skale i podklad zrodlowej kondygnacji", () => {
+      useProjectStore.getState().setScale("f1", 0.05);
+      useProjectStore.getState().setBgImage("f1", "data:image/png;base64,xxx");
+      useProjectStore.getState().duplicateFloor("f1", "Pietro 1");
+      const s = useProjectStore.getState();
+      expect(s.scales[s.activeFloorId]).toBe(0.05);
+      expect(s.bgImages[s.activeFloorId]).toBe("data:image/png;base64,xxx");
+    });
+
+    it("da sie cofnac jednym krokiem", () => {
+      parterZGeometria();
+      const przed = useProjectStore.getState().draft.elements.length;
+      useProjectStore.getState().duplicateFloor("f1", "Pietro 1");
+      expect(useProjectStore.getState().draft.elements.length).toBe(przed + 1);
+      useProjectStore.getState().undo();
+      expect(useProjectStore.getState().draft.elements.length).toBe(przed);
+    });
+
+    it("nieistniejaca kondygnacja nic nie zmienia", () => {
+      const przed = useProjectStore.getState().floors.length;
+      useProjectStore.getState().duplicateFloor("nie-ma", "X");
+      expect(useProjectStore.getState().floors).toHaveLength(przed);
+    });
+  });
 });

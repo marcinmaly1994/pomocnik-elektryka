@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, Undo2 } from "lucide-react";
+import { Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
 import { FloorBar } from "./FloorBar";
@@ -36,6 +36,11 @@ export interface EditorToolbarProps {
   /** Tryb wymiarowania — długości wszystkich ścian i wymiary prostokątnych pomieszczeń. */
   showDimensions: boolean;
   onToggleDimensions: () => void;
+  /** Podgląd kondygnacji poniżej. `null` na najniższej — nie ma czego pokazać, więc
+   *  przycisk się nie renderuje, zamiast być wyszarzony bez wyjaśnienia (ten sam
+   *  wzorzec co usuwanie ostatniej kondygnacji w `FloorBar`). */
+  showUnderlay: boolean;
+  onToggleUnderlay: (() => void) | null;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -97,6 +102,8 @@ export function EditorToolbar({
   onToggleRoutes,
   showDimensions,
   onToggleDimensions,
+  showUnderlay,
+  onToggleUnderlay,
   canUndo,
   canRedo,
   onUndo,
@@ -239,6 +246,21 @@ export function EditorToolbar({
       >
         <Ruler size={15} className={showDimensions ? "text-copper" : undefined} />
       </Button>
+
+      {/* Podgląd kondygnacji poniżej — bez niego piętro rysuje się w ciemno i nie da
+          się trafić pionem rozdzielnicy ani wypustu nad tym z parteru. */}
+      {onToggleUnderlay && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleUnderlay}
+          title={showUnderlay ? "Ukryj kondygnację poniżej" : "Pokaż kondygnację poniżej jako podkład"}
+          aria-label={showUnderlay ? "Ukryj kondygnację poniżej" : "Pokaż kondygnację poniżej"}
+          aria-pressed={showUnderlay}
+        >
+          <Layers2 size={15} className={showUnderlay ? "text-copper" : undefined} />
+        </Button>
+      )}
 
       <div className="flex items-center">
         <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title="Cofnij">

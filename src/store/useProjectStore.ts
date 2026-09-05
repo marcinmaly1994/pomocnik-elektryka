@@ -312,6 +312,8 @@ interface ProjectState {
 
   setActiveFloorId: (id: string) => void;
   addFloor: (name: string) => void;
+  /** Kopiuje kondygnację razem z geometrią i osprzętem — patrz implementacja. */
+  duplicateFloor: (id: string, name: string) => void;
   removeFloor: (id: string) => void;
 
   setBgImage: (floorId: string, dataUrl: string | null) => void;
@@ -578,6 +580,80 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         scales: inherited === null ? state.scales : { ...state.scales, [id]: inherited },
         // Obszar planu też jest wspólny — inaczej odziedziczona skala opisywałaby
         // rysunek o innych wymiarach, czyli już nie ta sama skala.
+      };
+    }),
+
+  /**
+   * Kopiuje kondygnację wraz z całą jej geometrią i osprzętem.
+   *
+   * Piętra w budynku wielorodzinnym bywają identyczne albo różnią się kilkoma
+   * elementami — przerysowywanie ich od zera to najdłuższa i najbardziej bezmyślna
+   * czynność w całej aplikacji, a przy okazji jedyna, przy której piony na pewno się
+   * rozjadą (patrz podgląd kondygnacji poniżej).
+   *
+   * Identyfikatory MUSZĄ być przemapowane, nie tylko podmienione na nowe: otwory
+   * wskazują na konkretną ścianę (`wallId`) albo obrys (`roomId`), więc kopia z tymi
+   * samymi id-kami przykleiłaby drzwi z piętra do ściany z parteru. Przy usunięciu
+   * tamtej ściany kasowałyby się razem z nią (patrz `deleteSelection`), na piętrze,
+   * którego użytkownik w ogóle nie dotykał.
+   *
+   * `routeOverrides` NIE są kopiowane: są kluczowane id elementów, a kopie mają nowe.
+   * Ręczny układ trasy i tak zależy od rozdzielnicy, której na nowym piętrze nie ma —
+   * trasy policzą się od zera.
+   */
+  duplicateFloor: (id, name) =>
+    set((state) => {
+      const zrodlo = state.floors.find((f) => f.id === id);
+      if (!zrodlo) return state;
+      const nowaId = crypto.randomUUID();
+
+      const mapaScian = new Map<string, string>();
+      const mapaPokoi = new Map<string, string>();
+      const walls = state.draft.walls
+        .filter((w) => w.floor === id)
+        .map((w) => {
+          const noweId = crypto.randomUUID();
+          mapaScian.set(w.id, noweId);
+          return { ...w, id: noweId, floor: nowaId, points: w.points.map((p) => ({ ...p })) };
+        });
+      const roomShapes = state.draft.roomShapes
+        .filter((r) => r.floor === id)
+        .map((r) => {
+          const noweId = crypto.randomUUID();
+          mapaPokoi.set(r.id, noweId);
+          return { ...r, id: noweId, floor: nowaId, points: r.points.map((p) => ({ ...p })) };
+        });
+      const openings = state.draft.openings
+        .filter((o) => o.floor === id)
+        .map((o) => ({
+          ...o,
+          id: crypto.randomUUID(),
+          floor: nowaId,
+          wallId: o.wallId ? mapaScian.get(o.wallId) : undefined,
+          roomId: o.roomId ? mapaPokoi.get(o.roomId) : undefined,
+        }));
+      const elements = state.draft.elements
+        .filter((e) => e.floor === id)
+        .map((e) => ({ ...e, id: crypto.randomUUID(), floor: nowaId }));
+
+      const skala = state.scales[id];
+      return {
+        floors: [...state.floors, { id: nowaId, name }],
+        activeFloorId: nowaId,
+        scales: typeof skala === "number" ? { ...state.scales, [nowaId]: skala } : state.scales,
+        // Podkład (wgrany rzut) też idzie z kopią — piętro powielane z parteru zwykle
+        // ma ten sam skan, a bez niego skala odziedziczona z parteru nie ma do czego
+        // się odnieść.
+        bgImages: state.bgImages[id] ? { ...state.bgImages, [nowaId]: state.bgImages[id] } : state.bgImages,
+        draft: {
+          ...state.draft,
+          walls: [...state.draft.walls, ...walls],
+          roomShapes: [...state.draft.roomShapes, ...roomShapes],
+          openings: [...state.draft.openings, ...openings],
+          elements: [...state.draft.elements, ...elements],
+        },
+        past: [...state.past, state.draft],
+        future: [],
       };
     }),
 

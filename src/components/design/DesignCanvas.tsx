@@ -112,6 +112,9 @@ interface DesignCanvasProps {
   bgImageUrl: string | null;
   calibPoints: Point[];
   zones: SanitaryZone[];
+  /** Geometria kondygnacji PONIŻEJ, rysowana jako przygaszony podkład. `null`, gdy
+   *  podgląd wyłączony albo nie ma czego pokazać (najniższa kondygnacja). */
+  podklad: { walls: Wall[]; roomShapes: RoomShape[]; elements: InstallationElement[] } | null;
   /** Tryb wymiarowania: dlugosci WSZYSTKICH scian i wymiary prostokatnych pomieszczen.
    *  Ustawienie widoku, wlaczane w pasku edytora — patrz komentarze przy obu miejscach. */
   pokazWymiary: boolean;
@@ -289,6 +292,7 @@ export function DesignCanvas({
   bgImageUrl,
   calibPoints,
   zones,
+  podklad,
   pokazWymiary,
   cableRoutes,
   routeOverrides,
@@ -1024,6 +1028,36 @@ export function DesignCanvas({
               puste tło i bez obwódki nie było wiadomo, dokąd wolno stawiać elementy. */}
           <Rect name="tylko-ekran" x={0} y={0} width={planSize.w} height={planSize.h} stroke="#C3CDD7" strokeWidth={1.5} />
         </Layer>
+
+        {/* PODGLĄD KONDYGNACJI PONIŻEJ — osobna warstwa POD wszystkim, bez nasłuchu.
+            Bez niego piętro rysuje się w ciemno: nie da się trafić pionem rozdzielnicy
+            ani wypustu nad tym z parteru, a sprawdzanie polega na przełączaniu
+            kondygnacji tam i z powrotem i zapamiętywaniu, gdzie coś było.
+            Jednolita szarość i niska nieprzezroczystość, a nie oryginalne kolory:
+            podkład ma być rozpoznawalny jako „nie ta kondygnacja" bez patrzenia na
+            pasek — inaczej myli się z rysowanym właśnie piętrem. */}
+        {podklad && (
+          <Layer listening={false} opacity={0.3}>
+            {podklad.roomShapes.map((r) => (
+              <Line key={r.id} points={r.points.flatMap((p) => [p.x, p.y])} closed stroke="#94A3B8" strokeWidth={1} dash={[4, 4]} />
+            ))}
+            {podklad.walls.map((w) => (
+              <Line
+                key={w.id}
+                points={w.points.flatMap((p) => [p.x, p.y])}
+                stroke="#64748B"
+                strokeWidth={w.thickness ?? DEFAULT_WALL_THICKNESS}
+                lineCap="round"
+                lineJoin="round"
+              />
+            ))}
+            {podklad.elements.map((el) => (
+              <Group key={el.id} x={el.x} y={el.y} rotation={el.rotation ?? 0} scaleX={elementScale} scaleY={elementScale}>
+                <ElementGlyphKonva type={el.type} color="#64748B" gangs={el.gangs} agdLetter={el.agdLetter} />
+              </Group>
+            ))}
+          </Layer>
+        )}
 
         <Layer ref={layerRef}>
           {roomShapes.map((r) => {
