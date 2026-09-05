@@ -1,7 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Powrot do przewodnika po jego ukonczeniu.
+ * Karta przewodnika „Zacznij w 3 krokach": rozmiar wzgledem kolumny narzedzi
+ * i powrot do niej po ukonczeniu krokow.
  *
  * Przycisk „Otworz przewodnik" byl martwy na gotowym projekcie: klikalo sie i nie
  * dzialo sie nic widocznego. Skladaly sie na to DWIE niezalezne przyczyny i test
@@ -11,6 +12,8 @@ import { test, expect, type Page } from "@playwright/test";
  *  2. efekt pozegnalny w `OnboardingChecklist` zwijal ja 1,4 s po otwarciu.
  */
 
+const lista = (page: Page) => page.locator("div.pe-bez-suwaka.overflow-y-auto.pr-1");
+const kolumna = (page: Page) => page.locator("div.flex.shrink-0.overflow-hidden.rounded-card").first();
 const karta = (page: Page) => page.getByRole("complementary", { name: /Zacznij w 3 krokach/i });
 
 /** Okno 1280 x 900 — typowy laptop, ustawiane jawnie, zeby wysokosc karty i pozycja
@@ -28,6 +31,31 @@ async function pustyProjekt(page: Page, wysokosc = 900) {
   await expect(karta(page)).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));
 }
+
+test("kolumna narzedzi konczy sie nad karta, a nie pod nia", async ({ page }) => {
+  await pustyProjekt(page);
+
+  const k = (await karta(page).boundingBox())!;
+  // Karta pokazuje tylko krok aktywny — bez tego mierzyla ~308 px i zadne skracanie
+  // kolumny nie bylo w stanie jej wyminac na typowym laptopie.
+  expect(k.height).toBeLessThan(220);
+
+  const kol = (await kolumna(page).boundingBox())!;
+  expect(kol.y + kol.height).toBeLessThanOrEqual(k.y + 1);
+});
+
+test("zwiniecie karty oddaje liscie odzyskana wysokosc", async ({ page }) => {
+  await pustyProjekt(page);
+  const skrocona = (await lista(page).boundingBox())!.height;
+
+  await page.getByRole("button", { name: "Zwiń przewodnik" }).click();
+  await expect(karta(page)).toHaveCount(0);
+
+  // Zostaje sam dyskretny przycisk „?", wiec lista ma odzyskac miejsce — inaczej
+  // karta zabieralaby je takze wtedy, gdy jej nie ma.
+  const pelna = (await lista(page).boundingBox())!.height;
+  expect(pelna).toBeGreaterThan(skrocona + 80);
+});
 
 test("przycisk pomocy otwiera karte z powrotem na ukonczonym projekcie", async ({ page }) => {
   await pustyProjekt(page);
