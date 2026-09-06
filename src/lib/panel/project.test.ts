@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ElementType, InstallationElement } from "@/types";
 import { computeCircuits } from "./circuits";
-import { applySizing, assignPhases, computeSizedCircuits, panelCapacity, phaseBalance, routeLengths, sizeProjectCircuits } from "./project";
+import { applySizing, assignPhases, computeSizedCircuits, obwodyDoKalkulatora, panelCapacity, phaseBalance, routeLengths, sizeProjectCircuits } from "./project";
+import { estimateRoutesByFloor, findPanels } from "./loads";
 import type { SizedCircuit } from "./sizing";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -287,5 +288,45 @@ describe("podrozdzielnica na pietrze", () => {
       suma([tablicaGlowna, podrozdzielnica, naPietrze]),
       5
     );
+  });
+});
+
+describe("obwodyDoKalkulatora", () => {
+  const rozdzielnica = el("rozdzielnica", { x: 0, y: 0, floor: "parter" });
+  const gniazdko = el("gniazdko", { x: 100, y: 0, floor: "parter", room: "Salon" });
+  const skale = { parter: 0.05 };
+
+  it("podaje moc, liczbe faz i aparat gotowe do wpisania w kalkulator", () => {
+    const [obwod] = obwodyDoKalkulatora([rozdzielnica, gniazdko], skale);
+    expect(obwod.typ).toBe("gniazda");
+    expect(obwod.liczba_faz).toBe("1");
+    // Podloga mocy obwodu gniazdowego — ta sama, ktora widac w Rozdzielnicy.
+    expect(obwod.moc_W).toBe(1500);
+    expect(obwod.charakterystyka).toBeTruthy();
+    expect(obwod.In_A).toBeGreaterThan(0);
+  });
+
+  /**
+   * Sedno: kalkulator wywolany na obwodzie z rzutu ma odtworzyc wynik z zakladki
+   * co do liczby. Gdyby szedl inna sciezka, dwa miejsca w aplikacji podawalyby dla
+   * tego samego obwodu rozne przekroje.
+   */
+  it("dlugosc jest TA SAMA, ktora dobor bierze do spadku napiecia", () => {
+    const elementy = [rozdzielnica, gniazdko];
+    const [obwod] = obwodyDoKalkulatora(elementy, skale);
+    const { circuits } = computeSizedCircuits(elementy, { scales: skale });
+    const trasa = estimateRoutesByFloor(findPanels(elementy), circuits[0].elements, skale)!;
+    expect(obwod.dlugosc_m).toBe(trasa.worstCaseM);
+  });
+
+  it("bez skali dlugosci nie zmyslamy — zostaje pusta", () => {
+    const [obwod] = obwodyDoKalkulatora([rozdzielnica, gniazdko], {});
+    expect(obwod.dlugosc_m).toBeUndefined();
+    // Reszta danych jest znana i ma sie wczytac mimo braku trasy.
+    expect(obwod.moc_W).toBe(1500);
+  });
+
+  it("pusty rzut nie daje zadnych obwodow", () => {
+    expect(obwodyDoKalkulatora([], skale)).toEqual([]);
   });
 });
