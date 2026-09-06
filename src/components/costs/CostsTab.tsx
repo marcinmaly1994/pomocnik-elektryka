@@ -1,10 +1,13 @@
-import { useMemo, useRef, type ChangeEvent } from "react";
-import { AlertTriangle, Download, Info, Upload, X } from "lucide-react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { AlertTriangle, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, routeLengths } from "@/lib/panel/project";
 import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, VAT_RATE } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
+import { buildCostsPdf } from "@/lib/pdf/costs";
+import { PdfPreview } from "@/components/ui/PdfPreview";
+import { resolveDocHeader } from "@/lib/docHeader";
 
 /**
  * Kosztorys instalacji elektrycznej — ilości materiałów i robocizny szacowane
@@ -24,6 +27,12 @@ export function CostsTab() {
   const costOverrides = useProjectStore((s) => s.costOverrides);
   const setCostOverride = useProjectStore((s) => s.setCostOverride);
   const projectName = useProjectStore((s) => s.projectName);
+  const rawDocHeader = useProjectStore((s) => s.docHeader);
+  // Nazwa projektu jako domyślny „Obiekt" — dzięki temu tabliczka rysunkowa i nazwa
+  // pliku są wypełnione nawet bez wizyty w zakładce Protokoły (ten sam wzorzec co
+  // w Rozdzielnicy).
+  const docHeader = resolveDocHeader(rawDocHeader, projectName);
+  const [podgladPdf, setPodgladPdf] = useState(false);
   const scales = useProjectStore((s) => s.scales);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -97,8 +106,18 @@ export function CostsTab() {
             <Upload size={14} /> Importuj cennik CSV
           </button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvImport} />
-          <button onClick={exportCsv} className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs">
-            <Download size={14} /> Eksportuj kosztorys
+          {/* CSV zostaje dla tych, którzy liczą dalej w arkuszu; PDF jest tym, co wysyła
+              się klientowi — stąd on dostaje przycisk główny. Pobranie dzieje się
+              z poziomu PODGLĄDU, tak jak przy pozostałych eksportach: nikt nie ma wysłać
+              dokumentu, na który sam nie spojrzał. */}
+          <button onClick={exportCsv} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+            <Download size={14} /> Eksportuj CSV
+          </button>
+          <button
+            onClick={() => setPodgladPdf(true)}
+            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs"
+          >
+            <FileText size={14} /> Kosztorys do PDF
           </button>
         </div>
       </div>
@@ -254,6 +273,16 @@ export function CostsTab() {
         Liczba puszek jest szacowana z liczby punktów instalacyjnych (podtynkowe) i pomieszczeń (rozgałęźne).
         Zweryfikuj ilości na realnym rzucie budynku przed zakupem materiału.
       </div>
+
+      {/* Dokument składany jest RAZ, a „Pobierz" zapisuje dokładnie te bajty, które
+          widać w podglądzie — patrz komentarz w `PdfPreview`. */}
+      <PdfPreview
+        open={podgladPdf}
+        onOpenChange={setPodgladPdf}
+        title="Kosztorys instalacji"
+        filename={projectFileName("kosztorys", docHeader.obiekt, "pdf")}
+        build={() => buildCostsPdf(rows, docHeader)}
+      />
     </div>
   );
 }
