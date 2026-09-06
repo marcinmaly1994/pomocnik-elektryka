@@ -16,6 +16,23 @@ import { skipEntryScreen } from "./_flow";
 async function openCalculators(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
+  // Zakladka otwiera sie teraz EKRANEM STARTOWYM (kafelki wszystkich narzedzi),
+  // a nie ostatnio uzywanym kalkulatorem — wybor jest jawnym krokiem. Testy
+  // dotyczace samego ekranu startowego nie uzywaja tego pomocnika.
+  await page.getByRole("button", { name: "Dobór obwodu" }).first().click();
+}
+
+/**
+ * Klika pozycje na liscie bocznej, rozwijajac wczesniej „Zaawansowane", jesli trzeba.
+ *
+ * Ta grupa jest zwinieta przy pierwszym wejsciu (patrz `GRUPY`), wiec jej pozycji
+ * po prostu nie ma w DOM — test klikajacy je wprost szukalby przycisku, ktorego
+ * uzytkownik tez by nie zobaczyl.
+ */
+async function wybierzKalkulator(page: import("@playwright/test").Page, nazwa: RegExp) {
+  const przycisk = page.getByRole("button", { name: nazwa }).first();
+  if ((await przycisk.count()) === 0) await page.getByRole("button", { name: /^Zaawansowane/ }).click();
+  await przycisk.click();
 }
 
 /**
@@ -234,11 +251,11 @@ test("zapisany identyfikator kalkulatora sprzed aktualizacji nie wywraca zakład
   await page.reload();
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
 
-  // zamiast białego ekranu — cofnięcie do PIERWSZEJ pozycji z listy, czyli
-  // `CALC_LIST[0]` (patrz fallback w CalculatorsTab). Od czasu ułożenia listy wg
-  // etapu pracy jest nią bilans mocy, a nie spadek napięcia.
-  await expect(page.getByRole("heading", { name: "Bilans mocy budynku" })).toBeVisible();
-  await expect(page.locator(".pe-result").first()).toBeVisible();
+  // Zamiast białego ekranu — ekran startowy z kafelkami. Zapisany identyfikator
+  // nie decyduje już o widoku (służy tylko sekcji „Ostatnio używane"), więc jego
+  // nieaktualność przestała mieć jakiekolwiek znaczenie.
+  await expect(page.getByRole("heading", { name: "Obwód odbiorczy" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Dobór obwodu" }).first()).toBeVisible();
 });
 
 /**
@@ -274,7 +291,7 @@ test("współczynnik napięciowy c wynika z CELU obliczenia i nie da się go pom
 
 test("kompensacja mocy biernej: 100 kW, cosφ 0,80 → 0,95 daje 42,13 kvar", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Kompensacja mocy biernej/ }).click();
+  await wybierzKalkulator(page, /^Kompensacja mocy biernej/);
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("42,13 kvar");
@@ -334,7 +351,7 @@ test("uziom pionowy: R = ρ/(2πL)·ln(4L/d) i potrzebna długość dla wymagani
  */
 test("bilans faz: 3. harmoniczna podnosi prąd w N ponad prąd fazowy i daje werdykt niespełniony", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Bilans faz i prąd w N/ }).click();
+  await wybierzKalkulator(page, /^Bilans faz i prąd w N/);
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("6,45 A");
@@ -376,7 +393,7 @@ test("silnik: spadek napięcia przy rozruchu ponad 15% to warunek niespełniony"
 
 test("impedancja przewodu: R, X, Z oraz nierówny podział prądu między żyły równoległe", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Impedancja przewodu/ }).click();
+  await wybierzKalkulator(page, /^Impedancja przewodu/);
 
   // 100 m, 16 mm² Cu przy 70 °C: R = 0,021366·100/16 = 0,1335 Ω
   const wyniki = page.locator(".pe-result");
@@ -570,7 +587,7 @@ test("pełny dobór: metoda gruntowa (D2) pomija korektę temperatury/grupowania
 
 test("dobór wkładki gG: domyślne dane (D0gG, 16A, TN odbiorczy) — Imax i Zs max z tablicy Z.10.3", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Dobór wkładki gG/ }).click();
+  await wybierzKalkulator(page, /^Dobór wkładki gG/);
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("D0gG (wkładka gwintowa, system D0), In 16 A");
@@ -580,7 +597,7 @@ test("dobór wkładki gG: domyślne dane (D0gG, 16A, TN odbiorczy) — Imax i Zs
 
 test("dobór wkładki gG: zmiana układu na TT-rozdzielczy zwraca błąd zamiast interpolacji (brak punktu 1s w tablicy)", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Dobór wkładki gG/ }).click();
+  await wybierzKalkulator(page, /^Dobór wkładki gG/);
 
   await page.getByLabel("Układ sieci").selectOption("TT");
   await page.getByLabel(/Obwód odbiorczy/).uncheck();
@@ -590,7 +607,7 @@ test("dobór wkładki gG: zmiana układu na TT-rozdzielczy zwraca błąd zamiast
 
 test("dobór wkładki gG: ocena warunku ochronnego wg zmierzonej Zs", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Dobór wkładki gG/ }).click();
+  await wybierzKalkulator(page, /^Dobór wkładki gG/);
 
   await page.getByLabel(/Oceń warunek ochronny/).check();
   await page.getByLabel(/Zmierzona impedancja pętli zwarcia/).fill("3");
@@ -620,7 +637,7 @@ test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnic
 test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają zmianę zakładki i odświeżenie strony", async ({ page }) => {
   await openCalculators(page);
 
-  await page.getByRole("button", { name: "Bilans mocy budynku" }).click();
+  await page.getByRole("button", { name: "Bilans mocy budynku" }).first().click();
   const firstDeviceName = page.locator("input.pe-input.text-sm.flex-1").first();
   await firstDeviceName.fill("Test trwałości");
 
@@ -629,6 +646,9 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
   await page.getByRole("button", { name: "Instalacja", exact: true }).click();
   await skipEntryScreen(page);
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
+  // Zakładka wita ekranem startowym, więc kalkulator wybieramy jawnie — sprawdzamy
+  // trwałość WPISANYCH DANYCH, a nie tego, co się otwiera samo.
+  await page.getByRole("button", { name: "Bilans mocy budynku" }).first().click();
   await expect(page.getByRole("heading", { name: "Bilans mocy budynku" })).toBeVisible();
   await expect(page.locator("input.pe-input.text-sm.flex-1").first()).toHaveValue("Test trwałości");
 
@@ -638,6 +658,7 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
   // to jest właśnie to, co ma przetrwać w localStorage
   await page.reload();
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
+  await page.getByRole("button", { name: "Bilans mocy budynku" }).first().click();
   await expect(page.getByRole("heading", { name: "Bilans mocy budynku" })).toBeVisible();
   await expect(page.locator("input.pe-input.text-sm.flex-1").first()).toHaveValue("Test trwałości");
 });
@@ -710,7 +731,7 @@ test("kalkulatory nie siegaja do rzutu, nawet gdy projekt ma gotowy obwod", asyn
   await page.getByRole("button", { name: "Impedancja pętli zwarcia" }).first().click();
   await expect(page.getByLabel("Wczytaj obwód z projektu")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Bilans mocy budynku" }).click();
+  await page.getByRole("button", { name: "Bilans mocy budynku" }).first().click();
   await expect(page.getByRole("button", { name: "Wczytaj z projektu" })).toHaveCount(0);
   // Lista odbiornikow zostaje wlasnoscia kalkulatora: gniazdko z rzutu nie ma prawa
   // sie w niej pojawic samo.
@@ -780,4 +801,63 @@ test("cztery kryteria widac zawsze, a te bez danych sa NIEOCENIONE zamiast zielo
   await karta.getByLabel(/Spodziewany prąd zwarcia/).fill("500");
   await expect(karta).toContainText("Ik·√t/k");
   await expect(karta).toContainText("przekroczenie");
+});
+
+/**
+ * Nawigacja zakladki: grupy, wyszukiwarka i ekran startowy.
+ *
+ * Osiemnascie pozycji jednym ciagiem wymagalo od uzytkownika, zeby najpierw znal
+ * nazwy — a „Impedancja petli zwarcia" nic nie mowi komus, kto sprawdza, czy jego
+ * instalacja jest bezpieczna.
+ */
+test("wejscie na zakladke pokazuje kafelki pogrupowane wg etapu pracy", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/kalkulatory");
+
+  for (const grupa of ["Start", "Obwód odbiorczy", "Ochrona", "Odbiorniki", "Zaawansowane"]) {
+    await expect(page.getByRole("heading", { name: grupa, exact: true })).toBeVisible();
+  }
+  // Pierwsze wejscie nie ma czego pokazac w „Ostatnio uzywanych".
+  await expect(page.getByText("Ostatnio używane")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /^Dobór oświetlenia/ }).first().click();
+  await expect(page).toHaveURL(/\/kalkulatory\/oswietlenie/);
+});
+
+test("wyszukiwarka filtruje po nazwie I OPISIE, takze bez polskich ogonkow", async ({ page }) => {
+  await page.goto("/kalkulatory/moc");
+  const pole = page.getByLabel("Szukaj kalkulatora");
+
+  // „RCD" wystepuje w OPISACH dwoch kalkulatorow (rozniowka i ladowarka EV),
+  // a w zadnej NAZWIE — szukanie po samych nazwach nie znalazloby ani jednego.
+  await pole.fill("rcd");
+  await expect(page.getByText("Pasujących: 2")).toBeVisible();
+  await expect(page.getByRole("button", { name: /różnicowoprądowego/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Ładowarka pojazdu/ })).toBeVisible();
+
+  await pole.fill("PETLI");
+  await expect(page.getByRole("button", { name: /Impedancja pętli zwarcia/ })).toBeVisible();
+
+  await pole.fill("termowizja");
+  await expect(page.getByText("Nic nie pasuje — spróbuj innego słowa.")).toBeVisible();
+
+  // Escape oddaje pelna liste — bez kasowania tekstu znak po znaku. Na liscie
+  // bocznej grupy sa przyciskami (da sie je zwijac), naglowki maja tylko kafelki
+  // na ekranie startowym.
+  await pole.press("Escape");
+  await expect(page.getByRole("button", { name: /^Ochrona/ })).toBeVisible();
+});
+
+test("grupa Zaawansowane jest zwinieta, dopoki sie jej nie rozwinie", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/kalkulatory/moc");
+
+  const naglowek = page.getByRole("button", { name: /^Zaawansowane/ });
+  await expect(naglowek).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: /^Kompensacja mocy biernej/ })).toHaveCount(0);
+
+  await naglowek.click();
+  await expect(page.getByRole("button", { name: /^Kompensacja mocy biernej/ })).toBeVisible();
 });

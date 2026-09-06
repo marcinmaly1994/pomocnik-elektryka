@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
 import { obliczImpedancjePrzewodu, obliczPrzewodyRownolegle } from "@/lib/calc/conductorImpedance";
@@ -48,6 +48,8 @@ import { useCalculatorsStore, type CalcId, type TrybObwodu } from "@/store/useCa
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { Card } from "./Card";
+import { EkranStartowy, ListaKalkulatorow, SzukajkaKalkulatorow } from "./NawigacjaKalkulatorow";
+import { filtruj, type GrupaId } from "@/lib/calc/grupy";
 import { KryteriaObwodu, PrzelacznikTrybu } from "./DoborObwodu";
 import { ocenKryteria, werdyktObwodu, type OcenaKryterium } from "@/lib/calc/kryteriaObwodu";
 import { Field, HintButton } from "./Field";
@@ -243,6 +245,9 @@ export function CalculatorsTab() {
   // sam wzorzec co `useProjectStore` w całej aplikacji — każdy komponent
   // subskrybuje tylko to, co faktycznie czyta.
   const zapisanyActiveCalc = useCalculatorsStore((s) => s.activeCalc);
+  const zapisaneOstatnie = useCalculatorsStore((s) => s.ostatnieKalkulatory);
+  const zwinieteGrupy = useCalculatorsStore((s) => s.zwinieteGrupy);
+  const [frazaSzukania, setFrazaSzukania] = useState("");
   const circuitKind = useCalculatorsStore((s) => s.circuitKind);
   const power = useCalculatorsStore((s) => s.power);
   const phase = useCalculatorsStore((s) => s.phase);
@@ -421,8 +426,15 @@ export function CalculatorsTab() {
     route.tab === "kalkulatory" ? route.param : null,
     CALC_LIST.map((c) => c.id)
   );
-  const activeCalc: CalcId =
-    zParamu ?? (CALC_LIST.some((c) => c.id === zapisanyActiveCalc) ? zapisanyActiveCalc : CALC_LIST[0].id);
+  /**
+   * `null` = ekran startowy z kafelkami.
+   *
+   * Wejscie na samo „/kalkulatory" przekierowywalo wczesniej do OSTATNIO otwartego
+   * kalkulatora, wiec ktos, kto wchodzil tu pierwszy raz, ladowal w „Doborze obwodu"
+   * bez pojecia, ze obok jest siedemnascie innych narzedzi. Pamiec o ostatnim
+   * kalkulatorze zostaje — ale jako SKROT na ekranie startowym, nie jako przekierowanie.
+   */
+  const activeCalc: CalcId | null = zParamu ?? null;
 
   /**
    * Doprowadza adres do postaci KANONICZNEJ. Trzy przypadki, jeden warunek:
@@ -443,7 +455,8 @@ export function CalculatorsTab() {
       nawiguj("kalkulatory", "obwod", { replace: true });
       return;
     }
-    if (route.param !== activeCalc) nawiguj("kalkulatory", activeCalc, { replace: true });
+    // Brak parametru to WIDOK, nie brak danych — nie ma czego prostowac.
+    if (activeCalc && route.param !== activeCalc) nawiguj("kalkulatory", activeCalc, { replace: true });
   }, [route.tab, route.param, activeCalc, nawiguj, patch]);
 
   /**
@@ -489,8 +502,14 @@ export function CalculatorsTab() {
    * innego, mimo że pomiędzy nie było żadnego wyboru.
    */
   useEffect(() => {
-    if (route.tab === "kalkulatory" && zapisanyActiveCalc !== activeCalc) patch({ activeCalc });
-  }, [route.tab, activeCalc, zapisanyActiveCalc, patch]);
+    if (route.tab !== "kalkulatory" || !activeCalc) return;
+    // Lista ostatnich: najswiezszy na przodzie, bez powtorzen, maksymalnie trzy —
+    // dluzsza przestaje byc skrotem i staje sie druga lista wszystkiego.
+    const ostatnie = [activeCalc, ...zapisaneOstatnie.filter((id) => id !== activeCalc)].slice(0, 3);
+    const bezZmian = ostatnie.length === zapisaneOstatnie.length && ostatnie.every((id, i) => id === zapisaneOstatnie[i]);
+    if (!bezZmian) patch({ ostatnieKalkulatory: ostatnie });
+    if (zapisanyActiveCalc !== activeCalc) patch({ activeCalc });
+  }, [route.tab, activeCalc, zapisanyActiveCalc, zapisaneOstatnie, patch]);
   const setCircuitKind = (v: CircuitKind) => patch({ circuitKind: v });
   const setPower = (v: number) => patch({ power: v });
   const setPhase = (v: "1" | "3") => patch({ phase: v });
@@ -1042,7 +1061,9 @@ export function CalculatorsTab() {
     [roomA, lux, lumPerOpr, mf, uf]
   );
 
-  const active = CALC_LIST.find((c) => c.id === activeCalc)!; // bezpieczne — `activeCalc` jest wyżej sprowadzone do istniejącej pozycji
+  // `null` przy ekranie startowym — patrz `activeCalc` wyżej. Tytuły kart czytają
+  // z tego obiektu, więc renderują się tylko razem z wybranym kalkulatorem.
+  const active = CALC_LIST.find((c) => c.id === activeCalc) ?? CALC_LIST[0];
 
   return (
     <div className="space-y-5">
@@ -1054,28 +1075,56 @@ export function CalculatorsTab() {
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-        <div className="space-y-1.5" style={{ width: 260, flexShrink: 0, flexGrow: 0 }}>
-          {CALC_LIST.map((c) => {
-            const on = activeCalc === c.id;
-            return (
-              <button
-                key={c.id}
-                onClick={() => setActiveCalc(c.id)}
-                className="w-full text-left p-3 rounded-lg"
-                style={on ? { background: "#2D5A8C10", border: "1px solid #2D5A8C" } : { background: "#fff", border: "1px solid #DCE2E8" }}
-              >
-                <div className="min-w-0">
-                  <div className="text-[13px] font-medium" style={{ color: on ? "#2D5A8C" : "#16202B" }}>
-                    {c.label}
-                  </div>
-                  <div className="text-[11px] text-slate-500 leading-snug">{c.desc}</div>
-                </div>
-              </button>
-            );
-          })}
+        {/* Lista boczna: wyszukiwarka nad grupami. `sticky`, bo przy osiemnastu
+            pozycjach i długim wyniku wybór kolejnego kalkulatora wymagał wcześniej
+            przewinięcia całej strony z powrotem do góry.
+
+            Na ekranie startowym jej NIE MA: te same pozycje są tam kafelkami, więc
+            lista obok byłaby drugą kopią tej samej nawigacji — i zabierałaby jedną
+            trzecią szerokości, która przydaje się kafelkom. */}
+        {activeCalc && (
+        <div className="self-start lg:sticky lg:top-4" style={{ width: 260, flexShrink: 0, flexGrow: 0 }}>
+          <SzukajkaKalkulatorow
+            fraza={frazaSzukania}
+            onZmien={setFrazaSzukania}
+            liczbaWynikow={filtruj(CALC_LIST, frazaSzukania).length}
+          />
+          <ListaKalkulatorow
+            lista={CALC_LIST}
+            aktywny={activeCalc}
+            fraza={frazaSzukania}
+            zwiniete={zwinieteGrupy as GrupaId[]}
+            onPrzelaczGrupe={(id) =>
+              patch({
+                zwinieteGrupy: zwinieteGrupy.includes(id)
+                  ? zwinieteGrupy.filter((g) => g !== id)
+                  : [...zwinieteGrupy, id],
+              })
+            }
+            onWybierz={setActiveCalc}
+          />
         </div>
+        )}
 
         <div style={{ flex: "1 1 480px", minWidth: 320 }}>
+          {/* Bez wybranego kalkulatora pokazujemy, CO tu w ogóle jest — zamiast
+              wrzucać w ostatnio otwarty, którego nowy użytkownik nie wybierał. */}
+          {!activeCalc && (
+            <>
+              <div className="mb-4 max-w-sm">
+                <SzukajkaKalkulatorow
+                  fraza={frazaSzukania}
+                  onZmien={setFrazaSzukania}
+                  liczbaWynikow={filtruj(CALC_LIST, frazaSzukania).length}
+                />
+              </div>
+              <EkranStartowy
+                lista={filtruj(CALC_LIST, frazaSzukania)}
+                ostatnie={frazaSzukania.trim() ? [] : zapisaneOstatnie}
+                onWybierz={setActiveCalc}
+              />
+            </>
+          )}
           {/* Przelacznik trybu STOI NAD karta trybu, a nie w niej: to wybor pytania,
               nie jedno z pol formularza. Cztery dawne kalkulatory (przekroj,
               zabezpieczenie, WLZ, pelny dobor) pytaly o to samo z czterech stron. */}
