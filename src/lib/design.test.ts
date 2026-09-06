@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { InstallationElement, RoomShape } from "@/types";
 import { NO_ROOM } from "./elements";
-import {
+import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU,
   ROOM_COLORS,
   roomColorForIndex,
   nextRoomName,
@@ -359,5 +359,23 @@ describe("contentBounds", () => {
     const b = contentBounds(PLAN, [], [], [{ x: 500, y: 350 }], [], 300)!;
     expect(b.w).toBe(600);
     expect(b.x).toBe(200);
+  });
+});
+
+describe("gruboscObrysuPokoju", () => {
+  it("odpowiada 8 cm w skali rzutu", () => {
+    expect(gruboscObrysuPokoju(0.05)).toBeCloseTo(1.6, 6); // 1 jedn. = 5 cm
+    expect(gruboscObrysuPokoju(0.01)).toBeCloseTo(8, 6); // 1 jedn. = 1 cm
+  });
+
+  /** Bez kalibracji obowiazuje skala rysunku odrecznego — to ona jest wtedy prawda. */
+  it("bez skali bierze skale rysunku odrecznego", () => {
+    expect(gruboscObrysuPokoju(null)).toBeCloseTo(gruboscObrysuPokoju(MANUAL_DRAW_SCALE_MPU), 6);
+    expect(gruboscObrysuPokoju(0)).toBeCloseTo(gruboscObrysuPokoju(MANUAL_DRAW_SCALE_MPU), 6);
+  });
+
+  /** Im drobniejsza jednostka planu, tym WIECEJ jednostek na te same 8 cm. */
+  it("gestszy rzut daje grubszy obrys w jednostkach", () => {
+    expect(gruboscObrysuPokoju(0.01)).toBeGreaterThan(gruboscObrysuPokoju(0.05));
   });
 });

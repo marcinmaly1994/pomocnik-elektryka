@@ -383,3 +383,26 @@ export function contentBounds(
   const maxY = Math.min(planSize.h, Math.max(...punkty.map((p) => p.y)) + margines);
   return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
 }
+
+/**
+ * Grubość ścianki, którą rysujemy obrys pomieszczenia [m].
+ *
+ * Obrys pomieszczenia JEST ścianą — nie linią pomocniczą — więc ma wyglądać jak ściana,
+ * a nie jak włos. Wcześniej szedł stałym `strokeWidth` w jednostkach planu, przez co na
+ * rzucie skalibrowanym inaczej niż rysunek odręczny (np. wgranym PDF-em) wychodził raz
+ * grubszy, raz cieńszy niż jakakolwiek prawdziwa ściana.
+ *
+ * 8 cm to ścianka działowa — najcieńsza ściana, jaka w domu występuje. Świadomie
+ * najcieńsza z możliwych: obrys ma pokazywać, ŻE tam jest ściana, a nie zajmować
+ * miejsca za konkretną, jeszcze nieznaną konstrukcję.
+ */
+export const GRUBOSC_OBRYSU_POKOJU_M = 0.08;
+
+/**
+ * Ta sama grubość przeliczona na jednostki planu. Bez kalibracji bierzemy skalę
+ * rysunku odręcznego — to ona obowiązuje, dopóki użytkownik nie zmierzy nic własnego.
+ */
+export function gruboscObrysuPokoju(metersPerUnit: number | null): number {
+  const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
+  return GRUBOSC_OBRYSU_POKOJU_M / mpu;
+}

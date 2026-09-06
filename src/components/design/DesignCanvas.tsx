@@ -4,7 +4,8 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
-import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, type PlanSize } from "@/lib/design";
+import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, gruboscObrysuPokoju, type PlanSize } from "@/lib/design";
+import { promienieDoPokoi, snapDoPokoi } from "@/lib/roomSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
@@ -499,8 +500,33 @@ export function DesignCanvas({
    * o resztę dba `ROOM_SNAP_TOLERANCE_M` w DesignTab, która przypisuje go do
    * właściwego pomieszczenia, gdy wypadł tuż obok jego obrysu (nie przesuwa go).
    */
+  /** Grubosc obrysu pomieszczen w jednostkach planu — jedna dla calego rysunku,
+   *  bo skala jest wspolna. Liczona raz, nie w petli po pomieszczeniach. */
+  const grubosciObrysu = gruboscObrysuPokoju(metersPerUnit);
+
   function withSnap(p: Point): Point {
     return snapOn ? { x: snap(p.x, GRID), y: snap(p.y, GRID) } : p;
+  }
+
+  /**
+   * Przyciąganie punktu RYSOWANEGO POMIESZCZENIA — najpierw do sąsiadów, dopiero potem
+   * do siatki.
+   *
+   * Kolejność jest tu całą treścią: pokoje w domu stykają się ścianami, więc trafienie
+   * w krawędź sąsiada jest ważniejsze niż trafienie w linię siatki. Bok pomieszczenia
+   * może mieć dowolną długość, więc jego krawędź wcale nie musi leżeć na siatce —
+   * i wtedy sąsiad przyciągnięty do siatki mija się z nią o kilka jednostek, zostawiając
+   * szczelinę albo zachodząc na niego (patrz `lib/roomSnap.ts`).
+   *
+   * NIE zależy od przełącznika „przyciągaj do siatki" i to jest świadome. Siatkę gasi
+   * się na wgranym podkładzie, bo ściany na zdjęciu nie leżą na jej oczkach (patrz
+   * `setSnapOn` w DesignTab) — ale to jest argument przeciwko SIATCE, nie przeciwko
+   * dociąganiu do pokoju, który użytkownik sam przed chwilą narysował. Szczelina
+   * kilku centymetrów między dwoma pokojami nie jest niczyim zamiarem.
+   */
+  function snapPunktuPokoju(p: Point): Point {
+    const { naroznik, krawedz } = promienieDoPokoi(metersPerUnit);
+    return snapDoPokoi(p, roomShapes, naroznik, krawedz)?.point ?? withSnap(p);
   }
 
   /** Przy rysowaniu ortogonalnym zamraża oś BLIŻSZĄ poprzedniemu punktowi na jego
@@ -676,7 +702,7 @@ export function DesignCanvas({
     if (drawingRoom && roomMode === "prostokat") {
       const p = stage && planPoint(stage, planSize);
       if (!p) return;
-      const start = withSnap(p);
+      const start = snapPunktuPokoju(p);
       roomRectStartRef.current = start;
       const rect = { x: start.x, y: start.y, w: 0, h: 0 };
       roomRectRef.current = rect;
@@ -718,7 +744,7 @@ export function DesignCanvas({
       if (roomMode === "wielobok") {
         // przy kursorze w pobliżu startu pokazujemy punkt startowy, nie pozycję myszy —
         // dzięki temu widać dokładnie, gdzie figura się domknie
-        setRoomCursor(closesPolygon(raw) ? drawingRoomPoints[0] : withSnap(raw));
+        setRoomCursor(closesPolygon(raw) ? drawingRoomPoints[0] : snapPunktuPokoju(raw));
         return;
       }
       // Kotwica z pierwszego kliknięcia działa tak samo jak wciśnięty przycisk —
@@ -726,7 +752,7 @@ export function DesignCanvas({
       // kliknięciu ekran wyglądałby, jakby nic się nie stało.
       const start = roomRectStartRef.current ?? rectAnchor;
       if (!start) return;
-      const rect = rectBetween(start, withSnap(raw));
+      const rect = rectBetween(start, snapPunktuPokoju(raw));
       roomRectRef.current = rect;
       setRoomRect(rect);
       return;
@@ -829,7 +855,7 @@ export function DesignCanvas({
           roomRectJustDrawnRef.current = false;
           return;
         }
-        const rogSnapowany = withSnap(p);
+        const rogSnapowany = snapPunktuPokoju(p);
         // Druga (obok przytrzymania) droga do tego samego prostokąta: klik stawia
         // narożnik, ruch myszy rozciąga podgląd, kolejny klik domyka figurę.
         if (rectAnchor) {
@@ -847,7 +873,7 @@ export function DesignCanvas({
         setRoomCursor(null);
         return;
       }
-      onAddRoomPoint(withSnap(p));
+      onAddRoomPoint(snapPunktuPokoju(p));
       return;
     }
     if (toolMode === "skala") {
@@ -1106,7 +1132,14 @@ export function DesignCanvas({
                   closed
                   fill={`${r.color}22`}
                   stroke={r.color}
-                  strokeWidth={isSelRoom ? 2.5 : 1.5}
+                  // Obrys pomieszczenia JEST ścianą, więc ma grubość ścianki działowej
+                  // przeliczonej ze skali rzutu (patrz `gruboscObrysuPokoju`), a nie
+                  // stałą w jednostkach planu. Przy stałej wychodził na skalibrowanym
+                  // podkładzie raz grubszy, raz cieńszy niż jakakolwiek prawdziwa ściana.
+                  // Zaznaczone pomieszczenie dostaje narzut, nie inną grubość — grubość
+                  // niesie informację o murze i nie może zmieniać się od kliknięcia.
+                  strokeWidth={grubosciObrysu + (isSelRoom ? 1 : 0)}
+                  lineJoin="miter"
                 />
 
                 {/* Krawędź: OSOBNY, niewidoczny kształt WYŁĄCZNIE do klikania, z szerokim
@@ -1133,6 +1166,21 @@ export function DesignCanvas({
                   strokeWidth={1}
                   hitStrokeWidth={14}
                   onClick={(e) => {
+                    /**
+                     * W trybie „pomieszczenie" LEWY klik należy do rysunku, nie do
+                     * sąsiada. `hitStrokeWidth` (14 jedn.) ciągnie się wzdłuż całego
+                     * obrysu, więc rysując pokój PRZY istniejącym każdy punkt stawiany
+                     * na wspólnej ścianie lądował tutaj i znikał — zmierzone: z pięciu
+                     * kliknięć wzdłuż wspólnej krawędzi rejestrowały się dwa, a figury
+                     * nie dawało się domknąć.
+                     *
+                     * Wychodzimy BEZ `cancelBubble`, więc zdarzenie idzie dalej do
+                     * sceny i staje się punktem wieloboku. Samo `listening={false}`
+                     * w tym trybie byłoby prostsze, ale zabrałoby też PPM „Usuń
+                     * pomieszczenie" na krawędzi — a prawy przycisk niczego tu nie
+                     * rysuje, więc nie ma powodu, żeby go tracić.
+                     */
+                    if (toolMode === "pomieszczenie") return;
                     e.cancelBubble = true;
                     // W trybie „otwory" klik w krawędź pomieszczenia dokłada na niej
                     // drzwi zamiast zaznaczać pomieszczenie — ten sam wzorzec co przy
