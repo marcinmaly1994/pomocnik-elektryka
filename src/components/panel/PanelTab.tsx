@@ -83,8 +83,7 @@ export function PanelTab() {
   // inaczej zmiana zasilania tutaj nie byłaby widoczna na schemacie jednokreskowym.
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const setPanelConfig = useProjectStore((s) => s.setPanelConfig);
-  const { supply3f, mainRating } = panelConfig;
-  const [perRow, setPerRow] = useState(12);
+  const { supply3f, mainRating, perRow } = panelConfig;
   // Aparaty, ukryte pozycje i tryb mieszkają w PROJEKCIE, nie w stanie komponentu.
   // Wcześniej ręcznie dołożone aparaty i skasowane pozycje przepadały przy odświeżeniu
   // i nie trafiały do zapisu — a bez trwałości nie da się złożyć rozdzielnicy bez rzutu.
@@ -412,7 +411,7 @@ export function PanelTab() {
         </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Modułów w rzędzie</div>
-          <select value={perRow} onChange={(e) => setPerRow(Number(e.target.value))} className="pe-input text-sm">
+          <select value={perRow} onChange={(e) => setPanelConfig({ perRow: Number(e.target.value) })} className="pe-input text-sm">
             {PER_ROW_OPTIONS.map((n) => (
               <option key={n} value={n}>
                 {n}

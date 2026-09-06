@@ -444,7 +444,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   qtyOverrides: {},
   projectName: "Mój dom",
   protocols: {},
-  panelConfig: { supply3f: true, mainRating: 40 },
+  panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
   panelDevices: [],
   panelHidden: [],
   panelTryb: "zRzutu",
@@ -551,7 +551,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       floors: [{ id: "f1", name: "Parter" }],
       activeFloorId: "f1",
       projectName: "Mój dom",
-      panelConfig: { supply3f: true, mainRating: 40 },
+      panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
       panelDevices: [],
       panelHidden: [],
       panelTryb: "zRzutu",
@@ -609,7 +609,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // migawki go nie mają, stąd fallback do domyślnej konfiguracji. Starsze zapisy
       // MOGĄ mieć w środku jeszcze pole `spd` sprzed usunięcia go z typu — zostaje
       // wtedy nieużywane w obiekcie (nikt go już nie czyta), nie trzeba go czyścić.
-      panelConfig: payload.panelConfig || { supply3f: true, mainRating: 40 },
+      //
+      // Domyślne wartości nakładane NA obiekt, nie tylko na jego brak: `perRow` doszło
+      // później niż sam `panelConfig`, więc brakuje go także w migawkach, które
+      // `panelConfig` już mają. Bez tego rozdzielnica wczytana ze starego projektu
+      // miałaby rząd o szerokości `undefined` i nie policzyłaby modułów.
+      panelConfig: { supply3f: true, mainRating: 40, perRow: 12, ...((payload.panelConfig ?? {}) as Partial<PanelConfig>) },
       // Projekty zapisane przed wprowadzeniem trwałej rozdzielnicy nie mają tych pól —
       // wracają wtedy do trybu „z rzutu" i odbudowują aparaty z obwodów, czyli
       // dokładnie tak, jak działały do tej pory.
