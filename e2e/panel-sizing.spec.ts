@@ -79,7 +79,9 @@ test("bez kalibracji skali spadek napięcia jest zgłoszony jako niesprawdzony, 
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   const card = page.locator("div.pe-card", { hasText: "Dobór obwodów wg PN-HD 60364" });
 
-  await expect(card.getByText(/Plan nie ma skalibrowanej skali/)).toBeVisible();
+  // Komunikat NAZYWA kondygnację, zamiast mówić „plan nie ma skali": skala jest
+  // właściwością kondygnacji, więc przy kilku piętrach trzeba wiedzieć, które otworzyć.
+  await expect(card.getByText(/Bez skali: Parter/)).toBeVisible();
   // fraza z ostrzeżenia przy konkretnym obwodzie, nie z nagłówka karty
   await expect(card.getByText(/Dobór pokrywa wyłącznie obciążalność/)).toBeVisible();
   // kolumna ΔU pokazuje kreskę, a nie liczbę wziętą z długości „na oko"

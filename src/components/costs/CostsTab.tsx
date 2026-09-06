@@ -3,7 +3,6 @@ import { AlertTriangle, Download, Info, Upload, X } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, routeLengths } from "@/lib/panel/project";
-import { scaleOf } from "@/lib/design";
 import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, VAT_RATE } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 
@@ -25,21 +24,20 @@ export function CostsTab() {
   const costOverrides = useProjectStore((s) => s.costOverrides);
   const setCostOverride = useProjectStore((s) => s.setCostOverride);
   const projectName = useProjectStore((s) => s.projectName);
-  const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const scales = useProjectStore((s) => s.scales);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Te same obwody co w Rozdzielnicy/Schemacie — przekroje z doboru trafiają wprost
-  // do pozycji kosztorysu, więc zamawiany materiał zgadza się z rysunkiem.
-  const mpu = scaleOf(scales, activeFloorId);
+  // do pozycji kosztorysu, więc zamawiany materiał zgadza się z rysunkiem. Skale idą
+  // CAŁĄ MAPĄ, bo obwód potrafi sięgać kilku pięter (patrz `estimateRoutesByFloor`).
   const { circuits } = useMemo(
-    () => computeSizedCircuits(elements, { metersPerUnit: mpu }, roomShapes),
-    [elements, mpu, roomShapes]
+    () => computeSizedCircuits(elements, { scales }, roomShapes),
+    [elements, scales, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const { quantities, cableLengthSource } = useMemo(
-    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: routeLengths(circuits, elements, mpu) }),
-    [elements, circuits, rcdGroups, mpu]
+    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: routeLengths(circuits, elements, scales) }),
+    [elements, circuits, rcdGroups, scales]
   );
 
   const rows = kosztorysRows(quantities, prices, costOverrides);

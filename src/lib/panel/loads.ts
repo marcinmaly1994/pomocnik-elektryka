@@ -149,6 +149,57 @@ export function estimateRoutes(
   return { worstCaseM: round1(worst), totalM: round1(total) };
 }
 
+/**
+ * To samo, ale dla obwodu rozłożonego na WIĘCEJ NIŻ JEDNĄ kondygnację.
+ *
+ * Skala jest właściwością kondygnacji, nie projektu: parter bywa wgranym skanem
+ * skalibrowanym na 1 jedn. = 1,2 cm, a piętro narysowanym od zera (1 jedn. = 5 cm).
+ * Wcześniej cały budynek liczył się jedną skalą — tą z kondygnacji AKURAT OTWARTEJ
+ * w edytorze — więc metry na pozostałych piętrach wychodziły przemnożone przez
+ * przypadkowy współczynnik, a wynik zmieniał się przy samym przełączeniu zakładki
+ * kondygnacji. Dotyczyło to jednocześnie kosztorysu (ile kabla kupić) i doboru
+ * przekroju (spadek napięcia liczy się z długości trasy).
+ *
+ * Każda kondygnacja liczy się więc własną skalą, a wyniki sumują się na końcu:
+ * `totalM` to suma (tyle kabla trzeba), `worstCaseM` maksimum (to najdłuższa
+ * pojedyncza trasa decyduje o spadku napięcia).
+ *
+ * `null`, gdy CHOĆ JEDNEJ kondygnacji z obwodu brakuje skali. Nie liczymy części:
+ * skrócona długość zaniżyłaby spadek napięcia i dobrała za cienki przewód, a to
+ * jest błąd w złą stronę. Lepiej odesłać obwód do ryczałtu i powiedzieć o tym wprost
+ * (patrz `cableLengthSource` w kosztorysie).
+ *
+ * Czego to NIE liczy: pionu MIĘDZY kondygnacjami. Trasa z rozdzielnicy na parterze
+ * do gniazda na piętrze dostaje tylko rzut poziomy i zejścia spod stropu — bo plan
+ * nie wie, jaka jest wysokość kondygnacji. To osobne, świadome przybliżenie, starsze
+ * od tej poprawki.
+ */
+export function estimateRoutesByFloor(
+  panel: Point | null,
+  elements: InstallationElement[],
+  scales: Record<string, number>,
+  panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5
+): RouteEstimate | null {
+  if (!panel || elements.length === 0) return null;
+  const poKondygnacjach = new Map<string, InstallationElement[]>();
+  for (const e of elements) {
+    const lista = poKondygnacjach.get(e.floor);
+    if (lista) lista.push(e);
+    else poKondygnacjach.set(e.floor, [e]);
+  }
+
+  let worst = 0;
+  let total = 0;
+  for (const [floor, grupa] of poKondygnacjach) {
+    const skala = scales[floor];
+    const r = estimateRoutes(panel, grupa, typeof skala === "number" && skala > 0 ? skala : null, panelHeightM);
+    if (!r) return null;
+    total += r.totalM;
+    if (r.worstCaseM > worst) worst = r.worstCaseM;
+  }
+  return { worstCaseM: round1(worst), totalM: round1(total) };
+}
+
 /** Znajduje rozdzielnicę na danej kondygnacji — punkt odniesienia dla wszystkich tras. */
 export function findPanel(elements: InstallationElement[]): Point | null {
   const p = elements.find((e) => e.type === "rozdzielnica");

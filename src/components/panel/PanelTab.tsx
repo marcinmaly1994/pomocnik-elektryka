@@ -118,14 +118,24 @@ export function PanelTab() {
 
   // Dobór normatywny: przekrój, zabezpieczenie, ΔU i Zs liczone z tablic PN-HD 60364
   // (src/lib/panel/sizing.ts) zamiast stałych wpisanych przy generowaniu obwodów.
-  // Skala z bieżącej kondygnacji — bez kalibracji `mpu` jest null i dobór jawnie
-  // zgłasza, że spadku napięcia nie sprawdzono, zamiast liczyć go z długości „na oko".
-  const activeFloorId = useProjectStore((s) => s.activeFloorId);
+  // Skale WSZYSTKICH kondygnacji, nie tylko bieżącej: obwody obejmują cały budynek
+  // (patrz `elements` wyżej), a skala jest właściwością kondygnacji — patrz
+  // `estimateRoutesByFloor`. Bez kalibracji dobór jawnie zgłasza, że spadku napięcia
+  // nie sprawdzono, zamiast liczyć go z długości „na oko".
+  const floors = useProjectStore((s) => s.floors);
   const scales = useProjectStore((s) => s.scales);
-  const mpu = scaleOf(scales, activeFloorId);
+  /** Kondygnacje, na których stoi osprzęt, ale brakuje skali — to one blokują
+   *  sprawdzenie spadku napięcia, i to je trzeba nazwać po imieniu. */
+  const bezSkali = useMemo(
+    () =>
+      [...new Set(elements.map((e) => e.floor))]
+        .filter((id) => scaleOf(scales, id) === null)
+        .map((id) => floors.find((f) => f.id === id)?.name ?? id),
+    [elements, scales, floors]
+  );
   const { circuits, sized: sizedRaw } = useMemo(
-    () => computeSizedCircuits(elements, { metersPerUnit: mpu }, roomShapes),
-    [elements, mpu, roomShapes]
+    () => computeSizedCircuits(elements, { scales }, roomShapes),
+    [elements, scales, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const sized = useMemo(() => assignPhases(sizedRaw, supply3f), [sizedRaw, supply3f]);
@@ -634,11 +644,14 @@ export function PanelTab() {
           Przekrój i zabezpieczenie dobrane tak, by jednocześnie spełnić Ib ≤ In ≤ Iz oraz limit spadku
           napięcia (3% oświetlenie, 5% pozostałe). Obciążalność z tablicy B.52.4 po współczynnikach
           temperatury i grupowania.{" "}
-          {mpu ? (
+          {/* Nazwy kondygnacji, nie samo „plan nie ma skali": przy trzech piętrach
+              i jednym nieskalibrowanym trzeba wiedzieć, KTÓRE otworzyć. */}
+          {bezSkali.length === 0 ? (
             <>Długości tras policzone z kalibracji skali planu.</>
           ) : (
             <span style={{ color: "#8A5526" }}>
-              Plan nie ma skalibrowanej skali — spadek napięcia nie został sprawdzony.
+              Bez skali: {bezSkali.join(", ")} — spadek napięcia nie został sprawdzony dla obwodów
+              sięgających {bezSkali.length === 1 ? "tej kondygnacji" : "tych kondygnacji"}.
             </span>
           )}
         </p>
