@@ -36,7 +36,11 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
       <span
         className="flex items-center gap-1 text-xs"
         style={{ color: "#8A5526" }}
-        title="W chmurze jest nowsza wersja tego projektu. Autozapis wstrzymany do czasu rozstrzygnięcia."
+        title={
+          konflikt.rodzaj === "protokoly"
+            ? "W chmurze jest nowsza wersja tego zestawu protokołów. Rozstrzygnij, którą zachować."
+            : "W chmurze jest nowsza wersja tego projektu. Autozapis wstrzymany do czasu rozstrzygnięcia."
+        }
       >
         <AlertTriangle size={12} /> Zmiany niezapisane — konflikt
       </span>

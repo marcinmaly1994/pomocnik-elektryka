@@ -73,6 +73,12 @@ let ostatniaZapisanaNazwa: string | null = null;
  */
 let znaneUpdatedAt: string | null = null;
 
+/** To samo dla ZESTAWU PROTOKOLOW — osobny wiersz w tej samej tabeli, wiec i osobny
+ *  znacznik. Protokoly zapisuja sie tylko na klikniecie, wiec okno na kolizje jest
+ *  mniejsze niz przy autozapisie projektu, ale kolizja konczy sie tak samo: cudza
+ *  praca znika bez sladu. */
+let znaneUpdatedAtProtokoly: string | null = null;
+
 function loadStoredSession(): Session | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -294,7 +300,7 @@ interface ProjectState {
    * Ktos zapisal ten sam projekt w miedzyczasie (inne urzadzenie, inna karta).
    * `null` = brak konfliktu. Rozstrzyga uzytkownik — patrz `saveToCloud`.
    */
-  konfliktChmury: { id: string; nazwa: string } | null;
+  konfliktChmury: { rodzaj: RodzajDokumentu; id: string; nazwa: string } | null;
 
   // historia cofnij/ponów — ten sam mechanizm co useHistory() w wersji JS,
   // ale jako część store'a, więc undo/redo działa niezależnie od tego,
@@ -908,7 +914,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           warunek
         );
         if (warunek && wiersze.length === 0) {
-          set({ autozapisWstrzymany: true, konfliktChmury: { id: docelowyId, nazwa: projectName } });
+          set({ autozapisWstrzymany: true, konfliktChmury: { rodzaj: "projekt", id: docelowyId, nazwa: projectName } });
           return;
         }
         znaneUpdatedAt = wiersze[0]?.updated_at ?? null;
@@ -962,13 +968,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  nowyZestawProtokolow: () => set({ protokolyId: null, protokolyNazwa: "", protocols: {} }),
+  nowyZestawProtokolow: () => {
+    // Nowy zestaw nie jest jeszcze zadnym wierszem w chmurze — zostawiony znacznik
+    // kazalby pierwszemu zapisowi celowac w cudzy.
+    znaneUpdatedAtProtokoly = null;
+    set({ protokolyId: null, protokolyNazwa: "", protocols: {}, konfliktChmury: null });
+  },
 
   saveProtokolyToCloud: async (nazwa, opcje) => {
     const { docHeader, protocols, protokolyId, zapewnijSesje } = get();
     const session = await zapewnijSesje();
     if (!session) return;
-    set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null });
+    set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null, konfliktChmury: null });
     try {
       // Limit sprawdzamy na ŚWIEŻEJ liście z serwera, nie na lokalnej kopii: ten sam
       // użytkownik mógł zapisać coś na innym urządzeniu i lokalny stan byłby nieaktualny.
@@ -997,10 +1008,25 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const data = { kind: "protokoly", docHeader, protocols } as unknown as Record<string, unknown>;
       const tytul = tytulRoboczy;
       if (docelowyId) {
-        await supaUpdateProject(session.token, docelowyId, { name: tytul, data, updated_at: new Date().toISOString() });
+        // Ten sam optimistic locking co przy projekcie — patrz `supaUpdateProject`.
+        // Protokoły zapisują się tylko na kliknięcie, więc kolizja jest rzadsza, ale
+        // kończy się identycznie: pomiary wpisane na drugim urządzeniu znikają.
+        const warunek = opcje?.nadpiszId ? null : znaneUpdatedAtProtokoly;
+        const wiersze = await supaUpdateProject(
+          session.token,
+          docelowyId,
+          { name: tytul, data, updated_at: new Date().toISOString() },
+          warunek
+        );
+        if (warunek && wiersze.length === 0) {
+          set({ konfliktChmury: { rodzaj: "protokoly", id: docelowyId, nazwa: tytul } });
+          return;
+        }
+        znaneUpdatedAtProtokoly = wiersze[0]?.updated_at ?? null;
         if (docelowyId !== protokolyId) set({ protokolyId: docelowyId });
       } else {
         const [row] = await supaInsertProject(session.token, { user_id: session.user.id, name: tytul, data });
+        znaneUpdatedAtProtokoly = row.updated_at ?? null;
         set({ protokolyId: row.id });
       }
       set({ protokolyNazwa: tytul, lastCloudSaveAt: Date.now() });
@@ -1026,7 +1052,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         protocols: data.protocols ?? {},
         protokolyId: row.id,
         protokolyNazwa: row.name || "Protokoły",
+        konfliktChmury: null,
       });
+      // Od tego stanu wiersza liczy sie kolejny zapis — patrz `znaneUpdatedAtProtokoly`.
+      znaneUpdatedAtProtokoly = row.updated_at ?? null;
     } catch (e) {
       set({ cloudSaveError: e instanceof Error ? e.message : "Nie udało się wczytać protokołów" });
     } finally {

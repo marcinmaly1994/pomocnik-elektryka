@@ -752,47 +752,60 @@ export default function App() {
           więc nie ma dobrego automatycznego wyjścia i decyzję podejmuje użytkownik.
           Wcześniej wygrywał po prostu ten, kto zapisał później, i nikt się o tym nie
           dowiadywał. */}
-      <Dialog open={!!konfliktChmury} onOpenChange={(o) => !o && odlozKonflikt()}>
-        <DialogContent title="Ktoś zapisał ten projekt w międzyczasie">
-          <p className="mb-2 text-sm text-slate-600">
-            W chmurze jest nowsza wersja projektu <strong className="text-ink">„{konfliktChmury?.nazwa}”</strong> niż ta,
-            którą masz otwartą. Zapisał ją inny komputer, tablet albo druga karta tej przeglądarki.
-          </p>
-          <p className="mb-4 text-xs text-slate-500">
-            Automatyczny zapis jest wstrzymany, żeby nie skasować żadnej z tych wersji. Wczytanie porzuci zmiany
-            zrobione tutaj; nadpisanie porzuci tamte. Jeśli obie są potrzebne, zmień nazwę projektu i zapisz jako nowy.
-          </p>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={odlozKonflikt}>
-              Zdecyduję później
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const k = konfliktChmury;
-                if (!k) return;
-                odlozKonflikt();
-                void loadFromCloud(k.id);
-              }}
-            >
-              Wczytaj wersję z chmury
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                const k = konfliktChmury;
-                if (!k) return;
-                odlozKonflikt();
-                void saveToCloud({ reczny: true, nadpiszId: k.id });
-              }}
-            >
-              Nadpisz moją wersją
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {(() => {
+        // Protokoły zapisują się WYŁĄCZNIE na kliknięcie, więc nie ma tam czego
+        // wstrzymywać — zdanie o autozapisie dotyczy tylko projektu i pojawia się
+        // tylko przy nim. Bez tego rozróżnienia okno mówiłoby o mechanizmie, którego
+        // w tym dokumencie nie ma.
+        const protokoly = konfliktChmury?.rodzaj === "protokoly";
+        const czym = protokoly ? "zestawu protokołów" : "projektu";
+        return (
+          <Dialog open={!!konfliktChmury} onOpenChange={(o) => !o && odlozKonflikt()}>
+            <DialogContent title={`Ktoś zapisał ${protokoly ? "te protokoły" : "ten projekt"} w międzyczasie`}>
+              <p className="mb-2 text-sm text-slate-600">
+                W chmurze jest nowsza wersja {czym} <strong className="text-ink">„{konfliktChmury?.nazwa}”</strong> niż
+                ta, którą masz otwartą. Zapisał ją inny komputer, tablet albo druga karta tej przeglądarki.
+              </p>
+              <p className="mb-4 text-xs text-slate-500">
+                {protokoly
+                  ? "Wczytanie porzuci pomiary wpisane tutaj; nadpisanie porzuci tamte. Jeśli obie wersje są potrzebne, zmień nazwę zestawu i zapisz jako nowy."
+                  : "Automatyczny zapis jest wstrzymany, żeby nie skasować żadnej z tych wersji. Wczytanie porzuci zmiany zrobione tutaj; nadpisanie porzuci tamte. Jeśli obie są potrzebne, zmień nazwę projektu i zapisz jako nowy."}
+              </p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={odlozKonflikt}>
+                  Zdecyduję później
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const k = konfliktChmury;
+                    if (!k) return;
+                    odlozKonflikt();
+                    if (k.rodzaj === "protokoly") void loadProtokolyFromCloud(k.id);
+                    else void loadFromCloud(k.id);
+                  }}
+                >
+                  Wczytaj wersję z chmury
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    const k = konfliktChmury;
+                    if (!k) return;
+                    odlozKonflikt();
+                    if (k.rodzaj === "protokoly") void saveProtokolyToCloud(k.nazwa, { nadpiszId: k.id });
+                    else void saveToCloud({ reczny: true, nadpiszId: k.id });
+                  }}
+                >
+                  Nadpisz moją wersją
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {session && accountModalTab && (
         <AccountModal

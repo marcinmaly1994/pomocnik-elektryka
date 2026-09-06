@@ -70,7 +70,7 @@ describe("optimistic locking zapisu projektu", () => {
     await useProjectStore.getState().saveToCloud();
 
     const stan = useProjectStore.getState();
-    expect(stan.konfliktChmury).toEqual({ id: "p1", nazwa: "Mój dom" });
+    expect(stan.konfliktChmury).toEqual({ rodzaj: "projekt", id: "p1", nazwa: "Mój dom" });
     // Bez wstrzymania autozapis wracałby z tym samym pytaniem co 2,5 s.
     expect(stan.autozapisWstrzymany).toBe(true);
     // Konflikt to NIE jest udany zapis — godzina „zapisano" nie ma prawa drgnąć,
@@ -114,5 +114,60 @@ describe("optimistic locking zapisu projektu", () => {
 
     expect(supa.insert).toHaveBeenCalledTimes(2);
     expect(useProjectStore.getState().cloudId).toBe("p2");
+  });
+});
+
+/**
+ * Protokoly pomiarowe siedza w tej samej tabeli co projekty i szly tym samym slepym
+ * PATCH-em. Zapisuja sie tylko na klikniecie, wiec okno na kolizje jest mniejsze niz
+ * przy autozapisie co 2,5 s — ale konczy sie identycznie: pomiary wpisane na drugim
+ * urzadzeniu znikaja bez sladu.
+ */
+describe("optimistic locking zapisu protokolow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useProjectStore.getState().resetProject();
+    useProjectStore.getState().nowyZestawProtokolow();
+    useProjectStore.setState({ session: SESJA, konfliktChmury: null });
+  });
+
+  async function zapiszPierwszyRaz(updatedAt: string) {
+    supa.list.mockResolvedValueOnce([]);
+    supa.insert.mockResolvedValueOnce([{ id: "pr1", name: "Pomiary", data: {}, updated_at: updatedAt }]);
+    await useProjectStore.getState().saveProtokolyToCloud("Pomiary");
+  }
+
+  it("kolejny zapis niesie znacznik z odpowiedzi bazy", async () => {
+    await zapiszPierwszyRaz("2026-09-06T10:00:00+00:00");
+    expect(useProjectStore.getState().protokolyId).toBe("pr1");
+
+    supa.list.mockResolvedValueOnce([{ id: "pr1", name: "Pomiary", updated_at: "x", kind: "protokoly" }]);
+    supa.update.mockResolvedValueOnce([{ id: "pr1", name: "Pomiary", data: {}, updated_at: "2026-09-06T10:05:00+00:00" }]);
+    await useProjectStore.getState().saveProtokolyToCloud("Pomiary");
+
+    expect(supa.update).toHaveBeenCalledWith("t", "pr1", expect.anything(), "2026-09-06T10:00:00+00:00");
+  });
+
+  it("pusta odpowiedz zglasza konflikt opisany jako PROTOKOLY", async () => {
+    await zapiszPierwszyRaz("2026-09-06T10:00:00+00:00");
+
+    supa.list.mockResolvedValueOnce([{ id: "pr1", name: "Pomiary", updated_at: "x", kind: "protokoly" }]);
+    supa.update.mockResolvedValueOnce([]);
+    await useProjectStore.getState().saveProtokolyToCloud("Pomiary");
+
+    // Rodzaj decyduje o tresci okna i o tym, ktora akcje wywola „wczytaj"/„nadpisz".
+    expect(useProjectStore.getState().konfliktChmury).toEqual({ rodzaj: "protokoly", id: "pr1", nazwa: "Pomiary" });
+  });
+
+  it("nowy zestaw zapomina znacznik — inaczej pierwszy zapis celowalby w cudzy wiersz", async () => {
+    await zapiszPierwszyRaz("2026-09-06T10:00:00+00:00");
+    useProjectStore.getState().nowyZestawProtokolow();
+
+    supa.list.mockResolvedValueOnce([]);
+    supa.insert.mockResolvedValueOnce([{ id: "pr2", name: "Pomiary 2", data: {}, updated_at: "2026-09-06T12:00:00+00:00" }]);
+    await useProjectStore.getState().saveProtokolyToCloud("Pomiary 2");
+
+    expect(useProjectStore.getState().protokolyId).toBe("pr2");
+    expect(useProjectStore.getState().konfliktChmury).toBe(null);
   });
 });
