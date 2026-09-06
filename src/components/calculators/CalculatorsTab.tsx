@@ -46,7 +46,9 @@ import { useCalculatorsStore, type CalcId } from "@/store/useCalculatorsStore";
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { useProjectStore } from "@/store/useProjectStore";
+import { obwodyDoKalkulatora, type ObwodDoKalkulatora } from "@/lib/panel/project";
 import { Card } from "./Card";
+import { WczytajObwod } from "./WczytajObwod";
 import { Field, HintButton } from "./Field";
 import { HowItWorks } from "./HowItWorks";
 
@@ -837,6 +839,14 @@ export function CalculatorsTab() {
   // liczbę. Filtr `power > 0` odsiewa obwody złożone wyłącznie z elementów bez
   // przypisanej mocy typowej (np. same łączniki bez lamp w tej samej paczce).
   const projectElements = useProjectStore((s) => s.draft.elements);
+  const projectRoomShapes = useProjectStore((s) => s.draft.roomShapes);
+  const projectScales = useProjectStore((s) => s.scales);
+  /** Obwody rzutu gotowe do wpisania w kalkulator — te same liczby, ktore widac
+   *  w Rozdzielnicy (patrz `obwodyDoKalkulatora`). */
+  const obwodyProjektu = useMemo(
+    () => obwodyDoKalkulatora(projectElements, projectScales, projectRoomShapes),
+    [projectElements, projectScales, projectRoomShapes]
+  );
   const projectDevices = useMemo(() => {
     return computeCircuits(projectElements)
       .map((c) => {
@@ -849,6 +859,25 @@ export function CalculatorsTab() {
   function loadDevicesFromProject() {
     if (!confirm("Zastąpić listę odbiorników obwodami wyliczonymi z planu? Obecna lista zostanie nadpisana.")) return;
     setDevices(() => projectDevices.map((d) => ({ id: crypto.randomUUID(), ...d })));
+  }
+
+  /** Wypelnia kalkulator doboru danymi obwodu z rzutu. `cos φ` zostaje nietkniete —
+   *  projekt go nie modeluje, a podstawienie 1,0 po cichu zmienialoby wynik. */
+  function wczytajDoDoboru(o: ObwodDoKalkulatora) {
+    patch({
+      circuitKind: o.typ,
+      power: o.moc_W,
+      phase: o.liczba_faz,
+      ...(o.dlugosc_m !== undefined ? { length: o.dlugosc_m } : {}),
+    });
+  }
+
+  /** Wypelnia kalkulator petli zwarcia zabezpieczeniem dobranym dla obwodu z rzutu.
+   *  Zmierzonej impedancji NIE ruszamy — to jedyna liczba, ktora musi pochodzic
+   *  z miernika, a nie z projektu. */
+  function wczytajDoPetli(o: ObwodDoKalkulatora) {
+    if (!o.charakterystyka || !o.In_A) return;
+    patch({ zCurve: o.charakterystyka, zIn: o.In_A });
   }
 
   // --- 3. impedancja pętli zwarcia ---
@@ -932,6 +961,11 @@ export function CalculatorsTab() {
         <div style={{ flex: "1 1 480px", minWidth: 320 }}>
           {activeCalc === "przekroj" && (
             <Card title={active.label} tag="przekrój żyły">
+              <WczytajObwod
+                obwody={obwodyProjektu}
+                onPick={wczytajDoDoboru}
+                hint="Wypełni rodzaj obwodu, moc obliczeniową, liczbę faz i długość najdłuższej trasy — tymi samymi liczbami, którymi liczy Rozdzielnica. cos φ i warunki ułożenia zostają Twoje."
+              />
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
                   label="Rodzaj obwodu"
@@ -2983,6 +3017,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "petla" && (
             <Card title={active.label} tag="ochrona przeciwporażeniowa">
+              <WczytajObwod
+                obwody={obwodyProjektu.filter((o) => o.charakterystyka && o.In_A)}
+                onPick={wczytajDoPetli}
+                hint="Wypełni charakterystykę i prąd zabezpieczenia dobranego dla tego obwodu. Zmierzoną impedancję wpisujesz sam — ta może pochodzić tylko z miernika."
+              />
               <div className="grid sm:grid-cols-3 gap-x-4">
                 <Field
                   label="Charakterystyka"
