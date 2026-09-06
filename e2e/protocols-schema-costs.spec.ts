@@ -207,7 +207,7 @@ test("Kosztorys: wylicza pozycje z elementów i eksportuje CSV", async ({ page }
   await expect(page.getByRole("cell", { name: /Gniazdko/ }).first()).toBeVisible();
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Eksportuj kosztorys" }).click();
+  await page.getByRole("button", { name: "Eksportuj CSV" }).click();
   const download = await downloadPromise;
   // domyślna nazwa projektu („Mój dom") trafia do nazwy pliku po zamianie na ASCII
   expect(download.suggestedFilename()).toBe("kosztorys-moj-dom.csv");
@@ -384,4 +384,21 @@ test("Rzut: eksport do PDF dokłada legendę użytych symboli", async ({ page })
   const pobranie = page.waitForEvent("download");
   await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
   expect((await pobranie).suggestedFilename()).toMatch(/^rzut-.*[.]pdf$/);
+});
+
+test("Kosztorys: podgląd PDF rysuje zadrukowaną kartkę i pobiera się pod właściwą nazwą", async ({ page }) => {
+  await placeThreeSockets(page);
+  await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
+
+  await page.getByRole("button", { name: "Kosztorys do PDF" }).click();
+  oczekujKartke(await zmierzPodglad(page));
+
+  const pobranie = page.waitForEvent("download");
+  await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
+  const plik = await pobranie;
+  // Nazwa projektu („Mój dom") trafia do metryki jako „Obiekt", a stamtąd do nazwy pliku.
+  expect(plik.suggestedFilename()).toBe("kosztorys-moj-dom.pdf");
+
+  const fs = await import("node:fs");
+  expect(fs.statSync(await plik.path()).size).toBeGreaterThan(1000);
 });
