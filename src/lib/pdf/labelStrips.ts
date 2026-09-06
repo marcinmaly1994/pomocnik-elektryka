@@ -1,5 +1,5 @@
 import type { DocumentHeader, PanelDevice } from "@/types";
-import { createPdfDoc, pdfFitText, pdfTextWidth } from "./engine";
+import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
 import { zawijNaDwieLinie } from "@/lib/tekst";
@@ -83,7 +83,7 @@ function naOdcinki(rzad: PanelDevice[], maxSzer: number): PanelDevice[][] {
  * Składa PDF z paskami opisowymi i zwraca gotowe bajty (bez pobierania — testowalne
  * bez DOM-u, jak reszta silnika).
  */
-export function buildLabelStripsPdf(devices: PanelDevice[], perRow: number, header: DocumentHeader): Promise<Uint8Array> {
+export function buildLabelStripsDoc(devices: PanelDevice[], perRow: number, header: DocumentHeader): PdfDoc {
   const doc = createPdfDoc({
     pageW: STRONA_W,
     pageH: STRONA_H,
@@ -156,10 +156,19 @@ export function buildLabelStripsPdf(devices: PanelDevice[], perRow: number, head
     });
   }
 
-  return doc.finish();
+  return doc;
 }
 
 export async function downloadLabelStripsPdf(devices: PanelDevice[], perRow: number, header: DocumentHeader): Promise<boolean> {
   const bytes = await buildLabelStripsPdf(devices, perRow, header);
   return downloadPdfBytes(bytes, projectFileName("paski-opisowe-rozdzielnicy", header.obiekt, "pdf"));
+}
+
+/**
+ * Ten sam dokument jako gotowy plik. Rozdzielenie na buildLabelStripsDoc i buildLabelStripsPdf jest po to,
+ * zeby komplet dokumentacji mogl wziac SAME STRONY i zlozyc je z innymi dokumentami
+ * w jeden plik (patrz polaczDokumenty w engine.ts) — zamiast sklejac gotowe PDF-y.
+ */
+export function buildLabelStripsPdf(...args: Parameters<typeof buildLabelStripsDoc>): Promise<Uint8Array> {
+  return buildLabelStripsDoc(...args).finish();
 }

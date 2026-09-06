@@ -82,7 +82,9 @@ import { EditElementModal } from "./EditElementModal";
 import type Konva from "konva";
 import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
-import { buildDrawingPdf } from "@/lib/pdf/drawing";
+import { buildDrawingDoc } from "@/lib/pdf/drawing";
+import type { PdfDoc } from "@/lib/pdf/engine";
+import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { bialePlotno, plotnoDoPdf, rysujPodzialke, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
 import { projectFileName } from "@/lib/pdf/download";
 import { resolveDocHeader } from "@/lib/docHeader";
@@ -284,7 +286,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    * ekran — na ekranie rzut ma kilkaset pikseli szerokości i wydrukowany wyglądałby
    * jak powiększony zrzut.
    */
-  async function zbudujPdfRzutu(): Promise<Uint8Array> {
+  async function zbudujDokumentRzutu(): Promise<PdfDoc> {
     const stage = stageRef.current;
     if (!stage) throw new Error("Rzut nie jest jeszcze gotowy.");
 
@@ -345,7 +347,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       legenda.push({ symbol: await plotnoDoPdf(await svgDoPlotna(svg, 96)), opis });
     }
 
-    return buildDrawingPdf({
+    return buildDrawingDoc({
       tytul: `Rzut — ${floorName}`,
       header: docHeader,
       rysunek: await plotnoDoPdf(naBieli),
@@ -355,6 +357,17 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       zestawienie: pozycjeZestawieniaDoPdf(elements),
     });
   }
+  /**
+   * Zgłoszenie rzutu do kompletu dokumentacji.
+   *
+   * Rzut rasteryzuje się z ŻYWEJ sceny Konvy (`stageRef`), która istnieje tylko wtedy,
+   * gdy ta zakładka jest zamontowana — dlatego komplet nie buduje go sam, tylko otwiera
+   * zakładkę i sięga po tę funkcję (patrz `lib/pdf/rejestr.ts`). Klucz niesie ID
+   * kondygnacji, bo producent umie zbudować wyłącznie kondygnację AKTYWNĄ: komplet
+   * przełącza je po kolei i za każdym razem czeka na właściwy klucz.
+   */
+  useEffect(() => zarejestrujProducenta(`rzut:${activeFloorId}`, zbudujDokumentRzutu));
+
   const walls = useActiveFloorWalls();
   const roomShapes = useActiveFloorRoomShapes();
   const openings = useActiveFloorOpenings();
@@ -2086,7 +2099,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         onOpenChange={setPodgladPdf}
         title={`Rzut — ${floorName}`}
         filename={projectFileName(`rzut-${floorName}`, projectName, "pdf")}
-        build={zbudujPdfRzutu}
+        build={async () => (await zbudujDokumentRzutu()).finish()}
       />
 
       <EditorToolbar

@@ -1,5 +1,5 @@
 import type { DocumentHeader, PanelDevice } from "@/types";
-import { createPdfDoc, pdfFitText } from "./engine";
+import { createPdfDoc, pdfFitText, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
 
@@ -31,14 +31,14 @@ const HEAD_H = 22;
 
 /** Składa legendę rozdzielnicy elektrycznej i zwraca gotowe bajty PDF (bez pobierania —
  *  dzięki temu da się to przetestować bez DOM-u). */
-export function buildPanelLegendPdf(
+export function buildPanelLegendDoc(
   devices: PanelDevice[],
   rowCount: number,
   usedModules: number,
   totalModules: number,
   perRow = 12,
   header: DocumentHeader
-): Promise<Uint8Array> {
+): PdfDoc {
   const doc = createPdfDoc({ footer: (d) => drawTitleBlock(d, header, "Legenda rozdzielnicy elektrycznej") });
   const M = doc.margin;
   const W = doc.innerW;
@@ -93,7 +93,7 @@ export function buildPanelLegendPdf(
     doc.text("Wykonawca: ..................................", M + 270, doc.y, 9);
   }
 
-  return doc.finish();
+  return doc;
 }
 
 export async function downloadPanelLegendPdf(
@@ -106,4 +106,13 @@ export async function downloadPanelLegendPdf(
 ): Promise<boolean> {
   const bytes = await buildPanelLegendPdf(devices, rowCount, usedModules, totalModules, perRow, header);
   return downloadPdfBytes(bytes, projectFileName("legenda-rozdzielnicy", header.obiekt, "pdf"));
+}
+
+/**
+ * Ten sam dokument jako gotowy plik. Rozdzielenie na buildPanelLegendDoc i buildPanelLegendPdf jest po to,
+ * zeby komplet dokumentacji mogl wziac SAME STRONY i zlozyc je z innymi dokumentami
+ * w jeden plik (patrz polaczDokumenty w engine.ts) — zamiast sklejac gotowe PDF-y.
+ */
+export function buildPanelLegendPdf(...args: Parameters<typeof buildPanelLegendDoc>): Promise<Uint8Array> {
+  return buildPanelLegendDoc(...args).finish();
 }

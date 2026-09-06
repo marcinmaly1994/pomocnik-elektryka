@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfEscape, createPdfDoc, assemblePdfBytes } from "./engine";
+import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, type CzesciDokumentu, type PdfImage } from "./engine";
 import { parseTtf } from "./ttf";
 import { stubPdfFontFetch } from "./testFontMock";
 
@@ -149,14 +149,14 @@ describe("createPdfDoc + assemblePdfBytes", () => {
   });
 
   it("assemblePdfBytes bezpośrednio składa podane strony", () => {
-    const bytes = assemblePdfBytes(["0 g BT /F1 9 Tf 10 10 Td (x) Tj ET"], 100, 100, regularFont, boldFont);
+    const bytes = assemblePdfBytes([{ content: "0 g BT /F1 9 Tf 10 10 Td (x) Tj ET", w: 100, h: 100 }], regularFont, boldFont);
     const out = bytesToAscii(bytes);
     expect(out.startsWith("%PDF-1.4")).toBe(true);
     expect((out.match(/\/Type \/Page /g) || []).length).toBe(1);
   });
 
   it("osadza oba pliki fontów (/FontFile2) i realny BaseFont DejaVu Sans", () => {
-    const bytes = assemblePdfBytes(["0 g BT /F1 9 Tf 10 10 Td (x) Tj ET"], 100, 100, regularFont, boldFont);
+    const bytes = assemblePdfBytes([{ content: "0 g BT /F1 9 Tf 10 10 Td (x) Tj ET", w: 100, h: 100 }], regularFont, boldFont);
     const out = bytesToAscii(bytes);
     expect(out).toContain("/Subtype /TrueType");
     expect(out).toContain("/BaseFont /DejaVuSans");
@@ -240,5 +240,89 @@ describe("createPdfDoc — obrazy", () => {
     doc.text("Sam tekst", 42, 700);
     const out = bytesToAscii(await doc.finish());
     expect(out).not.toContain("/XObject");
+  });
+});
+
+/**
+ * Skladanie kilku dokumentow w jeden plik — fundament kompletu dokumentacji.
+ *
+ * Sklejamy CZESCI (strony i obrazy), a nie gotowe PDF-y: te trzeba by parsowac
+ * i przenumerowywac, a tutaj wszystko powstaje w naszym wlasnym generatorze.
+ */
+describe("polaczDokumenty + assemblePdfBytes", () => {
+  const obraz = (bajt: number): PdfImage => ({
+    bytes: new Uint8Array([bajt]),
+    width: 1,
+    height: 1,
+    filter: "FlateDecode",
+  });
+
+  it("zachowuje kolejnosc stron kolejnych dokumentow", () => {
+    const a: CzesciDokumentu = { pages: [{ content: "A1", w: 10, h: 10 }, { content: "A2", w: 10, h: 10 }], images: [] };
+    const b: CzesciDokumentu = { pages: [{ content: "B1", w: 20, h: 20 }], images: [] };
+    expect(polaczDokumenty([a, b]).pages.map((s) => s.content)).toEqual(["A1", "A2", "B1"]);
+  });
+
+  /** Kazda strona zostaje przy SWOIM formacie — komplet miesza pion z poziomem. */
+  it("nie ujednolica rozmiaru stron", () => {
+    const pion: CzesciDokumentu = { pages: [{ content: "p", w: 595.28, h: 841.89 }], images: [] };
+    const poziom: CzesciDokumentu = { pages: [{ content: "l", w: 841.89, h: 595.28 }], images: [] };
+    const { pages } = polaczDokumenty([pion, poziom]);
+    expect(pages[0]).toMatchObject({ w: 595.28, h: 841.89 });
+    expect(pages[1]).toMatchObject({ w: 841.89, h: 595.28 });
+  });
+
+  /**
+   * Sedno laczenia: `/Im1` drugiego dokumentu wskazywalby obraz pierwszego, wiec na
+   * kartce wyszedlby rzut parteru w miejscu schematu. Numery przesuwaja sie o tyle,
+   * ile obrazow wniosly dokumenty przed nim.
+   */
+  it("przenumerowuje odwolania do obrazow", () => {
+    const a: CzesciDokumentu = {
+      pages: [{ content: "q 1 0 0 1 0 0 cm /Im1 Do Q", w: 10, h: 10 }],
+      images: [obraz(1)],
+    };
+    const b: CzesciDokumentu = {
+      pages: [{ content: "q 1 0 0 1 0 0 cm /Im1 Do Q /Im2 Do", w: 10, h: 10 }],
+      images: [obraz(2), obraz(3)],
+    };
+    const { pages, images } = polaczDokumenty([a, b]);
+    expect(pages[0].content).toContain("/Im1 Do");
+    expect(pages[1].content).toContain("/Im2 Do");
+    expect(pages[1].content).toContain("/Im3 Do");
+    expect(images).toHaveLength(3);
+  });
+
+  it("pierwszy dokument zostaje nietkniety — nie ma czego przesuwac", () => {
+    const a: CzesciDokumentu = { pages: [{ content: "/Im1 Do", w: 10, h: 10 }], images: [obraz(1)] };
+    expect(polaczDokumenty([a]).pages[0].content).toBe("/Im1 Do");
+  });
+
+  it("z pustej listy powstaje pusty zestaw, nie wyjatek", () => {
+    expect(polaczDokumenty([])).toEqual({ pages: [], images: [] });
+  });
+
+  it("czesci() i finish() zamykaja dokument tak samo — bez zdublowanej strony", async () => {
+    const doc = createPdfDoc({ footer: (d) => d.text("stopka", 10, 10) });
+    doc.text("tresc", doc.margin, doc.y);
+    const czesci = doc.czesci();
+    expect(czesci.pages).toHaveLength(1);
+    // Drugie zamkniecie nie dokleja pustej kartki z druga tabliczka.
+    expect(doc.czesci().pages).toHaveLength(1);
+    const out = bytesToAscii(await doc.finish());
+    expect((out.match(/\/Type \/Page /g) || []).length).toBe(1);
+    expect((out.match(/\(stopka\)/g) || []).length).toBe(1);
+  });
+
+  it("zlozony komplet ma tyle stron, ile wniosly dokumenty", async () => {
+    const pion = createPdfDoc();
+    pion.text("kosztorys", pion.margin, pion.y);
+    const poziom = createPdfDoc({ pageW: 841.89, pageH: 595.28 });
+    poziom.text("karta obliczen", poziom.margin, poziom.y);
+    const { pages, images } = polaczDokumenty([pion.czesci(), poziom.czesci()]);
+    const out = bytesToAscii(assemblePdfBytes(pages, regularFont, boldFont, images));
+    expect((out.match(/\/Type \/Page /g) || []).length).toBe(2);
+    expect(out).toContain("/MediaBox [0 0 595.28 841.89]");
+    expect(out).toContain("/MediaBox [0 0 841.89 595.28]");
   });
 });

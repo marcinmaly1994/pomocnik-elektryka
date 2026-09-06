@@ -15,9 +15,10 @@ import {
 } from "@/lib/panel/devices";
 import { assignPhases, computeSizedCircuits, dlugosciDoboru, phaseBalance } from "@/lib/panel/project";
 import { scaleOf } from "@/lib/design";
-import { buildPanelLegendPdf, downloadPanelLegendPdf } from "@/lib/pdf/panelLegend";
-import { buildLabelStripsPdf, downloadLabelStripsPdf } from "@/lib/pdf/labelStrips";
-import { buildCalcSheetPdf, downloadCalcSheetPdf } from "@/lib/pdf/obliczenia";
+import { buildPanelLegendDoc, buildPanelLegendPdf, downloadPanelLegendPdf } from "@/lib/pdf/panelLegend";
+import { buildLabelStripsDoc, buildLabelStripsPdf, downloadLabelStripsPdf } from "@/lib/pdf/labelStrips";
+import { buildCalcSheetDoc, buildCalcSheetPdf, downloadCalcSheetPdf } from "@/lib/pdf/obliczenia";
+import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
@@ -174,6 +175,20 @@ export function PanelTab() {
   const rows = useMemo(() => layoutPanel(devices, perRow), [devices, perRow]);
   const usedModules = devices.reduce((a, d) => a + d.modules, 0);
   const totalModules = Math.max(rows.length, 1) * perRow;
+
+  /**
+   * Zgłoszenie trzech dokumentów tej zakładki do kompletu dokumentacji.
+   *
+   * Te akurat dałoby się złożyć z samych danych, bez montowania zakładki — ale wtedy
+   * komplet musiałby po raz drugi wyliczyć aparaty, rozkład modułów i dobór, czyli
+   * powtórzyć cały ten komponent. Jedna droga dla wszystkich dokumentów jest tańsza
+   * niż dwie, z których jedna po cichu się rozjeżdża (patrz `lib/pdf/rejestr.ts`).
+   */
+  useEffect(
+    () => zarejestrujProducenta("legenda", async () => buildPanelLegendDoc(devices, rows.length, usedModules, totalModules, perRow, docHeader))
+  );
+  useEffect(() => zarejestrujProducenta("paski", async () => buildLabelStripsDoc(devices, perRow, docHeader)));
+  useEffect(() => zarejestrujProducenta("obliczenia", async () => buildCalcSheetDoc(sized, dlugosci, docHeader)));
 
   // Bilans faz pochodzi z prądów OBLICZENIOWYCH (`balance`), nie ze znamionowych
   // zabezpieczeń — i ta sama wartość idzie do kontroli selektywności, żeby obie
