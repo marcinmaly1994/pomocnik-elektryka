@@ -28,6 +28,7 @@ import type { CircuitKind } from "@/lib/panel/sizing";
  */
 
 export type CalcId =
+  | "obwod"
   | "spadek"
   | "zwarcie"
   | "kompensacja"
@@ -49,6 +50,15 @@ export type CalcId =
   | "ev"
   | "oswietlenie"
   | "rcd";
+
+/**
+ * Tryb scalonego kalkulatora „Dobor obwodu".
+ *
+ * Cztery dawne kalkulatory pytaly o to samo z czterech stron: raz przekroj byl
+ * wynikiem, raz dana, raz chodzilo o linie zasilajaca, raz o komplet czterech
+ * kryteriow. Uzytkownik musial najpierw zgadnac, w ktorym z nich jest jego pytanie.
+ */
+export type TrybObwodu = "przekroj" | "zabezpieczenie" | "wlz" | "pelny";
 
 export interface CalculatorDevice {
   id: string;
@@ -86,6 +96,13 @@ interface CalculatorsState {
   ambientC: number;
   bundleCount: number;
   motorStart: boolean;
+  /** Tryb kalkulatora „Dobor obwodu" — patrz TrybObwodu. */
+  trybObwodu: TrybObwodu;
+  /** Impedancja petli w tym punkcie [Ω] — do 3. kryterium. 0 = nie podano. */
+  obwodZsOhm: number;
+  /** Spodziewany prad zwarcia [A] i czas wylaczenia [s] — do 4. kryterium. */
+  obwodIkA: number;
+  obwodCzasS: number;
   /**
    * Spadek napiecia zuzyty juz na WLZ [%].
    *
@@ -308,7 +325,9 @@ const DEFAULT_ODBIORY_FAZOWE: OdbiorFazowy[] = [
 export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>()(
   persist(
     (set) => ({
-      activeCalc: "przekroj",
+      // Scalony „Dobor obwodu" jest naturalnym wejsciem: to od doboru obwodu zaczyna
+      // sie kazda robota, a trzy pozostale tryby siedza w tym samym kalkulatorze.
+      activeCalc: "obwod",
 
       circuitKind: "gniazda",
       power: 2000,
@@ -319,6 +338,10 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       ambientC: 30,
       bundleCount: 1,
       motorStart: false,
+      trybObwodu: "przekroj",
+      obwodZsOhm: 0,
+      obwodIkA: 0,
+      obwodCzasS: 0.4,
       spadekWlzPct: 0,
       wlasnaStacja: false,
       breakerSection: 2.5,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
 import { obliczImpedancjePrzewodu, obliczPrzewodyRownolegle } from "@/lib/calc/conductorImpedance";
@@ -31,21 +31,25 @@ import {
   type ModelRezystywnosci,
   type RodzajLinii,
 } from "@/lib/norms/conductors";
+import { limitSpadkuPct } from "@/lib/panel/norms";
 import { formatLiczba } from "@/lib/calc/result";
 import { calcLighting, calcPowerBalance, maxGroundingResistance, UL } from "@/lib/electrical";
 import { LAYING_METHOD_LABELS, SECTIONS, U0, type LayingMethod } from "@/lib/panel/norms";
 import {
   sizeBreakerForSection,
+  voltageDropPct,
   sizeCircuit,
   sizeFeeder,
   zsMaxForBreaker,
   ZAPAS_POMIAROWY,
   type CircuitKind,
 } from "@/lib/panel/sizing";
-import { useCalculatorsStore, type CalcId } from "@/store/useCalculatorsStore";
+import { useCalculatorsStore, type CalcId, type TrybObwodu } from "@/store/useCalculatorsStore";
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { Card } from "./Card";
+import { KryteriaObwodu, PrzelacznikTrybu } from "./DoborObwodu";
+import { ocenKryteria, werdyktObwodu, type OcenaKryterium } from "@/lib/calc/kryteriaObwodu";
 import { Field, HintButton } from "./Field";
 import { HowItWorks } from "./HowItWorks";
 
@@ -62,12 +66,28 @@ import { HowItWorks } from "./HowItWorks";
  *  5. Obciążenia specjalne i jakość zasilania.
  *  6. Instalacje specjalne (opcjonalne, coraz częstsze) — PV, EV, oświetlenie.
  */
+/**
+ * Adresy czterech kalkulatorow scalonych w „Dobor obwodu" — kazdy prowadzi do
+ * wlasciwego TRYBU, a nie tylko do nowej strony.
+ *
+ * Linki do nich sa juz w obiegu (w mailach, notatkach, na forach), a kalkulator
+ * elektryczny bez wynikow to dla odbiorcy taki sam blad jak 404. Przekierowanie
+ * zachowuje intencje: kto szukal doboru zabezpieczenia, trafia w tryb „Mam przekroj",
+ * a nie na ekran, na ktorym musi zgadnac, gdzie sie to teraz znajduje.
+ */
+const TRYBY_OBWODU: TrybObwodu[] = ["przekroj", "zabezpieczenie", "wlz", "pelny"];
+
+const STARE_ADRESY: Record<string, TrybObwodu> = {
+  przekroj: "przekroj",
+  zabezpieczenie: "zabezpieczenie",
+  pelnyDobor: "pelny",
+  "pelny-dobor": "pelny",
+  wlz: "wlz",
+};
+
 const CALC_LIST: { id: CalcId; label: string; desc: string }[] = [
   { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza" },
-  { id: "wlz", label: "Dobór WLZ (linii zasilającej)", desc: "przekrój kabla od licznika do rozdzielnicy" },
-  { id: "przekroj", label: "Dobór przekroju przewodu", desc: "przekrój wg obciążalności i spadku" },
-  { id: "zabezpieczenie", label: "Dobór zabezpieczenia", desc: "wyłącznik do znanego przekroju" },
-  { id: "pelnyDobor", label: "Pełny dobór (4 kryteria)", desc: "obciążalność + spadek + ochrona + zwarcie naraz" },
+  { id: "obwod", label: "Dobór obwodu", desc: "przekrój, zabezpieczenie, WLZ i cztery kryteria w jednym" },
   { id: "gGWkladka", label: "Dobór wkładki gG", desc: "ochrona przeciwporażeniowa — zabezpieczenie topikowe" },
   { id: "spadek", label: "Spadek napięcia", desc: "sprawdzenie trasy o znanym przekroju" },
   { id: "impedancja", label: "Impedancja przewodu", desc: "R, X, Z oraz przewody równoległe" },
@@ -232,6 +252,10 @@ export function CalculatorsTab() {
   const ambientC = useCalculatorsStore((s) => s.ambientC);
   const bundleCount = useCalculatorsStore((s) => s.bundleCount);
   const motorStart = useCalculatorsStore((s) => s.motorStart);
+  const trybObwodu = useCalculatorsStore((s) => s.trybObwodu);
+  const obwodZsOhm = useCalculatorsStore((s) => s.obwodZsOhm);
+  const obwodIkA = useCalculatorsStore((s) => s.obwodIkA);
+  const obwodCzasS = useCalculatorsStore((s) => s.obwodCzasS);
   const spadekWlzPct = useCalculatorsStore((s) => s.spadekWlzPct);
   const wlasnaStacja = useCalculatorsStore((s) => s.wlasnaStacja);
   const breakerSection = useCalculatorsStore((s) => s.breakerSection);
@@ -411,10 +435,44 @@ export function CalculatorsTab() {
    * zawracać na adres, który natychmiast przekieruje z powrotem.
    */
   useEffect(() => {
-    if (route.tab === "kalkulatory" && route.param !== activeCalc) {
-      nawiguj("kalkulatory", activeCalc, { replace: true });
+    if (route.tab !== "kalkulatory") return;
+    // Stary adres czterech scalonych kalkulatorow: ustaw tryb i przejdz na „obwod".
+    const tryb = route.param ? STARE_ADRESY[route.param] : undefined;
+    if (tryb) {
+      patch({ trybObwodu: tryb });
+      nawiguj("kalkulatory", "obwod", { replace: true });
+      return;
     }
-  }, [route.tab, route.param, activeCalc, nawiguj]);
+    if (route.param !== activeCalc) nawiguj("kalkulatory", activeCalc, { replace: true });
+  }, [route.tab, route.param, activeCalc, nawiguj, patch]);
+
+  /**
+   * Tryb w adresie jako `?tryb=…`.
+   *
+   * Query trzymamy poza routerem (`useRoute` czyta sama sciezke), bo tryb nie jest
+   * osobnym widokiem, tylko ustawieniem jednego kalkulatora — ale MA byc w adresie,
+   * zeby dalo sie przyslac komus link prosto do „Mam przekroj" i zeby przekierowania
+   * ze starych adresow mialy dokad prowadzic.
+   */
+  const trybWzietyZAdresu = useRef(false);
+  useEffect(() => {
+    if (route.tab !== "kalkulatory" || activeCalc !== "obwod") return;
+    const zAdresu = new URLSearchParams(window.location.search).get("tryb");
+    // Adres ustawia tryb TYLKO przy wejściu. Bez tego ograniczenia kliknięcie
+    // w zakładkę trybu było natychmiast cofane przez `?tryb=` z paska — adres
+    // wygrywał z użytkownikiem i przełącznik wyglądał na zepsuty.
+    if (!trybWzietyZAdresu.current) {
+      trybWzietyZAdresu.current = true;
+      const znany = TRYBY_OBWODU.find((t) => t === zAdresu);
+      if (znany && znany !== trybObwodu) {
+        patch({ trybObwodu: znany });
+        return;
+      }
+    }
+    if (zAdresu !== trybObwodu) {
+      window.history.replaceState(null, "", `${window.location.pathname}?tryb=${trybObwodu}`);
+    }
+  }, [route.tab, route.param, activeCalc, trybObwodu, patch]);
 
   // Wybór z listy tylko NAWIGUJE — zapisem zajmuje się efekt niżej, jedną drogą dla
   // wszystkich sposobów otwarcia kalkulatora.
@@ -442,6 +500,9 @@ export function CalculatorsTab() {
   const setAmbientC = (v: number) => patch({ ambientC: v });
   const setBundleCount = (v: number) => patch({ bundleCount: v });
   const setMotorStart = (v: boolean) => patch({ motorStart: v });
+  const setObwodZsOhm = (v: number) => patch({ obwodZsOhm: v });
+  const setObwodIkA = (v: number) => patch({ obwodIkA: v });
+  const setObwodCzasS = (v: number) => patch({ obwodCzasS: v });
   const setSpadekWlzPct = (v: number) => patch({ spadekWlzPct: v });
   const setWlasnaStacja = (v: boolean) => patch({ wlasnaStacja: v });
   const setBreakerSection = (v: number) => patch({ breakerSection: v });
@@ -889,6 +950,79 @@ export function CalculatorsTab() {
     setWlzCurrentA(Math.round((wlzPhase === "3" ? balance.demandCurrent3 : balance.demandCurrent1) * 10) / 10);
   }
 
+  /**
+   * Cztery kryteria dla AKTYWNEGO trybu — wspolna stopka scalonego kalkulatora.
+   *
+   * Tryby przekroj/zabezpieczenie/WLZ jada tym samym silnikiem (`lib/panel/sizing.ts`),
+   * wiec ocena idzie po jego wyniku. Tryb „pelny dobor" ma wlasny silnik z szersza
+   * dziedzina (Al, XLPE, kabel w gruncie) i liczy kryteria sam — tu tylko
+   * przepisujemy jego werdykt na te sama liste, zeby uzytkownik widzial ZAWSZE
+   * te same cztery pozycje, niezaleznie od trybu.
+   */
+  const kryteriaObwodu = useMemo<OcenaKryterium[]>(() => {
+    const dodatkowe = {
+      Zs_Ohm: obwodZsOhm > 0 ? obwodZsOhm : undefined,
+      Ik_A: obwodIkA > 0 ? obwodIkA : undefined,
+      czas_s: obwodCzasS > 0 ? obwodCzasS : undefined,
+      material: "Cu" as const,
+      izolacja: "PVC" as const,
+    };
+    if (trybObwodu === "pelny") {
+      const w = pelnyDobor.wartosci;
+      if (!w) return ocenKryteria({ ...dodatkowe, Ib_A: null, In_A: null, Iz_A: null, spadek_pct: null, spadek_limit_pct: 5, Zs_max_Ohm: null, przekroj_mm2: null });
+      return (Object.keys(KRYTERIUM_LABELS) as (keyof typeof KRYTERIUM_LABELS)[]).map((k) => {
+        const kr = w.kryteria[k];
+        return {
+          kryterium: k,
+          etykieta: KRYTERIUM_LABELS[k],
+          stan: !kr.ocenione ? ("nieoceniono" as const) : w.decydujace.includes(k) ? ("ok" as const) : ("ok" as const),
+          opis: kr.ocenione
+            ? `wymaga min. ${formatLiczba(kr.minPrzekroj_mm2 ?? 0, 2)} mm² — dobrano ${formatLiczba(w.przekroj_mm2, 1)} mm²`
+            : (kr.powod_pominiecia ?? "Brak danych do oceny."),
+        };
+      });
+    }
+    if (trybObwodu === "zabezpieczenie") {
+      // Dobor do znanego przekroju nie liczy spadku (przekroj jest dana, nie wynikiem),
+      // ale wszystkie skladniki sa pod reka — liczymy go tym samym wzorem co reszta.
+      const drop = length > 0 && sized.Ib_A ? voltageDropPct(length, sized.Ib_A, breakerSection, phase) : null;
+      return ocenKryteria({
+        ...dodatkowe,
+        Ib_A: sized.Ib_A,
+        In_A: sizedBreaker.aparat?.In_A ?? null,
+        Iz_A: sizedBreaker.Iz_A,
+        spadek_pct: drop,
+        spadek_limit_pct: limitSpadkuPct(circuitKind === "oswietlenie", wlasnaStacja),
+        Zs_max_Ohm: sizedBreaker.Zs_max_Ohm,
+        przekroj_mm2: breakerSection,
+      });
+    }
+    if (trybObwodu === "wlz") {
+      return ocenKryteria({
+        ...dodatkowe,
+        Ib_A: wlzCurrentA,
+        In_A: sizedFeeder.aparat?.In_A ?? null,
+        Iz_A: sizedFeeder.Iz_A,
+        spadek_pct: sizedFeeder.spadek_napiecia_pct,
+        spadek_limit_pct: sizedFeeder.spadek_napiecia_limit_pct,
+        // WLZ nie dobiera aparatu pod warunek zwarciowy — to zadanie obwodow za
+        // rozdzielnica, wiec kryterium zostaje nieocenione zamiast udawac wynik.
+        Zs_max_Ohm: null,
+        przekroj_mm2: sizedFeeder.przekroj_mm2,
+      });
+    }
+    return ocenKryteria({
+      ...dodatkowe,
+      Ib_A: sized.Ib_A,
+      In_A: sized.aparat?.In_A ?? null,
+      Iz_A: sized.Iz_A,
+      spadek_pct: sized.spadek_calkowity_pct,
+      spadek_limit_pct: sized.spadek_napiecia_limit_pct,
+      Zs_max_Ohm: sized.Zs_max_Ohm,
+      przekroj_mm2: sized.przekroj_mm2,
+    });
+  }, [trybObwodu, sized, sizedBreaker, sizedFeeder, pelnyDobor, breakerSection, length, phase, circuitKind, wlasnaStacja, wlzCurrentA, obwodZsOhm, obwodIkA, obwodCzasS]);
+
   // --- 5. rezystancja uziemienia (układ TT) ---
   const groundingCheck = useMemo(() => {
     const raMax = maxGroundingResistance(ttIdnMa / 1000);
@@ -942,7 +1076,15 @@ export function CalculatorsTab() {
         </div>
 
         <div style={{ flex: "1 1 480px", minWidth: 320 }}>
-          {activeCalc === "przekroj" && (
+          {/* Przelacznik trybu STOI NAD karta trybu, a nie w niej: to wybor pytania,
+              nie jedno z pol formularza. Cztery dawne kalkulatory (przekroj,
+              zabezpieczenie, WLZ, pelny dobor) pytaly o to samo z czterech stron. */}
+          {activeCalc === "obwod" && (
+            <div className="pe-card mb-4 p-4">
+              <PrzelacznikTrybu tryb={trybObwodu} onZmien={(t) => patch({ trybObwodu: t })} />
+            </div>
+          )}
+          {activeCalc === "obwod" && trybObwodu === "przekroj" && (
             <Card title={active.label} tag="przekrój żyły">
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
@@ -1188,7 +1330,7 @@ export function CalculatorsTab() {
             </Card>
           )}
 
-          {activeCalc === "zabezpieczenie" && (
+          {activeCalc === "obwod" && trybObwodu === "zabezpieczenie" && (
             <Card title={active.label} tag="wyłącznik nadprądowy">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
@@ -1367,7 +1509,7 @@ export function CalculatorsTab() {
             </Card>
           )}
 
-          {activeCalc === "pelnyDobor" && (
+          {activeCalc === "obwod" && trybObwodu === "pelny" && (
             <Card title={active.label} tag="4 kryteria naraz">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Cztery kryteria liczone NIEZALEŻNIE — obciążalność, spadek napięcia i (opcjonalnie) ochrona
@@ -2884,7 +3026,7 @@ export function CalculatorsTab() {
             </Card>
           )}
 
-          {activeCalc === "wlz" && (
+          {activeCalc === "obwod" && trybObwodu === "wlz" && (
             <Card title={active.label} tag="WLZ">
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <div>
@@ -3005,6 +3147,48 @@ export function CalculatorsTab() {
                   "„Wczytaj z bilansu mocy” bierze prąd zapotrzebowany (Pz) z kalkulatora „Bilans mocy budynku” dla wybranej tu liczby faz — uzupełnij najpierw listę odbiorników w tamtym kalkulatorze.",
                 ]}
               />
+            </Card>
+          )}
+
+          {/* Wspolna stopka wszystkich trybow: te same cztery kryteria, niezaleznie
+              od tego, czym uzytkownik zaczal. Dwa ostatnie wymagaja liczb, ktorych
+              dobor nie ma skad wziac sam — sa wiec polami, a nieuzupelnione zostaja
+              NIEOCENIONE, nigdy „spelnione". */}
+          {activeCalc === "obwod" && (
+            <Card title="Cztery kryteria doboru" tag="werdykt">
+              <div className="mb-3 grid gap-x-4 sm:grid-cols-3">
+                <Field
+                  label="Impedancja pętli Zs"
+                  value={obwodZsOhm}
+                  onChange={(v) => setObwodZsOhm(Number(v))}
+                  unit="Ω"
+                  step="0.01"
+                  hint="Zmierzona albo policzona impedancja pętli zwarcia w tym punkcie. Bez niej trzecie kryterium zostaje nieocenione — dobór zna tylko wartość WYMAGANĄ, nie rzeczywistą."
+                />
+                <Field
+                  label="Spodziewany prąd zwarcia Ik"
+                  value={obwodIkA}
+                  onChange={(v) => setObwodIkA(Number(v))}
+                  unit="A"
+                  hint="Prąd zwarcia w tym punkcie — z kalkulatora „Prądy zwarciowe” albo z danych operatora. Do warunku cieplnego S ≥ Ik·√t / k."
+                />
+                <Field
+                  label="Czas wyłączenia t"
+                  value={obwodCzasS}
+                  onChange={(v) => setObwodCzasS(Number(v))}
+                  unit="s"
+                  step="0.05"
+                  hint="Czas zadziałania zabezpieczenia przy zwarciu. Dla obwodów odbiorczych do 32 A w układzie TN wymagane 0,4 s, dla rozdzielczych 5 s."
+                />
+              </div>
+              <KryteriaObwodu oceny={kryteriaObwodu} />
+              <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+                {werdyktObwodu(kryteriaObwodu) === "ok"
+                  ? "Wszystkie cztery kryteria sprawdzone i spełnione."
+                  : werdyktObwodu(kryteriaObwodu) === "blad"
+                    ? "Co najmniej jedno kryterium nie jest spełnione — obwód w tej postaci nie przejdzie odbioru."
+                    : "Część kryteriów została nieoceniona: brakuje danych, których dobór nie ma skąd wziąć. Uzupełnij pola powyżej, żeby sprawdzić komplet."}
+              </p>
             </Card>
           )}
 
