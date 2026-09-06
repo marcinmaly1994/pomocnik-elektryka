@@ -621,55 +621,6 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
   await expect(page.locator("input.pe-input.text-sm.flex-1").first()).toHaveValue("Test trwałości");
 });
 
-/**
- * „Wczytaj z projektu" w Bilansie mocy — zamiast ręcznego przepisywania mocy
- * odbiorników, obwody liczą się z tego, co faktycznie stoi na planie, przez
- * ten sam model obciążeń (`circuitDemand`) co Rozdzielnica.
- */
-test("Wczytaj z projektu wypełnia bilans mocy obwodami wyliczonymi z elementów na planie", async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
-  await page.getByRole("button", { name: "Instalacja", exact: true }).click();
-  await skipEntryScreen(page);
-
-  // 1 gniazdko (300 W wg ASSUMED_POWER_W) -> obwód gniazdowy
-  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
-  let box = await planBox(page);
-  await page.mouse.click(box.x + 150, box.y + 100);
-
-  // 1 punkt sufitowy (60 W) -> obwód oświetleniowy — osobna kategoria w bibliotece
-  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
-  box = await planBox(page);
-  await page.mouse.click(box.x + 300, box.y + 200);
-
-  await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
-  await page.getByRole("button", { name: "Bilans mocy budynku" }).click();
-
-  page.once("dialog", (d) => d.accept());
-  await page.getByRole("button", { name: "Wczytaj z projektu" }).click();
-
-  const names = page.locator("input.pe-input.text-sm.flex-1");
-  await expect(names).toHaveCount(2);
-  await expect(names.nth(0)).toHaveValue(/Obwód gniazd/);
-  await expect(names.nth(1)).toHaveValue(/Obwód oświetlenia/);
-
-  const powers = page.locator("input.pe-mono.w-24");
-  await expect(powers.nth(0)).toHaveValue("300");
-  await expect(powers.nth(1)).toHaveValue("60");
-});
-
-test("Wczytaj z projektu jest wyłączone, gdy na planie nie ma jeszcze żadnych elementów", async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
-  await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
-  await page.getByRole("button", { name: "Bilans mocy budynku" }).click();
-
-  await expect(page.getByRole("button", { name: "Wczytaj z projektu" })).toBeDisabled();
-});
-
 test("dobór WLZ dla domyślnych danych (20 A, 3F, 20 m, w rurce) -> 10 mm² / B20, ten sam silnik co obwód odbiorczy", async ({ page }) => {
   await openCalculators(page);
   await page.getByRole("button", { name: "Dobór WLZ" }).click();
@@ -702,18 +653,20 @@ test("rezystancja uziemienia (TT): RCD 30 mA daje RA max 1667 Ω, zmierzona RA p
   await expect(page.getByText(/Warunek niespełniony/)).toBeVisible();
 });
 
-/**
- * „Wczytaj obwod z projektu": kalkulatory znaja rzut.
- *
- * Projekt zna moc, liczbe faz, dlugosc trasy i dobrany aparat kazdego obwodu, a mimo to
- * kalkulatory kazaly wpisywac te same liczby od nowa. Przepisywanie bylo wylacznie
- * okazja do pomylki: literowka w dlugosci daje inny przekroj, a nic w aplikacji jej nie
- * prostuje.
- */
 
-/** Rzut ze skala (rysowanie od zera), rozdzielnica i trzy gniazdka — najmniejszy
- *  projekt, z ktorego powstaje obwod z policzona trasa. */
-async function projektZObwodem(page: import("@playwright/test").Page) {
+/**
+ * Kalkulatory sa NIEZALEZNE od projektowanej instalacji.
+ *
+ * Zakladka jest narzedziem OBOK przepływu 1→2→3→4, a nie jego krokiem: elektryk liczy
+ * tu przekroj dla roboty, ktora z otwartym rzutem nie ma nic wspolnego. Byly tu trzy
+ * zejscia do projektu — „Wczytaj z projektu" w bilansie mocy oraz „Wczytaj obwod
+ * z projektu" w doborze przekroju i w petli zwarcia — i wszystkie usunieto.
+ *
+ * Test stawia PELNY rzut z policzonym obwodem, bo tylko wtedy dawne kontrolki byly
+ * widoczne; na pustym projekcie i tak sie chowaly, wiec pusty rzut niczego by nie
+ * pilnowal.
+ */
+test("kalkulatory nie siegaja do rzutu, nawet gdy projekt ma gotowy obwod", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -729,55 +682,23 @@ async function projektZObwodem(page: import("@playwright/test").Page) {
   };
   await postaw("rozdzielnica", /Rozdzielnica/, 60);
   await postaw("gniazdo 230", /Gniazdo 230 V/, 200);
-  await postaw("gniazdo 230", /Gniazdo 230 V/, 320);
-}
 
-test("wczytanie obwodu wypelnia dobor przekroju danymi z rzutu", async ({ page }) => {
-  await projektZObwodem(page);
-  await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
-
-  const wybor = page.getByLabel("Wczytaj obwód z projektu");
-  await expect(wybor).toBeVisible();
-  // Podpis pozycji musi odrozniac obwody od siebie — sama nazwa nie wystarcza,
-  // gdy jest ich kilkanascie.
-  await expect(wybor.locator("option").nth(1)).toContainText(/W,.*m/);
-
-  const moc = page.getByLabel("Moc odbiornika");
-  const dlugosc = page.getByLabel(/Długość/).first();
-  const przedMoc = await moc.inputValue();
-
-  await wybor.selectOption({ index: 1 });
-
-  // Moc obliczeniowa obwodu gniazdowego ma podloge 1500 W — ta sama liczba, ktora
-  // widac w Rozdzielnicy.
-  await expect(moc).toHaveValue("1500");
-  expect(await moc.inputValue()).not.toBe(przedMoc);
-  // Dlugosc to zmierzona trasa z rzutu, wiec musi byc dodatnia i nie moze zostac
-  // domyslna wartoscia formularza.
-  expect(Number(await dlugosc.inputValue())).toBeGreaterThan(0);
-
-  // Lista wraca do stanu „wybierz obwod" — to akcja, nie ustawienie.
-  await expect(wybor).toHaveValue("");
-});
-
-test("bez rzutu nie ma czego wczytywac — selektor sie nie pokazuje", async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
   await expect(page.getByLabel("Wczytaj obwód z projektu")).toHaveCount(0);
-});
 
-test("kalkulator petli zwarcia wczytuje zabezpieczenie dobrane dla obwodu", async ({ page }) => {
-  await projektZObwodem(page);
-  await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
-  await page.getByRole("button", { name: /Impedancja pętli zwarcia/ }).first().click();
+  await page.getByRole("button", { name: "Impedancja pętli zwarcia" }).first().click();
+  await expect(page.getByLabel("Wczytaj obwód z projektu")).toHaveCount(0);
 
-  const wybor = page.getByLabel("Wczytaj obwód z projektu");
-  const prad = page.getByLabel(/Prąd znamionowy/).first();
-  await wybor.selectOption({ index: 1 });
-
-  // Obwod gniazdowy dobiera sie na B16 — ta sama odpowiedz co w Rozdzielnicy.
-  await expect(page.getByLabel("Charakterystyka").first()).toHaveValue("B");
-  await expect(prad).toHaveValue("16");
+  await page.getByRole("button", { name: "Bilans mocy budynku" }).click();
+  await expect(page.getByRole("button", { name: "Wczytaj z projektu" })).toHaveCount(0);
+  // Lista odbiornikow zostaje wlasnoscia kalkulatora: gniazdko z rzutu nie ma prawa
+  // sie w niej pojawic samo.
+  const nazwy = page.locator("input.pe-input.text-sm.flex-1");
+  // Petla po WARTOSCIACH pol, nie po ich tresci: input nie ma tekstu, wiec filtr
+  // `hasText` przechodzilby zawsze i niczego by nie pilnowal. Asercja na liczbie
+  // pol pilnuje, zeby petla nie okazala sie pusta i przez to bezzebna.
+  expect(await nazwy.count()).toBeGreaterThan(0);
+  for (const nazwa of await nazwy.all()) {
+    expect(await nazwa.inputValue()).not.toMatch(/Obwód/);
+  }
 });
