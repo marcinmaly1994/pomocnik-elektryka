@@ -37,7 +37,8 @@ describe("PROTOCOL_DEFS.petla.evaluate", () => {
     const ia = def.columns!.find((c) => c.key === "ia")!;
     const zsmax = def.columns!.find((c) => c.key === "zsmax")!;
     expect(ia.compute!({ curve: "B", in: 16 })).toBe("80");
-    expect(zsmax.compute!({ curve: "B", in: 16 })).toBe("2.88");
+    // Cmin = 0,95 — protokol musi wymagac DOKLADNIE tego, co dopuscil dobor.
+    expect(zsmax.compute!({ curve: "B", in: 16 })).toBe("2.73");
   });
 });
 

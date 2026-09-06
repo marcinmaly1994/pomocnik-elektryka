@@ -23,6 +23,7 @@ import {
   type CelZwarcia,
 } from "@/lib/calc/shortCircuit";
 import {
+  C_NAPIECIOWE,
   MODEL_REZYSTYWNOSCI_LABELS,
   RODZAJ_LINII_LABELS,
   type Izolacja,
@@ -38,6 +39,7 @@ import {
   sizeCircuit,
   sizeFeeder,
   zsMaxForBreaker,
+  ZAPAS_POMIAROWY,
   type CircuitKind,
 } from "@/lib/panel/sizing";
 import { useCalculatorsStore, type CalcId } from "@/store/useCalculatorsStore";
@@ -230,6 +232,8 @@ export function CalculatorsTab() {
   const ambientC = useCalculatorsStore((s) => s.ambientC);
   const bundleCount = useCalculatorsStore((s) => s.bundleCount);
   const motorStart = useCalculatorsStore((s) => s.motorStart);
+  const spadekWlzPct = useCalculatorsStore((s) => s.spadekWlzPct);
+  const wlasnaStacja = useCalculatorsStore((s) => s.wlasnaStacja);
   const breakerSection = useCalculatorsStore((s) => s.breakerSection);
   const duCurrentA = useCalculatorsStore((s) => s.duCurrentA);
   const duPhase = useCalculatorsStore((s) => s.duPhase);
@@ -438,6 +442,8 @@ export function CalculatorsTab() {
   const setAmbientC = (v: number) => patch({ ambientC: v });
   const setBundleCount = (v: number) => patch({ bundleCount: v });
   const setMotorStart = (v: boolean) => patch({ motorStart: v });
+  const setSpadekWlzPct = (v: number) => patch({ spadekWlzPct: v });
+  const setWlasnaStacja = (v: boolean) => patch({ wlasnaStacja: v });
   const setBreakerSection = (v: number) => patch({ breakerSection: v });
   const setDuCurrentA = (v: number) => patch({ duCurrentA: v });
   const setDuPhase = (v: "1" | "3") => patch({ duPhase: v });
@@ -482,8 +488,10 @@ export function CalculatorsTab() {
         temperatura_otoczenia_C: ambientC,
         obwodow_w_wiazce: bundleCount,
         rozruch_silnikowy: motorStart,
+        spadek_wlz_pct: spadekWlzPct,
+        wlasna_stacja: wlasnaStacja,
       }),
-    [circuitKind, power, phase, cosphi, length, layingMethod, ambientC, bundleCount, motorStart]
+    [circuitKind, power, phase, cosphi, length, layingMethod, ambientC, bundleCount, motorStart, spadekWlzPct, wlasnaStacja]
   );
 
   /**
@@ -838,8 +846,28 @@ export function CalculatorsTab() {
   // --- 3. impedancja pętli zwarcia ---
   const zCalc = useMemo(() => {
     const { ia, zsMax } = zsMaxForBreaker(zCurve, zIn);
-    const ik = zMeasured > 0 ? U0 / zMeasured : 0;
-    return { ia, zsMax, ik, ok: zsMax > 0 && zMeasured > 0 ? zMeasured <= zsMax : null };
+    /**
+     * Prąd zwarcia liczony z Cmin = 0,95, nie z pełnego U0.
+     *
+     * Tu sprawdza się OCHRONĘ PRZECIWPORAŻENIOWĄ, a jej najgorszym przypadkiem jest
+     * prąd NAJMNIEJSZY — ten, przy którym zabezpieczenie ma najtrudniej zadziałać.
+     * Liczenie Ik z pełnych 230 V zawyżało go o 5% i mogło pokazać margines, którego
+     * w rzeczywistości nie ma (PN-EN 60909-0; ten sam współczynnik co w `zsMaxDlaIa`).
+     */
+    const ik = zMeasured > 0 ? (C_NAPIECIOWE.min * U0) / zMeasured : 0;
+    const zsZalecana = zsMax * ZAPAS_POMIAROWY;
+    const zmierzona = zMeasured > 0 && zsMax > 0;
+    return {
+      ia,
+      zsMax,
+      zsZalecana,
+      ik,
+      ok: zmierzona ? zMeasured <= zsMax : null,
+      // Drugi próg: wynik pomiaru bierze się z jednej chwili i zimnego przewodu,
+      // a warunek ma być spełniony także po nagrzaniu i przy gorszym napięciu.
+      okZalecany: zmierzona ? zMeasured <= zsZalecana : null,
+      margines: zmierzona ? (1 - zMeasured / zsMax) * 100 : null,
+    };
   }, [zCurve, zIn, zMeasured]);
 
   // --- 4. WLZ (linia zasilająca) ---
@@ -1022,6 +1050,29 @@ export function CalculatorsTab() {
                 Odbiornik z rozruchem silnikowym (pompa, lodówka, klimatyzacja) — charakterystyka C
               </label>
 
+              {/* Budżet spadku napięcia dotyczy CAŁEJ drogi od złącza. Te dwa pola
+                  domykają rachunek: pierwsze odejmuje to, co zjadła już WLZ, drugie
+                  podnosi limit tam, gdzie transformator stoi na terenie obiektu. */}
+              <div className="grid gap-x-4 sm:grid-cols-2">
+                <Field
+                  label="Spadek napięcia na WLZ"
+                  value={spadekWlzPct}
+                  onChange={(v) => setSpadekWlzPct(Number(v))}
+                  unit="%"
+                  step="0.1"
+                  hint="Ile z budżetu spadku zużywa już odcinek od złącza do rozdzielnicy. Typowo 0,5-1%. Limit 3/5% liczy się od ZŁĄCZA, więc obwód odbiorczy ma do dyspozycji resztę — zostaw 0, jeśli liczysz sam obwód."
+                />
+              </div>
+              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={wlasnaStacja}
+                  onChange={(e) => setWlasnaStacja(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Zasilanie z własnej stacji transformatorowej — limit spadku większy o 2 p.p.
+              </label>
+
               <div className="mt-2 p-3 pe-result">
                 <div className="text-xs text-slate-500 mb-1">Wymagany przekrój żyły</div>
                 {sized.przekroj_mm2 ? (
@@ -1034,8 +1085,12 @@ export function CalculatorsTab() {
                       <span className="pe-chip pe-tag-blue">Ib {(sized.Ib_A ?? 0).toFixed(2)} A</span>
                       <span className="pe-chip pe-tag-green">obc. dop. {sized.Iz_A} A</span>
                       {sized.spadek_napiecia_pct !== null && (
+                        // Z podanym spadkiem na WLZ pokazujemy SUMĘ — bo to ona jest
+                        // porównywana z limitem — i rozbicie, żeby było widać, skąd wyszła.
                         <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
-                          ΔU {sized.spadek_napiecia_pct}% (limit {sized.spadek_napiecia_limit_pct}%)
+                          {sized.spadek_wlz_pct > 0
+                            ? `ΔU ${sized.spadek_calkowity_pct}% = WLZ ${sized.spadek_wlz_pct}% + obwód ${sized.spadek_napiecia_pct}% (limit ${sized.spadek_napiecia_limit_pct}%)`
+                            : `ΔU ${sized.spadek_napiecia_pct}% (limit ${sized.spadek_napiecia_limit_pct}%)`}
                         </span>
                       )}
                     </div>
@@ -2982,29 +3037,50 @@ export function CalculatorsTab() {
                   hint="Wynik pomiaru pętli zwarcia L-PE miernikiem instalacyjnym w danym punkcie obwodu. Zostaw puste/0, żeby zobaczyć samo Zs max bez oceny."
                 />
               </div>
-              <div className="mt-2 p-3 pe-result grid grid-cols-3 gap-3">
+              <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
                   <div className="text-xs text-slate-500">Prąd zadziałania Ia</div>
                   <div className="pe-mono">{zCalc.ia.toFixed(0)} A</div>
                 </div>
+                {/* Dwa progi obok siebie, nie jeden: pierwszy to granica z normy, drugi —
+                    z jakim zapasem powinien wyjść POMIAR, żeby obwód przeszedł odbiór
+                    także przy nagrzanych przewodach i niższym napięciu sieci. */}
                 <div>
-                  <div className="text-xs text-slate-500">Zs maksymalna</div>
+                  <div className="text-xs text-slate-500">Zs max — limit normy</div>
                   <div className="pe-mono text-copper">{zCalc.zsMax ? zCalc.zsMax.toFixed(2) : "—"} Ω</div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500">Prąd zwarcia Ik</div>
+                  <div className="text-xs text-slate-500">Zs — limit zalecany (0,8)</div>
+                  <div className="pe-mono text-copper">{zCalc.zsZalecana ? zCalc.zsZalecana.toFixed(2) : "—"} Ω</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Prąd zwarcia Ik (c = 0,95)</div>
                   <div className="pe-mono">{zCalc.ik ? zCalc.ik.toFixed(0) : "—"} A</div>
                 </div>
               </div>
               {zCalc.ok !== null && (
                 <div
-                  className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2"
-                  style={zCalc.ok ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
+                  className="mt-2 flex items-start gap-2 rounded-lg p-3 text-sm"
+                  style={
+                    !zCalc.ok
+                      ? { background: "#C6433A1A", color: "#A2352C" }
+                      : zCalc.okZalecany
+                        ? { background: "#3B8C631A", color: "#2C6B4A" }
+                        : { background: "#C1793F1A", color: "#8A5526" }
+                  }
                 >
-                  {zCalc.ok ? <Check size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
-                  {zCalc.ok
-                    ? "Warunek spełniony — zabezpieczenie zadziała w wymaganym czasie."
-                    : "Warunek niespełniony — zmierzona Zs przekracza wartość dopuszczalną. Skróć obwód, zwiększ przekrój lub zmień charakterystykę zabezpieczenia."}
+                  {zCalc.ok && zCalc.okZalecany ? (
+                    <Check size={16} className="mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                  )}
+                  <span>
+                    {!zCalc.ok
+                      ? "Warunek niespełniony — zmierzona Zs przekracza limit normy. Skróć obwód, zwiększ przekrój lub zmień charakterystykę zabezpieczenia."
+                      : zCalc.okZalecany
+                        ? `Warunek spełniony z zapasem ${zCalc.margines!.toFixed(0)}% — zabezpieczenie zadziała w wymaganym czasie.`
+                        : `Mieści się w normie, ale bez zapasu (do limitu ${zCalc.margines!.toFixed(0)}%). Pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję — po obciążeniu obwód może wypaść poza limit.`}
+                  </span>
                 </div>
               )}
               <HowItWorks

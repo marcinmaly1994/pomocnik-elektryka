@@ -61,8 +61,8 @@ test("rozdzielnica pokazuje przekrój i zabezpieczenie policzone, a nie wpisane 
   await expect(lightRow).toContainText("B10 1P");
 
   // Zs max wynika z charakterystyki: B10 → 230/(5·10) = 4,6 Ω, B16 → 230/(5·16) = 2,875 Ω
-  await expect(lightRow).toContainText("4.6 Ω");
-  await expect(socketRow).toContainText("2.875 Ω");
+  await expect(lightRow).toContainText("4.37 Ω");
+  await expect(socketRow).toContainText("2.731 Ω");
 });
 
 test("bez kalibracji skali spadek napięcia jest zgłoszony jako niesprawdzony, a nie zmyślony", async ({ page }) => {

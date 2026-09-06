@@ -35,6 +35,8 @@ function sizedStub(over: Partial<SizedCircuit>): SizedCircuit {
     wspolczynniki: { k1_temperatura: 1, k2_grupowanie: 1 },
     spadek_napiecia_pct: 1,
     spadek_napiecia_limit_pct: 5,
+    spadek_wlz_pct: 0,
+    spadek_calkowity_pct: null,
     Ia_A: 80,
     Zs_max_Ohm: 2.875,
     rcd_typ: "A",

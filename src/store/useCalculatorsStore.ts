@@ -86,6 +86,16 @@ interface CalculatorsState {
   ambientC: number;
   bundleCount: number;
   motorStart: boolean;
+  /**
+   * Spadek napiecia zuzyty juz na WLZ [%].
+   *
+   * Limit 3/5% dotyczy calej drogi OD ZLACZA, a nie samego obwodu odbiorczego —
+   * bez tego pola kalkulator liczyl obwod w oderwaniu od odcinka lezacego przed
+   * rozdzielnica i przepuszczal instalacje jako calosc przekraczajace norme.
+   */
+  spadekWlzPct: number;
+  /** Zasilanie z wlasnej stacji transformatorowej — budzet spadku wiekszy o 2 p.p. */
+  wlasnaStacja: boolean;
   /** Przekrój ŻYŁY [mm²] — dana wejściowa doboru zabezpieczenia (tam, gdzie
    *  w doborze przekroju jest wynikiem). Patrz `sizeBreakerForSection`. */
   breakerSection: number;
@@ -309,6 +319,8 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       ambientC: 30,
       bundleCount: 1,
       motorStart: false,
+      spadekWlzPct: 0,
+      wlasnaStacja: false,
       breakerSection: 2.5,
 
       duCurrentA: 10,
@@ -325,10 +337,14 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       duRownolegle: 1,
 
       zwCel: "dobor_aparatu",
-      zwSnKVA: 630,
+      // Stacja 100 kVA to typowy transformator zasilajacy kilka domow — daje Ik3
+      // okolo 3,8 kA na zlaczu. Domyslne 630 kVA (23,9 kA) opisywalo zaklad
+      // przemyslowy: kazdy, kto nie zmienil tych pol, dostawal wynik bez zwiazku
+      // z instalacja, ktora liczyl.
+      zwSnKVA: 100,
       zwUkPct: 4,
       zwUnV: 400,
-      zwStratyCuW: 6500,
+      zwStratyCuW: 1750,
       zwZsOhm: 1,
       zwRdoX: 0.1,
       zwCzasS: 0.1,

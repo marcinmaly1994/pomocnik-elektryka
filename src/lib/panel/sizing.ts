@@ -15,7 +15,7 @@ import {
   BREAKER_RATINGS,
   CURVE_MULTIPLIER,
   LAYING_METHOD_LABELS,
-  MAX_VOLTAGE_DROP_PCT,
+  limitSpadkuPct,
   REFERENCE_METHOD_FOR,
   RHO_CU_70C,
   SECTIONS,
@@ -28,6 +28,7 @@ import {
   type ReferenceMethod,
   type Section,
 } from "./norms";
+import { C_NAPIECIOWE } from "@/lib/norms/conductors";
 
 export type CircuitKind = "oswietlenie" | "gniazda" | "dedykowany";
 export type PhaseCount = "1" | "3";
@@ -65,6 +66,16 @@ export interface CircuitSpec {
   obwodow_w_wiazce?: number;
   /** Współczynnik mocy. Dla odbiorników rezystancyjnych 1,0. */
   cos_phi?: number;
+  /**
+   * Spadek napięcia zużyty JUŻ na WLZ [%] — odcinek od złącza do rozdzielnicy.
+   *
+   * Limit 3/5% dotyczy CAŁEJ drogi od złącza do odbiornika, a nie samego obwodu
+   * odbiorczego. Licząc obwód w oderwaniu od WLZ, dopuszczaliśmy instalacje, które
+   * jako całość limit przekraczają — i to tym bardziej, im dłuższa jest WLZ.
+   */
+  spadek_wlz_pct?: number;
+  /** Instalacja zasilana z własnej stacji transformatorowej — budżet większy o 2 p.p. */
+  wlasna_stacja?: boolean;
 }
 
 export interface SizedCircuit {
@@ -88,7 +99,12 @@ export interface SizedCircuit {
   Iz_A: number | null;
   wspolczynniki: { k1_temperatura: number; k2_grupowanie: number };
   spadek_napiecia_pct: number | null;
+  /** Limit dla CAŁEJ drogi od złącza — obwód plus WLZ. */
   spadek_napiecia_limit_pct: number;
+  /** Spadek przyjęty na WLZ [%] — 0, gdy nie podano. */
+  spadek_wlz_pct: number;
+  /** Suma: WLZ + obwód. To ona jest porównywana z limitem. */
+  spadek_calkowity_pct: number | null;
   /** Prąd zadziałania wyzwalacza magnetycznego [A]. */
   Ia_A: number | null;
   /** Maksymalna dopuszczalna impedancja pętli zwarcia [Ω]. */
@@ -158,6 +174,27 @@ export function currentFromPower(powerW: number, phases: PhaseCount, cosPhi: num
   return denom > 0 ? powerW / denom : 0;
 }
 
+/**
+ * Zs_max z prądu zadziałania — jedno miejsce dla całej aplikacji.
+ *
+ * Dobór w Rozdzielnicy, kalkulator pętli zwarcia i protokół pomiarowy muszą podawać
+ * TĘ SAMĄ liczbę: gdyby dobór dopuszczał 2,88 Ω, a protokół wymagał 2,73 Ω, ten sam
+ * obwód przechodziłby projekt i oblewał odbiór.
+ */
+/**
+ * Zapas pomiarowy dla ODBIORU: zmierzona Zs powinna zmieścić się w 0,8 limitu normy.
+ *
+ * Pomiar robi się na zimnym przewodzie i przy takim napięciu, jakie akurat jest
+ * w sieci. Nagrzany przewód ma większą rezystancję, więc obwód zmierzony dokładnie
+ * na granicy wypada poza nią przy pierwszym dłuższym obciążeniu. Ten próg nie
+ * zastępuje limitu normy — pokazywany jest OBOK niego.
+ */
+export const ZAPAS_POMIAROWY = 0.8;
+
+export function zsMaxDlaIa(ia: number): number {
+  return ia > 0 ? (C_NAPIECIOWE.min * U0) / ia : 0;
+}
+
 export interface LoopImpedanceResult {
   /** Prąd zadziałania wyzwalacza magnetycznego [A]. */
   ia: number;
@@ -166,7 +203,20 @@ export interface LoopImpedanceResult {
 }
 
 /**
- * Zs max = U0 / Ia, gdzie Ia = k × In (k zależny od charakterystyki wyłącznika).
+ * Maksymalna dopuszczalna impedancja pętli zwarcia [Ω].
+ *
+ *   Zs_max = Cmin · U0 / Ia,   Ia = k · In   (k zależne od charakterystyki)
+ *
+ * Współczynnik napięciowy Cmin = 0,95 (PN-EN 60909-0) był tu wcześniej pominięty,
+ * czyli liczony jak 1,0 — a to jest błąd W STRONĘ NIEBEZPIECZNĄ. Napięcie w sieci
+ * bywa niższe od znamionowego, więc prąd zwarcia jest mniejszy niż przy 230 V;
+ * pomijając to, dopuszczaliśmy pętlę o 5% dłuższą niż wolno, przy której
+ * zabezpieczenie może nie zadziałać w wymaganym czasie. Dla B16 daje to 2,73 Ω
+ * zamiast 2,88 Ω.
+ *
+ * Ten sam współczynnik obowiązuje wszędzie, gdzie liczy się skuteczność ochrony
+ * przeciwporażeniowej — patrz `C_NAPIECIOWE.min` w `lib/norms/conductors.ts`
+ * i `wspolczynnikC` w `lib/calc/shortCircuit.ts`.
  *
  * Osobna funkcja od `sizeCircuit`: weryfikacja pomiarowa Zs zakłada już
  * ZAINSTALOWANY wyłącznik o znanym In — nie ma tu nic do dobierania, tylko
@@ -179,7 +229,7 @@ export interface LoopImpedanceResult {
 export function zsMaxForBreaker(curve: string, inA: number): LoopImpedanceResult {
   const k = CURVE_MULTIPLIER[curve.toUpperCase() as Curve] ?? CURVE_MULTIPLIER.B;
   const ia = k * inA;
-  return { ia, zsMax: ia > 0 ? U0 / ia : 0 };
+  return { ia, zsMax: ia > 0 ? zsMaxDlaIa(ia) : 0 };
 }
 
 /**
@@ -201,7 +251,11 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
   const method = REFERENCE_METHOD_FOR[spec.sposob_ulozenia];
   const loadedCores: 2 | 3 = phases === "3" ? 3 : 2;
   const curve: Curve = spec.rozruch_silnikowy ? "C" : "B";
-  const dropLimit = spec.typ === "oswietlenie" ? MAX_VOLTAGE_DROP_PCT.oswietlenie : MAX_VOLTAGE_DROP_PCT.inne;
+  // Limit dotyczy CALEJ drogi od zlacza: budzet obwodu to limit MINUS to, co zjadla
+  // juz WLZ. Bez tego dwa poprawne osobno odcinki dawaly razem instalacje ponad norme.
+  const dropWlz = Math.max(0, spec.spadek_wlz_pct ?? 0);
+  const dropLimit = limitSpadkuPct(spec.typ === "oswietlenie", spec.wlasna_stacja);
+  const budzetObwodu = Math.max(0, dropLimit - dropWlz);
 
   const k1 = temperatureFactor(ambientC);
   const k2 = groupingFactor(bundle);
@@ -211,6 +265,8 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
   const rcdType: "A" | "B" | "F" = /ładowarka|ev\b|falownik|fotowolta/i.test(spec.nazwa) ? "B" : "A";
 
   const base = (): SizedCircuit => ({
+    spadek_wlz_pct: dropWlz,
+    spadek_calkowity_pct: null,
     id: spec.id,
     nazwa: spec.nazwa,
     typ: spec.typ,
@@ -276,7 +332,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
       if (In === undefined) continue; // ten przekrój nie udźwignie wymaganego prądu
       if (!hasLength) return { section, In, Iz, drop: null };
       const drop = voltageDropPct(spec.dlugosc_m!, Ib, section, phases);
-      if (drop <= dropLimit) return { section, In, Iz, drop };
+      if (drop <= budzetObwodu) return { section, In, Iz, drop };
     }
     return null;
   }
@@ -337,7 +393,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
 
   if (chosen.section > MIN_SECTION_FOR[spec.typ] && chosen.drop !== null) {
     const atMin = voltageDropPct(spec.dlugosc_m!, Ib, MIN_SECTION_FOR[spec.typ], phases);
-    if (atMin > dropLimit) {
+    if (atMin > budzetObwodu) {
       warnings.push({
         code: "PRZEKROJ_PODNIESIONY_SPADEK",
         level: "warn",
@@ -369,6 +425,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
   const status: SizingStatus = hasError ? "error" : warnings.length > 0 ? "warn" : "ok";
 
   return {
+    spadek_wlz_pct: dropWlz,
     id: spec.id,
     nazwa: spec.nazwa,
     typ: spec.typ,
@@ -382,9 +439,10 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
     Iz_A: round(chosen.Iz, 2),
     wspolczynniki: { k1_temperatura: round(k1, 3), k2_grupowanie: k2 },
     spadek_napiecia_pct: chosen.drop === null ? null : round(chosen.drop, 2),
+    spadek_calkowity_pct: chosen.drop === null ? null : round(chosen.drop + dropWlz, 2),
     spadek_napiecia_limit_pct: dropLimit,
     Ia_A: Ia,
-    Zs_max_Ohm: round(U0 / Ia, 3),
+    Zs_max_Ohm: round(zsMaxDlaIa(Ia), 3),
     rcd_typ: rcdType,
     status,
     ostrzezenia: warnings,
@@ -526,7 +584,7 @@ export function sizeBreakerForSection(spec: BreakerSpec): SizedBreaker {
     ...common,
     aparat: { charakterystyka: curve, In_A: In, bieguny: poles },
     Ia_A: Ia,
-    Zs_max_Ohm: round(U0 / Ia, 3),
+    Zs_max_Ohm: round(zsMaxDlaIa(Ia), 3),
     status: hasError ? "error" : warnings.length > 0 ? "warn" : "ok",
     ostrzezenia: warnings,
   };
