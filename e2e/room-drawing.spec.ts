@@ -350,3 +350,98 @@ test("po anulowaniu Escape kolejne kliknięcie normalnie zaczyna nowy prostokąt
   await page.mouse.move(box.x + 300, box.y + 240);
   expect(await previewRects(page)).toBe(1);
 });
+
+/**
+ * Rysowanie pomieszczenia PRZY już istniejącym.
+ *
+ * Krawędź narysowanego pokoju ma szeroki `hitStrokeWidth` (14 jedn.) i w trybie
+ * „pomieszczenie" łapała kliknięcia: punkty stawiane na wspólnej ścianie znikały,
+ * a figury nie dawało się domknąć. Zmierzone przed poprawką: z pięciu kliknięć wzdłuż
+ * wspólnej krawędzi rejestrowały się dwa i rysowanie zostawało w zawieszeniu.
+ */
+async function wspolrzedneWPlanie(page: import("@playwright/test").Page, x: number, y: number) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const skala = await page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { scaleX(): number }[] } }).Konva;
+    return k.stages[0].scaleX();
+  });
+  return { x: box.x + x * skala, y: box.y + y * skala };
+}
+
+async function zapisanePokoje(page: import("@playwright/test").Page) {
+  await page.waitForTimeout(900); // debounce autozapisu
+  return page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!).draft.roomShapes as {
+        points: { x: number; y: number }[];
+      }[]
+  );
+}
+
+test("drugie pomieszczenie da się narysować wzdłuż ściany pierwszego", async ({ page }) => {
+  await openPlan(page);
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  const a = await wspolrzedneWPlanie(page, 200, 200);
+  const b = await wspolrzedneWPlanie(page, 500, 400);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  // Drugi pokój wielobokiem, wzdłuż PRAWEJ ściany pierwszego (x = 500).
+  await page.getByRole("button", { name: "Wielobok" }).click();
+  for (const [x, y] of [
+    [500, 200],
+    [700, 200],
+    [700, 400],
+    [500, 400],
+    [500, 200], // domknięcie kliknięciem w pierwszy punkt
+  ]) {
+    const p = await wspolrzedneWPlanie(page, x, y);
+    await page.mouse.click(p.x, p.y);
+  }
+  await expect(page.getByText("Nazwij pomieszczenie")).toBeVisible();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  const pokoje = await zapisanePokoje(page);
+  expect(pokoje).toHaveLength(2);
+  expect(pokoje[1].points).toHaveLength(4);
+});
+
+test("punkty nowego pomieszczenia przyciągają się do narożników sąsiada", async ({ page }) => {
+  await openPlan(page);
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  const a = await wspolrzedneWPlanie(page, 200, 200);
+  const b = await wspolrzedneWPlanie(page, 500, 400);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  // Celujemy OBOK narożników sąsiada (kilka jednostek za daleko) — przyciąganie ma
+  // dociągnąć punkty na wspólną ścianę, żeby między pokojami nie została szczelina.
+  await page.getByRole("button", { name: "Wielobok" }).click();
+  for (const [x, y] of [
+    [505, 196],
+    [700, 200],
+    [700, 400],
+    [497, 404],
+    [505, 196],
+  ]) {
+    const p = await wspolrzedneWPlanie(page, x, y);
+    await page.mouse.click(p.x, p.y);
+  }
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  const [pierwszy, drugi] = await zapisanePokoje(page);
+  const prawaPierwszego = Math.max(...pierwszy.points.map((p) => p.x));
+  // Oba punkty przy wspólnej ścianie leżą DOKŁADNIE na niej, mimo że klik był obok.
+  const przyScianie = drugi.points.filter((p) => Math.abs(p.x - prawaPierwszego) < 0.001);
+  expect(przyScianie).toHaveLength(2);
+  // I to na wysokości narożników sąsiada, a nie gdziekolwiek na jego krawędzi.
+  const naroznikiY = pierwszy.points.filter((p) => p.x === prawaPierwszego).map((p) => p.y).sort((m, n) => m - n);
+  expect(przyScianie.map((p) => p.y).sort((m, n) => m - n)).toEqual(naroznikiY);
+});
