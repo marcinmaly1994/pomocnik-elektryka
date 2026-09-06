@@ -32,8 +32,6 @@ import {
 } from "@/lib/norms/conductors";
 import { formatLiczba } from "@/lib/calc/result";
 import { calcLighting, calcPowerBalance, maxGroundingResistance, UL } from "@/lib/electrical";
-import { computeCircuits } from "@/lib/panel/circuits";
-import { circuitDemand, kindForElements } from "@/lib/panel/loads";
 import { LAYING_METHOD_LABELS, SECTIONS, U0, type LayingMethod } from "@/lib/panel/norms";
 import {
   sizeBreakerForSection,
@@ -45,10 +43,7 @@ import {
 import { useCalculatorsStore, type CalcId } from "@/store/useCalculatorsStore";
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
-import { useProjectStore } from "@/store/useProjectStore";
-import { obwodyDoKalkulatora, type ObwodDoKalkulatora } from "@/lib/panel/project";
 import { Card } from "./Card";
-import { WczytajObwod } from "./WczytajObwod";
 import { Field, HintButton } from "./Field";
 import { HowItWorks } from "./HowItWorks";
 
@@ -831,54 +826,14 @@ export function CalculatorsTab() {
   // --- 3. bilans mocy ---
   const balance = useMemo(() => calcPowerBalance(devices, ks), [devices, ks]);
 
-  // Obwody z CAŁEGO budynku (wszystkie kondygnacje — `draft.elements` nie jest
-  // filtrowane per piętro, tak samo jak w Rozdzielnicy, patrz PanelTab.tsx),
-  // przepuszczone przez ten sam model obciążeń co dobór normatywny
-  // (`circuitDemand`), żeby „Wczytaj z projektu" dawało moc zainstalowaną
-  // zgodną co do watu z tym, co widać w Rozdzielnicy — nie osobno wymyśloną
-  // liczbę. Filtr `power > 0` odsiewa obwody złożone wyłącznie z elementów bez
-  // przypisanej mocy typowej (np. same łączniki bez lamp w tej samej paczce).
-  const projectElements = useProjectStore((s) => s.draft.elements);
-  const projectRoomShapes = useProjectStore((s) => s.draft.roomShapes);
-  const projectScales = useProjectStore((s) => s.scales);
-  /** Obwody rzutu gotowe do wpisania w kalkulator — te same liczby, ktore widac
-   *  w Rozdzielnicy (patrz `obwodyDoKalkulatora`). */
-  const obwodyProjektu = useMemo(
-    () => obwodyDoKalkulatora(projectElements, projectScales, projectRoomShapes),
-    [projectElements, projectScales, projectRoomShapes]
-  );
-  const projectDevices = useMemo(() => {
-    return computeCircuits(projectElements)
-      .map((c) => {
-        const kind = kindForElements(c.elements);
-        return { name: c.name, power: Math.round(circuitDemand(c.elements, kind).installedW) };
-      })
-      .filter((d) => d.power > 0);
-  }, [projectElements]);
-
-  function loadDevicesFromProject() {
-    if (!confirm("Zastąpić listę odbiorników obwodami wyliczonymi z planu? Obecna lista zostanie nadpisana.")) return;
-    setDevices(() => projectDevices.map((d) => ({ id: crypto.randomUUID(), ...d })));
-  }
-
-  /** Wypelnia kalkulator doboru danymi obwodu z rzutu. `cos φ` zostaje nietkniete —
-   *  projekt go nie modeluje, a podstawienie 1,0 po cichu zmienialoby wynik. */
-  function wczytajDoDoboru(o: ObwodDoKalkulatora) {
-    patch({
-      circuitKind: o.typ,
-      power: o.moc_W,
-      phase: o.liczba_faz,
-      ...(o.dlugosc_m !== undefined ? { length: o.dlugosc_m } : {}),
-    });
-  }
-
-  /** Wypelnia kalkulator petli zwarcia zabezpieczeniem dobranym dla obwodu z rzutu.
-   *  Zmierzonej impedancji NIE ruszamy — to jedyna liczba, ktora musi pochodzic
-   *  z miernika, a nie z projektu. */
-  function wczytajDoPetli(o: ObwodDoKalkulatora) {
-    if (!o.charakterystyka || !o.In_A) return;
-    patch({ zCurve: o.charakterystyka, zIn: o.In_A });
-  }
+  // Ta zakładka NIE czyta projektowanej instalacji — świadomie. Kalkulatory (tak samo
+  // jak Protokoły pomiarowe) są narzędziem OBOK przepływu 1→2→3→4, a nie jego krokiem:
+  // elektryk liczy tu przekrój dla roboty, która z otwartym rzutem nie ma nic wspólnego.
+  // Były tu trzy zejścia do `useProjectStore` — „Wczytaj z projektu" w bilansie mocy
+  // i „Wczytaj obwód z projektu" w doborze przekroju oraz w pętli zwarcia — usunięte,
+  // bo zamieniały samodzielne narzędzie w akcesorium aktualnie rysowanego budynku.
+  // Jedyne wczytanie, jakie tu zostaje, biegnie MIĘDZY kalkulatorami („Wczytaj
+  // z bilansu mocy" w WLZ) i nie wyprowadza zakładki poza jej własne dane.
 
   // --- 3. impedancja pętli zwarcia ---
   const zCalc = useMemo(() => {
@@ -961,11 +916,6 @@ export function CalculatorsTab() {
         <div style={{ flex: "1 1 480px", minWidth: 320 }}>
           {activeCalc === "przekroj" && (
             <Card title={active.label} tag="przekrój żyły">
-              <WczytajObwod
-                obwody={obwodyProjektu}
-                onPick={wczytajDoDoboru}
-                hint="Wypełni rodzaj obwodu, moc obliczeniową, liczbę faz i długość najdłuższej trasy — tymi samymi liczbami, którymi liczy Rozdzielnica. cos φ i warunki ułożenia zostają Twoje."
-              />
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
                   label="Rodzaj obwodu"
@@ -2835,18 +2785,6 @@ export function CalculatorsTab() {
                 >
                   <Plus size={13} /> Dodaj odbiornik
                 </button>
-                <button
-                  onClick={loadDevicesFromProject}
-                  disabled={projectDevices.length === 0}
-                  title={
-                    projectDevices.length === 0
-                      ? "Brak elementów na planie — narysuj instalację, żeby wczytać bilans stąd"
-                      : "Zastąp listę mocą zainstalowaną obwodów wyliczonych z planu"
-                  }
-                  className="pe-btn-ghost text-xs px-2.5 py-1.5 flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Download size={13} /> Wczytaj z projektu
-                </button>
               </div>
               <Field
                 label="Współczynnik jednoczesności (ks)"
@@ -2880,7 +2818,7 @@ export function CalculatorsTab() {
                   { label: "Prąd zapotrzebowany", eq: "I₁f = Pz / U   |   I₃f = Pz / (√3 × U)", where: "U = 230 V dla 1 fazy, 400 V dla 3 faz" },
                 ]}
                 notes={[
-                  "„Wczytaj z projektu” zastępuje listę mocą zainstalowaną obwodów wyliczonych z elementów rozstawionych na planie (ten sam model obciążeń co w Rozdzielnicy) — to tylko punkt startowy, dopisz ręcznie odbiorniki, których nie ma na rysunku (np. piekarnik podłączony na stałe bez widocznego gniazda).",
+                  "Lista odbiorników jest wyłącznie Twoja — kalkulator nie zagląda do rysowanego rzutu. Wpisz odbiorniki tej instalacji, którą właśnie liczysz, łącznie z tymi bez widocznego gniazda (np. piekarnik podłączony na stałe).",
                   "Współczynnik jednoczesności odzwierciedla fakt, że nie wszystkie odbiorniki pracują jednocześnie z pełną mocą.",
                   "Wartości orientacyjne ks dla domu jednorodzinnego: 0,6–0,8. Im więcej odbiorników, tym niższy współczynnik.",
                   "Moc zapotrzebowana służy do doboru mocy przyłączeniowej we wniosku do operatora sieci oraz zabezpieczenia przedlicznikowego.",
@@ -3017,11 +2955,6 @@ export function CalculatorsTab() {
 
           {activeCalc === "petla" && (
             <Card title={active.label} tag="ochrona przeciwporażeniowa">
-              <WczytajObwod
-                obwody={obwodyProjektu.filter((o) => o.charakterystyka && o.In_A)}
-                onPick={wczytajDoPetli}
-                hint="Wypełni charakterystykę i prąd zabezpieczenia dobranego dla tego obwodu. Zmierzoną impedancję wpisujesz sam — ta może pochodzić tylko z miernika."
-              />
               <div className="grid sm:grid-cols-3 gap-x-4">
                 <Field
                   label="Charakterystyka"
