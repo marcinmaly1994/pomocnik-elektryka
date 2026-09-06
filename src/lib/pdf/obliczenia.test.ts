@@ -190,7 +190,7 @@ describe("szerokości kolumn", () => {
     komorkiObliczen(najdluzszy, 128.6)
       .slice(1)
       .forEach((tekst, i) => {
-        expect(pdfFitText(tekst, SZEROKOSCI[i + 1] - WCIECIE_PRAWE - 2, 8.5, false)).toBe(tekst);
+        expect(pdfFitText(tekst, SZEROKOSCI[i + 1] - WCIECIE_PRAWE, 8.5, false)).toBe(tekst);
       });
   });
 });

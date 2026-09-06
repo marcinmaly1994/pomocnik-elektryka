@@ -62,10 +62,9 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
   ];
   // Odstęp etykieta->wartość liczony z szerokości etykiety (nie na sztywno) — przy stałym
   // wcięciu dłuższe etykiety (np. "Świadectwo wzorcowania:") potrafiły nachodzić na wartość.
-  // `pdfTextWidth` liczy w przybliżeniu wg tabel Helvetiki (patrz komentarz w engine.ts przy
-  // PDF_W_REG), a osadzony font (DejaVu Sans Bold) bywa ok. 20% szerszy dla pogrubionych
-  // etykiet — stąd zapas `LABEL_WIDTH_SAFETY` w wyliczeniu pozycji wartości.
-  const LABEL_WIDTH_SAFETY = 1.3;
+  // Stał tu jeszcze mnożnik 1,3: zapas na to, że metryki silnika były helwetyckie, a font
+  // osadzony (DejaVu Bold) jest o piątą szerszy. Metryki są już prawdziwe (patrz PDF_W_REG
+  // w engine.ts), więc zapas zniknął — wartości stoją dokładnie tam, gdzie kończy się etykieta.
   const col1End = M + 270;
   const col2End = M + W;
   // `box` przyjmuje LEWY DOLNY róg i rośnie w GÓRĘ (patrz `engine.ts`: operator `re`
@@ -77,12 +76,12 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
   for (let i = 0; i < info.length; i += 2) {
     const yy = doc.y + 2;
     const label1 = info[i][0] + ":";
-    const value1X = M + 6 + pdfTextWidth(label1, 8.5, true) * LABEL_WIDTH_SAFETY + 6;
+    const value1X = M + 6 + pdfTextWidth(label1, 8.5, true) + 6;
     doc.text(label1, M + 6, yy, 8.5, true);
     doc.text(pdfFitText(info[i][1] || "—", col1End - value1X, 8.5, false), value1X, yy, 8.5);
     if (info[i + 1]) {
       const label2 = info[i + 1][0] + ":";
-      const value2X = M + 274 + pdfTextWidth(label2, 8.5, true) * LABEL_WIDTH_SAFETY + 6;
+      const value2X = M + 274 + pdfTextWidth(label2, 8.5, true) + 6;
       doc.text(label2, M + 274, yy, 8.5, true);
       doc.text(pdfFitText(info[i + 1][1] || "—", col2End - value2X, 8.5, false), value2X, yy, 8.5);
     }
