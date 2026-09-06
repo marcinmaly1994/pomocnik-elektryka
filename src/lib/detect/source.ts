@@ -7,6 +7,8 @@
  * pierwszym PDF-ie.
  */
 
+import { zakodujPodklad } from "./kodowaniePodkladu";
+
 export interface WczytanyRzut {
   /** Piksele do analizy. */
   rgba: Uint8ClampedArray;
@@ -32,9 +34,10 @@ export function canvasDoWyniku(canvas: HTMLCanvasElement, nazwaPliku: string): W
     rgba: dane.data,
     szerokosc: canvas.width,
     wysokosc: canvas.height,
-    // PNG, nie JPEG: rzut to grafika kreskowa, a kompresja stratna rozmywa
-    // cienkie ścianki i psuje próg Otsu przy późniejszej ponownej analizie.
-    dataUrl: canvas.toDataURL("image/png"),
+    // Mniejszy z dwóch zapisów — patrz `kodowaniePodkladu.ts`. Rysunek kreskowy wychodzi
+    // z tego PNG-iem (bezstratnie i tak mniejszym), zdjęcie JPEG-iem, bo bezstratny
+    // zapis fotografii zjadał cały budżet `localStorage` na jednej kondygnacji.
+    dataUrl: zakodujPodklad(canvas, dane.data).dataUrl,
     nazwaPliku,
   };
 }
@@ -62,9 +65,12 @@ async function wczytajObraz(file: File): Promise<WczytanyRzut> {
   if (!ctx) throw new Error("Przeglądarka nie udostępniła kontekstu 2D");
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  // Gdy nie skalowaliśmy, oddajemy ORYGINALNY dataUrl — bez ponownej kompresji.
   const wynik = canvasDoWyniku(canvas, file.name);
-  return skala === 1 ? { ...wynik, dataUrl } : wynik;
+  // Bez skalowania mamy dwa równoważne zapisy tego samego obrazu: oryginalny plik
+  // i nasze przekodowanie. Bierzemy MNIEJSZY — dzięki temu wgrany JPEG zostaje sobą
+  // (ponowna stratna kompresja tylko by mu zaszkodziła), a fotografia wgrana jako PNG
+  // schodzi do rozmiaru, który mieści się w pamięci przeglądarki.
+  return skala === 1 && dataUrl.length < wynik.dataUrl.length ? { ...wynik, dataUrl } : wynik;
 }
 
 async function wczytajPdf(file: File): Promise<WczytanyRzut> {

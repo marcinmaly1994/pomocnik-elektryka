@@ -1,21 +1,30 @@
-import { Check } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
+import { komunikatZapisu } from "@/lib/zapisLokalny";
 
 /**
  * Wskaźnik autozapisu. Wyciągnięty z nagłówka do osobnego pliku, bo po przebudowie
  * układu mieszka w pasku stanu edytora — a `DesignTab` jest ładowany leniwie z
  * `App.tsx`, więc import z powrotem do App zrobiłby cykl.
+ *
+ * Nieudany zapis MUSI wygrywać z godziną ostatniego udanego. Wcześniej wyjątek
+ * z `localStorage` (przepełniona pamięć przeglądarki) był połykany po cichu, więc
+ * wskaźnik zamierał na starej godzinie — zielony, z ptaszkiem, twierdząc, że projekt
+ * jest zapisany. Patrz `localSaveError` w store.
  */
+
 export function SaveIndicator({ compact = false }: { compact?: boolean }) {
   const lastLocalSaveAt = useProjectStore((s) => s.lastLocalSaveAt);
-  if (!lastLocalSaveAt) return null;
-  const time = new Date(lastLocalSaveAt).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  const localSaveError = useProjectStore((s) => s.localSaveError);
+  const stan = komunikatZapisu(localSaveError, lastLocalSaveAt);
+  if (!stan) return null;
+  const Ikona = stan.ostrzezenie ? AlertTriangle : Check;
   return (
     <span
-      className="flex items-center gap-1 text-xs text-emerald-600"
-      title={`Projekt zapisuje się automatycznie w tej przeglądarce — ostatnio o ${time}`}
+      className={`flex items-center gap-1 text-xs ${stan.ostrzezenie ? "font-medium text-warn" : "text-emerald-600"}`}
+      title={stan.tytul}
     >
-      <Check size={12} /> {compact ? "Zapisano" : `Zapisano lokalnie ${time}`}
+      <Ikona size={12} /> {compact ? stan.krotki : stan.tekst}
     </span>
   );
 }

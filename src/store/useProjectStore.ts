@@ -259,6 +259,23 @@ interface ProjectState {
    *  zasila wskaźnik „Zapisano lokalnie” w nagłówku. `null`, dopóki w tej karcie
    *  jeszcze nic nie zapisano. Ustawiane wyłącznie przez autosave niżej w pliku. */
   lastLocalSaveAt: number | null;
+  /**
+   * Co poszło nie tak z ostatnim zapisem lokalnym. `null`, gdy wszystko się zapisało.
+   *
+   * Przeglądarka daje na `localStorage` około 5 MB na całą aplikację, a podkład rzutu
+   * potrafi zająć prawie tyle sam (zmierzone: zdjęcie 4000 × 2800 to 4,8 MB jako data
+   * URL). Po przekroczeniu limitu `setItem` rzuca wyjątkiem — i dotąd był on po cichu
+   * połykany: wskaźnik pokazywał godzinę OSTATNIEGO UDANEGO zapisu i po prostu
+   * przestawał się zmieniać, a użytkownik zamykał kartę w przekonaniu, że praca jest
+   * zapisana. To ten sam rodzaj cichej straty, co nadpisywanie cudzych zmian w chmurze
+   * (patrz `konfliktChmury`) — tyle że dotyczy wszystkich, bo lokalny zapis nie wymaga
+   * konta.
+   *
+   * „bezPodkladu" to stan pośredni: sam rysunek się zapisał, nie zmieścił się podkład.
+   * Rysunek jest cenniejszy — powstawał godzinami, a podkład wgrywa się z pliku
+   * w dziesięć sekund — więc ratujemy to, co da się uratować, i mówimy o tym wprost.
+   */
+  localSaveError: "bezPodkladu" | "brak" | null;
   /** To samo co `lastLocalSaveAt`, ale dla zapisu W CHMURZE — value-add
    *  zarezerwowany dla konta: zalogowani nie muszą pamiętać o ręcznym „Zapisz”,
    *  bo `saveToCloud` odpala się automatycznie po każdej zmianie (patrz autosave
@@ -446,6 +463,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   protokolyNazwa: "",
   limitBlokada: null,
   lastLocalSaveAt: null,
+  localSaveError: null,
   lastCloudSaveAt: null,
   cloudSaveError: null,
   cloudBusy: false,
@@ -1285,9 +1303,26 @@ useProjectStore.subscribe(() => {
     lastAutosavedJson = json;
     try {
       localStorage.setItem(AUTOSAVE_KEY, json);
-      useProjectStore.setState({ lastLocalSaveAt: Date.now() });
+      useProjectStore.setState({ lastLocalSaveAt: Date.now(), localSaveError: null });
     } catch {
-      // limit przeglądarki / tryb prywatny — projekt działa nadal w tej karcie, tylko bez zapisu
+      /**
+       * Limit przeglądarki albo tryb prywatny. Dwie rzeczy, których tu wcześniej
+       * brakowało — obie sprowadzają się do „nie udawaj, że zapisałeś".
+       *
+       * 1. RATUJEMY RYSUNEK. Podkład rzutu potrafi zająć prawie cały budżet
+       *    `localStorage` (zdjęcie 4000 × 2800 to 4,8 MB przy ~5 MB limitu), a jest
+       *    najmniej cenną częścią projektu: wgrywa się z pliku w dziesięć sekund,
+       *    podczas gdy rozstawiony osprzęt powstawał godzinami. Druga próba idzie
+       *    więc bez podkładów.
+       * 2. MÓWIMY O TYM. Bez `localSaveError` wskaźnik zamierał na godzinie ostatniego
+       *    udanego zapisu, nie zmieniając ani koloru, ani treści.
+       */
+      try {
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ ...payload, bgImages: {} }));
+        useProjectStore.setState({ lastLocalSaveAt: Date.now(), localSaveError: "bezPodkladu" });
+      } catch {
+        useProjectStore.setState({ localSaveError: "brak" });
+      }
     }
   }, 600);
 });

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   ChevronDown,
@@ -24,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CloudSaveIndicator } from "@/components/ui/CloudSaveIndicator";
+import { komunikatZapisu } from "@/lib/zapisLokalny";
 import { CalculatorsTab } from "@/components/calculators/CalculatorsTab";
 import { ProtocolsTab } from "@/components/protocols/ProtocolsTab";
 import { SchemaTab } from "@/components/schema/SchemaTab";
@@ -361,6 +363,8 @@ export default function App() {
   const loadFromCloud = useProjectStore((s) => s.loadFromCloud);
   const resetProject = useProjectStore((s) => s.resetProject);
   const elementCount = useProjectStore((s) => s.draft.elements.length);
+  const localSaveError = useProjectStore((s) => s.localSaveError);
+  const lastLocalSaveAt = useProjectStore((s) => s.lastLocalSaveAt);
   const projectName = useProjectStore((s) => s.projectName);
 
   const [authOpen, setAuthOpen] = useState(false);
@@ -464,15 +468,29 @@ export default function App() {
               lokalnie” + `Save` mówią wprost co się dzieje, bez straszenia. Klikalne
               (gdy Supabase jest skonfigurowane) — otwiera logowanie, więc to
               rzeczywista zachęta, nie tylko podpowiedź w tooltipie. */}
+          {/* Chip stwierdzał „Zapisano lokalnie" ZAWSZE, bo był napisem, nie stanem —
+              także wtedy, gdy pamięć przeglądarki się skończyła i nic się nie zapisało.
+              Teraz mówi prawdę i w razie awarii prowadzi tam, gdzie limitu nie ma
+              (patrz `localSaveError` w store). Zostaje w nagłówku, a nie w pasku stanu
+              edytora, właśnie po to: awarię widać z każdej zakładki. */}
           {!session && (
             <button
               type="button"
               onClick={SUPABASE_CONFIGURED ? () => setAuthOpen(true) : undefined}
               disabled={!SUPABASE_CONFIGURED}
-              className="pe-chip hidden items-center gap-1 text-slate-400 transition-colors enabled:hover:border-copper enabled:hover:text-copper lg:flex disabled:cursor-default"
-              title={SUPABASE_CONFIGURED ? "Zaloguj się, aby synchronizować projekt z chmurą" : "Uzupełnij VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY w .env"}
+              className={`pe-chip hidden items-center gap-1 transition-colors enabled:hover:border-copper enabled:hover:text-copper lg:flex disabled:cursor-default ${
+                localSaveError ? "font-medium text-warn" : "text-slate-400"
+              }`}
+              title={
+                localSaveError
+                  ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tytul
+                  : SUPABASE_CONFIGURED
+                    ? "Zaloguj się, aby synchronizować projekt z chmurą"
+                    : "Uzupełnij VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY w .env"
+              }
             >
-              <Save size={13} /> Zapisano lokalnie
+              {localSaveError ? <AlertTriangle size={13} /> : <Save size={13} />}{" "}
+              {localSaveError ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tekst : "Zapisano lokalnie"}
             </button>
           )}
           <NewProjectButton onConfirm={resetProject} elementCount={elementCount} />
