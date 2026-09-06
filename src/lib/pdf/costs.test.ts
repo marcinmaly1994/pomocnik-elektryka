@@ -84,7 +84,7 @@ describe("buildCostsPdf", () => {
 
   it("dluga lista pozycji przechodzi na kolejne strony z naglowkiem (cd.)", async () => {
     const duzo = Array.from({ length: 60 }, (_, i) => ({
-      key: `k${i}`, label: `Pozycja numer ${i}`, qty: i + 1, price: 10, value: (i + 1) * 10, overridden: false,
+      key: `k${i}`, label: `Pozycja numer ${i}`, qty: i + 1, qtyOverridden: false, price: 10, value: (i + 1) * 10, overridden: false,
     }));
     const out = bytesToAscii(await buildCostsPdf(duzo, header));
     expect((out.match(/\/Type \/Page /g) || []).length).toBeGreaterThan(1);

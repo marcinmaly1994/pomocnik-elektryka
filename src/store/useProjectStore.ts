@@ -23,7 +23,7 @@ import {
   scaleOf,
   type PlanSize,
 } from "@/lib/design";
-import { DEFAULT_PRICES, type CostOverrides } from "@/lib/costs";
+import { DEFAULT_PRICES, type CostOverrides, type QtyOverrides } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
 import { decyzjaZapisu, type RodzajDokumentu } from "@/lib/dokumenty";
@@ -92,6 +92,8 @@ export interface ProjectPayload {
   prices: PriceTable;
   /** Recznie wpisane WARTOSCI pozycji kosztorysu [zl netto] — patrz `CostOverrides`. */
   costOverrides: CostOverrides;
+  /** Recznie poprawione ILOSCI pozycji kosztorysu — patrz `QtyOverrides`. */
+  qtyOverrides: QtyOverrides;
   docHeader: DocumentHeader;
   protocols: Partial<Record<ProtocolKey, ProtocolState>>;
   projectName: string;
@@ -196,6 +198,8 @@ interface ProjectState {
   prices: PriceTable;
   /** Recznie wpisane WARTOSCI pozycji kosztorysu [zl netto] — patrz `CostOverrides`. */
   costOverrides: CostOverrides;
+  /** Recznie poprawione ILOSCI pozycji kosztorysu — patrz `QtyOverrides`. */
+  qtyOverrides: QtyOverrides;
   docHeader: DocumentHeader;
   projectName: string;
   protocols: Partial<Record<ProtocolKey, ProtocolState>>;
@@ -326,6 +330,8 @@ interface ProjectState {
   setPrice: (key: string, value: number) => void;
   /** Wpisuje wartosc pozycji kosztorysu recznie; `null` przywraca ilosc x cena. */
   setCostOverride: (key: string, value: number | null) => void;
+  /** Poprawia ilosc pozycji kosztorysu; `null` przywraca oszacowanie z rzutu. */
+  setQtyOverride: (key: string, value: number | null) => void;
   setPrices: (patch: Record<string, number>) => void;
   setDocHeader: (patch: Partial<DocumentHeader>) => void;
   setProjectName: (name: string) => void;
@@ -390,6 +396,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   scales: {},
   prices: { ...DEFAULT_PRICES },
   costOverrides: {},
+  qtyOverrides: {},
   projectName: "Mój dom",
   protocols: {},
   panelConfig: { supply3f: true, mainRating: 40 },
@@ -487,6 +494,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       scales: {},
       prices: { ...DEFAULT_PRICES },
       costOverrides: {},
+      qtyOverrides: {},
       protocols: {},
       cloudId: null,
       lastCloudSaveAt: null,
@@ -518,8 +526,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   getProjectPayload: () => {
-    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding } = get();
-    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
+    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding } = get();
+    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
   },
 
   loadProjectPayload: (payload) => {
@@ -544,6 +552,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       prices: { ...DEFAULT_PRICES, ...payload.prices },
       // Zapisy sprzed tej zmiany nie maja tego pola — pusta mapa znaczy "wszystko liczone".
       costOverrides: payload.costOverrides ?? {},
+      qtyOverrides: payload.qtyOverrides ?? {},
       docHeader: payload.docHeader,
       protocols: payload.protocols,
       projectName: payload.projectName || "Projekt",
@@ -722,6 +731,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (value === null) delete next[key];
       else next[key] = value;
       return { costOverrides: next };
+    }),
+
+  setQtyOverride: (key, value) =>
+    set((state) => {
+      const next = { ...state.qtyOverrides };
+      if (value === null) delete next[key];
+      else next[key] = value;
+      return { qtyOverrides: next };
     }),
 
   setDocHeader: (patch) =>

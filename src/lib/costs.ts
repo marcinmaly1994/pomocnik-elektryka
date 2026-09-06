@@ -166,10 +166,27 @@ export function computeCosts(
  */
 export type CostOverrides = Record<string, number>;
 
+/**
+ * Ręcznie poprawione ILOŚCI pozycji, per klucz cennika.
+ *
+ * Ilości są SZACOWANE z rzutu — puszki podtynkowe z liczby punktów, rozgałęźne z liczby
+ * pomieszczeń, metry kabla z tras albo z ryczałtu. Aplikacja sama pisze pod tabelą, żeby
+ * je zweryfikować na realnym rzucie budynku, a do tej pory nie dawała ich poprawić:
+ * jedyne wyjście prowadziło przez wpisanie wartości ryczałtem, co gubi informację
+ * „ile tego kupić”.
+ *
+ * `0` jest pełnoprawną ilością („tej pozycji w ogóle nie robimy”), więc brak poprawki
+ * to brak klucza, nie zero — ten sam zapis co przy `CostOverrides`.
+ */
+export type QtyOverrides = Record<string, number>;
+
 export interface CostRow {
   key: string;
   label: string;
+  /** Ilość: oszacowana z rzutu albo poprawiona ręcznie. */
   qty: number;
+  /** Ilość pochodzi z ręcznej poprawki, nie z oszacowania. */
+  qtyOverridden: boolean;
   /** Cena jednostkowa z cennika [zł]. Przy pozycji ryczałtowej dalej widoczna,
    *  ale nieużyta — patrz `overridden`. */
   price: number;
@@ -179,43 +196,65 @@ export interface CostRow {
   overridden: boolean;
 }
 
+function nadpisane(map: Record<string, number>, key: string): boolean {
+  return typeof map[key] === "number" && Number.isFinite(map[key]);
+}
+
 /**
- * Wiersze kosztorysu: pozycje o niezerowej ilości, z wartością policzoną albo wpisaną.
+ * Wiersze kosztorysu: pozycje z ilością, ceną i wartością — każda z nich policzona
+ * albo poprawiona ręcznie.
  *
  * Wydzielone ze składnika, bo to jedyne miejsce, w którym decyduje się, co wchodzi do
  * sumy — a suma jest tym, po co ktoś tu przychodzi.
+ *
+ * Ilość i wartość są NIEZALEŻNE. Poprawiona ilość przelicza wartość (bo tyle sztuk razy
+ * cena), ale wartość podana ryczałtem zostaje na swoim miejscu — „90 punktów robocizny,
+ * 14 500 zł ryczałtem” to zdanie sensowne i poprawienie liczby punktów na 85 nie zmienia
+ * umówionej kwoty.
  */
 export function kosztorysRows(
   quantities: Record<string, number>,
   prices: Record<string, number>,
-  overrides: CostOverrides = {}
+  overrides: CostOverrides = {},
+  qtyOverrides: QtyOverrides = {}
 ): CostRow[] {
   return Object.keys(PRICE_LABELS)
-    .filter((k) => (quantities[k] ?? 0) > 0)
+    .filter(
+      // Pozycja z ręcznie ustawioną ILOŚCIĄ zostaje na liście nawet po wyzerowaniu —
+      // inaczej wpisanie zera kasowałoby wiersz razem z jedyną drogą powrotu.
+      // Sama wartość tego nie robi: nadpisanie kwoty przy pozycji, której na rzucie
+      // nie ma (bo np. skasowano rozdzielnicę), zostawiałoby w kosztorysie widmo.
+      (k) => (quantities[k] ?? 0) > 0 || nadpisane(qtyOverrides, k)
+    )
     .map((k) => {
-      const qty = quantities[k];
+      const qtyNadpisana = nadpisane(qtyOverrides, k);
+      const qty = qtyNadpisana ? qtyOverrides[k] : quantities[k] ?? 0;
       const price = prices[k] ?? 0;
-      const nadpisana = typeof overrides[k] === "number" && Number.isFinite(overrides[k]);
+      const wartoscNadpisana = nadpisane(overrides, k);
       return {
         key: k,
         label: PRICE_LABELS[k],
         qty,
+        qtyOverridden: qtyNadpisana,
         price,
-        value: nadpisana ? overrides[k] : qty * price,
-        overridden: nadpisana,
+        value: wartoscNadpisana ? overrides[k] : qty * price,
+        overridden: wartoscNadpisana,
       };
     });
 }
 
 /**
- * Pozycje, których BRAK w sumie — ilość jest, a wartość zerowa.
+ * Pozycje, których BRAK w sumie — jest ilość, a wartość zerowa.
  *
  * Liczy się wartość, nie cena jednostkowa: pozycja wyceniona ryczałtem ma prawo mieć
  * zerową cenę za sztukę i nadal wchodzić do kosztorysu pełną kwotą. Pilnowanie ceny
  * jednostkowej kazałoby uzupełniać cenę czegoś, co użytkownik już wycenił.
+ *
+ * Pozycje o ZEROWEJ ILOŚCI są pomijane: nie ma tam czego wyceniać, więc rada
+ * „uzupełnij cenę” byłaby nie na temat — to pozycja wykreślona z zakresu, nie luka.
  */
 export function pozycjeBezCeny(rows: CostRow[]): string[] {
-  return rows.filter((r) => r.value === 0).map((r) => r.label.replace(/\s*\(.*?\)\s*$/, ""));
+  return rows.filter((r) => r.value === 0 && r.qty !== 0).map((r) => r.label.replace(/\s*\(.*?\)\s*$/, ""));
 }
 
 /** Dopasowuje pozycje cennika CSV (nazwa;cena) po słowach kluczowych w nazwie. */
