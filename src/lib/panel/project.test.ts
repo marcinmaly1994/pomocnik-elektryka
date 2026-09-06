@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ElementType, InstallationElement } from "@/types";
 import { computeCircuits } from "./circuits";
-import { applySizing, assignPhases, computeSizedCircuits, panelCapacity, phaseBalance, routeLengths, sizeProjectCircuits } from "./project";
+import { applySizing, assignPhases, computeSizedCircuits, dlugosciDoboru, panelCapacity, phaseBalance, routeLengths, sizeProjectCircuits } from "./project";
 import type { SizedCircuit } from "./sizing";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -287,5 +287,33 @@ describe("podrozdzielnica na pietrze", () => {
       suma([tablicaGlowna, podrozdzielnica, naPietrze]),
       5
     );
+  });
+});
+
+describe("dlugosciDoboru", () => {
+  const rozdzielnica = el("rozdzielnica", { x: 0, y: 0, floor: "parter" });
+  const bliskie = el("gniazdko", { x: 100, y: 0, floor: "parter", room: "Salon" });
+  const dalekie = el("gniazdko", { x: 400, y: 0, floor: "parter", room: "Salon" });
+  const skale = { parter: 0.05 };
+  const elementy = [rozdzielnica, bliskie, dalekie];
+
+  /**
+   * Sedno: karta obliczen ma podac trase, ktora ZDECYDOWALA o spadku napiecia,
+   * a nie material do kupienia. To dwie rozne liczby dla tego samego obwodu.
+   */
+  it("mierzy do punktu najdalszego, a nie sume tras jak routeLengths", () => {
+    const { circuits } = computeSizedCircuits(elementy, { scales: skale });
+    const doDoboru = dlugosciDoboru(circuits, elementy, skale).get(circuits[0].id)!;
+    const naMaterial = routeLengths(circuits, elementy, skale).get(circuits[0].id)!;
+    expect(doDoboru).toBeGreaterThan(0);
+    expect(doDoboru).toBeLessThan(naMaterial);
+  });
+
+  /** Brak wpisu i pusty spadek to ta sama sytuacja opisana dwa razy — gdyby sie
+   *  rozjechaly, karta pokazywalaby dlugosc obok kreski w kolumnie ΔU. */
+  it("bez skali kondygnacji nie ma wpisu — dokladnie wtedy, gdy spadek zostaje pusty", () => {
+    const { circuits, sized } = computeSizedCircuits(elementy, { scales: {} });
+    expect(dlugosciDoboru(circuits, elementy, {}).has(circuits[0].id)).toBe(false);
+    expect(sized[0].spadek_napiecia_pct).toBeNull();
   });
 });

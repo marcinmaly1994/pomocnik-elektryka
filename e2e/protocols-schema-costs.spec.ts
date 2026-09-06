@@ -402,3 +402,44 @@ test("Kosztorys: podgląd PDF rysuje zadrukowaną kartkę i pobiera się pod wł
   const fs = await import("node:fs");
   expect(fs.statSync(await plik.path()).size).toBeGreaterThan(1000);
 });
+
+/**
+ * Karta obliczeń obwodów: dobór jako dokument.
+ *
+ * Aplikacja liczyła Ib, przekrój, Iz, ΔU i Zs max dla każdego obwodu, po czym gubiła
+ * to razem z sesją — legenda rozdzielnicy, jedyny dokument o obwodach, niesie sam
+ * opis aparatów. Sprawdzamy WPIĘCIE i PIKSELE: sama tabela ma komplet testów
+ * jednostkowych w `src/lib/pdf/obliczenia.test.ts`.
+ */
+test("Rozdzielnica: karta obliczeń zapisuje się jako zadrukowana kartka pod właściwą nazwą", async ({ page }) => {
+  await placeThreeSockets(page);
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  await page.getByRole("button", { name: "Podgląd obliczeń" }).click();
+
+  oczekujKartke(await zmierzPodglad(page));
+
+  const pobranie = page.waitForEvent("download");
+  await page.getByRole("dialog").getByRole("button", { name: "Pobierz PDF" }).click();
+  const plik = await pobranie;
+  expect(plik.suggestedFilename()).toMatch(/^karta-obliczen.*\.pdf$/);
+
+  const fs = await import("node:fs");
+  expect(fs.statSync(await plik.path()).size).toBeGreaterThan(1000);
+});
+
+/**
+ * Rozdzielnica złożona ręcznie (wymiana tablicy, wycena) nie ma obwodów z rzutu, więc
+ * nie ma też czego liczyć — a tabela doboru i tak się wtedy renderuje, tyle że pusta.
+ * Bez rzutu w ogóle zakładka pokazuje ekran powitalny i przycisków nie ma wcale, więc
+ * to jest JEDYNY stan, w którym ta blokada ma co robić.
+ */
+test("Rozdzielnica: rozdzielnica bez obwodów nie oferuje karty obliczeń", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
+
+  await expect(page.getByRole("button", { name: "Podgląd obliczeń" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Karta obliczeń PDF" })).toBeDisabled();
+});

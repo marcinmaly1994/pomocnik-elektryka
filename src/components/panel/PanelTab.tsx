@@ -13,10 +13,11 @@ import {
   przeniesAparat,
   type SelectivityLevel,
 } from "@/lib/panel/devices";
-import { assignPhases, computeSizedCircuits, phaseBalance } from "@/lib/panel/project";
+import { assignPhases, computeSizedCircuits, dlugosciDoboru, phaseBalance } from "@/lib/panel/project";
 import { scaleOf } from "@/lib/design";
 import { buildPanelLegendPdf, downloadPanelLegendPdf } from "@/lib/pdf/panelLegend";
 import { buildLabelStripsPdf, downloadLabelStripsPdf } from "@/lib/pdf/labelStrips";
+import { buildCalcSheetPdf, downloadCalcSheetPdf } from "@/lib/pdf/obliczenia";
 import { projectFileName } from "@/lib/pdf/download";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
@@ -104,6 +105,7 @@ export function PanelTab() {
   const [podgladLegendy, setPodgladLegendy] = useState(false);
   const [edytowany, setEdytowany] = useState<string | null>(null);
   const [podgladPaskow, setPodgladPaskow] = useState(false);
+  const [podgladObliczen, setPodgladObliczen] = useState(false);
   const panelOverrides = useProjectStore((s) => s.panelOverrides);
   const setPanelOverrides = useProjectStore((s) => s.setPanelOverrides);
   // Osobna, mniejsza historia cofnij/ponów TYLKO dla ręcznych zmian w rozdzielnicy —
@@ -147,6 +149,9 @@ export function PanelTab() {
   // Kluczowane tak, jak `buildPanelDevices` nadaje `key` aparatom obwodowym —
   // dzięki temu render dostaje gotową mapę i nie musi nic wiedzieć o obwodach.
   const sizingByDeviceKey = useMemo(() => new Map(sized.map((s) => [`mcb-${s.id}`, s])), [sized]);
+  /** Trasy do NAJDALSZEGO punktu — te same, którymi dobór policzył ΔU (patrz
+   *  `dlugosciDoboru`). Tabela na ekranie ich nie pokazuje, karta obliczeń musi. */
+  const dlugosci = useMemo(() => dlugosciDoboru(circuits, elements, scales), [circuits, elements, scales]);
 
   // Aparaty przeliczają się, gdy zmienią się obwody lub konfiguracja zasilania.
   // Ręcznie dodane aparaty i ręcznie usunięte (auto-generowane) są zachowywane.
@@ -639,7 +644,37 @@ export function PanelTab() {
       </div>
 
       <div className="pe-card p-5">
-        <h3 className="pe-display mb-1 text-[15px]">Dobór obwodów wg PN-HD 60364</h3>
+        {/* Przyciski przy TEJ tabeli, nie w pasku nad rysunkiem rozdzielnicy: karta
+            obliczeń jest wydrukiem tego, co widać poniżej, a tamten pasek dotyczy
+            rozmieszczenia aparatów. Wyłączone przy pustym doborze — PDF z samą główką
+            tabeli wygląda jak awaria, nie jak dokument. */}
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="pe-display text-[15px]">Dobór obwodów wg PN-HD 60364</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={sized.length === 0}
+              title={sized.length === 0 ? "Brak obwodów — narysuj instalację na rzucie" : undefined}
+              onClick={() => setPodgladObliczen(true)}
+            >
+              <Eye size={13} /> Podgląd obliczeń
+            </Button>
+            <Button
+              variant="copper"
+              size="sm"
+              disabled={sized.length === 0}
+              title={
+                sized.length === 0
+                  ? "Brak obwodów — narysuj instalację na rzucie"
+                  : "Tabela doboru z długościami tras — do dokumentacji projektu"
+              }
+              onClick={() => downloadCalcSheetPdf(sized, dlugosci, docHeader)}
+            >
+              <Download size={13} /> Karta obliczeń PDF
+            </Button>
+          </div>
+        </div>
         <p className="mb-3 text-xs text-slate-500">
           Przekrój i zabezpieczenie dobrane tak, by jednocześnie spełnić Ib ≤ In ≤ Iz oraz limit spadku
           napięcia (3% oświetlenie, 5% pozostałe). Obciążalność z tablicy B.52.4 po współczynnikach
@@ -768,6 +803,14 @@ export function PanelTab() {
           Dobór orientacyjny/edukacyjny. Projekt do realizacji i odbioru wykonuje i podpisuje osoba
           z uprawnieniami; wymagane pomiary powykonawcze.
         </p>
+
+        <PdfPreview
+          open={podgladObliczen}
+          onOpenChange={setPodgladObliczen}
+          title="Karta obliczeń obwodów"
+          filename={projectFileName("karta-obliczen", docHeader.obiekt, "pdf")}
+          build={() => buildCalcSheetPdf(sized, dlugosci, docHeader)}
+        />
       </div>
 
       <div className="pe-card p-5">

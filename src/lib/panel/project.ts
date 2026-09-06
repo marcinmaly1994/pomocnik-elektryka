@@ -126,6 +126,31 @@ export function routeLengths(
   return out;
 }
 
+/**
+ * Długości tras, KTÓRE ZDECYDOWAŁY o spadku napięcia [m] — do udokumentowania doboru.
+ *
+ * Różnica względem `routeLengths` jest ta sama co między materiałem a obliczeniem:
+ * tam suma wszystkich odgałęzień (bo tyle kabla trzeba kupić), tutaj odcinek do punktu
+ * NAJDALSZEGO (bo to on wyznacza ΔU). Karta obliczeń musi podać tę drugą liczbę —
+ * inaczej czytelnik nie odtworzy z niej podanego spadku i nie ma czego sprawdzić.
+ *
+ * Brak wpisu znaczy „nie da się zmierzyć" (brak skali kondygnacji albo rozdzielnicy),
+ * dokładnie w tych samych przypadkach, w których dobór zwraca `spadek_napiecia_pct: null`.
+ */
+export function dlugosciDoboru(
+  circuits: Circuit[],
+  allElements: InstallationElement[],
+  scales: Record<string, number>
+): Map<string, number> {
+  const panele = findPanels(allElements);
+  const out = new Map<string, number>();
+  for (const c of circuits) {
+    const r = estimateRoutesByFloor(panele, c.elements, scales);
+    if (r) out.set(c.id, r.worstCaseM);
+  }
+  return out;
+}
+
 export type Phase = "L1" | "L2" | "L3";
 const PHASES: Phase[] = ["L1", "L2", "L3"];
 
