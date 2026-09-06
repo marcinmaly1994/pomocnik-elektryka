@@ -175,12 +175,12 @@ export function estimateRoutes(
  * od tej poprawki.
  */
 export function estimateRoutesByFloor(
-  panel: Point | null,
+  panele: Rozdzielnice,
   elements: InstallationElement[],
   scales: Record<string, number>,
   panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5
 ): RouteEstimate | null {
-  if (!panel || elements.length === 0) return null;
+  if (elements.length === 0) return null;
   const poKondygnacjach = new Map<string, InstallationElement[]>();
   for (const e of elements) {
     const lista = poKondygnacjach.get(e.floor);
@@ -192,7 +192,12 @@ export function estimateRoutesByFloor(
   let total = 0;
   for (const [floor, grupa] of poKondygnacjach) {
     const skala = scales[floor];
-    const r = estimateRoutes(panel, grupa, typeof skala === "number" && skala > 0 ? skala : null, panelHeightM);
+    const r = estimateRoutes(
+      panelDlaKondygnacji(panele, floor),
+      grupa,
+      typeof skala === "number" && skala > 0 ? skala : null,
+      panelHeightM
+    );
     if (!r) return null;
     total += r.totalM;
     if (r.worstCaseM > worst) worst = r.worstCaseM;
@@ -200,10 +205,54 @@ export function estimateRoutesByFloor(
   return { worstCaseM: round1(worst), totalM: round1(total) };
 }
 
-/** Znajduje rozdzielnicę na danej kondygnacji — punkt odniesienia dla wszystkich tras. */
+/** Znajduje rozdzielnicę wśród PODANYCH elementów — punkt odniesienia dla tras.
+ *  Wołane z listą JEDNEJ kondygnacji (patrz `cableRoutes` w DesignTab); dla całego
+ *  budynku służy `findPanels`, bo tam liczy się, na którym piętrze co stoi. */
 export function findPanel(elements: InstallationElement[]): Point | null {
   const p = elements.find((e) => e.type === "rozdzielnica");
   return p ? { x: p.x, y: p.y } : null;
+}
+
+/** Rozdzielnice budynku: po jednej na kondygnację plus ta, od której zaczyna się
+ *  cały budynek (pierwsza znaleziona). Patrz `panelDlaKondygnacji`. */
+export interface Rozdzielnice {
+  poKondygnacji: Map<string, Point>;
+  glowna: Point | null;
+}
+
+/**
+ * Zbiera rozdzielnice CAŁEGO budynku, z podziałem na kondygnacje.
+ *
+ * Dotąd trasy wszystkich obwodów mierzyły się od `findPanel(allElements)`, czyli od
+ * PIERWSZEJ rozdzielnicy znalezionej w projekcie — nawet dla obwodów na piętrze, które
+ * ma własną podrozdzielnicę. Dom z tablicą główną na parterze i podrozdzielnicą na
+ * górze dostawał przez to metry liczone przez pół budynku, a spadek napięcia — od
+ * niewłaściwego źródła. Kolejność elementów w tablicy decydowała o wyniku.
+ *
+ * Przy kilku rozdzielnicach na jednej kondygnacji liczy się pierwsza: plan nie mówi,
+ * która zasila który obwód, a zgadywanie byłoby gorsze od jawnego uproszczenia.
+ */
+export function findPanels(allElements: InstallationElement[]): Rozdzielnice {
+  const poKondygnacji = new Map<string, Point>();
+  let glowna: Point | null = null;
+  for (const e of allElements) {
+    if (e.type !== "rozdzielnica") continue;
+    const punkt = { x: e.x, y: e.y };
+    if (!poKondygnacji.has(e.floor)) poKondygnacji.set(e.floor, punkt);
+    glowna ??= punkt;
+  }
+  return { poKondygnacji, glowna };
+}
+
+/**
+ * Rozdzielnica, od której liczy się trasy na danej kondygnacji: własna, a gdy jej nie
+ * ma — główna.
+ *
+ * Zapasowa jest tu konieczna, nie wygodna: typowy dom ma JEDNĄ tablicę na parterze
+ * i obwody na piętrze też muszą się od czegoś liczyć.
+ */
+export function panelDlaKondygnacji(panele: Rozdzielnice, floor: string): Point | null {
+  return panele.poKondygnacji.get(floor) ?? panele.glowna;
 }
 
 /** Łamana Manhattan (jedno załamanie: najpierw poziomo, potem pionowo) — zapasowa
