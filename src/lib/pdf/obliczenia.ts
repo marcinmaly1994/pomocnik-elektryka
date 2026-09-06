@@ -104,11 +104,11 @@ function tekstDoPrawej(doc: PdfDoc, str: string, prawy: number, y: number, size:
   doc.text(str, prawy - pdfTextWidth(str, size, bold), y, size, bold);
 }
 
-export function buildCalcSheetPdf(
+export function buildCalcSheetDoc(
   sized: SizedCircuit[],
   dlugosci: Map<string, number>,
   header: DocumentHeader
-): Promise<Uint8Array> {
+): PdfDoc {
   const doc = createPdfDoc({
     pageW: STRONA_W,
     pageH: STRONA_H,
@@ -221,7 +221,7 @@ export function buildCalcSheetPdf(
   doc.y -= 11;
   doc.text("wymagane pomiary powykonawcze.", M, doc.y, 7.5, false, 0.5);
 
-  return doc.finish();
+  return doc;
 }
 
 export async function downloadCalcSheetPdf(
@@ -231,4 +231,13 @@ export async function downloadCalcSheetPdf(
 ): Promise<boolean> {
   const bytes = await buildCalcSheetPdf(sized, dlugosci, header);
   return downloadPdfBytes(bytes, projectFileName("karta-obliczen", header.obiekt, "pdf"));
+}
+
+/**
+ * Ten sam dokument jako gotowy plik. Rozdzielenie na buildCalcSheetDoc i buildCalcSheetPdf jest po to,
+ * zeby komplet dokumentacji mogl wziac SAME STRONY i zlozyc je z innymi dokumentami
+ * w jeden plik (patrz polaczDokumenty w engine.ts) — zamiast sklejac gotowe PDF-y.
+ */
+export function buildCalcSheetPdf(...args: Parameters<typeof buildCalcSheetDoc>): Promise<Uint8Array> {
+  return buildCalcSheetDoc(...args).finish();
 }

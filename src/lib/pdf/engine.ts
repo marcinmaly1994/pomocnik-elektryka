@@ -176,6 +176,36 @@ export interface PdfDoc {
   /** Assembluje kompletny plik PDF i zwraca jego bajty (bez efektu ubocznego pobierania).
    *  Asynchroniczne — przy pierwszym wywołaniu w sesji pobiera i parsuje pliki fontów. */
   finish(): Promise<Uint8Array>;
+  /**
+   * Zamyka dokument i oddaje jego CZĘŚCI zamiast gotowego pliku — strony i obrazy.
+   *
+   * Tym żyje komplet dokumentacji: kilka dokumentów zbudowanych osobno składa się
+   * w jeden plik (`polaczDokumenty`), zamiast sklejać gotowe PDF-y, co wymagałoby
+   * parsowania i przenumerowywania cudzej struktury obiektów.
+   *
+   * Zamknięcie strony jest idempotentne i wspólne z `finish()` — drugie wywołanie
+   * nie dokłada bieżącej strony po raz drugi ani nie rysuje tabliczki dwa razy.
+   */
+  czesci(): CzesciDokumentu;
+}
+
+/**
+ * Strona gotowa do złożenia: strumień treści plus rozmiar WŁASNEJ kartki.
+ *
+ * Rozmiar jest cechą STRONY, nie dokumentu — komplet miesza pion (kosztorys, legenda)
+ * z poziomem (rzut, schemat, karta obliczeń) i każda strona musi zachować swój format.
+ * Wcześniej `assemblePdfBytes` dostawała jeden rozmiar na cały plik, bo każdy dokument
+ * powstawał osobno i pytanie o mieszanie formatów nie istniało.
+ */
+export interface StronaPdf {
+  content: string;
+  w: number;
+  h: number;
+}
+
+export interface CzesciDokumentu {
+  pages: StronaPdf[];
+  images: PdfImage[];
 }
 
 export interface PdfDocOptions {
@@ -258,14 +288,65 @@ export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, foot
       }
       return false;
     },
-    async finish() {
-      if (footer) footer(api);
-      pages.push(content.join("\n"));
-      const { regular, bold } = await loadPdfFonts();
-      return assemblePdfBytes(pages, pageW, pageH, regular, bold, obrazy);
+    czesci() {
+      zamknij();
+      return { pages: pages.map((content) => ({ content, w: pageW, h: pageH })), images: obrazy };
+    },
+    finish() {
+      return zlozPdf(api.czesci());
     },
   };
+
+  /** Domyka bieżącą stronę razem z tabliczką. Raz — `finish()` i `czesci()` prowadzą
+   *  do tego samego miejsca, a podwójne domknięcie dokleiłoby pustą kartkę z drugą
+   *  tabliczką. */
+  let zamkniety = false;
+  function zamknij() {
+    if (zamkniety) return;
+    zamkniety = true;
+    if (footer) footer(api);
+    pages.push(content.join("\n"));
+  }
+
   return api;
+}
+
+/**
+ * Składa CZĘŚCI kilku dokumentów w jeden zestaw stron i obrazów.
+ *
+ * Cała trudność siedzi w obrazach: strumień strony odwołuje się do nich przez `/Im1`,
+ * `/Im2`… liczone od zera W SWOIM dokumencie. Po zlepieniu dwóch dokumentów `/Im1`
+ * drugiego wskazywałoby rysunek pierwszego — na kartce wyszedłby rzut parteru w miejscu
+ * schematu. Numery są więc przesuwane o tyle, ile obrazów wniosły dokumenty przed nim.
+ *
+ * Podmiana jest bezpieczna, bo to NASZ generator: `/Im<n> Do` powstaje wyłącznie
+ * w `image()` i nigdzie indziej taki token się nie pojawia (tekst jest escapowany,
+ * a nazwy fontów to /F1 i /F2).
+ */
+/** Zamienia części (własne albo złożone z kilku dokumentów) w gotowy plik. Osobno od
+ *  `finish()`, bo komplet dokumentacji nie ma jednego dokumentu, tylko ich listę. */
+export async function zlozPdf(czesci: CzesciDokumentu): Promise<Uint8Array> {
+  const { regular, bold } = await loadPdfFonts();
+  return assemblePdfBytes(czesci.pages, regular, bold, czesci.images);
+}
+
+export function polaczDokumenty(dokumenty: CzesciDokumentu[]): CzesciDokumentu {
+  const pages: StronaPdf[] = [];
+  const images: PdfImage[] = [];
+  for (const d of dokumenty) {
+    const przesuniecie = images.length;
+    for (const strona of d.pages) {
+      pages.push({
+        ...strona,
+        content:
+          przesuniecie === 0
+            ? strona.content
+            : strona.content.replace(/\/Im(\d+) Do/g, (_, nr: string) => `/Im${Number(nr) + przesuniecie} Do`),
+      });
+    }
+    images.push(...d.images);
+  }
+  return { pages, images };
 }
 
 /** Code (128..145) -> code point Unicode, odwrócone z `PDF_POLISH` — do wyliczania
@@ -324,9 +405,7 @@ function loadPdfFonts(): Promise<{ regular: ParsedTtf; bold: ParsedTtf }> {
  *  fonty przekazywane są już sparsowane (patrz `loadPdfFonts`), co czyni tę funkcję w pełni
  *  testowalną bez sieci/DOM-u (testy wczytują pliki fontów z dysku przez `fs`). */
 export function assemblePdfBytes(
-  pages: string[],
-  PW: number,
-  PH: number,
+  pages: StronaPdf[],
   regularFont: ParsedTtf,
   boldFont: ParsedTtf,
   images: PdfImage[] = []
@@ -337,7 +416,7 @@ export function assemblePdfBytes(
     return objs.length;
   };
 
-  const contentIds = pages.map((c) => push(`<< /Length ${c.length} >>\nstream\n${c}\nendstream`));
+  const contentIds = pages.map((s) => push(`<< /Length ${s.content.length} >>\nstream\n${s.content}\nendstream`));
   const encId = push(`<< /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [128 ${PDF_DIFF_NAMES.map((n) => "/" + n).join(" ")}] >>`);
 
   function pushFont(font: ParsedTtf, baseFontName: string, fallbackWidths: number[], stemV: number): number {
@@ -372,9 +451,9 @@ export function assemblePdfBytes(
     : "";
 
   const pagesId = objs.length + pages.length + 1;
-  const kidsIds = pages.map((_, i) =>
+  const kidsIds = pages.map((strona, i) =>
     push(
-      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}] ` +
+      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${strona.w.toFixed(2)} ${strona.h.toFixed(2)}] ` +
         `/Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xobjRes} >> /Contents ${contentIds[i]} 0 R >>`
     )
   );

@@ -1,5 +1,5 @@
 import type { DocumentHeader } from "@/types";
-import { createPdfDoc, pdfFitText, pdfTextWidth } from "./engine";
+import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
 import { PROTOCOL_DEFS, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
@@ -24,7 +24,7 @@ function zawijajTekst(tekst: string, maxWidth: number, size: number): string[] {
 }
 
 /** Składa protokół pomiarowy i zwraca gotowe bajty PDF (bez pobierania — testowalne bez DOM-u). */
-export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows: ProtocolRow[], limit: number): Promise<Uint8Array> {
+export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows: ProtocolRow[], limit: number): PdfDoc {
   const def = PROTOCOL_DEFS[key];
   // Izolacja ma teraz kolumnę na każdą parę pomiarową (do 10 naraz, wzór Z.4.4) —
   // w portretowym A4 nagłówki obcinały się do nieczytelnego "L1-..". Poziomy A4
@@ -238,10 +238,19 @@ export function buildProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows:
   doc.y -= 16;
   doc.text("Dokument wygenerowany w pomocnikelektryka.pl — wymaga weryfikacji i podpisu osoby z uprawnieniami.", M, doc.y, 7.5, false, 0.5);
 
-  return doc.finish();
+  return doc;
 }
 
 export async function downloadProtocolPdf(key: ProtocolKey, header: DocumentHeader, rows: ProtocolRow[], limit: number): Promise<boolean> {
   const bytes = await buildProtocolPdf(key, header, rows, limit);
   return downloadPdfBytes(bytes, projectFileName(`protokol-${key}`, header.obiekt, "pdf"));
+}
+
+/**
+ * Ten sam dokument jako gotowy plik. Rozdzielenie na buildProtocolDoc i buildProtocolPdf jest po to,
+ * zeby komplet dokumentacji mogl wziac SAME STRONY i zlozyc je z innymi dokumentami
+ * w jeden plik (patrz polaczDokumenty w engine.ts) — zamiast sklejac gotowe PDF-y.
+ */
+export function buildProtocolPdf(...args: Parameters<typeof buildProtocolDoc>): Promise<Uint8Array> {
+  return buildProtocolDoc(...args).finish();
 }

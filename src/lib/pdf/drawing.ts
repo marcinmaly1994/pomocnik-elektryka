@@ -79,7 +79,7 @@ function dwieLinie(tekst: string, maxW: number, size: number): [string, string |
   return [pierwsza, reszta ? pdfFitText(reszta, maxW, size, false) : null];
 }
 
-export function buildDrawingPdf({ tytul, header, rysunek, legenda, zestawienie }: RysunekPdfOpcje): Promise<Uint8Array> {
+export function buildDrawingDoc({ tytul, header, rysunek, legenda, zestawienie }: RysunekPdfOpcje): PdfDoc {
   const doc = createPdfDoc({
     pageW: STRONA_W,
     pageH: STRONA_H,
@@ -152,7 +152,7 @@ export function buildDrawingPdf({ tytul, header, rysunek, legenda, zestawienie }
 
   if (zestawienie?.length) rysujZestawienie(doc, zestawienie);
 
-  return doc.finish();
+  return doc;
 }
 
 /**
@@ -215,4 +215,13 @@ function rysujZestawienie(doc: PdfDoc, pozycje: PozycjaZestawienia[]): void {
 export async function downloadDrawingPdf(opcje: RysunekPdfOpcje, bazaNazwy: string): Promise<boolean> {
   const bytes = await buildDrawingPdf(opcje);
   return downloadPdfBytes(bytes, projectFileName(bazaNazwy, opcje.header.obiekt, "pdf"));
+}
+
+/**
+ * Ten sam dokument jako gotowy plik. Rozdzielenie na buildDrawingDoc i buildDrawingPdf jest po to,
+ * zeby komplet dokumentacji mogl wziac SAME STRONY i zlozyc je z innymi dokumentami
+ * w jeden plik (patrz polaczDokumenty w engine.ts) — zamiast sklejac gotowe PDF-y.
+ */
+export function buildDrawingPdf(...args: Parameters<typeof buildDrawingDoc>): Promise<Uint8Array> {
+  return buildDrawingDoc(...args).finish();
 }

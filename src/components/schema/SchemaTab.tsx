@@ -1,8 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, FileText } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { downloadBlob, downloadPdfBytes, projectFileName } from "@/lib/pdf/download";
-import { buildDrawingPdf } from "@/lib/pdf/drawing";
+import { buildDrawingDoc } from "@/lib/pdf/drawing";
+import type { PdfDoc } from "@/lib/pdf/engine";
+import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { plotnoDoPdf, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { PdfPreview } from "@/components/ui/PdfPreview";
@@ -495,22 +497,26 @@ export function SchemaTab() {
    *
    * SVG zostaje jako osobny przycisk: PDF jest do wydruku i wysyłki, SVG do CAD-u.
    */
-  async function zbudujPdf(): Promise<Uint8Array> {
+  async function zbudujDokument(): Promise<PdfDoc> {
     const node = svgRef.current;
     if (!node) throw new Error("Rysunek nie jest jeszcze gotowy.");
     // Szerokość pola rysunku na kartce A4 poziomo, przeliczona na piksele druku.
     const canvas = await svgDoPlotna(node, Math.round(770 * PIKSELI_NA_PUNKT));
-    return buildDrawingPdf({
+    return buildDrawingDoc({
       tytul: "Schemat jednokreskowy",
       header: docHeader,
       rysunek: await plotnoDoPdf(canvas),
     });
   }
 
+  /** Zgloszenie schematu do kompletu dokumentacji — rysunek rasteryzuje sie z zywego
+   *  <svg> tej zakladki, wiec komplet musi ja otworzyc (patrz lib/pdf/rejestr.ts). */
+  useEffect(() => zarejestrujProducenta("schemat", zbudujDokument));
+
   async function pobierzPdf() {
     setPdfTrwa(true);
     try {
-      const bytes = await zbudujPdf();
+      const bytes = await (await zbudujDokument()).finish();
       downloadPdfBytes(bytes, projectFileName("schemat-jednokreskowy", projectName, "pdf"));
     } finally {
       setPdfTrwa(false);
@@ -666,7 +672,7 @@ export function SchemaTab() {
           onOpenChange={setPodglad}
           title="Schemat jednokreskowy"
           filename={projectFileName("schemat-jednokreskowy", projectName, "pdf")}
-          build={zbudujPdf}
+          build={async () => (await zbudujDokument()).finish()}
         />
       </div>
 

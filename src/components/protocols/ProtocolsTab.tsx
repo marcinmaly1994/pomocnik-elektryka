@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
-import { buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
+import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
+import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
@@ -107,6 +108,20 @@ export function ProtocolsTab() {
       return nowy;
     });
   }
+
+  /**
+   * Zgloszenie protokolow do kompletu dokumentacji — WSZYSTKICH wypelnionych, nie tylko
+   * ogladanego. Zakladka pokazuje jeden protokol naraz, a komplet moze chciec kilka;
+   * skoro kazdy powstaje z samych danych ze store, nie ma powodu ich przelaczac.
+   */
+  useEffect(() => {
+    const sprzataczki = PROTOCOL_ORDER.filter((k) => (protocols[k]?.rows.length ?? 0) > 0).map((k) => {
+      const st = protocols[k]!;
+      const limitK = st.limit ?? PROTOCOL_DEFS[k].limitDefault ?? 0;
+      return zarejestrujProducenta(`protokol:${k}`, async () => buildProtocolDoc(k, header, st.rows, limitK));
+    });
+    return () => sprzataczki.forEach((f) => f());
+  });
 
   const def = PROTOCOL_DEFS[active];
   const state = protocols[active] ?? { rows: [] };

@@ -49,7 +49,7 @@ function tekstDoPrawej(doc: PdfDoc, str: string, prawy: number, y: number, size:
   doc.text(str, prawy - pdfTextWidth(str, size, bold), y, size, bold);
 }
 
-export function buildCostsPdf(rows: CostRow[], header: DocumentHeader): Promise<Uint8Array> {
+export function buildCostsDoc(rows: CostRow[], header: DocumentHeader): PdfDoc {
   const doc = createPdfDoc({ footer: (d) => drawTitleBlock(d, header, "Kosztorys instalacji") });
   const M = doc.margin;
   const W = doc.innerW;
@@ -161,10 +161,19 @@ export function buildCostsPdf(rows: CostRow[], header: DocumentHeader): Promise<
   doc.y -= 11;
   doc.text("nie zastępuje oferty ani projektu wykonanego przez osobę z uprawnieniami.", M, doc.y, 7.5, false, 0.5);
 
-  return doc.finish();
+  return doc;
 }
 
 export async function downloadCostsPdf(rows: CostRow[], header: DocumentHeader): Promise<boolean> {
   const bytes = await buildCostsPdf(rows, header);
   return downloadPdfBytes(bytes, projectFileName("kosztorys", header.obiekt, "pdf"));
+}
+
+/**
+ * Ten sam dokument jako gotowy plik. Rozdzielenie na buildCostsDoc i buildCostsPdf jest po to,
+ * zeby komplet dokumentacji mogl wziac SAME STRONY i zlozyc je z innymi dokumentami
+ * w jeden plik (patrz polaczDokumenty w engine.ts) — zamiast sklejac gotowe PDF-y.
+ */
+export function buildCostsPdf(...args: Parameters<typeof buildCostsDoc>): Promise<Uint8Array> {
+  return buildCostsDoc(...args).finish();
 }

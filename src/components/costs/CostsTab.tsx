@@ -1,11 +1,12 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { AlertTriangle, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, routeLengths } from "@/lib/panel/project";
 import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, VAT_RATE } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
-import { buildCostsPdf } from "@/lib/pdf/costs";
+import { buildCostsDoc, buildCostsPdf } from "@/lib/pdf/costs";
+import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
 
@@ -54,6 +55,8 @@ export function CostsTab() {
   );
 
   const rows = kosztorysRows(quantities, prices, costOverrides, qtyOverrides);
+  /** Zgloszenie kosztorysu do kompletu dokumentacji — patrz lib/pdf/rejestr.ts. */
+  useEffect(() => zarejestrujProducenta("kosztorys", async () => buildCostsDoc(rows, docHeader)));
 
   const grandTotal = rows.reduce((a, r) => a + r.value, 0);
   const vat = grandTotal * (VAT_RATE / 100);

@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ClipboardList,
   FilePlus2,
+  FileStack,
   Folder,
   FolderOpen,
   HelpCircle,
@@ -31,6 +32,9 @@ import { AuthModal } from "@/components/auth/AuthModal";
 import { ProjectsModal } from "@/components/auth/ProjectsModal";
 import { AccountModal, type AccountModalTab } from "@/components/auth/AccountModal";
 import { HelpModal } from "@/components/help/HelpModal";
+import { KompletDialog } from "@/components/ui/KompletDialog";
+import { PdfPreview } from "@/components/ui/PdfPreview";
+import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 
 // Konva/react-konva to największy pojedynczy zależnik w bundlu — DesignTab i
@@ -357,6 +361,7 @@ export default function App() {
   const loadFromCloud = useProjectStore((s) => s.loadFromCloud);
   const resetProject = useProjectStore((s) => s.resetProject);
   const elementCount = useProjectStore((s) => s.draft.elements.length);
+  const projectName = useProjectStore((s) => s.projectName);
 
   const [authOpen, setAuthOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -365,6 +370,10 @@ export default function App() {
    *  przechodzenia najpierw przez „Profil". */
   const [accountModalTab, setAccountModalTab] = useState<AccountModalTab | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [kompletOpen, setKompletOpen] = useState(false);
+  /** Gotowe bajty kompletu — trzymane tu, bo podglad ma pokazac DOKLADNIE ten plik,
+   *  ktory przed chwila powstal, a nie zbudowac go po raz drugi. */
+  const [kompletBajty, setKompletBajty] = useState<Uint8Array | null>(null);
 
   function signOut() {
     setSession(null);
@@ -428,6 +437,16 @@ export default function App() {
         <div className="flex flex-wrap items-center gap-1.5">
           <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
           <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
+          {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów
+              z czterech zakładek plus protokołów, więc nie należy do żadnej z nich
+              bardziej niż do pozostałych. Do tego samo okno musi żyć poza zakładkami,
+              bo w trakcie składania je przełącza (patrz `KompletDialog`). */}
+          <button
+            onClick={() => setKompletOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
+          >
+            <FileStack size={15} /> Dokumentacja
+          </button>
           <button
             onClick={() => setHelpOpen(true)}
             className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
@@ -817,6 +836,18 @@ export default function App() {
       )}
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {/* Okno kompletu i jego podglad mieszkaja TUTAJ, nie w zakladce: skladanie
+          przelacza zakladki (patrz KompletDialog), wiec cokolwiek osadzonego
+          w zakladce odmontowaloby sie w polowie wlasnej pracy. */}
+      <KompletDialog open={kompletOpen} onOpenChange={setKompletOpen} onGotowe={setKompletBajty} />
+      <PdfPreview
+        open={kompletBajty !== null}
+        onOpenChange={(v) => !v && setKompletBajty(null)}
+        title="Komplet dokumentacji"
+        filename={projectFileName("dokumentacja", projectName, "pdf")}
+        build={async () => kompletBajty!}
+      />
 
       <SiteFooter />
     </div>
