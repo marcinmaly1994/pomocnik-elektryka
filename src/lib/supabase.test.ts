@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { isSupabaseConfigured, sesjaZOdpowiedzi, wymagaOdswiezenia } from "./supabase";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { isSupabaseConfigured, sesjaZOdpowiedzi, supaUpdateProject, wymagaOdswiezenia } from "./supabase";
 
 describe("isSupabaseConfigured", () => {
   it("puste wartości -> nieskonfigurowane", () => {
@@ -53,5 +53,41 @@ describe("sesjaZOdpowiedzi", () => {
     const s = sesjaZOdpowiedzi({ access_token: "a", user: { id: "u1" } });
     // z zapasem na czas wykonania testu
     expect(s.expiresAt! - Date.now()).toBeGreaterThan(3_500_000);
+  });
+});
+
+describe("supaUpdateProject — warunek na updated_at", () => {
+  const ZNACZNIK = "2026-09-06T11:22:33.456789+00:00";
+  let ostatniUrl = "";
+
+  beforeEach(() => {
+    ostatniUrl = "";
+    vi.stubGlobal("fetch", (url: string) => {
+      ostatniUrl = String(url);
+      return Promise.resolve(new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } }));
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("bez oczekiwanego znacznika filtruje po samym id — jak dotad", async () => {
+    await supaUpdateProject("t", "abc", { name: "x", updated_at: ZNACZNIK });
+    expect(ostatniUrl).toContain("/rest/v1/projects?id=eq.abc");
+    expect(ostatniUrl).not.toContain("updated_at=eq.");
+  });
+
+  /**
+   * Znacznik ma dwukropki i plus. Bez zakodowania PostgREST dostaje uciety filtr,
+   * ktory nie trafia w zaden wiersz — czyli KAZDY zapis wygladalby na konflikt.
+   */
+  it("znacznik trafia do filtra zakodowany", async () => {
+    await supaUpdateProject("t", "abc", { name: "x", updated_at: ZNACZNIK }, ZNACZNIK);
+    expect(ostatniUrl).toContain(`updated_at=eq.${encodeURIComponent(ZNACZNIK)}`);
+    expect(ostatniUrl).toContain("%3A");
+    expect(ostatniUrl).toContain("%2B");
+  });
+
+  /** Pusta tablica to sygnal konfliktu — wywolujacy musi ja dostac, a nie wyjatek. */
+  it("brak trafionego wiersza wraca jako pusta tablica", async () => {
+    await expect(supaUpdateProject("t", "abc", { name: "x", updated_at: ZNACZNIK }, ZNACZNIK)).resolves.toEqual([]);
   });
 });

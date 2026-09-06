@@ -59,6 +59,20 @@ let lastCloudSavedJson: string | null = null;
  *  ponowne sprawdzenie kolizji — patrz `saveToCloud`. */
 let ostatniaZapisanaNazwa: string | null = null;
 
+/**
+ * `updated_at` wiersza w chmurze, o którym WIEMY — z ostatniego zapisu albo wczytania.
+ *
+ * To jest cała pamięć potrzebna do optimistic lockingu: zapis idzie z warunkiem „nadpisz
+ * tylko, jeśli w bazie stoi dokładnie ta wartość" (patrz `supaUpdateProject`). Bez tego
+ * dwa urządzenia z otwartym tym samym projektem po prostu kasowały sobie pracę
+ * nawzajem — autozapis chodzi co 2,5 s, więc przegrywał ten, kto akurat zapisał
+ * wcześniej, i nie dowiadywał się o tym nigdy.
+ *
+ * `null` znaczy „nie wiemy" (np. projekt jeszcze nietrafiony do chmury) i wtedy zapis
+ * idzie bez warunku — tak jak dotąd.
+ */
+let znaneUpdatedAt: string | null = null;
+
 function loadStoredSession(): Session | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -276,6 +290,11 @@ interface ProjectState {
    * chwilą zapisaliśmy, pytania nie wymaga — to zwykłe „zapisz zmiany”.
    */
   pytanieONadpisanie: { rodzaj: RodzajDokumentu; nazwa: string; id: string } | null;
+  /**
+   * Ktos zapisal ten sam projekt w miedzyczasie (inne urzadzenie, inna karta).
+   * `null` = brak konfliktu. Rozstrzyga uzytkownik — patrz `saveToCloud`.
+   */
+  konfliktChmury: { id: string; nazwa: string } | null;
 
   // historia cofnij/ponów — ten sam mechanizm co useHistory() w wersji JS,
   // ale jako część store'a, więc undo/redo działa niezależnie od tego,
@@ -368,6 +387,9 @@ interface ProjectState {
   saveProtokolyToCloud: (nazwa: string, opcje?: { nadpiszId?: string }) => Promise<void>;
   /** Zamyka pytanie o nadpisanie bez zapisywania. */
   anulujNadpisanie: () => void;
+  /** Zamyka okno konfliktu bez rozstrzygania — autozapis zostaje wstrzymany,
+   *  zeby nie wrocil z tym samym pytaniem po 2,5 s. */
+  odlozKonflikt: () => void;
   loadProtokolyFromCloud: (id: string) => Promise<void>;
   /** Zaczyna nowy, pusty zestaw protokołów — odpina bieżący od zapisu w chmurze. */
   nowyZestawProtokolow: () => void;
@@ -414,6 +436,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   oknoZestawowOtwarte: false,
   autozapisWstrzymany: false,
   pytanieONadpisanie: null,
+  konfliktChmury: null,
   protokolyNazwa: "",
   limitBlokada: null,
   lastLocalSaveAt: null,
@@ -483,6 +506,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     // bez wyzerowania tego automatyczny zapis w tle nadpisałby STARY projekt
     // pustym draftem zamiast założyć nowy wiersz.
     lastCloudSavedJson = null;
+    znaneUpdatedAt = null;
     ostatniaZapisanaNazwa = null;
     set((state) => ({
       draft: emptyDraft,
@@ -495,6 +519,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       prices: { ...DEFAULT_PRICES },
       costOverrides: {},
       qtyOverrides: {},
+      konfliktChmury: null,
       protocols: {},
       cloudId: null,
       lastCloudSaveAt: null,
@@ -825,7 +850,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!session) return;
     // Ręczna próba zawsze zaczyna od czystej karty: użytkownik klika „Zapisz teraz"
     // zwykle właśnie po zrobieniu miejsca, więc wstrzymanie musi wtedy zniknąć.
-    set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null, ...(opcje?.reczny ? { autozapisWstrzymany: false } : {}) });
+    set({ cloudBusy: true, cloudSaveError: null, limitBlokada: null, konfliktChmury: null, ...(opcje?.reczny ? { autozapisWstrzymany: false } : {}) });
     try {
       const payload = getProjectPayload();
       // `kind` odróżnia projekt od zestawu protokołów w tej samej tabeli — bez niego
@@ -865,10 +890,34 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         docelowyId = decyzja.akcja === "aktualizuj" ? decyzja.id : null;
       }
       if (docelowyId) {
-        await supaUpdateProject(session.token, docelowyId, { name: projectName, data, updated_at: new Date().toISOString() });
+        /**
+         * Nadpisujemy TYLKO ten stan wiersza, który znamy — chyba że użytkownik
+         * świadomie wybrał „nadpisz mimo to" (`nadpiszId`, ta sama droga co przy
+         * kolizji nazw) albo zapisujemy do wiersza, którego jeszcze nie czytaliśmy.
+         *
+         * Pusta odpowiedź = warunek nie trafił w żaden wiersz, czyli ktoś zapisał
+         * w międzyczasie. Nie ma wtedy dobrego automatycznego wyjścia: i nasza,
+         * i tamta wersja są czyjąś pracą. Wstrzymujemy autozapis (inaczej pytałby
+         * co 2,5 s) i oddajemy decyzję użytkownikowi.
+         */
+        const warunek = opcje?.nadpiszId ? null : znaneUpdatedAt;
+        const wiersze = await supaUpdateProject(
+          session.token,
+          docelowyId,
+          { name: projectName, data, updated_at: new Date().toISOString() },
+          warunek
+        );
+        if (warunek && wiersze.length === 0) {
+          set({ autozapisWstrzymany: true, konfliktChmury: { id: docelowyId, nazwa: projectName } });
+          return;
+        }
+        znaneUpdatedAt = wiersze[0]?.updated_at ?? null;
         if (docelowyId !== cloudId) set({ cloudId: docelowyId });
       } else {
         const [row] = await supaInsertProject(session.token, { user_id: session.user.id, name: projectName, data });
+        // `updated_at` wypełnia baza (default now()), więc jedyne wiarygodne źródło
+        // tej wartości to odpowiedź na INSERT.
+        znaneUpdatedAt = row.updated_at ?? null;
         set({ cloudId: row.id });
       }
       lastCloudSavedJson = JSON.stringify(payload);
@@ -886,6 +935,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setOknoZestawow: (open) => set({ oknoZestawowOtwarte: open }),
 
   anulujNadpisanie: () => set({ pytanieONadpisanie: null }),
+
+  odlozKonflikt: () => set({ konfliktChmury: null }),
 
   zapewnijSesje: async () => {
     const { session, setSession } = get();
@@ -1010,7 +1061,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // pierwszy autozapis po wczytaniu uznałby ją za zmienioną i niepotrzebnie
       // pobierał listę, żeby sprawdzić kolizję z samym sobą.
       ostatniaZapisanaNazwa = row.name || "Projekt";
-      set({ cloudId: row.id, lastCloudSaveAt: Date.now() });
+      // Od tego stanu wiersza liczy sie kolejny zapis — patrz `znaneUpdatedAt`.
+      znaneUpdatedAt = row.updated_at ?? null;
+      set({ cloudId: row.id, lastCloudSaveAt: Date.now(), konfliktChmury: null });
     } catch (e) {
       set({ cloudSaveError: e instanceof Error ? e.message : "Nie udało się wczytać projektu" });
     } finally {

@@ -1,4 +1,4 @@
-import { Check, CloudOff, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, CloudOff, Loader2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 
 /** Odpowiednik `SaveIndicator` (autozapis lokalny), ale dla zapisu W CHMURZE —
@@ -9,6 +9,7 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const lastCloudSaveAt = useProjectStore((s) => s.lastCloudSaveAt);
   const cloudSaveError = useProjectStore((s) => s.cloudSaveError);
+  const konflikt = useProjectStore((s) => s.konfliktChmury);
   if (!session) return null;
 
   if (cloudBusy) {
@@ -22,6 +23,22 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
     return (
       <span className="flex items-center gap-1 text-xs text-red-600" title={cloudSaveError}>
         <CloudOff size={12} /> Nie udało się zapisać w chmurze
+      </span>
+    );
+  }
+  {
+    /* Konflikt musi tu wygrać z godziną ostatniego zapisu. Ta godzina jest prawdziwa —
+       tamten zapis się udał — ale po odłożeniu decyzji („zdecyduję później") zielone
+       „Zapisano 10:42" mówiłoby, że bieżąca praca jest w chmurze, a nie jest. */
+  }
+  if (konflikt) {
+    return (
+      <span
+        className="flex items-center gap-1 text-xs"
+        style={{ color: "#8A5526" }}
+        title="W chmurze jest nowsza wersja tego projektu. Autozapis wstrzymany do czasu rozstrzygnięcia."
+      >
+        <AlertTriangle size={12} /> Zmiany niezapisane — konflikt
       </span>
     );
   }

@@ -196,8 +196,30 @@ export function supaInsertProject(token: string, row: { user_id: string; name: s
   return sbFetch<CloudProjectRow[]>("/rest/v1/projects", { method: "POST", body: row, token });
 }
 
-export function supaUpdateProject(token: string, id: string, row: { name: string; data?: Record<string, unknown>; updated_at: string }) {
-  return sbFetch<CloudProjectRow[]>(`/rest/v1/projects?id=eq.${id}`, { method: "PATCH", body: row, token });
+/**
+ * Nadpisuje zapis w chmurze — opcjonalnie TYLKO wtedy, gdy nikt inny go w międzyczasie
+ * nie ruszył.
+ *
+ * `oczekiwaneUpdatedAt` dokłada do filtra warunek na znaczniku czasu ostatniego znanego
+ * nam stanu wiersza. Gdy w bazie stoi już inna wartość — bo zapisał drugi laptop, tablet
+ * albo druga karta przeglądarki — warunek nie trafia w żaden wiersz i PATCH wraca
+ * z PUSTĄ tablicą zamiast po cichu skasować cudzą pracę. To zwykły optimistic locking:
+ * baza rozstrzyga wyścig, a nie ten, kto akurat kliknął później.
+ *
+ * Bez tego parametru zachowuje się jak dawniej (ślepe nadpisanie) — potrzebne, gdy
+ * użytkownik świadomie wybierze „nadpisz mimo to".
+ */
+export function supaUpdateProject(
+  token: string,
+  id: string,
+  row: { name: string; data?: Record<string, unknown>; updated_at: string },
+  oczekiwaneUpdatedAt?: string | null
+) {
+  // Znacznik czasu ma dwukropki i plus, więc MUSI być zakodowany — bez tego PostgREST
+  // dostaje uciętą wartość i filtr nie trafia w nic, czyli każdy zapis wyglądałby
+  // na konflikt.
+  const warunek = oczekiwaneUpdatedAt ? `&updated_at=eq.${encodeURIComponent(oczekiwaneUpdatedAt)}` : "";
+  return sbFetch<CloudProjectRow[]>(`/rest/v1/projects?id=eq.${id}${warunek}`, { method: "PATCH", body: row, token });
 }
 
 export function supaGetProject(token: string, id: string) {
