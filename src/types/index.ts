@@ -232,6 +232,16 @@ export interface CableRoute {
 export interface PanelConfig {
   supply3f: boolean;
   mainRating: number;
+  /**
+   * Liczba modulow w rzedzie obudowy.
+   *
+   * Cecha KONKRETNEJ tablicy, nie preferencja widoku: 2 x 18 to inny produkt niz
+   * 3 x 12, a ta liczba idzie na rysunek rozdzielnicy, do legendy PDF („Rzedow: 1 x 18
+   * modulow") i na paski opisowe do wyciecia. Dlatego mieszka w projekcie razem
+   * z zasilaniem i rozlacznikiem glownym, a nie w stanie komponentu — tam wracala
+   * do 12 po kazdym odswiezeniu strony.
+   */
+  perRow: number;
 }
 
 /** Jeden aparat na froncie rozdzielnicy — patrz DesignTab -> buildPanelDevices w wersji JS. */

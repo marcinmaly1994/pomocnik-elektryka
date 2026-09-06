@@ -245,3 +245,37 @@ test("zmiana liczby biegunów aparatu zmienia jego szerokość na wizualizacji",
   // brakowało przed poprawką (szerokość zostawała identyczna).
   expect(po).toBeGreaterThan((przed ?? 0) * 2.5);
 });
+
+/**
+ * Liczba modulow w rzedzie przezywa odswiezenie.
+ *
+ * To cecha KONKRETNEJ tablicy (2 x 18 to inny produkt niz 3 x 12), a nie preferencja
+ * widoku — idzie na rysunek rozdzielnicy, do legendy PDF („Rzedow: 1 x 18 modulow")
+ * i na paski opisowe do wyciecia. Siedziala w stanie komponentu, wiec po kazdym F5
+ * wracala do 12, po cichu zmieniajac wszystkie trzy dokumenty.
+ */
+test("liczba modulow w rzedzie zostaje po odswiezeniu strony", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByPlaceholder(/Szukaj elementu/).fill("gniazdo 230");
+  await page.locator("button.w-full.items-center.gap-2.rounded-md").filter({ hasText: /Gniazdo 230 V/ }).first().click();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  await page.mouse.click(box.x + 200, box.y + 90);
+
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  const opis = page.getByText(/Widok frontu rozdzielnicy/);
+  await expect(opis).toContainText("rząd 12 modułów");
+
+  await page.getByRole("combobox").filter({ hasText: "12" }).first().selectOption("18");
+  await expect(opis).toContainText("rząd 18 modułów");
+
+  await page.waitForTimeout(1200); // debounce autozapisu
+  await page.reload();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  await expect(page.getByText(/Widok frontu rozdzielnicy/)).toContainText("rząd 18 modułów");
+});

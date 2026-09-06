@@ -384,3 +384,40 @@ describe("useProjectStore", () => {
     });
   });
 });
+
+/**
+ * Liczba modulow w rzedzie to cecha KONKRETNEJ tablicy (2 x 18 to inny produkt niz
+ * 3 x 12), a nie preferencja widoku: idzie na rysunek rozdzielnicy, do legendy PDF
+ * i na paski opisowe. Do niedawna siedziala w stanie komponentu i po kazdym
+ * odswiezeniu strony wracala do 12.
+ */
+describe("perRow w konfiguracji rozdzielnicy", () => {
+  it("trafia do zapisu projektu razem z reszta konfiguracji", () => {
+    useProjectStore.getState().setPanelConfig({ perRow: 18 });
+    expect(useProjectStore.getState().getProjectPayload().panelConfig.perRow).toBe(18);
+  });
+
+  it("wczytanie projektu przywraca zapisana wartosc", () => {
+    const payload = { ...useProjectStore.getState().getProjectPayload(), panelConfig: { supply3f: false, mainRating: 63, perRow: 24 } };
+    useProjectStore.getState().loadProjectPayload(payload);
+    expect(useProjectStore.getState().panelConfig).toMatchObject({ perRow: 24, mainRating: 63 });
+  });
+
+  /**
+   * `perRow` doszlo pozniej niz sam `panelConfig`, wiec brakuje go takze w migawkach,
+   * ktore panelConfig JUZ maja. Bez domyslnej wartosci nalozonej NA obiekt rozdzielnica
+   * dostalaby rzad szerokosci `undefined` i nie policzylaby modulow.
+   */
+  it("stary zapis bez perRow dostaje wartosc domyslna", () => {
+    const payload = useProjectStore.getState().getProjectPayload();
+    const stary = { ...payload, panelConfig: { supply3f: true, mainRating: 40 } as never };
+    useProjectStore.getState().loadProjectPayload(stary);
+    expect(useProjectStore.getState().panelConfig.perRow).toBe(12);
+  });
+
+  it("nowy projekt zaczyna od dwunastu modulow w rzedzie", () => {
+    useProjectStore.getState().setPanelConfig({ perRow: 24 });
+    useProjectStore.getState().resetProject();
+    expect(useProjectStore.getState().panelConfig.perRow).toBe(12);
+  });
+});
