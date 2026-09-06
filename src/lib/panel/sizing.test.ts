@@ -99,15 +99,18 @@ describe("sizeCircuit — obwody typowe", () => {
     expect(r.aparat?.In_A).toBe(16);
   });
 
-  it("warunek zwarciowy: Zs max = U0 / (k · In), krotność wg charakterystyki", () => {
+  it("warunek zwarciowy: Zs max = Cmin · U0 / (k · In), krotność wg charakterystyki", () => {
     const b = sizeCircuit(spec({ moc_W: 800, dlugosc_m: 10 }));
     expect(b.Ia_A).toBe(50); // B10 → 5 × 10 A
-    expect(b.Zs_max_Ohm).toBeCloseTo(230 / 50, 3);
+    // Cmin = 0,95 (PN-EN 60909-0): napięcie w sieci bywa niższe od znamionowego,
+    // więc prąd zwarcia jest mniejszy, a dopuszczalna pętla KRÓTSZA. Bez tego
+    // współczynnika dobór przepuszczał obwody o 5% za długą pętlą.
+    expect(b.Zs_max_Ohm).toBeCloseTo((0.95 * 230) / 50, 3);
 
     const c = sizeCircuit(spec({ typ: "gniazda", moc_W: 800, dlugosc_m: 10, rozruch_silnikowy: true }));
     expect(c.aparat?.charakterystyka).toBe("C");
     expect(c.Ia_A).toBe(160); // C16 → 10 × 16 A
-    expect(c.Zs_max_Ohm).toBeCloseTo(230 / 160, 3);
+    expect(c.Zs_max_Ohm).toBeCloseTo((0.95 * 230) / 160, 3);
   });
 });
 
@@ -236,16 +239,16 @@ describe("niezmienniki normy", () => {
 });
 
 describe("zsMaxForBreaker", () => {
-  it("B16: Ia=80A, Zs max=2,88Ω", () => {
+  it("B16: Ia=80A, Zs max=2,73Ω (z Cmin=0,95)", () => {
     const r = zsMaxForBreaker("B", 16);
     expect(r.ia).toBe(80);
-    expect(r.zsMax).toBeCloseTo(2.875, 2);
+    expect(r.zsMax).toBeCloseTo(2.73, 2);
   });
 
-  it("C16: Ia=160A, Zs max=1,44Ω", () => {
+  it("C16: Ia=160A, Zs max=1,37Ω (z Cmin=0,95)", () => {
     const r = zsMaxForBreaker("C", 16);
     expect(r.ia).toBe(160);
-    expect(r.zsMax).toBeCloseTo(1.4375, 2);
+    expect(r.zsMax).toBeCloseTo(1.37, 2);
   });
 
   it("nieznana charakterystyka -> domyślnie k=5 (jak B)", () => {
@@ -407,5 +410,48 @@ describe("sizeBreakerForSection — dobór aparatu do znanego przekroju", () => 
     expect(r.status).toBe("error");
     expect(r.aparat).toBeNull();
     expect(r.ostrzezenia.map((w) => w.code)).toContain("BRAK_PRADU");
+  });
+});
+
+/**
+ * Budzet spadku napiecia liczy sie OD ZLACZA, nie od rozdzielnicy.
+ *
+ * Obwod policzony w oderwaniu od WLZ potrafi przejsc limit, mimo ze cala droga od
+ * zlacza do odbiornika juz go przekracza — i tym latwiej, im dluzsza WLZ.
+ */
+describe("spadek napiecia: WLZ i wlasna stacja", () => {
+  const dlugi = () =>
+    spec({ typ: "gniazda", moc_W: 2300, dlugosc_m: 30, sposob_ulozenia: "w_scianie" as const });
+
+  it("spadek zuzyty na WLZ zabiera budzet obwodowi", () => {
+    const bez = sizeCircuit(dlugi());
+    const zWlz = sizeCircuit({ ...dlugi(), spadek_wlz_pct: 3 });
+    expect(bez.spadek_napiecia_pct).not.toBeNull();
+    // Ten sam obwod z ciasniejszym budzetem musi dostac GRUBSZY przewod.
+    expect(zWlz.przekroj_mm2!).toBeGreaterThan(bez.przekroj_mm2!);
+  });
+
+  it("wynik pokazuje sume: WLZ + obwod", () => {
+    const r = sizeCircuit({ ...dlugi(), spadek_wlz_pct: 1 });
+    expect(r.spadek_wlz_pct).toBe(1);
+    expect(r.spadek_calkowity_pct).toBeCloseTo(1 + r.spadek_napiecia_pct!, 2);
+  });
+
+  /** Transformator na terenie obiektu = brak odcinka od sieci publicznej, wiec norma
+   *  daje dwa punkty procentowe wiecej (5% / 7%). */
+  it("wlasna stacja transformatorowa podnosi limit o 2 p.p.", () => {
+    expect(sizeCircuit(spec({ typ: "gniazda", moc_W: 1000, dlugosc_m: 10 })).spadek_napiecia_limit_pct).toBe(5);
+    expect(
+      sizeCircuit(spec({ typ: "gniazda", moc_W: 1000, dlugosc_m: 10, wlasna_stacja: true })).spadek_napiecia_limit_pct
+    ).toBe(7);
+    expect(
+      sizeCircuit(spec({ typ: "oswietlenie", moc_W: 500, dlugosc_m: 10, wlasna_stacja: true })).spadek_napiecia_limit_pct
+    ).toBe(5);
+  });
+
+  it("bez podanego WLZ nic sie nie zmienia", () => {
+    const r = sizeCircuit(dlugi());
+    expect(r.spadek_wlz_pct).toBe(0);
+    expect(r.spadek_calkowity_pct).toBe(r.spadek_napiecia_pct);
   });
 });

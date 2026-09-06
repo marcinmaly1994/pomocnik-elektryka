@@ -170,6 +170,23 @@ export const CURVE_MULTIPLIER: Record<Curve, number> = { B: 5, C: 10, D: 20 };
 export const MAX_VOLTAGE_DROP_PCT = { oswietlenie: 3, inne: 5 } as const;
 
 /**
+ * Dodatkowy budżet spadku napięcia [%] dla instalacji zasilanej z WŁASNEJ stacji
+ * transformatorowej.
+ *
+ * Normowe 3/5% liczy się od złącza, czyli od punktu przyłączenia do sieci publicznej.
+ * Gdy transformator stoi na terenie obiektu, tej samej drogi nie ma — odcinek, na
+ * który u innych idzie budżet WLZ, tutaj po prostu nie istnieje, więc norma pozwala
+ * na dwa punkty procentowe więcej (5% / 7%).
+ */
+export const BONUS_WLASNA_STACJA_PCT = 2;
+
+/** Limit spadku napięcia dla danego rodzaju odbiornika i rodzaju zasilania. */
+export function limitSpadkuPct(oswietlenie: boolean, wlasnaStacja = false): number {
+  const bazowy = oswietlenie ? MAX_VOLTAGE_DROP_PCT.oswietlenie : MAX_VOLTAGE_DROP_PCT.inne;
+  return bazowy + (wlasnaStacja ? BONUS_WLASNA_STACJA_PCT : 0);
+}
+
+/**
  * Rezystywność miedzi w warunkach ruchowych [Ω·mm²/m] — do spadku napięcia.
  *
  * NIE 0,0175 (to wartość dla 20 °C): spadek napięcia liczy się przy przewodzie

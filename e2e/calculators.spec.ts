@@ -232,13 +232,16 @@ test("zapisany identyfikator kalkulatora sprzed aktualizacji nie wywraca zakład
  * silnik i pokazuje pełną kopertę wyniku wymaganą przez specyfikację — rachunek
  * krok po kroku z podstawionymi wartościami, ocenę warunku, założenia i źródła.
  */
-test("prądy zwarciowe: domyślny transformator 630 kVA / uk 4% daje Ik3 ≈ 23,9 kA i wymaganą Icn", async ({ page }) => {
+test("prądy zwarciowe: domyślny transformator 100 kVA / uk 4% daje Ik3 ≈ 3,8 kA i wymaganą Icn", async ({ page }) => {
   await openCalculators(page);
   await page.getByRole("button", { name: /^Prądy zwarciowe/ }).click();
 
   const result = page.locator(".pe-result").first();
-  await expect(result).toContainText("23,87 kA");
-  await expect(result).toContainText("Zt 10,16 mΩ");
+  // Stacja 100 kVA — typowy transformator zasilajacy kilka domow. Wczesniej stalo tu
+  // 630 kVA (23,87 kA), czyli scenariusz przemyslowy: kazdy, kto nie zmienil pol,
+  // dostawal wynik bez zwiazku z instalacja, ktora liczyl.
+  await expect(result).toContainText("3,79 kA");
+  await expect(result).toContainText("Zt 64,00 mΩ");
   await expect(result).toContainText("c = 1,05");
   await expect(page.getByText(/Icn ≥/)).toBeVisible();
 });
@@ -250,8 +253,8 @@ test("współczynnik napięciowy c wynika z CELU obliczenia i nie da się go pom
   await expect(page.locator(".pe-result").first()).toContainText("c = 1,05");
   await page.getByLabel("Cel obliczenia").selectOption("ochrona_przeciwporazeniowa");
   await expect(page.locator(".pe-result").first()).toContainText("c = 0,95");
-  // do ochrony liczymy przypadek NAJMNIEJSZEGO prądu — musi wyjść mniej niż 23,87 kA
-  await expect(page.locator(".pe-result").first()).toContainText("21,60 kA");
+  // do ochrony liczymy przypadek NAJMNIEJSZEGO prądu — musi wyjść mniej niż 3,79 kA
+  await expect(page.locator(".pe-result").first()).toContainText("3,43 kA");
 });
 
 test("kompensacja mocy biernej: 100 kW, cosφ 0,80 → 0,95 daje 42,13 kvar", async ({ page }) => {
@@ -580,14 +583,17 @@ test("dobór wkładki gG: ocena warunku ochronnego wg zmierzonej Zs", async ({ p
   await expect(page.getByText(/przekracza dopuszczalne/)).toBeVisible();
 });
 
-test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,88 Ω)", async ({ page }) => {
+test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnica (B16 -> Ia 80 A, Zs max 2,73 Ω)", async ({ page }) => {
   await openCalculators(page);
 
   await page.getByRole("button", { name: "Impedancja pętli zwarcia" }).click();
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("80 A");
-  await expect(result).toContainText("2.88 Ω");
+  // Cmin = 0,95 — ten sam wspolczynnik co w doborze i w protokole pomiarowym.
+  await expect(result).toContainText("2.73 Ω");
+  // Drugi prog: z jakim zapasem powinien wyjsc POMIAR.
+  await expect(result).toContainText("2.19 Ω");
 });
 
 /**
