@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Circuit, ElementType, InstallationElement } from "@/types";
-import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, findPanel, kindForElements, spreadOverlappingRoutes } from "./loads";
+import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, kindForElements, spreadOverlappingRoutes } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -540,5 +540,54 @@ describe("findPanel / kindForElements", () => {
     expect(kindForElements([el("gniazdko400")])).toBe("dedykowany");
     // obwód mieszany z odbiornikiem dedykowanym traktujemy jako dedykowany
     expect(kindForElements([el("gniazdko"), el("wypustAGD")])).toBe("dedykowany");
+  });
+});
+
+describe("estimateRoutesByFloor", () => {
+  const panel = { x: 0, y: 0 };
+  // Ten sam punkt planu na dwoch kondygnacjach — rozni je WYLACZNIE skala pietra.
+  const naParterze = el("gniazdko", { x: 100, y: 0, floor: "parter" });
+  const naPietrze = el("gniazdko", { x: 100, y: 0, floor: "pietro" });
+
+  it("kazda kondygnacja liczy sie wlasna skala", () => {
+    // 100 jedn. x 0,05 m = 5 m na parterze; 100 jedn. x 0,01 m = 1 m na pietrze.
+    const skale = { parter: 0.05, pietro: 0.01 };
+    const sam = (e: InstallationElement, s: Record<string, number>) => estimateRoutesByFloor(panel, [e], s)!.totalM;
+    expect(sam(naParterze, skale) - sam(naPietrze, skale)).toBeCloseTo(4, 5);
+  });
+
+  /**
+   * Sedno bledu, ktory to naprawia: przedtem caly budynek liczyl sie skala kondygnacji
+   * AKURAT OTWARTEJ w edytorze, wiec ta sama instalacja dawala inny metraz po samym
+   * przelaczeniu zakladki pietra.
+   */
+  it("wynik nie zalezy od tego, ktora kondygnacja jest otwarta", () => {
+    const skale = { parter: 0.05, pietro: 0.01 };
+    const razem = estimateRoutesByFloor(panel, [naParterze, naPietrze], skale)!;
+    const osobno =
+      estimateRoutesByFloor(panel, [naParterze], skale)!.totalM +
+      estimateRoutesByFloor(panel, [naPietrze], skale)!.totalM;
+    expect(razem.totalM).toBeCloseTo(osobno, 5);
+    // Do spadku napiecia liczy sie NAJDLUZSZA pojedyncza trasa, nie suma.
+    expect(razem.worstCaseM).toBeCloseTo(estimateRoutesByFloor(panel, [naParterze], skale)!.worstCaseM, 5);
+  });
+
+  /**
+   * Czesciowy wynik bylby gorszy od braku: skrocona dlugosc zanizylaby spadek napiecia
+   * i dobrala za cienki przewod, czyli blad w strone niebezpieczna.
+   */
+  it("brak skali CHOC JEDNEJ kondygnacji unieważnia caly obwod", () => {
+    expect(estimateRoutesByFloor(panel, [naParterze, naPietrze], { parter: 0.05 })).toBeNull();
+    expect(estimateRoutesByFloor(panel, [naParterze], { parter: 0.05 })).not.toBeNull();
+  });
+
+  it("na jednej kondygnacji daje dokladnie to samo co wersja jednoskalowa", () => {
+    const jedno = estimateRoutes(panel, [naParterze], 0.05);
+    expect(estimateRoutesByFloor(panel, [naParterze], { parter: 0.05 })).toEqual(jedno);
+  });
+
+  it("bez rozdzielnicy i bez elementow nie ma czego mierzyc", () => {
+    expect(estimateRoutesByFloor(null, [naParterze], { parter: 0.05 })).toBeNull();
+    expect(estimateRoutesByFloor(panel, [], { parter: 0.05 })).toBeNull();
   });
 });

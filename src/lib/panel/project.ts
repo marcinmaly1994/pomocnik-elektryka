@@ -10,14 +10,19 @@
 
 import type { Circuit, InstallationElement, RoomShape } from "@/types";
 import { computeCircuits } from "./circuits";
-import { circuitDemand, estimateRoutes, findPanel, kindForElements } from "./loads";
+import { circuitDemand, estimateRoutesByFloor, findPanel, kindForElements } from "./loads";
 import { sizeCircuit, type PhaseAssignment, type SizedCircuit } from "./sizing";
 import type { LayingMethod } from "./norms";
 import { isWetRoomName } from "@/lib/design";
 
 export interface ProjectSizingOptions {
-  /** Metry na jednostkę planu z kalibracji skali; `null` = brak kalibracji. */
-  metersPerUnit: number | null;
+  /**
+   * Metry na jednostkę planu, PER KONDYGNACJA (brak wpisu = brak kalibracji).
+   *
+   * Cała mapa, nie jedna liczba: obwód potrafi sięgać kilku pięter, a każde ma
+   * własną skalę — patrz `estimateRoutesByFloor`.
+   */
+  scales: Record<string, number>;
   sposob_ulozenia?: LayingMethod;
   temperatura_otoczenia_C?: number;
   /** Ile obwodów dzieli wspólną trasę — wpływa na współczynnik grupowania. */
@@ -35,7 +40,7 @@ export function sizeProjectCircuits(
   return circuits.map((c) => {
     const kind = kindForElements(c.elements);
     const demand = circuitDemand(c.elements, kind);
-    const routes = estimateRoutes(panel, c.elements, opts.metersPerUnit);
+    const routes = estimateRoutesByFloor(panel, c.elements, opts.scales);
     // „3-faz." w etykiecie zabezpieczenia to sposób, w jaki obwody trójfazowe są
     // oznaczane w warstwie planu — tu tłumaczymy to na liczbę faz doboru.
     const phases = c.breaker.includes("3-faz.") ? "3" : "1";
@@ -106,12 +111,12 @@ export function computeSizedCircuits(
 export function routeLengths(
   circuits: Circuit[],
   allElements: InstallationElement[],
-  metersPerUnit: number | null
+  scales: Record<string, number>
 ): Map<string, number> {
   const panel = findPanel(allElements);
   const out = new Map<string, number>();
   for (const c of circuits) {
-    const r = estimateRoutes(panel, c.elements, metersPerUnit);
+    const r = estimateRoutesByFloor(panel, c.elements, scales);
     if (r) out.set(c.id, r.totalM);
   }
   return out;

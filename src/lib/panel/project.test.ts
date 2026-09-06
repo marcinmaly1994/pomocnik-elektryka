@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ElementType, InstallationElement } from "@/types";
 import { computeCircuits } from "./circuits";
-import { applySizing, assignPhases, computeSizedCircuits, panelCapacity, phaseBalance, sizeProjectCircuits } from "./project";
+import { applySizing, assignPhases, computeSizedCircuits, panelCapacity, phaseBalance, routeLengths, sizeProjectCircuits } from "./project";
 import type { SizedCircuit } from "./sizing";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -53,7 +53,7 @@ describe("sizeProjectCircuits", () => {
 
   it("każdy obwód z planu dostaje policzone liczby, nie stałe z kodu", () => {
     const circuits = computeCircuits(elements);
-    const sized = sizeProjectCircuits(circuits, elements, { metersPerUnit: 0.05 });
+    const sized = sizeProjectCircuits(circuits, elements, { scales: { parter: 0.05 } });
     expect(sized.length).toBe(circuits.length);
     for (const s of sized) {
       expect(s.Ib_A).toBeGreaterThan(0);
@@ -65,7 +65,7 @@ describe("sizeProjectCircuits", () => {
 
   it("bez kalibracji skali nie ma spadku napięcia, tylko jawne ostrzeżenie", () => {
     const circuits = computeCircuits(elements);
-    const sized = sizeProjectCircuits(circuits, elements, { metersPerUnit: null });
+    const sized = sizeProjectCircuits(circuits, elements, { scales: {} });
     for (const s of sized) {
       expect(s.spadek_napiecia_pct).toBeNull();
       expect(s.ostrzezenia.map((w) => w.code)).toContain("BRAK_DLUGOSCI");
@@ -74,7 +74,7 @@ describe("sizeProjectCircuits", () => {
 
   it("obwód oświetleniowy i gniazdowy dostają różne przekroje i zabezpieczenia", () => {
     const circuits = computeCircuits(elements);
-    const sized = sizeProjectCircuits(circuits, elements, { metersPerUnit: 0.05 });
+    const sized = sizeProjectCircuits(circuits, elements, { scales: { parter: 0.05 } });
     const light = sized.find((s) => s.typ === "oswietlenie")!;
     const socket = sized.find((s) => s.typ === "gniazda")!;
     expect(light.przekroj_mm2).toBe(1.5);
@@ -86,7 +86,7 @@ describe("sizeProjectCircuits", () => {
   it("ładowarka EV trafia na obwód 3-fazowy i wymaga RCD typu B", () => {
     const withEv = [...elements, el("ladowarkaEV", { x: 40, y: 40, room: "Garaż" })];
     const circuits = computeCircuits(withEv);
-    const sized = sizeProjectCircuits(circuits, withEv, { metersPerUnit: 0.05 });
+    const sized = sizeProjectCircuits(circuits, withEv, { scales: { parter: 0.05 } });
     const ev = sized.find((s) => /EV/i.test(s.nazwa))!;
     expect(ev.liczba_faz).toBe("3");
     expect(ev.rcd_typ).toBe("B");
@@ -109,7 +109,7 @@ describe("applySizing / computeSizedCircuits", () => {
     const rawBlind = raw.find((c) => /rolet/i.test(c.name))!;
     expect(rawBlind.cable).toBe("YDYp 3x1,5 mm²");
 
-    const { circuits } = computeSizedCircuits(elements, { metersPerUnit: 0.05 });
+    const { circuits } = computeSizedCircuits(elements, { scales: { parter: 0.05 } });
     const blind = circuits.find((c) => /rolet/i.test(c.name))!;
     expect(blind.cable).toBe("YDYp 3x2,5 mm²");
     expect(blind.breaker).toBe("B16");
@@ -117,7 +117,7 @@ describe("applySizing / computeSizedCircuits", () => {
 
   it("sufiks 3-faz. przeżywa podmianę — inaczej aparat 3-biegunowy zwęziłby się do 1 modułu", () => {
     const withEv = [...elements, el("ladowarkaEV", { x: 60, y: 60, room: "Garaż" })];
-    const { circuits } = computeSizedCircuits(withEv, { metersPerUnit: 0.05 });
+    const { circuits } = computeSizedCircuits(withEv, { scales: { parter: 0.05 } });
     const ev = circuits.find((c) => /EV/i.test(c.name))!;
     expect(ev.breaker).toMatch(/3-faz\.$/);
     expect(ev.cable).toMatch(/^YDYp 5x/);
@@ -131,8 +131,8 @@ describe("applySizing / computeSizedCircuits", () => {
   });
 
   it("wszystkie zakładki dostają tę samą listę obwodów", () => {
-    const a = computeSizedCircuits(elements, { metersPerUnit: 0.05 });
-    const b = computeSizedCircuits(elements, { metersPerUnit: 0.05 });
+    const a = computeSizedCircuits(elements, { scales: { parter: 0.05 } });
+    const b = computeSizedCircuits(elements, { scales: { parter: 0.05 } });
     expect(a.circuits.map((c) => [c.id, c.cable, c.breaker])).toEqual(
       b.circuits.map((c) => [c.id, c.cable, c.breaker])
     );
@@ -208,5 +208,45 @@ describe("panelCapacity", () => {
 
   it("pusta rozdzielnica to nadal jeden rząd, nie zero", () => {
     expect(panelCapacity(0).rows).toBe(1);
+  });
+});
+
+describe("skala per kondygnacja w doborze i kosztorysie", () => {
+  const rozdzielnica = el("rozdzielnica", { x: 0, y: 0, floor: "parter" });
+  const naParterze = el("gniazdko", { x: 100, y: 0, floor: "parter", room: "Salon" });
+  const naPietrze = el("gniazdko", { x: 100, y: 0, floor: "pietro", room: "Salon" });
+  const wszystkie = [rozdzielnica, naParterze, naPietrze];
+
+  /**
+   * Przedtem caly budynek liczyl sie JEDNA skala — ta z kondygnacji akurat otwartej
+   * w edytorze — wiec metry na pozostalych pietrach wychodzily przemnozone przez
+   * przypadkowy wspolczynnik. Tu obie kondygnacje maja skale rozne o rzad wielkosci,
+   * wiec pomylka byloby widac natychmiast.
+   */
+  it("routeLengths sumuje trasy liczone skala WLASNEJ kondygnacji", () => {
+    const { circuits } = computeSizedCircuits(wszystkie, { scales: { parter: 0.05, pietro: 0.01 } });
+    const gestsze = routeLengths(circuits, wszystkie, { parter: 0.05, pietro: 0.01 });
+    const rzadsze = routeLengths(circuits, wszystkie, { parter: 0.05, pietro: 0.05 });
+    const suma = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
+    // Pietro pieciokrotnie gestsze to 4 m mniej trasy do tego jednego gniazda.
+    expect(suma(rzadsze) - suma(gestsze)).toBeCloseTo(4, 5);
+  });
+
+  it("obwod siegajacy kondygnacji bez skali wypada z pomiaru, zamiast liczyc sie po czesci", () => {
+    const { circuits } = computeSizedCircuits(wszystkie, { scales: { parter: 0.05 } });
+    expect(routeLengths(circuits, wszystkie, { parter: 0.05 }).size).toBe(0);
+    // Ta sama instalacja z komplet skal juz sie mierzy.
+    expect(routeLengths(circuits, wszystkie, { parter: 0.05, pietro: 0.05 }).size).toBeGreaterThan(0);
+  });
+
+  /** Dlugosc trasy wchodzi do doboru przez spadek napiecia — i to on jest widocznym
+   *  skutkiem tego, czy skala byla znana. Kosztorys i dobor licza z tych samych skal,
+   *  wiec nie da sie juz dostac przekroju dobranego pod inny budynek. */
+  it("spadek napiecia liczy sie wtedy i tylko wtedy, gdy znane sa skale wszystkich kondygnacji obwodu", () => {
+    const zeSkalami = computeSizedCircuits(wszystkie, { scales: { parter: 0.05, pietro: 0.01 } });
+    expect(zeSkalami.sized.some((s) => s.spadek_napiecia_pct !== null)).toBe(true);
+
+    const bezPietra = computeSizedCircuits(wszystkie, { scales: { parter: 0.05 } });
+    expect(bezPietra.sized.every((s) => s.spadek_napiecia_pct === null)).toBe(true);
   });
 });

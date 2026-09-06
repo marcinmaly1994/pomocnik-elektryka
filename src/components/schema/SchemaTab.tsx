@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { CadGlyph, GLYPHS, labelOffset, LINE_W, STROKE } from "./deviceGlyphs";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits } from "@/lib/panel/project";
-import { scaleOf } from "@/lib/design";
 import { buildPanelDevices, PHASE_COLORS } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
 
@@ -478,7 +477,6 @@ export function SchemaTab() {
   const roomShapes = useProjectStore((s) => s.draft.roomShapes);
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const projectName = useProjectStore((s) => s.projectName);
-  const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const scales = useProjectStore((s) => s.scales);
   const svgRef = useRef<SVGSVGElement>(null);
   const rawDocHeader = useProjectStore((s) => s.docHeader);
@@ -544,10 +542,9 @@ export function SchemaTab() {
 
   // Te same obwody co w Rozdzielnicy — z doborem, nie ze stałymi z `computeCircuits`.
   // Inaczej schemat jednokreskowy pokazywałby inny przekrój niż front rozdzielnicy.
-  const mpu = scaleOf(scales, activeFloorId);
   const { circuits } = useMemo(
-    () => computeSizedCircuits(elements, { metersPerUnit: mpu }, roomShapes),
-    [elements, mpu, roomShapes]
+    () => computeSizedCircuits(elements, { scales }, roomShapes),
+    [elements, scales, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   /**
