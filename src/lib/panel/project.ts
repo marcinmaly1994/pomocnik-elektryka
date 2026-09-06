@@ -10,7 +10,7 @@
 
 import type { Circuit, InstallationElement, RoomShape } from "@/types";
 import { computeCircuits } from "./circuits";
-import { circuitDemand, estimateRoutesByFloor, findPanel, kindForElements } from "./loads";
+import { circuitDemand, estimateRoutesByFloor, findPanels, kindForElements } from "./loads";
 import { sizeCircuit, type PhaseAssignment, type SizedCircuit } from "./sizing";
 import type { LayingMethod } from "./norms";
 import { isWetRoomName } from "@/lib/design";
@@ -36,11 +36,13 @@ export function sizeProjectCircuits(
   opts: ProjectSizingOptions,
   roomShapes: RoomShape[] = []
 ): SizedCircuit[] {
-  const panel = findPanel(allElements);
+  // Rozdzielnice CALEGO budynku, z podzialem na kondygnacje — obwod na pietrze liczy
+  // sie od tamtejszej podrozdzielnicy, nie od pierwszej z brzegu (patrz `findPanels`).
+  const panele = findPanels(allElements);
   return circuits.map((c) => {
     const kind = kindForElements(c.elements);
     const demand = circuitDemand(c.elements, kind);
-    const routes = estimateRoutesByFloor(panel, c.elements, opts.scales);
+    const routes = estimateRoutesByFloor(panele, c.elements, opts.scales);
     // „3-faz." w etykiecie zabezpieczenia to sposób, w jaki obwody trójfazowe są
     // oznaczane w warstwie planu — tu tłumaczymy to na liczbę faz doboru.
     const phases = c.breaker.includes("3-faz.") ? "3" : "1";
@@ -113,10 +115,12 @@ export function routeLengths(
   allElements: InstallationElement[],
   scales: Record<string, number>
 ): Map<string, number> {
-  const panel = findPanel(allElements);
+  // Rozdzielnice CALEGO budynku, z podzialem na kondygnacje — obwod na pietrze liczy
+  // sie od tamtejszej podrozdzielnicy, nie od pierwszej z brzegu (patrz `findPanels`).
+  const panele = findPanels(allElements);
   const out = new Map<string, number>();
   for (const c of circuits) {
-    const r = estimateRoutesByFloor(panel, c.elements, scales);
+    const r = estimateRoutesByFloor(panele, c.elements, scales);
     if (r) out.set(c.id, r.totalM);
   }
   return out;

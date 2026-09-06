@@ -250,3 +250,42 @@ describe("skala per kondygnacja w doborze i kosztorysie", () => {
     expect(bezPietra.sized.every((s) => s.spadek_napiecia_pct === null)).toBe(true);
   });
 });
+
+describe("podrozdzielnica na pietrze", () => {
+  const tablicaGlowna = el("rozdzielnica", { x: 0, y: 0, floor: "parter" });
+  const podrozdzielnica = el("rozdzielnica", { x: 400, y: 0, floor: "pietro" });
+  const naPietrze = el("gniazdko", { x: 420, y: 0, floor: "pietro", room: "Salon" });
+
+  /**
+   * Sedno bledu: trasy WSZYSTKICH obwodow mierzyly sie od pierwszej rozdzielnicy
+   * znalezionej w projekcie. Gniazdko 20 jedn. od podrozdzielnicy na pietrze dostawalo
+   * dlugosc liczona od tablicy glownej na parterze, czyli przez pol budynku — i to
+   * zarowno w kosztorysie (ile kabla kupic), jak i w doborze (spadek napiecia).
+   */
+  it("obwod na pietrze mierzy sie od tamtejszej podrozdzielnicy", () => {
+    const skale = { parter: 0.05, pietro: 0.05 };
+    const bezPodrozdzielnicy = [tablicaGlowna, naPietrze];
+    const zPodrozdzielnica = [tablicaGlowna, podrozdzielnica, naPietrze];
+
+    const suma = (elementy: typeof bezPodrozdzielnicy) => {
+      const { circuits } = computeSizedCircuits(elementy, { scales: skale });
+      return [...routeLengths(circuits, elementy, skale).values()].reduce((a, b) => a + b, 0);
+    };
+
+    // Od tablicy glownej: 420 jedn. = 21 m. Od podrozdzielnicy: 20 jedn. = 1 m.
+    expect(suma(bezPodrozdzielnicy) - suma(zPodrozdzielnica)).toBeCloseTo(20, 5);
+  });
+
+  it("kolejnosc elementow w tablicy nie zmienia wyniku", () => {
+    const skale = { parter: 0.05, pietro: 0.05 };
+    const suma = (elementy: InstallationElement[]) => {
+      const { circuits } = computeSizedCircuits(elementy, { scales: skale });
+      return [...routeLengths(circuits, elementy, skale).values()].reduce((a, b) => a + b, 0);
+    };
+    // Przedtem wygrywala ta rozdzielnica, ktora stala wczesniej w tablicy.
+    expect(suma([podrozdzielnica, tablicaGlowna, naPietrze])).toBeCloseTo(
+      suma([tablicaGlowna, podrozdzielnica, naPietrze]),
+      5
+    );
+  });
+});

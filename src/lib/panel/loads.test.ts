@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Circuit, ElementType, InstallationElement } from "@/types";
-import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, kindForElements, spreadOverlappingRoutes } from "./loads";
+import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -544,7 +544,8 @@ describe("findPanel / kindForElements", () => {
 });
 
 describe("estimateRoutesByFloor", () => {
-  const panel = { x: 0, y: 0 };
+  /** Jedna rozdzielnica na caly budynek — najczestszy uklad w domu jednorodzinnym. */
+  const panel = { poKondygnacji: new Map<string, { x: number; y: number }>(), glowna: { x: 0, y: 0 } };
   // Ten sam punkt planu na dwoch kondygnacjach — rozni je WYLACZNIE skala pietra.
   const naParterze = el("gniazdko", { x: 100, y: 0, floor: "parter" });
   const naPietrze = el("gniazdko", { x: 100, y: 0, floor: "pietro" });
@@ -582,12 +583,63 @@ describe("estimateRoutesByFloor", () => {
   });
 
   it("na jednej kondygnacji daje dokladnie to samo co wersja jednoskalowa", () => {
-    const jedno = estimateRoutes(panel, [naParterze], 0.05);
+    const jedno = estimateRoutes(panel.glowna, [naParterze], 0.05);
     expect(estimateRoutesByFloor(panel, [naParterze], { parter: 0.05 })).toEqual(jedno);
   });
 
   it("bez rozdzielnicy i bez elementow nie ma czego mierzyc", () => {
-    expect(estimateRoutesByFloor(null, [naParterze], { parter: 0.05 })).toBeNull();
+    expect(estimateRoutesByFloor({ poKondygnacji: new Map(), glowna: null }, [naParterze], { parter: 0.05 })).toBeNull();
     expect(estimateRoutesByFloor(panel, [], { parter: 0.05 })).toBeNull();
+  });
+});
+
+describe("findPanels / panelDlaKondygnacji", () => {
+  const rozdzielnicaParter = el("rozdzielnica", { x: 10, y: 10, floor: "parter" });
+  const rozdzielnicaPietro = el("rozdzielnica", { x: 500, y: 500, floor: "pietro" });
+  const gniazdko = el("gniazdko", { x: 0, y: 0, floor: "pietro" });
+
+  it("zbiera po jednej rozdzielnicy na kondygnacje i zapamietuje glowna", () => {
+    const p = findPanels([gniazdko, rozdzielnicaParter, rozdzielnicaPietro]);
+    expect(p.poKondygnacji.get("parter")).toEqual({ x: 10, y: 10 });
+    expect(p.poKondygnacji.get("pietro")).toEqual({ x: 500, y: 500 });
+    // Glowna to pierwsza znaleziona — od niej licza sie kondygnacje bez wlasnej.
+    expect(p.glowna).toEqual({ x: 10, y: 10 });
+  });
+
+  /**
+   * Sedno bledu: obwod na pietrze mierzyl sie od PIERWSZEJ rozdzielnicy w projekcie,
+   * czyli zwykle od tablicy glownej na parterze — nawet gdy pietro ma wlasna
+   * podrozdzielnice. O wyniku decydowala kolejnosc elementow w tablicy.
+   */
+  it("kondygnacja z wlasna podrozdzielnica liczy sie od NIEJ, nie od glownej", () => {
+    const p = findPanels([rozdzielnicaParter, rozdzielnicaPietro]);
+    expect(panelDlaKondygnacji(p, "pietro")).toEqual({ x: 500, y: 500 });
+  });
+
+  /** Typowy dom ma JEDNA tablice na parterze, a obwody na pietrze tez musza sie od
+   *  czegos liczyc — bez tego zapasu przestalyby sie mierzyc w ogole. */
+  it("kondygnacja bez wlasnej rozdzielnicy spada na glowna", () => {
+    const p = findPanels([rozdzielnicaParter]);
+    expect(panelDlaKondygnacji(p, "poddasze")).toEqual({ x: 10, y: 10 });
+  });
+
+  it("bez zadnej rozdzielnicy nie ma punktu odniesienia", () => {
+    const p = findPanels([gniazdko]);
+    expect(panelDlaKondygnacji(p, "pietro")).toBeNull();
+  });
+
+  it("przy kilku rozdzielnicach na jednej kondygnacji liczy sie pierwsza", () => {
+    const druga = el("rozdzielnica", { x: 99, y: 99, floor: "parter" });
+    expect(findPanels([rozdzielnicaParter, druga]).poKondygnacji.get("parter")).toEqual({ x: 10, y: 10 });
+  });
+
+  it("trasa na pietrze skraca sie, gdy pietro dostaje wlasna podrozdzielnice", () => {
+    const skale = { parter: 0.05, pietro: 0.05 };
+    const daleko = estimateRoutesByFloor(findPanels([rozdzielnicaParter]), [gniazdko], skale)!;
+    const blisko = estimateRoutesByFloor(findPanels([rozdzielnicaParter, rozdzielnicaPietro]), [gniazdko], skale)!;
+    // Gniazdko stoi w (0,0): do tablicy na parterze (10,10) jest 20 jedn., do
+    // podrozdzielnicy (500,500) — 1000 jedn. Kierunek roznicy jest tu mniej wazny niz
+    // to, ze WYNIK W OGOLE zalezy od tego, ktora rozdzielnica zasila to pietro.
+    expect(blisko.totalM).not.toBeCloseTo(daleko.totalM, 3);
   });
 });
