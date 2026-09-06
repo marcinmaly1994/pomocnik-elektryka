@@ -97,18 +97,26 @@ test("nieznany adres pokazuje stronę startową I poprawia się w pasku adresu",
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("samo „/kalkulatory” uzupełnia się o ostatnio używany kalkulator, bez śmiecenia w historii", async ({ page }) => {
+/**
+ * Samo „/kalkulatory" pokazuje EKRAN STARTOWY i zostaje pod tym adresem.
+ *
+ * Wcześniej uzupełniało się o ostatnio używany kalkulator — czyli ktoś, kto wchodził
+ * tu pierwszy raz, lądował w przypadkowym narzędziu bez pojęcia, że obok jest
+ * siedemnaście innych. Pamięć o ostatnim wyborze została, ale jako SKRÓT na tym
+ * ekranie („Ostatnio używane"), nie jako przekierowanie.
+ */
+test("samo „/kalkulatory” pokazuje ekran startowy, a ostatni wybór jest na nim skrótem", async ({ page }) => {
   await czystyStart(page);
   await page.goto("/kalkulatory/zwarcie");
   await expect(page.getByRole("heading", { name: "Prądy zwarciowe" })).toBeVisible();
 
-  // powrót na goły adres zakładki — ma wrócić do ostatniego wyboru
   await page.goto("/kalkulatory");
-  await expect(page).toHaveURL(/\/kalkulatory\/zwarcie$/);
+  await expect(page).toHaveURL(/\/kalkulatory$/);
+  await expect(page.getByText("Ostatnio używane")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ochrona" })).toBeVisible();
 
-  // Uzupełnienie adresu leci przez `replace`, więc NIE zostawia po sobie wpisu:
-  // „wstecz" ma wyjść z tego widoku, a nie wrócić na „/kalkulatory", które
-  // natychmiast przekierowałoby z powrotem (przycisk wyglądałby na zepsuty).
+  // Adres nie jest już prostowany, więc „wstecz" działa zwyczajnie: wraca na
+  // poprzedni widok zamiast trafiać na wpis, który natychmiast przekierowuje.
   await page.goBack();
-  await expect(page).not.toHaveURL(/\/kalkulatory$/);
+  await expect(page).toHaveURL(/\/kalkulatory\/zwarcie$/);
 });

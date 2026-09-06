@@ -77,6 +77,14 @@ export interface OdbiorFazowy {
 
 interface CalculatorsState {
   activeCalc: CalcId;
+  /**
+   * Ostatnio otwarte kalkulatory, od najswiezszego — do sekcji na ekranie wejscia.
+   *
+   * Osobno od `activeCalc`: tamto mowi, GDZIE uzytkownik jest, to — po co tu wraca.
+   */
+  ostatnieKalkulatory: CalcId[];
+  /** Zwiniete grupy na liscie bocznej (patrz `GRUPY`). */
+  zwinieteGrupy: string[];
 
   /**
    * --- dobór przekroju przewodu ORAZ dobór zabezpieczenia ---
@@ -328,6 +336,9 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       // Scalony „Dobor obwodu" jest naturalnym wejsciem: to od doboru obwodu zaczyna
       // sie kazda robota, a trzy pozostale tryby siedza w tym samym kalkulatorze.
       activeCalc: "obwod",
+      ostatnieKalkulatory: [],
+      // „Zaawansowane" zwiniete przy pierwszym wejsciu — patrz GRUPY.
+      zwinieteGrupy: ["zaawansowane"],
 
       circuitKind: "gniazda",
       power: 2000,
