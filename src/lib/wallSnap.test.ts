@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { RoomShape, Wall } from "@/types";
-import { przyscienny, snapToWall } from "./wallSnap";
+import { przyscienny, snapElementToWall, snapToWall } from "./wallSnap";
+import { montazPrzyscienny, zasiegPrzyscienny } from "./glyphs";
 
 /** Pokoj 200 x 200 z lewym gornym rogiem w (0,0); srodek w (100,100). */
 const POKOJ: RoomShape = {
@@ -144,5 +145,79 @@ describe("snapToWall — klik tuz ZA linia sciany", () => {
     const zZewnatrz = snapToWall({ x: 100, y: -5 }, [], [POKOJ], 20)!;
     const zWewnatrz = snapToWall({ x: 100, y: 5 }, [], [POKOJ], 20)!;
     expect(zZewnatrz.rotation).toBeCloseTo(zWewnatrz.rotation, 6);
+  });
+});
+
+/**
+ * Osadzenie KONKRETNEGO symbolu: element ma stać po stronie pomieszczenia i dotykać
+ * ściany, a nie siedzieć na niej środkiem.
+ *
+ * Przedtem gniazdko wychodziło trzonkiem na zewnątrz budynku, łącznik siedział na
+ * murze okrakiem, a plakietka RJ45 była przecięta linią ściany na pół.
+ */
+describe("snapElementToWall — osadzenie symbolu", () => {
+  /** Punkt, którym symbol ma dotknąć ściany: środek plus zasięg w stronę ściany. */
+  function czubek(w: { x: number; y: number; rotation: number }, type: Parameters<typeof zasiegPrzyscienny>[0], skala: number) {
+    const rad = ((w.rotation - montazPrzyscienny(type)) * Math.PI) / 180;
+    return {
+      x: w.x + Math.sin(rad) * zasiegPrzyscienny(type) * skala,
+      y: w.y - Math.cos(rad) * zasiegPrzyscienny(type) * skala,
+    };
+  }
+
+  it("trzonek gniazdka ląduje na linii ściany, a symbol zostaje w pomieszczeniu", () => {
+    const w = snapElementToWall({ x: 100, y: 6 }, [], [POKOJ], 20, "gniazdko", 1)!;
+    // Górna krawędź pokoju to y = 0, wnętrze jest niżej.
+    expect(czubek(w, "gniazdko", 1).y).toBeCloseTo(0, 6);
+    expect(w.y).toBeCloseTo(zasiegPrzyscienny("gniazdko"), 6);
+    expect(w.x).toBeCloseTo(100, 6);
+  });
+
+  it("odsunięcie skaluje się razem z symbolem", () => {
+    const maly = snapElementToWall({ x: 100, y: 6 }, [], [POKOJ], 20, "gniazdko", 0.7)!;
+    const duzy = snapElementToWall({ x: 100, y: 6 }, [], [POKOJ], 20, "gniazdko", 1.4)!;
+    expect(duzy.y).toBeCloseTo(2 * maly.y, 6);
+  });
+
+  it("działa tak samo na każdej ścianie pokoju", () => {
+    const doly = snapElementToWall({ x: 100, y: 194 }, [], [POKOJ], 20, "gniazdko", 1)!;
+    const lewa = snapElementToWall({ x: 6, y: 100 }, [], [POKOJ], 20, "gniazdko", 1)!;
+    expect(czubek(doly, "gniazdko", 1).y).toBeCloseTo(200, 6);
+    expect(czubek(lewa, "gniazdko", 1).x).toBeCloseTo(0, 6);
+  });
+
+  it("kinkiet dostaje obrót montażowy — plecami do muru, nie do podłogi", () => {
+    const goly = snapToWall({ x: 6, y: 100 }, [], [POKOJ], 20)!;
+    const kinkiet = snapElementToWall({ x: 6, y: 100 }, [], [POKOJ], 20, "kinkiet", 1)!;
+    expect(kinkiet.rotation).toBeCloseTo((goly.rotation + 90) % 360, 6);
+  });
+
+  /**
+   * Regres, który wychodzi dopiero przy DRUGIM ruchu: po osadzeniu środek symbolu leży
+   * dalej od ściany niż tolerancja, więc przeciągnięcie go wzdłuż tej samej ściany
+   * przestawało się przyklejać i po cichu zostawiało element krzywo.
+   */
+  it("element już osadzony przykleja się ponownie, gdy przesunąć go wzdłuż ściany", () => {
+    const pierwsze = snapElementToWall({ x: 100, y: 6 }, [], [POKOJ], 8, "gniazdko", 1)!;
+    expect(pierwsze.y).toBeGreaterThan(8); // środek już poza samą tolerancją
+    const drugie = snapElementToWall({ x: 140, y: pierwsze.y }, [], [POKOJ], 8, "gniazdko", 1)!;
+    expect(drugie.y).toBeCloseTo(pierwsze.y, 6);
+    expect(drugie.x).toBeCloseTo(140, 6);
+  });
+
+  it("dalej niż tolerancja liczona od krawędzi symbolu — bez przyklejania", () => {
+    expect(snapElementToWall({ x: 100, y: 60 }, [], [POKOJ], 8, "gniazdko", 1)).toBeNull();
+  });
+
+  /**
+   * Plan rysowany samymi ścianami nie ma „wnętrza", więc strona brała się z kolejności
+   * normalnych. Odkąd symbol jest odsuwany od ściany, zła strona nie jest już tylko
+   * brzydka — wyrzuca element na zewnątrz budynku.
+   */
+  it("bez pomieszczenia zostaje po tej stronie ściany, z której kliknięto", () => {
+    const ponizej = snapElementToWall({ x: 50, y: 6 }, [SCIANA_POZIOMA], [], 20, "gniazdko", 1)!;
+    const powyzej = snapElementToWall({ x: 50, y: -6 }, [SCIANA_POZIOMA], [], 20, "gniazdko", 1)!;
+    expect(ponizej.y).toBeGreaterThan(0);
+    expect(powyzej.y).toBeLessThan(0);
   });
 });

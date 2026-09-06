@@ -1,6 +1,6 @@
 import type { ElementType } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
-import { glyphBoxSize, switchGlyph } from "@/lib/glyphs";
+import { glyphBoxSize, SOCKET_GLYPH, switchGlyph } from "@/lib/glyphs";
 
 interface GlyphProps {
   type: ElementType;
@@ -23,9 +23,8 @@ interface GlyphProps {
  *  bazowy, żeby te trzy symbole nie zaczęły z czasem rozjeżdżać się kształtem.
  */
 function SocketArc({ color, herm, insideLabel, belowLabel }: { color: string; herm?: boolean; insideLabel?: string; belowLabel?: string }) {
-  const r = 9;
-  const stemLen = 12;
-  const half = (stemLen + r) / 2;
+  // Jedno zrodlo wymiarow dla obu rendererow i dla przyciagania do sciany.
+  const { r, stemLen, half } = SOCKET_GLYPH;
   const stemTopY = -half;
   const apexY = stemTopY + stemLen;
   const chordY = apexY + r;

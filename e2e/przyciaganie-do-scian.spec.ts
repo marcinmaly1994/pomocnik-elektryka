@@ -84,8 +84,13 @@ test("gniazdko postawione przy scianie przykleja sie do niej i obraca prostopadl
   const draft = await stan(page);
   const g = draft.elements.find((e: { type: string }) => e.type === "gniazdko");
   expect(g).toBeTruthy();
-  // Wyladowalo DOKLADNIE na linii obrysu, nie obok niej.
-  expect(g.x).toBeCloseTo(lewaKrawedz(draft), 3);
+  // Symbol stoi PO WEWNETRZNEJ stronie sciany i dotyka jej koncem trzonka — nie siedzi
+  // na niej srodkiem, bo urzadzenie jest montowane W scianie, a nie na jej linii.
+  // Dokladne odsuniecie (zasieg trzonka razy skala renderu symboli) pilnuja testy
+  // jednostkowe snapElementToWall; tutaj chodzi o to, ze w ogole jest i idzie W GLAB.
+  const odsuniecie = g.x - lewaKrawedz(draft);
+  expect(odsuniecie).toBeGreaterThan(3);
+  expect(odsuniecie).toBeLessThan(12);
   // Trzonek symbolu patrzy w lewo, czyli poza pomieszczenie — obrot 270 stopni.
   expect(g.rotation).toBeCloseTo(270, 0);
 });
@@ -108,7 +113,13 @@ test("przeciagniecie do sciany przykleja tak samo jak postawienie", async ({ pag
   await page.mouse.up();
 
   const po = await stan(page);
-  expect(po.elements[0].x).toBeCloseTo(lewaKrawedz(po), 3);
+  // Symbol stoi PO WEWNETRZNEJ stronie sciany i dotyka jej koncem trzonka — nie siedzi
+  // na niej srodkiem, bo urzadzenie jest montowane W scianie, a nie na jej linii.
+  // Dokladne odsuniecie (zasieg trzonka razy skala renderu symboli) pilnuja testy
+  // jednostkowe snapElementToWall; tutaj chodzi o to, ze w ogole jest i idzie W GLAB.
+  const odsuniecie = po.elements[0].x - lewaKrawedz(po);
+  expect(odsuniecie).toBeGreaterThan(3);
+  expect(odsuniecie).toBeLessThan(12);
   expect(po.elements[0].rotation).toBeCloseTo(270, 0);
 });
 

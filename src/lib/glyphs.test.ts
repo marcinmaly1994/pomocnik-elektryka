@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { socketGridMetrics, glyphBoxSize, switchGlyph, SWITCH_TYPES } from "./glyphs";
+import { socketGridMetrics, glyphBoxSize, montazPrzyscienny, SOCKET_GLYPH, switchGlyph, SWITCH_TYPES, zasiegPrzyscienny } from "./glyphs";
 
 describe("socketGridMetrics", () => {
   it("układa 1-2 gniazda w kolumnie, 3+ w rzędzie", () => {
@@ -127,5 +127,60 @@ describe("switchGlyph", () => {
         [s.y1, s.y2].forEach((y) => expect(Math.abs(y)).toBeLessThanOrEqual(h / 2));
       });
     });
+  });
+});
+
+/**
+ * Czym symbol dotyka ściany. Liczby są tu wypisane wprost, bo to one decydują, czy
+ * gniazdko stanie NA ścianie, czy ją przetnie — a różnicę widać wyłącznie na rysunku.
+ */
+describe("zasiegPrzyscienny / montazPrzyscienny", () => {
+  it("gniazdko dotyka ściany końcem trzonka, nie krawędzią pudełka", () => {
+    expect(zasiegPrzyscienny("gniazdko")).toBe(SOCKET_GLYPH.half);
+    expect(zasiegPrzyscienny("gniazdko")).toBe(10.5);
+    // Pudełko jest wyższe od symbolu (22 wobec 21) — gdyby zasięg brał się z niego,
+    // gniazdko wisiałoby pół jednostki nad ścianą.
+    expect(zasiegPrzyscienny("gniazdko")).toBeLessThan(glyphBoxSize("gniazdko").h / 2);
+  });
+
+  it("wszystkie warianty gniazda mają ten sam trzonek", () => {
+    (["gniazdko", "gniazdkoHerm", "gniazdko400", "wypustAGD"] as const).forEach((t) =>
+      expect(zasiegPrzyscienny(t)).toBe(SOCKET_GLYPH.half)
+    );
+    // Mimo że gniazdo 400 V ma wyższe pudełko — dopisek „3F" siedzi POD łukiem,
+    // czyli po stronie pomieszczenia, i do ściany nic mu nie jest.
+    expect(glyphBoxSize("gniazdko400").h).toBeGreaterThan(glyphBoxSize("gniazdko").h);
+  });
+
+  it("łącznik dotyka ściany dźwignią — koło zostaje w pomieszczeniu", () => {
+    SWITCH_TYPES.forEach((t) => {
+      const { r, segments } = switchGlyph(t);
+      const zasieg = zasiegPrzyscienny(t);
+      expect(zasieg).toBeGreaterThan(r);
+      // Nic z symbolu nie wystaje poza ten zasięg, czyli nic nie przetnie ściany.
+      segments.forEach((s) => {
+        expect(-s.y1).toBeLessThanOrEqual(zasieg + 1e-9);
+        expect(-s.y2).toBeLessThanOrEqual(zasieg + 1e-9);
+      });
+      // Połowa pudełka (18) zawiesiłaby łącznik w powietrzu — jest o kilka jednostek
+      // większa od tego, co naprawdę sięga w stronę ściany.
+      expect(zasieg).toBeLessThan(glyphBoxSize(t).h / 2);
+    });
+  });
+
+  it("plakietka z kodem dotyka ściany krawędzią pudełka", () => {
+    expect(zasiegPrzyscienny("rj45")).toBe(glyphBoxSize("rj45").h / 2);
+  });
+
+  it("oprawa zewnętrzna liczy się z promyków, które wystają poza pudełko", () => {
+    expect(zasiegPrzyscienny("oswietlenieZewn")).toBeGreaterThan(glyphBoxSize("oswietlenieZewn").h / 2);
+  });
+
+  it("kinkiet jako jedyny wymaga obrotu montażowego — jest narysowany bokiem", () => {
+    expect(montazPrzyscienny("kinkiet")).toBe(90);
+    expect(zasiegPrzyscienny("kinkiet")).toBe(11);
+    (["gniazdko", "wlacznik", "rj45", "rozdzielnica"] as const).forEach((t) =>
+      expect(montazPrzyscienny(t)).toBe(0)
+    );
   });
 });
