@@ -152,19 +152,36 @@ describe("zasiegPrzyscienny / montazPrzyscienny", () => {
     expect(glyphBoxSize("gniazdko400").h).toBeGreaterThan(glyphBoxSize("gniazdko").h);
   });
 
-  it("łącznik dotyka ściany dźwignią — koło zostaje w pomieszczeniu", () => {
+  it("łącznik dotyka ściany kołem — to ono odpowiada puszce w murze", () => {
     SWITCH_TYPES.forEach((t) => {
-      const { r, segments } = switchGlyph(t);
-      const zasieg = zasiegPrzyscienny(t);
-      expect(zasieg).toBeGreaterThan(r);
-      // Nic z symbolu nie wystaje poza ten zasięg, czyli nic nie przetnie ściany.
-      segments.forEach((s) => {
-        expect(-s.y1).toBeLessThanOrEqual(zasieg + 1e-9);
-        expect(-s.y2).toBeLessThanOrEqual(zasieg + 1e-9);
+      expect(zasiegPrzyscienny(t)).toBe(switchGlyph(t).r);
+      expect(montazPrzyscienny(t)).toBe(180);
+      // Połowa pudełka (18) oderwałaby koło od muru o jedenaście jednostek — pudełko
+      // obejmuje dźwignie we wszystkie strony, więc nie mówi nic o styku ze ścianą.
+      expect(zasiegPrzyscienny(t)).toBeLessThan(glyphBoxSize(t).h / 2);
+    });
+  });
+
+  /**
+   * Po obrocie montażowym dźwignie mają iść W POMIESZCZENIE. Sprawdzamy to na
+   * geometrii po obrocie, bo to jedyny sposób odróżnić „dźwignie w dół" od „w górę"
+   * bez patrzenia na rysunek.
+   */
+  it("po obrocie dźwignie odchodzą od ściany, nie w nią", () => {
+    const poObrocie = (t: (typeof SWITCH_TYPES)[number]) =>
+      // Obrót o 180 stopni to zmiana znaku obu współrzędnych.
+      switchGlyph(t).segments.map((s) => ({ y1: -s.y1, y2: -s.y2 }));
+    (["wlacznik", "wlacznikDwubiegunowy", "wlacznikGrupowy"] as const).forEach((t) => {
+      // Dodatnie y to strona pomieszczenia (ściana jest na -y).
+      poObrocie(t).forEach((s) => {
+        expect(s.y1).toBeGreaterThanOrEqual(-1e-9);
+        expect(s.y2).toBeGreaterThanOrEqual(-1e-9);
       });
-      // Połowa pudełka (18) zawiesiłaby łącznik w powietrzu — jest o kilka jednostek
-      // większa od tego, co naprawdę sięga w stronę ściany.
-      expect(zasieg).toBeLessThan(glyphBoxSize(t).h / 2);
+    });
+    // Schodowy i krzyżowy mają dźwignie na obie strony z definicji symbolu, więc
+    // jedna zawsze musnie ścianę — obrót niczego tu nie zmienia i nie ma czego udawać.
+    (["wlacznikSchodowy", "wlacznikKrzyzowy"] as const).forEach((t) => {
+      expect(poObrocie(t).some((s) => s.y2 < 0)).toBe(true);
     });
   });
 
@@ -176,10 +193,10 @@ describe("zasiegPrzyscienny / montazPrzyscienny", () => {
     expect(zasiegPrzyscienny("oswietlenieZewn")).toBeGreaterThan(glyphBoxSize("oswietlenieZewn").h / 2);
   });
 
-  it("kinkiet jako jedyny wymaga obrotu montażowego — jest narysowany bokiem", () => {
+  it("kinkiet ma własny obrót montażowy — jest narysowany bokiem", () => {
     expect(montazPrzyscienny("kinkiet")).toBe(90);
     expect(zasiegPrzyscienny("kinkiet")).toBe(11);
-    (["gniazdko", "wlacznik", "rj45", "rozdzielnica"] as const).forEach((t) =>
+    (["gniazdko", "rj45", "rozdzielnica"] as const).forEach((t) =>
       expect(montazPrzyscienny(t)).toBe(0)
     );
   });

@@ -206,12 +206,19 @@ export function glyphBoxSize(type: ElementType, wymiaryM?: { widthM: number; dep
  * Dodatkowy obrót glifu [stopnie], żeby jego strona przyścienna patrzyła w lokalne −Y
  * — kierunek, który `snapToWall` kieruje w ścianę.
  *
- * Kinkiet jest jedynym symbolem narysowanym „bokiem": jego plecy to pionowa kreska po
- * lewej (lokalne −X), więc bez tej korekty na pionowej ścianie wychodził obrócony o 90°
- * — plecami do podłogi zamiast do muru. Widać to było dopiero na rysunku.
+ * Kinkiet jest narysowany „bokiem": jego plecy to pionowa kreska po lewej (lokalne −X),
+ * więc bez tej korekty na pionowej ścianie wychodził obrócony o 90° — plecami do
+ * podłogi zamiast do muru. Widać to było dopiero na rysunku.
+ *
+ * Łącznik ma dźwignie narysowane skosem w GÓRĘ, czyli — po przyklejeniu — w stronę
+ * ściany. Obrót o 180° odwraca to tak, jak łącznik wygląda naprawdę: koło (puszka
+ * w murze) przy ścianie, dźwignie w stronę pomieszczenia. Dla łącznika schodowego
+ * i krzyżowego obrót nic nie zmienia, bo ich dźwignie są rozłożone symetrycznie.
  */
 export function montazPrzyscienny(type: ElementType): number {
-  return type === "kinkiet" ? 90 : 0;
+  if (type === "kinkiet") return 90;
+  if (isSwitchType(type)) return 180;
+  return 0;
 }
 
 /**
@@ -225,12 +232,12 @@ export function montazPrzyscienny(type: ElementType): number {
  */
 export function zasiegPrzyscienny(type: ElementType): number {
   if (SOCKET_TYPES.includes(type)) return SOCKET_GLYPH.half;
-  // Łącznik dotyka ściany końcem dźwigni — koło zostaje w pomieszczeniu. Dźwignia
-  // pełni tu rolę trzonka gniazdka: to ona pokazuje, w której ścianie siedzi puszka.
-  if (isSwitchType(type)) {
-    const { r, segments } = switchGlyph(type);
-    return segments.reduce((max, s) => Math.max(max, -s.y1, -s.y2), r);
-  }
+  // Łącznik dotyka ściany KOŁEM — to ono odpowiada puszce w murze, a dźwignie idą
+  // w stronę pomieszczenia (patrz obrót w `montazPrzyscienny`). Wyjątkiem są łącznik
+  // schodowy i krzyżowy: ich dźwignie z założenia wychodzą na obie strony, więc jedna
+  // zawsze musnie linię ściany. Odsunięcie ich o długość dźwigni oderwałoby koło od
+  // muru — a to ono pokazuje, gdzie naprawdę siedzi puszka.
+  if (isSwitchType(type)) return switchGlyph(type).r;
   // Kinkiet: plecy oprawy, po obrocie o 90° leżące na lokalnym −Y.
   if (type === "kinkiet") return 11;
   // Oprawa zewnętrzna jest jedynym symbolem, który WYSTAJE poza swoje pudełko:
