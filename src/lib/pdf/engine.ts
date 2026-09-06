@@ -52,36 +52,43 @@ export const PDF_FALLBACK: Record<string, string> = {
   "≤": "<=", "≥": ">=",
 };
 
-// Metryki fontów (jednostki/1000) — kody 32..126 wg AFM Helvetiki, następnie 127 (nieużywany)
-// i 128+ dla glifów zdefiniowanych w /Differences (polskie litery, potem jednostki).
-// Te tablice służą TYLKO szacowaniu układu (`pdfTextWidth`); szerokości wpisywane do
-// samego PDF-a bierze `widthsForFont` z osadzonego pliku fontu.
+/**
+ * Metryki OSADZONEGO fontu (jednostki/1000) — kody 32..126, potem 127 (nieużywany)
+ * i 128+ dla glifów z /Differences (polskie litery, dalej jednostki).
+ *
+ * Wyliczone z PLIKÓW DejaVu leżących w src/assets/fonts i pilnowane testem, który
+ * parsuje te pliki i porównuje je z tą tablicą — rozjechać się mogą tylko razem
+ * z podmianą fontu, i wtedy test to powie.
+ *
+ * HISTORIA: wcześniej stały tu metryki HELWETYKI, bo tablice powstały, zanim dokument
+ * zaczął osadzać własny font. Rozjazd nie był kosmetyczny: DejaVu jest średnio 17%
+ * (regular) i 21% (bold) szersza, na pojedynczych znakach nawet dwukrotnie. Wszystko,
+ * co mierzy tekst — przycinanie do kolumny (pdfFitText), wyrównanie do prawej,
+ * pozycja wartości za etykietą — liczyło się z zaniżonych liczb, więc napisy wychodziły
+ * poza swoje rubryki. Łatane to było lokalnie: 30% zapasu w nagłówku protokołu,
+ * szersze wcięcie kolumn w karcie obliczeń, skrócone nazwy w tabliczce. Te łatki
+ * zniknęły razem z przyczyną.
+ */
 export const PDF_W_REG = [
-  278, 278, 355, 556, 556, 889, 667, 222, 333, 333, 389, 584, 278, 333, 278, 278,
-  556, 556, 556, 556, 556, 556, 556, 556, 556, 556,
-  278, 278, 584, 584, 584, 556, 1015,
-  667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611,
-  278, 278, 278, 469, 556, 222,
-  556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500,
-  334, 260, 334, 584,
-  0, // 127
-  556, 500, 556, 222, 556, 556, 500, 500, 500, // ą ć ę ł ń ó ś ź ż
-  667, 722, 667, 556, 722, 778, 667, 611, 611, // Ą Ć Ę Ł Ń Ó Ś Ź Ż
-  768, 400, 684, 634, 318, 400, // Ω ° Δ μ · ²
+  318, 401, 460, 838, 636, 950, 780, 275, 390, 390, 500, 838, 318, 361, 318, 337,
+  636, 636, 636, 636, 636, 636, 636, 636, 636, 636, 337, 337, 838, 838, 838, 531,
+  1000, 684, 686, 698, 770, 632, 575, 775, 752, 295, 295, 656, 557, 863, 748, 787,
+  603, 787, 695, 635, 611, 732, 684, 989, 685, 611, 685, 390, 337, 390, 838, 500,
+  500, 613, 635, 550, 635, 615, 352, 635, 634, 278, 278, 579, 278, 974, 634, 612,
+  635, 635, 411, 521, 392, 634, 592, 818, 592, 592, 525, 636, 337, 636, 838, 0,
+  613, 550, 615, 284, 634, 612, 521, 525, 525, 684, 698, 632, 562, 748, 787, 635,
+  685, 685, 764, 500, 684, 636, 318, 401,
 ];
 
 export const PDF_W_BOLD = [
-  278, 333, 474, 556, 556, 889, 722, 278, 333, 333, 389, 584, 278, 333, 278, 278,
-  556, 556, 556, 556, 556, 556, 556, 556, 556, 556,
-  333, 333, 584, 584, 584, 611, 975,
-  722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611,
-  333, 278, 333, 584, 556, 278,
-  556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500,
-  389, 280, 389, 584,
-  0, // 127
-  556, 556, 556, 278, 611, 611, 556, 500, 500,
-  722, 722, 667, 611, 722, 778, 667, 611, 611,
-  830, 500, 762, 712, 400, 500, // Ω ° Δ μ · ²
+  348, 456, 521, 838, 696, 1002, 872, 306, 457, 457, 523, 838, 380, 415, 380, 365,
+  696, 696, 696, 696, 696, 696, 696, 696, 696, 696, 400, 400, 838, 838, 838, 580,
+  1000, 774, 762, 734, 830, 683, 683, 821, 837, 372, 372, 775, 637, 995, 837, 850,
+  733, 850, 770, 720, 682, 812, 774, 1103, 771, 724, 725, 457, 365, 457, 838, 500,
+  500, 675, 716, 593, 716, 678, 435, 716, 712, 343, 343, 665, 343, 1042, 712, 687,
+  716, 716, 493, 595, 478, 712, 652, 924, 645, 652, 582, 712, 365, 712, 838, 0,
+  675, 593, 678, 371, 712, 687, 595, 582, 582, 774, 734, 683, 642, 837, 850, 720,
+  725, 725, 850, 500, 774, 736, 380, 438,
 ];
 
 /** Zamienia znak na kod używany w strumieniu PDF (z uwzględnieniem polskich znaków i zamienników). */
@@ -369,7 +376,8 @@ function bytesToBinaryString(bytes: Uint8Array): string {
 }
 
 /** Realne szerokości znaków (kody 32..145) z osadzonego fontu, z awaryjnym spadkiem na
- *  przybliżone tabele Helvetiki, gdyby jakiegoś code pointa w foncie zabrakło. */
+ *  tabelę z tego modułu, gdyby jakiegoś code pointa w foncie zabrakło (dziś nie brakuje
+ *  żadnego — pilnuje tego test „każdy używany kod ma szerokość z fontu"). */
 function widthsForFont(font: ParsedTtf, fallback: number[]): number[] {
   const widths: number[] = [];
   for (let code = 32; code <= PDF_LAST_CHAR; code++) {

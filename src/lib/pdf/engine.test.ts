@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, type CzesciDokumentu, type PdfImage } from "./engine";
+import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, PDF_LAST_CHAR, PDF_POLISH, PDF_W_BOLD, PDF_W_REG, type CzesciDokumentu, type PdfImage } from "./engine";
 import { parseTtf } from "./ttf";
 import { stubPdfFontFetch } from "./testFontMock";
 
@@ -324,5 +324,61 @@ describe("polaczDokumenty + assemblePdfBytes", () => {
     expect((out.match(/\/Type \/Page /g) || []).length).toBe(2);
     expect(out).toContain("/MediaBox [0 0 595.28 841.89]");
     expect(out).toContain("/MediaBox [0 0 841.89 595.28]");
+  });
+});
+
+/**
+ * Metryki tekstu MUSZA odpowiadac osadzonemu fontowi.
+ *
+ * Przez dlugi czas nie odpowiadaly: w tablicach stala Helvetica, a dokument osadzal
+ * DejaVu. Kazde przyciecie do kolumny i kazde wyrownanie do prawej liczylo sie
+ * z zanizonych liczb, wiec napisy wychodzily poza swoje rubryki — widac to bylo
+ * dopiero na wyrenderowanej kartce, nigdy w tescie. Ten test zamyka te droge:
+ * tablice sa porownywane z PLIKAMI fontow, wiec rozjechac sie moga tylko razem
+ * z ich podmiana, i wtedy powie o tym czerwony test, a nie uzytkownik.
+ */
+describe("metryki fontu", () => {
+  /** Kod PDF -> code point, odwrocone z `PDF_POLISH` (ta sama droga co `widthsForFont`). */
+  const codePointDlaKodu: Record<number, number> = {};
+  for (const ch of Object.keys(PDF_POLISH)) codePointDlaKodu[PDF_POLISH[ch]] = ch.codePointAt(0)!;
+
+  const zFontu = (font: ReturnType<typeof parseTtf>) => {
+    const out: number[] = [];
+    for (let code = 32; code <= PDF_LAST_CHAR; code++) {
+      if (code === 127) {
+        out.push(0);
+        continue;
+      }
+      const cp = code <= 126 ? code : codePointDlaKodu[code];
+      out.push(cp !== undefined ? (font.widthOf(cp) ?? 0) : 0);
+    }
+    return out;
+  };
+
+  it("tablica regular odpowiada plikowi DejaVuSans.ttf", () => {
+    expect(PDF_W_REG).toEqual(zFontu(regularFont));
+  });
+
+  it("tablica bold odpowiada plikowi DejaVuSans-Bold.ttf", () => {
+    expect(PDF_W_BOLD).toEqual(zFontu(boldFont));
+  });
+
+  /** Kazdy kod ma wlasna szerokosc — brak wpisu oznaczalby ciche 556 z `pdfCharWidth`,
+   *  czyli znow zgadywanie zamiast pomiaru. */
+  it("kazdy uzywany kod ma szerokosc z fontu", () => {
+    for (let code = 32; code <= PDF_LAST_CHAR; code++) {
+      if (code === 127) continue;
+      expect(pdfCharWidth(code, false)).toBeGreaterThan(0);
+      expect(pdfCharWidth(code, true)).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * Sedno dla ukladu stron: bold jest SZERSZY od regular. Tablice helwetyckie mowily
+   * to samo, ale o innych proporcjach — i to na nich opieraly sie wszystkie rubryki.
+   */
+  it("pogrubiony napis jest szerszy od zwyklego", () => {
+    const napis = "Świadectwo wzorcowania:";
+    expect(pdfTextWidth(napis, 8.5, true)).toBeGreaterThan(pdfTextWidth(napis, 8.5, false));
   });
 });

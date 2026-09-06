@@ -29,18 +29,27 @@ interface Kolumna {
 const STRONA_W = 841.89;
 const STRONA_H = 595.28;
 
+/**
+ * Szerokości dobrane do NAJDŁUŻSZYCH realnych wartości, zmierzonych metrykami
+ * osadzonego fontu (patrz test „najdłuższe realne wartości nie są ucinane").
+ * Każda kolumna ma zapas 10 pt na odstęp od sąsiadki.
+ *
+ * Kolumny liczbowe były wcześniej za wąskie — „27,4 A" nie mieściło się w rubryce Ib —
+ * ale nie było tego widać, bo szerokość liczyły metryki helwetyckie, zaniżone o jedną
+ * piątą względem DejaVu (patrz PDF_W_REG w engine.ts).
+ */
 const COLS: Kolumna[] = [
-  { label: "Obwód", w: 178 },
+  { label: "Obwód", w: 220 },
   { label: "Faza", w: 34 },
-  { label: "Ib", w: 44, right: true },
-  { label: "Przekrój", w: 58, right: true },
-  { label: "Przewód", w: 104 },
-  { label: "Aparat", w: 54 },
-  { label: "Iz", w: 44, right: true },
+  { label: "Ib", w: 42, right: true },
+  { label: "Przekrój", w: 52, right: true },
+  { label: "Przewód", w: 100 },
+  { label: "Aparat", w: 48 },
+  { label: "Iz", w: 42, right: true },
   { label: "Długość", w: 52, right: true },
-  { label: "ΔU / limit", w: 68, right: true },
-  { label: "Zs max", w: 54, right: true },
-  { label: "RCD", w: 42 },
+  { label: "ΔU / limit", w: 64, right: true },
+  { label: "Zs max", w: 50, right: true },
+  { label: "RCD", w: 38 },
 ];
 
 /**
@@ -54,14 +63,14 @@ export const SZEROKOSC_TABELI = SZEROKOSCI.reduce((a, w) => a + w, 0);
 export const STRONA = { w: STRONA_W, h: STRONA_H, margines: 42 };
 
 /**
- * O ile tekst wyrownany DO PRAWEJ konczy sie przed krawedzia kolumny [pt].
+ * Odstęp między treścią sąsiednich kolumn [pt] — tyle przed prawą krawędzią kolumny
+ * kończy się tekst wyrównany do prawej i do tyle przycinany jest tekst do lewej.
  *
- * Wiecej niz odstep kolumn lewych (5 pt), bo tabele metryk w silniku sa helwetyckie,
- * a dokument osadza wlasny font: realna szerokosc napisu bywa wieksza od policzonej,
- * wiec napis wyrownany do prawej wychodzi poza wyliczony koniec. Przy 10 pt naglowek
- * „Zs max" dotykal sasiedniego „RCD" — widac to bylo dopiero na wyrenderowanej kartce.
+ * Było tu 16 pt, bo metryki silnika zaniżały szerokość napisów i wyrównanie do prawej
+ * wychodziło poza wyliczony koniec — nagłówek „Zs max" dotykał sąsiedniego „RCD".
+ * Odkąd metryki są prawdziwe (patrz `PDF_W_REG` w engine.ts), wystarczy zwykły odstęp.
  */
-export const WCIECIE_PRAWE = 16;
+export const WCIECIE_PRAWE = 10;
 
 const ROW_H = 17;
 const HEAD_H = 20;
@@ -155,7 +164,7 @@ export function buildCalcSheetDoc(
     const komorki = komorkiObliczen(s, dlugosci.get(s.id));
     let cx = M + 5;
     COLS.forEach((c, k) => {
-      const tekst = pdfFitText(komorki[k], c.w - WCIECIE_PRAWE - 2, 8.5, false);
+      const tekst = pdfFitText(komorki[k], c.w - WCIECIE_PRAWE, 8.5, false);
       if (c.right) tekstDoPrawej(doc, tekst, cx + c.w - WCIECIE_PRAWE, base, 8.5);
       else doc.text(tekst, cx, base, 8.5);
       cx += c.w;

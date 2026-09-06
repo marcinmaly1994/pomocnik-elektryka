@@ -93,9 +93,8 @@ export function buildStronaTytulowaDoc(header: DocumentHeader, pozycje: string[]
     pageW: STRONA_W,
     pageH: STRONA_H,
     // Krótka nazwa w tabliczce, mimo że nagłówek strony brzmi pełniej: rubryka
-    // „RYSUNEK / DOKUMENT" ma 118 pt, a przycinanie (`pdfFitText`) liczy szerokość
-    // z tablic helwetyckich, gdy dokument osadza DejaVu — dłuższy napis wychodził
-    // poza rubrykę i nachodził na numer rysunku. Widać to było dopiero na kartce.
+    // „RYSUNEK / DOKUMENT" ma 118 pt, w które pełna nazwa się nie mieści. Przycięta
+    // („Dokumentacja instala..") wygląda jak usterka, a nie jak skrót.
     footer: (d) => drawTitleBlock(d, header, "Dokumentacja"),
   });
   const M = doc.margin;
