@@ -9,4 +9,20 @@
 #
 # Vite kopiuje zawartość public/ do dist/ przy budowaniu, więc plik trafia na
 # hosting sam, bez dodatkowego kroku we wdrożeniu.
+# Cztery kalkulatory scalone w „Dobór obwodu" — stare adresy prowadzą do właściwego
+# TRYBU nowego, a nie tylko na nową stronę. 301, bo to przeniesienie na stałe:
+# przeglądarka i wyszukiwarki mają zapamiętać nowy adres. Aplikacja robi to samo po
+# swojej stronie (patrz STARE_ADRESY w CalculatorsTab) — te reguły obsługują wejścia
+# BEZPOŚREDNIE, zanim jeszcze cokolwiek się uruchomi.
+#
+# KOLEJNOŚĆ MA ZNACZENIE: obowiązuje PIERWSZA pasująca reguła, więc te muszą stać
+# NAD regułą catch-all — inaczej wszystko złapie „/*” i żadne przekierowanie nie
+# zadziała.
+
+/kalkulatory/przekroj        /kalkulatory/obwod?tryb=przekroj        301
+/kalkulatory/zabezpieczenie  /kalkulatory/obwod?tryb=zabezpieczenie  301
+/kalkulatory/pelny-dobor     /kalkulatory/obwod?tryb=pelny           301
+/kalkulatory/pelnyDobor      /kalkulatory/obwod?tryb=pelny           301
+/kalkulatory/wlz             /kalkulatory/obwod?tryb=wlz             301
+
 /*    /index.html   200

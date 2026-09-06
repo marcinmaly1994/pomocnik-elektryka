@@ -18,6 +18,22 @@ async function openCalculators(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
 }
 
+/**
+ * Cztery dawne kalkulatory (przekroj, zabezpieczenie, WLZ, pelny dobor) sa dzis
+ * TRYBAMI jednego „Doboru obwodu" — otwarcie to wybor kalkulatora plus wybor trybu.
+ */
+const TRYB_OBWODU = {
+  przekroj: "Szukam przekroju",
+  zabezpieczenie: "Mam przekrój",
+  wlz: "WLZ",
+  pelny: "Pełny dobór",
+} as const;
+
+async function otworzObwod(page: import("@playwright/test").Page, tryb: keyof typeof TRYB_OBWODU) {
+  await page.getByRole("button", { name: "Dobór obwodu" }).first().click();
+  await page.getByRole("tab", { name: TRYB_OBWODU[tryb], exact: true }).click();
+}
+
 async function planBox(page: import("@playwright/test").Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
   return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
@@ -26,7 +42,7 @@ async function planBox(page: import("@playwright/test").Page) {
 test("dobór przekroju dla domyślnych danych zgadza się z silnikiem Rozdzielnicy (2,5 mm²)", async ({ page }) => {
   await openCalculators(page);
 
-  // domyślnie otwiera się „Dobór przekroju przewodu": gniazda, 2000 W, 1-fazowe,
+  // domyślnie otwiera się „Dobór obwodu" w trybie „Szukam przekroju": gniazda, 2000 W, 1-fazowe,
   // 15 m, pod tynkiem (B2) — te same założenia, z którymi liczy `sizeCircuit`
   // w src/lib/panel/sizing.test.ts
   const result = page.locator(".pe-result").first();
@@ -85,7 +101,7 @@ test("dobór przekroju pokazuje, jak sposób ułożenia zmienia obciążalność
  */
 test("dobór zabezpieczenia do przekroju 2,5 mm² daje B16 i rozpisany warunek Ib ≤ In ≤ Iz", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Dobór zabezpieczenia/ }).click();
+  await otworzObwod(page, "zabezpieczenie");
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("B16 1P");
@@ -99,7 +115,7 @@ test("dobór zabezpieczenia do przekroju 2,5 mm² daje B16 i rozpisany warunek I
 
 test("zbyt cienki przewód do danego prądu to BŁĄD doboru zabezpieczenia, nie cichy większy wyłącznik", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Dobór zabezpieczenia/ }).click();
+  await otworzObwod(page, "zabezpieczenie");
 
   // 1,5 mm² pod tynkiem (B2) = 16,5 A; 6000 W / 230 V = 26,1 A > Iz
   await page.getByLabel("Przekrój żyły przewodu").selectOption("1.5");
@@ -128,20 +144,19 @@ test("zbyt cienki przewód do danego prądu to BŁĄD doboru zabezpieczenia, nie
 test("dobór przekroju, zabezpieczenia i spadek napięcia stoją w kolejności etapów pracy i mają rozdzielone role", async ({ page }) => {
   await openCalculators(page);
 
-  const pozycje = page.locator("button", { hasText: /^(Spadek napięcia|Dobór przekroju przewodu|Dobór zabezpieczenia)/ });
-  await expect(pozycje.nth(0)).toContainText("Dobór przekroju przewodu");
-  await expect(pozycje.nth(1)).toContainText("Dobór zabezpieczenia");
-  await expect(pozycje.nth(2)).toContainText("Spadek napięcia");
+  const pozycje = page.locator("button", { hasText: /^(Spadek napięcia|Dobór obwodu)/ });
+  await expect(pozycje.nth(0)).toContainText("Dobór obwodu");
+  await expect(pozycje.nth(1)).toContainText("Spadek napięcia");
 
-  // w doborze PRZEKROJU przekrój jest wynikiem, więc nie ma go wśród pól wejściowych
-  await expect(page.getByRole("heading", { name: "Dobór przekroju przewodu" })).toBeVisible();
+  // w trybie „Szukam przekroju" przekrój jest WYNIKIEM, więc nie ma go wśród pól wejściowych
+  await otworzObwod(page, "przekroj");
   await expect(page.getByLabel("Przekrój żyły")).toHaveCount(0);
 
   // w obu pozostałych jest polem WEJŚCIOWYM — to je odróżnia
   await page.getByRole("button", { name: /^Spadek napięcia/ }).click();
   await expect(page.getByLabel("Przekrój żyły")).toBeVisible();
 
-  await page.getByRole("button", { name: /^Dobór zabezpieczenia/ }).click();
+  await otworzObwod(page, "zabezpieczenie");
   await expect(page.getByLabel("Przekrój żyły przewodu")).toBeVisible();
 });
 
@@ -514,7 +529,7 @@ test("EV: bez wbudowanej ochrony DC wymagany jest RCD typu B albo A+RDC-DD", asy
  */
 test("pełny dobór: domyślne dane — o przekroju decyduje obciążalność, pozostałe kryteria nieocenione bez danych", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Pełny dobór/ }).click();
+  await otworzObwod(page, "pelny");
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("10,0 mm²");
@@ -525,7 +540,7 @@ test("pełny dobór: domyślne dane — o przekroju decyduje obciążalność, p
 
 test("pełny dobór: włączenie ochrony i wytrzymałości zwarciowej podnosi przekrój i zmienia decydujące kryterium", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Pełny dobór/ }).click();
+  await otworzObwod(page, "pelny");
 
   await page.getByLabel(/Sprawdź też ochronę przeciwporażeniową/).check();
   await page.getByLabel(/Sprawdź też wytrzymałość zwarciową/).check();
@@ -538,7 +553,7 @@ test("pełny dobór: włączenie ochrony i wytrzymałości zwarciowej podnosi pr
 
 test("pełny dobór: obwody 1-fazowe są jawnie odrzucone — brak tablicy dla dwóch żył obciążonych", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Pełny dobór/ }).click();
+  await otworzObwod(page, "pelny");
 
   await expect(page.getByText(/Tylko obwody 3-fazowe/)).toBeVisible();
   await expect(page.getByText(/tablica dla dwóch żył obciążonych.*nie została jeszcze dostarczona/)).toBeVisible();
@@ -546,7 +561,7 @@ test("pełny dobór: obwody 1-fazowe są jawnie odrzucone — brak tablicy dla d
 
 test("pełny dobór: metoda gruntowa (D2) pomija korektę temperatury/grupowania i mówi o tym wprost", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: /^Pełny dobór/ }).click();
+  await otworzObwod(page, "pelny");
 
   await page.getByLabel("Metoda odniesienia").selectOption("D2");
   await expect(page.getByText(/Metoda gruntowa — bez korekty/)).toBeVisible();
@@ -629,7 +644,7 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
 
 test("dobór WLZ dla domyślnych danych (20 A, 3F, 20 m, w rurce) -> 10 mm² / B20, ten sam silnik co obwód odbiorczy", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: "Dobór WLZ" }).click();
+  await otworzObwod(page, "wlz");
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("YDYp 5x10 mm²");
@@ -639,7 +654,7 @@ test("dobór WLZ dla domyślnych danych (20 A, 3F, 20 m, w rurce) -> 10 mm² / B
 
 test("Wczytaj z bilansu mocy pobiera prąd zapotrzebowany 3-fazowy z kalkulatora Bilans mocy", async ({ page }) => {
   await openCalculators(page);
-  await page.getByRole("button", { name: "Dobór WLZ" }).click();
+  await otworzObwod(page, "wlz");
 
   // domyślne odbiorniki bilansu (6000+7000+3000 W, ks=0,7) -> Pz=11 200 W ->
   // I3f = 11200/(√3·400) ≈ 16,17 A, zaokrąglone w UI do 16,2
@@ -707,4 +722,62 @@ test("kalkulatory nie siegaja do rzutu, nawet gdy projekt ma gotowy obwod", asyn
   for (const nazwa of await nazwy.all()) {
     expect(await nazwa.inputValue()).not.toMatch(/Obwód/);
   }
+});
+
+/**
+ * Scalenie czterech kalkulatorow w „Dobor obwodu".
+ *
+ * Przekroj, zabezpieczenie, WLZ i pelny dobor pytaly o to samo z czterech stron —
+ * uzytkownik musial najpierw zgadnac, w ktorym z nich jest jego pytanie. Teraz to
+ * jeden kalkulator z przelacznikiem trybu i wspolna lista czterech kryteriow.
+ */
+test("stare adresy czterech kalkulatorow prowadza do wlasciwego TRYBU nowego", async ({ page }) => {
+  const mapowanie: [string, string][] = [
+    ["przekroj", "tryb=przekroj"],
+    ["zabezpieczenie", "tryb=zabezpieczenie"],
+    ["pelny-dobor", "tryb=pelny"],
+    ["wlz", "tryb=wlz"],
+  ];
+  for (const [stary, oczekiwany] of mapowanie) {
+    await page.goto("/kalkulatory/" + stary);
+    // Link przyslany komus ma otworzyc to, po co go przyslano — nie ekran, na ktorym
+    // trzeba zgadnac, gdzie sie to teraz znajduje.
+    await expect
+      .poll(() => {
+        const u = new URL(page.url());
+        return u.pathname + u.search;
+      })
+      .toBe("/kalkulatory/obwod?" + oczekiwany);
+  }
+});
+
+test("przelacznik trybu zmienia adres i wraca do tego samego trybu po odswiezeniu", async ({ page }) => {
+  await page.goto("/kalkulatory/obwod");
+  await page.getByRole("tab", { name: "WLZ", exact: true }).click();
+  await expect(page).toHaveURL(/tryb=wlz/);
+
+  await page.reload();
+  await expect(page.getByRole("tab", { name: "WLZ", exact: true })).toHaveAttribute("aria-selected", "true");
+});
+
+test("cztery kryteria widac zawsze, a te bez danych sa NIEOCENIONE zamiast zielone", async ({ page }) => {
+  await page.goto("/kalkulatory/obwod?tryb=przekroj");
+  const karta = page.locator(".pe-card").filter({ hasText: "Cztery kryteria doboru" });
+
+  await expect(karta.getByText("obciążalność długotrwała")).toBeVisible();
+  await expect(karta.getByText("spadek napięcia", { exact: true })).toBeVisible();
+  await expect(karta.getByText("ochrona przeciwporażeniowa")).toBeVisible();
+  await expect(karta.getByText("wytrzymałość zwarciowa cieplna")).toBeVisible();
+  // Bez impedancji petli i pradu zwarcia dwa ostatnie kryteria nie sa ocenione —
+  // i mowia, czego im brakuje, zamiast pokazywac ptaszka.
+  await expect(karta).toContainText("Podaj impedancję pętli");
+  await expect(karta).toContainText("Podaj spodziewany prąd zwarcia");
+
+  await karta.getByLabel("Impedancja pętli Zs").fill("1.5");
+  await expect(karta).toContainText("Zs 1,50 Ω ≤ Zs max 2,73 Ω");
+
+  // Warunek cieplny potrafi ODRZUCIC przekroj, ktory przeszedl trzy pozostale kryteria.
+  await karta.getByLabel(/Spodziewany prąd zwarcia/).fill("500");
+  await expect(karta).toContainText("Ik·√t/k");
+  await expect(karta).toContainText("przekroczenie");
 });
