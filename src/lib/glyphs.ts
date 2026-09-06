@@ -40,6 +40,26 @@ export function isSwitchType(type: ElementType): boolean {
   return (SWITCH_TYPES as readonly ElementType[]).includes(type);
 }
 
+/**
+ * Geometria symbolu gniazda: trzonek i łuk. Trzymana tu, bo rysują ją DWA niezależne
+ * renderery (SVG w bibliotece i Konva na planie), a od niej zależy jeszcze trzecia
+ * rzecz — punkt, którym gniazdko dotyka ściany (`zasiegPrzyscienny`). Trzy kopie tych
+ * samych liczb rozjechałyby się przy pierwszej zmianie rozmiaru symbolu.
+ */
+export const SOCKET_GLYPH = {
+  /** Promień łuku. */
+  r: 9,
+  /** Długość trzonka, od końca do cięciwy łuku. */
+  stemLen: 12,
+  /** Połowa wysokości symbolu — trzonek zaczyna się na `-half`, łuk kończy na `+half`. */
+  get half() {
+    return (this.stemLen + this.r) / 2;
+  },
+} as const;
+
+/** Typy rysowane symbolem gniazda (łuk + trzonek), niezależnie od tego, co jest w łuku. */
+const SOCKET_TYPES: readonly ElementType[] = ["gniazdko", "gniazdkoHerm", "gniazdko400", "wypustAGD"];
+
 const SW_R = 7; // promień koła łącznika
 const SW_ROD = 12; // długość dźwigni, licząc od krawędzi koła
 const SW_TICK = 5; // kreska oznaczająca biegun
@@ -170,4 +190,62 @@ export function glyphBoxSize(type: ElementType, wymiaryM?: { widthM: number; dep
     return { w: 26, h: 26 };
   }
   return { w: 26, h: 24 }; // plakietki z kodem
+}
+
+/**
+ * Osprzęt przyścienny: czym symbol DOTYKA ściany i jak musi być do niej obrócony.
+ *
+ * Przyciąganie stawiało środek symbolu na linii ściany, więc gniazdko wychodziło
+ * trzonkiem na zewnątrz budynku, łącznik siedział na ścianie okrakiem (pół koła w
+ * pokoju, pół w murze), a plakietka RJ45 była przecięta na pół. W rysunku
+ * instalacyjnym symbol stoi PO STRONIE POMIESZCZENIA i dotyka ściany tym, czym
+ * urządzenie w nią wchodzi.
+ */
+
+/**
+ * Dodatkowy obrót glifu [stopnie], żeby jego strona przyścienna patrzyła w lokalne −Y
+ * — kierunek, który `snapToWall` kieruje w ścianę.
+ *
+ * Kinkiet jest narysowany „bokiem": jego plecy to pionowa kreska po lewej (lokalne −X),
+ * więc bez tej korekty na pionowej ścianie wychodził obrócony o 90° — plecami do
+ * podłogi zamiast do muru. Widać to było dopiero na rysunku.
+ *
+ * Łącznik ma dźwignie narysowane skosem w GÓRĘ, czyli — po przyklejeniu — w stronę
+ * ściany. Obrót o 180° odwraca to tak, jak łącznik wygląda naprawdę: koło (puszka
+ * w murze) przy ścianie, dźwignie w stronę pomieszczenia. Dla łącznika schodowego
+ * i krzyżowego obrót nic nie zmienia, bo ich dźwignie są rozłożone symetrycznie.
+ */
+export function montazPrzyscienny(type: ElementType): number {
+  if (type === "kinkiet") return 90;
+  if (isSwitchType(type)) return 180;
+  return 0;
+}
+
+/**
+ * Jak daleko od środka symbolu — po obrocie z `montazPrzyscienny` — sięga jego strona
+ * przyścienna [jednostki glifu]. O tyle trzeba odsunąć środek od linii ściany, żeby
+ * symbol jej dotknął, zamiast ją przecinać.
+ *
+ * Liczone z RZECZYWISTEJ geometrii symbolu, nie z pudełka `glyphBoxSize`: pudełko
+ * łącznika (36 × 36) jest symetrycznym obrysem obejmującym dźwignie we wszystkie
+ * strony, więc odsunięcie o jego połowę zawiesiłoby łącznik w powietrzu.
+ */
+export function zasiegPrzyscienny(type: ElementType): number {
+  if (SOCKET_TYPES.includes(type)) return SOCKET_GLYPH.half;
+  // Łącznik dotyka ściany KOŁEM — to ono odpowiada puszce w murze, a dźwignie idą
+  // w stronę pomieszczenia (patrz obrót w `montazPrzyscienny`). Wyjątkiem są łącznik
+  // schodowy i krzyżowy: ich dźwignie z założenia wychodzą na obie strony, więc jedna
+  // zawsze musnie linię ściany. Odsunięcie ich o długość dźwigni oderwałoby koło od
+  // muru — a to ono pokazuje, gdzie naprawdę siedzi puszka.
+  if (isSwitchType(type)) return switchGlyph(type).r;
+  // Kinkiet: plecy oprawy, po obrocie o 90° leżące na lokalnym −Y.
+  if (type === "kinkiet") return 11;
+  // Oprawa zewnętrzna jest jedynym symbolem, który WYSTAJE poza swoje pudełko:
+  // promyki sięgają 13,5 przy pudełku 26 × 26. Pół jednostki, ale to właśnie ono
+  // przecinałoby linię ściany.
+  if (type === "oswietlenieZewn") return 13.5;
+  // Reszta (plakietki z kodem, rozdzielnica, roleta, taśma, puszka, czujnik ruchu,
+  // wentylator, oprawa zewnętrzna) to symbole wpisane w swoje pudełko — dotykają
+  // ściany jego krawędzią.
+  return glyphBoxSize(type).h / 2;
 }

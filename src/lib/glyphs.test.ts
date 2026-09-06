@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { socketGridMetrics, glyphBoxSize, switchGlyph, SWITCH_TYPES } from "./glyphs";
+import { socketGridMetrics, glyphBoxSize, montazPrzyscienny, SOCKET_GLYPH, switchGlyph, SWITCH_TYPES, zasiegPrzyscienny } from "./glyphs";
 
 describe("socketGridMetrics", () => {
   it("układa 1-2 gniazda w kolumnie, 3+ w rzędzie", () => {
@@ -127,5 +127,77 @@ describe("switchGlyph", () => {
         [s.y1, s.y2].forEach((y) => expect(Math.abs(y)).toBeLessThanOrEqual(h / 2));
       });
     });
+  });
+});
+
+/**
+ * Czym symbol dotyka ściany. Liczby są tu wypisane wprost, bo to one decydują, czy
+ * gniazdko stanie NA ścianie, czy ją przetnie — a różnicę widać wyłącznie na rysunku.
+ */
+describe("zasiegPrzyscienny / montazPrzyscienny", () => {
+  it("gniazdko dotyka ściany końcem trzonka, nie krawędzią pudełka", () => {
+    expect(zasiegPrzyscienny("gniazdko")).toBe(SOCKET_GLYPH.half);
+    expect(zasiegPrzyscienny("gniazdko")).toBe(10.5);
+    // Pudełko jest wyższe od symbolu (22 wobec 21) — gdyby zasięg brał się z niego,
+    // gniazdko wisiałoby pół jednostki nad ścianą.
+    expect(zasiegPrzyscienny("gniazdko")).toBeLessThan(glyphBoxSize("gniazdko").h / 2);
+  });
+
+  it("wszystkie warianty gniazda mają ten sam trzonek", () => {
+    (["gniazdko", "gniazdkoHerm", "gniazdko400", "wypustAGD"] as const).forEach((t) =>
+      expect(zasiegPrzyscienny(t)).toBe(SOCKET_GLYPH.half)
+    );
+    // Mimo że gniazdo 400 V ma wyższe pudełko — dopisek „3F" siedzi POD łukiem,
+    // czyli po stronie pomieszczenia, i do ściany nic mu nie jest.
+    expect(glyphBoxSize("gniazdko400").h).toBeGreaterThan(glyphBoxSize("gniazdko").h);
+  });
+
+  it("łącznik dotyka ściany kołem — to ono odpowiada puszce w murze", () => {
+    SWITCH_TYPES.forEach((t) => {
+      expect(zasiegPrzyscienny(t)).toBe(switchGlyph(t).r);
+      expect(montazPrzyscienny(t)).toBe(180);
+      // Połowa pudełka (18) oderwałaby koło od muru o jedenaście jednostek — pudełko
+      // obejmuje dźwignie we wszystkie strony, więc nie mówi nic o styku ze ścianą.
+      expect(zasiegPrzyscienny(t)).toBeLessThan(glyphBoxSize(t).h / 2);
+    });
+  });
+
+  /**
+   * Po obrocie montażowym dźwignie mają iść W POMIESZCZENIE. Sprawdzamy to na
+   * geometrii po obrocie, bo to jedyny sposób odróżnić „dźwignie w dół" od „w górę"
+   * bez patrzenia na rysunek.
+   */
+  it("po obrocie dźwignie odchodzą od ściany, nie w nią", () => {
+    const poObrocie = (t: (typeof SWITCH_TYPES)[number]) =>
+      // Obrót o 180 stopni to zmiana znaku obu współrzędnych.
+      switchGlyph(t).segments.map((s) => ({ y1: -s.y1, y2: -s.y2 }));
+    (["wlacznik", "wlacznikDwubiegunowy", "wlacznikGrupowy"] as const).forEach((t) => {
+      // Dodatnie y to strona pomieszczenia (ściana jest na -y).
+      poObrocie(t).forEach((s) => {
+        expect(s.y1).toBeGreaterThanOrEqual(-1e-9);
+        expect(s.y2).toBeGreaterThanOrEqual(-1e-9);
+      });
+    });
+    // Schodowy i krzyżowy mają dźwignie na obie strony z definicji symbolu, więc
+    // jedna zawsze musnie ścianę — obrót niczego tu nie zmienia i nie ma czego udawać.
+    (["wlacznikSchodowy", "wlacznikKrzyzowy"] as const).forEach((t) => {
+      expect(poObrocie(t).some((s) => s.y2 < 0)).toBe(true);
+    });
+  });
+
+  it("plakietka z kodem dotyka ściany krawędzią pudełka", () => {
+    expect(zasiegPrzyscienny("rj45")).toBe(glyphBoxSize("rj45").h / 2);
+  });
+
+  it("oprawa zewnętrzna liczy się z promyków, które wystają poza pudełko", () => {
+    expect(zasiegPrzyscienny("oswietlenieZewn")).toBeGreaterThan(glyphBoxSize("oswietlenieZewn").h / 2);
+  });
+
+  it("kinkiet ma własny obrót montażowy — jest narysowany bokiem", () => {
+    expect(montazPrzyscienny("kinkiet")).toBe(90);
+    expect(zasiegPrzyscienny("kinkiet")).toBe(11);
+    (["gniazdko", "rj45", "rozdzielnica"] as const).forEach((t) =>
+      expect(montazPrzyscienny(t)).toBe(0)
+    );
   });
 });

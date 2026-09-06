@@ -37,7 +37,7 @@ import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
-import { przyscienny, snapToWall } from "@/lib/wallSnap";
+import { przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
@@ -1087,7 +1087,12 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   function zPrzyciaganiemDoSciany(p: Point, type: ElementType, obecnyObrot = 0) {
     if (!wallSnapOn || !przyscienny(type)) return { x: p.x, y: p.y, rotation: obecnyObrot };
     const tolerancja = mpu ? WALL_SNAP_TOLERANCE_M / mpu : GRID / 2;
-    return snapToWall(p, walls, roomShapes, tolerancja) ?? { x: p.x, y: p.y, rotation: obecnyObrot };
+    // Skala renderu symboli musi tu dojść ta sama, którą rysuje płótno — odsunięcie od
+    // ściany jest podane w jednostkach glifu, a element żyje w jednostkach planu.
+    const skala = elementRenderScale(mpu, elementScale);
+    return (
+      snapElementToWall(p, walls, roomShapes, tolerancja, type, skala) ?? { x: p.x, y: p.y, rotation: obecnyObrot }
+    );
   }
 
   function handlePlaceElement(p: Point) {

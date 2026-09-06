@@ -1,5 +1,6 @@
 import type { ElementType, Point, RoomShape, Wall } from "@/types";
 import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
+import { montazPrzyscienny, zasiegPrzyscienny } from "@/lib/glyphs";
 
 /**
  * Przyklejanie osprzętu do ściany, z obrotem symbolu prostopadle do niej.
@@ -115,19 +116,71 @@ export function snapToWall(
    *
    * Gdy więc punkt nie leży w żadnym obrysie, bierzemy pomieszczenie, do którego
    * należy DOPASOWANA KRAWĘDŹ — to ono jest wnętrzem, od którego trzonek ma uciekać.
-   * Zostaje jeszcze przypadek ściany bez pomieszczenia (plan rysowany samymi
-   * ścianami): tam nie ma żadnego „wnętrza" i zostaje pierwsza normalna — symbol
-   * nadal jest prostopadły, czyli i tak bliżej prawdy niż domyślne 0°.
+   *
+   * Zostaje przypadek ściany bez pomieszczenia (plan rysowany samymi ścianami): tam
+   * żadnego „wnętrza" nie ma, więc pytamy, z której strony ściany użytkownik KLIKNĄŁ
+   * — to ta strona jest dla niego wnętrzem. Wcześniej padała tu po prostu pierwsza
+   * normalna, czyli w połowie przypadków zła: symbol był prostopadły, ale odwrócony
+   * tyłem. Odkąd `snapElementToWall` odsuwa symbol od ściany, ta sama pomyłka
+   * wyrzucałaby go jeszcze na zewnątrz budynku, więc zgadywanie przestało być
+   * niegroźne.
    */
   const pokoj = roomShapes.find((r) => pointInPolygon(p, r.points)) ?? trafienie.pokoj;
-  let wybrana = n1;
-  if (pokoj) {
-    const c = srodek(pokoj.points);
-    const naZewnatrz = { x: trafienie.point.x - c.x, y: trafienie.point.y - c.y };
-    const dot = (n: Point) => n.x * naZewnatrz.x + n.y * naZewnatrz.y;
-    wybrana = dot(n1) >= dot(n2) ? n1 : n2;
-  }
+  const odWnetrza = pokoj
+    ? (() => {
+        const c = srodek(pokoj.points);
+        return { x: trafienie.point.x - c.x, y: trafienie.point.y - c.y };
+      })()
+    : { x: trafienie.point.x - p.x, y: trafienie.point.y - p.y };
+  const dot = (n: Point) => n.x * odWnetrza.x + n.y * odWnetrza.y;
+  // Remis (klik dokładnie na linii ściany, bez pomieszczenia) rozstrzyga `n1` — tak
+  // jak dotąd, bo nie ma wtedy żadnej przesłanki, która strona jest wnętrzem.
+  const wybrana = dot(n1) >= dot(n2) ? n1 : n2;
 
   const rotation = obrotDlaKierunku(wybrana.x, wybrana.y);
   return { x: trafienie.point.x, y: trafienie.point.y, rotation: ((rotation % 360) + 360) % 360 };
+}
+
+/**
+ * Pozycja i obrót KONKRETNEGO symbolu przyklejonego do ściany.
+ *
+ * `snapToWall` odpowiada tylko na pytanie „gdzie jest ściana i w którą stronę jej
+ * zewnętrze" — i przez to stawiało ŚRODEK symbolu na linii ściany. Gniazdko wychodziło
+ * wtedy trzonkiem na zewnątrz budynku, łącznik siedział na murze okrakiem, a plakietka
+ * RJ45 była przecięta linią ściany na pół. Urządzenie jest montowane W ścianie, więc
+ * symbol ma stać po stronie pomieszczenia i DOTYKAĆ jej tym, czym w nią wchodzi:
+ * gniazdko końcem trzonka, łącznik dźwignią, plakietka krawędzią (`zasiegPrzyscienny`).
+ *
+ * `skala` to skala renderu symboli (`elementRenderScale`) — zasięg jest podany w
+ * jednostkach glifu, a pozycja elementu żyje w jednostkach planu. Bez tego mnożenia
+ * odsunięcie rozjeżdżałoby się z rysunkiem przy każdej zmianie skali rzutu i suwaka
+ * rozmiaru symboli.
+ */
+export function snapElementToWall(
+  p: Point,
+  walls: Wall[],
+  roomShapes: RoomShape[],
+  toleranceUnits: number,
+  type: ElementType,
+  skala: number
+): WynikPrzyciagania | null {
+  const kotwica = zasiegPrzyscienny(type) * skala;
+  /**
+   * Tolerancja liczona od KRAWĘDZI symbolu, nie od jego środka — dlatego poszerzona
+   * o zasięg. Bez tego element raz przyklejony przestawał się przyklejać: po
+   * odsunięciu środka o zasięg leżał już dalej niż tolerancja, więc przeciągnięcie go
+   * wzdłuż tej samej ściany po cichu odczepiało go od niej i zostawiało krzywo.
+   */
+  const trafienie = snapToWall(p, walls, roomShapes, toleranceUnits + kotwica);
+  if (!trafienie) return null;
+
+  // Kierunek „w ścianę" odtworzony z obrotu: przy obrocie θ lokalne (0, −1) idzie
+  // na (sin θ, −cos θ) — to ta sama zależność, którą zapisuje `obrotDlaKierunku`.
+  const rad = (trafienie.rotation * Math.PI) / 180;
+  const wSciane = { x: Math.sin(rad), y: -Math.cos(rad) };
+  return {
+    x: trafienie.x - wSciane.x * kotwica,
+    y: trafienie.y - wSciane.y * kotwica,
+    rotation: (trafienie.rotation + montazPrzyscienny(type) + 360) % 360,
+  };
 }
