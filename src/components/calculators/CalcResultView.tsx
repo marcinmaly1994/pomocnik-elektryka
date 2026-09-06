@@ -1,5 +1,5 @@
 import { AlertTriangle, Check, Info, TriangleAlert } from "lucide-react";
-import type { CalcResult } from "@/lib/calc/result";
+import type { CalcResult, Ocena } from "@/lib/calc/result";
 import { formatLiczba } from "@/lib/calc/result";
 
 /**
@@ -14,12 +14,48 @@ import { formatLiczba } from "@/lib/calc/result";
  * czegoś innego, niż policzył silnik.
  */
 
+/**
+ * Tła są NIEPRZEZROCZYSTE, a nie w wersji z kanałem alfa (dawniej `#3B8C631A`).
+ * Pasek werdyktu przykleja się do góry przy przewijaniu, więc przez półprzezroczyste
+ * tło przejeżdżałby pod nim rachunek krok po kroku. Wartości to dokładnie te same
+ * barwy zmieszane z bielą karty (10%), więc wygląd bez przewijania się nie zmienia.
+ */
 const WERDYKT_STYL = {
-  spelniony: { bg: "#3B8C631A", fg: "#2C6B4A", Icon: Check, etykieta: "Warunek spełniony" },
-  graniczny: { bg: "#C1793F1A", fg: "#8A5526", Icon: TriangleAlert, etykieta: "Wynik graniczny" },
-  niespelniony: { bg: "#C6433A1A", fg: "#A2352C", Icon: AlertTriangle, etykieta: "Warunek niespełniony" },
+  spelniony: { bg: "#EBF3EF", fg: "#2C6B4A", Icon: Check, etykieta: "Warunek spełniony" },
+  graniczny: { bg: "#F9F1EB", fg: "#8A5526", Icon: TriangleAlert, etykieta: "Wynik graniczny" },
+  niespelniony: { bg: "#F9ECEB", fg: "#A2352C", Icon: AlertTriangle, etykieta: "Warunek niespełniony" },
   nieoceniany: { bg: "#EEF1F4", fg: "#475569", Icon: Info, etykieta: "Bez oceny warunku" },
 } as const;
+
+/**
+ * Pasek werdyktu PRZYKLEJONY do góry przy przewijaniu.
+ *
+ * Rachunek krok po kroku, założenia i źródła potrafią mieć kilka ekranów, więc
+ * werdykt — jedyna rzecz, dla której użytkownik tu przyszedł — znikał z widoku
+ * dokładnie wtedy, gdy czytał uzasadnienie albo poprawiał dane wejściowe.
+ *
+ * Osobny, eksportowany komponent, bo ten sam pasek stoi też nad kompletem czterech
+ * kryteriów w „Doborze obwodu", który nie przechodzi przez `CalcResult`. Werdykt ma
+ * wyglądać i brzmieć tak samo w całej zakładce, niezależnie od tego, skąd pochodzi.
+ */
+export function PasekWerdyktu({ ocena }: { ocena: Ocena }) {
+  const styl = WERDYKT_STYL[ocena.verdict];
+  return (
+    <div
+      className="sticky top-2 z-10 mt-2 flex items-start gap-2 rounded-lg p-3 text-sm shadow-sm"
+      style={{ background: styl.bg, color: styl.fg }}
+    >
+      <styl.Icon size={16} className="mt-0.5 shrink-0" />
+      <div>
+        <div className="font-semibold">
+          {styl.etykieta}
+          {ocena.margines_pct !== null && ` — margines ${formatLiczba(ocena.margines_pct, 1)}%`}
+        </div>
+        <div className="mt-0.5 leading-relaxed">{ocena.komunikat}</div>
+      </div>
+    </div>
+  );
+}
 
 export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
   // Błędy walidacji wykluczają wynik — pokazujemy WYŁĄCZNIE je, żeby nie dało
@@ -42,22 +78,10 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
   }
 
   const ocena = wynik.ocena;
-  const styl = ocena ? WERDYKT_STYL[ocena.verdict] : null;
 
   return (
     <>
-      {ocena && styl && (
-        <div className="mt-2 flex items-start gap-2 rounded-lg p-3 text-sm" style={{ background: styl.bg, color: styl.fg }}>
-          <styl.Icon size={16} className="mt-0.5 shrink-0" />
-          <div>
-            <div className="font-semibold">
-              {styl.etykieta}
-              {ocena.margines_pct !== null && ` — margines ${formatLiczba(ocena.margines_pct, 1)}%`}
-            </div>
-            <div className="mt-0.5 leading-relaxed">{ocena.komunikat}</div>
-          </div>
-        </div>
-      )}
+      {ocena && <PasekWerdyktu ocena={ocena} />}
 
       {wynik.kroki.length > 0 && (
         <details className="mt-2 rounded-lg border border-border bg-white/60" open>
