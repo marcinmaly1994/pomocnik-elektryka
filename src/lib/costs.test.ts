@@ -204,3 +204,55 @@ describe("pozycjeBezCeny", () => {
     expect(pozycjeBezCeny(rows)).toEqual(["Gniazdko 230V podtynkowe"]);
   });
 });
+
+describe("kosztorysRows — poprawiona ilosc", () => {
+  const ilosci = { gniazdko: 12, puszkaPodtynkowa: 40 };
+  const ceny = { gniazdko: 15, puszkaPodtynkowa: 2 };
+
+  it("poprawiona ilosc przelicza wartosc pozycji", () => {
+    const rows = kosztorysRows(ilosci, ceny, {}, { gniazdko: 20 });
+    const g = rows.find((r) => r.key === "gniazdko")!;
+    expect(g.qty).toBe(20);
+    expect(g.qtyOverridden).toBe(true);
+    expect(g.value).toBe(300);
+  });
+
+  it("nietkniete pozycje dalej licza sie z rzutu", () => {
+    const rows = kosztorysRows(ilosci, ceny, {}, { gniazdko: 20 });
+    const p = rows.find((r) => r.key === "puszkaPodtynkowa")!;
+    expect(p.qty).toBe(40);
+    expect(p.qtyOverridden).toBe(false);
+  });
+
+  /**
+   * „90 punktow robocizny, 14 500 zl ryczaltem" to zdanie sensowne — poprawienie liczby
+   * punktow na 85 nie zmienia umowionej kwoty. Ilosc i wartosc sa wiec niezalezne.
+   */
+  it("ryczalt na wartosci wygrywa z iloczynem, ale ilosc zostaje wlasna", () => {
+    const rows = kosztorysRows(ilosci, ceny, { gniazdko: 999 }, { gniazdko: 20 });
+    const g = rows.find((r) => r.key === "gniazdko")!;
+    expect(g.qty).toBe(20);
+    expect(g.value).toBe(999);
+    expect(g.qtyOverridden).toBe(true);
+    expect(g.overridden).toBe(true);
+  });
+
+  /** Bez tego wpisanie zera kasowaloby wiersz razem z jedyna droga powrotu. */
+  it("wyzerowana ilosc zostawia wiersz w tabeli", () => {
+    const rows = kosztorysRows(ilosci, ceny, {}, { gniazdko: 0 });
+    const g = rows.find((r) => r.key === "gniazdko")!;
+    expect(g.qty).toBe(0);
+    expect(g.value).toBe(0);
+    expect(g.qtyOverridden).toBe(true);
+  });
+
+  it("pozycja wykreslona z zakresu nie jest zglaszana jako brakujaca cena", () => {
+    // Sama zerowa wartosc to luka do uzupelnienia...
+    expect(pozycjeBezCeny(kosztorysRows({ robocizna: 30 }, { robocizna: 0 }))).toEqual([
+      "Robocizna za punkt instalacyjny",
+    ]);
+    // ...ale zerowa ILOSC to pozycja, ktorej po prostu nie ma. Rada „uzupelnij cene"
+    // byla by wtedy nie na temat.
+    expect(pozycjeBezCeny(kosztorysRows({ robocizna: 30 }, { robocizna: 0 }, {}, { robocizna: 0 }))).toEqual([]);
+  });
+});

@@ -15,8 +15,10 @@ import { resolveDocHeader } from "@/lib/docHeader";
  * kroki 6-8), ceny edytowalne ręcznie lub importowalne z CSV (`nazwa;cena`,
  * dopasowanie po słowach kluczowych). Wartość pojedynczej pozycji da się też wpisać
  * wprost — wtedy zastępuje rachunek ilość × cena (patrz `CostOverrides`), bo oferty
- * podają część pozycji ryczałtem. Ceny i nadpisania trzymane w store (`prices`,
- * `costOverrides`), więc przetrwają przełączanie zakładek i zapis projektu.
+ * podają część pozycji ryczałtem. Poprawić da się też ILOŚĆ — jest szacowana z rzutu
+ * (patrz `QtyOverrides`), a aplikacja sama prosi o jej weryfikację. Ceny i poprawki
+ * trzymane w store (`prices`, `costOverrides`, `qtyOverrides`), więc przetrwają
+ * przełączanie zakładek i zapis projektu.
  */
 export function CostsTab() {
   const elements = useProjectStore((s) => s.draft.elements);
@@ -26,6 +28,8 @@ export function CostsTab() {
   const setPrices = useProjectStore((s) => s.setPrices);
   const costOverrides = useProjectStore((s) => s.costOverrides);
   const setCostOverride = useProjectStore((s) => s.setCostOverride);
+  const qtyOverrides = useProjectStore((s) => s.qtyOverrides);
+  const setQtyOverride = useProjectStore((s) => s.setQtyOverride);
   const projectName = useProjectStore((s) => s.projectName);
   const rawDocHeader = useProjectStore((s) => s.docHeader);
   // Nazwa projektu jako domyślny „Obiekt" — dzięki temu tabliczka rysunkowa i nazwa
@@ -49,7 +53,7 @@ export function CostsTab() {
     [elements, circuits, rcdGroups, scales]
   );
 
-  const rows = kosztorysRows(quantities, prices, costOverrides);
+  const rows = kosztorysRows(quantities, prices, costOverrides, qtyOverrides);
 
   const grandTotal = rows.reduce((a, r) => a + r.value, 0);
   const vat = grandTotal * (VAT_RATE / 100);
@@ -166,7 +170,7 @@ export function CostsTab() {
             <thead>
               <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
                 <th className="p-3">Pozycja</th>
-                <th className="w-24 p-3">Ilość</th>
+                <th className="w-36 p-3">Ilość</th>
                 <th className="w-32 p-3">Cena jedn.</th>
                 <th className="w-44 p-3 text-right">Wartość</th>
               </tr>
@@ -175,7 +179,32 @@ export function CostsTab() {
               {rows.map((r) => (
                 <tr key={r.key} className="border-b last:border-0" style={{ borderColor: "#EEF1F4" }}>
                   <td className="p-3">{r.label}</td>
-                  <td className="pe-mono p-3">{r.qty}</td>
+                  {/* Ilość do poprawienia ręcznie. Aplikacja sama pisze pod tabelą, żeby
+                      zweryfikować ilości na realnym rzucie — a puszki i robocizna to
+                      czyste szacunki z liczby punktów i pomieszczeń. Puste pole = wartość
+                      z rzutu, pokazana jako podpowiedź. */}
+                  <td className="p-3">
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        value={r.qtyOverridden ? r.qty : ""}
+                        onChange={(e) => setQtyOverride(r.key, e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0))}
+                        placeholder={String(r.qty)}
+                        aria-label={`Ilość: ${r.label}`}
+                        className="pe-input pe-mono w-20 text-sm"
+                        style={r.qtyOverridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
+                      />
+                      <button
+                        onClick={() => setQtyOverride(r.key, null)}
+                        aria-label={`Przywróć ilość z rzutu: ${r.label}`}
+                        title="Wróć do ilości oszacowanej z rzutu"
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink ${r.qtyOverridden ? "" : "invisible"}`}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </td>
                   <td className="p-3">
                     <input
                       type="number"
@@ -271,7 +300,8 @@ export function CostsTab() {
           co jest szacunkiem ZAWSZE, niezależnie od skali i tras. */}
       <div className="text-xs text-slate-400">
         Liczba puszek jest szacowana z liczby punktów instalacyjnych (podtynkowe) i pomieszczeń (rozgałęźne).
-        Zweryfikuj ilości na realnym rzucie budynku przed zakupem materiału.
+        Zweryfikuj ilości na realnym rzucie budynku przed zakupem materiału — każdą da się poprawić w kolumnie
+        „Ilość”, a krzyżyk obok wraca do wartości z rzutu.
       </div>
 
       {/* Dokument składany jest RAZ, a „Pobierz" zapisuje dokładnie te bajty, które

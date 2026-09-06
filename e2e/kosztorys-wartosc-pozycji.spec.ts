@@ -101,3 +101,66 @@ test("wpisana wartosc przezywa odswiezenie strony", async ({ page }) => {
   await expect(wartosc(page)).toHaveValue("4500");
   await expect.poll(() => nettoKwota(page)).toBeCloseTo(przed, 2);
 });
+
+const ilosc = (page: Page) => page.getByLabel(`Ilość: ${POZYCJA}`);
+
+test("poprawiona ilosc przelicza wartosc i sume", async ({ page }) => {
+  await kosztorysZTrzemaGniazdkami(page);
+  await cena(page).fill("100");
+  const przed = await nettoKwota(page);
+  // Robocizna to 3 punkty z rzutu, po 100 zl.
+  await expect(ilosc(page)).toHaveAttribute("placeholder", "3");
+  await expect(ilosc(page)).toHaveValue("");
+
+  await ilosc(page).fill("8");
+  // 8 zamiast 3 punktow to +500 zl przy cenie 100 zl.
+  await expect.poll(() => nettoKwota(page)).toBeCloseTo(przed + 500, 2);
+});
+
+test("wyzerowana ilosc zostawia wiersz i nie prosi o uzupelnienie ceny", async ({ page }) => {
+  await kosztorysZTrzemaGniazdkami(page);
+  await expect(ostrzezenie(page)).toContainText("Robocizna za punkt instalacyjny");
+
+  await ilosc(page).fill("0");
+  // Pozycja wykreslona z zakresu to nie luka do uzupelnienia — rada „uzupelnij cene"
+  // byla by wtedy nie na temat.
+  await expect(ostrzezenie(page)).toHaveCount(0);
+  // ...ale wiersz zostaje, bo inaczej nie byloby jak cofnac zera.
+  await expect(ilosc(page)).toHaveValue("0");
+});
+
+test("krzyzyk przy ilosci wraca do oszacowania z rzutu", async ({ page }) => {
+  await kosztorysZTrzemaGniazdkami(page);
+  const przywroc = page.getByLabel(`Przywróć ilość z rzutu: ${POZYCJA}`);
+  await expect(przywroc).toBeHidden();
+
+  await ilosc(page).fill("8");
+  await expect(przywroc).toBeVisible();
+  await przywroc.click();
+
+  await expect(ilosc(page)).toHaveValue("");
+  await expect(ilosc(page)).toHaveAttribute("placeholder", "3");
+});
+
+test("ryczalt na wartosci nie blokuje poprawiania ilosci", async ({ page }) => {
+  await kosztorysZTrzemaGniazdkami(page);
+  await wartosc(page).fill("4500");
+  const przed = await nettoKwota(page);
+
+  // „90 punktow robocizny, 14 500 zl ryczaltem" to zdanie sensowne: liczba punktow to
+  // informacja o zakresie, a nie skladnik ceny, wiec suma ma zostac nietknieta.
+  await ilosc(page).fill("8");
+  await expect(ilosc(page)).toHaveValue("8");
+  await expect(wartosc(page)).toHaveValue("4500");
+  await expect.poll(() => nettoKwota(page)).toBeCloseTo(przed, 2);
+});
+
+test("poprawiona ilosc przezywa odswiezenie strony", async ({ page }) => {
+  await kosztorysZTrzemaGniazdkami(page);
+  await ilosc(page).fill("8");
+  await page.waitForTimeout(900); // debounce autozapisu
+
+  await page.reload();
+  await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
+  await expect(ilosc(page)).toHaveValue("8");
+});
