@@ -787,8 +787,8 @@ test("cztery kryteria widac zawsze, a te bez danych sa NIEOCENIONE zamiast zielo
 
   await expect(karta.getByText("obciążalność długotrwała")).toBeVisible();
   await expect(karta.getByText("spadek napięcia", { exact: true })).toBeVisible();
-  await expect(karta.getByText("ochrona przeciwporażeniowa")).toBeVisible();
-  await expect(karta.getByText("wytrzymałość zwarciowa cieplna")).toBeVisible();
+  await expect(karta.getByText("ochrona przeciwporażeniowa", { exact: true })).toBeVisible();
+  await expect(karta.getByText("wytrzymałość zwarciowa cieplna", { exact: true })).toBeVisible();
   // Bez impedancji petli i pradu zwarcia dwa ostatnie kryteria nie sa ocenione —
   // i mowia, czego im brakuje, zamiast pokazywac ptaszka.
   await expect(karta).toContainText("Podaj impedancję pętli");
@@ -860,4 +860,56 @@ test("grupa Zaawansowane jest zwinieta, dopoki sie jej nie rozwinie", async ({ p
 
   await naglowek.click();
   await expect(page.getByRole("button", { name: /^Kompensacja mocy biernej/ })).toBeVisible();
+});
+
+/**
+ * Pasek werdyktu zostaje na ekranie, gdy przewija sie uzasadnienie.
+ *
+ * Rachunek krok po kroku, zalozenia i zrodla potrafia miec kilka ekranow — werdykt,
+ * czyli jedyna rzecz, po ktora sie tu przychodzi, znikal wtedy z widoku. Test celowo
+ * uzywa NISKIEGO okna: przy pelnowymiarowym monitorze uzasadnienie bywa krotsze niz
+ * ekran i przyklejenie nie ma czego pokazac.
+ */
+test("pasek werdyktu przykleja sie do gory przy przewijaniu wyniku", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 420 });
+  await page.goto("/kalkulatory/zwarcie");
+
+  const pasek = page.locator("div.sticky").filter({ hasText: /Warunek|graniczny|Bez oceny/ }).first();
+  await pasek.scrollIntoViewIfNeeded();
+  const przed = (await pasek.boundingBox())!;
+  expect(przed.y).toBeGreaterThan(20);
+
+  await page.evaluate(() => window.scrollBy(0, 400));
+  const po = (await pasek.boundingBox())!;
+  // sedno: pasek zatrzymal sie tuz pod gorna krawedzia okna zamiast wyjechac poza nie
+  expect(po.y).toBeGreaterThan(0);
+  expect(po.y).toBeLessThanOrEqual(10);
+});
+
+/**
+ * Na waskim ekranie lista boczna ustepuje miejsca rozwijanemu wyborowi.
+ *
+ * Lista ma stale 260 px i przy zawijaniu siadala NAD trescia: pierwszym, co widzial
+ * uzytkownik telefonu, bylo osiemnascie kafelkow, a wlasciwy kalkulator zaczynal sie
+ * dwa ekrany nizej.
+ */
+test("mobile: kalkulator wybiera sie z rozwijanego menu, nie z listy nad trescia", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 780 });
+  await page.goto("/kalkulatory/spadek");
+
+  // lista boczna znika ponizej `lg` — jej naglowki grup nie sa w ogole widoczne
+  await expect(page.getByRole("button", { name: /^Ochrona/ })).toHaveCount(0);
+
+  const przelacznik = page.getByRole("button", { name: "Zmień kalkulator" });
+  await expect(przelacznik).toHaveAttribute("aria-expanded", "false");
+  // przycisk mowi, gdzie jestesmy — sama lista boczna tego nie mowila
+  await expect(przelacznik).toContainText("Spadek napięcia");
+
+  await przelacznik.click();
+  await page.getByRole("button", { name: /^Prądy zwarciowe/ }).click();
+
+  await expect(page).toHaveURL(/\/kalkulatory\/zwarcie$/);
+  await expect(page.getByRole("heading", { name: "Prądy zwarciowe" })).toBeVisible();
+  // menu zamyka sie po wyborze — inaczej wybrany kalkulator zostaje poza ekranem
+  await expect(przelacznik).toHaveAttribute("aria-expanded", "false");
 });

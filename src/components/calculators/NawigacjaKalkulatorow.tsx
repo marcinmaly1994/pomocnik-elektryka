@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Clock, Search } from "lucide-react";
 import type { CalcId } from "@/store/useCalculatorsStore";
 import { filtruj, pogrupuj, type GrupaId, type PozycjaKalkulatora } from "@/lib/calc/grupy";
@@ -157,6 +157,77 @@ export function ListaKalkulatorow({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Wybór kalkulatora na wąskim ekranie.
+ *
+ * Lista boczna ma stałe 260 px i przy zawijaniu siadała NAD treścią: na telefonie
+ * pierwszym, co widział użytkownik, było osiemnaście kafelków, a właściwy kalkulator
+ * zaczynał się dwa ekrany niżej. Tutaj lista jest schowana za jednym przyciskiem,
+ * który przy okazji mówi, w którym kalkulatorze się jest — czego wersja z zawijaniem
+ * nie mówiła wcale.
+ */
+export function WyborKalkulatoraMobile({
+  lista,
+  aktywny,
+  fraza,
+  onZmienFraze,
+  zwiniete,
+  onPrzelaczGrupe,
+  onWybierz,
+}: {
+  lista: PozycjaKalkulatora[];
+  aktywny: CalcId | null;
+  fraza: string;
+  onZmienFraze: (v: string) => void;
+  zwiniete: GrupaId[];
+  onPrzelaczGrupe: (id: GrupaId) => void;
+  onWybierz: (id: CalcId) => void;
+}) {
+  const [otwarty, setOtwarty] = useState(false);
+  const biezacy = lista.find((p) => p.id === aktywny);
+
+  return (
+    <div className="mb-3 lg:hidden">
+      <button
+        onClick={() => setOtwarty((v) => !v)}
+        aria-expanded={otwarty}
+        // Nazwa dostepna mowi, CO ten przycisk robi — sama tresc („Kalkulator /
+        // Spadek napiecia") brzmi jak etykieta pola, nie jak przelacznik listy.
+        aria-label="Zmień kalkulator"
+        className="pe-card flex w-full items-center gap-2 px-3 py-2 text-left"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Kalkulator</div>
+          <div className="truncate text-[13px] font-medium text-ink">{biezacy?.label ?? "Wybierz kalkulator"}</div>
+        </div>
+        <ChevronDown
+          size={16}
+          className="shrink-0 text-slate-400 transition-transform"
+          style={otwarty ? { transform: "rotate(180deg)" } : undefined}
+        />
+      </button>
+      {otwarty && (
+        <div className="pe-card mt-1.5 max-h-[60vh] overflow-y-auto p-3">
+          <SzukajkaKalkulatorow fraza={fraza} onZmien={onZmienFraze} liczbaWynikow={filtruj(lista, fraza).length} />
+          <ListaKalkulatorow
+            lista={lista}
+            aktywny={aktywny}
+            fraza={fraza}
+            zwiniete={zwiniete}
+            onPrzelaczGrupe={onPrzelaczGrupe}
+            // Zamknięcie po wyborze jest tu istotne: bez tego wybrany kalkulator
+            // zostaje pod listą, poza ekranem, i wygląda, jakby klik nic nie zrobił.
+            onWybierz={(id) => {
+              onWybierz(id);
+              setOtwarty(false);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { METODA_LABELS, type MetodaOdniesienia3 } from "@/lib/norms/ampacity3";
 import { CZAS_GG_LABELS, TYP_WKLADKI_LABELS, type TypWkladkiGG } from "@/lib/norms/gGFuses";
 import { obliczBilans, type Faza } from "@/lib/calc/loadBalance";
 import { obliczSilnik, SPOSOB_ROZRUCHU_LABELS, type SposobRozruchu } from "@/lib/calc/motor";
-import { CalcResultView } from "./CalcResultView";
+import { CalcResultView, PasekWerdyktu } from "./CalcResultView";
 import { obliczSpadekNapiecia } from "@/lib/calc/voltageDrop";
 import { obliczKompensacje, UKLAD_BATERII_LABELS, type UkladBaterii } from "@/lib/calc/powerFactor";
 import {
@@ -48,10 +48,10 @@ import { useCalculatorsStore, type CalcId, type TrybObwodu } from "@/store/useCa
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { Card } from "./Card";
-import { EkranStartowy, ListaKalkulatorow, SzukajkaKalkulatorow } from "./NawigacjaKalkulatorow";
+import { EkranStartowy, ListaKalkulatorow, SzukajkaKalkulatorow, WyborKalkulatoraMobile } from "./NawigacjaKalkulatorow";
 import { filtruj, type GrupaId } from "@/lib/calc/grupy";
 import { KryteriaObwodu, PrzelacznikTrybu } from "./DoborObwodu";
-import { ocenKryteria, werdyktObwodu, type OcenaKryterium } from "@/lib/calc/kryteriaObwodu";
+import { ocenKryteria, podsumowanieObwodu, type OcenaKryterium } from "@/lib/calc/kryteriaObwodu";
 import { Field, HintButton } from "./Field";
 import { HowItWorks } from "./HowItWorks";
 
@@ -994,10 +994,20 @@ export function CalculatorsTab() {
         return {
           kryterium: k,
           etykieta: KRYTERIUM_LABELS[k],
-          stan: !kr.ocenione ? ("nieoceniono" as const) : w.decydujace.includes(k) ? ("ok" as const) : ("ok" as const),
+          // Kryterium OCENIONE jest w tym trybie zawsze spelnione — silnik bierze
+          // najwiekszy z wymaganych przekrojow, wiec wynik z definicji przechodzi
+          // kazde ze sprawdzonych kryteriow. Ryzykiem jest tu tylko kryterium
+          // POMINIETE, i to widac po stanie „nieoceniono".
+          stan: kr.ocenione ? ("ok" as const) : ("nieoceniono" as const),
           opis: kr.ocenione
             ? `wymaga min. ${formatLiczba(kr.minPrzekroj_mm2 ?? 0, 2)} mm² — dobrano ${formatLiczba(w.przekroj_mm2, 1)} mm²`
             : (kr.powod_pominiecia ?? "Brak danych do oceny."),
+          // Zapas liczony w przekroju: ile brakuje wymaganej zyle do dobranej.
+          // Bez tego pasek werdyktu nie mial w tym trybie czego pokazac.
+          margines_pct:
+            kr.ocenione && kr.minPrzekroj_mm2 !== null && w.przekroj_mm2 > 0
+              ? (1 - kr.minPrzekroj_mm2 / w.przekroj_mm2) * 100
+              : undefined,
         };
       });
     }
@@ -1081,9 +1091,12 @@ export function CalculatorsTab() {
 
             Na ekranie startowym jej NIE MA: te same pozycje są tam kafelkami, więc
             lista obok byłaby drugą kopią tej samej nawigacji — i zabierałaby jedną
-            trzecią szerokości, która przydaje się kafelkom. */}
+            trzecią szerokości, która przydaje się kafelkom.
+
+            Poniżej `lg` znika na rzecz `WyborKalkulatoraMobile`: przy zawijaniu
+            siadała nad treścią i spychała właściwy kalkulator dwa ekrany w dół. */}
         {activeCalc && (
-        <div className="self-start lg:sticky lg:top-4" style={{ width: 260, flexShrink: 0, flexGrow: 0 }}>
+        <div className="hidden self-start lg:sticky lg:top-4 lg:block" style={{ width: 260, flexShrink: 0, flexGrow: 0 }}>
           <SzukajkaKalkulatorow
             fraza={frazaSzukania}
             onZmien={setFrazaSzukania}
@@ -1107,6 +1120,23 @@ export function CalculatorsTab() {
         )}
 
         <div style={{ flex: "1 1 480px", minWidth: 320 }}>
+          {activeCalc && (
+            <WyborKalkulatoraMobile
+              lista={CALC_LIST}
+              aktywny={activeCalc}
+              fraza={frazaSzukania}
+              onZmienFraze={setFrazaSzukania}
+              zwiniete={zwinieteGrupy as GrupaId[]}
+              onPrzelaczGrupe={(id) =>
+                patch({
+                  zwinieteGrupy: zwinieteGrupy.includes(id)
+                    ? zwinieteGrupy.filter((g) => g !== id)
+                    : [...zwinieteGrupy, id],
+                })
+              }
+              onWybierz={setActiveCalc}
+            />
+          )}
           {/* Bez wybranego kalkulatora pokazujemy, CO tu w ogóle jest — zamiast
               wrzucać w ostatnio otwarty, którego nowy użytkownik nie wybierał. */}
           {!activeCalc && (
@@ -3205,6 +3235,16 @@ export function CalculatorsTab() {
               NIEOCENIONE, nigdy „spelnione". */}
           {activeCalc === "obwod" && (
             <Card title="Cztery kryteria doboru" tag="werdykt">
+              {/* Tryb „pełny dobór" ma WŁASNE pola na impedancję i prąd zwarcia
+                  (w karcie wyżej, pod checkboxami) i tylko one wchodzą do jego
+                  silnika. Te trzy poniżej były dla niego martwe: dawało się je
+                  wypełnić, a kryteria dalej pokazywały „nie podano". */}
+              {trybObwodu === "pelny" ? (
+                <p className="mb-3 text-[11.5px] leading-relaxed text-slate-500">
+                  Kryteria 3 i 4 włączasz w karcie wyżej — checkboxami „sprawdź ochronę przeciwporażeniową" i „sprawdź
+                  wytrzymałość zwarciową". Ten tryb liczy je z impedancji źródła i prądu zwarcia, a nie z gotowej Zs.
+                </p>
+              ) : (
               <div className="mb-3 grid gap-x-4 sm:grid-cols-3">
                 <Field
                   label="Impedancja pętli Zs"
@@ -3230,14 +3270,14 @@ export function CalculatorsTab() {
                   hint="Czas zadziałania zabezpieczenia przy zwarciu. Dla obwodów odbiorczych do 32 A w układzie TN wymagane 0,4 s, dla rozdzielczych 5 s."
                 />
               </div>
-              <KryteriaObwodu oceny={kryteriaObwodu} />
-              <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
-                {werdyktObwodu(kryteriaObwodu) === "ok"
-                  ? "Wszystkie cztery kryteria sprawdzone i spełnione."
-                  : werdyktObwodu(kryteriaObwodu) === "blad"
-                    ? "Co najmniej jedno kryterium nie jest spełnione — obwód w tej postaci nie przejdzie odbioru."
-                    : "Część kryteriów została nieoceniona: brakuje danych, których dobór nie ma skąd wziąć. Uzupełnij pola powyżej, żeby sprawdzić komplet."}
-              </p>
+              )}
+              {/* Werdykt zbiorczy STOI NAD listą kryteriów i przykleja się przy
+                  przewijaniu — dotąd był szarym akapitem pod czterema kartami, czyli
+                  najmniej widocznym elementem tego, po co się tu w ogóle przychodzi. */}
+              <PasekWerdyktu ocena={podsumowanieObwodu(kryteriaObwodu)} />
+              <div className="mt-2">
+                <KryteriaObwodu oceny={kryteriaObwodu} />
+              </div>
             </Card>
           )}
 

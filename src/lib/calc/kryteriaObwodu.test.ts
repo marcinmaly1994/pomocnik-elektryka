@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { minPrzekrojZwarciowy, ocenKryteria, werdyktObwodu, type WejscieKryteriow } from "./kryteriaObwodu";
+import { minPrzekrojZwarciowy, ocenKryteria, podsumowanieObwodu, werdyktObwodu, type WejscieKryteriow } from "./kryteriaObwodu";
+import { OCENA_GRANICZNA_PCT } from "./result";
 
 /** Obwod gniazdowy 1-fazowy 2,5 mm2 / B16, ktory spelnia wszystko, co da sie ocenic. */
 function wejscie(over: Partial<WejscieKryteriow> = {}): WejscieKryteriow {
@@ -87,5 +88,40 @@ describe("werdyktObwodu", () => {
 
   it("wszystko sprawdzone i spelnione", () => {
     expect(werdyktObwodu(ocenKryteria(wejscie({ Zs_Ohm: 1, Ik_A: 500, czas_s: 0.1 })))).toBe("ok");
+  });
+});
+
+/**
+ * Podsumowanie zbiorcze — to ono trafia na pasek werdyktu nad kryteriami, wiec
+ * musi miec te sama semantyke, co oceny pojedynczych kalkulatorow.
+ */
+describe("podsumowanieObwodu", () => {
+  it("margines to NAJGORSZE z kryteriow, nie srednia", () => {
+    const o = podsumowanieObwodu(ocenKryteria(wejscie({ Zs_Ohm: 1, Ik_A: 500, czas_s: 0.1 })));
+    expect(o.verdict).toBe("spelniony");
+    // obciazalnosc: 1 - 16/23 = 30,4% i to jest tu warunek najciasniejszy
+    expect(o.margines_pct).toBeCloseTo(30.4, 1);
+  });
+
+  it("komplet spelniony, ale ciasno — wynik graniczny, a nie zielony", () => {
+    const o = podsumowanieObwodu(ocenKryteria(wejscie({ Iz_A: 17, Zs_Ohm: 1, Ik_A: 500, czas_s: 0.1 })));
+    expect(o.verdict).toBe("graniczny");
+    expect(o.margines_pct).toBeLessThan(OCENA_GRANICZNA_PCT);
+  });
+
+  it("niespelnione kryterium wygrywa i jest wymienione z nazwy", () => {
+    const o = podsumowanieObwodu(ocenKryteria(wejscie({ spadek_pct: 9, Zs_Ohm: 1, Ik_A: 500, czas_s: 0.1 })));
+    expect(o.verdict).toBe("niespelniony");
+    expect(o.komunikat.toLowerCase()).toContain("spadek");
+    // przekroczenie ma byc ujemne — pasek pokazuje je jako minus, nie jako zapas
+    expect(o.margines_pct!).toBeLessThan(0);
+  });
+
+  it("brak danych to BRAK OCENY, nawet gdy reszta jest zielona", () => {
+    const o = podsumowanieObwodu(ocenKryteria(wejscie()));
+    expect(o.verdict).toBe("nieoceniany");
+    expect(o.komunikat).toContain("2 z 4");
+    // Bez marginesu: liczba obok „bez oceny" sugerowalaby, ze jednak cos oceniono.
+    expect(o.margines_pct).toBeNull();
   });
 });

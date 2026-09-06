@@ -1,5 +1,6 @@
 import { K_ZYLA, type Izolacja, type Material } from "@/lib/norms/conductors";
 import { KRYTERIUM_LABELS, type Kryterium } from "./fullSizing";
+import { OCENA_GRANICZNA_PCT, type Ocena } from "./result";
 
 /**
  * Cztery kryteria doboru obwodu, oceniane na gotowym wyniku doboru.
@@ -155,4 +156,60 @@ export function werdyktObwodu(oceny: OcenaKryterium[]): StanKryterium {
   if (oceny.some((o) => o.stan === "blad")) return "blad";
   if (oceny.some((o) => o.stan === "nieoceniono")) return "nieoceniono";
   return "ok";
+}
+
+/**
+ * Cztery kryteria sprowadzone do JEDNEJ oceny — tej samej koperty, której używają
+ * pozostałe kalkulatory (`Ocena` z `result.ts`).
+ *
+ * Dzięki temu pasek werdyktu nad wynikiem wygląda i mówi tak samo niezależnie od
+ * tego, czy patrzymy na spadek napięcia, czy na komplet kryteriów obwodu — a nie
+ * jak dotąd: tam kolorowy pasek, tutaj szary akapit na dole karty.
+ *
+ * Margines to zawsze NAJGORSZE z kryteriów, bo o bezpieczeństwie obwodu decyduje
+ * warunek najciaśniejszy, a nie średnia z czterech.
+ */
+export function podsumowanieObwodu(oceny: OcenaKryterium[]): Ocena {
+  const marginesy = (lista: OcenaKryterium[]) =>
+    lista.map((o) => o.margines_pct).filter((m): m is number => typeof m === "number");
+  const najgorszy = (lista: OcenaKryterium[]) => {
+    const m = marginesy(lista);
+    return m.length > 0 ? Math.min(...m) : null;
+  };
+
+  const bledne = oceny.filter((o) => o.stan === "blad");
+  if (bledne.length > 0) {
+    return {
+      verdict: "niespelniony",
+      margines_pct: najgorszy(bledne),
+      komunikat: `Nie spełniono: ${bledne.map((o) => o.etykieta.toLowerCase()).join(", ")}. Obwód w tej postaci nie przejdzie odbioru.`,
+    };
+  }
+
+  const brakujace = oceny.filter((o) => o.stan === "nieoceniono");
+  if (brakujace.length > 0) {
+    return {
+      verdict: "nieoceniany",
+      // BEZ marginesu: liczba obok „bez oceny" sugerowałaby, że jednak coś oceniono.
+      // Zapasy sprawdzonych kryteriów są widoczne przy nich samych, na liście niżej.
+      margines_pct: null,
+      komunikat: `Sprawdzono ${oceny.length - brakujace.length} z ${oceny.length} kryteriów — bez oceny: ${brakujace
+        .map((o) => o.etykieta.toLowerCase())
+        .join(", ")}. Uzupełnij brakujące dane, żeby sprawdzić komplet.`,
+    };
+  }
+
+  const margines = najgorszy(oceny);
+  if (margines !== null && margines < OCENA_GRANICZNA_PCT) {
+    return {
+      verdict: "graniczny",
+      margines_pct: margines,
+      komunikat: `Wszystkie cztery kryteria spełnione, ale najciaśniejsze ma zapas tylko ${margines.toFixed(0)}%. Przy niepewności danych wejściowych to wynik graniczny.`,
+    };
+  }
+  return {
+    verdict: "spelniony",
+    margines_pct: margines,
+    komunikat: "Wszystkie cztery kryteria sprawdzone i spełnione.",
+  };
 }
