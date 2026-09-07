@@ -14,6 +14,7 @@ import { obliczBilans, type Faza } from "@/lib/calc/loadBalance";
 import { obliczSilnik, SPOSOB_ROZRUCHU_LABELS, type SposobRozruchu } from "@/lib/calc/motor";
 import { CalcResultView, PasekWerdyktu } from "./CalcResultView";
 import { obliczSpadekNapiecia } from "@/lib/calc/voltageDrop";
+import { obliczMaksymalnaDlugosc } from "@/lib/calc/maxLength";
 import { obliczKompensacje, UKLAD_BATERII_LABELS, type UkladBaterii } from "@/lib/calc/powerFactor";
 import {
   CEL_ZWARCIA_LABELS,
@@ -92,6 +93,7 @@ const CALC_LIST: { id: CalcId; label: string; desc: string }[] = [
   { id: "obwod", label: "Dobór obwodu", desc: "przekrój, zabezpieczenie, WLZ i cztery kryteria w jednym" },
   { id: "gGWkladka", label: "Dobór wkładki gG", desc: "ochrona przeciwporażeniowa — zabezpieczenie topikowe" },
   { id: "spadek", label: "Spadek napięcia", desc: "sprawdzenie trasy o znanym przekroju" },
+  { id: "dlugosc", label: "Maksymalna długość obwodu", desc: "ile metrów wolno pociągnąć — spadek i zadziałanie zabezpieczenia" },
   { id: "impedancja", label: "Impedancja przewodu", desc: "R, X, Z oraz przewody równoległe" },
   { id: "zwarcie", label: "Prądy zwarciowe", desc: "Ik, prąd udarowy, wytrzymałość cieplna" },
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN" },
@@ -276,6 +278,17 @@ export function CalculatorsTab() {
   const duRodzajLinii = useCalculatorsStore((s) => s.duRodzajLinii);
   const duRownolegle = useCalculatorsStore((s) => s.duRownolegle);
   const duModel = useCalculatorsStore((s) => s.duModel);
+  const mdPhase = useCalculatorsStore((s) => s.mdPhase);
+  const mdCurrentA = useCalculatorsStore((s) => s.mdCurrentA);
+  const mdSection = useCalculatorsStore((s) => s.mdSection);
+  const mdSectionPE = useCalculatorsStore((s) => s.mdSectionPE);
+  const mdMaterial = useCalculatorsStore((s) => s.mdMaterial);
+  const mdIzolacja = useCalculatorsStore((s) => s.mdIzolacja);
+  const mdCurve = useCalculatorsStore((s) => s.mdCurve);
+  const mdInA = useCalculatorsStore((s) => s.mdInA);
+  const mdZsPrzed = useCalculatorsStore((s) => s.mdZsPrzed);
+  const mdLimitPct = useCalculatorsStore((s) => s.mdLimitPct);
+  const mdPlanowana = useCalculatorsStore((s) => s.mdPlanowana);
   const zwCel = useCalculatorsStore((s) => s.zwCel);
   const zwSnKVA = useCalculatorsStore((s) => s.zwSnKVA);
   const zwUkPct = useCalculatorsStore((s) => s.zwUkPct);
@@ -656,6 +669,26 @@ export function CalculatorsTab() {
         modelRezystywnosci: duModel,
       }),
     [duPhase, duCurrentA, duCosfi, duLength, duMaterial, duSection, duIzolacja, duZReaktancja, duRodzajLinii, duRownolegle, duLimitPct, duModel]
+  );
+
+  // --- maksymalna długość obwodu ---
+  const maksDlugosc = useMemo(
+    () =>
+      obliczMaksymalnaDlugosc({
+        uklad: mdPhase === "3" ? "3f" : "1f",
+        napiecie_V: mdPhase === "3" ? 400 : U0,
+        prad_A: mdCurrentA,
+        material: mdMaterial,
+        izolacja: mdIzolacja,
+        przekroj_mm2: mdSection,
+        przekrojPE_mm2: mdSectionPE,
+        charakterystyka: mdCurve,
+        In_A: mdInA,
+        Zs_przed_Ohm: mdZsPrzed,
+        limitSpadku_pct: mdLimitPct,
+        dlugoscPlanowana_m: mdPlanowana,
+      }),
+    [mdPhase, mdCurrentA, mdMaterial, mdIzolacja, mdSection, mdSectionPE, mdCurve, mdInA, mdZsPrzed, mdLimitPct, mdPlanowana]
   );
 
   // --- prądy zwarciowe ---
@@ -1983,6 +2016,130 @@ export function CalculatorsTab() {
               )}
 
               <CalcResultView wynik={spadekPelny} />
+            </Card>
+          )}
+
+          {activeCalc === "dlugosc" && (
+            <Card title={active.label} tag="granica trasy">
+              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                Odwrotność „Spadku napięcia": tam podajesz długość i patrzysz na wynik, tutaj dostajesz{" "}
+                <strong>granicę wprost</strong>. Liczone są dwa warunki naraz — spadek napięcia i zadziałanie
+                zabezpieczenia przy zwarciu na końcu trasy — a wiąże ten, który wypada krócej.
+              </div>
+
+              <div className="grid gap-x-4 sm:grid-cols-2">
+                <Field label="Zasilanie" value={mdPhase} onChange={(v) => patch({ mdPhase: v as "1" | "3" })} options={PHASE_OPTIONS} />
+                <Field
+                  label="Prąd obliczeniowy (Ib)"
+                  value={mdCurrentA}
+                  onChange={(v) => patch({ mdCurrentA: Number(v) })}
+                  unit="A"
+                  step="0.1"
+                  hint="Prąd, jaki popłynie trasą przy pełnym obciążeniu. Do warunku spadku napięcia — im większy, tym krótsza dopuszczalna trasa."
+                />
+                <Field
+                  label="Przekrój żyły fazowej"
+                  value={String(mdSection)}
+                  onChange={(v) => patch({ mdSection: Number(v) })}
+                  options={SZEREG_PELNY_OPTIONS}
+                />
+                <Field
+                  label="Przekrój żyły ochronnej PE"
+                  value={String(mdSectionPE)}
+                  onChange={(v) => patch({ mdSectionPE: Number(v) })}
+                  options={SZEREG_PELNY_OPTIONS}
+                  hint="Pętla zwarciowa idzie fazą TAM i przewodem PE Z POWROTEM, więc cieńszy PE skraca dopuszczalną trasę. W przewodach YDY/YKY o przekroju do 16 mm² PE ma zwykle taki sam przekrój jak faza."
+                />
+                <Field label="Materiał żyły" value={mdMaterial} onChange={(v) => patch({ mdMaterial: v as Material })} options={MATERIAL_OPTIONS} />
+                <Field
+                  label="Izolacja (temperatura pracy)"
+                  value={mdIzolacja}
+                  onChange={(v) => patch({ mdIzolacja: v as Izolacja })}
+                  options={IZOLACJA_OPTIONS}
+                />
+                <Field
+                  label="Charakterystyka zabezpieczenia"
+                  value={mdCurve}
+                  onChange={(v) => patch({ mdCurve: v as "B" | "C" | "D" })}
+                  options={[
+                    { value: "B", label: "B (5×In)" },
+                    { value: "C", label: "C (10×In)" },
+                    { value: "D", label: "D (20×In)" },
+                  ]}
+                  hint="Krotność GÓRNEJ granicy pasma wyzwalania magnetycznego. Charakterystyka C wymaga dwa razy mniejszej impedancji pętli niż B, więc skraca dopuszczalną trasę o połowę."
+                />
+                <Field
+                  label="Prąd znamionowy zabezpieczenia (In)"
+                  value={mdInA}
+                  onChange={(v) => patch({ mdInA: Number(v) })}
+                  unit="A"
+                />
+                <Field
+                  label="Impedancja pętli przed odcinkiem"
+                  value={mdZsPrzed}
+                  onChange={(v) => patch({ mdZsPrzed: Number(v) })}
+                  unit="Ω"
+                  step="0.01"
+                  hint="Impedancja od transformatora do rozdzielnicy, z której wychodzi ten obwód — zmierzona miernikiem pętli albo z kalkulatora „Prądy zwarciowe”. Dla domu jednorodzinnego typowo 0,2–0,8 Ω."
+                />
+                <Field
+                  label="Dopuszczalny spadek napięcia"
+                  value={String(mdLimitPct)}
+                  onChange={(v) => patch({ mdLimitPct: Number(v) })}
+                  options={LIMIT_SPADKU_OPCJE}
+                  hint="Budżet dla TEGO odcinka. Jeśli spadek zjada już WLZ, odejmij go tutaj — limit normy dotyczy całej drogi od złącza."
+                />
+                <Field
+                  label="Planowana długość trasy"
+                  value={mdPlanowana}
+                  onChange={(v) => patch({ mdPlanowana: Number(v) })}
+                  unit="m"
+                  hint="Trasa, którą chcesz poprowadzić — to ją oceniamy względem wyliczonej granicy. Mierz drogę przewodu, a nie odległość w linii prostej."
+                />
+              </div>
+
+              {maksDlugosc.wartosci && (
+                <div className="pe-result mt-2 p-3">
+                  <div className="mb-1 text-xs text-slate-500">Maksymalna długość trasy</div>
+                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(maksDlugosc.wartosci.L_max_m, 1)} m</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {/* Obie granice OBOK siebie, nie tylko ta wiążąca: dopiero z nich
+                        widać, co poprawić — grubszą żyłę czy inne zabezpieczenie. */}
+                    <span className={`pe-chip ${maksDlugosc.wartosci.wiazace === "spadek" ? "pe-tag-copper" : "pe-tag-blue"}`}>
+                      spadek napięcia {formatLiczba(maksDlugosc.wartosci.L_spadek_m, 1)} m
+                    </span>
+                    <span className={`pe-chip ${maksDlugosc.wartosci.wiazace === "ochrona" ? "pe-tag-copper" : "pe-tag-blue"}`}>
+                      samoczynne wyłączenie {formatLiczba(maksDlugosc.wartosci.L_ochrona_m, 1)} m
+                    </span>
+                    <span className="pe-chip pe-tag-green">
+                      Zs max {formatLiczba(maksDlugosc.wartosci.Zs_max_Ohm, 2)} Ω przy Ia {formatLiczba(maksDlugosc.wartosci.Ia_A, 0)} A
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <CalcResultView wynik={maksDlugosc} />
+
+              <HowItWorks
+                formulas={[
+                  {
+                    label: "Granica ze spadku napięcia",
+                    eq: "L ≤ ΔU_dop · S / (k · Ib · ρ)",
+                    where: "k = 2 dla 1 fazy, √3 dla 3 faz; ΔU_dop = limit% · U",
+                  },
+                  {
+                    label: "Granica z samoczynnego wyłączenia",
+                    eq: "L ≤ (Zs_max − Z_przed) / (ρ · (1/S_L + 1/S_PE))",
+                    where: "Zs_max = 0,95 · U₀ / Ia, Ia = krotność górna × In",
+                  },
+                ]}
+                notes={[
+                  "Warunek cieplny (S ≥ Ik·√t/k) nie ogranicza długości — dłuższy obwód to mniejszy prąd zwarcia, czyli mniejsze obciążenie cieplne żyły. Ogranicza ją za to zdolność zabezpieczenia do zadziałania, i to jest właśnie drugi z liczonych tu warunków.",
+                  "Obwód zabezpieczony wyłącznikiem różnicowoprądowym spełnia warunek samoczynnego wyłączenia niezależnie od impedancji pętli, więc realną granicą zostaje wtedy sam spadek napięcia.",
+                  "Prąd przyjęty jako skupiony na końcu trasy. Dla linii z odbiorami rozłożonymi po drodze (np. oprawy oświetleniowe) granica jest większa — policz taką trasę w kalkulatorze „Spadek napięcia”, który liczy sumę momentów prądowych.",
+                  "Rachunek pomija reaktancję, więc od 35 mm² kalkulator odmawia liczenia zamiast podawać wynik zaniżony — tak samo jak „Spadek napięcia” w metodzie uproszczonej.",
+                ]}
+              />
             </Card>
           )}
 

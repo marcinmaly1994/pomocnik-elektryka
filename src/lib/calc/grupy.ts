@@ -36,7 +36,7 @@ export const GRUPY: Grupa[] = [
     id: "obwod",
     tytul: "Obwód odbiorczy",
     opis: "przewód, zabezpieczenie, spadek napięcia",
-    pozycje: ["obwod", "spadek", "peN"],
+    pozycje: ["obwod", "spadek", "dlugosc", "peN"],
   },
   {
     id: "ochrona",

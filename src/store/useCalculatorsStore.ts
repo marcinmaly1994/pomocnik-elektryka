@@ -30,6 +30,7 @@ import type { CircuitKind } from "@/lib/panel/sizing";
 export type CalcId =
   | "obwod"
   | "spadek"
+  | "dlugosc"
   | "zwarcie"
   | "kompensacja"
   | "przekroj"
@@ -148,6 +149,28 @@ interface CalculatorsState {
   duRodzajLinii: RodzajLinii;
   duModel: ModelRezystywnosci;
   duRownolegle: number;
+
+  /**
+   * --- maksymalna długość obwodu ---
+   *
+   * Znowu odwrócone pytanie: tam długość jest daną, tutaj WYNIKIEM. Osobny
+   * zestaw pól, bo różni się też zakres danych — potrzebne są zabezpieczenie
+   * (charakterystyka, In) i przekrój PE, których sprawdzanie spadku nie wymaga,
+   * a nie ma tu reaktancji ani obciążenia rozłożonego.
+   */
+  mdPhase: "1" | "3";
+  mdCurrentA: number;
+  mdSection: number;
+  mdSectionPE: number;
+  mdMaterial: Material;
+  mdIzolacja: Izolacja;
+  mdCurve: "B" | "C" | "D";
+  mdInA: number;
+  /** Impedancja pętli PRZED odcinkiem [Ω] — od transformatora do rozdzielnicy. */
+  mdZsPrzed: number;
+  mdLimitPct: number;
+  /** Planowana trasa [m] — to ją oceniamy względem wyliczonej granicy. */
+  mdPlanowana: number;
 
   // --- prądy zwarciowe i wytrzymałość zwarciowa cieplna ---
   zwCel: CelZwarcia;
@@ -369,6 +392,21 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       duRodzajLinii: "kabel_wielozylowy",
       duModel: "annexG",
       duRownolegle: 1,
+
+      // Domyslnie najczestszy obwod gniazdowy w domu jednorodzinnym: 2,5 mm2 Cu
+      // pod B16, PE tego samego przekroju, rozdzielnica o impedancji 0,4 Om
+      // (typowa dla zlacza z transformatorem 100 kVA i krotkiego WLZ).
+      mdPhase: "1",
+      mdCurrentA: 16,
+      mdSection: 2.5,
+      mdSectionPE: 2.5,
+      mdMaterial: "Cu",
+      mdIzolacja: "PVC",
+      mdCurve: "B",
+      mdInA: 16,
+      mdZsPrzed: 0.4,
+      mdLimitPct: 5,
+      mdPlanowana: 20,
 
       zwCel: "dobor_aparatu",
       // Stacja 100 kVA to typowy transformator zasilajacy kilka domow — daje Ik3

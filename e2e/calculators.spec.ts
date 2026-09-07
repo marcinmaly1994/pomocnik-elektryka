@@ -913,3 +913,42 @@ test("mobile: kalkulator wybiera sie z rozwijanego menu, nie z listy nad trescia
   // menu zamyka sie po wyborze — inaczej wybrany kalkulator zostaje poza ekranem
   await expect(przelacznik).toHaveAttribute("aria-expanded", "false");
 });
+
+/**
+ * Maksymalna dlugosc obwodu — odwrocenie rachunku spadku napiecia.
+ *
+ * Sens tego testu to WPIECIE i wybor granicy WIAZACEJ: sama matematyka ma komplet
+ * testow jednostkowych w `src/lib/calc/maxLength.test.ts`. Tu sprawdzamy, ze pola
+ * formularza realnie wplywaja na wynik i ze zmiana danych potrafi przerzucic
+ * werdykt oraz to, ktore kryterium ogranicza trase.
+ */
+test("maksymalna dlugosc obwodu: granice wyznacza kryterium ciasniejsze", async ({ page }) => {
+  await page.goto("/kalkulatory/dlugosc");
+  const karta = page.locator(".pe-card").filter({ hasText: "Maksymalna długość trasy" });
+
+  // 2,5 mm2 Cu, B16, Ib 16 A, limit 5%, Zs przed 0,4 Om → 40,3 m ze spadku
+  await expect(karta).toContainText("40,3 m");
+  await expect(karta).toContainText("spadek napięcia 40,3 m");
+  await expect(karta).toContainText("samoczynne wyłączenie 130,6 m");
+  // kryterium akceptacji specyfikacji: B16 → Zs max 2,73 Om
+  await expect(karta).toContainText("Zs max 2,73 Ω");
+  await expect(karta).toContainText("Warunek spełniony");
+
+  // Trasa dluzsza niz granica przewraca werdykt.
+  await karta.getByLabel("Planowana długość trasy").fill("60");
+  await expect(karta).toContainText("Warunek niespełniony");
+
+  // Slabe zasilanie rozdzielnicy przerzuca granice na ochrone przeciwporazeniowa.
+  await karta.getByLabel("Impedancja pętli przed odcinkiem").fill("2.5");
+  await expect(karta).toContainText("Granicę wyznacza samoczynne wyłączenie");
+});
+
+test("maksymalna dlugosc obwodu: od 35 mm2 kalkulator ODMAWIA zamiast zanizac wynik", async ({ page }) => {
+  await page.goto("/kalkulatory/dlugosc");
+  await page.getByLabel("Przekrój żyły fazowej").selectOption("35");
+
+  // Rachunek pomija reaktancje, wiec przy takiej zyle wynik bylby nieprawdziwy —
+  // ma byc twardy blad, a nie liczba obok ostrzezenia.
+  await expect(page.getByText(/reaktancja przestaje być pomijalna/)).toBeVisible();
+  await expect(page.getByText("Maksymalna długość trasy")).toHaveCount(0);
+});
