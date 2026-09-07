@@ -1,6 +1,12 @@
 {
   "compilerOptions": {
     "composite": true,
+    // Artefakty `tsc -b` IDA POZA projekt. Wczesniej ladowaly obok zrodla, a Vite
+    // wybiera `vite.config.js` PRZED `vite.config.ts` — czyli budowanie szlo z
+    // konfiguracji sprzed ostatniej zmiany. Objawilo sie to dopiero przy pierwszej
+    // edycji konfiguracji od miesiecy: nowa wtyczka byla ignorowana bez ostrzezenia.
+    // (`noEmit` odpada: projekt jest `composite`, a TypeScript tego nie laczy.)
+    "outDir": "./node_modules/.tmp/tsc-node",
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",

@@ -17,6 +17,11 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
+    <!-- Aplikacja da się dodać do ekranu głównego i uruchomić bez paska przeglądarki.
+         Razem z service workerem (`public/sw.js`) znaczy to, że rzut otwiera się na
+         budowie także wtedy, gdy w piwnicy nie ma zasięgu. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
     <!-- Kolor paska przeglądarki na telefonie — ten sam `paper` co tło aplikacji
          (tailwind.config.ts), żeby pasek nie odcinał się od strony. -->
     <meta name="theme-color" content="#EEF1F4" />
