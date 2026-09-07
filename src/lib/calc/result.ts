@@ -83,11 +83,34 @@ export function bladWyniku<T>(bledy: CalcError[], zalozenia: string[] = []): Cal
 }
 
 /**
+ * Dane, których nie da się porównać, dają BRAK OCENY — nigdy werdyktu.
+ *
+ * Dwa przypadki i oba kończyły się wcześniej źle. Wartość nieskończona albo `NaN`
+ * (dzielenie przez zero gdzieś wyżej) przechodziła przez oba porównania — `NaN > x`
+ * i `NaN < x` są fałszywe — i wypadała z funkcji jako „warunek SPEŁNIONY" z
+ * marginesem `NaN`. Limit zerowy albo ujemny dawał z kolei `margines = 0`, czyli
+ * pewny siebie werdykt oparty na niczym.
+ *
+ * Zielony ptaszek przy warunku, którego nikt nie sprawdził, jest gorszy niż jego
+ * brak — ta sama zasada, co przy czterech kryteriach doboru obwodu.
+ */
+function bezOceny(co: string, czegoBrak: string): Ocena {
+  return {
+    verdict: "nieoceniany",
+    margines_pct: null,
+    komunikat: `Nie ma jak ocenić warunku „${co}": ${czegoBrak}`,
+  };
+}
+
+/**
  * Ocena warunku „wartość ≤ limit" (spadek napięcia, impedancja pętli, prąd
  * względem obciążalności). Margines liczony względem LIMITU.
  */
 export function ocenPodLimitem(wartosc: number, limit: number, opis: { co: string; jednostka: string }): Ocena {
-  const margines = limit > 0 ? ((limit - wartosc) / limit) * 100 : 0;
+  if (!Number.isFinite(wartosc) || !Number.isFinite(limit) || limit <= 0) {
+    return bezOceny(opis.co, "wartość musi być liczbą skończoną, a limit liczbą większą od zera.");
+  }
+  const margines = ((limit - wartosc) / limit) * 100;
   const fmt = (v: number) => formatLiczba(v, 2);
   if (wartosc > limit) {
     return {
@@ -116,7 +139,11 @@ export function ocenPodLimitem(wartosc: number, limit: number, opis: { co: strin
  * przykładzie ze specyfikacji: Ik 230 A przy Ia 80 A to margines 187%.
  */
 export function ocenPonadMinimum(wartosc: number, minimum: number, opis: { co: string; jednostka: string }): Ocena {
-  const margines = minimum > 0 ? ((wartosc - minimum) / minimum) * 100 : 0;
+  // Patrz `bezOceny` — te same dwa przypadki, ta sama odpowiedź.
+  if (!Number.isFinite(wartosc) || !Number.isFinite(minimum) || minimum <= 0) {
+    return bezOceny(opis.co, "wartość musi być liczbą skończoną, a wymagane minimum liczbą większą od zera.");
+  }
+  const margines = ((wartosc - minimum) / minimum) * 100;
   const fmt = (v: number) => formatLiczba(v, 2);
   if (wartosc < minimum) {
     return {
