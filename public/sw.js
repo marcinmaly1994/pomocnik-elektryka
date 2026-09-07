@@ -47,10 +47,18 @@ self.addEventListener("install", (zdarzenie) => {
   // Sama powłoka strony, żeby pierwsze wejście bez sieci nie kończyło się błędem
   // przeglądarki. Reszta (kod, obrazy) dopisuje się w miarę używania.
   zdarzenie.waitUntil(
-    caches
-      .open(CACHE)
-      .then((c) => c.add("/"))
-      .catch(() => {})
+    (async () => {
+      try {
+        // `cache: "reload"` omija pamięć podręczną HTTP — przy instalacji chcemy
+        // świeżą powłokę, a nie tę, którą przeglądarka trzyma od poprzedniej wizyty.
+        const odpowiedz = await fetch("/", { cache: "reload" });
+        // Ta sama zasada co przy nawigacjach: przekierowanej odpowiedzi nie zapisujemy.
+        if (wolnoZapisacNawigacje(odpowiedz)) await zapiszWPamieci("/", odpowiedz);
+      } catch {
+        // Instalacja bez sieci — tryb offline po prostu zacznie działać przy
+        // pierwszym udanym wejściu. Nie ma powodu przerywać instalacji.
+      }
+    })()
   );
   // Bez `skipWaiting` nowa wersja czekałaby na zamknięcie WSZYSTKICH kart aplikacji,
   // a użytkownik siedzi w jednej karcie tygodniami — aktualizacja nigdy by nie doszła.
@@ -84,15 +92,15 @@ self.addEventListener("fetch", (zdarzenie) => {
       (async () => {
         try {
           const odpowiedz = await fetch(zadanie);
-          const cache = await caches.open(CACHE);
-          // Zapisujemy pod „/", bo pod tym kluczem szukamy przy braku sieci —
-          // wszystkie adresy aplikacji (/kalkulatory/spadek, /protokoly/izolacja…)
-          // i tak dostają ten sam `index.html`.
-          cache.put("/", odpowiedz.clone());
+          if (wolnoZapisacNawigacje(odpowiedz)) {
+            // Zapisujemy pod „/", bo pod tym kluczem szukamy przy braku sieci —
+            // wszystkie adresy aplikacji (/kalkulatory/spadek, /protokoly/izolacja…)
+            // i tak dostają ten sam `index.html`.
+            await zapiszWPamieci("/", odpowiedz.clone());
+          }
           return odpowiedz;
         } catch {
-          const cache = await caches.open(CACHE);
-          const zapas = await cache.match("/");
+          const zapas = await zPamieci("/");
           if (zapas) return zapas;
           throw new Error("Brak sieci i brak zapisanej kopii strony.");
         }
@@ -103,14 +111,56 @@ self.addEventListener("fetch", (zdarzenie) => {
 
   zdarzenie.respondWith(
     (async () => {
-      const cache = await caches.open(CACHE);
-      const zapisane = await cache.match(zadanie);
+      const zapisane = await zPamieci(zadanie);
       if (zapisane) return zapisane;
       const odpowiedz = await fetch(zadanie);
       // `basic` = ta sama domena i pełna odpowiedź. Odpowiedzi częściowe (206, np.
       // przewijany film) i nieprzezroczyste do pamięci podręcznej się nie nadają.
-      if (odpowiedz.ok && odpowiedz.type === "basic") cache.put(zadanie, odpowiedz.clone());
+      if (odpowiedz.ok && odpowiedz.type === "basic") await zapiszWPamieci(zadanie, odpowiedz.clone());
       return odpowiedz;
     })()
   );
 });
+
+/**
+ * Czy tę odpowiedź na nawigację wolno zapisać jako kopię strony.
+ *
+ * PRZEKIEROWANE ODPOWIEDZI SĄ TU TRUCIZNĄ i to nie jest teoria. W `_redirects` stoi
+ * pięć reguł 301 (stare adresy kalkulatorów), więc wejście ze starego linku daje
+ * odpowiedź z `redirected === true`. Podanie takiej odpowiedzi przeglądarce
+ * w odpowiedzi na żądanie NAWIGACJI jest błędem specyfikacji — zamiast aplikacji
+ * użytkownik zobaczyłby ekran błędu sieci. Ktoś kliknąłby stary link z notatek,
+ * aplikacja otworzyłaby się normalnie, a następne uruchomienie bez zasięgu
+ * przestałoby działać, bez żadnego widocznego związku między jednym a drugim.
+ */
+function wolnoZapisacNawigacje(odpowiedz) {
+  return odpowiedz.ok && !odpowiedz.redirected && odpowiedz.type === "basic";
+}
+
+/**
+ * Dostęp do pamięci podręcznej NIE MOŻE wywrócić żądania.
+ *
+ * `caches.open` potrafi odmówić: zablokowane dane witryny, wyczerpany limit, polityka
+ * przeglądarki. Gdy takie odrzucenie leciało wprost z `respondWith`, przepadało całe
+ * żądanie — czyli zasób, który BEZ service workera załadowałby się normalnie, z nim
+ * nie ładował się wcale. Mechanizm mający pomagać robił szkodę dokładnie tym
+ * użytkownikom, u których i tak jest najciaśniej.
+ */
+async function zPamieci(klucz) {
+  try {
+    const cache = await caches.open(CACHE);
+    return await cache.match(klucz);
+  } catch {
+    return undefined;
+  }
+}
+
+async function zapiszWPamieci(klucz, odpowiedz) {
+  try {
+    const cache = await caches.open(CACHE);
+    await cache.put(klucz, odpowiedz);
+  } catch {
+    // Brak miejsca albo brak zgody na dane witryny. Tryb offline po prostu nie
+    // zadziała — ale bieżące żądanie ma się udać mimo to.
+  }
+}
