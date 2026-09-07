@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { zarejestrujServiceWorker } from "./lib/rejestracjaSW";
 import "./index.css";
 
 /**
@@ -20,3 +21,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Po wyrenderowaniu, nie przed: rejestracja czeka na `load`, więc nie konkuruje
+// o łącze z pierwszym wyświetleniem strony.
+zarejestrujServiceWorker();

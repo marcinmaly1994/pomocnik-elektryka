@@ -84,3 +84,43 @@ test("robots blokuje wyszukiwarki, ale przepuszcza podglad linku", async ({ requ
     expect(tekst, bot).toContain(`User-agent: ${bot}`);
   }
 });
+
+/**
+ * Manifest aplikacji — bez niego przegladarka nie zaproponuje dodania do ekranu
+ * glownego, a wtedy caly tryb offline jest dla uzytkownika niewidoczny.
+ */
+test("manifest ma komplet danych do zainstalowania aplikacji", async ({ page, request }) => {
+  await page.goto("/");
+  expect(await page.locator('link[rel="manifest"]').getAttribute("href")).toBe("/manifest.webmanifest");
+
+  const m = await (await request.get("/manifest.webmanifest")).json();
+  expect(m.start_url).toBe("/");
+  expect(m.display).toBe("standalone");
+  expect(m.lang).toBe("pl");
+  // 192 i 512 to rozmiary wymagane przez przegladarki do instalacji; wariant
+  // „maskable" pilnuje, zeby Android nie przycial domku wlasna maska.
+  const rozmiary = (m.icons as { sizes: string }[]).map((i) => i.sizes);
+  expect(rozmiary).toContain("192x192");
+  expect(rozmiary).toContain("512x512");
+  expect((m.icons as { purpose?: string }[]).some((i) => i.purpose === "maskable")).toBe(true);
+});
+
+test("stopka podaje wersje wdrozenia", async ({ page }) => {
+  await page.goto("/");
+  // Bez tego przy zgloszeniu „u mnie nie dziala" nie ma jak ustalic, co ktos ma
+  // zaladowane: aplikacja jest jednostronicowa, wiec adres tego nie mowi.
+  await expect(page.locator("footer")).toContainText(/wersja \S+/);
+});
+
+/**
+ * W trybie deweloperskim service worker NIE moze sie rejestrowac: Vite serwuje wtedy
+ * kazdy modul osobno, pod adresami ze znacznikami czasu, wiec zapamietanie ich
+ * rozjezdza HMR i podaje kod sprzed ostatniej zmiany. Testy e2e biegna wlasnie po
+ * serwerze deweloperskim, wiec to jedyne miejsce, gdzie da sie tego dopilnowac.
+ */
+test("service worker nie wtraca sie do trybu deweloperskiego", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForTimeout(1000);
+  const zarejestrowany = await page.evaluate(async () => !!(await navigator.serviceWorker?.getRegistration()));
+  expect(zarejestrowany).toBe(false);
+});

@@ -35,6 +35,7 @@ import { KompletDialog } from "@/components/ui/KompletDialog";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
+import { WERSJA_BUILDU } from "virtual:wersja-buildu";
 
 /**
  * KAŻDA zakładka ładowana leniwie — nigdy nie widać więcej niż jednej naraz.
@@ -987,6 +988,12 @@ function SiteFooter() {
         <div className="text-slate-400">
           <div>Obliczenia wg PN-HD 60364</div>
           <div className="mt-0.5">Projekt zapisywany lokalnie w przeglądarce</div>
+          {/* Wersja wdrożenia. Przy zgłoszeniu „u mnie nie działa" nie było czym
+              ustalić, co ktoś ma właściwie załadowane: aplikacja jest jednostronicowa,
+              więc adres tego nie mówi, a przeglądarka potrafi trzymać starą wersję. */}
+          <div className="pe-mono mt-1 text-[10px] text-slate-300" title="Wersja wdrożenia — podaj ją przy zgłaszaniu problemu">
+            wersja {WERSJA_BUILDU}
+          </div>
         </div>
       </div>
     </footer>
