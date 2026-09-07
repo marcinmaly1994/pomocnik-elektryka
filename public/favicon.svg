@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Ikona marki: ten sam domek co w nagłówku aplikacji (ICON_SVG_MARKUP w App.tsx),
+       przesunięty o 2 px w dół, żeby w kwadracie 64×64 stał optycznie na środku.
+       SVG, bo favicona skaluje się wtedy od 16 px w karcie po 128 px w zakładkach
+       przypiętych — bez rozmycia i bez trzymania czterech rozmiarów PNG. -->
+  <path d="M32 7 L61 33 H3 Z" fill="#E08A1E"/>
+  <path d="M11 33 H53 V59 H11 Z M21 39 h6 v13 h-6 Z M37 39 h6 v13 h-6 Z" fill="#16191C" fill-rule="evenodd"/>
+</svg>

@@ -1,0 +1,52 @@
+# =============================================================================
+#  UWAGA - DO ZMIANY PRZY URUCHAMIANIU DOMENY pomocnikelektryka.pl
+#
+#  Aplikacja stoi dzis pod tymczasowym adresem (*.pages.dev), a docelowa domena
+#  jest swiadomie wstrzymana do czasu ukonczenia prac. Wpuszczenie wyszukiwarek
+#  TERAZ zaszkodziloby wlasnie tej domenie: zaindeksowany adres tymczasowy stalby
+#  sie duplikatem konkurujacym z docelowym i trzeba by go potem mozolnie wycofywac.
+#  Dlatego wyszukiwarki sa tu zablokowane.
+#
+#  GDY DOMENA RUSZY: zamien regule na dole na
+#      User-agent: *
+#      Allow: /
+#  i dopisz linie `Sitemap: https://pomocnikelektryka.pl/sitemap.xml`
+#  (sam plik sitemap trzeba wtedy wygenerowac - dzis bylby bez sensu, bo nikt
+#  go nie przeczyta).
+#
+#  Komentarze bez polskich znakow SWIADOMIE: ten plik serwowany jest jako
+#  text/plain, a naglowek z kodowaniem zalezy od hostingu - przy lacinskim
+#  domyslnym ogonki wyswietlaja sie jako krzaki.
+# =============================================================================
+
+# Scrapery podgladu linkow przepuszczamy MIMO blokady nizej - i to jest sedno tej
+# konfiguracji. Blokada dotyczy INDEKSOWANIA, a nie pokazywania karty z podgladem:
+# aplikacja rozchodzi sie dzis linkiem wyslanym znajomemu, wiec znaczniki `og:`
+# z index.html musza miec kto przeczytac. Te roboty nie buduja indeksu wyszukiwarki,
+# tylko rozwijaja wklejony adres w miniaturke.
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Slackbot
+Allow: /
+
+User-agent: Slackbot-LinkExpanding
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+User-agent: Discordbot
+Allow: /
+
+User-agent: *
+Disallow: /

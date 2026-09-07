@@ -3,7 +3,52 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>pomocnikelektryka.pl</title>
+
+    <title>pomocnikelektryka.pl — zaprojektuj instalację elektryczną w swoim domu</title>
+    <meta
+      name="description"
+      content="Narysuj rzut mieszkania, rozmieść gniazda i oświetlenie, a aplikacja dobierze zabezpieczenia wg PN-HD 60364, policzy kosztorys i wystawi schemat oraz protokoły pomiarowe."
+    />
+
+    <!-- Favicona jako SVG: skaluje się od 16 px w karcie po 128 px w zakładce
+         przypiętej, więc nie trzeba trzymać czterech rozmiarów PNG. `apple-touch-icon`
+         zostaje w PNG, bo iOS nie przyjmuje SVG i dokłada własne tło pod ikoną
+         (stąd biała, nieprzezroczysta plansza w tym pliku). -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Kolor paska przeglądarki na telefonie — ten sam `paper` co tło aplikacji
+         (tailwind.config.ts), żeby pasek nie odcinał się od strony. -->
+    <meta name="theme-color" content="#EEF1F4" />
+    <!-- Interfejs jest wyłącznie jasny; bez tego przeglądarka w trybie ciemnym
+         renderuje pola formularzy po swojemu i wychodzi czarny tekst na czarnym tle. -->
+    <meta name="color-scheme" content="light" />
+
+    <!-- Podgląd linku w Messengerze, na Facebooku, LinkedInie i Slacku. Bez tych
+         znaczników wklejony adres pokazywał gołą, pustą kartę — a aplikacja na tym
+         etapie rozchodzi się głównie linkiem wysłanym znajomemu.
+         Adresy MUSZĄ być bezwzględne: scrapery nie rozwiązują ścieżek względnych. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="pomocnikelektryka.pl" />
+    <meta property="og:locale" content="pl_PL" />
+    <meta property="og:url" content="https://pomocnikelektryka.pl/" />
+    <meta property="og:title" content="pomocnikelektryka.pl — zaprojektuj instalację elektryczną w swoim domu" />
+    <meta
+      property="og:description"
+      content="Narysuj rzut mieszkania, rozmieść gniazda i oświetlenie, a aplikacja dobierze zabezpieczenia wg PN-HD 60364, policzy kosztorys i wystawi schemat oraz protokoły pomiarowe."
+    />
+    <meta property="og:image" content="https://pomocnikelektryka.pl/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="pomocnikelektryka.pl — rzut, dobór zabezpieczeń, schemat, kalkulatory i protokoły" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="pomocnikelektryka.pl — zaprojektuj instalację elektryczną w swoim domu" />
+    <meta
+      name="twitter:description"
+      content="Narysuj rzut, rozmieść osprzęt, a aplikacja dobierze zabezpieczenia wg PN-HD 60364 i wystawi schemat oraz protokoły."
+    />
+    <meta name="twitter:image" content="https://pomocnikelektryka.pl/og.png" />
   </head>
   <body>
     <div id="root"></div>
