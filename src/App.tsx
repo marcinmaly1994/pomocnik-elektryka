@@ -26,10 +26,6 @@ import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CloudSaveIndicator } from "@/components/ui/CloudSaveIndicator";
 import { komunikatZapisu } from "@/lib/zapisLokalny";
-import { CalculatorsTab } from "@/components/calculators/CalculatorsTab";
-import { ProtocolsTab } from "@/components/protocols/ProtocolsTab";
-import { SchemaTab } from "@/components/schema/SchemaTab";
-import { CostsTab } from "@/components/costs/CostsTab";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { ProjectsModal } from "@/components/auth/ProjectsModal";
 import { AccountModal, type AccountModalTab } from "@/components/auth/AccountModal";
@@ -39,11 +35,25 @@ import { PdfPreview } from "@/components/ui/PdfPreview";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 
-// Konva/react-konva to największy pojedynczy zależnik w bundlu — DesignTab i
-// PanelTab (jedyne dwa moduły, które go importują) ładowane leniwie, żeby
-// pierwsze wejście na Kalkulatory/Protokoły/Schemat/Kosztorys go nie ciągnęło.
+/**
+ * KAŻDA zakładka ładowana leniwie — nigdy nie widać więcej niż jednej naraz.
+ *
+ * Konva/react-konva (DesignTab, PanelTab) był tu pierwszy i najbardziej oczywisty,
+ * ale reszta ważyła razem tyle samo: sam `CalculatorsTab` to trzy tysiące linii i
+ * dwadzieścia jeden silników obliczeniowych, których nie potrzebuje NIKT, kto wszedł
+ * narysować rzut. Wejście na stronę ściągało komplet wszystkiego, choć aplikacja
+ * montuje dokładnie jedną zakładkę.
+ *
+ * Komplet dokumentacji przechodzi przez `lib/pdf/rejestr.ts`, więc podział działa
+ * i dla niego: komplet OTWIERA potrzebną zakładkę i czeka, aż zgłosi się jej
+ * producent — z limitem czasu, który obejmuje też pobranie tego kawałka kodu.
+ */
 const DesignTab = lazy(() => import("@/components/design/DesignTab").then((m) => ({ default: m.DesignTab })));
 const PanelTab = lazy(() => import("@/components/panel/PanelTab").then((m) => ({ default: m.PanelTab })));
+const CalculatorsTab = lazy(() => import("@/components/calculators/CalculatorsTab").then((m) => ({ default: m.CalculatorsTab })));
+const ProtocolsTab = lazy(() => import("@/components/protocols/ProtocolsTab").then((m) => ({ default: m.ProtocolsTab })));
+const SchemaTab = lazy(() => import("@/components/schema/SchemaTab").then((m) => ({ default: m.SchemaTab })));
+const CostsTab = lazy(() => import("@/components/costs/CostsTab").then((m) => ({ default: m.CostsTab })));
 
 function TabLoading() {
   return (
@@ -613,7 +623,11 @@ export default function App() {
           sens tego paska, przestawała być czytelna. Teraz przepływ jest jednym rzędem,
           który w razie braku miejsca przewija się poziomo, a narzędzia schodzą do
           własnego wiersza pod spodem. */}
-      {tab === "kalkulatory" && <CalculatorsTab />}
+      {tab === "kalkulatory" && (
+        <Suspense fallback={<TabLoading />}>
+          <CalculatorsTab />
+        </Suspense>
+      )}
 
       {tab === "rozdzielnica" && (
         <Suspense fallback={<TabLoading />}>
@@ -621,11 +635,23 @@ export default function App() {
         </Suspense>
       )}
 
-      {tab === "protokoly" && <ProtocolsTab />}
+      {tab === "protokoly" && (
+        <Suspense fallback={<TabLoading />}>
+          <ProtocolsTab />
+        </Suspense>
+      )}
 
-      {tab === "schemat" && <SchemaTab />}
+      {tab === "schemat" && (
+        <Suspense fallback={<TabLoading />}>
+          <SchemaTab />
+        </Suspense>
+      )}
 
-      {tab === "kosztorys" && <CostsTab />}
+      {tab === "kosztorys" && (
+        <Suspense fallback={<TabLoading />}>
+          <CostsTab />
+        </Suspense>
+      )}
 
       {tab === "projekt" && (
         <>
