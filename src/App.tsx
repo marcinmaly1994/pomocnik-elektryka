@@ -48,12 +48,42 @@ import { SUPABASE_CONFIGURED } from "@/lib/supabase";
  * i dla niego: komplet OTWIERA potrzebną zakładkę i czeka, aż zgłosi się jej
  * producent — z limitem czasu, który obejmuje też pobranie tego kawałka kodu.
  */
-const DesignTab = lazy(() => import("@/components/design/DesignTab").then((m) => ({ default: m.DesignTab })));
-const PanelTab = lazy(() => import("@/components/panel/PanelTab").then((m) => ({ default: m.PanelTab })));
-const CalculatorsTab = lazy(() => import("@/components/calculators/CalculatorsTab").then((m) => ({ default: m.CalculatorsTab })));
-const ProtocolsTab = lazy(() => import("@/components/protocols/ProtocolsTab").then((m) => ({ default: m.ProtocolsTab })));
-const SchemaTab = lazy(() => import("@/components/schema/SchemaTab").then((m) => ({ default: m.SchemaTab })));
-const CostsTab = lazy(() => import("@/components/costs/CostsTab").then((m) => ({ default: m.CostsTab })));
+const wczytaj = {
+  projekt: () => import("@/components/design/DesignTab"),
+  rozdzielnica: () => import("@/components/panel/PanelTab"),
+  kalkulatory: () => import("@/components/calculators/CalculatorsTab"),
+  protokoly: () => import("@/components/protocols/ProtocolsTab"),
+  schemat: () => import("@/components/schema/SchemaTab"),
+  kosztorys: () => import("@/components/costs/CostsTab"),
+} as const;
+
+const DesignTab = lazy(() => wczytaj.projekt().then((m) => ({ default: m.DesignTab })));
+const PanelTab = lazy(() => wczytaj.rozdzielnica().then((m) => ({ default: m.PanelTab })));
+const CalculatorsTab = lazy(() => wczytaj.kalkulatory().then((m) => ({ default: m.CalculatorsTab })));
+const ProtocolsTab = lazy(() => wczytaj.protokoly().then((m) => ({ default: m.ProtocolsTab })));
+const SchemaTab = lazy(() => wczytaj.schemat().then((m) => ({ default: m.SchemaTab })));
+const CostsTab = lazy(() => wczytaj.kosztorys().then((m) => ({ default: m.CostsTab })));
+
+/**
+ * Pobiera kod zakładki, ZANIM użytkownik w nią kliknie.
+ *
+ * Podział na kawałki zdjął z wejścia 283 kB, ale przeniósł je na pierwsze kliknięcie:
+ * same Kalkulatory to 206 kB, czyli na wolnym łączu widoczne „Wczytywanie…". Kursor
+ * jest jednak nad przyciskiem grubo wcześniej, niż go naciśnie — i tę zwłokę
+ * wykorzystujemy na pobranie kodu.
+ *
+ * Wywołanie jest BEZPIECZNE do powtarzania: `import()` zwraca ten sam moduł z pamięci
+ * podręcznej modułów, więc dziesiąte najechanie na przycisk nie pobiera nic więcej.
+ *
+ * Błąd jest tu połykany ŚWIADOMIE. Nieudane pobranie z wyprzedzenia (chwilowy brak
+ * sieci) nie jest zdarzeniem, o którym użytkownik ma się dowiedzieć — nic przecież
+ * nie kliknął. Prawdziwe kliknięcie spróbuje jeszcze raz i wtedy błąd pokaże się
+ * normalnie, przez `Suspense`. Bez `catch` zostawialibyśmy odrzuconą obietnicę,
+ * która trafia do konsoli jako nieobsłużony wyjątek.
+ */
+function pobierzZawczasu(tab: AppTab): void {
+  void wczytaj[tab]().catch(() => {});
+}
 
 function TabLoading() {
   return (
@@ -143,7 +173,8 @@ function FlowCard({
   subtitle,
   isActive,
   badge,
-  onClick,
+  tab,
+  onPick,
   children,
 }: {
   step: string;
@@ -151,7 +182,10 @@ function FlowCard({
   subtitle: string;
   isActive: boolean;
   badge?: string;
-  onClick: () => void;
+  /** Zakładka tego etapu — stąd i przejście, i pobranie kodu z wyprzedzeniem.
+   *  Wcześniej kafel dostawał samo `onClick`, więc nie wiedział, DOKĄD prowadzi. */
+  tab: AppTab;
+  onPick: (tab: AppTab) => void;
   children?: React.ReactNode;
 }) {
   return (
@@ -166,7 +200,12 @@ function FlowCard({
       {/* Numer, plakietka i podtytuł są `aria-hidden`, żeby nazwą dostępnościową
           przycisku został sam tytuł etapu („Rozdzielnica", nie „02 Rozdzielnica auto
           Dobór i schemat") — dla czytników ekranu i testów e2e. */}
-      <button onClick={onClick} className="flex items-center gap-2.5 text-left">
+      <button
+        onClick={() => onPick(tab)}
+        onPointerEnter={() => pobierzZawczasu(tab)}
+        onFocus={() => pobierzZawczasu(tab)}
+        className="flex items-center gap-2.5 text-left"
+      >
         <span
           aria-hidden="true"
           className="pe-mono flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold"
@@ -210,6 +249,10 @@ function ToolTab({ id, label, active, onPick }: TabButtonProps) {
   return (
     <button
       onClick={() => onPick(id)}
+      // `pointerenter` obsługuje mysz, pióro I dotyk (przy dotyku pada w momencie
+      // przyłożenia palca, czyli i tak przed `click`); `focus` — nawigację klawiaturą.
+      onPointerEnter={() => pobierzZawczasu(id)}
+      onFocus={() => pobierzZawczasu(id)}
       className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors"
       style={isActive ? { color: "#C1793F", background: "#C1793F14", fontWeight: 600 } : { color: "#64748B" }}
     >
@@ -424,6 +467,8 @@ export default function App() {
             Przycisk, nie link: to nawigacja WEWNĄTRZ aplikacji, bez przeładowania. */}
         <button
           onClick={() => setTab("projekt")}
+          onPointerEnter={() => pobierzZawczasu("projekt")}
+          onFocus={() => pobierzZawczasu("projekt")}
           title="Wróć do projektowania instalacji"
           aria-label="pomocnikelektryka.pl — wróć do projektowania instalacji"
           className="flex min-w-0 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-80"
@@ -582,7 +627,8 @@ export default function App() {
             title="Instalacja"
             subtitle="Projekt instalacji"
             isActive={tab === "projekt"}
-            onClick={() => setTab("projekt")}
+            tab="projekt"
+            onPick={setTab}
           />
           <FlowArrow />
           {/* Rozdzielnica i Schemat to dwa OSOBNE etapy, choć oba powstają automatycznie
@@ -595,7 +641,8 @@ export default function App() {
             subtitle="Dobór zabezpieczeń"
             badge="auto"
             isActive={tab === "rozdzielnica"}
-            onClick={() => setTab("rozdzielnica")}
+            tab="rozdzielnica"
+            onPick={setTab}
           />
           <FlowArrow />
           <FlowCard
@@ -604,7 +651,8 @@ export default function App() {
             subtitle="Schemat jednokreskowy"
             badge="auto"
             isActive={tab === "schemat"}
-            onClick={() => setTab("schemat")}
+            tab="schemat"
+            onPick={setTab}
           />
           <FlowArrow />
           <FlowCard
@@ -612,7 +660,8 @@ export default function App() {
             title="Kosztorys"
             subtitle="Zestawienie kosztów"
             isActive={tab === "kosztorys"}
-            onClick={() => setTab("kosztorys")}
+            tab="kosztorys"
+            onPick={setTab}
           />
         </div>
       </div>
@@ -690,6 +739,8 @@ export default function App() {
         return (
           <button
             onClick={() => setTab(poprzedni.id)}
+            onPointerEnter={() => pobierzZawczasu(poprzedni.id)}
+            onFocus={() => pobierzZawczasu(poprzedni.id)}
             // Ukryty poniżej `md`: to `position: fixed` w rogu OKNA, obojętne na
             // przewijanie i długość treści pod spodem — na wąskich/niskich oknach
             // (kolumna narzędzi + panel Instalacji już same potrzebują sporo
@@ -712,6 +763,8 @@ export default function App() {
         return (
           <button
             onClick={() => setTab(nastepny.id)}
+            onPointerEnter={() => pobierzZawczasu(nastepny.id)}
+            onFocus={() => pobierzZawczasu(nastepny.id)}
             // Patrz komentarz przy „Cofnij" wyżej — ten sam powód, ten sam próg.
             className="fixed bottom-5 right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
           >
