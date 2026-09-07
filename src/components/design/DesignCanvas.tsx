@@ -2164,6 +2164,30 @@ export function DesignCanvas({
                     />
                   );
                 })}
+                {/* Numer obwodu wskazany RĘCZNIE — w kółku pod symbolem, żeby nie mylił
+                    się z numerem grupy sterowania (ten stoi obok, bez obwódki). Widać go
+                    tylko tam, gdzie ktoś go nadał: automatyczne obwody numeru na rzucie
+                    nie dostają, bo ich podział zmienia się z każdym dołożonym punktem
+                    i cyfra kłamałaby przy pierwszej zmianie. Na budowie mówi się
+                    „obwód 5", więc numer musi stać przy symbolu, a nie tylko w tabeli. */}
+                {typeof el.obwod === "number" && (
+                  <Group x={0} y={16} rotation={-(el.rotation ?? 0)} listening={false}>
+                    <Circle radius={6.5} fill="#fff" stroke={def.color} strokeWidth={1} />
+                    <Text
+                      x={-7}
+                      y={-7}
+                      text={String(el.obwod)}
+                      fontSize={8}
+                      fontStyle="700"
+                      fill={def.color}
+                      width={14}
+                      height={14}
+                      align="center"
+                      verticalAlign="middle"
+                      listening={false}
+                    />
+                  </Group>
+                )}
               </Group>
             );
           })}

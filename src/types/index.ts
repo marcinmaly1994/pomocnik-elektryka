@@ -76,6 +76,19 @@ export interface InstallationElement {
    */
   widthM?: number;
   depthM?: number;
+  /**
+   * Numer obwodu wskazany RĘCZNIE (menu pod prawym przyciskiem). `undefined` =
+   * przydziela automat (`computeCircuits`).
+   *
+   * Istnieje, bo automat dzieli obwody po rodzaju punktu, mokrości pomieszczenia
+   * i kolejności — a projektant często chce inaczej: kuchnia osobno, gniazdo przy
+   * biurku razem z salonem, dwa pokoje na jednym obwodzie, bo blisko pionu. To
+   * decyzja projektowa, której z samego rysunku nie da się odgadnąć.
+   *
+   * Numer jest wspólny dla całego projektu i to on jest tożsamością obwodu na
+   * rzucie — dokładnie tak, jak mówi się o nim na budowie („obwód 5").
+   */
+  obwod?: number;
 }
 
 export interface Wall {

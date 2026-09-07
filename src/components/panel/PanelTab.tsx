@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { computeRcdGroups } from "@/lib/panel/circuits";
+import { computeRcdGroups, ostrzezeniaObwodow } from "@/lib/panel/circuits";
 import { ELEMENT_TYPES, NO_ROOM } from "@/lib/elements";
 import {
   balancePhases,
@@ -146,6 +146,14 @@ export function PanelTab() {
     () => sized.flatMap((s) => s.ostrzezenia.map((w) => ({ ...w, obwod: s.nazwa }))),
     [sized]
   );
+  /**
+   * Zastrzeżenia do obwodów złożonych RĘCZNIE (numer nadany na rzucie).
+   *
+   * Osobno od `sizingWarnings`, bo mówią co innego: tamte — że dobór nie wychodzi,
+   * te — że ręcznie złożony obwód odbiega od praktyki projektowej. Stoją jednak
+   * w tym samym miejscu, bo dla czytającego to jedna lista „na co uważać".
+   */
+  const ostrzezeniaReczne = useMemo(() => ostrzezeniaObwodow(elements, roomShapes), [elements, roomShapes]);
   // Kluczowane tak, jak `buildPanelDevices` nadaje `key` aparatom obwodowym —
   // dzięki temu render dostaje gotową mapę i nie musi nic wiedzieć o obwodach.
   const sizingByDeviceKey = useMemo(() => new Map(sized.map((s) => [`mcb-${s.id}`, s])), [sized]);
@@ -796,7 +804,7 @@ export function PanelTab() {
           </table>
         </div>
 
-        {sizingWarnings.length > 0 && (
+        {(sizingWarnings.length > 0 || ostrzezeniaReczne.length > 0) && (
           <div className="mt-4 space-y-1.5">
             {sizingWarnings.map((w, i) => (
               <div
@@ -808,6 +816,16 @@ export function PanelTab() {
                 <div>
                   <span className="font-semibold">{w.obwod}</span> — {w.message}
                 </div>
+              </div>
+            ))}
+            {ostrzezeniaReczne.map((o, i) => (
+              <div
+                key={`reczne-${i}`}
+                className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                style={{ background: "#C1793F14", color: "#8A5526" }}
+              >
+                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                <div>{o.tresc}</div>
               </div>
             ))}
           </div>

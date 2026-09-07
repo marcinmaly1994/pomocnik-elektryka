@@ -70,15 +70,74 @@ function roleOf(e: InstallationElement) {
 }
 
 /**
+ * Odbiorniki, którym numeru obwodu przypisać SIĘ NIE DA — bo z definicji mają
+ * własny obwód: ładowarka EV, gniazdo trójfazowe, wypust AGD i gniazdo oznaczone
+ * jako dedykowane.
+ *
+ * To jedyne miejsce, gdzie ręczny wybór jest odrzucany zamiast uszanowany. Powód
+ * nie jest formalny: obwód takiego odbiornika ma inny przewód, inne zabezpieczenie
+ * i często inną liczbę faz. Dorzucenie go do wspólnego obwodu gniazd nie dałoby
+ * „obwodu z ładowarką", tylko obwód z błędnym doborem — a menu i tak musi
+ * powiedzieć, dlaczego tej opcji nie ma (patrz `DesignTab`).
+ */
+export function maWlasnyObwodZDefinicji(e: InstallationElement): boolean {
+  const rola = roleOf(e);
+  return rola === "ev" || rola === "socket3f" || rola === "dedicated" || (rola === "socket" && e.dedicated);
+}
+
+/** Numer obwodu wskazany ręcznie — tylko tam, gdzie w ogóle wolno go wskazać. */
+function recznyNumer(e: InstallationElement): number | undefined {
+  return !maWlasnyObwodZDefinicji(e) && typeof e.obwod === "number" ? e.obwod : undefined;
+}
+
+/**
+ * Obwody złożone RĘCZNIE — po numerze wpisanym przez projektanta.
+ *
+ * Idą PRZED regułami automatycznymi i zabierają im swoje elementy, bo ręczny wybór
+ * jest decyzją projektową: automat dzieli po rodzaju punktu i mokrości pomieszczenia,
+ * a projektant wie, że kuchnia ma iść osobno, choć reguła tego nie widzi.
+ *
+ * Przewód i zabezpieczenie biorą się z zawartości: obwód z choćby jedną oprawą jest
+ * oświetleniowy (1,5 mm², B10), pozostałe gniazdowe (2,5 mm², B16). Mieszanki nie
+ * blokujemy — bywa uzasadniona — ale `ostrzezeniaObwodow` ją zgłasza.
+ */
+function obwodyReczne(elements: InstallationElement[]): { numer: number; elementy: InstallationElement[] }[] {
+  const wg = new Map<number, InstallationElement[]>();
+  for (const e of elements) {
+    const numer = recznyNumer(e);
+    if (numer === undefined) continue;
+    if (!wg.has(numer)) wg.set(numer, []);
+    wg.get(numer)!.push(e);
+  }
+  return [...wg.entries()].sort(([a], [b]) => a - b).map(([numer, elementy]) => ({ numer, elementy }));
+}
+
+/**
  * Heurystyka grupowania elementów instalacji w obwody — przeniesiona z wersji JS.
  * Odbiorniki wymagające własnego obwodu (EV, gniazda 400V, wypusty AGD, gniazda
  * dedykowane, hermetyczne) dostają osobne obwody; zwykłe gniazda i oświetlenie są
  * grupowane po pomieszczeniu/typie w paczki po kilka sztuk (limit modułowy szyny).
  */
-export function computeCircuits(elements: InstallationElement[], roomShapes: RoomShape[] = []): Circuit[] {
+export function computeCircuits(wszystkie: InstallationElement[], roomShapes: RoomShape[] = []): Circuit[] {
   const circuits: Circuit[] = [];
   let n = 1;
   const add = (c: Omit<Circuit, "id">) => circuits.push({ id: "obw" + n++, ...c });
+
+  // Najpierw to, co projektant przypisał ręcznie — reszta reguł dostaje już tylko
+  // elementy bez numeru, więc automat nie „odbiera" mu jego decyzji.
+  for (const { numer, elementy } of obwodyReczne(wszystkie)) {
+    const oswietleniowy = elementy.some((e) => roleOf(e) === "light");
+    const pokoje = [...new Set(elementy.map((e) => e.room).filter(Boolean))];
+    add({
+      name: `Obwód ${numer}${pokoje.length ? ` — ${pokoje.join(", ")}` : ""}`,
+      type: oswietleniowy ? "oswietlenie" : "gniazdko",
+      elements: elementy,
+      cable: oswietleniowy ? "YDYp 3x1,5 mm²" : "YDYp 3x2,5 mm²",
+      breaker: oswietleniowy ? "B10" : "B16",
+      rcd: true,
+    });
+  }
+  const elements = wszystkie.filter((e) => recznyNumer(e) === undefined);
 
   elements.filter((e) => roleOf(e) === "ev").forEach((e) => {
     add({ name: `Ładowarka EV — ${e.room}`, type: "gniazdko", elements: [e], cable: "YDYp 5x4 mm²", breaker: "C25 3-faz.", rcd: true });
@@ -185,4 +244,61 @@ export function mainBreakerFor(circuitCount: number): string {
 /** Kolor wg typu obwodu — używany na schemacie jednokreskowym i w widoku rozdzielnicy. */
 export function colorForCircuit(type: string): string {
   return ({ gniazdko: "#2D5A8C", oswietlenie: "#C1793F", roleta: "#7C5CBF" } as Record<string, string>)[type] || "#2D5A8C";
+}
+
+/** Zalecane maksimum punktów na obwód — PRAKTYKA projektowa, nie liczba z normy.
+ *  PN-HD 60364 nie podaje limitu punktów; te wartości są tymi samymi, których używa
+ *  automat wyżej, więc ręczny podział ocenia się tą samą miarą co automatyczny. */
+export const ZALECANE_MAKS = { gniazda: 8, gniazdaMokre: 6, oswietlenie: 10 } as const;
+
+export interface OstrzezenieObwodu {
+  /** Numer obwodu wpisany ręcznie — po nim użytkownik go rozpozna na rzucie. */
+  numer: number;
+  tresc: string;
+}
+
+/**
+ * Zastrzeżenia do obwodów złożonych RĘCZNIE.
+ *
+ * Ostrzegamy, nie blokujemy — tak jak wszędzie indziej w tej aplikacji: liczymy,
+ * pokazujemy werdykt i mówimy dlaczego, zamiast odmawiać. Projektant bywa mądrzejszy
+ * od reguły (kuchnia z sześcioma gniazdami, z których realnie pracują dwa), ale musi
+ * wiedzieć, że od reguły odszedł.
+ *
+ * Elementów, które z definicji mają własny obwód, tu nie ma — ich w ogóle nie da się
+ * przypisać ręcznie (patrz `maWlasnyObwodZDefinicji`).
+ */
+export function ostrzezeniaObwodow(
+  elements: InstallationElement[],
+  roomShapes: RoomShape[] = []
+): OstrzezenieObwodu[] {
+  const out: OstrzezenieObwodu[] = [];
+  for (const { numer, elementy } of obwodyReczne(elements)) {
+    const oprawy = elementy.filter((e) => roleOf(e) === "light").length;
+    const gniazda = elementy.length - oprawy;
+
+    // Mieszanka oświetlenia z gniazdami: fizycznie wykonalna, ale dobór potraktuje
+    // taki obwód jako oświetleniowy (1,5 mm², B10) — a to za mało pod gniazda.
+    if (oprawy > 0 && gniazda > 0) {
+      out.push({
+        numer,
+        tresc: `Obwód ${numer} miesza oświetlenie (${oprawy}) z gniazdami (${gniazda}). Dobór potraktuje go jako oświetleniowy — 1,5 mm² i B10, czyli za mało pod gniazda. Rozdziel je albo sprawdź dobór ręcznie.`,
+      });
+    }
+
+    const mokre = elementy.filter((e) => roleOf(e) === "socketWet" || isWetRoomName(e.room, roomShapes)).length;
+    const limit =
+      oprawy > 0 && gniazda === 0
+        ? ZALECANE_MAKS.oswietlenie
+        : mokre > 0
+          ? ZALECANE_MAKS.gniazdaMokre
+          : ZALECANE_MAKS.gniazda;
+    if (elementy.length > limit) {
+      out.push({
+        numer,
+        tresc: `Obwód ${numer} ma ${elementy.length} punktów przy zalecanych ${limit}${mokre > 0 ? " (pomieszczenie mokre)" : ""}. To praktyka projektowa, nie zakaz z normy — ale przy takiej liczbie punktów sprawdź obciążenie i spadek napięcia.`,
+      });
+    }
+  }
+  return out;
 }
