@@ -12,6 +12,7 @@ import type { CableRoute, Circuit, ElementType, InstallationElement, Point, Room
 import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM } from "@/lib/elements";
 import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
 import { crossesGeometry, routeAlongWalls } from "./routing";
+import { kolejnoscLancucha } from "./lancuch";
 
 /**
  * Moc typowa pojedynczego punktu [W] — wartości projektowe, nie katalogowe.
@@ -111,19 +112,58 @@ function pionM(panelHeightM: number, deviceHeightM: number): number {
   return Math.max(0, CEILING_RUN_M - panelHeightM) + Math.max(0, CEILING_RUN_M - deviceHeightM);
 }
 
+/**
+ * Naddatek pionowy MIĘDZY dwiema puszkami tego samego obwodu [m] — sama różnica
+ * wysokości montażu.
+ *
+ * NIE `pionM`, i to jest istota łańcucha. Tamta funkcja opisuje trasę „pod strop
+ * i z powrotem w dół", bo tak wychodzi się z rozdzielnicy. Ale kolejnego gniazda
+ * nie zasila się, wracając pod sufit — przewód idzie z puszki do puszki bruzdą
+ * wzdłuż ściany, na tej samej wysokości. Liczenie tu pełnego biegu pod strop
+ * dokładało 5 m na każdą parę sąsiednich gniazd: przy obwodzie ośmiu gniazd
+ * trzydzieści metrów przewodu, którego nikt nigdy nie położy.
+ *
+ * Różnica zostaje, bo bywa prawdziwa: z gniazda (0,3 m) do punktu sufitowego
+ * (2,8 m) przewód faktycznie musi się wspiąć.
+ */
+function pionMiedzyPunktami(poprzedniaHM: number, nastepnaHM: number): number {
+  return Math.abs(poprzedniaHM - nastepnaHM);
+}
+
 export interface RouteEstimate {
-  /** Trasa do NAJDALSZEGO punktu obwodu [m] — to ona decyduje o spadku napięcia. */
+  /**
+   * Trasa do NAJDALSZEGO punktu obwodu [m] — to ona decyduje o spadku napięcia.
+   *
+   * Mierzona WZDŁUŻ ŁAŃCUCHA, a nie w linii prostej od rozdzielnicy: prąd do
+   * ostatniego gniazda płynie przez wszystkie wcześniejsze puszki. Dawne liczenie
+   * „na skróty" zaniżało tę długość, czyli myliło się w stronę NIEBEZPIECZNĄ —
+   * spadek napięcia wychodził mniejszy niż w rzeczywistości.
+   *
+   * Prąd przyjmujemy pełny na całej długości, choć w rzeczywistości maleje z każdym
+   * odgałęzieniem — to zapas po bezpiecznej stronie.
+   */
   worstCaseM: number;
-  /** Suma tras do wszystkich punktów [m] — materiał do kosztorysu. */
+  /**
+   * Suma odcinków łańcucha [m] — tyle przewodu trzeba KUPIĆ (kosztorys).
+   *
+   * Większa od `worstCaseM` o zejścia do puszek pośrednich i zapasy montażowe:
+   * kabel do nich schodzi i wraca pod strop, więc materiał jest, a na drodze prądu
+   * do ostatniego punktu tych metrów nie ma.
+   */
   totalM: number;
 }
 
 /**
- * Szacuje długości tras od rozdzielnicy do punktów obwodu.
+ * Szacuje długość przewodu obwodu, prowadzonego ŁAŃCUCHEM przez kolejne punkty.
  *
  * Manhattan, nie linia prosta: przewody układa się wzdłuż ścian i pod stropem,
- * nie po przekątnej pokoju. Do każdego punktu doliczany jest bieg pionowy
- * (pod sufit i z powrotem w dół) oraz zapas montażowy.
+ * nie po przekątnej pokoju. Każdy odcinek dostaje własny bieg pionowy (pod sufit
+ * i z powrotem w dół, licząc od wysokości montażu punktu POPRZEDNIEGO) oraz zapas
+ * montażowy na puszkę.
+ *
+ * Kolejność punktów bierze się z `kolejnoscLancucha` — tej samej, którą rysuje
+ * `buildCableRoutes`. To celowo jedno źródło: dopóki każde z nich zakładało
+ * gwiazdę po swojemu, kosztorys i rysunek pokazywały dwie różne instalacje.
  *
  * `metersPerUnit` pochodzi z kalibracji skali planu. Bez kalibracji zwraca `null`
  * — i to jest właściwe zachowanie: lepiej powiedzieć „nie wiem", niż podać
@@ -138,14 +178,39 @@ export function estimateRoutes(
   panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5
 ): RouteEstimate | null {
   if (!panel || metersPerUnit === null || !(metersPerUnit > 0) || elements.length === 0) return null;
-  let worst = 0;
+
+  const lancuch = kolejnoscLancucha(panel, elements);
   let total = 0;
-  for (const e of elements) {
-    const manhattanUnits = Math.abs(e.x - panel.x) + Math.abs(e.y - panel.y);
-    const runM = manhattanUnits * metersPerUnit + pionM(panelHeightM, mountingHeightM(e)) + SLACK_M;
-    total += runM;
-    if (runM > worst) worst = runM;
+  /**
+   * Sam bieg POZIOMY łańcucha — osobno od `total`, bo tylko on jest wspólny dla
+   * wszystkich punktów. Zejścia do puszek i zapasy montażowe trzeba KUPIĆ (więc są
+   * w `total`), ale nie leżą na drodze prądu do ostatniego gniazda: kabel biegnie
+   * pod stropem, a do każdej puszki tylko schodzi i wraca. Wliczenie ich do trasy
+   * spadku napięcia dodałoby przy ośmiu gniazdach ponad trzydzieści metrów, których
+   * prąd nigdy nie przepływa — i kazałoby kłaść 6 mm² pod zwykłe gniazda.
+   */
+  let poziomM = 0;
+  let poprzedni: Point = panel;
+  let wysokoscPoprzedniego = panelHeightM;
+  let pierwszy = true;
+  for (const e of lancuch) {
+    const odcinekM = (Math.abs(e.x - poprzedni.x) + Math.abs(e.y - poprzedni.y)) * metersPerUnit;
+    poziomM += odcinekM;
+    // Pierwszy odcinek wychodzi z ROZDZIELNICY — pod strop i w dół do puszki.
+    // Kolejne idą z puszki do puszki, więc liczy się sama różnica wysokości.
+    const pion = pierwszy
+      ? pionM(panelHeightM, mountingHeightM(e))
+      : pionMiedzyPunktami(wysokoscPoprzedniego, mountingHeightM(e));
+    total += odcinekM + pion + SLACK_M;
+    poprzedni = e;
+    wysokoscPoprzedniego = mountingHeightM(e);
+    pierwszy = false;
   }
+
+  // Punkt elektrycznie najdalszy to OSTATNI w łańcuchu (kolejność narasta od
+  // rozdzielnicy): cały bieg poziomy plus jedno zejście do tej właśnie puszki.
+  const ostatni = lancuch[lancuch.length - 1];
+  const worst = poziomM + pionM(panelHeightM, mountingHeightM(ostatni)) + SLACK_M;
   return { worstCaseM: round1(worst), totalM: round1(total) };
 }
 
@@ -574,12 +639,23 @@ export function buildCableRoutes(
       })),
     ];
 
-    for (const t of targets) {
+    // ŁAŃCUCH, nie gwiazda: jeden kabel obwodu wchodzi po drodze do kolejnych
+    // puszek. Rysowanie osobnej linii z rozdzielnicy do każdego punktu pokazywało
+    // tyle kabli, ile punktów — przy dwóch gniazdach w pokoju wyglądało to na dwa
+    // niezależne obwody, choć to jeden przewód pod jednym zabezpieczeniem.
+    // Kolejność liczy `kolejnoscLancucha`, ta sama, którą liczy `estimateRoutes` —
+    // inaczej kosztorys opisywałby inną instalację niż rysunek.
+    const lancuch = kolejnoscLancucha(
+      panel,
+      targets.map((t) => ({ ...t, x: t.end.x, y: t.end.y }))
+    );
+    let poczatek: Point = panel;
+    for (const t of lancuch) {
       // Punkty świadomie skopiowane do gołego `{x,y}` — `Point[]` ma zostać lekką
       // geometrią, a nie przeciekiem całego `InstallationElement` (rola, pokój,
       // kondygnacja…) tam, gdzie potrzebna jest tylko ścieżka do narysowania.
-      const routed = routeAlongWalls(panel, t.end, walls, roomShapes);
-      const points = routed ?? manhattanFallback(panel, t.end, walls, roomShapes);
+      const routed = routeAlongWalls(poczatek, t.end, walls, roomShapes);
+      const points = routed ?? manhattanFallback(poczatek, t.end, walls, roomShapes);
       const cable = t.cores ? withCoreCount(c.cable, t.cores) : c.cable;
       supply.push({
         id: t.id,
@@ -595,6 +671,10 @@ export function buildCableRoutes(
         kind: "zasilanie",
         lengthUnits: polylineLengthUnits(points),
       });
+      // Następny odcinek startuje z TEJ puszki, nie z rozdzielnicy — na tym polega
+      // łańcuch. `id` odcinka zostaje id punktu, w którym się KOŃCZY, więc ręcznie
+      // poprawione trasy (`routeOverrides`) dalej trafiają we właściwy odcinek.
+      poczatek = t.end;
     }
   }
   return [...supply, ...control];
