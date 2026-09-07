@@ -15,6 +15,21 @@ export const DEFAULT_PLAN_WIDTH = 1000;
 export const DEFAULT_PLAN_HEIGHT = 700;
 export const GRID = 20;
 
+/**
+ * Poniżej tej szerokości okna edytor układa się „telefonicznie": panel boczny
+ * startuje zwinięty, a ustawienia planu chowają się pod jeden przycisk.
+ *
+ * 768 px to próg `md` z Tailwinda i tak MUSI zostać — klasy `md:` w
+ * `EditorToolbar` decydują o tej samej rzeczy co ta stała, tylko po stronie CSS.
+ * Rozjazd tych dwóch liczb dałby stan, w którym ustawienia są schowane, a
+ * przycisk do ich pokazania — nie.
+ *
+ * Powód progu: przy 375 px sama chrome nad płótnem zajmowała 822 px, czyli więcej
+ * niż cały ekran telefonu. Rzut — jedyna rzecz, po którą się tu przychodzi —
+ * zaczynał się dopiero po przewinięciu.
+ */
+export const PROG_WASKIEGO_EKRANU = 768;
+
 /** Domyślna grubość ściany w jednostkach planu — dawna sztywna wartość `strokeWidth`
  *  sprzed dodania regulowanej grubości. Zapisy bez pola `thickness` (patrz `Wall`
  *  w types/index.ts) muszą wyglądać identycznie jak przed tą zmianą. */

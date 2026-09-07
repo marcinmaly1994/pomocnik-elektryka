@@ -622,7 +622,12 @@ export default function App() {
         {/* Bez widocznego suwaka: to pasek nawigacji, a nie okno z treścią. Że da
             się przewinąć, widać po przyciętej karcie następnego etapu — tak samo
             jak w paskach kart przeglądarki. */}
-        <div className="pe-bez-suwaka -mx-1 flex items-center gap-2 overflow-x-auto px-1 py-0.5">
+        {/* `min-w-0` NIE jest tu ozdobą. Element elastyczny ma domyślnie
+            `min-width: auto`, więc nie kurczy się poniżej szerokości swojej treści —
+            i `overflow-x-auto` nigdy się nie włączało: zamiast przewijać kafle
+            wewnątrz, pasek rozpychał całą stronę. Na oknie 375 px dawało to dokument
+            o szerokości 655 px, czyli poziome przewijanie CAŁEJ aplikacji. */}
+        <div className="pe-bez-suwaka -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-0.5">
           <FlowCard
             step="01"
             title="Instalacja"

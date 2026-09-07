@@ -46,6 +46,7 @@ import {
   MANUAL_DRAW_SCALE_MPU,
   MARGINES_KADROWANIA,
   ROOM_TYPE_LABELS,
+  PROG_WASKIEGO_EKRANU,
   defaultOpeningWidth,
   detectRoomName,
   guessRoomType,
@@ -69,7 +70,7 @@ import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
-import { DesignCanvas, MAX_ZOOM, MIN_ZOOM, wysokoscPlotna, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
+import { DesignCanvas, MAX_ZOOM, minZoom, wysokoscPlotna, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
 import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
 import { EditorStatusBar } from "./EditorStatusBar";
@@ -152,13 +153,27 @@ function odczytajOdrzuconyPrompt(): boolean {
  *  localStorage, a nie zapisywany dokument. Kto raz zwinie, ma zwinięty na stałe. */
 const PANEL_ZWINIETY_KEY = "pomocnikelektryka_panel_zwiniety";
 
+/**
+ * Bez ZAPISANEGO wyboru decyduje szerokość okna: na telefonie panel startuje
+ * zwinięty, na monitorze rozwinięty.
+ *
+ * Panel ma 268 px i na wąskim ekranie zjeżdżał pod pasek narzędzi, spychając rzut
+ * o kolejne pół ekranu w dół — czyli akurat tam, gdzie i tak było najciaśniej.
+ * Zwinięty zostawia sam pionowy pasek ikon, a ten mieści się obok planu.
+ *
+ * WYBÓR UŻYTKOWNIKA MA PIERWSZEŃSTWO nad szerokością okna, w obie strony: kto raz
+ * rozwinie panel na telefonie, ma go rozwiniętego także po odświeżeniu. Dlatego
+ * sprawdzamy `!== null`, a nie samo `=== "1"` — wcześniej zapisane „0" było nie do
+ * odróżnienia od braku zapisu.
+ */
 function odczytajPanelZwiniety(): boolean {
   try {
-    return localStorage.getItem(PANEL_ZWINIETY_KEY) === "1";
+    const zapisane = localStorage.getItem(PANEL_ZWINIETY_KEY);
+    if (zapisane !== null) return zapisane === "1";
   } catch {
-    // patrz odczytajOdrzuconyPrompt — brak flagi znaczy „domyślnie rozwinięty"
-    return false;
+    // patrz odczytajOdrzuconyPrompt — brak dostępu do pamięci nie może wywrócić edytora
   }
+  return typeof window !== "undefined" && window.innerWidth < PROG_WASKIEGO_EKRANU;
 }
 
 /**
@@ -505,7 +520,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     const dostepnaSzer = el.clientWidth - 2;
     if (dostepnaSzer <= 0) return;
     const z = Math.min(dostepnaSzer / planSize.w, wysPlotna / planSize.h);
-    setZoom(Math.round(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)) * 100) / 100);
+    setZoom(Math.round(Math.min(MAX_ZOOM, Math.max(minZoom(), z)) * 100) / 100);
   }, [planSize.w, planSize.h, wysPlotna]);
 
   useEffect(() => {
@@ -2205,6 +2220,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             krawędzi — `shadow-xl` odrywa ją wtedy wizualnie od rysunku pod spodem. */}
         <div
           ref={lewaKartaRef}
+          // Uchwyt dla testów: wcześniej celowały w tę kartę zestawem klas układu
+          // (`div.flex.shrink-0.overflow-hidden.rounded-card`), więc pierwsza zmiana
+          // responsywności — zdjęcie `shrink-0` na wąskim ekranie — wywracała test,
+          // który z tą zmianą nie miał nic wspólnego.
+          data-testid="karta-narzedzi"
           className={
             pelnyEkran
               // Przy samej krawędzi (`left-0`), bez zaokrąglenia i ramki od tej strony:
@@ -2215,7 +2235,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               // z opóźnieniem i na moment go zasłaniała — czyli dokładnie to, co
               // ta zmiana ma naprawić. Odsunięcie ma być natychmiastowe.
               ? "absolute left-0 z-30 flex overflow-hidden rounded-r-card border border-l-0 border-border bg-white shadow-xl transition-transform duration-200"
-              : "flex shrink-0 overflow-hidden rounded-card border border-border bg-white"
+              : "flex min-w-0 overflow-hidden rounded-card border border-border bg-white md:shrink-0"
           }
           // Karta USTĘPUJE pasków poziomych, zamiast się na nie kłaść. Wszystkie trzy
           // panele mają ten sam `z-index`, więc o wierzchu decydowała kolejność w DOM
@@ -2348,8 +2368,12 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
 
         <div
           ref={kolumnaPlotnaRef}
-          className={pelnyEkran ? "h-full w-full p-2" : undefined}
-          style={pelnyEkran ? undefined : { flex: "1 1 480px", minWidth: 320 }}
+          // `min-w-0` poniżej `md`: sztywne 320 px nie mieściło się obok paska
+          // narzędzi na ekranie 375 px i rozpychało stronę w poziomie. Płótno i tak
+          // dopasowuje powiększenie do szerokości kolumny (patrz `dopasujZoom`), więc
+          // węższa kolumna daje mniejszy, ale CAŁY rzut zamiast wystającego kadru.
+          className={pelnyEkran ? "h-full w-full p-2" : "min-w-0 md:min-w-[320px]"}
+          style={pelnyEkran ? undefined : { flex: "1 1 480px" }}
         >
           <DesignCanvas
             stageRef={stageRef}

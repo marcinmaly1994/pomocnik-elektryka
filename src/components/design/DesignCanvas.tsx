@@ -4,7 +4,7 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
-import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, gruboscObrysuPokoju, type PlanSize } from "@/lib/design";
+import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, gruboscObrysuPokoju, PROG_WASKIEGO_EKRANU, type PlanSize } from "@/lib/design";
 import { promienieDoPokoi, snapDoPokoi } from "@/lib/roomSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
@@ -52,6 +52,24 @@ export function wysokoscPlotna(): number {
 }
 export const MIN_ZOOM = 0.4;
 export const MAX_ZOOM = 4;
+
+/** Dolna granica powiększenia na wąskim ekranie — patrz `minZoom`. */
+export const MIN_ZOOM_WASKI = 0.2;
+
+/**
+ * Dolna granica powiększenia, zależna od szerokości okna.
+ *
+ * Na monitorze zostaje 0,4: niżej symbole osprzętu przestają być rozróżnialne, a
+ * miejsca i tak nie brakuje. Na telefonie ta sama granica znaczyła co innego —
+ * kolumna planu ma tam około 250 px, a plan przy 0,4 zajmuje 400 px, więc CAŁEGO
+ * mieszkania nie dawało się zobaczyć ani razu, nawet po dopasowaniu widoku.
+ * Alternatywą dla drobnego rzutu nie był większy rzut, tylko oglądanie go przez
+ * dziurkę — stąd 0,2 poniżej progu.
+ */
+export function minZoom(): number {
+  const okno = typeof window === "undefined" ? 1280 : window.innerWidth;
+  return okno < PROG_WASKIEGO_EKRANU ? MIN_ZOOM_WASKI : MIN_ZOOM;
+}
 
 /** Ładuje obraz podkładu z data URL. Zwraca `null`, dopóki się nie wczyta. */
 function useBackgroundImage(src: string | null): HTMLImageElement | null {
@@ -924,7 +942,7 @@ export function DesignCanvas({
     const planX = (el.scrollLeft + kursorX) / zoom;
     const planY = (el.scrollTop + kursorY) / zoom;
     const factor = e.evt.deltaY < 0 ? 1.1 : 0.9;
-    const nowaSkala = clampNum(zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    const nowaSkala = clampNum(zoom * factor, minZoom(), MAX_ZOOM);
     if (nowaSkala === zoom) return;
     kotwicaZoomRef.current = { planX, planY, kursorX, kursorY };
     onZoomChange(nowaSkala);

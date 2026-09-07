@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
-import { ArrowUpFromLine, Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, Undo2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ArrowUpFromLine, Cable, ChevronDown, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MAX_ZOOM, MIN_ZOOM } from "./DesignCanvas";
+import { MAX_ZOOM, minZoom } from "./DesignCanvas";
 import { FloorBar } from "./FloorBar";
 
 /**
@@ -125,10 +125,39 @@ export function EditorToolbar({
   onTogglePelnyEkran,
   przypinacz,
 }: EditorToolbarProps) {
-  const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100));
+  const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(minZoom(), Math.round(z * 100) / 100));
+
+  /**
+   * Ustawienia planu schowane pod jednym przyciskiem — ale TYLKO na wąskim ekranie.
+   *
+   * Ten pasek ma kilkanaście kontrolek i przy 375 px zawijał się w blok wysoki na
+   * 250 px, czyli jedną trzecią ekranu telefonu, spychając rzut poniżej krawędzi.
+   * Na monitorze nic się nie zmienia: opakowanie ma `md:contents`, więc od 768 px
+   * w górę znika z układu i pasek wygląda dokładnie tak jak przedtem.
+   *
+   * Przy planie zostaje to, czego używa się W TRAKCIE rysowania — cofnij/ponów,
+   * powiększenie, dopasowanie widoku, pełny ekran, zapis i PDF. Chowa się to, co
+   * ustawia się RAZ: kondygnacje, podkład, przyciąganie, rozmiar symboli i
+   * przełączniki warstw.
+   */
+  const [ustawieniaOtwarte, setUstawieniaOtwarte] = useState(false);
 
   return (
     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-card border border-border bg-white px-2.5 py-1.5">
+      <button
+        onClick={() => setUstawieniaOtwarte((v) => !v)}
+        aria-expanded={ustawieniaOtwarte}
+        className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs text-slate-600 transition-colors hover:text-copper md:hidden"
+      >
+        <SlidersHorizontal size={14} />
+        Ustawienia planu
+        <ChevronDown size={13} className={ustawieniaOtwarte ? "rotate-180 transition-transform" : "transition-transform"} />
+      </button>
+
+      {/* `contents` zamiast `block`: opakowanie ma zniknąć z układu, żeby jego dzieci
+          zostały bezpośrednimi elementami paska i zawijały się jak dotąd. Inaczej
+          całość stałaby się jednym blokiem i pasek rozjechałby się na monitorze. */}
+      <div className={ustawieniaOtwarte ? "contents" : "hidden md:contents"}>
       <FloorBar />
 
       <Separator />
@@ -307,6 +336,7 @@ export function EditorToolbar({
           <Layers2 size={15} className={showUnderlay ? "text-copper" : undefined} />
         </Button>
       )}
+      </div>
 
       <div className="flex items-center">
         <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title="Cofnij">
@@ -322,7 +352,7 @@ export function EditorToolbar({
       <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-border p-0.5">
         <button
           onClick={() => onZoomChange(clampZoom(zoom - ZOOM_STEP))}
-          disabled={zoom <= MIN_ZOOM}
+          disabled={zoom <= minZoom()}
           aria-label="Oddal widok"
           title="Oddal widok"
           className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30"
