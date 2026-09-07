@@ -38,7 +38,7 @@ import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type Distribu
 import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przyscienny, snapElementToWall } from "@/lib/wallSnap";
-import { computeCircuits } from "@/lib/panel/circuits";
+import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
@@ -75,6 +75,7 @@ import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
 import { EditorStatusBar } from "./EditorStatusBar";
 import { ToolRail } from "./ToolRail";
+import { WyborObwodu } from "./WyborObwodu";
 import { ElementLibrary } from "./ElementLibrary";
 import { RoomPanel } from "./RoomPanel";
 import { PlanCheckPanel } from "./PlanCheckPanel";
@@ -1207,6 +1208,38 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     setSelected(null);
     setMultiSelected(kopie.map((k) => k.id));
   }
+
+  /**
+   * Przypisuje elementom NUMER OBWODU — albo oddaje je automatowi (`undefined`).
+   *
+   * Numer jest decyzją projektową, której z rysunku nie da się odgadnąć: automat
+   * dzieli obwody po rodzaju punktu, mokrości pomieszczenia i kolejności, a
+   * projektant wie, że kuchnia ma iść osobno. Patrz `computeCircuits`.
+   *
+   * Odbiorniki z własnym obwodem z definicji (ładowarka EV, gniazdo trójfazowe,
+   * wypust AGD, gniazdo dedykowane) są tu pomijane, nawet gdyby trafiły do
+   * zaznaczenia grupowego — ich obwód ma inny przewód i inne zabezpieczenie, więc
+   * dołączenie do wspólnego dałoby obwód z błędnym doborem.
+   */
+  function przypiszObwod(ids: string[], numer: number | undefined) {
+    setDraft((d) => ({
+      ...d,
+      elements: d.elements.map((e) =>
+        ids.includes(e.id) && !maWlasnyObwodZDefinicji(e) ? { ...e, obwod: numer } : e
+      ),
+    }));
+  }
+
+  /**
+   * Numery, które już gdzieś na projekcie są — do podpowiedzi w menu. Bez nich
+   * przypisanie drugiego gniazda do „obwodu 3" wymagałoby zapamiętania, że taki
+   * numer w ogóle istnieje.
+   */
+  const uzyteNumeryObwodow = useMemo(() => {
+    const s = new Set<number>();
+    for (const e of elements) if (typeof e.obwod === "number") s.add(e.obwod);
+    return [...s].sort((a, b) => a - b);
+  }, [elements]);
 
   /** Obraca element(y) o 90° (w prawo) — np. gniazdko/łącznik przy skośnej ścianie. */
   function rotateElements(ids: string[]) {
@@ -2707,6 +2740,33 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                 >
                   <Trash2 size={14} /> Usuń zaznaczone
                 </button>
+                {/* Przypisanie GRUPOWE jest tu najważniejsze: obwód składa się
+                    z kilku punktów, więc klikanie ich po jednym byłoby karą za
+                    korzystanie z funkcji. */}
+                {(() => {
+                  const zaznaczone = elements.filter((e) => multiSelected.includes(e.id));
+                  const doPrzypisania = zaznaczone.filter((e) => !maWlasnyObwodZDefinicji(e));
+                  if (doPrzypisania.length === 0) {
+                    return (
+                      <WyborObwodu
+                        uzyte={uzyteNumeryObwodow}
+                        onWybierz={() => {}}
+                        zablokowane="Żaden z zaznaczonych odbiorników nie może dzielić obwodu — ładowarka EV, gniazdo trójfazowe, wypust AGD i gniazdo dedykowane mają własny z definicji."
+                      />
+                    );
+                  }
+                  const numery = new Set(doPrzypisania.map((e) => e.obwod));
+                  return (
+                    <WyborObwodu
+                      numerAktualny={numery.size === 1 ? [...numery][0] : undefined}
+                      uzyte={uzyteNumeryObwodow}
+                      onWybierz={(n) => {
+                        przypiszObwod(multiSelected, n);
+                        setContextMenu(null);
+                      }}
+                    />
+                  );
+                })()}
               </>
             ) : contextMenu.kind === "wall" ? (
               <button
@@ -2809,6 +2869,25 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                 >
                   <Trash2 size={14} /> Usuń
                 </button>
+                {(() => {
+                  const el = elements.find((e) => e.id === contextMenu.id);
+                  if (!el) return null;
+                  return (
+                    <WyborObwodu
+                      numerAktualny={el.obwod}
+                      uzyte={uzyteNumeryObwodow}
+                      onWybierz={(n) => {
+                        przypiszObwod([contextMenu.id], n);
+                        setContextMenu(null);
+                      }}
+                      zablokowane={
+                        maWlasnyObwodZDefinicji(el)
+                          ? "Ten odbiornik ma własny obwód z definicji — inny przewód i inne zabezpieczenie niż obwód wspólny."
+                          : undefined
+                      }
+                    />
+                  );
+                })()}
               </>
             )}
           </div>

@@ -76,6 +76,22 @@ export interface InstallationElement {
    */
   widthM?: number;
   depthM?: number;
+  /**
+   * Numer obwodu wskazany RĘCZNIE (menu pod prawym przyciskiem). `undefined` =
+   * przydziela automat (`computeCircuits`).
+   *
+   * Istnieje, bo automat dzieli obwody po rodzaju punktu, mokrości pomieszczenia
+   * i kolejności — a projektant często chce inaczej: kuchnia osobno, gniazdo przy
+   * biurku razem z salonem, dwa pokoje na jednym obwodzie, bo blisko pionu. To
+   * decyzja projektowa, której z samego rysunku nie da się odgadnąć.
+   *
+   * Numer jest wspólny dla całego projektu i służy do WSKAZANIA przynależności,
+   * a nie do jej pokazywania. Na rzucie nie ma po nim śladu i to jest świadome:
+   * przynależność widać po trasach przewodów — jeden obwód to jeden kabel wchodzący
+   * po drodze do kolejnych puszek (patrz `kolejnoscLancucha`). Cyfra przy symbolu
+   * powtarzałaby tę samą informację drugi raz, zaśmiecając rysunek.
+   */
+  obwod?: number;
 }
 
 export interface Wall {

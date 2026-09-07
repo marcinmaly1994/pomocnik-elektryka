@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { chunkLightsByGroup, colorForCircuit, computeCircuits, computeLowVoltage, computeRcdGroups, mainBreakerFor } from "./circuits";
+import { chunkLightsByGroup, colorForCircuit, computeCircuits, computeLowVoltage, computeRcdGroups, mainBreakerFor, ostrzezeniaObwodow, ZALECANE_MAKS } from "./circuits";
 import type { InstallationElement } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -222,5 +222,119 @@ describe("colorForCircuit", () => {
 
   it("nieznany typ -> domyślny kolor gniazdka", () => {
     expect(colorForCircuit("cokolwiek")).toBe("#2D5A8C");
+  });
+});
+
+/**
+ * Numer obwodu nadany RECZNIE na rzucie (menu pod prawym przyciskiem).
+ *
+ * Automat dzieli obwody po rodzaju punktu, mokrosci pomieszczenia i kolejnosci —
+ * a projektant czesto chce inaczej: kuchnia osobno, dwa pokoje razem, bo blisko
+ * pionu. To decyzja projektowa, ktorej z samego rysunku nie da sie odgadnac.
+ */
+describe("computeCircuits — reczny numer obwodu", () => {
+  it("elementy z tym samym numerem trafiaja do JEDNEGO obwodu, niezaleznie od pokoju", () => {
+    const obwody = computeCircuits([
+      el({ type: "gniazdko", room: "Salon", obwod: 3, id: "a" }),
+      el({ type: "gniazdko", room: "Kuchnia", obwod: 3, id: "b" }),
+    ]);
+    expect(obwody).toHaveLength(1);
+    expect(obwody[0].elements.map((e) => e.id).sort()).toEqual(["a", "b"]);
+    expect(obwody[0].name).toContain("Obwód 3");
+    // Nazwa wymienia pokoje, bo sam numer nie mowi, gdzie ten obwod jest.
+    expect(obwody[0].name).toContain("Salon");
+  });
+
+  it("rozne numery to rozne obwody, a elementy BEZ numeru zostaja przy automacie", () => {
+    const obwody = computeCircuits([
+      el({ type: "gniazdko", obwod: 1, id: "a" }),
+      el({ type: "gniazdko", obwod: 2, id: "b" }),
+      el({ type: "gniazdko", id: "c" }),
+    ]);
+    expect(obwody).toHaveLength(3);
+    const auto = obwody.find((o) => o.elements.some((e) => e.id === "c"))!;
+    expect(auto.name).toMatch(/Obwód gniazd ogólnych/);
+  });
+
+  it("obwod z choc jedna oprawa dostaje przewod i zabezpieczenie oswietleniowe", () => {
+    const [o] = computeCircuits([
+      el({ type: "oswietlenie", obwod: 5, id: "l" }),
+      el({ type: "kinkiet", obwod: 5, id: "k" }),
+    ]);
+    expect(o.type).toBe("oswietlenie");
+    expect(o.cable).toContain("1,5");
+    expect(o.breaker).toBe("B10");
+  });
+
+  it("obwod z samych gniazd dostaje 2,5 mm2 i B16", () => {
+    const [o] = computeCircuits([el({ type: "gniazdko", obwod: 5 }), el({ type: "gniazdko", obwod: 5 })]);
+    expect(o.cable).toContain("2,5");
+    expect(o.breaker).toBe("B16");
+  });
+
+  /**
+   * Odbiornik z wlasnym obwodem z definicji IGNORUJE numer — jego obwod ma inny
+   * przewod, inne zabezpieczenie i czesto inna liczbe faz, wiec dolaczenie go do
+   * wspolnego dalo by nie „obwod z ladowarka", tylko obwod z blednym doborem.
+   */
+  it("ladowarka EV, gniazdo trojfazowe i wypust AGD zostaja przy swoim obwodzie mimo numeru", () => {
+    const obwody = computeCircuits([
+      el({ type: "gniazdko", obwod: 4, id: "g" }),
+      el({ type: "ladowarkaEV", obwod: 4, id: "ev" }),
+      el({ type: "gniazdko400", obwod: 4, id: "3f" }),
+      el({ type: "wypustAGD", obwod: 4, id: "agd" }),
+    ]);
+    const reczny = obwody.find((o) => o.name.startsWith("Obwód 4"))!;
+    expect(reczny.elements.map((e) => e.id)).toEqual(["g"]);
+    expect(obwody.some((o) => o.name.startsWith("Ładowarka EV"))).toBe(true);
+    expect(obwody.some((o) => o.name.startsWith("Gniazdo trójfazowe"))).toBe(true);
+    expect(obwody.some((o) => o.name.startsWith("Wypust AGD"))).toBe(true);
+  });
+
+  it("obwody reczne ida przed automatycznymi i sa uporzadkowane numerem", () => {
+    const obwody = computeCircuits([
+      el({ type: "gniazdko", obwod: 7 }),
+      el({ type: "gniazdko", obwod: 2 }),
+      el({ type: "gniazdko" }),
+    ]);
+    expect(obwody[0].name).toContain("Obwód 2");
+    expect(obwody[1].name).toContain("Obwód 7");
+  });
+});
+
+describe("ostrzezeniaObwodow", () => {
+  it("bez recznych numerow nie ma czego zglaszac", () => {
+    expect(ostrzezeniaObwodow([el({ type: "gniazdko" }), el({ type: "oswietlenie" })])).toEqual([]);
+  });
+
+  it("mieszanka oswietlenia z gniazdami jest zglaszana — dobor potraktuje ja jako oswietleniowa", () => {
+    const o = ostrzezeniaObwodow([el({ type: "gniazdko", obwod: 1 }), el({ type: "oswietlenie", obwod: 1 })]);
+    expect(o).toHaveLength(1);
+    expect(o[0].numer).toBe(1);
+    expect(o[0].tresc).toMatch(/1,5 mm²|za mało pod gniazda/);
+  });
+
+  it("przekroczenie zalecanej liczby punktow jest zglaszane jako PRAKTYKA, nie zakaz", () => {
+    const dziewiec = Array.from({ length: 9 }, () => el({ type: "gniazdko", obwod: 2 }));
+    const [o] = ostrzezeniaObwodow(dziewiec);
+    expect(o.tresc).toContain("9 punktów");
+    expect(o.tresc).toContain(String(ZALECANE_MAKS.gniazda));
+    expect(o.tresc).toMatch(/praktyka projektowa, nie zakaz/);
+  });
+
+  it("osiem gniazd to jeszcze nie przekroczenie", () => {
+    expect(ostrzezeniaObwodow(Array.from({ length: 8 }, () => el({ type: "gniazdko", obwod: 2 })))).toEqual([]);
+  });
+
+  it("w pomieszczeniu mokrym limit jest ciasniejszy", () => {
+    const siedem = Array.from({ length: 7 }, () => el({ type: "gniazdkoHerm", obwod: 3 }));
+    const [o] = ostrzezeniaObwodow(siedem);
+    expect(o.tresc).toContain(String(ZALECANE_MAKS.gniazdaMokre));
+    expect(o.tresc).toContain("mokre");
+  });
+
+  it("obwod oswietleniowy ma wlasny, wyzszy limit", () => {
+    expect(ostrzezeniaObwodow(Array.from({ length: 10 }, () => el({ type: "oswietlenie", obwod: 4 })))).toEqual([]);
+    expect(ostrzezeniaObwodow(Array.from({ length: 11 }, () => el({ type: "oswietlenie", obwod: 4 })))).toHaveLength(1);
   });
 });
