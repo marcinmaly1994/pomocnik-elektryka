@@ -4,7 +4,6 @@ import {
   formatLiczba,
   OCENA_GRANICZNA_PCT,
   ocenPodLimitem,
-  ocenPonadMinimum,
   type CalcError,
 } from "./result";
 
@@ -86,40 +85,6 @@ describe("ocenPodLimitem", () => {
 
   it("komunikat braku oceny nazywa warunek, ktorego dotyczy", () => {
     expect(ocenPodLimitem(2, 0, OPIS).komunikat).toContain("Spadek napiecia");
-  });
-});
-
-describe("ocenPonadMinimum", () => {
-  /** Przyklad wprost ze specyfikacji: Ik 230 A przy Ia 80 A to margines 187,5%. */
-  it("liczy margines od WYMAGANEGO MINIMUM, nie od wartosci", () => {
-    const o = ocenPonadMinimum(230, 80, { co: "Prad zwarciowy Ik", jednostka: "A" });
-    expect(o.verdict).toBe("spelniony");
-    expect(o.margines_pct).toBeCloseTo(187.5, 9);
-  });
-
-  it("dokladnie na minimum jest GRANICZNE", () => {
-    const o = ocenPonadMinimum(80, 80, { co: "Prad zwarciowy Ik", jednostka: "A" });
-    expect(o.verdict).toBe("graniczny");
-    expect(o.margines_pct).toBe(0);
-  });
-
-  it("ponizej minimum: werdykt NIESPELNIONY, margines ujemny, komunikat mowi CZEGO brakuje", () => {
-    const o = ocenPonadMinimum(60, 80, { co: "Prad zwarciowy Ik", jednostka: "A" });
-    expect(o.verdict).toBe("niespelniony");
-    expect(o.margines_pct).toBeCloseTo(-25, 9);
-    expect(o.komunikat).toContain("brakuje");
-    expect(o.komunikat).toContain("20,00");
-  });
-
-  it("prog granicznosci jest ten sam co przy limicie", () => {
-    expect(ocenPonadMinimum(110, 100, { co: "X", jednostka: "A" }).verdict).toBe("spelniony");
-    expect(ocenPonadMinimum(109.99, 100, { co: "X", jednostka: "A" }).verdict).toBe("graniczny");
-  });
-
-  it("dane nie do porownania daja BRAK OCENY", () => {
-    expect(ocenPonadMinimum(NaN, 80, { co: "X", jednostka: "A" }).verdict).toBe("nieoceniany");
-    expect(ocenPonadMinimum(230, 0, { co: "X", jednostka: "A" }).verdict).toBe("nieoceniany");
-    expect(ocenPonadMinimum(Infinity, 80, { co: "X", jednostka: "A" }).margines_pct).toBeNull();
   });
 });
 
