@@ -85,8 +85,11 @@ export interface InstallationElement {
    * biurku razem z salonem, dwa pokoje na jednym obwodzie, bo blisko pionu. To
    * decyzja projektowa, której z samego rysunku nie da się odgadnąć.
    *
-   * Numer jest wspólny dla całego projektu i to on jest tożsamością obwodu na
-   * rzucie — dokładnie tak, jak mówi się o nim na budowie („obwód 5").
+   * Numer jest wspólny dla całego projektu i służy do WSKAZANIA przynależności,
+   * a nie do jej pokazywania. Na rzucie nie ma po nim śladu i to jest świadome:
+   * przynależność widać po trasach przewodów — jeden obwód to jeden kabel wchodzący
+   * po drodze do kolejnych puszek (patrz `kolejnoscLancucha`). Cyfra przy symbolu
+   * powtarzałaby tę samą informację drugi raz, zaśmiecając rysunek.
    */
   obwod?: number;
 }
