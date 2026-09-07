@@ -13,7 +13,7 @@ import { test, expect, type Page } from "@playwright/test";
  */
 
 const lista = (page: Page) => page.locator("div.pe-bez-suwaka.overflow-y-auto.pr-1");
-const kolumna = (page: Page) => page.locator("div.flex.shrink-0.overflow-hidden.rounded-card").first();
+const kolumna = (page: Page) => page.getByTestId("karta-narzedzi").first();
 const karta = (page: Page) => page.getByRole("complementary", { name: /Zacznij w 3 krokach/i });
 
 /** Okno 1280 x 900 — typowy laptop, ustawiane jawnie, zeby wysokosc karty i pozycja
