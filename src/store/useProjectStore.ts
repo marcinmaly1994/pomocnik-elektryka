@@ -1298,18 +1298,22 @@ if (autosavedProject && useProjectStore.getState().roomsFixedOnLoad > 0) {
   }
 }
 
-useProjectStore.subscribe(() => {
-  if (autosaveTimer) clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => {
-    autosaveTimer = null;
-    const payload = useProjectStore.getState().getProjectPayload();
-    const json = JSON.stringify(payload);
-    if (json === lastAutosavedJson) return;
-    lastAutosavedJson = json;
-    try {
-      localStorage.setItem(AUTOSAVE_KEY, json);
-      useProjectStore.setState({ lastLocalSaveAt: Date.now(), localSaveError: null });
-    } catch {
+/**
+ * Ciało autozapisu, wyjęte z licznika czasu, żeby dało się je wywołać NATYCHMIAST.
+ *
+ * Powód: `zapiszTerazLokalnie` niżej. Awaryjne przeładowanie strony (patrz
+ * `ErrorBoundary`) wypada w środku okna 600 ms i bez wcześniejszego opróżnienia
+ * bufora zabrałoby ze sobą ostatnie zmiany.
+ */
+function wykonajAutozapis(): void {
+  const payload = useProjectStore.getState().getProjectPayload();
+  const json = JSON.stringify(payload);
+  if (json === lastAutosavedJson) return;
+  lastAutosavedJson = json;
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, json);
+    useProjectStore.setState({ lastLocalSaveAt: Date.now(), localSaveError: null });
+  } catch {
       /**
        * Limit przeglądarki albo tryb prywatny. Dwie rzeczy, których tu wcześniej
        * brakowało — obie sprowadzają się do „nie udawaj, że zapisałeś".
@@ -1322,15 +1326,38 @@ useProjectStore.subscribe(() => {
        * 2. MÓWIMY O TYM. Bez `localSaveError` wskaźnik zamierał na godzinie ostatniego
        *    udanego zapisu, nie zmieniając ani koloru, ani treści.
        */
-      try {
-        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ ...payload, bgImages: {} }));
-        useProjectStore.setState({ lastLocalSaveAt: Date.now(), localSaveError: "bezPodkladu" });
-      } catch {
-        useProjectStore.setState({ localSaveError: "brak" });
-      }
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ ...payload, bgImages: {} }));
+      useProjectStore.setState({ lastLocalSaveAt: Date.now(), localSaveError: "bezPodkladu" });
+    } catch {
+      useProjectStore.setState({ localSaveError: "brak" });
     }
+  }
+}
+
+useProjectStore.subscribe(() => {
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    autosaveTimer = null;
+    wykonajAutozapis();
   }, 600);
 });
+
+/**
+ * Zapisuje projekt lokalnie NATYCHMIAST, nie czekając na debounce.
+ *
+ * Do użycia przed czynnością, po której ta karta przestanie istnieć — dziś jedyną
+ * taką jest awaryjne przeładowanie po nieudanym pobraniu kodu zakładki. Bez tego
+ * przeładowanie wypadające w oknie 600 ms zabrałoby ze sobą ostatnie zmiany, a
+ * użytkownik nie miałby jak skojarzyć jednego z drugim.
+ */
+export function zapiszTerazLokalnie(): void {
+  if (autosaveTimer) {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+  }
+  wykonajAutozapis();
+}
 
 /**
  * Autozapis W CHMURZE — value-add zarezerwowany dla konta (patrz `saveToCloud`).

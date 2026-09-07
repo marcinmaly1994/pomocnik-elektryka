@@ -30,6 +30,7 @@ import { AuthModal } from "@/components/auth/AuthModal";
 import { ProjectsModal } from "@/components/auth/ProjectsModal";
 import { AccountModal, type AccountModalTab } from "@/components/auth/AccountModal";
 import { HelpModal } from "@/components/help/HelpModal";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { KompletDialog } from "@/components/ui/KompletDialog";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { projectFileName } from "@/lib/pdf/download";
@@ -672,6 +673,12 @@ export default function App() {
           sens tego paska, przestawała być czytelna. Teraz przepływ jest jednym rzędem,
           który w razie braku miejsca przewija się poziomo, a narzędzia schodzą do
           własnego wiersza pod spodem. */}
+      {/* Granica błędu obejmuje SAMĄ TREŚĆ zakładki, nie całą stronę: gdy jedna
+          zakładka padnie, nagłówek i nawigacja mają zostać na miejscu, żeby dało się
+          po prostu przejść gdzie indziej. `key={tab}` zeruje ją przy każdej zmianie
+          zakładki — bez tego raz złapany błąd zostawałby na ekranie na zawsze, także
+          po przejściu na sprawną zakładkę. */}
+      <ErrorBoundary key={tab} onReset={() => setTab(ZAKLADKA_DOMYSLNA)}>
       {tab === "kalkulatory" && (
         <Suspense fallback={<TabLoading />}>
           <CalculatorsTab />
@@ -709,6 +716,7 @@ export default function App() {
           </Suspense>
         </>
       )}
+      </ErrorBoundary>
 
       {/*
         Duży, zawsze widoczny przycisk „Dalej” — bez niego jedyną drogą do kolejnego
