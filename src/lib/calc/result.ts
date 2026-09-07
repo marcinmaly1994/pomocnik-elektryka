@@ -133,39 +133,6 @@ export function ocenPodLimitem(wartosc: number, limit: number, opis: { co: strin
   };
 }
 
-/**
- * Ocena warunku „wartość ≥ wymagane minimum" (prąd zwarciowy względem prądu
- * zadziałania). Margines liczony względem WYMAGANEGO MINIMUM — tak jak w
- * przykładzie ze specyfikacji: Ik 230 A przy Ia 80 A to margines 187%.
- */
-export function ocenPonadMinimum(wartosc: number, minimum: number, opis: { co: string; jednostka: string }): Ocena {
-  // Patrz `bezOceny` — te same dwa przypadki, ta sama odpowiedź.
-  if (!Number.isFinite(wartosc) || !Number.isFinite(minimum) || minimum <= 0) {
-    return bezOceny(opis.co, "wartość musi być liczbą skończoną, a wymagane minimum liczbą większą od zera.");
-  }
-  const margines = ((wartosc - minimum) / minimum) * 100;
-  const fmt = (v: number) => formatLiczba(v, 2);
-  if (wartosc < minimum) {
-    return {
-      verdict: "niespelniony",
-      margines_pct: margines,
-      komunikat: `${opis.co} ${fmt(wartosc)} ${opis.jednostka} nie osiąga wymaganych ${fmt(minimum)} ${opis.jednostka} — brakuje ${fmt(minimum - wartosc)} ${opis.jednostka}.`,
-    };
-  }
-  if (margines < OCENA_GRANICZNA_PCT) {
-    return {
-      verdict: "graniczny",
-      margines_pct: margines,
-      komunikat: `${opis.co} ${fmt(wartosc)} ${opis.jednostka} przekracza wymagane ${fmt(minimum)} ${opis.jednostka} tylko o ${fmt(margines)}%. To wynik graniczny — sprawdź założenia, zanim uznasz warunek za spełniony.`,
-    };
-  }
-  return {
-    verdict: "spelniony",
-    margines_pct: margines,
-    komunikat: `${opis.co} ${fmt(wartosc)} ${opis.jednostka} przy wymaganych ${fmt(minimum)} ${opis.jednostka} — margines ${fmt(margines)}%.`,
-  };
-}
-
 /** Liczba do prezentacji: przecinek dziesiętny (polska norma zapisu), zadana precyzja. */
 export function formatLiczba(v: number, miejsca: number): string {
   if (!Number.isFinite(v)) return "—";

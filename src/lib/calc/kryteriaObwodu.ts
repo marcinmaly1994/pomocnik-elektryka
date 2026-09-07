@@ -151,13 +151,6 @@ export function ocenKryteria(w: WejscieKryteriow): OcenaKryterium[] {
   return oceny;
 }
 
-/** Werdykt zbiorczy: błąd wygrywa z brakiem oceny, brak oceny z sukcesem. */
-export function werdyktObwodu(oceny: OcenaKryterium[]): StanKryterium {
-  if (oceny.some((o) => o.stan === "blad")) return "blad";
-  if (oceny.some((o) => o.stan === "nieoceniono")) return "nieoceniono";
-  return "ok";
-}
-
 /**
  * Cztery kryteria sprowadzone do JEDNEJ oceny — tej samej koperty, której używają
  * pozostałe kalkulatory (`Ocena` z `result.ts`).

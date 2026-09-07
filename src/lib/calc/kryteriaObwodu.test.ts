@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { minPrzekrojZwarciowy, ocenKryteria, podsumowanieObwodu, werdyktObwodu, type WejscieKryteriow } from "./kryteriaObwodu";
+import { minPrzekrojZwarciowy, ocenKryteria, podsumowanieObwodu, type WejscieKryteriow } from "./kryteriaObwodu";
 import { OCENA_GRANICZNA_PCT } from "./result";
 
 /** Obwod gniazdowy 1-fazowy 2,5 mm2 / B16, ktory spelnia wszystko, co da sie ocenic. */
@@ -77,17 +77,23 @@ describe("ocenKryteria", () => {
   });
 });
 
-describe("werdyktObwodu", () => {
+/**
+ * Zasady pierwszenstwa, ktorych pilnowal dawny `werdyktObwodu`, sa dzis czescia
+ * `podsumowanieObwodu` (blad > brak oceny > sukces) i sprawdza je opis wyzej.
+ */
+describe("pierwszenstwo stanow w podsumowaniu", () => {
   it("blad wygrywa ze wszystkim", () => {
-    expect(werdyktObwodu(ocenKryteria(wejscie({ spadek_pct: 9, Zs_Ohm: 1, Ik_A: 500, czas_s: 0.1 })))).toBe("blad");
+    const oceny = ocenKryteria(wejscie({ spadek_pct: 9, Zs_Ohm: 1, Ik_A: 500, czas_s: 0.1 }));
+    expect(podsumowanieObwodu(oceny).verdict).toBe("niespelniony");
   });
 
   it("brak oceny wygrywa z sukcesem — komplet zielonych musi znaczyc komplet sprawdzonych", () => {
-    expect(werdyktObwodu(ocenKryteria(wejscie()))).toBe("nieoceniono");
+    expect(podsumowanieObwodu(ocenKryteria(wejscie())).verdict).toBe("nieoceniany");
   });
 
   it("wszystko sprawdzone i spelnione", () => {
-    expect(werdyktObwodu(ocenKryteria(wejscie({ Zs_Ohm: 1, Ik_A: 500, czas_s: 0.1 })))).toBe("ok");
+    const oceny = ocenKryteria(wejscie({ Zs_Ohm: 1, Ik_A: 500, czas_s: 0.1 }));
+    expect(podsumowanieObwodu(oceny).verdict).toBe("spelniony");
   });
 });
 
