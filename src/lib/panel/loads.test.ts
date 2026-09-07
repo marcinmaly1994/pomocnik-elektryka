@@ -59,6 +59,9 @@ describe("estimateRoutes", () => {
   /** Pion + zapas dla gniazda na 0,3 m przy rozdzielnicy na 1,5 m i kondygnacji 2,8 m:
    *  podejście (2,8 − 1,5) + zejście (2,8 − 0,3) + zapas 1,5 = 5,3 m. */
   const NADDATEK_GNIAZDO = 5.3;
+  /** Sam zapas montazowy w puszce — tyle dokłada kolejne gniazdo na tej samej
+   *  wysokosci, bo miedzy puszkami przewod nie wraca pod strop. */
+  const ZAPAS = 1.5;
 
   it("liczy trasę po obrysie (Manhattan), nie po przekątnej", () => {
     // punkt (30,40) przy skali 0,1 m/jedn.: (30+40)·0,1 = 7 m + naddatek pionowy
@@ -73,9 +76,34 @@ describe("estimateRoutes", () => {
       [el("gniazdko", { x: 10, y: 0 }), el("gniazdko", { x: 100, y: 0 })],
       0.1
     );
+    // Bieg poziomy łańcucha: 1 m do pierwszego gniazda + 9 m do drugiego = 10 m,
+    // plus JEDNO zejście (do punktu najdalszego).
     expect(r!.worstCaseM).toBeCloseTo(10 + NADDATEK_GNIAZDO, 1);
-    expect(r!.totalM).toBeCloseTo(1 + NADDATEK_GNIAZDO + 10 + NADDATEK_GNIAZDO, 1);
+    // Materiału więcej: każda puszka ma własne zejście i zapas.
+    // Drugi odcinek idzie z puszki do puszki na tej samej wysokosci: sam bieg
+    // poziomy plus zapas montazowy, bez wracania pod strop.
+    expect(r!.totalM).toBeCloseTo(1 + NADDATEK_GNIAZDO + 9 + ZAPAS, 1);
     expect(r!.totalM).toBeGreaterThan(r!.worstCaseM);
+  });
+
+  /**
+   * Przypadek ze zgloszenia: dwa gniazda obok siebie, daleko od rozdzielnicy.
+   * Gwiazda liczyla odcinek do pokoju DWA RAZY — po razie na gniazdo. Lancuch liczy
+   * go raz i dokłada tylko przeskok miedzy puszkami, bo to jeden kabel wchodzacy po
+   * drodze do obu.
+   */
+  it("odcinek do pokoju liczy sie RAZ, a nie po razie na kazde gniazdo", () => {
+    const dwa = estimateRoutes(
+      panel,
+      [el("gniazdko", { x: 100, y: 0 }), el("gniazdko", { x: 110, y: 0 })],
+      0.1
+    )!;
+    const jedno = estimateRoutes(panel, [el("gniazdko", { x: 100, y: 0 })], 0.1)!;
+
+    // Drugie gniazdo dokłada tylko metr przeskoku + własne zejście i zapas...
+    expect(dwa.totalM).toBeCloseTo(jedno.totalM + 1 + ZAPAS, 1);
+    // ...a nie cały bieg od rozdzielnicy jeszcze raz (to byłoby ok. 15 m więcej).
+    expect(dwa.totalM).toBeLessThan(jedno.totalM * 1.5);
   });
 
   it("naddatek pionowy zależy od WYSOKOŚCI MONTAŻU, nie jest jedną stałą", () => {
@@ -641,5 +669,76 @@ describe("findPanels / panelDlaKondygnacji", () => {
     // podrozdzielnicy (500,500) — 1000 jedn. Kierunek roznicy jest tu mniej wazny niz
     // to, ze WYNIK W OGOLE zalezy od tego, ktora rozdzielnica zasila to pietro.
     expect(blisko.totalM).not.toBeCloseTo(daleko.totalM, 3);
+  });
+});
+
+/**
+ * Przypadek ze zgloszenia uzytkownika: jeden punkt swietlny i dwa gniazda w pokoju
+ * dawaly TRZY linie z rozdzielnicy, choc to dwa obwody i dwa przewody.
+ */
+describe("buildCableRoutes — lancuch zamiast gwiazdy", () => {
+  const panel = { x: 0, y: 0 };
+
+  it("gniazda jednego obwodu dostaja JEDEN kabel wchodzacy po drodze do kazdego", () => {
+    const g1 = el("gniazdko", { x: 100, y: 0, id: "g1" });
+    const g2 = el("gniazdko", { x: 140, y: 0, id: "g2" });
+    const obwod: Circuit = {
+      id: "obw1",
+      name: "Obwód gniazd ogólnych 1",
+      type: "gniazdko",
+      elements: [g2, g1], // celowo w kolejnosci odwrotnej niz geograficzna
+      cable: "YDYp 3x2,5 mm²",
+      breaker: "B16",
+      rcd: true,
+    };
+    const trasy = buildCableRoutes(panel, [obwod], [g1, g2], [], []);
+
+    expect(trasy).toHaveLength(2);
+    // Pierwszy odcinek wychodzi z rozdzielnicy do BLIZSZEGO gniazda...
+    const doG1 = trasy.find((t) => t.id === "g1")!;
+    expect(doG1.points[0]).toEqual(panel);
+    expect(doG1.points[doG1.points.length - 1]).toEqual({ x: 100, y: 0 });
+    // ...a drugi startuje Z NIEGO, nie z rozdzielnicy. To cala roznica.
+    const doG2 = trasy.find((t) => t.id === "g2")!;
+    expect(doG2.points[0]).toEqual({ x: 100, y: 0 });
+    expect(doG2.points[doG2.points.length - 1]).toEqual({ x: 140, y: 0 });
+    // Suma narysowanego przewodu: 140 jednostek zamiast 240 przy gwiezdzie.
+    expect(doG1.lengthUnits + doG2.lengthUnits).toBe(140);
+  });
+
+  it("odcinki lancucha zostaja przy SWOIM obwodzie i swoim kablu", () => {
+    const g1 = el("gniazdko", { x: 50, y: 0, id: "g1" });
+    const g2 = el("gniazdko", { x: 60, y: 0, id: "g2" });
+    const obwod: Circuit = {
+      id: "obw9",
+      name: "Obwód gniazd — Kuchnia",
+      type: "gniazdko",
+      elements: [g1, g2],
+      cable: "YDYp 3x2,5 mm²",
+      breaker: "B16",
+      rcd: true,
+    };
+    for (const t of buildCableRoutes(panel, [obwod], [g1, g2], [], [])) {
+      expect(t.circuitId).toBe("obw9");
+      expect(t.cable).toBe("YDYp 3x2,5 mm²");
+      expect(t.kind).toBe("zasilanie");
+    }
+  });
+
+  /** Dwa obwody = dwa niezalezne lancuchy, kazdy od rozdzielnicy. */
+  it("kazdy obwod zaczyna wlasny lancuch od rozdzielnicy", () => {
+    const g = el("gniazdko", { x: 100, y: 0, id: "g" });
+    const l = el("oswietlenie", { x: 100, y: 40, id: "l" });
+    const trasy = buildCableRoutes(
+      panel,
+      [
+        { id: "obwG", name: "Gniazda", type: "gniazdko", elements: [g], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true },
+        { id: "obwL", name: "Oświetlenie", type: "oswietlenie", elements: [l], cable: "YDYp 3x1,5 mm²", breaker: "B10", rcd: true },
+      ],
+      [g, l],
+      [],
+      []
+    );
+    expect(trasy.filter((t) => t.points[0].x === panel.x && t.points[0].y === panel.y)).toHaveLength(2);
   });
 });

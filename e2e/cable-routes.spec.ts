@@ -570,3 +570,53 @@ test("dwa obwody gniazdek dzielące ten sam odcinek ściany: trasy się NIE zlew
   // faktycznie się różnią (rozsunięcie na wspólnym odcinku ściany zadziałało)
   expect(pointSets[0]).not.toEqual(pointSets[1]);
 });
+
+/**
+ * Zgłoszenie użytkownika: pokój z jednym punktem świetlnym i dwoma gniazdami
+ * pokazywał TRZY przewody z rozdzielnicy — po jednym na element. Obwody były
+ * policzone dobrze (dwa), kłamał sam rysunek: zasilanie szło gwiazdą, choć obwód
+ * to jeden kabel wchodzący po drodze do kolejnych puszek.
+ */
+test("dwa gniazda jednego obwodu: DRUGI odcinek startuje z pierwszego gniazda, nie z rozdzielnicy", async ({ page }) => {
+  await openPlan(page);
+  await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
+
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 200, box.y + 330);
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  box = await planBox(page);
+  for (const y of [170, 100]) {
+    await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+    await page.mouse.click(box.x + 300, box.y + y);
+  }
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const trasy = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    return (stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01) ?? []).map((l) => l.points().map(Math.round));
+  });
+
+  expect(trasy).toHaveLength(2);
+  const start = (pts: number[]) => `${pts[0]},${pts[1]}`;
+  const koniec = (pts: number[]) => `${pts[pts.length - 2]},${pts[pts.length - 1]}`;
+  const konce = trasy.map(koniec);
+
+  // Dokładnie JEDEN odcinek wychodzi z rozdzielnicy: jego początek nie jest końcem
+  // żadnego innego. Drugi zaczyna się tam, gdzie pierwszy się kończy — i to jest
+  // cała różnica między łańcuchem a gwiazdą (tam OBA startowałyby z rozdzielnicy).
+  const zRozdzielnicy = trasy.filter((t) => !konce.includes(start(t)));
+  const kontynuacje = trasy.filter((t) => konce.includes(start(t)));
+  expect(zRozdzielnicy).toHaveLength(1);
+  expect(kontynuacje).toHaveLength(1);
+  expect(start(kontynuacje[0])).toBe(koniec(zRozdzielnicy[0]));
+});
