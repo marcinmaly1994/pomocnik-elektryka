@@ -248,9 +248,10 @@ test("z rozdzielnicą na planie: zasilanie oprawy STEROWANEJ łącznikiem ląduj
   });
   expect(lines).toHaveLength(2);
 
-  // zasilanie (grubsza linia, strokeWidth 2.5) — sterowanie jest cieńsze (1.5)
-  const supply = lines.find((l) => l.strokeWidth > 2)!;
-  const control = lines.find((l) => l.strokeWidth < 2)!;
+  // zasilanie to GRUBSZA z dwoch linii — patrz GRUBOSC_PROG (same wartosci zeszly
+  // przy scienieniu tras, wiec prog jest liczony z nich, zeby nie rozjechal sie znowu)
+  const supply = lines.find((l) => l.strokeWidth > GRUBOSC_PROG)!;
+  const control = lines.find((l) => l.strokeWidth < GRUBOSC_PROG)!;
   expect(supply).toBeDefined();
   expect(control).toBeDefined();
 
@@ -298,8 +299,8 @@ test("z rozdzielnicą: KILKA opraw JEDNEGO obwodu na jednym łączniku — TYLKO
     const stage = konva?.stages?.[0];
     return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01).map((l) => l.strokeWidth()) ?? [];
   });
-  const supplyLines = lines.filter((w) => w > 2); // zasilanie: strokeWidth 2.5, sterowanie: 1.5
-  const controlLines = lines.filter((w) => w < 2);
+  const supplyLines = lines.filter((w) => w > GRUBOSC_PROG); // zasilanie jest grubsze od sterowania
+  const controlLines = lines.filter((w) => w < GRUBOSC_PROG);
   // trzy oprawy WSPÓLNEGO obwodu sterowane jednym łącznikiem = JEDNA linia
   // zasilania do łącznika (jeden kabel), a NIE trzy równoległe kreski
   expect(supplyLines).toHaveLength(1);
@@ -334,15 +335,15 @@ test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania d
 
   // uchwyt łącznika (patrz ElementGlyphKonva) — trasy sterowania mają charakterystyczny
   // cieńszy, kropkowany styl (strokeWidth 1.5) odróżniający je od zasilania (2.5)
-  const controlRoutes = await page.evaluate(() => {
+  // Próg przekazany ARGUMENTEM: `page.evaluate` wykonuje się w przeglądarce, gdzie
+  // stałe modułu testowego nie istnieją — inaczej leci ReferenceError.
+  const controlRoutes = await page.evaluate((prog) => {
     const konva = (
       window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; strokeWidth(): number; points(): number[] }[] }[] } }
     ).Konva;
     const stage = konva?.stages?.[0];
-    return (
-      stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < GRUBOSC_PROG).map((l) => l.points()) ?? []
-    );
-  });
+    return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < prog).map((l) => l.points()) ?? [];
+  }, GRUBOSC_PROG);
   // trzy oprawy sterowane jednym łącznikiem = trzy odcinki ŁAŃCUCHA (łącznik->1,
   // 1->2, 2->3), NIE trzy osobne kable z łącznika do każdej z osobna
   expect(controlRoutes).toHaveLength(3);
@@ -384,15 +385,15 @@ test("cztery oprawy na jednym łączniku: łańcuch, nie drzewo — ŻADNA opraw
   await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
   await page.waitForTimeout(300);
 
-  const controlRoutes = await page.evaluate(() => {
+  // Próg przekazany ARGUMENTEM: `page.evaluate` wykonuje się w przeglądarce, gdzie
+  // stałe modułu testowego nie istnieją — inaczej leci ReferenceError.
+  const controlRoutes = await page.evaluate((prog) => {
     const konva = (
       window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; strokeWidth(): number; points(): number[] }[] }[] } }
     ).Konva;
     const stage = konva?.stages?.[0];
-    return (
-      stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < GRUBOSC_PROG).map((l) => l.points()) ?? []
-    );
-  });
+    return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < prog).map((l) => l.points()) ?? [];
+  }, GRUBOSC_PROG);
   // cztery oprawy sterowane jednym łącznikiem = cztery odcinki łańcucha
   expect(controlRoutes).toHaveLength(4);
 
