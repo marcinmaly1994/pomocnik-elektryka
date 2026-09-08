@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Circuit, ElementType, InstallationElement } from "@/types";
-import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, zakonczSkosem } from "./loads";
+import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, zakonczPrzyNozce, zakonczSkosem } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -789,5 +789,33 @@ describe("zakonczSkosem", () => {
   it("zerowy promien nic nie zmienia", () => {
     const wejscie = trasa([0, 0], [100, 0], [100, 60]);
     expect(zakonczSkosem(wejscie, 0)).toEqual(wejscie);
+  });
+});
+
+/**
+ * Odczep do NOZKI osprzetu przysciennego. Gniazdo stoi trzonkiem w sciane, a trasa
+ * biegnie rownolegle do niej kilka jednostek dalej — przewod ma trafic w koniec
+ * trzonka (tam siedzi puszka), a nie w srodek symbolu narysowany w pomieszczeniu.
+ */
+describe("zakonczPrzyNozce", () => {
+  const trasa = (...p: [number, number][]) => p.map(([x, y]) => ({ x, y }));
+
+  it("odbija pod 45 stopni: tyle wzdluz trasy, ile w poprzek do celu", () => {
+    // Trasa w dol po x = 100, cel szesc jednostek w bok, na wysokosci jej konca.
+    const out = zakonczPrzyNozce(trasa([100, 0], [100, 60]), { x: 106, y: 60 });
+    expect(out).toEqual(trasa([100, 0], [100, 54], [106, 60]));
+    // Skos ma rowne skladowe — to jest definicja 45 stopni, wiec sprawdzamy ja wprost.
+    expect(out[2].x - out[1].x).toBeCloseTo(out[2].y - out[1].y, 6);
+  });
+
+  it("cel LEZACY NA PRZEDLUZENIU trasy — przewod dochodzi wprost, bez zalamania", () => {
+    // Gniazdo na koncu ciagu przy tej samej scianie: skos wypadlby za elementem.
+    const out = zakonczPrzyNozce(trasa([0, 0], [100, 0]), { x: 110, y: 0 });
+    expect(out).toEqual(trasa([0, 0], [100, 0], [110, 0]));
+  });
+
+  it("trasa krotsza niz potrzebne cofniecie zostaje cala, z doprowadzeniem do celu", () => {
+    const out = zakonczPrzyNozce(trasa([100, 0], [100, 2]), { x: 108, y: 2 });
+    expect(out).toEqual(trasa([100, 0], [100, 2], [108, 2]));
   });
 });

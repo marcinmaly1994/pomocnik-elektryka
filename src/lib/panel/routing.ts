@@ -26,6 +26,15 @@ import { clampNum } from "@/lib/geometry";
  *  jest jednym rogiem pokoju. */
 const MERGE_TOLERANCE = 10;
 
+/** Ile najbliższych odcinków sieci dostaje szansę na bycie wejściem trasy — patrz
+ *  `connectPoint`. Trzy wystarczają, żeby Dijkstra miał z czego wybierać (lewa,
+ *  górna i dolna ściana pokoju), a graf nie rośnie w nieskończoność. */
+const LICZBA_WEJSC = 3;
+
+/** Ile razy dalej niż najbliższy odcinek może leżeć kandydat, żeby wciąż był
+ *  traktowany jak realna alternatywa wejścia (patrz `connectPoint`). */
+const POROWNYWALNIE_BLISKO = 1.5;
+
 /**
  * O ile jednostek planu trasa biegnie OBOK ściany, a nie po niej.
  *
@@ -41,8 +50,9 @@ const MERGE_TOLERANCE = 10;
  * Sześć jednostek to przy typowej skali 30 cm na rzucie: wyraźnie obok obrysu (ten
  * ma ok. 1,6 jedn. grubości), a nadal czytelnie „wzdłuż tej ściany", a nie w poprzek
  * pokoju. Trasa biegnie przez to mniej więcej na wysokości przyklejonych gniazd
- * (ich środek wypada o jedną jednostkę dalej) — i tak ma być: to 
- * odpowiada za to, żeby linia kończyła się PRZED symbolem, zamiast go przecinać.
+ * (ich środek wypada o jedną jednostkę dalej) — i tak ma być: to `zakonczSkosem`
+ * w loads.ts odpowiada za to, żeby linia kończyła się PRZED symbolem albo dochodziła
+ * do jego nóżki skosem, zamiast przecinać go na wylot.
  */
 export const ODSUNIECIE_TRASY = 6;
 
@@ -254,14 +264,49 @@ function connectPoint(graph: Graph, p: Point): number | null {
   // zamkniętym, w pełni otoczonym przez inne ściany pomieszczeniu), wracamy do
   // dotychczasowego zachowania — najbliższy mimo wszystko, żeby routing nie
   // spadał bez potrzeby na zapasowy szacunek Manhattan.
-  const clear = candidates.find(
+  const wolne = candidates.filter(
     (c) => !graph.segments.some((other) => other !== c.seg && segmentsIntersect(p, c.point, other.a, other.b))
   );
-  const best = clear ?? candidates[0];
-  const entry = nodeIndex(graph, best.point);
-  addEdge(graph, entry, best.seg.aIdx, dist(graph.nodes[entry], best.seg.a));
-  addEdge(graph, entry, best.seg.bIdx, dist(graph.nodes[entry], best.seg.b));
-  return entry;
+  const rozwazane = wolne.length > 0 ? wolne : candidates;
+  /**
+   * Kandydaci PORÓWNYWALNIE blisko — nie po prostu trzej najbliżsi.
+   *
+   * Bez tego ograniczenia punkt łapałby się także ścian odległych o pół pokoju,
+   * a że doskok jest zwykłą krawędzią grafu, dwa niepołączone ze sobą kawałki
+   * geometrii zaczynały się przez taki doskok „łączyć w powietrzu". Trasa wychodziła
+   * wtedy jako routowana (ciągła linia), choć w rzeczywistości przeskakiwała przez
+   * pustą przestrzeń — czyli obiecywała pewność, której nie ma.
+   *
+   * Chodzi o realny wybór między ścianami, które leżą mniej więcej tak samo blisko:
+   * oprawa na środku pokoju ma lewą i górną ścianę niemal w tej samej odległości
+   * i to WTEDY ma sens pytać, która da krótszą całą trasę.
+   */
+  const najblizej = Math.sqrt(rozwazane[0].distSq);
+  const doPodlaczenia = rozwazane
+    .filter((c) => Math.sqrt(c.distSq) <= najblizej * POROWNYWALNIE_BLISKO + 1)
+    .slice(0, LICZBA_WEJSC);
+
+  /**
+   * Punkt dostaje WŁASNY węzeł, a każdy kandydat — krawędź o wadze równej długości
+   * doskoku. To zmiana względem wersji, która wybierała jeden, najbliższy odcinek
+   * i zaczynała trasę dopiero na nim.
+   *
+   * Powód jest widoczny na rysunku: oprawa na środku pokoju leży prawie tak samo
+   * blisko ściany lewej co górnej, a wybór „najbliższej w linii prostej" potrafił
+   * posłać przewód dookoła pomieszczenia — bo o wyborze decydował sam doskok, bez
+   * oglądania się na to, ile jeszcze trzeba przejść wzdłuż ścian. Teraz o wszystkim
+   * decyduje Dijkstra na PEŁNEJ długości trasy: doskok jest zwykłą krawędzią grafu,
+   * więc dłuższe podejście do bliższej ściany przegrywa z krótszym do dalszej,
+   * dokładnie wtedy, kiedy powinno.
+   */
+  const wezelPunktu = nodeIndex(graph, p);
+  for (const c of doPodlaczenia) {
+    const entry = nodeIndex(graph, c.point);
+    addEdge(graph, entry, c.seg.aIdx, dist(graph.nodes[entry], c.seg.a));
+    addEdge(graph, entry, c.seg.bIdx, dist(graph.nodes[entry], c.seg.b));
+    addEdge(graph, wezelPunktu, entry, dist(p, graph.nodes[entry]));
+  }
+  return wezelPunktu;
 }
 
 /** Dijkstra bez kopca — grafy tras są rzędu dziesiątek/setek węzłów (narożniki

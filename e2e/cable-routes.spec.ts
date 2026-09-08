@@ -627,3 +627,57 @@ test("dwa gniazda jednego obwodu: DRUGI odcinek startuje z pierwszego gniazda, n
   expect(kontynuacje).toHaveLength(1);
   expect(start(kontynuacje[0])).toBe(koniec(zRozdzielnicy[0]));
 });
+
+/**
+ * Zgloszenie uzytkownika (z odreczna poprawka na zrzucie): przewod dochodzil do
+ * SRODKA gniazdka, czyli wchodzil mu w luk — od strony pomieszczenia, a nie od
+ * strony puszki. Gniazdo stoi trzonkiem w sciane i tam ma trafic przewod, odbijajac
+ * od swojego pasa krotkim skosem pod 45 stopni.
+ */
+test("gniazdo przy scianie: przewod odbija pod 45 stopni i konczy sie na nozce, po stronie sciany", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  let box = await planBox(page);
+  await page.mouse.move(box.x + 80, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 420, box.y + 300, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 120, box.y + 290); // przy dolnej scianie
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 415, box.y + 160); // przyklejone do PRAWEJ sciany
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const punkty = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const trasy = (konva?.stages?.[0]?.find("Line") ?? []).filter((l) => Math.abs(l.opacity() - 0.9) < 0.01);
+    return trasy[0]?.points() ?? [];
+  });
+
+  expect(punkty.length).toBeGreaterThanOrEqual(6); // co najmniej dwa zalamania + koniec
+  const n = punkty.length;
+  const przed = { x: punkty[n - 4], y: punkty[n - 3] };
+  const koniec = { x: punkty[n - 2], y: punkty[n - 1] };
+
+  // Ostatni odcinek to SKOS o rownych skladowych — czyli dokladnie 45 stopni.
+  expect(Math.abs(koniec.x - przed.x)).toBeGreaterThan(1);
+  expect(Math.abs(koniec.x - przed.x)).toBeCloseTo(Math.abs(koniec.y - przed.y), 0);
+  // I biegnie W STRONE sciany (w prawo), a nie w glab pomieszczenia.
+  expect(koniec.x).toBeGreaterThan(przed.x);
+});

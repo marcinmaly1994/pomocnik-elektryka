@@ -14,6 +14,7 @@ import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGro
 import { crossesGeometry, routeAlongWalls } from "./routing";
 import { kolejnoscLancucha } from "./lancuch";
 import { zasiegPrzyscienny } from "@/lib/glyphs";
+import { punktPrzyscienny } from "@/lib/wallSnap";
 
 /**
  * Moc typowa pojedynczego punktu [W] — wartości projektowe, nie katalogowe.
@@ -628,13 +629,22 @@ export function buildCableRoutes(
       }
     }
 
-    const targets: { id: string; room: string; floor: string; type: ElementType; end: Point; cores: 3 | 4 | null }[] = [
-      ...direct.map((e) => ({ id: e.id, room: e.room, floor: e.floor, type: e.type, end: { x: e.x, y: e.y }, cores: null as 3 | 4 | null })),
+    const targets: (Zakonczenie & { id: string; room: string; floor: string; end: Point; cores: 3 | 4 | null })[] = [
+      ...direct.map((e) => ({
+        id: e.id,
+        room: e.room,
+        floor: e.floor,
+        type: e.type,
+        rotation: e.rotation,
+        end: { x: e.x, y: e.y },
+        cores: null as 3 | 4 | null,
+      })),
       ...[...bySwitch.values()].map(({ sw, anchor }) => ({
         id: anchor.id,
         room: sw.room,
         floor: sw.floor,
         type: sw.type,
+        rotation: sw.rotation,
         end: { x: sw.x, y: sw.y },
         // Przekrój wynika z obciążalności obwodu (`c.cable`, sizing.ts) i zostaje
         // bez zmian — koryguje się WYŁĄCZNIE liczba żył w puszce łącznika (patrz
@@ -655,11 +665,11 @@ export function buildCableRoutes(
       targets.map((t) => ({ ...t, x: t.end.x, y: t.end.y }))
     );
     let poczatek: Point = panel;
-    // Typ elementu, z którego wychodzi kolejny odcinek — potrzebny, żeby wiedzieć,
-    // jak duży symbol ominąć przy jego początku. `null` na pierwszym odcinku:
-    // rozdzielnica jest punktem startu obwodu, nie odczepem, więc przewód dochodzi
-    // do niej wprost.
-    let poprzedniTyp: ElementType | null = null;
+    // Element, z którego wychodzi kolejny odcinek — potrzebny, żeby wiedzieć, gdzie
+    // dokładnie przy nim zacząć przewód (nóżka albo krawędź symbolu). `null` na
+    // pierwszym odcinku: rozdzielnica jest punktem startu obwodu, nie odczepem, więc
+    // przewód dochodzi do niej wprost.
+    let poprzedni: Zakonczenie | null = null;
     for (const t of lancuch) {
       // Punkty świadomie skopiowane do gołego `{x,y}` — `Point[]` ma zostać lekką
       // geometrią, a nie przeciekiem całego `InstallationElement` (rola, pokój,
@@ -673,10 +683,10 @@ export function buildCableRoutes(
       // TYLKO dla trasy faktycznie routowanej po geometrii. Zapasowy szacunek
       // Manhattan (rysowany przerywaną kreską) mówi „nie wiem, którędy" — dorysowanie
       // mu starannego odczepu sugerowałoby dokładność, której tam nie ma.
-      const zKoncem = routed ? zakonczSkosem(surowe, promienSymbolu(t.type, skalaSymboli)) : surowe;
+      const zKoncem = routed ? zakonczPrzyElemencie(surowe, t, skalaSymboli) : surowe;
       const points =
-        routed && poprzedniTyp
-          ? [...zakonczSkosem([...zKoncem].reverse(), promienSymbolu(poprzedniTyp, skalaSymboli))].reverse()
+        routed && poprzedni
+          ? [...zakonczPrzyElemencie([...zKoncem].reverse(), poprzedni, skalaSymboli)].reverse()
           : zKoncem;
       const cable = t.cores ? withCoreCount(c.cable, t.cores) : c.cable;
       supply.push({
@@ -697,7 +707,7 @@ export function buildCableRoutes(
       // łańcuch. `id` odcinka zostaje id punktu, w którym się KOŃCZY, więc ręcznie
       // poprawione trasy (`routeOverrides`) dalej trafiają we właściwy odcinek.
       poczatek = t.end;
-      poprzedniTyp = t.type;
+      poprzedni = t;
     }
   }
   return [...supply, ...control];
@@ -875,6 +885,67 @@ export function zakonczSkosem(points: Point[], promien: number): Point[] {
   // samej ścianie: przewód idzie od jednego do drugiego, nie ma czego ścinać).
   if (poczatekSkosu.indeks >= koniec.indeks) return przyciete;
   return [...przyciete.slice(0, poczatekSkosu.indeks + 1), poczatekSkosu.punkt, koniec.punkt];
+}
+
+/**
+ * Zakończenie trasy przy osprzęcie PRZYŚCIENNYM: odczep pod 45° do nóżki symbolu.
+ *
+ * Trasa biegnie równolegle do ściany, kilka jednostek od niej (`ODSUNIECIE_TRASY`),
+ * a gniazdko stoi trzonkiem do muru. Doprowadzenie przewodu do ŚRODKA symbolu
+ * wyglądało tak, jakby kabel wchodził gniazdku w łuk — czyli od strony pomieszczenia,
+ * a nie od strony puszki. Przewód ma trafić w koniec trzonka (`cel`).
+ *
+ *      ─────E╮              E — miejsce, w którym trasa schodzi z „pasa" przy ścianie
+ *             ╲             odcinek E→cel ma tyle samo wzdłuż co w poprzek trasy,
+ *   ══════════◗cel          więc zawsze wychodzi dokładnie 45°
+ *
+ * Kąt bierze się z geometrii, nie ze stałej: `E` odsuwamy od rzutu celu na trasę
+ * o tyle, ile wynosi odległość celu OD tej trasy. Dzięki temu ukos zostaje pod 45°
+ * niezależnie od tego, czy pas przewodów biegnie sześć jednostek od ściany, czy —
+ * przy kilku trasach w wiązce — o `LANE_SPACING` dalej.
+ */
+export function zakonczPrzyNozce(points: Point[], cel: Point): Point[] {
+  if (points.length < 2) return [...points, cel];
+  const koniec = points[points.length - 1];
+  const przed = points[points.length - 2];
+  const dx = koniec.x - przed.x;
+  const dy = koniec.y - przed.y;
+  const dlug = Math.hypot(dx, dy);
+  // Odcinek zerowej długości nie ma kierunku — nie ma jak rozłożyć dojścia na
+  // „wzdłuż" i „w poprzek", więc zostaje samo doprowadzenie do celu.
+  if (dlug === 0) return [...points, cel];
+  const u = { x: dx / dlug, y: dy / dlug };
+  const v = { x: cel.x - koniec.x, y: cel.y - koniec.y };
+  const wzdluz = v.x * u.x + v.y * u.y;
+  const wPoprzek = Math.hypot(v.x - u.x * wzdluz, v.y - u.y * wzdluz);
+  const cofnij = wPoprzek - wzdluz;
+  // Cel leży już PRZED końcem trasy (albo dokładnie na jej przedłużeniu) — ukos
+  // wypadłby za elementem, więc przewód po prostu dochodzi wprost.
+  if (cofnij <= 0) return [...points, cel];
+  const start = cofnijSieWzdluz(points, cofnij);
+  if (!start) return [...points, cel];
+  return [...points.slice(0, start.indeks + 1), start.punkt, cel];
+}
+
+/** Tyle o elemencie, ile potrzeba, żeby wiedzieć, GDZIE przy nim urwać przewód. */
+interface Zakonczenie {
+  type: ElementType;
+  /** Obrót symbolu [stopnie] — z niego wynika, w którą stronę patrzy nóżka. */
+  rotation?: number;
+  end: Point;
+}
+
+/**
+ * Doprowadzenie przewodu do jednego końca trasy — nóżką albo krawędzią.
+ *
+ * Osprzęt przyścienny (gniazda, łączniki, kinkiety) dostaje odczep pod 45° do punktu
+ * styku ze ścianą: tam siedzi puszka i stamtąd naprawdę wchodzi kabel. Reszta —
+ * punkt sufitowy, czujnik dymu — wisi na środku pomieszczenia i nie ma wyróżnionej
+ * strony, więc dla niej zostaje przycięcie łamanej do krawędzi symbolu.
+ */
+function zakonczPrzyElemencie(points: Point[], el: Zakonczenie, skala: number): Point[] {
+  const cel = punktPrzyscienny({ ...el, x: el.end.x, y: el.end.y }, skala);
+  return cel ? zakonczPrzyNozce(points, cel) : zakonczSkosem(points, promienSymbolu(el.type, skala));
 }
 
 /** Rodzaj obwodu wg roli elementów — mapowanie na kategorie używane w doborze. */
