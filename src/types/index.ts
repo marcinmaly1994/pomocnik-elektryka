@@ -221,10 +221,12 @@ export interface CableRoute {
   type: ElementType;
   cable: string;
   breaker: string;
-  /** Pomieszczenie PUNKTU DOCELOWEGO (nazwa, jak w `InstallationElement.room`) —
-   *  do kolorowania trasy tak samo jak pomieszczenie na planie (patrz
-   *  `colorForRoomName`), zamiast po rodzaju obwodu. */
+  /** Pomieszczenie PUNKTU DOCELOWEGO (nazwa, jak w `InstallationElement.room`). */
   room: string;
+  /** Kolor linii na rzucie — JEDEN na obwód (patrz `kolorObwodu` w panel/circuits.ts),
+   *  żeby obwód gniazd i obwód oświetlenia w tym samym pokoju dało się rozróżnić.
+   *  Wcześniej trasa brała kolor pomieszczenia i oba wychodziły identyczne. */
+  color: string;
   floor: string;
   points: Point[];
   lengthUnits: number;

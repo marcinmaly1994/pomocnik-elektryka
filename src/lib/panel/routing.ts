@@ -83,12 +83,36 @@ interface Segment {
   bIdx: number;
   a: Point;
   b: Point;
+  /**
+   * Węzły „doskoków" dołożone na TYM odcinku przez `connectPoint` — patrz tam.
+   * Trzymane przy odcinku, bo muszą się widzieć NAWZAJEM: dwa gniazda przy tej samej
+   * ścianie wchodzą w sieć w dwóch różnych miejscach jednego odcinka i przewód ma
+   * przejść między nimi wprost, a nie naokoło przez narożnik.
+   */
+  wejscia?: number[];
 }
 
 interface Graph {
   nodes: Point[];
   adj: Map<number, Map<number, number>>;
   segments: Segment[];
+}
+
+/**
+ * Dokłada węzeł BEZ scalania z sąsiadem — dla punktów, których położenie ma zostać
+ * dokładnie takie, jakie jest.
+ *
+ * `nodeIndex` scala wszystko w promieniu `MERGE_TOLERANCE` (10 jedn.), a doskok do
+ * trasy odsuniętej o `ODSUNIECIE_TRASY` (6 jedn.) mieści się w tym promieniu w
+ * całości. Punkt wejścia na ścianę wpadał więc do węzła samego gniazda i po grafie
+ * zostawała jedna krawędź: gniazdo → NAROŻNIK pokoju. Na rysunku wychodziła z tego
+ * jedna długa skośna kreska przez całą ścianę zamiast linii biegnącej wzdłuż niej
+ * i odbijającej dopiero przy elemencie.
+ */
+function dodajWezel(graph: Graph, p: Point): number {
+  graph.nodes.push(p);
+  graph.adj.set(graph.nodes.length - 1, new Map());
+  return graph.nodes.length - 1;
 }
 
 /** Zwraca indeks istniejącego węzła w promieniu `MERGE_TOLERANCE` albo dokłada nowy. */
@@ -301,10 +325,20 @@ function connectPoint(graph: Graph, p: Point): number | null {
    */
   const wezelPunktu = nodeIndex(graph, p);
   for (const c of doPodlaczenia) {
-    const entry = nodeIndex(graph, c.point);
+    const entry = dodajWezel(graph, c.point);
     addEdge(graph, entry, c.seg.aIdx, dist(graph.nodes[entry], c.seg.a));
     addEdge(graph, entry, c.seg.bIdx, dist(graph.nodes[entry], c.seg.b));
     addEdge(graph, wezelPunktu, entry, dist(p, graph.nodes[entry]));
+    /**
+     * Doskoki na TYM SAMYM odcinku łączone ze sobą wprost.
+     *
+     * Bez tego jedynym połączeniem między nimi były końce odcinka — więc przewód
+     * z jednego gniazda do sąsiedniego, przy tej samej ścianie, schodził najpierw
+     * do narożnika pokoju i wracał tą samą linią z powrotem. Na rysunku wyglądało
+     * to jak kreska przechodząca NA WYLOT przez gniazdo, które właśnie minął.
+     */
+    for (const inne of (c.seg.wejscia ??= [])) addEdge(graph, entry, inne, dist(graph.nodes[entry], graph.nodes[inne]));
+    c.seg.wejscia.push(entry);
   }
   return wezelPunktu;
 }

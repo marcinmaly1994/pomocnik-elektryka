@@ -12,6 +12,7 @@ import type { CableRoute, Circuit, ElementType, InstallationElement, Point, Room
 import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM } from "@/lib/elements";
 import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
 import { crossesGeometry, routeAlongWalls } from "./routing";
+import { kolorObwodu, KOLOR_BEZ_OBWODU } from "./circuits";
 import { kolejnoscLancucha } from "./lancuch";
 import { zasiegPrzyscienny } from "@/lib/glyphs";
 import { punktPrzyscienny } from "@/lib/wallSnap";
@@ -435,6 +436,8 @@ function withCoreCount(cableSpec: string, cores: 3 | 4): string {
 function buildControlRoutes(
   elements: InstallationElement[],
   circuits: Circuit[],
+  /** Kolor linii dla każdego obwodu, kluczowany jego id — patrz `kolorObwodu`. */
+  kolory: Map<string, string>,
   walls: Wall[],
   roomShapes: RoomShape[],
   groups: Map<string, (number | undefined)[]>
@@ -500,6 +503,7 @@ function buildControlRoutes(
         cable,
         breaker: circuit?.breaker ?? "",
         room: light.room,
+        color: (circuit && kolory.get(circuit.id)) ?? KOLOR_BEZ_OBWODU,
         floor: light.floor,
         points,
         viaWalls: routed !== null,
@@ -602,7 +606,11 @@ export function buildCableRoutes(
   skalaSymboli = 1
 ): CableRoute[] {
   const lightGroups = computeLightGroups(elements);
-  const control = buildControlRoutes(elements, circuits, walls, roomShapes, lightGroups);
+  // Kolor po OBWODZIE, nie po pomieszczeniu — patrz `KOLORY_OBWODOW`. Liczony raz,
+  // z kolejności obwodów, żeby zasilanie i sterowanie tego samego obwodu wyszły
+  // tym samym kolorem (różnią się grubością i kreską, nie barwą).
+  const kolory = new Map(circuits.map((c, i) => [c.id, kolorObwodu(i)]));
+  const control = buildControlRoutes(elements, circuits, kolory, walls, roomShapes, lightGroups);
   if (!panel) return control;
 
   const supply: CableRoute[] = [];
@@ -697,6 +705,7 @@ export function buildCableRoutes(
         cable,
         breaker: c.breaker,
         room: t.room,
+        color: kolory.get(c.id) ?? KOLOR_BEZ_OBWODU,
         floor: t.floor,
         points,
         viaWalls: routed !== null,
@@ -919,9 +928,16 @@ export function zakonczPrzyNozce(points: Point[], cel: Point): Point[] {
   const wzdluz = v.x * u.x + v.y * u.y;
   const wPoprzek = Math.hypot(v.x - u.x * wzdluz, v.y - u.y * wzdluz);
   const cofnij = wPoprzek - wzdluz;
-  // Cel leży już PRZED końcem trasy (albo dokładnie na jej przedłużeniu) — ukos
-  // wypadłby za elementem, więc przewód po prostu dochodzi wprost.
-  if (cofnij <= 0) return [...points, cel];
+  /**
+   * Cel leży już PRZED końcem trasy (albo dokładnie na jej przedłużeniu) — ukos
+   * wypadłby za elementem, więc przewód dochodzi wprost.
+   *
+   * Środek symbolu wypada wtedy NA odcinku „poprzedni → nóżka", czyli jest punktem
+   * pośrodku prostej. Zostawiony w łamanej dzieli ją na dwa odcinki, a te przy
+   * rozsuwaniu wiązki (`spreadOverlappingRoutes`) dostają osobne przesunięcia
+   * i przy elemencie robi się mikroschodek. Dlatego go tu porzucamy.
+   */
+  if (cofnij <= 0) return [...points.slice(0, wPoprzek < 0.001 ? -1 : undefined), cel];
   const start = cofnijSieWzdluz(points, cofnij);
   if (!start) return [...points, cel];
   return [...points.slice(0, start.indeks + 1), start.punkt, cel];

@@ -435,6 +435,7 @@ describe("spreadOverlappingRoutes", () => {
       id,
       circuitId: "obw1",
       circuitName: "Obwód",
+      color: "#1F6FB2",
       kind: "zasilanie",
       type: "gniazdko",
       cable: "",
@@ -516,6 +517,7 @@ describe("applyRouteOverrides", () => {
       id,
       circuitId: "obw1",
       circuitName: "Obwód",
+      color: "#1F6FB2",
       kind: "zasilanie",
       type: "gniazdko",
       cable: "",
@@ -810,8 +812,23 @@ describe("zakonczPrzyNozce", () => {
 
   it("cel LEZACY NA PRZEDLUZENIU trasy — przewod dochodzi wprost, bez zalamania", () => {
     // Gniazdo na koncu ciagu przy tej samej scianie: skos wypadlby za elementem.
+    // Dotychczasowy koniec lezy POSRODKU prostej, wiec znika — zostawiony dzielilby
+    // odcinek na dwa, a te przy rozsuwaniu wiazki dostaja osobne przesuniecia
+    // i przy elemencie robi sie mikroschodek.
     const out = zakonczPrzyNozce(trasa([0, 0], [100, 0]), { x: 110, y: 0 });
-    expect(out).toEqual(trasa([0, 0], [100, 0], [110, 0]));
+    expect(out).toEqual(trasa([0, 0], [110, 0]));
+  });
+
+  /**
+   * Sedno zgloszenia: linia ma isc ROWNOLEGLE do sciany i odbijac dopiero przy
+   * elemencie. Skos rozlozony na cala dlugosc sciany jest bledem, nawet jesli
+   * konczy sie we wlasciwym punkcie.
+   */
+  it("odcinek biegnacy wzdluz sciany zostaje PROSTY — skos tylko na koncu", () => {
+    const out = zakonczPrzyNozce(trasa([514, 40], [514, 240]), { x: 520, y: 240 });
+    expect(out).toEqual(trasa([514, 40], [514, 234], [520, 240]));
+    // wszystko poza ostatnim odcinkiem trzyma sie jednej prostej x = 514
+    expect(out.slice(0, -1).every((p) => p.x === 514)).toBe(true);
   });
 
   it("trasa krotsza niz potrzebne cofniecie zostaje cala, z doprowadzeniem do celu", () => {

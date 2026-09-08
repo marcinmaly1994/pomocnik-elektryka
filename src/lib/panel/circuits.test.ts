@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { chunkLightsByGroup, colorForCircuit, computeCircuits, computeLowVoltage, computeRcdGroups, mainBreakerFor, ostrzezeniaObwodow, ZALECANE_MAKS } from "./circuits";
+import { chunkLightsByGroup, colorForCircuit, kolorObwodu, KOLORY_OBWODOW, computeCircuits, computeLowVoltage, computeRcdGroups, mainBreakerFor, ostrzezeniaObwodow, ZALECANE_MAKS } from "./circuits";
 import type { InstallationElement } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -393,5 +393,25 @@ describe("ostrzezeniaObwodow — rozerwana grupa sterowania", () => {
       oprawa({ id: "l2", x: 20, floor: "pietro", obwod: 2 }),
     ]);
     expect(o.filter((w) => w.tresc.includes("jednym łącznikiem"))).toEqual([]);
+  });
+});
+
+/**
+ * Kolor trasy na rzucie idzie z OBWODU, nie z pomieszczenia — inaczej obwod gniazd
+ * i obwod oswietlenia w tym samym pokoju wychodzily identyczne.
+ */
+describe("kolorObwodu", () => {
+  it("kolejne obwody dostaja ROZNE kolory", () => {
+    expect(kolorObwodu(0)).not.toBe(kolorObwodu(1));
+    expect(kolorObwodu(1)).not.toBe(kolorObwodu(2));
+  });
+
+  it("paleta zawija sie cyklicznie, wiec numer obwodu nigdy nie wyjdzie poza nia", () => {
+    expect(kolorObwodu(KOLORY_OBWODOW.length)).toBe(kolorObwodu(0));
+    expect(kolorObwodu(KOLORY_OBWODOW.length * 3 + 2)).toBe(kolorObwodu(2));
+  });
+
+  it("wszystkie kolory palety sa rozne — inaczej dwa obwody zlalyby sie mimo cyklu", () => {
+    expect(new Set(KOLORY_OBWODOW).size).toBe(KOLORY_OBWODOW.length);
   });
 });
