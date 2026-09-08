@@ -750,34 +750,44 @@ describe("buildCableRoutes — lancuch zamiast gwiazdy", () => {
 describe("zakonczSkosem", () => {
   const trasa = (...p: [number, number][]) => p.map(([x, y]) => ({ x, y }));
 
-  it("przycina ogon do krawedzi symbolu i odbija skosem", () => {
-    // Trasa biegnie poziomo do (100,0), potem 20 w dol do srodka symbolu o promieniu 6.
-    const out = zakonczSkosem(trasa([0, 0], [100, 0], [100, 20]), { x: 100, y: 20 }, 6);
-    // Ogon poza symbolem ma 14 jednostek, wiec odbicie wypada 14 przed rogiem...
-    expect(out[out.length - 2]).toEqual({ x: 86, y: 0 });
-    // ...a koniec siada na krawedzi symbolu, nie w jego srodku.
-    expect(out[out.length - 1]).toEqual({ x: 100, y: 14 });
-    // Rowne skladowe = 45 stopni.
-    const dx = out[out.length - 1].x - out[out.length - 2].x;
-    const dy = out[out.length - 1].y - out[out.length - 2].y;
-    expect(Math.abs(dx)).toBeCloseTo(Math.abs(dy), 9);
+  /**
+   * Przyciecie liczone WZDLUZ LAMANEJ, nie w linii prostej do srodka. Trasa biegnie
+   * szesc jednostek od sciany, a przyklejone gniazdo ma srodek o jedna dalej —
+   * mierzac prostopadle nie ma czego przycinac, bo linia przechodzi praktycznie przez
+   * symbol. Mierzac wzdluz drogi, skracamy ja dokladnie o tyle, ile zajmuje symbol.
+   */
+  it("skraca trase o promien symbolu, mierzac wzdluz niej", () => {
+    // Dwa gniazda w jednej linii przy tej samej scianie: przewod idzie od jednego
+    // do drugiego i ma zatrzymac sie przed symbolem, nie w jego srodku.
+    const out = zakonczSkosem(trasa([100, 20], [100, 90]), 7);
+    expect(out).toEqual(trasa([100, 20], [100, 83]));
   });
 
-  /** Gdy „odczep" jest dluzszy niz polowa odcinka, ktorym trasa nadchodzi, to nie
-   *  jest odczep, tylko cala droga do punktu — zaginanie wykrzywiloby trase. */
-  it("przy dlugim dojsciu i krotkim odcinku zostaje samo przyciecie", () => {
-    const out = zakonczSkosem(trasa([0, 0], [10, 0], [10, 100]), { x: 10, y: 100 }, 6);
+  it("na prostej NIE dokłada zadnego zalamania — trasa po prostu konczy sie wczesniej", () => {
+    const out = zakonczSkosem(trasa([0, 0], [100, 0], [100, 60]), 6);
+    expect(out).toEqual(trasa([0, 0], [100, 0], [100, 54]));
+  });
+
+  /** Skos pojawia sie tam, gdzie jest CO scinac: cofniecie przekracza zalamanie. */
+  it("scina zakret, gdy koniec trasy wypada tuz za nim", () => {
+    // Ogon za zakretem ma 8 jednostek; promien 6 zabiera z niego 6, a cofniecie
+    // o 1,5 promienia (9) siega juz na odcinek sprzed zakretu.
+    const out = zakonczSkosem(trasa([0, 0], [100, 0], [100, 8]), 6);
     expect(out).toHaveLength(3);
-    expect(out[2]).toEqual({ x: 10, y: 94 });
+    expect(out[0]).toEqual({ x: 0, y: 0 });
+    // Zalamanie zniknelo, zastapione ukosem konczacym sie przed symbolem.
+    expect(out[1].y).toBe(0);
+    expect(out[1].x).toBeLessThan(100);
+    expect(out[2]).toEqual({ x: 100, y: 2 });
   });
 
-  it("trasa konczaca sie juz w zasiegu symbolu zostaje nietknieta", () => {
-    const wejscie = trasa([0, 0], [100, 0], [100, 4]);
-    expect(zakonczSkosem(wejscie, { x: 100, y: 4 }, 6)).toEqual(wejscie);
+  it("trasa krotsza niz zasieg symbolu zostaje nietknieta — nie ma czego przycinac", () => {
+    const wejscie = trasa([100, 0], [100, 4]);
+    expect(zakonczSkosem(wejscie, 6)).toEqual(wejscie);
   });
 
-  it("bez punktu przed rogiem zostaje samo przyciecie", () => {
-    const out = zakonczSkosem(trasa([100, 0], [100, 20]), { x: 100, y: 20 }, 6);
-    expect(out).toEqual(trasa([100, 0], [100, 14]));
+  it("zerowy promien nic nie zmienia", () => {
+    const wejscie = trasa([0, 0], [100, 0], [100, 60]);
+    expect(zakonczSkosem(wejscie, 0)).toEqual(wejscie);
   });
 });

@@ -673,10 +673,10 @@ export function buildCableRoutes(
       // TYLKO dla trasy faktycznie routowanej po geometrii. Zapasowy szacunek
       // Manhattan (rysowany przerywaną kreską) mówi „nie wiem, którędy" — dorysowanie
       // mu starannego odczepu sugerowałoby dokładność, której tam nie ma.
-      const zKoncem = routed ? zakonczSkosem(surowe, t.end, promienSymbolu(t.type, skalaSymboli)) : surowe;
+      const zKoncem = routed ? zakonczSkosem(surowe, promienSymbolu(t.type, skalaSymboli)) : surowe;
       const points =
         routed && poprzedniTyp
-          ? [...zakonczSkosem([...zKoncem].reverse(), poczatek, promienSymbolu(poprzedniTyp, skalaSymboli))].reverse()
+          ? [...zakonczSkosem([...zKoncem].reverse(), promienSymbolu(poprzedniTyp, skalaSymboli))].reverse()
           : zKoncem;
       const cable = t.cores ? withCoreCount(c.cable, t.cores) : c.cable;
       supply.push({
@@ -807,56 +807,74 @@ function promienSymbolu(type: ElementType, skala: number): number {
   return zasiegPrzyscienny(type) * skala;
 }
 
+/** Punkt na łamanej, oddalony o `odleglosc` od jej KOŃCA, mierząc wzdłuż niej.
+ *  Zwraca też indeks ostatniego punktu przed nim — do przycięcia ogona. */
+function cofnijSieWzdluz(points: Point[], odleglosc: number): { punkt: Point; indeks: number } | null {
+  let zostalo = odleglosc;
+  for (let i = points.length - 1; i > 0; i--) {
+    const a = points[i - 1];
+    const b = points[i];
+    const dlug = Math.hypot(b.x - a.x, b.y - a.y);
+    if (dlug >= zostalo) {
+      const t = zostalo / dlug;
+      return { punkt: { x: b.x - (b.x - a.x) * t, y: b.y - (b.y - a.y) * t }, indeks: i - 1 };
+    }
+    zostalo -= dlug;
+  }
+  // Cała łamana jest krótsza niż żądane cofnięcie — nie ma czego przycinać.
+  return null;
+}
+
 /**
- * Zakończenie trasy SKOSEM przy symbolu, zamiast wbicia się w jego środek.
+ * O ile dłuższy od promienia symbolu ma być odcinek, na którym trasa „ścina zakręt"
+ * i wchodzi do punktu skosem.
  *
- * Trasa biegnie równolegle do ściany i dochodziła dotąd do punktu `{x, y}` elementu,
- * czyli przecinała cały symbol i kończyła się w jego środku. Na rysunku wyglądało to
- * tak, jakby przewód przebijał gniazdo, a nie do niego dochodził.
+ * Skos zaczyna się WCZEŚNIEJ niż sama krawędź symbolu — inaczej przy trasie
+ * biegnącej tuż obok gniazd (sześć jednostek od ściany, czyli praktycznie na ich
+ * wysokości) zagięcie wypadałoby już pod sąsiednim symbolem. Półtora promienia
+ * wystarcza, żeby ukos był widoczny i zaczynał się w wolnym miejscu.
+ */
+const ZAPAS_SKOSU = 1.5;
+
+/**
+ * Zakończenie trasy przy symbolu: przycięcie do jego krawędzi i wejście SKOSEM.
  *
- * Teraz ostatni odcinek odbija od trasy skosem i kończy się na KRAWĘDZI symbolu:
+ * Trasa dochodziła dotąd do punktu `{x, y}` elementu, czyli przecinała cały symbol
+ * i kończyła się w jego środku. Na rysunku wyglądało to tak, jakby przewód przebijał
+ * gniazdo, a nie do niego dochodził.
  *
- *      ────────E╮            E — miejsce odbicia od trasy
- *               ╲            odcinek E→T ma równe składowe wzdłuż trasy
- *                T◗          i w poprzek, więc kąt wychodzi 45° sam z siebie
+ * Obie operacje liczone są WZDŁUŻ ŁAMANEJ, nie w linii prostej do środka, i to jest
+ * tu sedno. Trasa biegnie sześć jednostek od ściany, a przyklejone gniazdo ma środek
+ * o jedną dalej — mierząc prostopadle, trasa przechodzi praktycznie przez symbol
+ * i nie ma czego przycinać. Mierząc wzdłuż drogi, skracamy ją dokładnie o tyle, ile
+ * zajmuje symbol, niezależnie od tego, pod jakim kątem przewód nadchodzi.
+ *
+ *      ────────E╮            E — początek skosu, `ZAPAS_SKOSU` promieni przed końcem
+ *               ╲            odcinek E→T zastępuje kawałek łamanej, więc na zakręcie
+ *                T◗          robi się ukos, a na prostej — po prostu krótsza linia
  *
  * Skos, a nie prostopadła: tak rysuje się odgałęzienia na schematach instalacyjnych —
  * prostopadły „ogonek" czyta się jak skrzyżowanie dwóch przewodów, a nie jak odczep.
- *
- * `promien` to zasięg symbolu w jednostkach planu; koniec trasy siada na okręgu o tym
- * promieniu, więc działa niezależnie od tego, z której strony przewód nadchodzi —
- * a to ważne przy elementach, które nie przykleiły się do ściany i nie mają „strony
- * przyściennej".
  */
-export function zakonczSkosem(points: Point[], srodek: Point, promien: number): Point[] {
+export function zakonczSkosem(points: Point[], promien: number): Point[] {
   if (points.length < 2 || promien <= 0) return points;
-  const F = points[points.length - 2];
-  const dlugoscOgona = Math.hypot(srodek.x - F.x, srodek.y - F.y);
-  // Trasa kończy się bliżej niż krawędź symbolu — nie ma czego przycinać ani zaginać.
-  if (dlugoscOgona <= promien + 0.01) return points;
 
-  const kier = { x: (srodek.x - F.x) / dlugoscOgona, y: (srodek.y - F.y) / dlugoscOgona };
-  const T = { x: srodek.x - kier.x * promien, y: srodek.y - kier.y * promien };
-  const h = dlugoscOgona - promien;
+  const koniec = cofnijSieWzdluz(points, promien);
+  // Cała trasa mieści się w zasięgu symbolu — zostawiamy ją, żeby nie zniknęła.
+  if (!koniec) return points;
+  const przyciete = [...points.slice(0, koniec.indeks + 1), koniec.punkt];
+  if (przyciete.length < 3) return przyciete;
 
-  // Bez punktu PRZED `F` nie ma wzdłuż czego się cofnąć — zostaje samo przycięcie.
-  const Q = points[points.length - 3];
-  if (!Q) return [...points.slice(0, -1), T];
-
-  const dlugoscOdcinka = Math.hypot(F.x - Q.x, F.y - Q.y);
-  if (dlugoscOdcinka < 0.01) return [...points.slice(0, -1), T];
-  // Skos ma sens tylko wtedy, gdy trasa faktycznie BIEGNIE OBOK i odbija na krótko.
-  // Gdy „odczep" jest dłuższy niż połowa odcinka, którym trasa nadchodzi, to nie jest
-  // odczep, tylko cała droga do punktu — zaginanie jej wykrzywiłoby trasę zamiast
-  // pokazać odgałęzienie. Zostaje samo przycięcie do krawędzi symbolu.
-  if (h > dlugoscOdcinka * 0.5) return [...points.slice(0, -1), T];
-  // Cofnięcie ograniczone długością odcinka, którym trasa nadchodzi: przy gniazdach
-  // stojących blisko siebie pełny skos wchodziłby w sąsiedni odczep. Kąt robi się
-  // wtedy ostrzejszy niż 45°, ale odczep zostaje po swojej stronie.
-  const cofniecie = Math.min(h, dlugoscOdcinka * 0.9);
-  const u = { x: (F.x - Q.x) / dlugoscOdcinka, y: (F.y - Q.y) / dlugoscOdcinka };
-  const E = { x: F.x - u.x * cofniecie, y: F.y - u.y * cofniecie };
-  return [...points.slice(0, -2), E, T];
+  const poczatekSkosu = cofnijSieWzdluz(przyciete, promien * ZAPAS_SKOSU);
+  // Cofnięcie dłuższe niż cała trasa — nie ma od czego odbijać.
+  if (!poczatekSkosu) return przyciete;
+  // Skos ma sens tylko wtedy, gdy cofnięcie PRZEKROCZYŁO załamanie: wtedy odcinek
+  // E→T ścina zakręt i widać ukos. Gdy oba punkty wypadły na tym samym, prostym
+  // odcinku, „skos" byłby zwykłym punktem pośrodku prostej — trasa kończy się wtedy
+  // po prostu przed symbolem i tak ma wyglądać (np. gniazda w jednej linii przy tej
+  // samej ścianie: przewód idzie od jednego do drugiego, nie ma czego ścinać).
+  if (poczatekSkosu.indeks >= koniec.indeks) return przyciete;
+  return [...przyciete.slice(0, poczatekSkosu.indeks + 1), poczatekSkosu.punkt, koniec.punkt];
 }
 
 /** Rodzaj obwodu wg roli elementów — mapowanie na kategorie używane w doborze. */

@@ -38,13 +38,13 @@ const MERGE_TOLERANCE = 10;
  * RYSUNKOWA (ma być widać), a nie wymiar instalacji — przewód i tak biegnie w ścianie
  * albo tuż przy niej.
  *
- * Piętnaście, a nie sześć jak na początku: przyklejone do ściany gniazdo ma środek
- * około siedmiu jednostek od niej i sięga drugie tyle w głąb pokoju, więc trasa
- * odsunięta o sześć przechodziła DOKŁADNIE przez symbole. Piętnaście mija je z
- * zapasem i dopiero wtedy widać osobną linię biegnącą wzdłuż ściany, a nie kreskę
- * przebijającą gniazda.
+ * Sześć jednostek to przy typowej skali 30 cm na rzucie: wyraźnie obok obrysu (ten
+ * ma ok. 1,6 jedn. grubości), a nadal czytelnie „wzdłuż tej ściany", a nie w poprzek
+ * pokoju. Trasa biegnie przez to mniej więcej na wysokości przyklejonych gniazd
+ * (ich środek wypada o jedną jednostkę dalej) — i tak ma być: to 
+ * odpowiada za to, żeby linia kończyła się PRZED symbolem, zamiast go przecinać.
  */
-export const ODSUNIECIE_TRASY = 20;
+export const ODSUNIECIE_TRASY = 6;
 
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
