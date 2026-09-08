@@ -1231,15 +1231,29 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   }
 
   /**
-   * Numery, które już gdzieś na projekcie są — do podpowiedzi w menu. Bez nich
+   * Numery, które już gdzieś w PROJEKCIE są — do podpowiedzi w menu. Bez nich
    * przypisanie drugiego gniazda do „obwodu 3" wymagałoby zapamiętania, że taki
    * numer w ogóle istnieje.
+   *
+   * Liczone z CAŁEGO budynku, nie z bieżącej kondygnacji, bo numer znaczy to samo
+   * w całym projekcie: `computeCircuits` w rozdzielnicy grupuje po nim wszystkie
+   * elementy, niezależnie od piętra. Gdy lista pochodziła z jednej kondygnacji,
+   * „+ nowy" na piętrze proponował numer zajęty na parterze — i kliknięcie po cichu
+   * scalało dwa niezwiązane zestawy punktów w jeden obwód.
+   *
+   * Numery używane WYŁĄCZNIE gdzie indziej zostają na liście (scalenie przez piętra
+   * bywa zamierzone — jeden pion), ale są oznaczone, żeby było to wybór, a nie
+   * przypadek.
    */
   const uzyteNumeryObwodow = useMemo(() => {
-    const s = new Set<number>();
-    for (const e of elements) if (typeof e.obwod === "number") s.add(e.obwod);
-    return [...s].sort((a, b) => a - b);
-  }, [elements]);
+    const naTej = new Set<number>();
+    for (const e of elements) if (typeof e.obwod === "number") naTej.add(e.obwod);
+    const wszystkieNumery = new Set<number>();
+    for (const e of wszystkieElementy) if (typeof e.obwod === "number") wszystkieNumery.add(e.obwod);
+    return [...wszystkieNumery]
+      .sort((a, b) => a - b)
+      .map((numer) => ({ numer, gdzieIndziej: !naTej.has(numer) }));
+  }, [elements, wszystkieElementy]);
 
   /** Obraca element(y) o 90° (w prawo) — np. gniazdko/łącznik przy skośnej ścianie. */
   function rotateElements(ids: string[]) {
