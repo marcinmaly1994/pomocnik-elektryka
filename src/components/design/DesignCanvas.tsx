@@ -498,8 +498,8 @@ export function DesignCanvas({
   // poprawne dla POZOSTAŁYCH tras: skoro edytowana trasa nie biegnie już tym odcinkiem
   // ściany, nie powinna zajmować w nim pasa.
   const spreadRoutePoints = useMemo(
-    () => spreadOverlappingRoutes(cableRoutes.filter((r) => !(r.id in routeOverrides))),
-    [cableRoutes, routeOverrides]
+    () => spreadOverlappingRoutes(cableRoutes.filter((r) => !(r.id in routeOverrides)), roomShapes),
+    [cableRoutes, routeOverrides, roomShapes]
   );
 
   /**

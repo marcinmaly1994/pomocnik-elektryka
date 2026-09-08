@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Circuit, ElementType, InstallationElement } from "@/types";
+import type { Circuit, ElementType, InstallationElement, RoomShape } from "@/types";
 import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, zakonczPrzyNozce, zakonczSkosem } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -429,11 +429,38 @@ describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
   });
 });
 
+/**
+ * Rozsuwanie tras w rownolegle pasy. Zgloszenie uzytkownika: kilka obwodow biegnacych
+ * ta sama sciana naklada sie na siebie i nie wiadomo, ile przewodow jest tam
+ * prowadzonych. Obwod gniazdowy ma zostac NAJBLIZEJ sciany.
+ *
+ * Trasy w testach maja ksztalt prawdziwych: koncowe odcinki to przylaczenia do
+ * urzadzen (obudowa rozdzielnicy, nozka gniazda), a rozsuwaniu podlega tylko przebieg
+ * MIEDZY nimi.
+ */
 describe("spreadOverlappingRoutes", () => {
-  function route(id: string, points: { x: number; y: number }[]): ReturnType<typeof buildCableRoutes>[number] {
+  /** Pokoj 200 x 200 — dolna sciana na y = 200, wiec korytarz tras wypada y = 195. */
+  const POKOJ_SPREAD: RoomShape = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 200 },
+      { x: 0, y: 200 },
+    ],
+  };
+
+  function route(
+    id: string,
+    points: { x: number; y: number }[],
+    over: Partial<ReturnType<typeof buildCableRoutes>[number]> = {}
+  ): ReturnType<typeof buildCableRoutes>[number] {
     return {
       id,
-      circuitId: "obw1",
+      circuitId: id, // domyslnie kazda trasa to osobny obwod — osobny kabel, osobny pas
       circuitName: "Obwód",
       color: "#1F6FB2",
       kind: "zasilanie",
@@ -445,28 +472,90 @@ describe("spreadOverlappingRoutes", () => {
       points,
       lengthUnits: 0,
       viaWalls: true,
+      ...over,
     };
   }
 
-  it("dwie trasy dzielące ten sam odcinek dostają przeciwne przesunięcia (kolejność po id)", () => {
-    const a = route("a", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
-    const b = route("b", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+  /** Trasa biegnaca korytarzem y = `y` od `x0` do `x1`, z krotkimi przylaczami na obu
+   *  koncach — czyli dokladnie tak, jak wychodzi z `buildCableRoutes`. */
+  const korytarz = (id: string, x0: number, x1: number, y: number, over = {}) =>
+    route(id, [{ x: x0, y: y + 5 }, { x: x0, y }, { x: x1, y }, { x: x1, y: y + 5 }], over);
+
+  it("dwa obwody na tym samym odcinku dostaja OSOBNE pasy", () => {
+    const out = spreadOverlappingRoutes([korytarz("a", 0, 100, 0), korytarz("b", 0, 100, 0)]);
+    expect(out.get("a")![1].y).not.toBeCloseTo(out.get("b")![1].y, 5);
+  });
+
+  /**
+   * Sedno zgloszenia. Wczesniej kluczem byla PARA KONCOW odcinka, wiec trasa biegnaca
+   * pol sciany i druga biegnaca cala mialy rozne klucze i rysowaly sie jedna na
+   * drugiej — a to najczestszy uklad, bo obwody wychodza z jednej rozdzielnicy
+   * i rozchodza sie w roznych miejscach.
+   */
+  it("odcinek ZAWIERAJACY SIE w dluzszym tez jest rozsuwany", () => {
+    const out = spreadOverlappingRoutes([korytarz("dlugi", 0, 100, 0), korytarz("krotki", 20, 60, 0)]);
+    expect(out.get("dlugi")![1].y).not.toBeCloseTo(out.get("krotki")![1].y, 5);
+  });
+
+  it("ODLEGLE kawalki tej samej sciany nie rozsuwaja sie — nic sie tam nie zaslania", () => {
+    const out = spreadOverlappingRoutes([korytarz("a", 0, 40, 0), korytarz("b", 120, 160, 0)]);
+    expect(out.get("a")![1].y).toBeCloseTo(0, 5);
+    expect(out.get("b")![1].y).toBeCloseTo(0, 5);
+  });
+
+  /**
+   * Koniec przewodu siedzi na urzadzeniu — na obudowie rozdzielnicy albo na nozce
+   * gniazda. Przesuniecie go w bok byloby klamstwem o tym, gdzie kabel wchodzi;
+   * zdarzalo sie przy tym, ze trasa zaczynala sie POZA budynkiem.
+   */
+  it("KONCE tras zostaja przypiete do urzadzen, mimo rozsuwania", () => {
+    const a = korytarz("a", 0, 100, 0);
+    const b = korytarz("b", 0, 100, 0);
     const out = spreadOverlappingRoutes([a, b]);
-    const pa = out.get("a")!;
-    const pb = out.get("b")!;
-    expect(pa[0].y).not.toBeCloseTo(pb[0].y, 5);
-    expect(pa[0].y).toBeCloseTo(-pb[0].y, 5);
+    for (const [id, r] of [["a", a], ["b", b]] as const) {
+      const pts = out.get(id)!;
+      expect(pts[0]).toEqual(r.points[0]);
+      expect(pts[pts.length - 1]).toEqual(r.points[r.points.length - 1]);
+    }
   });
 
-  it("trasa samotna na odcinku nie dostaje żadnego przesunięcia", () => {
-    const a = route("a", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
-    const out = spreadOverlappingRoutes([a]);
-    expect(out.get("a")).toEqual([{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+  /** Jeden obwod to JEDEN kabel — kolejne ogniwa lancucha trzymaja sie jednej linii,
+   *  nawet gdy sa osobnymi trasami (odcinek rozdzielnica→gniazdo, gniazdo→gniazdo). */
+  it("dwie trasy TEGO SAMEGO obwodu dziela pas", () => {
+    const out = spreadOverlappingRoutes([
+      korytarz("a", 0, 100, 0, { circuitId: "obw1" }),
+      korytarz("b", 0, 100, 0, { circuitId: "obw1" }),
+    ]);
+    expect(out.get("a")).toEqual(out.get("b"));
   });
 
-  it("zerowej długości odcinek nie psuje wyniku (brak NaN)", () => {
-    const a = route("a", [{ x: 5, y: 5 }, { x: 5, y: 5 }]);
-    const b = route("b", [{ x: 5, y: 5 }, { x: 5, y: 5 }]);
+  it("obwod GNIAZDOWY zostaje przy scianie, oswietlenie odsuwa sie w glab pokoju", () => {
+    const out = spreadOverlappingRoutes(
+      [korytarz("g", 20, 180, 195), korytarz("s", 20, 180, 195, { type: "oswietlenie" })],
+      [POKOJ_SPREAD]
+    );
+    // Sciana jest na y = 200, wiec „dalej od niej" znaczy MNIEJSZE y.
+    expect(out.get("g")![1].y).toBeCloseTo(195, 5); // pas zerowy zostaje na trasie
+    expect(out.get("s")![1].y).toBeLessThan(195);
+  });
+
+  it("kolejnosc pasow NIE zalezy od kolejnosci tras na wejsciu", () => {
+    const g = korytarz("g", 20, 180, 195);
+    const s = korytarz("s", 20, 180, 195, { type: "oswietlenie" });
+    const wPrzod = spreadOverlappingRoutes([g, s], [POKOJ_SPREAD]);
+    const wTyl = spreadOverlappingRoutes([s, g], [POKOJ_SPREAD]);
+    expect(wPrzod.get("g")).toEqual(wTyl.get("g"));
+    expect(wPrzod.get("s")).toEqual(wTyl.get("s"));
+  });
+
+  it("trasa samotna na odcinku nie dostaje zadnego przesuniecia", () => {
+    const a = korytarz("a", 0, 100, 0);
+    expect(spreadOverlappingRoutes([a])).toEqual(new Map([["a", a.points]]));
+  });
+
+  it("zerowej dlugosci odcinek nie psuje wyniku (brak NaN)", () => {
+    const a = route("a", [{ x: 5, y: 5 }, { x: 5, y: 5 }, { x: 5, y: 5 }]);
+    const b = route("b", [{ x: 5, y: 5 }, { x: 5, y: 5 }, { x: 5, y: 5 }]);
     const out = spreadOverlappingRoutes([a, b]);
     for (const pts of [out.get("a")!, out.get("b")!]) {
       for (const p of pts) {
@@ -476,38 +565,26 @@ describe("spreadOverlappingRoutes", () => {
     }
   });
 
-  it("trasy rozchodzące się po wspólnym odcinku mają niezależne przesunięcia na dalszych segmentach", () => {
-    const a = route("a", [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }]);
-    const b = route("b", [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: -50 }]);
+  it("trasy rozchodzace sie po wspolnym odcinku maja niezalezne przesuniecia na dalszych segmentach", () => {
+    const a = route("a", [{ x: 0, y: -5 }, { x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 50, y: 55 }]);
+    const b = route("b", [{ x: 0, y: -5 }, { x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: -50 }, { x: 50, y: -55 }]);
     const out = spreadOverlappingRoutes([a, b]);
-    const pa = out.get("a")!;
-    const pb = out.get("b")!;
-    // wspólny pierwszy odcinek — przesunięte w Y, przeciwnie
-    expect(pa[0].y).toBeCloseTo(-pb[0].y, 5);
-    // drugi odcinek każdej trasy jest samotny (nikt inny go nie dzieli) — bez przesunięcia w X
-    expect(pa[2].x).toBeCloseTo(50, 1);
-    expect(pb[2].x).toBeCloseTo(50, 1);
+    // wspolny korytarz — rozsuniety
+    expect(out.get("a")![1].y).not.toBeCloseTo(out.get("b")![1].y, 5);
+    // pionowe czesci ida w PRZECIWNE strony, wiec dziela tylko jeden punkt
+    // (narozny styk to nie nakladanie) — zostaja na swoim x
+    expect(out.get("a")![3].x).toBeCloseTo(50, 1);
+    expect(out.get("b")![3].x).toBeCloseTo(50, 1);
   });
-});
 
-describe("buildCableRoutes — zapasowa trasa Manhattan omija ścianę stojącą na drodze", () => {
-  function circuit(over: Partial<Circuit> = {}): Circuit {
-    return { id: "obw1", name: "Obwód gniazd ogólnych 1", type: "gniazdko", elements: [], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true, ...over };
-  }
-
-  it("gdy domyślne załamanie (przez {to.x, from.y}) przecina ścianę, a DRUGA orientacja jest wolna — wybiera drugą", () => {
-    const panel = { x: 0, y: 0 };
-    const e = el("gniazdko", { x: 100, y: 100 });
-    // trzy ROZŁĄCZONE kawałki ściany (patrz routing.test.ts — dijkstra między nimi
-    // zwraca null, więc trasa MUSI spaść na Manhattan): jedna tuż przy rozdzielnicy,
-    // jedna tuż przy gniazdku (żeby to one, a nie przeszkoda, były „najbliższe" przy
-    // doskoku), i trzecia — przeszkoda — dokładnie na domyślnym załamaniu (100,0).
-    const nearPanel = { id: "wp", floor: "parter", points: [{ x: 0, y: -5 }, { x: 0, y: -1 }] };
-    const nearPoint = { id: "we", floor: "parter", points: [{ x: 100, y: 105 }, { x: 100, y: 101 }] };
-    const obstacle = { id: "wo", floor: "parter", points: [{ x: 50, y: -10 }, { x: 50, y: 10 }] };
-    const [r] = buildCableRoutes(panel, [circuit({ elements: [e] })], [e], [nearPanel, nearPoint, obstacle], []);
-    expect(r.viaWalls).toBe(false); // nadal szacunek, nie routing po ścianach
-    expect(r.points).toEqual([panel, { x: 0, y: 100 }, { x: 100, y: 100 }]);
+  /** Trasy biegnace tym samym korytarzem w PRZECIWNE strony to nadal jeden korytarz —
+   *  bez sprowadzenia kierunku do jednej polplaszczyzny trafialyby na osobne proste
+   *  i rysowaly sie jedna na drugiej. */
+  it("przeciwne zwroty na tej samej prostej tez sie rozsuwaja", () => {
+    const a = korytarz("a", 0, 100, 0);
+    const b = route("b", [{ x: 100, y: 5 }, { x: 100, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 5 }]);
+    const out = spreadOverlappingRoutes([a, b]);
+    expect(out.get("a")![1].y).not.toBeCloseTo(out.get("b")![2].y, 5);
   });
 });
 
@@ -834,5 +911,66 @@ describe("zakonczPrzyNozce", () => {
   it("trasa krotsza niz potrzebne cofniecie zostaje cala, z doprowadzeniem do celu", () => {
     const out = zakonczPrzyNozce(trasa([100, 0], [100, 2]), { x: 108, y: 2 });
     expect(out).toEqual(trasa([100, 0], [100, 2], [108, 2]));
+  });
+});
+
+/**
+ * Rozdzielnica tez jest osprzetem przysciennym: przewody wychodza z jej OBUDOWY,
+ * nie ze srodka symbolu. Dopoki startowaly ze srodka, przy kilku obwodach robila
+ * sie wiazka linii zbiegajaca sie w jednym punkcie NA symbolu — czyli dokladnie
+ * tam, gdzie rysunek pokazuje aparaty.
+ */
+describe("buildCableRoutes — poczatek przy rozdzielnicy", () => {
+  const POKOJ = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 200 },
+      { x: 0, y: 200 },
+    ],
+  };
+  /** Polowa wysokosci pudelka rozdzielnicy (26) — o tyle jej srodek stoi od sciany. */
+  const ZASIEG = 13;
+  // Rozdzielnica przyklejona do DOLNEJ sciany pokoju: obrot 180 kieruje jej strone
+  // montazowa w +y, wiec obudowa dotyka linii y = 200.
+  const rozdzielnica = el("rozdzielnica", { x: 100, y: 200 - ZASIEG, rotation: 180 });
+  const panel = { x: rozdzielnica.x, y: rozdzielnica.y };
+
+  function trasyZ(punkty: InstallationElement[]) {
+    return buildCableRoutes(
+      panel,
+      punkty.map((p, i) => ({
+        id: `obw${i}`,
+        name: `Obwód ${i}`,
+        type: "gniazdko" as ElementType,
+        elements: [p],
+        cable: "YDYp 3x2,5 mm²",
+        breaker: "B16",
+        rcd: true,
+      })),
+      [rozdzielnica, ...punkty],
+      [],
+      [POKOJ]
+    );
+  }
+
+  it("przewod wychodzi z KRAWEDZI rozdzielnicy przy scianie, nie z jej srodka", () => {
+    const [r] = trasyZ([el("gniazdko", { x: 193, y: 60, rotation: 90 })]);
+    expect(r.viaWalls).toBe(true); // inaczej test nie sprawdzalby tego, co mysli
+    expect(r.points[0]).toEqual({ x: 100, y: 200 });
+    expect(r.points[0]).not.toEqual(panel);
+  });
+
+  it("kilka obwodow startuje z TEGO SAMEGO punktu na obudowie — nie kazdy ze srodka", () => {
+    const trasy = trasyZ([
+      el("gniazdko", { x: 193, y: 60, rotation: 90 }),
+      el("gniazdko", { x: 7, y: 60, rotation: 270 }),
+    ]);
+    expect(trasy).toHaveLength(2);
+    for (const r of trasy) expect(r.points[0]).toEqual({ x: 100, y: 200 });
   });
 });
