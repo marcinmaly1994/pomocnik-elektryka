@@ -268,11 +268,57 @@ export interface OstrzezenieObwodu {
  * Elementów, które z definicji mają własny obwód, tu nie ma — ich w ogóle nie da się
  * przypisać ręcznie (patrz `maWlasnyObwodZDefinicji`).
  */
+/**
+ * Grupa sterowania ROZERWANA między obwody — jedyne ostrzeżenie na tej liście, które
+ * mówi „tego nie da się zbudować", a nie „to odbiega od praktyki".
+ *
+ * Łącznik jest włączony szeregowo w przewód fazowy obwodu, który zasila sterowane nim
+ * oprawy. Fizycznie nie da się jednym łącznikiem przełączać dwóch obwodów pod dwoma
+ * zabezpieczeniami — automat pilnuje tego twardo (`chunkLightsByGroup`), ale RĘCZNY
+ * numer omijał ten strażnik bez słowa.
+ *
+ * „Auto" liczy się tu jako osobne przypisanie: oprawa z numerem i oprawa bez numeru
+ * trafiają do dwóch różnych obwodów tak samo skutecznie, jak dwa różne numery.
+ *
+ * Numery grup zaczynają się od 1 OSOBNO na każdej kondygnacji (patrz
+ * `computeLightGroups`), więc kluczem musi być piętro razem z numerem — inaczej
+ * grupa 1 z parteru zlałaby się z grupą 1 z piętra.
+ */
+function rozerwaneGrupySterowania(elements: InstallationElement[]): OstrzezenieObwodu[] {
+  const grupy = computeLightGroups(elements);
+  const wg = new Map<string, { numery: Set<number | "auto">; opis: string }>();
+
+  for (const e of elements) {
+    if (roleOf(e) !== "light") continue;
+    const g = grupy.get(e.id)?.[0];
+    if (g == null) continue;
+    const klucz = `${e.floor}::${g}`;
+    if (!wg.has(klucz)) wg.set(klucz, { numery: new Set(), opis: `${g}${e.room ? ` (${e.room})` : ""}` });
+    wg.get(klucz)!.numery.add(recznyNumer(e) ?? "auto");
+  }
+
+  const out: OstrzezenieObwodu[] = [];
+  for (const { numery, opis } of wg.values()) {
+    // Jeden wspólny obwód dla całej grupy — tak ma być.
+    if (numery.size < 2) continue;
+    // Grupa bez ANI JEDNEGO ręcznego numeru nie jest naszą sprawą: tamtą pilnuje
+    // automat i z definicji jej nie rozrywa.
+    const reczne = [...numery].filter((n): n is number => typeof n === "number");
+    if (reczne.length === 0) continue;
+    const wypis = [...numery].map((n) => (n === "auto" ? "automat" : `obwód ${n}`)).join(" i ");
+    out.push({
+      numer: Math.min(...reczne),
+      tresc: `Oprawy sterowane jednym łącznikiem (grupa ${opis}) trafiły do różnych obwodów: ${wypis}. Tego nie da się wykonać — łącznik siedzi w przewodzie JEDNEGO obwodu, więc nie przełączy drugiego. Nadaj wszystkim oprawom tej grupy ten sam numer.`,
+    });
+  }
+  return out;
+}
+
 export function ostrzezeniaObwodow(
   elements: InstallationElement[],
   roomShapes: RoomShape[] = []
 ): OstrzezenieObwodu[] {
-  const out: OstrzezenieObwodu[] = [];
+  const out: OstrzezenieObwodu[] = [...rozerwaneGrupySterowania(elements)];
   for (const { numer, elementy } of obwodyReczne(elements)) {
     const oprawy = elementy.filter((e) => roleOf(e) === "light").length;
     const gniazda = elementy.length - oprawy;

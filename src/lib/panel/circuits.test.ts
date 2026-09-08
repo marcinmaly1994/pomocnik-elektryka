@@ -338,3 +338,60 @@ describe("ostrzezeniaObwodow", () => {
     expect(ostrzezeniaObwodow(Array.from({ length: 11 }, () => el({ type: "oswietlenie", obwod: 4 })))).toHaveLength(1);
   });
 });
+
+/**
+ * Rozerwanie grupy sterowania to jedyne ostrzezenie mowiace „tego nie da sie
+ * zbudowac". Lacznik siedzi szeregowo w przewodzie fazowym SWOJEGO obwodu, wiec
+ * nie przelaczy drugiego — automat pilnuje tego twardo (`chunkLightsByGroup`),
+ * a reczny numer omijal ten straznik bez slowa.
+ */
+describe("ostrzezeniaObwodow — rozerwana grupa sterowania", () => {
+  const lacznik = (over: Partial<InstallationElement> = {}) => el({ type: "wlacznik", x: 0, y: 0, ...over });
+  const oprawa = (over: Partial<InstallationElement> = {}) => el({ type: "oswietlenie", ...over });
+
+  it("dwa rozne numery w jednej grupie sa zglaszane", () => {
+    const o = ostrzezeniaObwodow([
+      lacznik({ id: "sw" }),
+      oprawa({ id: "l1", x: 20, obwod: 1 }),
+      oprawa({ id: "l2", x: 40, obwod: 2 }),
+    ]);
+    const rozerwane = o.filter((w) => w.tresc.includes("jednym łącznikiem"));
+    expect(rozerwane).toHaveLength(1);
+    expect(rozerwane[0].tresc).toContain("obwód 1");
+    expect(rozerwane[0].tresc).toContain("obwód 2");
+    expect(rozerwane[0].tresc).toMatch(/nie da się wykonać/);
+  });
+
+  /** „Auto" to tez osobne przypisanie — oprawa z numerem i oprawa bez trafiaja do
+   *  dwoch roznych obwodow tak samo skutecznie jak dwa rozne numery. */
+  it("numer obok automatu w jednej grupie tez jest rozerwaniem", () => {
+    const o = ostrzezeniaObwodow([lacznik({ id: "sw" }), oprawa({ id: "l1", x: 20, obwod: 1 }), oprawa({ id: "l2", x: 40 })]);
+    expect(o.some((w) => w.tresc.includes("automat"))).toBe(true);
+  });
+
+  it("cala grupa na jednym numerze NIE jest zglaszana", () => {
+    const o = ostrzezeniaObwodow([
+      lacznik({ id: "sw" }),
+      oprawa({ id: "l1", x: 20, obwod: 1 }),
+      oprawa({ id: "l2", x: 40, obwod: 1 }),
+    ]);
+    expect(o.filter((w) => w.tresc.includes("jednym łącznikiem"))).toEqual([]);
+  });
+
+  it("grupa BEZ zadnego recznego numeru nie jest nasza sprawa — pilnuje jej automat", () => {
+    const o = ostrzezeniaObwodow([lacznik({ id: "sw" }), oprawa({ id: "l1", x: 20 }), oprawa({ id: "l2", x: 40 })]);
+    expect(o).toEqual([]);
+  });
+
+  /** Numeracja grup zaczyna sie od 1 osobno na kazdej kondygnacji — bez pietra
+   *  w kluczu grupa 1 z parteru zlalaby sie z grupa 1 z pietra. */
+  it("grupy o tym samym numerze na roznych kondygnacjach nie sa mylone", () => {
+    const o = ostrzezeniaObwodow([
+      lacznik({ id: "sw1", floor: "parter" }),
+      oprawa({ id: "l1", x: 20, floor: "parter", obwod: 1 }),
+      lacznik({ id: "sw2", floor: "pietro" }),
+      oprawa({ id: "l2", x: 20, floor: "pietro", obwod: 2 }),
+    ]);
+    expect(o.filter((w) => w.tresc.includes("jednym łącznikiem"))).toEqual([]);
+  });
+});

@@ -111,3 +111,31 @@ test("obwod mieszajacy oswietlenie z gniazdami jest zglaszany w rozdzielnicy", a
   await expect(page.getByText(/miesza oświetlenie/)).toBeVisible();
   await expect(page.getByText(/za mało pod gniazda/)).toBeVisible();
 });
+
+/**
+ * Numer obwodu obowiazuje w CALYM projekcie, nie na kondygnacji: rozdzielnica
+ * grupuje po nim wszystkie elementy, niezaleznie od pietra. Lista uzytych numerow
+ * liczona z jednej kondygnacji proponowala wiec na pietrze numer zajety na parterze
+ * — i klikniecie po cichu scalalo dwa niezwiazane zestawy punktow w jeden obwod.
+ */
+test("numery z innych kondygnacji sa widoczne, a nowy numer ich nie powtarza", async ({ page }) => {
+  await otworzPlan(page);
+  const box = await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
+  await page.mouse.click(box.x + 150, box.y + 150, { button: "right" });
+  await page.getByRole("button", { name: "+ 1" }).click();
+  await page.waitForTimeout(900);
+
+  await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
+  await page.getByRole("textbox").fill("Piętro 1");
+  await page.getByRole("button", { name: "Dodaj" }).click();
+  await expect(page.getByRole("button", { name: "Piętro 1", exact: true })).toBeVisible();
+
+  const box2 = await postaw(page, /Gniazdo 230 V/, [{ x: 200, y: 200 }]);
+  await page.mouse.click(box2.x + 200, box2.y + 200, { button: "right" });
+
+  // Obwod 1 z parteru JEST na liscie — i mowi, ze jest gdzie indziej.
+  await expect(page.getByTitle(/Dołącz do obwodu 1 — ten obwód jest na innej kondygnacji/)).toBeVisible();
+  // A „nowy" proponuje 2, nie 1: inaczej klikniecie scalaloby pietro z parterem.
+  await expect(page.getByRole("button", { name: "+ 2" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "+ 1" })).toHaveCount(0);
+});
