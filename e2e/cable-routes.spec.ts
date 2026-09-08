@@ -877,3 +877,69 @@ test("obwod gniazdowy i oswietleniowy dziela sciane: rownolegle pasy, gniazda bl
   // ...i to obwody, nie jeden kabel: kolory tez sie roznia
   expect(gniazda.stroke).not.toBe(swiatlo.stroke);
 });
+
+/**
+ * Zgloszenie uzytkownika: przewod do oprawy szedl do konca sciany i dopiero tam
+ * skrecal, a na koniec wchodzil do niej ukosem. Do opraw ma isc POD KATEM PROSTYM,
+ * odbijajac od sciany na wysokosci samej oprawy.
+ */
+test("trasa do oprawy odbija na jej wysokosci i wchodzi POD KATEM PROSTYM", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  let box = await planBox(page);
+  await page.mouse.move(box.x + 80, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 460, box.y + 340, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 110, box.y + 335); // dolna sciana, lewy dol
+
+  // Oprawa BLIZEJ prawej sciany niz dolnej — ale to dolna daje krotsza cala trase.
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 400, box.y + 230);
+  await page.waitForTimeout(400);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(400);
+
+  const punkty = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const trasy = (konva?.stages?.[0]?.find("Line") ?? []).filter((l) => Math.abs(l.opacity() - 0.9) < 0.01);
+    const raw = trasy[0]?.points() ?? [];
+    const out: { x: number; y: number }[] = [];
+    for (let i = 0; i < raw.length; i += 2) out.push({ x: raw[i], y: raw[i + 1] });
+    return out;
+  });
+
+  expect(punkty.length).toBeGreaterThanOrEqual(3);
+  // Kazdy odcinek POZA pierwszym jest pionowy albo poziomy — zaden ukos, takze ten
+  // koncowy, ktory wczesniej scinal zakret tuz przy symbolu. Pierwszy jest wyjatkiem
+  // z innego powodu: to przylaczenie do OBUDOWY rozdzielnicy, ktore ma wlasny skos
+  // (patrz `zakonczPrzyNozce`) — regula "pod katem prostym" dotyczy dojscia do oprawy.
+  for (let i = 2; i < punkty.length; i++) {
+    const dx = Math.abs(punkty[i].x - punkty[i - 1].x);
+    const dy = Math.abs(punkty[i].y - punkty[i - 1].y);
+    if (dx < 0.5 && dy < 0.5) continue;
+    expect(Math.min(dx, dy)).toBeLessThan(0.5);
+  }
+  // Odbicie nastepuje na wysokosci oprawy, a nie przy koncu sciany: ostatni odcinek
+  // jest pionowy i zaczyna sie tam, gdzie trasa opuszcza dolna sciane.
+  const ostatni = punkty[punkty.length - 1];
+  const przedOstatnim = punkty[punkty.length - 2];
+  expect(Math.abs(ostatni.x - przedOstatnim.x)).toBeLessThan(0.5);
+  // ...i nie doszla po drodze do prawej sciany pokoju
+  expect(Math.max(...punkty.map((p) => p.x))).toBeLessThan(500);
+});

@@ -27,12 +27,13 @@ import { clampNum } from "@/lib/geometry";
 const MERGE_TOLERANCE = 10;
 
 /** Ile najbliższych odcinków sieci dostaje szansę na bycie wejściem trasy — patrz
- *  `connectPoint`. Trzy wystarczają, żeby Dijkstra miał z czego wybierać (lewa,
- *  górna i dolna ściana pokoju), a graf nie rośnie w nieskończoność. */
-const LICZBA_WEJSC = 3;
+ *  `connectPoint`. Cztery, bo tyle ścian ma zwykły pokój: oprawa pod stropem ma prawo
+ *  zejść do KAŻDEJ z nich i dopiero Dijkstra rozstrzyga, która da krótszą całą trasę. */
+const LICZBA_WEJSC = 4;
 
 /** Ile razy dalej niż najbliższy odcinek może leżeć kandydat, żeby wciąż był
- *  traktowany jak realna alternatywa wejścia (patrz `connectPoint`). */
+ *  traktowany jak realna alternatywa wejścia. Próg ZAPASOWY — używany tylko tam, gdzie
+ *  nie da się zapytać o pomieszczenie (plan z samych ścian), patrz `connectPoint`. */
 const POROWNYWALNIE_BLISKO = 1.5;
 
 /**
@@ -53,7 +54,7 @@ const POROWNYWALNIE_BLISKO = 1.5;
  * biegnie, a różnica jednej jednostki jest na rzucie widoczna.
  *
  * Trasa biegnie przez to mniej więcej na wysokości przyklejonych gniazd (ich środek
- * wypada o dwie jednostki dalej) — i tak ma być: to `zakonczSkosem` / `zakonczPrzyNozce`
+ * wypada o dwie jednostki dalej) — i tak ma być: to `przytnijDoKrawedzi` / `zakonczPrzyNozce`
  * w loads.ts odpowiadają za to, żeby linia kończyła się PRZED symbolem albo dochodziła
  * do jego nóżki skosem, zamiast przecinać go na wylot.
  *
@@ -104,6 +105,9 @@ interface Graph {
   nodes: Point[];
   adj: Map<number, Map<number, number>>;
   segments: Segment[];
+  /** Obrysy pomieszczeń w ORYGINALNYCH położeniach (bez wsunięcia) — po nich
+   *  `connectPoint` poznaje, że doskok nie wychodzi poza pokój elementu. */
+  pokoje: Point[][];
 }
 
 /**
@@ -252,7 +256,7 @@ function zamknieta(points: Point[]): boolean {
  * z tym, co stoi na planie, a nie z linią pomocniczą odsuniętą o kilka jednostek.
  */
 function buildGraph(walls: Wall[], roomShapes: RoomShape[], wsuniecie = 0): Graph {
-  const graph: Graph = { nodes: [], adj: new Map(), segments: [] };
+  const graph: Graph = { nodes: [], adj: new Map(), segments: [], pokoje: roomShapes.map((r) => r.points) };
   walls.forEach((w) => {
     // Ściana OTWARTA nie ma wnętrza, więc nie ma jej dokąd wsunąć — zostaje jak jest.
     const ring = zamknieta(w.points);
@@ -261,6 +265,21 @@ function buildGraph(walls: Wall[], roomShapes: RoomShape[], wsuniecie = 0): Grap
   });
   roomShapes.forEach((r) => addPolyline(graph, wsuniecie > 0 ? wsunObrys(r.points, wsuniecie) : r.points, true));
   return graph;
+}
+
+/**
+ * Czy doskok `p`→`q` mieści się w JEDNYM pomieszczeniu.
+ *
+ * Sprawdzane na obrysach ORYGINALNYCH, nie wsuniętych: punkt wejścia leży na obrysie
+ * wsuniętym o `ODSUNIECIE_TRASY`, czyli w środku pokoju, a element — jeszcze bliżej
+ * ściany. Oba muszą trafić w ten sam wielobok.
+ *
+ * Środek odcinka sprawdzany razem z końcami ze względu na pokoje wklęsłe (L-kształtne):
+ * tam oba końce potrafią leżeć wewnątrz, a droga między nimi wyjść poza obrys.
+ */
+function wTymSamymPokoju(graph: Graph, p: Point, q: Point): boolean {
+  const srodek = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+  return graph.pokoje.some((poly) => wWieloboku(p, poly) && wWieloboku(q, poly) && wWieloboku(srodek, poly));
 }
 
 /** Rzut punktu `p` na ODCINEK [a,b], przycięty do samego odcinka (nie do prostej
@@ -283,7 +302,7 @@ function projectOntoSegment(p: Point, a: Point, b: Point): { point: Point; distS
  * końcami tego odcinka, żeby Dijkstra mógł stamtąd ruszyć w obie strony wzdłuż ściany.
  * Zwraca `null`, gdy w grafie nie ma żadnego odcinka (brak ścian/pomieszczeń).
  */
-function connectPoint(graph: Graph, p: Point): number | null {
+function connectPoint(graph: Graph, p: Point, swobodne: boolean): number | null {
   if (graph.segments.length === 0) return null;
   const candidates = graph.segments
     .map((seg) => ({ seg, ...projectOntoSegment(p, seg.a, seg.b) }))
@@ -301,22 +320,33 @@ function connectPoint(graph: Graph, p: Point): number | null {
   );
   const rozwazane = wolne.length > 0 ? wolne : candidates;
   /**
-   * Kandydaci PORÓWNYWALNIE blisko — nie po prostu trzej najbliżsi.
+   * Kandydaci Z TEGO SAMEGO POMIESZCZENIA co punkt — wszyscy, bez limitu odległości.
    *
-   * Bez tego ograniczenia punkt łapałby się także ścian odległych o pół pokoju,
-   * a że doskok jest zwykłą krawędzią grafu, dwa niepołączone ze sobą kawałki
-   * geometrii zaczynały się przez taki doskok „łączyć w powietrzu". Trasa wychodziła
-   * wtedy jako routowana (ciągła linia), choć w rzeczywistości przeskakiwała przez
-   * pustą przestrzeń — czyli obiecywała pewność, której nie ma.
+   * Ograniczenie w ogóle istnieje po to, żeby doskok nie „łączył w powietrzu" dwóch
+   * niepołączonych ze sobą kawałków geometrii: doskok jest zwykłą krawędzią grafu,
+   * więc bez żadnego progu trasa potrafiła przeskoczyć przez pustą przestrzeń i mimo
+   * to wyjść jako routowana (ciągła linia), obiecując pewność, której nie ma.
    *
-   * Chodzi o realny wybór między ścianami, które leżą mniej więcej tak samo blisko:
-   * oprawa na środku pokoju ma lewą i górną ścianę niemal w tej samej odległości
-   * i to WTEDY ma sens pytać, która da krótszą całą trasę.
+   * Pierwsza wersja odsiewała po ODLEGŁOŚCI WZGLĘDNEJ (najwyżej półtora raza dalej
+   * niż najbliższy odcinek) i to był zły miernik: oprawa wisząca bliżej jednej ściany
+   * niż drugiej traciła tę drugą z kandydatów, choć trasa DOOKOŁA pokoju przez tę
+   * bliższą wychodziła znacznie dłuższa. Na rysunku wyglądało to tak, że przewód
+   * do oprawy dobijał do końca ściany i dopiero tam skręcał.
+   *
+   * Przynależność do pomieszczenia jest właściwym kryterium: ściany własnego pokoju
+   * są osiągalne wszystkie i o wyborze decyduje Dijkstra na PEŁNEJ długości trasy,
+   * a doskok do innego, niepołączonego kawałka planu i tak nie przejdzie, bo wyszedłby
+   * poza obrys.
    */
   const najblizej = Math.sqrt(rozwazane[0].distSq);
-  const doPodlaczenia = rozwazane
-    .filter((c) => Math.sqrt(c.distSq) <= najblizej * POROWNYWALNIE_BLISKO + 1)
-    .slice(0, LICZBA_WEJSC);
+  const wPokoju = swobodne ? rozwazane.filter((c) => wTymSamymPokoju(graph, p, c.point)) : [];
+  const doPodlaczenia = (
+    wPokoju.length > 0
+      ? wPokoju
+      : // Osprzęt PRZYŚCIENNY (i plan rysowany samymi ścianami, bez obrysów, gdzie nie
+        // ma do czego przyłożyć kryterium pokoju): zostaje próg odległości względnej.
+        rozwazane.filter((c) => Math.sqrt(c.distSq) <= najblizej * POROWNYWALNIE_BLISKO + 1)
+  ).slice(0, LICZBA_WEJSC);
 
   /**
    * Punkt dostaje WŁASNY węzeł, a każdy kandydat — krawędź o wadze równej długości
@@ -417,12 +447,29 @@ export function crossesGeometry(a: Point, b: Point, walls: Wall[], roomShapes: R
   return graph.segments.some((seg) => segmentsIntersect(a, b, seg.a, seg.b));
 }
 
-export function routeAlongWalls(from: Point, to: Point, walls: Wall[], roomShapes: RoomShape[]): Point[] | null {
+export function routeAlongWalls(
+  from: Point,
+  to: Point,
+  walls: Wall[],
+  roomShapes: RoomShape[],
+  /**
+   * Który koniec wolno sprowadzić do DOWOLNEJ ściany swojego pomieszczenia, a nie
+   * tylko do najbliższej — patrz `connectPoint`.
+   *
+   * Rozróżnienie jest fizyczne, nie kosmetyczne. Oprawa wisi pod stropem na środku
+   * pokoju i przewód biegnie do niej SUFITEM: zejście może trafić w każdą ścianę
+   * i wybiera się tę, przy której cała trasa jest najkrótsza. Osprzęt przyścienny
+   * (gniazdo, łącznik, rozdzielnica) wchodzi w mur dokładnie tam, gdzie stoi —
+   * „doskok" przez pół pokoju do dalszej ściany byłby przewodem biegnącym środkiem
+   * podłogi.
+   */
+  swobodneWejscie: { from?: boolean; to?: boolean } = {}
+): Point[] | null {
   // Graf na obrysach WSUNIĘTYCH do wnętrza — patrz `ODSUNIECIE_TRASY`. Trasa biegnie
   // wtedy obok ściany, a nie po jej osi, i widać ją na rysunku jako osobną linię.
   const graph = buildGraph(walls, roomShapes, ODSUNIECIE_TRASY);
-  const start = connectPoint(graph, from);
-  const end = connectPoint(graph, to);
+  const start = connectPoint(graph, from, swobodneWejscie.from === true);
+  const end = connectPoint(graph, to, swobodneWejscie.to === true);
   if (start === null || end === null) return null;
 
   const path = dijkstra(graph, start, end);

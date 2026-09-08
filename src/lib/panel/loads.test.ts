@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Circuit, ElementType, InstallationElement, RoomShape } from "@/types";
-import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, zakonczPrzyNozce, zakonczSkosem } from "./loads";
+import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, przytnijDoKrawedzi, zakonczPrzyNozce } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -823,51 +823,50 @@ describe("buildCableRoutes — lancuch zamiast gwiazdy", () => {
 });
 
 /**
- * Zakonczenie trasy przy symbolu: przewod ma dochodzic do jego KRAWEDZI skosem,
- * a nie przebijac go na wylot do srodka.
+ * Zakonczenie trasy przy oprawie sufitowej: przewod ma dochodzic do KRAWEDZI symbolu
+ * pod katem PROSTYM, a nie przebijac go na wylot do srodka ani wchodzic ukosem.
  */
-describe("zakonczSkosem", () => {
+describe("przytnijDoKrawedzi", () => {
   const trasa = (...p: [number, number][]) => p.map(([x, y]) => ({ x, y }));
 
   /**
-   * Przyciecie liczone WZDLUZ LAMANEJ, nie w linii prostej do srodka. Trasa biegnie
-   * kilka jednostek od sciany, a przyklejone gniazdo ma srodek jeszcze dalej —
-   * mierzac prostopadle nie ma czego przycinac, bo linia przechodzi praktycznie przez
-   * symbol. Mierzac wzdluz drogi, skracamy ja dokladnie o tyle, ile zajmuje symbol.
+   * Przyciecie liczone WZDLUZ LAMANEJ, nie w linii prostej do srodka: skracamy droge
+   * dokladnie o tyle, ile zajmuje symbol, niezaleznie od tego, pod jakim katem przewod
+   * nadchodzi.
    */
   it("skraca trase o promien symbolu, mierzac wzdluz niej", () => {
-    // Dwa gniazda w jednej linii przy tej samej scianie: przewod idzie od jednego
-    // do drugiego i ma zatrzymac sie przed symbolem, nie w jego srodku.
-    const out = zakonczSkosem(trasa([100, 20], [100, 90]), 7);
+    const out = przytnijDoKrawedzi(trasa([100, 20], [100, 90]), 7);
     expect(out).toEqual(trasa([100, 20], [100, 83]));
   });
 
-  it("na prostej NIE dokłada zadnego zalamania — trasa po prostu konczy sie wczesniej", () => {
-    const out = zakonczSkosem(trasa([0, 0], [100, 0], [100, 60]), 6);
+  it("nie dokłada zadnego zalamania — trasa po prostu konczy sie wczesniej", () => {
+    const out = przytnijDoKrawedzi(trasa([0, 0], [100, 0], [100, 60]), 6);
     expect(out).toEqual(trasa([0, 0], [100, 0], [100, 54]));
   });
 
-  /** Skos pojawia sie tam, gdzie jest CO scinac: cofniecie przekracza zalamanie. */
-  it("scina zakret, gdy koniec trasy wypada tuz za nim", () => {
-    // Ogon za zakretem ma 8 jednostek; promien 6 zabiera z niego 6, a cofniecie
-    // o 1,5 promienia (9) siega juz na odcinek sprzed zakretu.
-    const out = zakonczSkosem(trasa([0, 0], [100, 0], [100, 8]), 6);
-    expect(out).toHaveLength(3);
-    expect(out[0]).toEqual({ x: 0, y: 0 });
-    // Zalamanie zniknelo, zastapione ukosem konczacym sie przed symbolem.
-    expect(out[1].y).toBe(0);
-    expect(out[1].x).toBeLessThan(100);
-    expect(out[2]).toEqual({ x: 100, y: 2 });
+  /**
+   * Sedno zmiany: do oprawy wchodzi sie POD KATEM PROSTYM. Wczesniej, gdy przyciecie
+   * przekraczalo zalamanie, ostatni odcinek scinal zakret i wchodzil ukosem — a oprawa
+   * wisi pod stropem i przewod schodzi do niej prosto od strony, z ktorej nadszedl.
+   */
+  it("przyciecie siegajace ZA zalamanie nie robi ukosu — konczy na odcinku sprzed niego", () => {
+    // Ogon za zakretem ma 8 jednostek, promien 6 — przyciecie zostaje na nim.
+    const out = przytnijDoKrawedzi(trasa([0, 0], [100, 0], [100, 8]), 6);
+    expect(out).toEqual(trasa([0, 0], [100, 0], [100, 2]));
+    // Kazdy odcinek jest pionowy albo poziomy — zaden ukos.
+    for (let i = 1; i < out.length; i++) {
+      expect(Math.min(Math.abs(out[i].x - out[i - 1].x), Math.abs(out[i].y - out[i - 1].y))).toBeCloseTo(0, 6);
+    }
   });
 
   it("trasa krotsza niz zasieg symbolu zostaje nietknieta — nie ma czego przycinac", () => {
     const wejscie = trasa([100, 0], [100, 4]);
-    expect(zakonczSkosem(wejscie, 6)).toEqual(wejscie);
+    expect(przytnijDoKrawedzi(wejscie, 6)).toEqual(wejscie);
   });
 
   it("zerowy promien nic nie zmienia", () => {
     const wejscie = trasa([0, 0], [100, 0], [100, 60]);
-    expect(zakonczSkosem(wejscie, 0)).toEqual(wejscie);
+    expect(przytnijDoKrawedzi(wejscie, 0)).toEqual(wejscie);
   });
 });
 
