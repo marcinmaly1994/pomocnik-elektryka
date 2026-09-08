@@ -47,14 +47,22 @@ const POROWNYWALNIE_BLISKO = 1.5;
  * RYSUNKOWA (ma być widać), a nie wymiar instalacji — przewód i tak biegnie w ścianie
  * albo tuż przy niej.
  *
- * Sześć jednostek to przy typowej skali 30 cm na rzucie: wyraźnie obok obrysu (ten
+ * Pięć jednostek to przy typowej skali 25 cm na rzucie: wyraźnie obok obrysu (ten
  * ma ok. 1,6 jedn. grubości), a nadal czytelnie „wzdłuż tej ściany", a nie w poprzek
- * pokoju. Trasa biegnie przez to mniej więcej na wysokości przyklejonych gniazd
- * (ich środek wypada o jedną jednostkę dalej) — i tak ma być: to `zakonczSkosem`
- * w loads.ts odpowiada za to, żeby linia kończyła się PRZED symbolem albo dochodziła
+ * pokoju. Zeszło z sześciu na życzenie — przewód ma się trzymać ściany, przy której
+ * biegnie, a różnica jednej jednostki jest na rzucie widoczna.
+ *
+ * Trasa biegnie przez to mniej więcej na wysokości przyklejonych gniazd (ich środek
+ * wypada o dwie jednostki dalej) — i tak ma być: to `zakonczSkosem` / `zakonczPrzyNozce`
+ * w loads.ts odpowiadają za to, żeby linia kończyła się PRZED symbolem albo dochodziła
  * do jego nóżki skosem, zamiast przecinać go na wylot.
+ *
+ * DOLNA GRANICA nie jest dowolna: doskok od punktu do trasy musi zostać osobnym
+ * węzłem grafu, więc `dodajWezel` zakłada go z pominięciem `MERGE_TOLERANCE`. Gdyby
+ * odsunięcie zeszło do zera, trasa położyłaby się z powrotem na osi ściany i wróciłby
+ * problem, dla którego ta stała powstała.
  */
-export const ODSUNIECIE_TRASY = 6;
+export const ODSUNIECIE_TRASY = 5;
 
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
@@ -103,7 +111,7 @@ interface Graph {
  * dokładnie takie, jakie jest.
  *
  * `nodeIndex` scala wszystko w promieniu `MERGE_TOLERANCE` (10 jedn.), a doskok do
- * trasy odsuniętej o `ODSUNIECIE_TRASY` (6 jedn.) mieści się w tym promieniu w
+ * trasy odsuniętej o `ODSUNIECIE_TRASY` (5 jedn.) mieści się w tym promieniu w
  * całości. Punkt wejścia na ścianę wpadał więc do węzła samego gniazda i po grafie
  * zostawała jedna krawędź: gniazdo → NAROŻNIK pokoju. Na rysunku wychodziła z tego
  * jedna długa skośna kreska przez całą ścianę zamiast linii biegnącej wzdłuż niej

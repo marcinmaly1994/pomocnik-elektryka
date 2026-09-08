@@ -849,7 +849,7 @@ function cofnijSieWzdluz(points: Point[], odleglosc: number): { punkt: Point; in
  * i wchodzi do punktu skosem.
  *
  * Skos zaczyna się WCZEŚNIEJ niż sama krawędź symbolu — inaczej przy trasie
- * biegnącej tuż obok gniazd (sześć jednostek od ściany, czyli praktycznie na ich
+ * biegnącej tuż obok gniazd (kilka jednostek od ściany, czyli praktycznie na ich
  * wysokości) zagięcie wypadałoby już pod sąsiednim symbolem. Półtora promienia
  * wystarcza, żeby ukos był widoczny i zaczynał się w wolnym miejscu.
  */
@@ -863,8 +863,8 @@ const ZAPAS_SKOSU = 1.5;
  * gniazdo, a nie do niego dochodził.
  *
  * Obie operacje liczone są WZDŁUŻ ŁAMANEJ, nie w linii prostej do środka, i to jest
- * tu sedno. Trasa biegnie sześć jednostek od ściany, a przyklejone gniazdo ma środek
- * o jedną dalej — mierząc prostopadle, trasa przechodzi praktycznie przez symbol
+ * tu sedno. Trasa biegnie kilka jednostek od ściany, a przyklejone gniazdo ma środek
+ * jeszcze dalej — mierząc prostopadle, trasa przechodzi praktycznie przez symbol
  * i nie ma czego przycinać. Mierząc wzdłuż drogi, skracamy ją dokładnie o tyle, ile
  * zajmuje symbol, niezależnie od tego, pod jakim kątem przewód nadchodzi.
  *
@@ -910,7 +910,7 @@ export function zakonczSkosem(points: Point[], promien: number): Point[] {
  *
  * Kąt bierze się z geometrii, nie ze stałej: `E` odsuwamy od rzutu celu na trasę
  * o tyle, ile wynosi odległość celu OD tej trasy. Dzięki temu ukos zostaje pod 45°
- * niezależnie od tego, czy pas przewodów biegnie sześć jednostek od ściany, czy —
+ * niezależnie od tego, jak daleko od ściany biegnie pas przewodów i czy —
  * przy kilku trasach w wiązce — o `LANE_SPACING` dalej.
  */
 export function zakonczPrzyNozce(points: Point[], cel: Point): Point[] {

@@ -754,7 +754,7 @@ describe("zakonczSkosem", () => {
 
   /**
    * Przyciecie liczone WZDLUZ LAMANEJ, nie w linii prostej do srodka. Trasa biegnie
-   * szesc jednostek od sciany, a przyklejone gniazdo ma srodek o jedna dalej —
+   * kilka jednostek od sciany, a przyklejone gniazdo ma srodek jeszcze dalej —
    * mierzac prostopadle nie ma czego przycinac, bo linia przechodzi praktycznie przez
    * symbol. Mierzac wzdluz drogi, skracamy ja dokladnie o tyle, ile zajmuje symbol.
    */
