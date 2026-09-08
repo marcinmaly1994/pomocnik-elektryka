@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { skipEntryScreen } from "./_flow";
 
+/** Prog odrozniajacy trase ZASILANIA od STEROWANIA po grubosci linii — w polowie
+ *  miedzy nimi (1,5 kontra 1; patrz `strokeWidth` przy trasach w DesignCanvas).
+ *  Same wartosci sa detalem rysunkowym i zmieniaja sie, gdy zmienia sie czytelnosc
+ *  rzutu; ROZNICA miedzy nimi jest tym, co te testy odrozniaja. */
+const GRUBOSC_PROG = 1.25;
+
 /**
  * Poglądowe trasy przewodów (rozdzielnica → punkt), patrz `buildCableRoutes` w
  * lib/panel/loads.ts. Testowane e2e (nie tylko jednostkowo tę funkcję), bo wartość
@@ -334,7 +340,7 @@ test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania d
     ).Konva;
     const stage = konva?.stages?.[0];
     return (
-      stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < 2).map((l) => l.points()) ?? []
+      stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < GRUBOSC_PROG).map((l) => l.points()) ?? []
     );
   });
   // trzy oprawy sterowane jednym łącznikiem = trzy odcinki ŁAŃCUCHA (łącznik->1,
@@ -384,7 +390,7 @@ test("cztery oprawy na jednym łączniku: łańcuch, nie drzewo — ŻADNA opraw
     ).Konva;
     const stage = konva?.stages?.[0];
     return (
-      stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < 2).map((l) => l.points()) ?? []
+      stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01 && l.strokeWidth() < GRUBOSC_PROG).map((l) => l.points()) ?? []
     );
   });
   // cztery oprawy sterowane jednym łącznikiem = cztery odcinki łańcucha

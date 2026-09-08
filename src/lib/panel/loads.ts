@@ -681,9 +681,11 @@ export function buildCableRoutes(
 }
 
 /** O ile jednostek planu rozsunąć sąsiednie „pasy" tras dzielących ten sam odcinek —
- *  dobrane pod grubość linii trasy w DesignCanvas.tsx (2,5), żeby sąsiednie pasy się
- *  nie stykały, ale też nie odjeżdżały bezsensownie daleko od samej ściany. */
-const LANE_SPACING = 4;
+ *  dobrane pod grubość linii trasy w DesignCanvas.tsx (1,5), żeby sąsiednie pasy się
+ *  nie stykały, ale też nie odjeżdżały bezsensownie daleko od samej ściany. Zeszło
+ *  z 4 na 3 razem ze scienieniem linii: przy cieńszym pociągnięciu ciaśniejsze pasy
+ *  nadal są rozróżnialne, a wiązka kilku tras trzyma się bliżej swojej ściany. */
+const LANE_SPACING = 3;
 
 /** Klucz odcinka [a,b] NIEZALEŻNY od kierunku (a→b to ten sam odcinek co b→a) i
  *  odporny na drobne różnice zmiennoprzecinkowe między trasami policzonymi
