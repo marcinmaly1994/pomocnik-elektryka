@@ -241,6 +241,39 @@ export function mainBreakerFor(circuitCount: number): string {
   return "B40";
 }
 
+/**
+ * Paleta tras na rzucie — po JEDNYM kolorze na obwód.
+ *
+ * Wcześniej trasa brała kolor POMIESZCZENIA punktu docelowego. Dawało to spójny
+ * rzut, ale gubiło rzecz najważniejszą przy czytaniu instalacji: w jednym pokoju
+ * obwód gniazd i obwód oświetlenia wychodziły tym samym kolorem, więc dwa różne
+ * kable wyglądały jak jeden. Kolor pomieszczenia jest już na rzucie — niesie go
+ * wypełnienie obrysu — a kolor przewodu ma odpowiadać na pytanie „co siedzi na
+ * jednym zabezpieczeniu".
+ *
+ * Barwy dobrane pod SĄSIEDZTWO: kolejne obwody dostają kolejne pozycje z listy,
+ * więc różnica ma być widoczna między sąsiadami w cyklu, nie tylko „gdzieś w palecie".
+ */
+export const KOLORY_OBWODOW = [
+  "#1F6FB2",
+  "#D2691E",
+  "#2E9E5B",
+  "#8E5CD9",
+  "#0FA3B1",
+  "#D33F3F",
+  "#B98C2F",
+  "#D2559A",
+] as const;
+
+/** Trasa, której nie da się przypisać do żadnego obwodu (np. sterowanie oprawą, która
+ *  nie weszła jeszcze do żadnego) — neutralna szarość, żeby nie udawała obwodu. */
+export const KOLOR_BEZ_OBWODU = "#5B6B7E";
+
+/** Kolor obwodu wg jego pozycji w liście obwodów — cyklicznie z `KOLORY_OBWODOW`. */
+export function kolorObwodu(index: number): string {
+  return KOLORY_OBWODOW[((index % KOLORY_OBWODOW.length) + KOLORY_OBWODOW.length) % KOLORY_OBWODOW.length];
+}
+
 /** Kolor wg typu obwodu — używany na schemacie jednokreskowym i w widoku rozdzielnicy. */
 export function colorForCircuit(type: string): string {
   return ({ gniazdko: "#2D5A8C", oswietlenie: "#C1793F", roleta: "#7C5CBF" } as Record<string, string>)[type] || "#2D5A8C";

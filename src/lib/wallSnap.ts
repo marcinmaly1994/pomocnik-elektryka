@@ -31,6 +31,32 @@ export function przyscienny(type: ElementType): boolean {
   return !NIE_PRZYSCIENNE.includes(type);
 }
 
+/**
+ * Punkt, którym symbol DOTYKA ściany — koniec trzonka gniazda, koło łącznika, plecy
+ * kinkietu. Operacja odwrotna do odsunięcia z `snapElementToWall`: tam od punktu na
+ * ścianie odejmujemy zasięg, żeby dostać środek symbolu, tu do środka dodajemy go
+ * z powrotem.
+ *
+ * Potrzebne trasom przewodów: przewód dochodzi do osprzętu od strony muru (tam siedzi
+ * puszka), a nie do jego środka narysowanego w pomieszczeniu — patrz `zakonczPrzyNozce`.
+ *
+ * Zwraca `null` dla typów, które nie stoją przy ścianie (punkt sufitowy, czujnik dymu,
+ * przybory) — one nie mają „strony przyściennej", więc pytanie o nią nie ma sensu.
+ * Element nieprzyklejony do niczego ma obrót 0 i dostaje kierunek własnego trzonka —
+ * czyli dokładnie tam, gdzie trzonek widać na rysunku.
+ */
+export function punktPrzyscienny(
+  el: { type: ElementType; x: number; y: number; rotation?: number },
+  skala: number
+): Point | null {
+  if (!przyscienny(el.type)) return null;
+  // Obrót glifu bez korekty montażowej — czyli ten sam kąt, który `snapElementToWall`
+  // dostaje od ściany. Przy nim lokalne (0, −1) idzie na (sin θ, −cos θ).
+  const rad = (((el.rotation ?? 0) - montazPrzyscienny(el.type)) * Math.PI) / 180;
+  const zasieg = zasiegPrzyscienny(el.type) * skala;
+  return { x: el.x + Math.sin(rad) * zasieg, y: el.y - Math.cos(rad) * zasieg };
+}
+
 export interface WynikPrzyciagania {
   x: number;
   y: number;

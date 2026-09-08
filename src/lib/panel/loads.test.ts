@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Circuit, ElementType, InstallationElement } from "@/types";
-import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes } from "./loads";
+import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, zakonczPrzyNozce, zakonczSkosem } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -435,6 +435,7 @@ describe("spreadOverlappingRoutes", () => {
       id,
       circuitId: "obw1",
       circuitName: "Obwód",
+      color: "#1F6FB2",
       kind: "zasilanie",
       type: "gniazdko",
       cable: "",
@@ -516,6 +517,7 @@ describe("applyRouteOverrides", () => {
       id,
       circuitId: "obw1",
       circuitName: "Obwód",
+      color: "#1F6FB2",
       kind: "zasilanie",
       type: "gniazdko",
       cable: "",
@@ -740,5 +742,97 @@ describe("buildCableRoutes — lancuch zamiast gwiazdy", () => {
       []
     );
     expect(trasy.filter((t) => t.points[0].x === panel.x && t.points[0].y === panel.y)).toHaveLength(2);
+  });
+});
+
+/**
+ * Zakonczenie trasy przy symbolu: przewod ma dochodzic do jego KRAWEDZI skosem,
+ * a nie przebijac go na wylot do srodka.
+ */
+describe("zakonczSkosem", () => {
+  const trasa = (...p: [number, number][]) => p.map(([x, y]) => ({ x, y }));
+
+  /**
+   * Przyciecie liczone WZDLUZ LAMANEJ, nie w linii prostej do srodka. Trasa biegnie
+   * kilka jednostek od sciany, a przyklejone gniazdo ma srodek jeszcze dalej —
+   * mierzac prostopadle nie ma czego przycinac, bo linia przechodzi praktycznie przez
+   * symbol. Mierzac wzdluz drogi, skracamy ja dokladnie o tyle, ile zajmuje symbol.
+   */
+  it("skraca trase o promien symbolu, mierzac wzdluz niej", () => {
+    // Dwa gniazda w jednej linii przy tej samej scianie: przewod idzie od jednego
+    // do drugiego i ma zatrzymac sie przed symbolem, nie w jego srodku.
+    const out = zakonczSkosem(trasa([100, 20], [100, 90]), 7);
+    expect(out).toEqual(trasa([100, 20], [100, 83]));
+  });
+
+  it("na prostej NIE dokłada zadnego zalamania — trasa po prostu konczy sie wczesniej", () => {
+    const out = zakonczSkosem(trasa([0, 0], [100, 0], [100, 60]), 6);
+    expect(out).toEqual(trasa([0, 0], [100, 0], [100, 54]));
+  });
+
+  /** Skos pojawia sie tam, gdzie jest CO scinac: cofniecie przekracza zalamanie. */
+  it("scina zakret, gdy koniec trasy wypada tuz za nim", () => {
+    // Ogon za zakretem ma 8 jednostek; promien 6 zabiera z niego 6, a cofniecie
+    // o 1,5 promienia (9) siega juz na odcinek sprzed zakretu.
+    const out = zakonczSkosem(trasa([0, 0], [100, 0], [100, 8]), 6);
+    expect(out).toHaveLength(3);
+    expect(out[0]).toEqual({ x: 0, y: 0 });
+    // Zalamanie zniknelo, zastapione ukosem konczacym sie przed symbolem.
+    expect(out[1].y).toBe(0);
+    expect(out[1].x).toBeLessThan(100);
+    expect(out[2]).toEqual({ x: 100, y: 2 });
+  });
+
+  it("trasa krotsza niz zasieg symbolu zostaje nietknieta — nie ma czego przycinac", () => {
+    const wejscie = trasa([100, 0], [100, 4]);
+    expect(zakonczSkosem(wejscie, 6)).toEqual(wejscie);
+  });
+
+  it("zerowy promien nic nie zmienia", () => {
+    const wejscie = trasa([0, 0], [100, 0], [100, 60]);
+    expect(zakonczSkosem(wejscie, 0)).toEqual(wejscie);
+  });
+});
+
+/**
+ * Odczep do NOZKI osprzetu przysciennego. Gniazdo stoi trzonkiem w sciane, a trasa
+ * biegnie rownolegle do niej kilka jednostek dalej — przewod ma trafic w koniec
+ * trzonka (tam siedzi puszka), a nie w srodek symbolu narysowany w pomieszczeniu.
+ */
+describe("zakonczPrzyNozce", () => {
+  const trasa = (...p: [number, number][]) => p.map(([x, y]) => ({ x, y }));
+
+  it("odbija pod 45 stopni: tyle wzdluz trasy, ile w poprzek do celu", () => {
+    // Trasa w dol po x = 100, cel szesc jednostek w bok, na wysokosci jej konca.
+    const out = zakonczPrzyNozce(trasa([100, 0], [100, 60]), { x: 106, y: 60 });
+    expect(out).toEqual(trasa([100, 0], [100, 54], [106, 60]));
+    // Skos ma rowne skladowe — to jest definicja 45 stopni, wiec sprawdzamy ja wprost.
+    expect(out[2].x - out[1].x).toBeCloseTo(out[2].y - out[1].y, 6);
+  });
+
+  it("cel LEZACY NA PRZEDLUZENIU trasy — przewod dochodzi wprost, bez zalamania", () => {
+    // Gniazdo na koncu ciagu przy tej samej scianie: skos wypadlby za elementem.
+    // Dotychczasowy koniec lezy POSRODKU prostej, wiec znika — zostawiony dzielilby
+    // odcinek na dwa, a te przy rozsuwaniu wiazki dostaja osobne przesuniecia
+    // i przy elemencie robi sie mikroschodek.
+    const out = zakonczPrzyNozce(trasa([0, 0], [100, 0]), { x: 110, y: 0 });
+    expect(out).toEqual(trasa([0, 0], [110, 0]));
+  });
+
+  /**
+   * Sedno zgloszenia: linia ma isc ROWNOLEGLE do sciany i odbijac dopiero przy
+   * elemencie. Skos rozlozony na cala dlugosc sciany jest bledem, nawet jesli
+   * konczy sie we wlasciwym punkcie.
+   */
+  it("odcinek biegnacy wzdluz sciany zostaje PROSTY — skos tylko na koncu", () => {
+    const out = zakonczPrzyNozce(trasa([514, 40], [514, 240]), { x: 520, y: 240 });
+    expect(out).toEqual(trasa([514, 40], [514, 234], [520, 240]));
+    // wszystko poza ostatnim odcinkiem trzyma sie jednej prostej x = 514
+    expect(out.slice(0, -1).every((p) => p.x === 514)).toBe(true);
+  });
+
+  it("trasa krotsza niz potrzebne cofniecie zostaje cala, z doprowadzeniem do celu", () => {
+    const out = zakonczPrzyNozce(trasa([100, 0], [100, 2]), { x: 108, y: 2 });
+    expect(out).toEqual(trasa([100, 0], [100, 2], [108, 2]));
   });
 });

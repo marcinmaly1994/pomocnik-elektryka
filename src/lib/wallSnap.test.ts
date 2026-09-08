@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { RoomShape, Wall } from "@/types";
-import { przyscienny, snapElementToWall, snapToWall } from "./wallSnap";
+import { przyscienny, punktPrzyscienny, snapElementToWall, snapToWall } from "./wallSnap";
 import { montazPrzyscienny, zasiegPrzyscienny } from "./glyphs";
 
 /** Pokoj 200 x 200 z lewym gornym rogiem w (0,0); srodek w (100,100). */
@@ -219,5 +219,30 @@ describe("snapElementToWall — osadzenie symbolu", () => {
     const powyzej = snapElementToWall({ x: 50, y: -6 }, [SCIANA_POZIOMA], [], 20, "gniazdko", 1)!;
     expect(ponizej.y).toBeGreaterThan(0);
     expect(powyzej.y).toBeLessThan(0);
+  });
+});
+
+/**
+ * Punkt styku symbolu ze sciana — operacja ODWROTNA do odsuniecia srodka w
+ * `snapElementToWall`. Trasy przewodow dochodza wlasnie tam, bo tam siedzi puszka.
+ */
+describe("punktPrzyscienny", () => {
+  it("po przyklejeniu do sciany wraca DOKLADNIE w punkt na jej linii", () => {
+    // Gniazdo klikniete tuz przy gornej scianie pokoju (y = 0) — snap odsuwa jego
+    // srodek do wnetrza, a punkt przyscienny ma wrocic na sama linie sciany.
+    const przyklejone = snapElementToWall({ x: 100, y: 6 }, [], [POKOJ], 20, "gniazdko", 1)!;
+    const styk = punktPrzyscienny({ type: "gniazdko", x: przyklejone.x, y: przyklejone.y, rotation: przyklejone.rotation }, 1)!;
+    expect(styk.x).toBeCloseTo(100, 6);
+    expect(styk.y).toBeCloseTo(0, 6);
+  });
+
+  it("skaluje sie razem z symbolem — suwak rozmiaru nie rozjezdza sie z rysunkiem", () => {
+    const bez = punktPrzyscienny({ type: "gniazdko", x: 100, y: 100, rotation: 0 }, 1)!;
+    const podwojne = punktPrzyscienny({ type: "gniazdko", x: 100, y: 100, rotation: 0 }, 2)!;
+    expect(100 - podwojne.y).toBeCloseTo(2 * (100 - bez.y), 6);
+  });
+
+  it("typ NIEprzyscienny (punkt sufitowy) nie ma strony przysciennej", () => {
+    expect(punktPrzyscienny({ type: "oswietlenie", x: 100, y: 100, rotation: 0 }, 1)).toBeNull();
   });
 });

@@ -26,6 +26,15 @@ import { clampNum } from "@/lib/geometry";
  *  jest jednym rogiem pokoju. */
 const MERGE_TOLERANCE = 10;
 
+/** Ile najbliższych odcinków sieci dostaje szansę na bycie wejściem trasy — patrz
+ *  `connectPoint`. Trzy wystarczają, żeby Dijkstra miał z czego wybierać (lewa,
+ *  górna i dolna ściana pokoju), a graf nie rośnie w nieskończoność. */
+const LICZBA_WEJSC = 3;
+
+/** Ile razy dalej niż najbliższy odcinek może leżeć kandydat, żeby wciąż był
+ *  traktowany jak realna alternatywa wejścia (patrz `connectPoint`). */
+const POROWNYWALNIE_BLISKO = 1.5;
+
 /**
  * O ile jednostek planu trasa biegnie OBOK ściany, a nie po niej.
  *
@@ -36,11 +45,24 @@ const MERGE_TOLERANCE = 10;
  *
  * Wartość jest w JEDNOSTKACH PLANU, nie w metrach, i to jest świadome: to konwencja
  * RYSUNKOWA (ma być widać), a nie wymiar instalacji — przewód i tak biegnie w ścianie
- * albo tuż przy niej. Przy typowej skali (1 jedn. = 5 cm) sześć jednostek to 30 cm
- * na rzucie: wyraźnie obok obrysu (ten ma ok. 1,6 jedn. grubości), a nadal czytelnie
- * „wzdłuż tej ściany", a nie w poprzek pokoju.
+ * albo tuż przy niej.
+ *
+ * Pięć jednostek to przy typowej skali 25 cm na rzucie: wyraźnie obok obrysu (ten
+ * ma ok. 1,6 jedn. grubości), a nadal czytelnie „wzdłuż tej ściany", a nie w poprzek
+ * pokoju. Zeszło z sześciu na życzenie — przewód ma się trzymać ściany, przy której
+ * biegnie, a różnica jednej jednostki jest na rzucie widoczna.
+ *
+ * Trasa biegnie przez to mniej więcej na wysokości przyklejonych gniazd (ich środek
+ * wypada o dwie jednostki dalej) — i tak ma być: to `zakonczSkosem` / `zakonczPrzyNozce`
+ * w loads.ts odpowiadają za to, żeby linia kończyła się PRZED symbolem albo dochodziła
+ * do jego nóżki skosem, zamiast przecinać go na wylot.
+ *
+ * DOLNA GRANICA nie jest dowolna: doskok od punktu do trasy musi zostać osobnym
+ * węzłem grafu, więc `dodajWezel` zakłada go z pominięciem `MERGE_TOLERANCE`. Gdyby
+ * odsunięcie zeszło do zera, trasa położyłaby się z powrotem na osi ściany i wróciłby
+ * problem, dla którego ta stała powstała.
  */
-export const ODSUNIECIE_TRASY = 6;
+export const ODSUNIECIE_TRASY = 5;
 
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
@@ -69,12 +91,36 @@ interface Segment {
   bIdx: number;
   a: Point;
   b: Point;
+  /**
+   * Węzły „doskoków" dołożone na TYM odcinku przez `connectPoint` — patrz tam.
+   * Trzymane przy odcinku, bo muszą się widzieć NAWZAJEM: dwa gniazda przy tej samej
+   * ścianie wchodzą w sieć w dwóch różnych miejscach jednego odcinka i przewód ma
+   * przejść między nimi wprost, a nie naokoło przez narożnik.
+   */
+  wejscia?: number[];
 }
 
 interface Graph {
   nodes: Point[];
   adj: Map<number, Map<number, number>>;
   segments: Segment[];
+}
+
+/**
+ * Dokłada węzeł BEZ scalania z sąsiadem — dla punktów, których położenie ma zostać
+ * dokładnie takie, jakie jest.
+ *
+ * `nodeIndex` scala wszystko w promieniu `MERGE_TOLERANCE` (10 jedn.), a doskok do
+ * trasy odsuniętej o `ODSUNIECIE_TRASY` (5 jedn.) mieści się w tym promieniu w
+ * całości. Punkt wejścia na ścianę wpadał więc do węzła samego gniazda i po grafie
+ * zostawała jedna krawędź: gniazdo → NAROŻNIK pokoju. Na rysunku wychodziła z tego
+ * jedna długa skośna kreska przez całą ścianę zamiast linii biegnącej wzdłuż niej
+ * i odbijającej dopiero przy elemencie.
+ */
+function dodajWezel(graph: Graph, p: Point): number {
+  graph.nodes.push(p);
+  graph.adj.set(graph.nodes.length - 1, new Map());
+  return graph.nodes.length - 1;
 }
 
 /** Zwraca indeks istniejącego węzła w promieniu `MERGE_TOLERANCE` albo dokłada nowy. */
@@ -250,14 +296,59 @@ function connectPoint(graph: Graph, p: Point): number | null {
   // zamkniętym, w pełni otoczonym przez inne ściany pomieszczeniu), wracamy do
   // dotychczasowego zachowania — najbliższy mimo wszystko, żeby routing nie
   // spadał bez potrzeby na zapasowy szacunek Manhattan.
-  const clear = candidates.find(
+  const wolne = candidates.filter(
     (c) => !graph.segments.some((other) => other !== c.seg && segmentsIntersect(p, c.point, other.a, other.b))
   );
-  const best = clear ?? candidates[0];
-  const entry = nodeIndex(graph, best.point);
-  addEdge(graph, entry, best.seg.aIdx, dist(graph.nodes[entry], best.seg.a));
-  addEdge(graph, entry, best.seg.bIdx, dist(graph.nodes[entry], best.seg.b));
-  return entry;
+  const rozwazane = wolne.length > 0 ? wolne : candidates;
+  /**
+   * Kandydaci PORÓWNYWALNIE blisko — nie po prostu trzej najbliżsi.
+   *
+   * Bez tego ograniczenia punkt łapałby się także ścian odległych o pół pokoju,
+   * a że doskok jest zwykłą krawędzią grafu, dwa niepołączone ze sobą kawałki
+   * geometrii zaczynały się przez taki doskok „łączyć w powietrzu". Trasa wychodziła
+   * wtedy jako routowana (ciągła linia), choć w rzeczywistości przeskakiwała przez
+   * pustą przestrzeń — czyli obiecywała pewność, której nie ma.
+   *
+   * Chodzi o realny wybór między ścianami, które leżą mniej więcej tak samo blisko:
+   * oprawa na środku pokoju ma lewą i górną ścianę niemal w tej samej odległości
+   * i to WTEDY ma sens pytać, która da krótszą całą trasę.
+   */
+  const najblizej = Math.sqrt(rozwazane[0].distSq);
+  const doPodlaczenia = rozwazane
+    .filter((c) => Math.sqrt(c.distSq) <= najblizej * POROWNYWALNIE_BLISKO + 1)
+    .slice(0, LICZBA_WEJSC);
+
+  /**
+   * Punkt dostaje WŁASNY węzeł, a każdy kandydat — krawędź o wadze równej długości
+   * doskoku. To zmiana względem wersji, która wybierała jeden, najbliższy odcinek
+   * i zaczynała trasę dopiero na nim.
+   *
+   * Powód jest widoczny na rysunku: oprawa na środku pokoju leży prawie tak samo
+   * blisko ściany lewej co górnej, a wybór „najbliższej w linii prostej" potrafił
+   * posłać przewód dookoła pomieszczenia — bo o wyborze decydował sam doskok, bez
+   * oglądania się na to, ile jeszcze trzeba przejść wzdłuż ścian. Teraz o wszystkim
+   * decyduje Dijkstra na PEŁNEJ długości trasy: doskok jest zwykłą krawędzią grafu,
+   * więc dłuższe podejście do bliższej ściany przegrywa z krótszym do dalszej,
+   * dokładnie wtedy, kiedy powinno.
+   */
+  const wezelPunktu = nodeIndex(graph, p);
+  for (const c of doPodlaczenia) {
+    const entry = dodajWezel(graph, c.point);
+    addEdge(graph, entry, c.seg.aIdx, dist(graph.nodes[entry], c.seg.a));
+    addEdge(graph, entry, c.seg.bIdx, dist(graph.nodes[entry], c.seg.b));
+    addEdge(graph, wezelPunktu, entry, dist(p, graph.nodes[entry]));
+    /**
+     * Doskoki na TYM SAMYM odcinku łączone ze sobą wprost.
+     *
+     * Bez tego jedynym połączeniem między nimi były końce odcinka — więc przewód
+     * z jednego gniazda do sąsiedniego, przy tej samej ścianie, schodził najpierw
+     * do narożnika pokoju i wracał tą samą linią z powrotem. Na rysunku wyglądało
+     * to jak kreska przechodząca NA WYLOT przez gniazdo, które właśnie minął.
+     */
+    for (const inne of (c.seg.wejscia ??= [])) addEdge(graph, entry, inne, dist(graph.nodes[entry], graph.nodes[inne]));
+    c.seg.wejscia.push(entry);
+  }
+  return wezelPunktu;
 }
 
 /** Dijkstra bez kopca — grafy tras są rzędu dziesiątek/setek węzłów (narożniki

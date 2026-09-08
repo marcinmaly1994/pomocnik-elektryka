@@ -103,47 +103,40 @@ test("rozdzielnica + gniazdo + lampa BEZ ścian: przełącznik rysuje dwie trasy
   expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
 });
 
-test("trasa jest w KOLORZE POMIESZCZENIA punktu docelowego, nie w kolorze rodzaju obwodu", async ({ page }) => {
+/**
+ * Zgloszenie uzytkownika: obwody na rzucie zlewaly sie w jeden kolor. Trasa brala
+ * kolor POMIESZCZENIA, wiec obwod gniazd i obwod oswietlenia w tym samym pokoju
+ * wychodzily identyczne — dwa rozne kable wygladaly jak jeden. Teraz kolor idzie
+ * z OBWODU (patrz `KOLORY_OBWODOW` w panel/circuits.ts).
+ */
+test("obwod gniazd i obwod oswietlenia W TYM SAMYM pokoju maja ROZNE kolory", async ({ page }) => {
   await openPlan(page);
 
-  // Dwa osobne pomieszczenia — drugie dostaje ROOM_COLORS[1] ("#C1793F"), CELOWO
-  // inny niż colorForCircuit("gniazdko") ("#2D5A8C", który akurat pokrywa się z
-  // ROOM_COLORS[0]) — inaczej test przechodziłby nawet, gdyby kolorowanie po
-  // pomieszczeniu w ogóle nie działało i została stara wersja po rodzaju obwodu.
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
   await page.getByRole("button", { name: "Prostokąt" }).click();
   let box = await planBox(page);
   await page.mouse.move(box.x + 60, box.y + 60);
   await page.mouse.down();
-  await page.mouse.move(box.x + 180, box.y + 160, { steps: 6 });
+  await page.mouse.move(box.x + 360, box.y + 260, { steps: 6 });
   await page.mouse.up();
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
-
-  await page.getByRole("button", { name: "Prostokąt" }).click();
-  box = await planBox(page);
-  await page.mouse.move(box.x + 260, box.y + 60);
-  await page.mouse.down();
-  await page.mouse.move(box.x + 380, box.y + 160, { steps: 6 });
-  await page.mouse.up();
-  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
-  await page.waitForTimeout(900); // debounce autozapisu (600 ms) + zapas
-
-  const roomColors = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
-    return JSON.parse(raw!).draft.roomShapes.map((r: { color: string }) => r.color);
-  });
-  expect(roomColors[1]).toBe("#C1793F");
+  await page.waitForTimeout(300);
 
   await page.getByRole("button", { name: "Wstaw Element" }).click();
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
-  await page.mouse.click(box.x + 100, box.y + 100); // wewnątrz pierwszego pomieszczenia
+  await page.mouse.click(box.x + 100, box.y + 240);
 
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
-  await page.mouse.click(box.x + 320, box.y + 100); // wewnątrz DRUGIEGO pomieszczenia
+  await page.mouse.click(box.x + 355, box.y + 160);
+
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 210, box.y + 150);
   await page.waitForTimeout(300);
 
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
@@ -155,7 +148,10 @@ test("trasa jest w KOLORZE POMIESZCZENIA punktu docelowego, nie w kolorze rodzaj
     const stage = konva?.stages?.[0];
     return stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01).map((l) => l.stroke()) ?? [];
   });
-  expect(strokes).toEqual(["#C1793F"]);
+  expect(strokes).toHaveLength(2);
+  // Sedno: DWA rozne kolory. Gdyby kolor szedl z pomieszczenia (jak przedtem),
+  // oba byłyby tym samym kolorem obrysu i ten test by nie przeszedl.
+  expect(new Set(strokes).size).toBe(2);
 });
 
 test("rozdzielnica i gniazdo połączone ścianą: trasa jest CIĄGŁA (routowana), nie przerywana", async ({ page }) => {
@@ -626,4 +622,182 @@ test("dwa gniazda jednego obwodu: DRUGI odcinek startuje z pierwszego gniazda, n
   expect(zRozdzielnicy).toHaveLength(1);
   expect(kontynuacje).toHaveLength(1);
   expect(start(kontynuacje[0])).toBe(koniec(zRozdzielnicy[0]));
+});
+
+/**
+ * Zgloszenie uzytkownika (z odreczna poprawka na zrzucie): przewod dochodzil do
+ * SRODKA gniazdka, czyli wchodzil mu w luk — od strony pomieszczenia, a nie od
+ * strony puszki. Gniazdo stoi trzonkiem w sciane i tam ma trafic przewod, odbijajac
+ * od swojego pasa krotkim skosem pod 45 stopni.
+ */
+test("gniazdo przy scianie: przewod odbija pod 45 stopni i konczy sie na nozce, po stronie sciany", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  let box = await planBox(page);
+  await page.mouse.move(box.x + 80, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 420, box.y + 300, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 120, box.y + 290); // przy dolnej scianie
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 415, box.y + 160); // przyklejone do PRAWEJ sciany
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const punkty = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const trasy = (konva?.stages?.[0]?.find("Line") ?? []).filter((l) => Math.abs(l.opacity() - 0.9) < 0.01);
+    return trasy[0]?.points() ?? [];
+  });
+
+  expect(punkty.length).toBeGreaterThanOrEqual(6); // co najmniej dwa zalamania + koniec
+  const n = punkty.length;
+  const przed = { x: punkty[n - 4], y: punkty[n - 3] };
+  const koniec = { x: punkty[n - 2], y: punkty[n - 1] };
+
+  // Ostatni odcinek to SKOS o rownych skladowych — czyli dokladnie 45 stopni.
+  expect(Math.abs(koniec.x - przed.x)).toBeGreaterThan(1);
+  expect(Math.abs(koniec.x - przed.x)).toBeCloseTo(Math.abs(koniec.y - przed.y), 0);
+  // I biegnie W STRONE sciany (w prawo), a nie w glab pomieszczenia.
+  expect(koniec.x).toBeGreaterThan(przed.x);
+});
+
+/**
+ * Zgloszenie uzytkownika: przewod przechodzil NA WYLOT przez pierwsze i ostatnie
+ * gniazdo przy scianie. Dwa doskoki lezace na TYM SAMYM odcinku obrysu laczyly sie
+ * tylko przez jego konce, wiec trasa z gniazda do sasiedniego schodziła najpierw do
+ * naroznika pokoju i wracala ta sama linia — przez symbol, ktory wlasnie minela.
+ */
+test("trzy gniazda przy jednej scianie: zaden odcinek NIE ZAWRACA do naroznika", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  let box = await planBox(page);
+  await page.mouse.move(box.x + 80, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 460, box.y + 340, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 110, box.y + 330);
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  box = await planBox(page);
+  for (const y of [130, 210, 290]) {
+    await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+    await page.mouse.click(box.x + 455, box.y + y);
+  }
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const trasy = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const stage = konva?.stages?.[0];
+    return (stage?.find("Line").filter((l) => Math.abs(l.opacity() - 0.9) < 0.01) ?? []).map((l) => l.points());
+  });
+  expect(trasy).toHaveLength(3); // lancuch: rozdzielnica -> 1 -> 2 -> 3
+
+  // Odcinek miedzy dwoma gniazdami przy TEJ SAMEJ scianie ma isc MONOTONICZNIE:
+  // najpierw skos od nozki, potem prosto wzdluz sciany, potem skos do nastepnej.
+  // Zawrocenie do naroznika objawia sie zmiana ZNAKU przyrostu y — dokladnie to
+  // rysowalo kreske przez minięty symbol.
+  const miedzyGniazdami = trasy.filter((pts) => {
+    const ys = pts.filter((_, i) => i % 2 === 1);
+    return Math.abs(ys[0] - ys[ys.length - 1]) > 40; // pomijamy pierwszy odcinek z rozdzielnicy
+  });
+  for (const pts of miedzyGniazdami) {
+    const ys: number[] = pts.filter((_, i) => i % 2 === 1);
+    const kierunki = new Set<number>();
+    for (let i = 1; i < ys.length; i++) if (Math.abs(ys[i] - ys[i - 1]) > 0.5) kierunki.add(Math.sign(ys[i] - ys[i - 1]));
+    expect(kierunki.size).toBe(1);
+  }
+});
+
+/**
+ * Zgloszenie uzytkownika: linia szla SKOSEM przez cala dlugosc sciany i dopiero
+ * konczyla we wlasciwym punkcie. Przyczyna byla w grafie: doskok do trasy odsunietej
+ * o 6 jednostek miescil sie w calosci w `MERGE_TOLERANCE` (10), wiec punkt wejscia
+ * wpadal do wezla samego elementu i zostawala jedna krawedz element → NAROZNIK.
+ * Trasa ma isc ROWNOLEGLE do sciany i odbijac dopiero przy elemencie.
+ */
+test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  let box = await planBox(page);
+  await page.mouse.move(box.x + 80, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 460, box.y + 340, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 110, box.y + 330); // przy dolnej scianie, lewy dol
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 455, box.y + 130); // prawa sciana, wysoko
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(300);
+
+  const punkty = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[] }[] }[] } }
+    ).Konva;
+    const trasy = (konva?.stages?.[0]?.find("Line") ?? []).filter((l) => Math.abs(l.opacity() - 0.9) < 0.01);
+    const pts = trasy[0]?.points() ?? [];
+    const out: { x: number; y: number }[] = [];
+    for (let i = 0; i < pts.length; i += 2) out.push({ x: pts[i], y: pts[i + 1] });
+    return out;
+  });
+
+  // Kazdy odcinek POZA ostatnim (skosem do nozki) ma byc pionowy albo poziomy —
+  // skos rozlozony na dlugosc sciany zlamalby dokladnie ten warunek.
+  const odcinki: { dx: number; dy: number }[] = [];
+  for (let i = 1; i < punkty.length; i++) {
+    const dx = Math.abs(punkty[i].x - punkty[i - 1].x);
+    const dy = Math.abs(punkty[i].y - punkty[i - 1].y);
+    if (dx > 0.5 || dy > 0.5) odcinki.push({ dx, dy });
+  }
+  expect(odcinki.length).toBeGreaterThanOrEqual(3);
+  for (const s of odcinki.slice(0, -1)) expect(Math.min(s.dx, s.dy)).toBeLessThan(0.5);
+  // ...a ostatni jest skosem o rownych skladowych, czyli pod 45 stopni
+  const ostatni = odcinki[odcinki.length - 1];
+  expect(ostatni.dx).toBeCloseTo(ostatni.dy, 0);
 });

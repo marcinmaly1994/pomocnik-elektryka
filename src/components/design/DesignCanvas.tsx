@@ -4,7 +4,7 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
-import { colorForRoomName, DEFAULT_WALL_THICKNESS, GRID, gruboscObrysuPokoju, PROG_WASKIEGO_EKRANU, type PlanSize } from "@/lib/design";
+import { DEFAULT_WALL_THICKNESS, GRID, gruboscObrysuPokoju, PROG_WASKIEGO_EKRANU, type PlanSize } from "@/lib/design";
 import { promienieDoPokoi, snapDoPokoi } from "@/lib/roomSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
@@ -1639,7 +1639,7 @@ export function DesignCanvas({
             const isSelRoute = selected?.kind === "route" && selected.id === r.id;
             const pts = isEdited ? r.points : spreadRoutePoints.get(r.id) ?? r.points;
             const routeInteractive = toolMode === "zaznacz";
-            const color = colorForRoomName(r.room, roomShapes);
+            const color = r.color;
             return (
               <Group key={r.id}>
                 <Line
