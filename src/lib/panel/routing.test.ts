@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Point, RoomShape, Wall } from "@/types";
-import { crossesGeometry, routeAlongWalls } from "./routing";
+import { crossesGeometry, routeAlongWalls, wsunObrys } from "./routing";
 
 function wall(points: Point[]): Wall {
   return { id: Math.random().toString(36).slice(2), floor: "parter", points };
@@ -115,5 +115,114 @@ describe("crossesGeometry", () => {
   it("uwzględnia też obrysy pomieszczeń, nie tylko ściany", () => {
     const r = room([{ x: 40, y: -10 }, { x: 60, y: -10 }, { x: 60, y: 10 }, { x: 40, y: 10 }]);
     expect(crossesGeometry({ x: 0, y: 0 }, { x: 100, y: 0 }, [], [r])).toBe(true);
+  });
+});
+
+/**
+ * Trasa biegnie OBOK sciany, nie po jej osi.
+ *
+ * Wczesniej graf lezal dokladnie na obrysach, wiec przewod dzielil os ze sciana
+ * i ginal pod jej grubym pociagnieciem — na rysunku nie bylo widac, ktoredy idzie,
+ * a dwie trasy wzdluz tej samej sciany zlewaly sie w jedno.
+ */
+describe("wsunObrys", () => {
+  const kwadrat = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+    { x: 0, y: 100 },
+  ];
+
+  it("wsuwa prostokat DO SRODKA o zadana odleglosc, rownomiernie", () => {
+    const w = wsunObrys(kwadrat, 10);
+    expect(w).toEqual([
+      { x: 10, y: 10 },
+      { x: 90, y: 10 },
+      { x: 90, y: 90 },
+      { x: 10, y: 90 },
+    ]);
+  });
+
+  /** Kierunek ustalany doswiadczalnie, wiec kolejnosc punktow nie moze go odwrocic —
+   *  blad oznaczalby trasy biegnace NA ZEWNATRZ pomieszczenia. */
+  it("obojetne, czy wielobok podano zgodnie z ruchem wskazowek, czy przeciwnie", () => {
+    const odwrotny = [...kwadrat].reverse();
+    const w = wsunObrys(odwrotny, 10);
+    for (const p of w) {
+      expect(p.x).toBeGreaterThanOrEqual(10);
+      expect(p.x).toBeLessThanOrEqual(90);
+      expect(p.y).toBeGreaterThanOrEqual(10);
+      expect(p.y).toBeLessThanOrEqual(90);
+    }
+  });
+
+  /** W waskim pokoju wsuniecie zjadloby cala szerokosc — lepiej trasa po obrysie
+   *  niz w poprzek pomieszczenia. */
+  it("pomieszczenie ciasniejsze niz wsuniecie zostaje bez zmian", () => {
+    const waski = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 8 },
+      { x: 0, y: 8 },
+    ];
+    expect(wsunObrys(waski, 10)).toEqual(waski);
+  });
+
+  it("wielobok wydluzony zachowuje ROWNY odstep od kazdej sciany", () => {
+    // Przesuwanie wierzcholkow „ku srodkowi" dawaloby tu przy krotszych scianach
+    // zupelnie inny odstep niz przy dluzszych — stad przesuwanie KRAWEDZI.
+    const w = wsunObrys(
+      [
+        { x: 0, y: 0 },
+        { x: 400, y: 0 },
+        { x: 400, y: 60 },
+        { x: 0, y: 60 },
+      ],
+      10
+    );
+    expect(w).toEqual([
+      { x: 10, y: 10 },
+      { x: 390, y: 10 },
+      { x: 390, y: 50 },
+      { x: 10, y: 50 },
+    ]);
+  });
+
+  it("za malo punktow albo zerowe wsuniecie: bez zmian", () => {
+    expect(wsunObrys([{ x: 0, y: 0 }, { x: 10, y: 0 }], 5)).toHaveLength(2);
+    expect(wsunObrys(kwadrat, 0)).toEqual(kwadrat);
+  });
+});
+
+describe("routeAlongWalls — odsuniecie od sciany", () => {
+  it("trasa po obrysie pomieszczenia NIE lezy na jego krawedzi", () => {
+    const pokoj = room([
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 200 },
+      { x: 0, y: 200 },
+    ]);
+    const trasa = routeAlongWalls({ x: 10, y: 5 }, { x: 190, y: 195 }, [], [pokoj])!;
+    expect(trasa).not.toBeNull();
+    // Punkty POSREDNIE (bez koncow, ktore siedza na osprzecie) trzymaja sie z dala
+    // od krawedzi x=0/200 i y=0/200.
+    const posrednie = trasa.slice(1, -1);
+    expect(posrednie.length).toBeGreaterThan(0);
+    for (const p of posrednie) {
+      const doKrawedzi = Math.min(p.x, 200 - p.x, p.y, 200 - p.y);
+      expect(doKrawedzi).toBeGreaterThan(1);
+    }
+  });
+
+  /** Sciana OTWARTA nie ma wnetrza, wiec nie ma jej dokad wsunac — routing po niej
+   *  dziala jak dotad i to jest wlasciwe zachowanie, nie przeoczenie. */
+  it("po otwartej scianie trasa biegnie jak dotad", () => {
+    const s = wall([
+      { x: 0, y: 100 },
+      { x: 200, y: 100 },
+    ]);
+    const trasa = routeAlongWalls({ x: 10, y: 90 }, { x: 190, y: 90 }, [s], [])!;
+    expect(trasa).not.toBeNull();
+    expect(trasa.some((p) => Math.abs(p.y - 100) < 0.01)).toBe(true);
   });
 });

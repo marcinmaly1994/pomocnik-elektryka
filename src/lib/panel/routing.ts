@@ -26,6 +26,22 @@ import { clampNum } from "@/lib/geometry";
  *  jest jednym rogiem pokoju. */
 const MERGE_TOLERANCE = 10;
 
+/**
+ * O ile jednostek planu trasa biegnie OBOK ściany, a nie po niej.
+ *
+ * Dotąd graf routingu leżał dokładnie na obrysach, więc przewód dzielił oś ze ścianą
+ * i ginął pod jej grubym pociągnięciem — na rysunku nie było widać, którędy właściwie
+ * idzie, a dwie trasy wzdłuż tej samej ściany zlewały się w jedno. Odsunięcie do
+ * wnętrza pomieszczenia robi z nich osobne linie, które da się przeczytać.
+ *
+ * Wartość jest w JEDNOSTKACH PLANU, nie w metrach, i to jest świadome: to konwencja
+ * RYSUNKOWA (ma być widać), a nie wymiar instalacji — przewód i tak biegnie w ścianie
+ * albo tuż przy niej. Przy typowej skali (1 jedn. = 5 cm) sześć jednostek to 30 cm
+ * na rzucie: wyraźnie obok obrysu (ten ma ok. 1,6 jedn. grubości), a nadal czytelnie
+ * „wzdłuż tej ściany", a nie w poprzek pokoju.
+ */
+export const ODSUNIECIE_TRASY = 6;
+
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -97,10 +113,107 @@ function addPolyline(graph: Graph, points: Point[], closed: boolean) {
   }
 }
 
-function buildGraph(walls: Wall[], roomShapes: RoomShape[]): Graph {
+/** Czy punkt leży wewnątrz wieloboku — zwykłe puszczanie promienia w prawo. */
+function wWieloboku(p: Point, poly: Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** Punkt przecięcia dwóch prostych zadanych punktem i kierunkiem. `null`, gdy są
+ *  (prawie) równoległe — wtedy nie ma sensownego narożnika do wyliczenia. */
+function przeciecieProstych(p1: Point, d1: Point, p2: Point, d2: Point): Point | null {
+  const det = d1.x * d2.y - d1.y * d2.x;
+  if (Math.abs(det) < 1e-9) return null;
+  const t = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / det;
+  return { x: p1.x + t * d1.x, y: p1.y + t * d1.y };
+}
+
+/**
+ * Wielobok wsunięty do WNĘTRZA o `d` jednostek — po nim, a nie po samym obrysie,
+ * biegnie trasa przewodu (patrz `ODSUNIECIE_TRASY`).
+ *
+ * Każda krawędź przesuwa się o `d` wzdłuż swojej normalnej, a nowe narożniki to
+ * przecięcia sąsiednich, przesuniętych prostych — dzięki temu odstęp od ściany jest
+ * równy na całej długości, także w rogach. Przesuwanie samych wierzchołków „ku
+ * środkowi" byłoby prostsze, ale w wydłużonym pokoju dawałoby przy krótszych
+ * ścianach zupełnie inny odstęp niż przy dłuższych.
+ *
+ * Kierunek „do wnętrza" ustalamy DOŚWIADCZALNIE — przesuwamy środek pierwszej
+ * krawędzi w jedną stronę i sprawdzamy, czy wylądował w wieloboku. To pewniejsze niż
+ * wnioskowanie ze znaku pola: przy odwróconej osi Y (a taka jest na płótnie)
+ * konwencje orientacji łatwo pomylić, a błąd oznaczałby trasy biegnące NA ZEWNĄTRZ
+ * pomieszczenia.
+ *
+ * Zwraca WEJŚCIE BEZ ZMIAN, gdy wsunięcie nie ma sensu: za mało punktów, wielobok
+ * ciaśniejszy niż samo wsunięcie (mały schowek), albo gdy wynik wywraca się na
+ * drugą stronę. Lepiej narysować trasę po obrysie niż w poprzek pokoju.
+ */
+export function wsunObrys(points: Point[], d: number): Point[] {
+  if (points.length < 3 || d <= 0) return points;
+
+  const kierunki = points.map((a, i) => {
+    const b = points[(i + 1) % points.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    return len < 1e-9 ? null : { dx: dx / len, dy: dy / len };
+  });
+  if (kierunki.some((k) => k === null)) return points;
+
+  const pierwszy = kierunki[0]!;
+  const srodek = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
+  const proba = { x: srodek.x + pierwszy.dy * d, y: srodek.y - pierwszy.dx * d };
+  const znak = wWieloboku(proba, points) ? 1 : -1;
+  const normalna = (k: { dx: number; dy: number }) => ({ x: k.dy * znak, y: -k.dx * znak });
+
+  const wsuniete: Point[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const poprzednia = (i - 1 + points.length) % points.length;
+    const nPrev = normalna(kierunki[poprzednia]!);
+    const nCur = normalna(kierunki[i]!);
+    const aPrev = { x: points[poprzednia].x + nPrev.x * d, y: points[poprzednia].y + nPrev.y * d };
+    const aCur = { x: points[i].x + nCur.x * d, y: points[i].y + nCur.y * d };
+    const róg =
+      przeciecieProstych(aPrev, { x: kierunki[poprzednia]!.dx, y: kierunki[poprzednia]!.dy }, aCur, {
+        x: kierunki[i]!.dx,
+        y: kierunki[i]!.dy,
+      }) ?? aCur;
+    // Narożnik odjeżdżający wielokrotnie dalej niż samo wsunięcie znaczy, że
+    // wielobok zaczyna się wywracać (ostry kąt, ściana krótsza niż odstęp).
+    if (dist(róg, points[i]) > d * 4) return points;
+    wsuniete.push(róg);
+  }
+  // Ostatnia kontrola: środek pierwszej wsuniętej krawędzi ma nadal leżeć w środku.
+  const kontrola = { x: (wsuniete[0].x + wsuniete[1].x) / 2, y: (wsuniete[0].y + wsuniete[1].y) / 2 };
+  return wWieloboku(kontrola, points) ? wsuniete : points;
+}
+
+/** Czy łamana jest zamknięta (ostatni punkt wraca na pierwszy) — tylko taka ma
+ *  „wnętrze", więc tylko taką da się wsunąć. */
+function zamknieta(points: Point[]): boolean {
+  return points.length > 3 && dist(points[0], points[points.length - 1]) < 0.01;
+}
+
+/**
+ * `wsuniecie` > 0 buduje graf na obrysach ODSUNIĘTYCH do wnętrza — używa tego
+ * `routeAlongWalls`, żeby przewód nie leżał na osi ściany. `crossesGeometry` woła
+ * z zerem, bo tam chodzi o PRAWDZIWE położenie ścian: kolizję trzeba sprawdzać
+ * z tym, co stoi na planie, a nie z linią pomocniczą odsuniętą o kilka jednostek.
+ */
+function buildGraph(walls: Wall[], roomShapes: RoomShape[], wsuniecie = 0): Graph {
   const graph: Graph = { nodes: [], adj: new Map(), segments: [] };
-  walls.forEach((w) => addPolyline(graph, w.points, false));
-  roomShapes.forEach((r) => addPolyline(graph, r.points, true));
+  walls.forEach((w) => {
+    // Ściana OTWARTA nie ma wnętrza, więc nie ma jej dokąd wsunąć — zostaje jak jest.
+    const ring = zamknieta(w.points);
+    const pts = wsuniecie > 0 && ring ? wsunObrys(w.points.slice(0, -1), wsuniecie) : w.points;
+    addPolyline(graph, pts, wsuniecie > 0 && ring);
+  });
+  roomShapes.forEach((r) => addPolyline(graph, wsuniecie > 0 ? wsunObrys(r.points, wsuniecie) : r.points, true));
   return graph;
 }
 
@@ -214,7 +327,9 @@ export function crossesGeometry(a: Point, b: Point, walls: Wall[], roomShapes: R
 }
 
 export function routeAlongWalls(from: Point, to: Point, walls: Wall[], roomShapes: RoomShape[]): Point[] | null {
-  const graph = buildGraph(walls, roomShapes);
+  // Graf na obrysach WSUNIĘTYCH do wnętrza — patrz `ODSUNIECIE_TRASY`. Trasa biegnie
+  // wtedy obok ściany, a nie po jej osi, i widać ją na rysunku jako osobną linię.
+  const graph = buildGraph(walls, roomShapes, ODSUNIECIE_TRASY);
   const start = connectPoint(graph, from);
   const end = connectPoint(graph, to);
   if (start === null || end === null) return null;

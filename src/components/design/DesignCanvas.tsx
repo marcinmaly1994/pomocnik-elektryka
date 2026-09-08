@@ -1649,11 +1649,13 @@ export function DesignCanvas({
                   }}
                   points={pts.flatMap((p) => [p.x, p.y])}
                   stroke={isSelRoute ? "#C1793F" : color}
-                  // Grubsza i mniej przezroczysta niż typowa linia poglądowa — odcinek
-                  // routowany WZDŁUŻ ściany dzieli z nią oś, więc cieniutka, półprzezroczysta
-                  // kreska ginęła optycznie pod dużo grubszym, ciemnym pociągnięciem ściany.
-                  // Trasy sterowania są celowo cieńsze i kropkowane — inny rodzaj przewodu.
-                  strokeWidth={(isControl ? 1.5 : 2.5) + (isSelRoute ? 1.5 : 0)}
+                  // CIEŃSZA, odkąd trasa biegnie OBOK ściany, a nie po jej osi (patrz
+                  // `ODSUNIECIE_TRASY` w panel/routing.ts). Wcześniej musiała być gruba
+                  // z konieczności: dzieliła oś ze ścianą i cienka kreska ginęła pod jej
+                  // ciemnym pociągnięciem. Teraz gruba linia tylko zaciemniałaby rysunek —
+                  // przewód ma być widoczny jako osobna, lekka linia, a nie druga ściana.
+                  // Trasy sterowania zostają cieńsze i kropkowane — inny rodzaj przewodu.
+                  strokeWidth={(isControl ? 1 : 1.5) + (isSelRoute ? 1 : 0)}
                   dash={isEdited ? undefined : isControl ? [1, 3] : r.viaWalls ? undefined : [6, 4]}
                   opacity={0.9}
                   lineJoin="round"
