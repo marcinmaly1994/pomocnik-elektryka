@@ -16,6 +16,7 @@ import { kolorObwodu, KOLOR_BEZ_OBWODU } from "./circuits";
 import { kolejnoscLancucha } from "./lancuch";
 import { zasiegPrzyscienny } from "@/lib/glyphs";
 import { punktPrzyscienny } from "@/lib/wallSnap";
+import { nearestPointOnPolyline } from "@/lib/geometry";
 
 /**
  * Moc typowa pojedynczego punktu [W] — wartości projektowe, nie katalogowe.
@@ -745,13 +746,55 @@ export function buildCableRoutes(
  *  nadal są rozróżnialne, a wiązka kilku tras trzyma się bliżej swojej ściany. */
 const LANE_SPACING = 3;
 
-/** Klucz odcinka [a,b] NIEZALEŻNY od kierunku (a→b to ten sam odcinek co b→a) i
- *  odporny na drobne różnice zmiennoprzecinkowe między trasami policzonymi
- *  niezależnie, ale po tym samym grafie ścian (stąd zaokrąglenie). */
-function segmentKey(a: Point, b: Point): string {
-  const pa = `${Math.round(a.x)},${Math.round(a.y)}`;
-  const pb = `${Math.round(b.x)},${Math.round(b.y)}`;
-  return pa < pb ? `${pa}|${pb}` : `${pb}|${pa}`;
+/** Ile jednostek wspólnego przebiegu musi mieć para odcinków, żeby uznać, że NAPRAWDĘ
+ *  biegną obok siebie i trzeba je rozsunąć. Jedna jednostka planu to 5 cm — krótszego
+ *  nachodzenia i tak nie widać, a próg odsiewa zwykłe spotkania końcami w narożniku. */
+const MIN_NAKLADANIE = 1;
+
+/**
+ * Kierunek odcinka sprowadzony do JEDNEJ półpłaszczyzny — a→b i b→a opisują tę samą
+ * prostą, więc muszą dać ten sam wektor, inaczej dwie trasy biegnące tym korytarzem
+ * w przeciwne strony trafiłyby do osobnych „korytarzy".
+ */
+function kierunekKanoniczny(a: Point, b: Point): { x: number; y: number } | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return null;
+  const u = { x: dx / len, y: dy / len };
+  const odwroc = u.x < -1e-9 || (Math.abs(u.x) <= 1e-9 && u.y < 0);
+  return odwroc ? { x: -u.x, y: -u.y } : u;
+}
+
+/**
+ * Klucz PROSTEJ, na której leży odcinek — nie samego odcinka.
+ *
+ * Poprzednia wersja kluczowała parę końców, więc za „wspólny" uznawała wyłącznie
+ * odcinki o IDENTYCZNYCH końcach. Trasa biegnąca pół ściany i druga biegnąca całą
+ * miały różne klucze i rysowały się jedna na drugiej — a to najczęstszy układ:
+ * obwody wychodzą z jednej rozdzielnicy i rozchodzą się w różnych miejscach.
+ * Zaokrąglenie zostaje, bo trasy liczone są niezależnie po tym samym grafie ścian
+ * i te same przebiegi różnią się o ułamki jednostki.
+ */
+function liniaKey(u: { x: number; y: number }, a: Point): string {
+  const odleglosc = -u.y * a.x + u.x * a.y; // rzut na normalną — pozycja prostej
+  return `${u.x.toFixed(3)},${u.y.toFixed(3)}|${Math.round(odleglosc)}`;
+}
+
+/**
+ * Który pas dostaje trasa, licząc OD ŚCIANY.
+ *
+ * Gniazda najbliżej muru — tak biegnie instalacja naprawdę: obwód gniazdowy idzie
+ * bruzdą na wysokości puszek, oświetlenie wychodzi pod strop, a sterowanie to
+ * odgałęzienia od łączników. Trzymanie tej kolejności sprawia, że rysunek czyta się
+ * zawsze tak samo, niezależnie od tego, w jakiej kolejności ktoś stawiał elementy.
+ */
+function priorytetPasa(r: CableRoute): number {
+  if (r.kind === "sterowanie") return 3;
+  const rola = ELEMENT_TYPES[r.type]?.role;
+  if (rola === "socket" || rola === "socketWet") return 0;
+  if (rola === "light") return 2;
+  return 1; // siła, dedykowane, ładowarka EV, roleta, teletechnika
 }
 
 /**
@@ -769,43 +812,141 @@ function segmentKey(a: Point, b: Point): string {
  * (tak jak w realnym pęku przewodów, część biegnie razem, część się rozchodzi),
  * kosztem drobnego „łamania" na stykach zamiast idealnie gładkiej linii.
  */
-export function spreadOverlappingRoutes(routes: CableRoute[]): Map<string, Point[]> {
-  const usersBySegment = new Map<string, string[]>();
+export function spreadOverlappingRoutes(routes: CableRoute[], roomShapes: RoomShape[] = []): Map<string, Point[]> {
+  /** Odcinek trasy sprowadzony do pozycji na swojej prostej: [t0,t1] wzdłuż `u`. */
+  interface Wpis {
+    routeId: string;
+    /** Pas przydziela się OBWODOWI, nie odcinkowi: jeden obwód to jeden kabel, więc
+     *  kolejne ogniwa łańcucha mają trzymać się tej samej linii. */
+    obwod: string;
+    priorytet: number;
+    idx: number;
+    t0: number;
+    t1: number;
+  }
+  const linie = new Map<string, { u: { x: number; y: number }; a: Point; wpisy: Wpis[] }>();
+
   routes.forEach((r) => {
     for (let i = 0; i < r.points.length - 1; i++) {
-      const key = segmentKey(r.points[i], r.points[i + 1]);
-      const users = usersBySegment.get(key) ?? [];
-      if (!users.includes(r.id)) users.push(r.id);
-      usersBySegment.set(key, users);
+      // ODCINKI SKRAJNE zostają na miejscu: to nie przebieg korytarzem, tylko
+      // przyłączenie do urządzenia — koniec przewodu siedzi na obudowie rozdzielnicy
+      // albo na nóżce gniazda i przesunięcie go w bok byłoby kłamstwem o tym, gdzie
+      // kabel wchodzi. Bez tego skos przy rozdzielnicy odjeżdżał wzdłuż własnej,
+      // ukośnej normalnej i trasa zaczynała się POZA budynkiem.
+      if (i === 0 || i === r.points.length - 2) continue;
+      const a = r.points[i];
+      const b = r.points[i + 1];
+      const u = kierunekKanoniczny(a, b);
+      // Zerowej długości odcinek (np. `from`===`to` po zaokrągleniu) nie ma kierunku,
+      // więc nie leży na żadnej prostej i nie da się go z niczym zestawić.
+      if (!u) continue;
+      const key = liniaKey(u, a);
+      const linia = linie.get(key) ?? { u, a, wpisy: [] };
+      const ta = u.x * a.x + u.y * a.y;
+      const tb = u.x * b.x + u.y * b.y;
+      linia.wpisy.push({
+        routeId: r.id,
+        obwod: r.circuitId || r.id,
+        priorytet: priorytetPasa(r),
+        idx: i,
+        t0: Math.min(ta, tb),
+        t1: Math.max(ta, tb),
+      });
+      linie.set(key, linia);
     }
   });
-  // Stabilny, deterministyczny porządek pasów w obrębie odcinka — inaczej ten sam
-  // rysunek dostawałby losowo inny układ pasów przy każdym przeliczeniu.
-  usersBySegment.forEach((users) => users.sort());
+
+  /** Pas dla konkretnego odcinka konkretnej trasy: `${routeId}#${idx}`. */
+  const pasy = new Map<string, { lane: number; kierunek: { x: number; y: number } }>();
+
+  linie.forEach((linia) => {
+    const odScianyWGlab = kierunekOdSciany(linia, roomShapes);
+    // GRUPY NAKŁADANIA: rozsuwamy tylko te trasy, które naprawdę biegną obok siebie.
+    // Dwie trasy używające tej samej ściany w rozłącznych kawałkach nie zasłaniają
+    // się nawzajem, więc obie mogą zostać przy murze.
+    const posortowane = [...linia.wpisy].sort((p, q) => p.t0 - q.t0);
+    let grupa: Wpis[] = [];
+    let koniecGrupy = -Infinity;
+    const domknij = () => {
+      if (grupa.length === 0) return;
+      const obwody = [...new Set(grupa.map((w) => w.obwod))].sort((x, y) => {
+        const px = grupa.find((w) => w.obwod === x)!.priorytet;
+        const py = grupa.find((w) => w.obwod === y)!.priorytet;
+        // Priorytet, a przy remisie id obwodu — żeby ten sam rysunek dawał zawsze
+        // ten sam układ pasów, a nie losowy przy każdym przeliczeniu.
+        return px - py || (x < y ? -1 : x > y ? 1 : 0);
+      });
+      for (const w of grupa) pasy.set(`${w.routeId}#${w.idx}`, { lane: obwody.indexOf(w.obwod), kierunek: odScianyWGlab });
+      grupa = [];
+      koniecGrupy = -Infinity;
+    };
+    for (const w of posortowane) {
+      // Samo DOTKNIĘCIE końcami to nie nakładanie: trasa skręcająca w narożniku dzieli
+      // z sąsiednią dokładnie jeden punkt i nic tam nikogo nie zasłania. Bez tego progu
+      // każde spotkanie na rogu rozsuwało obie trasy, choć biegną w różne strony.
+      if (w.t0 >= koniecGrupy - MIN_NAKLADANIE) domknij();
+      grupa.push(w);
+      koniecGrupy = Math.max(koniecGrupy, w.t1);
+    }
+    domknij();
+  });
+
+  /** Przesunięcie odcinka `i` trasy `r`. Pas ZEROWY zostaje dokładnie na policzonej
+   *  trasie, a kolejne odsuwają się w głąb pomieszczenia — dzięki temu obwód
+   *  o najwyższym priorytecie (gniazdowy) biegnie tak blisko muru, jak pozwala
+   *  `ODSUNIECIE_TRASY`, a nie o pół wiązki dalej, jak przy rozsuwaniu w obie strony. */
+  const przesuniecieOdcinka = (routeId: string, i: number) => {
+    const pas = pasy.get(`${routeId}#${i}`);
+    if (!pas) return { lane: 0, x: 0, y: 0 };
+    return { lane: pas.lane, x: pas.kierunek.x * pas.lane * LANE_SPACING, y: pas.kierunek.y * pas.lane * LANE_SPACING };
+  };
 
   const out = new Map<string, Point[]>();
   routes.forEach((r) => {
-    const points: Point[] = [];
-    for (let i = 0; i < r.points.length - 1; i++) {
-      const a = r.points[i];
-      const b = r.points[i + 1];
-      const users = usersBySegment.get(segmentKey(a, b))!;
-      const lane = users.indexOf(r.id);
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const len = Math.hypot(dx, dy);
-      // Zerowej długości odcinek (np. `from`===`to` po zaokrągleniu) nie ma
-      // kierunku, więc nie ma jak wyznaczyć prostopadłej — zostaje bez przesunięcia.
-      const offset =
-        len > 0 && users.length > 1
-          ? { x: (-dy / len) * (lane - (users.length - 1) / 2) * LANE_SPACING, y: (dx / len) * (lane - (users.length - 1) / 2) * LANE_SPACING }
-          : { x: 0, y: 0 };
-      points.push({ x: a.x + offset.x, y: a.y + offset.y });
-      points.push({ x: b.x + offset.x, y: b.y + offset.y });
-    }
+    /**
+     * Przesunięcie liczone na WIERZCHOŁEK, nie na odcinek.
+     *
+     * Wersja „po odcinku" wypisywała każdy punkt dwa razy, z osobnym przesunięciem
+     * dla odcinka przed i po nim — na każdym załamaniu robił się przez to widoczny
+     * uskok. Wierzchołek idzie za tym z sąsiadów, który leży w DALSZYM pasie, więc
+     * linia zostaje ciągła, a zmiana pasa rozkłada się na odcinek dochodzący.
+     */
+    const points = r.points.map((p, i) => {
+      const przed = i > 0 ? przesuniecieOdcinka(r.id, i - 1) : null;
+      const po = i < r.points.length - 1 ? przesuniecieOdcinka(r.id, i) : null;
+      const wybrane = !przed ? po : !po ? przed : po.lane > przed.lane ? po : przed;
+      return { x: p.x + (wybrane?.x ?? 0), y: p.y + (wybrane?.y ?? 0) };
+    });
     out.set(r.id, points);
   });
   return out;
+}
+
+/**
+ * Normalna prostej skierowana W GŁĄB pomieszczenia, czyli OD ściany.
+ *
+ * Trasa biegnie już `ODSUNIECIE_TRASY` od muru, więc „która strona jest bliżej
+ * ściany" nie da się rozstrzygnąć testem „czy punkt leży w pokoju" — oba przesunięcia
+ * lądują w środku. Pytamy więc wprost o najbliższy punkt obrysu: kierunek do niego
+ * to kierunek ściany, a pasy układamy w przeciwną stronę.
+ *
+ * Bez obrysów (trasy zapasowe Manhattan, plan z samych ścian) nie ma do czego się
+ * odnieść — zostaje sama normalna, bo równoległe pasy mają sens także wtedy, tylko
+ * strona jest umowna.
+ */
+function kierunekOdSciany(linia: { u: { x: number; y: number }; a: Point }, roomShapes: RoomShape[]): { x: number; y: number } {
+  const n = { x: -linia.u.y, y: linia.u.x };
+  let najblizszy: { p: Point; d: number } | null = null;
+  for (const pokoj of roomShapes) {
+    if (pokoj.points.length < 2) continue;
+    const trafienie = nearestPointOnPolyline(linia.a, [...pokoj.points, pokoj.points[0]]);
+    if (!trafienie) continue;
+    const d = Math.hypot(trafienie.point.x - linia.a.x, trafienie.point.y - linia.a.y);
+    if (!najblizszy || d < najblizszy.d) najblizszy = { p: trafienie.point, d };
+  }
+  if (!najblizszy) return n;
+  const doSciany = { x: najblizszy.p.x - linia.a.x, y: najblizszy.p.y - linia.a.y };
+  return n.x * doSciany.x + n.y * doSciany.y > 0 ? { x: -n.x, y: -n.y } : n;
 }
 
 /**

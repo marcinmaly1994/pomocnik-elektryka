@@ -801,3 +801,79 @@ test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ pa
   // ...a oba skrajne sa skosami o rownych skladowych, czyli pod 45 stopni
   for (const s of [odcinki[0], odcinki[odcinki.length - 1]]) expect(s.dx).toBeCloseTo(s.dy, 0);
 });
+
+/**
+ * Zgloszenie uzytkownika: kilka obwodow biegnacych ta sama sciana naklada sie na
+ * siebie i nie wiadomo, ile przewodow jest tam prowadzonych. Rozsuwanie lapalo tylko
+ * odcinki o IDENTYCZNYCH koncach, a obwody wychodzace z jednej rozdzielnicy rozchodza
+ * sie w roznych miejscach — jeden przebieg zawiera sie w drugim. Do tego obwod
+ * gniazdowy ma zostac NAJBLIZEJ sciany.
+ */
+test("obwod gniazdowy i oswietleniowy dziela sciane: rownolegle pasy, gniazda blizej muru", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  let box = await planBox(page);
+  await page.mouse.move(box.x + 80, box.y + 60);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 460, box.y + 340, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  await page.waitForTimeout(300);
+
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 200, box.y + 335); // dolna sciana, srodek
+
+  // gniazdo przy PRAWEJ scianie — jego trasa idzie dolem w prawo, przez cala sciane
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 455, box.y + 200);
+
+  // oprawa na srodku — jej trasa idzie dolem w prawo tylko KAWALEK, potem w gore
+  await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 300, box.y + 180);
+  await page.waitForTimeout(400);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(400);
+
+  const trasy = await page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[]; stroke(): string }[] }[] } }
+    ).Konva;
+    const linie = (konva?.stages?.[0]?.find("Line") ?? []).filter((l) => Math.abs(l.opacity() - 0.9) < 0.01);
+    return linie.map((l) => {
+      const pts: { x: number; y: number }[] = [];
+      const raw = l.points();
+      for (let i = 0; i < raw.length; i += 2) pts.push({ x: raw[i], y: raw[i + 1] });
+      // najdluzszy odcinek POZIOMY trasy — to jest jej przebieg dolna sciana
+      let best: { y: number; dl: number } | null = null;
+      for (let i = 1; i < pts.length; i++) {
+        if (Math.abs(pts[i].y - pts[i - 1].y) > 0.5) continue;
+        const dl = Math.abs(pts[i].x - pts[i - 1].x);
+        if (!best || dl > best.dl) best = { y: pts[i].y, dl };
+      }
+      return { stroke: l.stroke(), poziomy: best, koniec: pts[pts.length - 1] };
+    });
+  });
+
+  expect(trasy).toHaveLength(2);
+  const [gniazda, swiatlo] = [...trasy].sort((a, b) => b.koniec.x - a.koniec.x); // gniazdo stoi przy PRAWEJ scianie
+  expect(gniazda.poziomy).not.toBeNull();
+  expect(swiatlo.poziomy).not.toBeNull();
+
+  // Rozne pasy: gdyby rozsuwanie nie zadzialalo, oba przebiegi mialyby to samo y.
+  expect(Math.abs(gniazda.poziomy!.y - swiatlo.poziomy!.y)).toBeGreaterThan(1);
+  // Gniazda BLIZEJ dolnej sciany, czyli WIEKSZE y (os y rosnie w dol).
+  expect(gniazda.poziomy!.y).toBeGreaterThan(swiatlo.poziomy!.y);
+  // ...i to obwody, nie jeden kabel: kolory tez sie roznia
+  expect(gniazda.stroke).not.toBe(swiatlo.stroke);
+});
