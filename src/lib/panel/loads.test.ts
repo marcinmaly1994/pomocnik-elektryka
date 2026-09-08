@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Circuit, ElementType, InstallationElement } from "@/types";
-import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes } from "./loads";
+import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, zakonczSkosem } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -740,5 +740,44 @@ describe("buildCableRoutes — lancuch zamiast gwiazdy", () => {
       []
     );
     expect(trasy.filter((t) => t.points[0].x === panel.x && t.points[0].y === panel.y)).toHaveLength(2);
+  });
+});
+
+/**
+ * Zakonczenie trasy przy symbolu: przewod ma dochodzic do jego KRAWEDZI skosem,
+ * a nie przebijac go na wylot do srodka.
+ */
+describe("zakonczSkosem", () => {
+  const trasa = (...p: [number, number][]) => p.map(([x, y]) => ({ x, y }));
+
+  it("przycina ogon do krawedzi symbolu i odbija skosem", () => {
+    // Trasa biegnie poziomo do (100,0), potem 20 w dol do srodka symbolu o promieniu 6.
+    const out = zakonczSkosem(trasa([0, 0], [100, 0], [100, 20]), { x: 100, y: 20 }, 6);
+    // Ogon poza symbolem ma 14 jednostek, wiec odbicie wypada 14 przed rogiem...
+    expect(out[out.length - 2]).toEqual({ x: 86, y: 0 });
+    // ...a koniec siada na krawedzi symbolu, nie w jego srodku.
+    expect(out[out.length - 1]).toEqual({ x: 100, y: 14 });
+    // Rowne skladowe = 45 stopni.
+    const dx = out[out.length - 1].x - out[out.length - 2].x;
+    const dy = out[out.length - 1].y - out[out.length - 2].y;
+    expect(Math.abs(dx)).toBeCloseTo(Math.abs(dy), 9);
+  });
+
+  /** Gdy „odczep" jest dluzszy niz polowa odcinka, ktorym trasa nadchodzi, to nie
+   *  jest odczep, tylko cala droga do punktu — zaginanie wykrzywiloby trase. */
+  it("przy dlugim dojsciu i krotkim odcinku zostaje samo przyciecie", () => {
+    const out = zakonczSkosem(trasa([0, 0], [10, 0], [10, 100]), { x: 10, y: 100 }, 6);
+    expect(out).toHaveLength(3);
+    expect(out[2]).toEqual({ x: 10, y: 94 });
+  });
+
+  it("trasa konczaca sie juz w zasiegu symbolu zostaje nietknieta", () => {
+    const wejscie = trasa([0, 0], [100, 0], [100, 4]);
+    expect(zakonczSkosem(wejscie, { x: 100, y: 4 }, 6)).toEqual(wejscie);
+  });
+
+  it("bez punktu przed rogiem zostaje samo przyciecie", () => {
+    const out = zakonczSkosem(trasa([100, 0], [100, 20]), { x: 100, y: 20 }, 6);
+    expect(out).toEqual(trasa([100, 0], [100, 14]));
   });
 });

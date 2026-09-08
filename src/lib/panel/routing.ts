@@ -36,11 +36,15 @@ const MERGE_TOLERANCE = 10;
  *
  * Wartość jest w JEDNOSTKACH PLANU, nie w metrach, i to jest świadome: to konwencja
  * RYSUNKOWA (ma być widać), a nie wymiar instalacji — przewód i tak biegnie w ścianie
- * albo tuż przy niej. Przy typowej skali (1 jedn. = 5 cm) sześć jednostek to 30 cm
- * na rzucie: wyraźnie obok obrysu (ten ma ok. 1,6 jedn. grubości), a nadal czytelnie
- * „wzdłuż tej ściany", a nie w poprzek pokoju.
+ * albo tuż przy niej.
+ *
+ * Piętnaście, a nie sześć jak na początku: przyklejone do ściany gniazdo ma środek
+ * około siedmiu jednostek od niej i sięga drugie tyle w głąb pokoju, więc trasa
+ * odsunięta o sześć przechodziła DOKŁADNIE przez symbole. Piętnaście mija je z
+ * zapasem i dopiero wtedy widać osobną linię biegnącą wzdłuż ściany, a nie kreskę
+ * przebijającą gniazda.
  */
-export const ODSUNIECIE_TRASY = 6;
+export const ODSUNIECIE_TRASY = 20;
 
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
