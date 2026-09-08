@@ -15,7 +15,7 @@ import { crossesGeometry, routeAlongWalls } from "./routing";
 import { kolorObwodu, KOLOR_BEZ_OBWODU } from "./circuits";
 import { kolejnoscLancucha } from "./lancuch";
 import { zasiegPrzyscienny } from "@/lib/glyphs";
-import { punktPrzyscienny } from "@/lib/wallSnap";
+import { przyscienny, punktPrzyscienny } from "@/lib/wallSnap";
 import { nearestPointOnPolyline } from "@/lib/geometry";
 
 /**
@@ -493,7 +493,10 @@ function buildControlRoutes(
 
       const from: Point = { x: bestFrom.x, y: bestFrom.y };
       const to: Point = { x: light.x, y: light.y };
-      const routed = routeAlongWalls(from, to, walls, roomShapes);
+      // Oprawa wisi pod stropem — przewód biegnie do niej sufitem i może zejść do
+      // KAŻDEJ ściany pokoju. Łącznik siedzi w murze tam, gdzie stoi (patrz
+      // `swobodneWejscie` w routing.ts).
+      const routed = routeAlongWalls(from, to, walls, roomShapes, { from: !przyscienny(bestFrom.type), to: !przyscienny(light.type) });
       const points = routed ?? manhattanFallback(from, to, walls, roomShapes);
       const circuit = circuits.find((circ) => circ.elements.some((el) => el.id === light.id));
       out.push({
@@ -699,7 +702,13 @@ export function buildCableRoutes(
       // Punkty świadomie skopiowane do gołego `{x,y}` — `Point[]` ma zostać lekką
       // geometrią, a nie przeciekiem całego `InstallationElement` (rola, pokój,
       // kondygnacja…) tam, gdzie potrzebna jest tylko ścieżka do narysowania.
-      const routed = routeAlongWalls(poczatek, t.end, walls, roomShapes);
+      // Do oprawy przewód idzie sufitem, więc wolno mu zejść do każdej ściany pokoju
+      // i wybrać tę, przy której cała trasa jest najkrótsza. Osprzęt przyścienny —
+      // rozdzielnica, gniazdo, łącznik — wchodzi w mur tam, gdzie stoi.
+      const routed = routeAlongWalls(poczatek, t.end, walls, roomShapes, {
+        from: poprzedni ? !przyscienny(poprzedni.type) : false,
+        to: !przyscienny(t.type),
+      });
       const surowe = routed ?? manhattanFallback(poczatek, t.end, walls, roomShapes);
       // Skos przy OBU końcach: przewód ma dochodzić do krawędzi symbolu, a nie
       // przebijać go na wylot. Koniec liczony wprost, początek — na odwróconej
@@ -1002,55 +1011,28 @@ function cofnijSieWzdluz(points: Point[], odleglosc: number): { punkt: Point; in
 }
 
 /**
- * O ile dłuższy od promienia symbolu ma być odcinek, na którym trasa „ścina zakręt"
- * i wchodzi do punktu skosem.
- *
- * Skos zaczyna się WCZEŚNIEJ niż sama krawędź symbolu — inaczej przy trasie
- * biegnącej tuż obok gniazd (kilka jednostek od ściany, czyli praktycznie na ich
- * wysokości) zagięcie wypadałoby już pod sąsiednim symbolem. Półtora promienia
- * wystarcza, żeby ukos był widoczny i zaczynał się w wolnym miejscu.
- */
-const ZAPAS_SKOSU = 1.5;
-
-/**
- * Zakończenie trasy przy symbolu: przycięcie do jego krawędzi i wejście SKOSEM.
+ * Zakończenie trasy przy oprawie sufitowej: przycięcie do krawędzi symbolu, BEZ ukosu.
  *
  * Trasa dochodziła dotąd do punktu `{x, y}` elementu, czyli przecinała cały symbol
  * i kończyła się w jego środku. Na rysunku wyglądało to tak, jakby przewód przebijał
- * gniazdo, a nie do niego dochodził.
+ * oprawę, a nie do niej dochodził.
  *
- * Obie operacje liczone są WZDŁUŻ ŁAMANEJ, nie w linii prostej do środka, i to jest
- * tu sedno. Trasa biegnie kilka jednostek od ściany, a przyklejone gniazdo ma środek
- * jeszcze dalej — mierząc prostopadle, trasa przechodzi praktycznie przez symbol
- * i nie ma czego przycinać. Mierząc wzdłuż drogi, skracamy ją dokładnie o tyle, ile
- * zajmuje symbol, niezależnie od tego, pod jakim kątem przewód nadchodzi.
+ * Przycięcie liczone jest WZDŁUŻ ŁAMANEJ, nie w linii prostej do środka: skracamy
+ * drogę dokładnie o tyle, ile zajmuje symbol, niezależnie od tego, pod jakim kątem
+ * przewód nadchodzi.
  *
- *      ────────E╮            E — początek skosu, `ZAPAS_SKOSU` promieni przed końcem
- *               ╲            odcinek E→T zastępuje kawałek łamanej, więc na zakręcie
- *                T◗          robi się ukos, a na prostej — po prostu krótsza linia
- *
- * Skos, a nie prostopadła: tak rysuje się odgałęzienia na schematach instalacyjnych —
- * prostopadły „ogonek" czyta się jak skrzyżowanie dwóch przewodów, a nie jak odczep.
+ * Kąt PROSTY, nie ukos — i to jest tu istota. Wcześniej ostatni odcinek ścinał zakręt
+ * i wchodził do oprawy skosem; do osprzętu przyściennego tak właśnie ma być (patrz
+ * `zakonczPrzyNozce`), ale oprawa wisi pod stropem i przewód schodzi do niej prosto
+ * od strony, z której nadszedł. Ukos w tym miejscu opisywał przebieg, którego nikt
+ * nie ułoży.
  */
-export function zakonczSkosem(points: Point[], promien: number): Point[] {
+export function przytnijDoKrawedzi(points: Point[], promien: number): Point[] {
   if (points.length < 2 || promien <= 0) return points;
-
   const koniec = cofnijSieWzdluz(points, promien);
   // Cała trasa mieści się w zasięgu symbolu — zostawiamy ją, żeby nie zniknęła.
   if (!koniec) return points;
-  const przyciete = [...points.slice(0, koniec.indeks + 1), koniec.punkt];
-  if (przyciete.length < 3) return przyciete;
-
-  const poczatekSkosu = cofnijSieWzdluz(przyciete, promien * ZAPAS_SKOSU);
-  // Cofnięcie dłuższe niż cała trasa — nie ma od czego odbijać.
-  if (!poczatekSkosu) return przyciete;
-  // Skos ma sens tylko wtedy, gdy cofnięcie PRZEKROCZYŁO załamanie: wtedy odcinek
-  // E→T ścina zakręt i widać ukos. Gdy oba punkty wypadły na tym samym, prostym
-  // odcinku, „skos" byłby zwykłym punktem pośrodku prostej — trasa kończy się wtedy
-  // po prostu przed symbolem i tak ma wyglądać (np. gniazda w jednej linii przy tej
-  // samej ścianie: przewód idzie od jednego do drugiego, nie ma czego ścinać).
-  if (poczatekSkosu.indeks >= koniec.indeks) return przyciete;
-  return [...przyciete.slice(0, poczatekSkosu.indeks + 1), poczatekSkosu.punkt, koniec.punkt];
+  return [...points.slice(0, koniec.indeks + 1), koniec.punkt];
 }
 
 /**
@@ -1118,7 +1100,7 @@ interface Zakonczenie {
  */
 function zakonczPrzyElemencie(points: Point[], el: Zakonczenie, skala: number): Point[] {
   const cel = punktPrzyscienny({ ...el, x: el.end.x, y: el.end.y }, skala);
-  return cel ? zakonczPrzyNozce(points, cel) : zakonczSkosem(points, promienSymbolu(el.type, skala));
+  return cel ? zakonczPrzyNozce(points, cel) : przytnijDoKrawedzi(points, promienSymbolu(el.type, skala));
 }
 
 /** Rodzaj obwodu wg roli elementów — mapowanie na kategorie używane w doborze. */

@@ -226,3 +226,75 @@ describe("routeAlongWalls — odsuniecie od sciany", () => {
     expect(trasa.some((p) => Math.abs(p.y - 100) < 0.01)).toBe(true);
   });
 });
+
+/**
+ * Zgloszenie uzytkownika: przewod do oprawy dobijal do konca sciany i dopiero tam
+ * skrecal. Kandydaci na wejscie w siec byli odsiewani po ODLEGLOSCI WZGLEDNEJ
+ * (najwyzej poltora raza dalej niz najblizszy odcinek), wiec oprawa wiszaca blizej
+ * jednej sciany niz drugiej tracila te druga z listy — nawet gdy trasa przez nia
+ * wychodzila znacznie krotsza. Teraz kryterium jest przynaleznosc do POMIESZCZENIA.
+ */
+describe("routeAlongWalls — wejscie w siec z wlasnego pomieszczenia", () => {
+  const POKOJ = room([
+    { x: 0, y: 0 },
+    { x: 400, y: 0 },
+    { x: 400, y: 300 },
+    { x: 0, y: 300 },
+  ]);
+
+  it("oprawa schodzi do sciany, przy ktorej cala trasa jest KROTSZA, a nie do najblizszej", () => {
+    // Rozdzielnica w lewym dolnym rogu. Oprawa wisi 60 od prawej sciany, ale az 150
+    // od dolnej — dawny prog (1,5x) odcinal dolna, choc to wlasnie nia trasa
+    // z rozdzielnicy jest o polowe krotsza.
+    const trasa = routeAlongWalls({ x: 20, y: 285 }, { x: 340, y: 150 }, [], [POKOJ], { to: true })!;
+    expect(trasa).not.toBeNull();
+    // Trasa NIE dociera do prawej sciany: zeszlaby tam tylko po to, zeby wrocic.
+    const przyPrawej = trasa.filter((p) => p.x > 380);
+    expect(przyPrawej).toHaveLength(0);
+    // Odgalezienie do oprawy jest PIONOWE — czyli pod katem prostym do dolnej sciany.
+    const przedKoncem = trasa[trasa.length - 2];
+    expect(przedKoncem.x).toBeCloseTo(340, 6);
+  });
+
+  /**
+   * Druga strona tego samego rozroznienia — i regresja, ktora sama sie tu pojawila.
+   * Gdy KAZDY punkt mogl siegnac dowolnej sciany swojego pokoju, rozdzielnica stojaca
+   * przy dolnej scianie laczyla sie wprost z prawa: doskok przez pol pokoju bywa
+   * krotszy niz obejscie narozem. Rysunek pokazywal wtedy przewod biegnacy srodkiem
+   * podlogi. Osprzet przyscienny wchodzi w mur tam, gdzie stoi.
+   */
+  it("osprzet PRZYSCIENNY nie doskakuje przez pol pokoju do dalszej sciany", () => {
+    // Oba konce przy dolnej scianie, daleko od siebie — bez flagi `swobodne`.
+    const trasa = routeAlongWalls({ x: 20, y: 285 }, { x: 380, y: 150 }, [], [POKOJ])!;
+    expect(trasa).not.toBeNull();
+    // Punkty POSREDNIE trzymaja sie obrysu: zaden nie wypada w srodku pokoju.
+    for (const p of trasa.slice(1, -1)) {
+      const doKrawedzi = Math.min(p.x, 400 - p.x, p.y, 300 - p.y);
+      expect(doKrawedzi).toBeLessThan(15); // przy scianie, a nie w srodku
+    }
+  });
+
+  /** Kryterium pomieszczenia zastepuje prog odleglosci TYLKO tam, gdzie pomieszczenia
+   *  sa. Plan rysowany samymi scianami dziala jak dotad. */
+  it("bez obrysow pomieszczen routing po samych scianach nadal dziala", () => {
+    const s = wall([
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+    ]);
+    const trasa = routeAlongWalls({ x: 10, y: 20 }, { x: 190, y: 20 }, [s], []);
+    expect(trasa).not.toBeNull();
+  });
+
+  /** Doskok nie ma prawa wyjsc poza obrys — inaczej trasa „laczylaby w powietrzu"
+   *  dwa niepolaczone ze soba kawalki planu i mimo to wyszla jako routowana. */
+  it("punkt w JEDNYM pokoju nie doskakuje do sciany DRUGIEGO", () => {
+    const drugi = room([
+      { x: 600, y: 0 },
+      { x: 800, y: 0 },
+      { x: 800, y: 300 },
+      { x: 600, y: 300 },
+    ]);
+    const trasa = routeAlongWalls({ x: 200, y: 150 }, { x: 700, y: 150 }, [], [POKOJ, drugi]);
+    expect(trasa).toBeNull(); // dwa rozlaczne kawalki geometrii — zostaje szacunek Manhattan
+  });
+});
