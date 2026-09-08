@@ -613,6 +613,19 @@ export function buildCableRoutes(
   const control = buildControlRoutes(elements, circuits, kolory, walls, roomShapes, lightGroups);
   if (!panel) return control;
 
+  /**
+   * Rozdzielnica jako ELEMENT, nie tylko punkt — potrzebny jej obrót, żeby wiedzieć,
+   * którą stroną stoi do ściany (patrz `punktPrzyscienny`).
+   *
+   * Szukana po POZYCJI, a nie „pierwsza z listy": `panel` bywa podrozdzielnicą
+   * kondygnacji (patrz `panelDlaKondygnacji`), a wtedy pierwsza rozdzielnica
+   * w projekcie jest zupełnie inną tablicą, stojącą gdzie indziej.
+   */
+  const rozdzielnicaEl = elements.find((e) => e.type === "rozdzielnica" && e.x === panel.x && e.y === panel.y);
+  const rozdzielnica: Zakonczenie | null = rozdzielnicaEl
+    ? { type: rozdzielnicaEl.type, rotation: rozdzielnicaEl.rotation, end: { x: rozdzielnicaEl.x, y: rozdzielnicaEl.y } }
+    : null;
+
   const supply: CableRoute[] = [];
   for (const c of circuits) {
     // Oprawy TEGO SAMEGO obwodu sterowane TYM SAMYM łącznikiem dzielą JEDNĄ
@@ -674,10 +687,13 @@ export function buildCableRoutes(
     );
     let poczatek: Point = panel;
     // Element, z którego wychodzi kolejny odcinek — potrzebny, żeby wiedzieć, gdzie
-    // dokładnie przy nim zacząć przewód (nóżka albo krawędź symbolu). `null` na
-    // pierwszym odcinku: rozdzielnica jest punktem startu obwodu, nie odczepem, więc
-    // przewód dochodzi do niej wprost.
-    let poprzedni: Zakonczenie | null = null;
+    // dokładnie przy nim zacząć przewód (nóżka albo krawędź symbolu). Na pierwszym
+    // odcinku jest nim ROZDZIELNICA: to też osprzęt przyścienny, a przewody wychodzą
+    // z jej obudowy, nie ze środka. Dopóki startowały ze środka, przy kilku obwodach
+    // robiła się wiązka linii zbiegająca się w jednym punkcie NA symbolu — czyli
+    // dokładnie tam, gdzie rysunek pokazuje aparaty. `null` tylko wtedy, gdy
+    // rozdzielnicy nie ma na liście elementów (osobny szacunek, patrz `estimateRoutes`).
+    let poprzedni: Zakonczenie | null = rozdzielnica;
     for (const t of lancuch) {
       // Punkty świadomie skopiowane do gołego `{x,y}` — `Point[]` ma zostać lekką
       // geometrią, a nie przeciekiem całego `InstallationElement` (rola, pokój,

@@ -836,3 +836,64 @@ describe("zakonczPrzyNozce", () => {
     expect(out).toEqual(trasa([100, 0], [100, 2], [108, 2]));
   });
 });
+
+/**
+ * Rozdzielnica tez jest osprzetem przysciennym: przewody wychodza z jej OBUDOWY,
+ * nie ze srodka symbolu. Dopoki startowaly ze srodka, przy kilku obwodach robila
+ * sie wiazka linii zbiegajaca sie w jednym punkcie NA symbolu — czyli dokladnie
+ * tam, gdzie rysunek pokazuje aparaty.
+ */
+describe("buildCableRoutes — poczatek przy rozdzielnicy", () => {
+  const POKOJ = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 200 },
+      { x: 0, y: 200 },
+    ],
+  };
+  /** Polowa wysokosci pudelka rozdzielnicy (26) — o tyle jej srodek stoi od sciany. */
+  const ZASIEG = 13;
+  // Rozdzielnica przyklejona do DOLNEJ sciany pokoju: obrot 180 kieruje jej strone
+  // montazowa w +y, wiec obudowa dotyka linii y = 200.
+  const rozdzielnica = el("rozdzielnica", { x: 100, y: 200 - ZASIEG, rotation: 180 });
+  const panel = { x: rozdzielnica.x, y: rozdzielnica.y };
+
+  function trasyZ(punkty: InstallationElement[]) {
+    return buildCableRoutes(
+      panel,
+      punkty.map((p, i) => ({
+        id: `obw${i}`,
+        name: `Obwód ${i}`,
+        type: "gniazdko" as ElementType,
+        elements: [p],
+        cable: "YDYp 3x2,5 mm²",
+        breaker: "B16",
+        rcd: true,
+      })),
+      [rozdzielnica, ...punkty],
+      [],
+      [POKOJ]
+    );
+  }
+
+  it("przewod wychodzi z KRAWEDZI rozdzielnicy przy scianie, nie z jej srodka", () => {
+    const [r] = trasyZ([el("gniazdko", { x: 193, y: 60, rotation: 90 })]);
+    expect(r.viaWalls).toBe(true); // inaczej test nie sprawdzalby tego, co mysli
+    expect(r.points[0]).toEqual({ x: 100, y: 200 });
+    expect(r.points[0]).not.toEqual(panel);
+  });
+
+  it("kilka obwodow startuje z TEGO SAMEGO punktu na obudowie — nie kazdy ze srodka", () => {
+    const trasy = trasyZ([
+      el("gniazdko", { x: 193, y: 60, rotation: 90 }),
+      el("gniazdko", { x: 7, y: 60, rotation: 270 }),
+    ]);
+    expect(trasy).toHaveLength(2);
+    for (const r of trasy) expect(r.points[0]).toEqual({ x: 100, y: 200 });
+  });
+});

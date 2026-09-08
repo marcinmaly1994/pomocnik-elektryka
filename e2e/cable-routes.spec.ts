@@ -743,7 +743,7 @@ test("trzy gniazda przy jednej scianie: zaden odcinek NIE ZAWRACA do naroznika",
 /**
  * Zgloszenie uzytkownika: linia szla SKOSEM przez cala dlugosc sciany i dopiero
  * konczyla we wlasciwym punkcie. Przyczyna byla w grafie: doskok do trasy odsunietej
- * o 6 jednostek miescil sie w calosci w `MERGE_TOLERANCE` (10), wiec punkt wejscia
+ * o `ODSUNIECIE_TRASY` miescil sie w calosci w `MERGE_TOLERANCE` (10), wiec punkt wejscia
  * wpadal do wezla samego elementu i zostawala jedna krawedz element → NAROZNIK.
  * Trasa ma isc ROWNOLEGLE do sciany i odbijac dopiero przy elemencie.
  */
@@ -787,17 +787,17 @@ test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ pa
     return out;
   });
 
-  // Kazdy odcinek POZA ostatnim (skosem do nozki) ma byc pionowy albo poziomy —
-  // skos rozlozony na dlugosc sciany zlamalby dokladnie ten warunek.
+  // Skos WYLACZNIE na obu koncach — przy obudowie rozdzielnicy i przy nozce gniazda.
+  // Wszystko pomiedzy ma byc pionowe albo poziome; skos rozlozony na dlugosc sciany
+  // zlamalby dokladnie ten warunek.
   const odcinki: { dx: number; dy: number }[] = [];
   for (let i = 1; i < punkty.length; i++) {
     const dx = Math.abs(punkty[i].x - punkty[i - 1].x);
     const dy = Math.abs(punkty[i].y - punkty[i - 1].y);
     if (dx > 0.5 || dy > 0.5) odcinki.push({ dx, dy });
   }
-  expect(odcinki.length).toBeGreaterThanOrEqual(3);
-  for (const s of odcinki.slice(0, -1)) expect(Math.min(s.dx, s.dy)).toBeLessThan(0.5);
-  // ...a ostatni jest skosem o rownych skladowych, czyli pod 45 stopni
-  const ostatni = odcinki[odcinki.length - 1];
-  expect(ostatni.dx).toBeCloseTo(ostatni.dy, 0);
+  expect(odcinki.length).toBeGreaterThanOrEqual(4);
+  for (const s of odcinki.slice(1, -1)) expect(Math.min(s.dx, s.dy)).toBeLessThan(0.5);
+  // ...a oba skrajne sa skosami o rownych skladowych, czyli pod 45 stopni
+  for (const s of [odcinki[0], odcinki[odcinki.length - 1]]) expect(s.dx).toBeCloseTo(s.dy, 0);
 });
