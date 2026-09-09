@@ -973,3 +973,106 @@ describe("buildCableRoutes — poczatek przy rozdzielnicy", () => {
     for (const r of trasy) expect(r.points[0]).toEqual({ x: 100, y: 200 });
   });
 });
+
+/**
+ * Szacunek dlugosci a NARYSOWANA trasa.
+ *
+ * Kolejnosc punktow byla wspolna od dawna (`kolejnoscLancucha`), ale DLUGOSC kazdego
+ * ogniwa liczyly inaczej: szacunek w linii lamanej miedzy punktami, rysunek naokolo
+ * wzdluz scian. Roznica zalezy od ulozenia i wlasnie dlatego jest zdradliwa —
+ * zmierzone na pokoju 400 x 300: 3-5% przy gniazdach wzdluz jednej sciany, ale 22%,
+ * gdy lancuch przechodzi miedzy scianami PRZECIWLEGLYMI. Manhattan tnie wtedy przez
+ * srodek pokoju, a kabel musi obejsc.
+ *
+ * Blad szedl w strone NIEBEZPIECZNA: `worstCaseM` idzie wprost do spadku napiecia,
+ * wiec krotsza trasa to mniejszy spadek i zgoda na cienszy przewod, niz trzeba.
+ */
+describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
+  const POKOJ: RoomShape = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 400, y: 0 },
+      { x: 400, y: 300 },
+      { x: 0, y: 300 },
+    ],
+  };
+  const geo = { walls: [], roomShapes: [POKOJ], openings: [] };
+  const rozdzielnica = el("rozdzielnica", { x: 20, y: 287, rotation: 180 });
+  const punkt = { x: rozdzielnica.x, y: rozdzielnica.y };
+  /** Pion i zapas dla gniazda przy rozdzielnicy na 1,5 m: (2,8−1,5) + (2,8−0,3) + 1,5. */
+  const NADDATEK = 5.3;
+
+  /** Suma dlugosci odcinkow NARYSOWANYCH na rzucie [jednostki planu]. */
+  function dlugoscRysunku(gniazda: InstallationElement[]): number {
+    const c: Circuit = { id: "o1", name: "Obwód", type: "gniazdko", elements: gniazda, cable: "", breaker: "", rcd: true };
+    return buildCableRoutes(punkt, [c], [rozdzielnica, ...gniazda], geo.walls, geo.roomShapes, geo.openings).reduce(
+      (s, t) => s + t.lengthUnits,
+      0
+    );
+  }
+
+  const wzdluzJednejSciany = [
+    el("gniazdko", { x: 393, y: 60, rotation: 90 }),
+    el("gniazdko", { x: 393, y: 150, rotation: 90 }),
+    el("gniazdko", { x: 393, y: 240, rotation: 90 }),
+  ];
+  /** Uklad, w ktorym Manhattan tnie przez srodek pokoju, a kabel musi obejsc scianami. */
+  const scianyPrzeciwlegle = [
+    el("gniazdko", { x: 7, y: 60, rotation: 270 }),
+    el("gniazdko", { x: 393, y: 60, rotation: 90 }),
+  ];
+
+  /**
+   * Sedno poprawki. `metersPerUnit` = 1, wiec metry sa jednostkami planu i da sie
+   * porownac wprost; od `worstCaseM` odejmujemy naddatek pionowy, ktorego na rzucie
+   * nie widac.
+   *
+   * Zostaje kilka procent roznicy i to jest zrozumiale: rysunek dokłada na obu koncach
+   * dojscia do obudowy rozdzielnicy i do nozki gniazda (patrz `zakonczPrzyNozce`),
+   * a szacunek liczy od srodka do srodka i pokrywa to ryczaltem `SLACK_M`. Pilnujemy
+   * wiec ZGODNOSCI, nie identycznosci.
+   */
+  it("bieg poziomy zgadza sie z dlugoscia narysowanej trasy", () => {
+    for (const gniazda of [wzdluzJednejSciany, scianyPrzeciwlegle]) {
+      const poziom = estimateRoutes(punkt, gniazda, 1, undefined, geo)!.worstCaseM - NADDATEK;
+      const rysunek = dlugoscRysunku(gniazda);
+      expect(Math.abs(poziom - rysunek)).toBeLessThan(rysunek * 0.1);
+    }
+  });
+
+  it("z geometria szacunek NIGDY nie jest krotszy niz bez niej", () => {
+    for (const gniazda of [wzdluzJednejSciany, scianyPrzeciwlegle]) {
+      const bez = estimateRoutes(punkt, gniazda, 1)!;
+      const zGeo = estimateRoutes(punkt, gniazda, 1, undefined, geo)!;
+      expect(zGeo.worstCaseM).toBeGreaterThanOrEqual(bez.worstCaseM);
+      expect(zGeo.totalM).toBeGreaterThanOrEqual(bez.totalM);
+    }
+  });
+
+  /** Uklad, dla ktorego cala poprawka powstala: Manhattan zaniza tu o jedna piata. */
+  it("przy scianach PRZECIWLEGLYCH roznica jest istotna, nie kosmetyczna", () => {
+    const bez = estimateRoutes(punkt, scianyPrzeciwlegle, 1)!;
+    const zGeo = estimateRoutes(punkt, scianyPrzeciwlegle, 1, undefined, geo)!;
+    expect(zGeo.worstCaseM - NADDATEK).toBeGreaterThan((bez.worstCaseM - NADDATEK) * 1.15);
+  });
+
+  /** Bez geometrii (brak rysunku, stare zapisy, testy doboru) zostaje dokladnie to,
+   *  co bylo — zeby wpiecie tras nie zmienilo po cichu wynikow tam, gdzie ich nie ma. */
+  it("bez geometrii zachowanie zostaje takie jak dotad (Manhattan)", () => {
+    const r = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1)!;
+    expect(r.worstCaseM).toBeCloseTo(7 + NADDATEK, 1); // (30+40) * 0,1 = 7 m
+  });
+
+  /** Gdy routing nie ma po czym prowadzic trasy, szacunek nie moze zwrocic zera ani
+   *  wyjatku — spada na Manhattan, dokladnie tak jak rysunek spada na przerywana. */
+  it("geometria bez scian i obrysow nie psuje wyniku — zostaje Manhattan", () => {
+    const pusta = { walls: [], roomShapes: [], openings: [] };
+    const zPusta = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1, undefined, pusta)!;
+    const bez = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1)!;
+    expect(zPusta).toEqual(bez);
+  });
+});

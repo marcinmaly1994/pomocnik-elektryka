@@ -158,16 +158,56 @@ export interface RouteEstimate {
 }
 
 /**
+ * Geometria kondygnacji — ta sama, po której `buildCableRoutes` prowadzi trasę na
+ * rysunku. Podana `estimateRoutes` sprawia, że kosztorys i dobór liczą się z DROGI,
+ * którą aplikacja rzeczywiście narysowała, a nie z jej przybliżenia.
+ */
+export interface GeometriaKondygnacji {
+  walls: Wall[];
+  roomShapes: RoomShape[];
+  openings: Opening[];
+}
+
+/**
+ * Bieg POZIOMY jednego ogniwa łańcucha [jednostki planu].
+ *
+ * Z geometrią — długość trasy policzonej przez `routeAlongWalls`, czyli dokładnie
+ * tej, którą widać na rzucie. Bez geometrii (albo gdy routing nie znajdzie drogi)
+ * zostaje Manhattan, tak jak przy rysowaniu zapasowej łamanej.
+ *
+ * Flagi `swobodneWejscie` powtórzone za `buildCableRoutes` — bez nich ta sama para
+ * punktów dawałaby tu inną trasę niż na rysunku, a o to w tej całej poprawce chodzi.
+ */
+function biegPoziomyJedn(a: Point, b: Point, typA: ElementType | null, typB: ElementType, geo?: GeometriaKondygnacji): number {
+  const manhattan = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+  if (!geo) return manhattan;
+  const trasa = routeAlongWalls(
+    a,
+    b,
+    geo.walls,
+    geo.roomShapes,
+    { from: typA ? !przyscienny(typA) : false, to: !przyscienny(typB) },
+    geo.openings
+  );
+  return trasa ? polylineLengthUnits(trasa) : manhattan;
+}
+
+/**
  * Szacuje długość przewodu obwodu, prowadzonego ŁAŃCUCHEM przez kolejne punkty.
  *
- * Manhattan, nie linia prosta: przewody układa się wzdłuż ścian i pod stropem,
- * nie po przekątnej pokoju. Każdy odcinek dostaje własny bieg pionowy (pod sufit
- * i z powrotem w dół, licząc od wysokości montażu punktu POPRZEDNIEGO) oraz zapas
- * montażowy na puszkę.
+ * Bieg poziomy bierze się z `routeAlongWalls` — z tej samej trasy, którą rysuje
+ * `buildCableRoutes`. Bez geometrii zostaje Manhattan: przewody układa się wzdłuż
+ * ścian i pod stropem, nie po przekątnej pokoju. Każdy odcinek dostaje własny bieg
+ * pionowy (pod sufit i z powrotem w dół, licząc od wysokości montażu punktu
+ * POPRZEDNIEGO) oraz zapas montażowy na puszkę.
  *
- * Kolejność punktów bierze się z `kolejnoscLancucha` — tej samej, którą rysuje
- * `buildCableRoutes`. To celowo jedno źródło: dopóki każde z nich zakładało
- * gwiazdę po swojemu, kosztorys i rysunek pokazywały dwie różne instalacje.
+ * Sama kolejność punktów to za mało, choć długo tak było. Kolejność bierze się
+ * z `kolejnoscLancucha`, więc kosztorys i rysunek opisywały ten sam łańcuch — ale
+ * DŁUGOŚĆ każdego ogniwa liczyły inaczej: tu w linii łamanej między punktami, tam
+ * naokoło, wzdłuż ścian. Zmierzone na pokoju z czterema gniazdami: 599 kontra 753
+ * jednostki, czyli szacunek krótszy o jedną piątą. To jest błąd w stronę NIEBEZPIECZNĄ,
+ * bo `worstCaseM` idzie wprost do spadku napięcia: krótsza trasa to mniejszy ΔU
+ * i zgoda na cieńszy przewód, niż trzeba.
  *
  * `metersPerUnit` pochodzi z kalibracji skali planu. Bez kalibracji zwraca `null`
  * — i to jest właściwe zachowanie: lepiej powiedzieć „nie wiem", niż podać
@@ -179,7 +219,9 @@ export function estimateRoutes(
   metersPerUnit: number | null,
   /** Wysokość montażu rozdzielnicy [m] — punkt startu pionu. Domyślnie wartość typowa
    *  dla rozdzielnicy; przekazywana jawnie tam, gdzie na planie stoi konkretna. */
-  panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5
+  panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5,
+  /** Ściany, obrysy i otwory TEJ kondygnacji. Brak = szacunek Manhattan, jak dotąd. */
+  geo?: GeometriaKondygnacji
 ): RouteEstimate | null {
   if (!panel || metersPerUnit === null || !(metersPerUnit > 0) || elements.length === 0) return null;
 
@@ -195,10 +237,14 @@ export function estimateRoutes(
    */
   let poziomM = 0;
   let poprzedni: Point = panel;
+  /** Typ elementu, z którego wychodzi ogniwo — decyduje, czy wolno mu zejść do dowolnej
+   *  ściany pokoju (oprawa pod stropem), czy tylko do swojej (osprzęt przyścienny).
+   *  `null` na pierwszym: tam startem jest rozdzielnica, zawsze przyścienna. */
+  let poprzedniTyp: ElementType | null = null;
   let wysokoscPoprzedniego = panelHeightM;
   let pierwszy = true;
   for (const e of lancuch) {
-    const odcinekM = (Math.abs(e.x - poprzedni.x) + Math.abs(e.y - poprzedni.y)) * metersPerUnit;
+    const odcinekM = biegPoziomyJedn(poprzedni, e, poprzedniTyp, e.type, geo) * metersPerUnit;
     poziomM += odcinekM;
     // Pierwszy odcinek wychodzi z ROZDZIELNICY — pod strop i w dół do puszki.
     // Kolejne idą z puszki do puszki, więc liczy się sama różnica wysokości.
@@ -207,6 +253,7 @@ export function estimateRoutes(
       : pionMiedzyPunktami(wysokoscPoprzedniego, mountingHeightM(e));
     total += odcinekM + pion + SLACK_M;
     poprzedni = e;
+    poprzedniTyp = e.type;
     wysokoscPoprzedniego = mountingHeightM(e);
     pierwszy = false;
   }
@@ -247,7 +294,10 @@ export function estimateRoutesByFloor(
   panele: Rozdzielnice,
   elements: InstallationElement[],
   scales: Record<string, number>,
-  panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5
+  panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5,
+  /** Geometria CAŁEGO budynku — filtrowana tu po kondygnacji, tak samo jak `scales`.
+   *  Brak = szacunek Manhattan, jak przed wpięciem tras w dobór. */
+  geo?: GeometriaKondygnacji
 ): RouteEstimate | null {
   if (elements.length === 0) return null;
   const poKondygnacjach = new Map<string, InstallationElement[]>();
@@ -265,7 +315,12 @@ export function estimateRoutesByFloor(
       panelDlaKondygnacji(panele, floor),
       grupa,
       typeof skala === "number" && skala > 0 ? skala : null,
-      panelHeightM
+      panelHeightM,
+      geo && {
+        walls: geo.walls.filter((w) => w.floor === floor),
+        roomShapes: geo.roomShapes.filter((r2) => r2.floor === floor),
+        openings: geo.openings.filter((o) => o.floor === floor),
+      }
     );
     if (!r) return null;
     total += r.totalM;

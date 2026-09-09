@@ -24,6 +24,12 @@ import { resolveDocHeader } from "@/lib/docHeader";
 export function CostsTab() {
   const elements = useProjectStore((s) => s.draft.elements);
   const roomShapes = useProjectStore((s) => s.draft.roomShapes);
+  // Geometria CALEGO budynku — z niej dobor liczy bieg poziomy trasy, czyli te sama
+  // droge, ktora widac na rzucie. Bez niej zostawal szacunek Manhattan, KROTSZY od
+  // trasy rzeczywistej, wiec zanizajacy spadek napiecia (patrz `estimateRoutes`).
+  const walls = useProjectStore((s) => s.draft.walls);
+  const openings = useProjectStore((s) => s.draft.openings);
+  const geometria = useMemo(() => ({ walls, roomShapes, openings }), [walls, roomShapes, openings]);
   const prices = useProjectStore((s) => s.prices);
   const setPrice = useProjectStore((s) => s.setPrice);
   const setPrices = useProjectStore((s) => s.setPrices);
@@ -45,13 +51,13 @@ export function CostsTab() {
   // do pozycji kosztorysu, więc zamawiany materiał zgadza się z rysunkiem. Skale idą
   // CAŁĄ MAPĄ, bo obwód potrafi sięgać kilku pięter (patrz `estimateRoutesByFloor`).
   const { circuits } = useMemo(
-    () => computeSizedCircuits(elements, { scales }, roomShapes),
-    [elements, scales, roomShapes]
+    () => computeSizedCircuits(elements, { scales, geometria }, roomShapes),
+    [elements, scales, geometria, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const { quantities, cableLengthSource } = useMemo(
-    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: routeLengths(circuits, elements, scales) }),
-    [elements, circuits, rcdGroups, scales]
+    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: routeLengths(circuits, elements, scales, geometria) }),
+    [elements, circuits, rcdGroups, scales, geometria]
   );
 
   const rows = kosztorysRows(quantities, prices, costOverrides, qtyOverrides);

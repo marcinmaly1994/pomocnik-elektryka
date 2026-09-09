@@ -59,6 +59,12 @@ function nextManualUid(existing: PanelDevice[]): string {
 export function PanelTab() {
   const elements = useProjectStore((s) => s.draft.elements); // cały budynek, nie tylko bieżąca kondygnacja
   const roomShapes = useProjectStore((s) => s.draft.roomShapes);
+  // Geometria CALEGO budynku — z niej dobor liczy bieg poziomy trasy, czyli te sama
+  // droge, ktora widac na rzucie. Bez niej zostawal szacunek Manhattan, KROTSZY od
+  // trasy rzeczywistej, wiec zanizajacy spadek napiecia (patrz `estimateRoutes`).
+  const walls = useProjectStore((s) => s.draft.walls);
+  const openings = useProjectStore((s) => s.draft.openings);
+  const geometria = useMemo(() => ({ walls, roomShapes, openings }), [walls, roomShapes, openings]);
 
   // Element bez rozpoznanego pomieszczenia grupuje się do ogólnego kubła zamiast
   // do właściwego obwodu, a łącznik nie połączy się z lampą w grupę sterowania
@@ -136,8 +142,8 @@ export function PanelTab() {
     [elements, scales, floors]
   );
   const { circuits, sized: sizedRaw } = useMemo(
-    () => computeSizedCircuits(elements, { scales }, roomShapes),
-    [elements, scales, roomShapes]
+    () => computeSizedCircuits(elements, { scales, geometria }, roomShapes),
+    [elements, scales, geometria, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const sized = useMemo(() => assignPhases(sizedRaw, supply3f), [sizedRaw, supply3f]);
@@ -159,7 +165,7 @@ export function PanelTab() {
   const sizingByDeviceKey = useMemo(() => new Map(sized.map((s) => [`mcb-${s.id}`, s])), [sized]);
   /** Trasy do NAJDALSZEGO punktu — te same, którymi dobór policzył ΔU (patrz
    *  `dlugosciDoboru`). Tabela na ekranie ich nie pokazuje, karta obliczeń musi. */
-  const dlugosci = useMemo(() => dlugosciDoboru(circuits, elements, scales), [circuits, elements, scales]);
+  const dlugosci = useMemo(() => dlugosciDoboru(circuits, elements, scales, geometria), [circuits, elements, scales, geometria]);
 
   // Aparaty przeliczają się, gdy zmienią się obwody lub konfiguracja zasilania.
   // Ręcznie dodane aparaty i ręcznie usunięte (auto-generowane) są zachowywane.
