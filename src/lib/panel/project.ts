@@ -8,7 +8,7 @@
  * wiedzieć nic o tablicach obciążalności.
  */
 
-import type { Circuit, InstallationElement, RoomShape } from "@/types";
+import type { Circuit, Floor, InstallationElement, RoomShape } from "@/types";
 import { computeCircuits } from "./circuits";
 import { circuitDemand, estimateRoutesByFloor, findPanels, kindForElements, type GeometriaKondygnacji } from "./loads";
 import { sizeCircuit, type PhaseAssignment, type SizedCircuit } from "./sizing";
@@ -32,6 +32,9 @@ export interface ProjectSizingOptions {
    * trasy rzeczywistej, wiec zaniza spadek napiecia — patrz `estimateRoutes`.
    */
   geometria?: GeometriaKondygnacji;
+  /** Kondygnacje w kolejnosci od dolu — z nich bierze sie PION miedzy pietrami dla
+   *  obwodow siegajacych piatra bez wlasnej podrozdzielnicy. Brak = pion nie doliczany. */
+  kondygnacje?: Floor[];
   sposob_ulozenia?: LayingMethod;
   temperatura_otoczenia_C?: number;
   /** Ile obwodów dzieli wspólną trasę — wpływa na współczynnik grupowania. */
@@ -51,7 +54,7 @@ export function sizeProjectCircuits(
   return circuits.map((c) => {
     const kind = kindForElements(c.elements);
     const demand = circuitDemand(c.elements, kind);
-    const routes = estimateRoutesByFloor(panele, c.elements, opts.scales, undefined, opts.geometria);
+    const routes = estimateRoutesByFloor(panele, c.elements, opts.scales, undefined, { geometria: opts.geometria, kondygnacje: opts.kondygnacje });
     // „3-faz." w etykiecie zabezpieczenia to sposób, w jaki obwody trójfazowe są
     // oznaczane w warstwie planu — tu tłumaczymy to na liczbę faz doboru.
     const phases = c.breaker.includes("3-faz.") ? "3" : "1";
@@ -123,14 +126,15 @@ export function routeLengths(
   circuits: Circuit[],
   allElements: InstallationElement[],
   scales: Record<string, number>,
-  geometria?: GeometriaKondygnacji
+  geometria?: GeometriaKondygnacji,
+  kondygnacje?: Floor[]
 ): Map<string, number> {
   // Rozdzielnice CALEGO budynku, z podzialem na kondygnacje — obwod na pietrze liczy
   // sie od tamtejszej podrozdzielnicy, nie od pierwszej z brzegu (patrz `findPanels`).
   const panele = findPanels(allElements);
   const out = new Map<string, number>();
   for (const c of circuits) {
-    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, geometria);
+    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, { geometria, kondygnacje });
     if (r) out.set(c.id, r.totalM);
   }
   return out;
@@ -151,12 +155,13 @@ export function dlugosciDoboru(
   circuits: Circuit[],
   allElements: InstallationElement[],
   scales: Record<string, number>,
-  geometria?: GeometriaKondygnacji
+  geometria?: GeometriaKondygnacji,
+  kondygnacje?: Floor[]
 ): Map<string, number> {
   const panele = findPanels(allElements);
   const out = new Map<string, number>();
   for (const c of circuits) {
-    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, geometria);
+    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, { geometria, kondygnacje });
     if (r) out.set(c.id, r.worstCaseM);
   }
   return out;

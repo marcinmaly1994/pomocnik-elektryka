@@ -29,6 +29,7 @@ export function CostsTab() {
   // trasy rzeczywistej, wiec zanizajacy spadek napiecia (patrz `estimateRoutes`).
   const walls = useProjectStore((s) => s.draft.walls);
   const openings = useProjectStore((s) => s.draft.openings);
+  const floors = useProjectStore((s) => s.floors);
   const geometria = useMemo(() => ({ walls, roomShapes, openings }), [walls, roomShapes, openings]);
   const prices = useProjectStore((s) => s.prices);
   const setPrice = useProjectStore((s) => s.setPrice);
@@ -51,13 +52,13 @@ export function CostsTab() {
   // do pozycji kosztorysu, więc zamawiany materiał zgadza się z rysunkiem. Skale idą
   // CAŁĄ MAPĄ, bo obwód potrafi sięgać kilku pięter (patrz `estimateRoutesByFloor`).
   const { circuits } = useMemo(
-    () => computeSizedCircuits(elements, { scales, geometria }, roomShapes),
-    [elements, scales, geometria, roomShapes]
+    () => computeSizedCircuits(elements, { scales, geometria, kondygnacje: floors }, roomShapes),
+    [elements, scales, geometria, floors, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const { quantities, cableLengthSource } = useMemo(
-    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: routeLengths(circuits, elements, scales, geometria) }),
-    [elements, circuits, rcdGroups, scales, geometria]
+    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: routeLengths(circuits, elements, scales, geometria, floors) }),
+    [elements, circuits, rcdGroups, scales, geometria, floors]
   );
 
   const rows = kosztorysRows(quantities, prices, costOverrides, qtyOverrides);

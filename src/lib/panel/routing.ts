@@ -108,6 +108,9 @@ interface Graph {
   nodes: Point[];
   adj: Map<number, Map<number, number>>;
   segments: Segment[];
+  /** Z którego pomieszczenia pochodzi węzeł (`null` = ze ściany albo z doskoku) —
+   *  patrz `nodeIndex` i `polaczSasiedniePokoje`. */
+  zrodloWezla: (number | null)[];
   /** Obrysy pomieszczeń w ORYGINALNYCH położeniach (bez wsunięcia) — po nich
    *  `connectPoint` poznaje, że doskok nie wychodzi poza pokój elementu. */
   pokoje: Point[][];
@@ -126,6 +129,7 @@ interface Graph {
  */
 function dodajWezel(graph: Graph, p: Point): number {
   graph.nodes.push(p);
+  graph.zrodloWezla.push(null);
   graph.adj.set(graph.nodes.length - 1, new Map());
   return graph.nodes.length - 1;
 }
@@ -133,21 +137,54 @@ function dodajWezel(graph: Graph, p: Point): number {
 /**
  * Zwraca indeks istniejącego węzła w promieniu `MERGE_TOLERANCE` albo dokłada nowy.
  *
- * UWAGA — od tej tolerancji zależy, czy sąsiednie pomieszczenia są w ogóle POŁĄCZONE.
- * Obrysy dwóch pokoi, każdy wsunięty o `ODSUNIECIE_TRASY`, mijają się w narożniku
- * o dwa wsunięcia, czyli dokładnie tyle, ile ona wynosi: węzły zlewają się i tym rogiem
- * przewód przechodzi z pokoju do pokoju — przewiercając ścianę, dokładnie tak, jak robi
- * to elektryk. Zbieżność `2 · ODSUNIECIE_TRASY === MERGE_TOLERANCE` jest więc NOŚNA,
- * choć wyszła przypadkiem: rozejście tych dwóch stałych rozspaja plan i wszystkie trasy
- * międzypokojowe spadają na przerywany szacunek Manhattan.
+ * Dwa RÓŻNE pomieszczenia nigdy się nie scalają i to jest tu sedno. Ich obrysy, każdy
+ * wsunięty o `ODSUNIECIE_TRASY`, mijają się w narożniku o dwa wsunięcia — czyli akurat
+ * tyle, ile wynosi tolerancja. Scalone w jeden węzeł przyjmowały pozycję tego pokoju,
+ * który trafił do grafu PIERWSZY, więc każdy przebieg drugiego startował dziesięć
+ * jednostek obok swojego korytarza, a różnica rozciągała się na całą długość ściany.
+ * Na rysunku linia przy wspólnej ścianie nie była do niej równoległa, tylko zapadnięta.
+ *
+ * Połączenie między pokojami nie znika — dostaje jawną krawędź, patrz
+ * `polaczSasiedniePokoje`. Scalanie zostaje tam, gdzie opisuje prawdę: dwa końce
+ * osobno rysowanych ŚCIAN, które nie trafiły w ten sam piksel, to jeden fizyczny róg.
  */
-function nodeIndex(graph: Graph, p: Point): number {
+function nodeIndex(graph: Graph, p: Point, pokoj: number | null = null): number {
   for (let i = 0; i < graph.nodes.length; i++) {
+    const inny = graph.zrodloWezla[i];
+    if (pokoj !== null && inny !== null && inny !== pokoj) continue;
     if (dist(graph.nodes[i], p) <= MERGE_TOLERANCE) return i;
   }
   graph.nodes.push(p);
+  graph.zrodloWezla.push(pokoj);
   graph.adj.set(graph.nodes.length - 1, new Map());
   return graph.nodes.length - 1;
+}
+
+/**
+ * Spina narożniki SĄSIADUJĄCYCH pomieszczeń jawną krawędzią — tędy przewód przechodzi
+ * z pokoju do pokoju, przewiercając ścianę.
+ *
+ * Krawędź zamiast scalania: oba narożniki zostają tam, gdzie naprawdę są (każdy pięć
+ * jednostek w głąb swojego pokoju), a przejście widać jako krótki, prostopadły przeskok
+ * przy rogu. Waga to rzeczywista odległość, więc Dijkstra wie, ile ono kosztuje.
+ *
+ * Próg liczony z `wsuniecie`, a nie ze stałej: narożniki dwóch pokoi rysowanych wspólną
+ * ścianą dzieli dokładnie dwa wsunięcia. Dopóki zależało to od zbieżności
+ * `2 · ODSUNIECIE_TRASY === MERGE_TOLERANCE`, każda zmiana odsunięcia groziła cichym
+ * rozspojeniem planu i zrzuceniem wszystkich tras międzypokojowych na szacunek Manhattan.
+ */
+function polaczSasiedniePokoje(graph: Graph, wsuniecie: number) {
+  const prog = 2 * wsuniecie + 2;
+  for (let i = 0; i < graph.nodes.length; i++) {
+    const a = graph.zrodloWezla[i];
+    if (a === null) continue;
+    for (let j = i + 1; j < graph.nodes.length; j++) {
+      const b = graph.zrodloWezla[j];
+      if (b === null || b === a) continue;
+      const d = dist(graph.nodes[i], graph.nodes[j]);
+      if (d <= prog) addEdge(graph, i, j, d);
+    }
+  }
 }
 
 /** Krawędź o WADZE = odległości euklidesowej; przy powtórnym dodaniu (dwie ściany
@@ -162,9 +199,9 @@ function addEdge(graph: Graph, a: number, b: number, w: number) {
 
 /** Dokłada do grafu jedną łamaną (ścianę — otwartą, albo obrys pomieszczenia —
  *  zamknięty domykającym odcinkiem ostatni→pierwszy punkt). */
-function addPolyline(graph: Graph, points: Point[], closed: boolean) {
+function addPolyline(graph: Graph, points: Point[], closed: boolean, pokoj: number | null = null) {
   if (points.length < 2) return;
-  const idxs = points.map((p) => nodeIndex(graph, p));
+  const idxs = points.map((p) => nodeIndex(graph, p, pokoj));
   for (let i = 0; i < idxs.length - 1; i++) {
     graph.segments.push({ aIdx: idxs[i], bIdx: idxs[i + 1], a: points[i], b: points[i + 1] });
     addEdge(graph, idxs[i], idxs[i + 1], dist(points[i], points[i + 1]));
@@ -269,14 +306,16 @@ function zamknieta(points: Point[]): boolean {
  * z tym, co stoi na planie, a nie z linią pomocniczą odsuniętą o kilka jednostek.
  */
 function buildGraph(walls: Wall[], roomShapes: RoomShape[], wsuniecie = 0, otwory: Opening[] = []): Graph {
-  const graph: Graph = { nodes: [], adj: new Map(), segments: [], pokoje: roomShapes.map((r) => r.points) };
+  const graph: Graph = { nodes: [], adj: new Map(), segments: [], zrodloWezla: [], pokoje: roomShapes.map((r) => r.points) };
   walls.forEach((w) => {
     // Ściana OTWARTA nie ma wnętrza, więc nie ma jej dokąd wsunąć — zostaje jak jest.
     const ring = zamknieta(w.points);
     const pts = wsuniecie > 0 && ring ? wsunObrys(w.points.slice(0, -1), wsuniecie) : w.points;
     addPolyline(graph, pts, wsuniecie > 0 && ring);
   });
-  roomShapes.forEach((r) => addPolyline(graph, wsuniecie > 0 ? wsunObrys(r.points, wsuniecie) : r.points, true));
+  roomShapes.forEach((r, i) => addPolyline(graph, wsuniecie > 0 ? wsunObrys(r.points, wsuniecie) : r.points, true, i));
+  // Przejscia miedzy pokojami DOPIERO teraz — wszystkie obrysy musza juz byc w grafie.
+  polaczSasiedniePokoje(graph, wsuniecie);
   // Otwory dokładane NA KOŃCU: przejście musi mieć do czego się podpiąć, więc obrysy
   // obu sąsiadujących pomieszczeń muszą już być w grafie.
   if (wsuniecie > 0) otwory.forEach((o) => dodajPrzejscie(graph, o, wsuniecie));

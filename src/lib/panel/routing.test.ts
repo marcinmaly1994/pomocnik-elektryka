@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Opening, Point, RoomShape, Wall } from "@/types";
-import { crossesGeometry, routeAlongWalls, wsunObrys } from "./routing";
+import { crossesGeometry, ODSUNIECIE_TRASY, routeAlongWalls, wsunObrys } from "./routing";
 
 function wall(points: Point[]): Wall {
   return { id: Math.random().toString(36).slice(2), floor: "parter", points };
@@ -367,5 +367,62 @@ describe("routeAlongWalls — przejscia przez otwory", () => {
     const trasa = routeAlongWalls({ x: 20, y: 20 }, { x: 180, y: 285 }, [], [A], {}, [wejsciowe])!;
     expect(trasa).not.toBeNull();
     expect(Math.min(...trasa.map((p) => p.x))).toBeGreaterThan(-1); // nic nie wyszlo poza budynek
+  });
+});
+/**
+ * WSPOLNA SCIANA dwoch pomieszczen.
+ *
+ * Zgloszenie: linia przy srodkowej scianie nie byla do niej rownolegla, tylko
+ * zapadnieta. Naroczniki obu pokoi — kazdy wsuniety o ODSUNIECIE_TRASY w glab SWOJEGO
+ * pomieszczenia — dzieli dokladnie dwa wsuniecia, czyli tyle, ile wynosi tolerancja
+ * scalania wezlow. Scalone w jeden wezel przyjmowaly pozycje tego pokoju, ktory trafil
+ * do grafu PIERWSZY, wiec kazdy przebieg drugiego startowal dziesiec jednostek obok
+ * swojego korytarza, a roznica rozciagala sie na cala dlugosc sciany.
+ */
+describe("routeAlongWalls — wspolna sciana dwoch pomieszczen", () => {
+  /** Gorny pokoj: y 0..200. Dolny: y 200..400. Wspolna sciana pozioma y = 200. */
+  const GORA = room([
+    { x: 0, y: 0 },
+    { x: 300, y: 0 },
+    { x: 300, y: 200 },
+    { x: 0, y: 200 },
+  ]);
+  const DOL = room([
+    { x: 0, y: 200 },
+    { x: 300, y: 200 },
+    { x: 300, y: 400 },
+    { x: 0, y: 400 },
+  ]);
+
+  it("przebieg wzdluz wspolnej sciany trzyma JEDNA prosta", () => {
+    // Oba punkty przy wspolnej scianie, po tej samej (dolnej) stronie.
+    const trasa = routeAlongWalls({ x: 60, y: 207 }, { x: 240, y: 207 }, [], [GORA, DOL])!;
+    expect(trasa).not.toBeNull();
+    // Punkty POSREDNIE (bez koncow siedzacych na osprzecie) leza na korytarzu dolnego
+    // pokoju, czyli na jednej wysokosci. Zapad objawial sie tu dwiema roznymi.
+    const wysokosci = [...new Set(trasa.slice(1, -1).map((p) => Math.round(p.y)))];
+    expect(wysokosci).toHaveLength(1);
+  });
+
+  /** Polaczenie miedzy pokojami ma ZOSTAC — zmiana dotyczy sposobu, nie tego, czy
+   *  przewod w ogole przechodzi przez mur. */
+  it("pokoje pozostaja polaczone — przewod nadal przechodzi przez sciane", () => {
+    const trasa = routeAlongWalls({ x: 60, y: 380 }, { x: 60, y: 20 }, [], [GORA, DOL]);
+    expect(trasa).not.toBeNull();
+  });
+
+  /** Przejscie jest KROTKIE i prostopadle do sciany, a nie rozciagniete na jej dlugosc:
+   *  odcinek przekraczajacy mur ma dlugosc dwoch wsuniec, nie pol pokoju. */
+  it("przejscie przez sciane jest krotkim przeskokiem, nie dlugim skosem", () => {
+    const trasa = routeAlongWalls({ x: 60, y: 380 }, { x: 60, y: 20 }, [], [GORA, DOL])!;
+    const przez = [];
+    for (let i = 1; i < trasa.length; i++) {
+      const a = trasa[i - 1];
+      const b = trasa[i];
+      if (a.y < 200 === b.y < 200) continue;
+      przez.push(Math.hypot(b.x - a.x, b.y - a.y));
+    }
+    expect(przez).toHaveLength(1);
+    expect(przez[0]).toBeLessThan(2 * ODSUNIECIE_TRASY + 2);
   });
 });

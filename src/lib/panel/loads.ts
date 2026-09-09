@@ -8,7 +8,7 @@
  * miejsce w całym łańcuchu, gdzie liczby nie pochodzą wprost z tablic.
  */
 
-import type { CableRoute, Circuit, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
+import type { CableRoute, Circuit, ElementType, Floor, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM } from "@/lib/elements";
 import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
 import { crossesGeometry, routeAlongWalls } from "./routing";
@@ -295,11 +295,17 @@ export function estimateRoutesByFloor(
   elements: InstallationElement[],
   scales: Record<string, number>,
   panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5,
-  /** Geometria CAŁEGO budynku — filtrowana tu po kondygnacji, tak samo jak `scales`.
-   *  Brak = szacunek Manhattan, jak przed wpięciem tras w dobór. */
-  geo?: GeometriaKondygnacji
+  kontekst: {
+    /** Geometria CAŁEGO budynku — filtrowana tu po kondygnacji, tak samo jak `scales`.
+     *  Brak = szacunek Manhattan, jak przed wpięciem tras w dobór. */
+    geometria?: GeometriaKondygnacji;
+    /** Kondygnacje w kolejności od dołu — z nich bierze się pion między piętrami.
+     *  Brak = pion nie jest doliczany, czyli zachowanie sprzed tej poprawki. */
+    kondygnacje?: Floor[];
+  } = {}
 ): RouteEstimate | null {
   if (elements.length === 0) return null;
+  const { geometria: geo, kondygnacje } = kontekst;
   const poKondygnacjach = new Map<string, InstallationElement[]>();
   for (const e of elements) {
     const lista = poKondygnacjach.get(e.floor);
@@ -323,8 +329,18 @@ export function estimateRoutesByFloor(
       }
     );
     if (!r) return null;
-    total += r.totalM;
-    if (r.worstCaseM > worst) worst = r.worstCaseM;
+    /**
+     * Pion doliczany RAZ na kondygnację, nie na punkt: kabel wchodzi na piętro jeden
+     * raz i dopiero tam rozchodzi się łańcuchem. Zerowy, gdy piętro ma własną
+     * podrozdzielnicę — wtedy obwód liczy się od niej, a zasilanie samej podrozdzielnicy
+     * to osobna sprawa (WLZ, poza modelem obwodów).
+     */
+    const pion =
+      kondygnacje && !panele.poKondygnacji.has(floor) && panele.glownaKondygnacja
+        ? pionMiedzyKondygnacjami(panele.glownaKondygnacja, floor, kondygnacje)
+        : 0;
+    total += r.totalM + pion;
+    if (r.worstCaseM + pion > worst) worst = r.worstCaseM + pion;
   }
   return { worstCaseM: round1(worst), totalM: round1(total) };
 }
@@ -342,6 +358,9 @@ export function findPanel(elements: InstallationElement[]): Point | null {
 export interface Rozdzielnice {
   poKondygnacji: Map<string, Point>;
   glowna: Point | null;
+  /** Kondygnacja, na ktorej stoi `glowna` — potrzebna, zeby policzyc PION do obwodow
+   *  na pietrach bez wlasnej podrozdzielnicy (patrz `pionMiedzyKondygnacjami`). */
+  glownaKondygnacja: string | null;
 }
 
 /**
@@ -359,13 +378,44 @@ export interface Rozdzielnice {
 export function findPanels(allElements: InstallationElement[]): Rozdzielnice {
   const poKondygnacji = new Map<string, Point>();
   let glowna: Point | null = null;
+  let glownaKondygnacja: string | null = null;
   for (const e of allElements) {
     if (e.type !== "rozdzielnica") continue;
     const punkt = { x: e.x, y: e.y };
     if (!poKondygnacji.has(e.floor)) poKondygnacji.set(e.floor, punkt);
-    glowna ??= punkt;
+    if (glowna === null) {
+      glowna = punkt;
+      glownaKondygnacja = e.floor;
+    }
   }
-  return { poKondygnacji, glowna };
+  return { poKondygnacji, glowna, glownaKondygnacja };
+}
+
+/**
+ * Pion, który przewód musi pokonać, idąc z kondygnacji `od` na `do` [m].
+ *
+ * Kolejność w `floors` jest kolejnością kondygnacji — nowe piętra dokładają się na
+ * końcu listy (patrz `addFloor` w store'ie) i to jedyna informacja o ich układzie,
+ * jaką projekt niesie. Liczymy sumę wysokości kondygnacji POKONANYCH po drodze, bo
+ * odległość od stropu do stropu to właśnie wysokość kondygnacji leżącej między nimi.
+ *
+ * To dokładka do `pionM`, nie zamiennik: tamta opisuje wyjście pod strop i zejście do
+ * puszki W OBRĘBIE piętra, ta — przejście przez strop. Bez niej trasa z rozdzielnicy
+ * na parterze do gniazda na piętrze dostawała sam rzut poziomy, czyli była krótsza
+ * o kilka metrów. Znowu w stronę niebezpieczną, bo `worstCaseM` idzie do spadku
+ * napięcia.
+ *
+ * Zero, gdy którejś kondygnacji nie ma na liście — lepiej nie doliczyć nic, niż
+ * doliczyć z pozycji zgadywanej.
+ */
+function pionMiedzyKondygnacjami(od: string, doK: string, floors: Floor[]): number {
+  const i = floors.findIndex((f) => f.id === od);
+  const j = floors.findIndex((f) => f.id === doK);
+  if (i < 0 || j < 0 || i === j) return 0;
+  const [nizej, wyzej] = i < j ? [i, j] : [j, i];
+  let m = 0;
+  for (let k = nizej + 1; k <= wyzej; k++) m += CEILING_RUN_M;
+  return m;
 }
 
 /**

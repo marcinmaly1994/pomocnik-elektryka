@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Circuit, ElementType, InstallationElement, RoomShape } from "@/types";
+import type { Circuit, ElementType, Floor, InstallationElement, RoomShape } from "@/types";
 import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, przytnijDoKrawedzi, zakonczPrzyNozce } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -652,7 +652,7 @@ describe("findPanel / kindForElements", () => {
 
 describe("estimateRoutesByFloor", () => {
   /** Jedna rozdzielnica na caly budynek — najczestszy uklad w domu jednorodzinnym. */
-  const panel = { poKondygnacji: new Map<string, { x: number; y: number }>(), glowna: { x: 0, y: 0 } };
+  const panel = { poKondygnacji: new Map<string, { x: number; y: number }>(), glowna: { x: 0, y: 0 }, glownaKondygnacja: "parter" };
   // Ten sam punkt planu na dwoch kondygnacjach — rozni je WYLACZNIE skala pietra.
   const naParterze = el("gniazdko", { x: 100, y: 0, floor: "parter" });
   const naPietrze = el("gniazdko", { x: 100, y: 0, floor: "pietro" });
@@ -695,7 +695,7 @@ describe("estimateRoutesByFloor", () => {
   });
 
   it("bez rozdzielnicy i bez elementow nie ma czego mierzyc", () => {
-    expect(estimateRoutesByFloor({ poKondygnacji: new Map(), glowna: null }, [naParterze], { parter: 0.05 })).toBeNull();
+    expect(estimateRoutesByFloor({ poKondygnacji: new Map(), glowna: null, glownaKondygnacja: null }, [naParterze], { parter: 0.05 })).toBeNull();
     expect(estimateRoutesByFloor(panel, [], { parter: 0.05 })).toBeNull();
   });
 });
@@ -1074,5 +1074,92 @@ describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
     const zPusta = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1, undefined, pusta)!;
     const bez = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1)!;
     expect(zPusta).toEqual(bez);
+  });
+});
+/**
+ * PION MIEDZY KONDYGNACJAMI.
+ *
+ * Trasa z rozdzielnicy na parterze do gniazda na pietrze dostawala sam rzut poziomy —
+ * plan nie wiedzial, ze po drodze jest strop. Przy typowej kondygnacji to kilka metrow
+ * na obwod, znowu zaniżonych, czyli w strone zbyt cienkiego przewodu.
+ *
+ * Kolejnosc w `floors` jest kolejnoscia kondygnacji (nowe dokladaja sie na koncu listy)
+ * i to jedyna informacja o ich ukladzie, jaka projekt niesie.
+ */
+describe("estimateRoutesByFloor — pion miedzy kondygnacjami", () => {
+  const FLOORS: Floor[] = [
+    { id: "parter", name: "Parter" },
+    { id: "pietro", name: "Piętro" },
+    { id: "poddasze", name: "Poddasze" },
+  ];
+  /** Wysokosc kondygnacji przyjeta w module (CEILING_RUN_M). */
+  const WYSOKOSC = 2.8;
+  const skale = { parter: 0.05, pietro: 0.05, poddasze: 0.05 };
+  /** Jedna rozdzielnica, na parterze — typowy dom. */
+  const tylkoParter = {
+    poKondygnacji: new Map([["parter", { x: 0, y: 0 }]]),
+    glowna: { x: 0, y: 0 },
+    glownaKondygnacja: "parter",
+  };
+  const naPietrze = el("gniazdko", { x: 100, y: 0, floor: "pietro" });
+
+  it("obwod siegajacy pietra dostaje pion o wysokosc kondygnacji", () => {
+    const bez = estimateRoutesByFloor(tylkoParter, [naPietrze], skale)!;
+    const zPionem = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.worstCaseM - bez.worstCaseM).toBeCloseTo(WYSOKOSC, 5);
+    expect(zPionem.totalM - bez.totalM).toBeCloseTo(WYSOKOSC, 5);
+  });
+
+  it("dwie kondygnacje wyzej to dwie wysokosci", () => {
+    const naPoddaszu = el("gniazdko", { x: 100, y: 0, floor: "poddasze" });
+    const bez = estimateRoutesByFloor(tylkoParter, [naPoddaszu], skale)!;
+    const zPionem = estimateRoutesByFloor(tylkoParter, [naPoddaszu], skale, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.worstCaseM - bez.worstCaseM).toBeCloseTo(2 * WYSOKOSC, 5);
+  });
+
+  /** Pietro z WLASNA podrozdzielnica liczy sie od niej — pionu nie ma, bo obwod nigdzie
+   *  nie przechodzi przez strop. Zasilanie samej podrozdzielnicy to osobna sprawa (WLZ). */
+  it("pietro z wlasna podrozdzielnica nie dostaje pionu", () => {
+    const zPodrozdzielnica = {
+      poKondygnacji: new Map([
+        ["parter", { x: 0, y: 0 }],
+        ["pietro", { x: 0, y: 0 }],
+      ]),
+      glowna: { x: 0, y: 0 },
+      glownaKondygnacja: "parter",
+    };
+    const bez = estimateRoutesByFloor(zPodrozdzielnica, [naPietrze], skale)!;
+    const zPionem = estimateRoutesByFloor(zPodrozdzielnica, [naPietrze], skale, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.worstCaseM).toBeCloseTo(bez.worstCaseM, 5);
+  });
+
+  /** Pion doliczany RAZ na kondygnacje, nie na punkt: kabel wchodzi na pietro jeden raz
+   *  i dopiero tam rozchodzi sie lancuchem. */
+  it("pion liczy sie raz na kondygnacje, a nie po razie na kazde gniazdo", () => {
+    const troje = [
+      el("gniazdko", { x: 100, y: 0, floor: "pietro" }),
+      el("gniazdko", { x: 120, y: 0, floor: "pietro" }),
+      el("gniazdko", { x: 140, y: 0, floor: "pietro" }),
+    ];
+    const bez = estimateRoutesByFloor(tylkoParter, troje, skale)!;
+    const zPionem = estimateRoutesByFloor(tylkoParter, troje, skale, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.totalM - bez.totalM).toBeCloseTo(WYSOKOSC, 5);
+  });
+
+  /** Kondygnacja spoza listy: lepiej nie doliczyc nic, niz doliczyc z pozycji zgadywanej. */
+  it("kondygnacja nieznana na liscie nie dostaje zadnego pionu", () => {
+    const gdzieIndziej = el("gniazdko", { x: 100, y: 0, floor: "piwnica" });
+    const skaleZPiwnica = { ...skale, piwnica: 0.05 };
+    const bez = estimateRoutesByFloor(tylkoParter, [gdzieIndziej], skaleZPiwnica)!;
+    const zPionem = estimateRoutesByFloor(tylkoParter, [gdzieIndziej], skaleZPiwnica, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.worstCaseM).toBeCloseTo(bez.worstCaseM, 5);
+  });
+
+  /** Bez listy kondygnacji zostaje dokladnie to, co bylo — zeby wpiecie pionow nie
+   *  zmienilo po cichu wynikow tam, gdzie tej informacji nie ma. */
+  it("bez listy kondygnacji zachowanie zostaje takie jak dotad", () => {
+    const a = estimateRoutesByFloor(tylkoParter, [naPietrze], skale)!;
+    const b = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, {})!;
+    expect(a).toEqual(b);
   });
 });

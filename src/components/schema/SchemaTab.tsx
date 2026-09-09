@@ -482,6 +482,7 @@ export function SchemaTab() {
   // trasy rzeczywistej, wiec zanizajacy spadek napiecia (patrz `estimateRoutes`).
   const walls = useProjectStore((s) => s.draft.walls);
   const openings = useProjectStore((s) => s.draft.openings);
+  const floors = useProjectStore((s) => s.floors);
   const geometria = useMemo(() => ({ walls, roomShapes, openings }), [walls, roomShapes, openings]);
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const projectName = useProjectStore((s) => s.projectName);
@@ -555,8 +556,8 @@ export function SchemaTab() {
   // Te same obwody co w Rozdzielnicy — z doborem, nie ze stałymi z `computeCircuits`.
   // Inaczej schemat jednokreskowy pokazywałby inny przekrój niż front rozdzielnicy.
   const { circuits } = useMemo(
-    () => computeSizedCircuits(elements, { scales, geometria }, roomShapes),
-    [elements, scales, geometria, roomShapes]
+    () => computeSizedCircuits(elements, { scales, geometria, kondygnacje: floors }, roomShapes),
+    [elements, scales, geometria, floors, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   /**

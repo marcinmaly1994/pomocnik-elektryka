@@ -142,8 +142,8 @@ export function PanelTab() {
     [elements, scales, floors]
   );
   const { circuits, sized: sizedRaw } = useMemo(
-    () => computeSizedCircuits(elements, { scales, geometria }, roomShapes),
-    [elements, scales, geometria, roomShapes]
+    () => computeSizedCircuits(elements, { scales, geometria, kondygnacje: floors }, roomShapes),
+    [elements, scales, geometria, floors, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const sized = useMemo(() => assignPhases(sizedRaw, supply3f), [sizedRaw, supply3f]);
@@ -165,7 +165,7 @@ export function PanelTab() {
   const sizingByDeviceKey = useMemo(() => new Map(sized.map((s) => [`mcb-${s.id}`, s])), [sized]);
   /** Trasy do NAJDALSZEGO punktu — te same, którymi dobór policzył ΔU (patrz
    *  `dlugosciDoboru`). Tabela na ekranie ich nie pokazuje, karta obliczeń musi. */
-  const dlugosci = useMemo(() => dlugosciDoboru(circuits, elements, scales, geometria), [circuits, elements, scales, geometria]);
+  const dlugosci = useMemo(() => dlugosciDoboru(circuits, elements, scales, geometria, floors), [circuits, elements, scales, geometria, floors]);
 
   // Aparaty przeliczają się, gdy zmienią się obwody lub konfiguracja zasilania.
   // Ręcznie dodane aparaty i ręcznie usunięte (auto-generowane) są zachowywane.
