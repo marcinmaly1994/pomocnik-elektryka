@@ -8,7 +8,7 @@
  * miejsce w całym łańcuchu, gdzie liczby nie pochodzą wprost z tablic.
  */
 
-import type { CableRoute, Circuit, ElementType, InstallationElement, Point, RoomShape, Wall } from "@/types";
+import type { CableRoute, Circuit, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM } from "@/lib/elements";
 import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
 import { crossesGeometry, routeAlongWalls } from "./routing";
@@ -441,6 +441,7 @@ function buildControlRoutes(
   kolory: Map<string, string>,
   walls: Wall[],
   roomShapes: RoomShape[],
+  otwory: Opening[],
   groups: Map<string, (number | undefined)[]>
 ): CableRoute[] {
   const byGroup = new Map<number, { controls: InstallationElement[]; lights: InstallationElement[] }>();
@@ -496,7 +497,7 @@ function buildControlRoutes(
       // Oprawa wisi pod stropem — przewód biegnie do niej sufitem i może zejść do
       // KAŻDEJ ściany pokoju. Łącznik siedzi w murze tam, gdzie stoi (patrz
       // `swobodneWejscie` w routing.ts).
-      const routed = routeAlongWalls(from, to, walls, roomShapes, { from: !przyscienny(bestFrom.type), to: !przyscienny(light.type) });
+      const routed = routeAlongWalls(from, to, walls, roomShapes, { from: !przyscienny(bestFrom.type), to: !przyscienny(light.type) }, otwory);
       const points = routed ?? manhattanFallback(from, to, walls, roomShapes);
       const circuit = circuits.find((circ) => circ.elements.some((el) => el.id === light.id));
       out.push({
@@ -604,6 +605,9 @@ export function buildCableRoutes(
   elements: InstallationElement[],
   walls: Wall[],
   roomShapes: RoomShape[],
+  /** Otwory (drzwi) tej kondygnacji — tylko nimi przewód przechodzi między
+   *  pomieszczeniami (patrz `dodajPrzejscie` w routing.ts). */
+  otwory: Opening[] = [],
   /** Skala renderu symboli (`elementRenderScale`) — trasa musi wiedzieć, jak duże
    *  są symbole na rysunku, żeby zatrzymać się na ich krawędzi. Domyślna jedynka
    *  odpowiada skali podstawowej i zachowuje zachowanie wywołań bez tego argumentu. */
@@ -614,7 +618,7 @@ export function buildCableRoutes(
   // z kolejności obwodów, żeby zasilanie i sterowanie tego samego obwodu wyszły
   // tym samym kolorem (różnią się grubością i kreską, nie barwą).
   const kolory = new Map(circuits.map((c, i) => [c.id, kolorObwodu(i)]));
-  const control = buildControlRoutes(elements, circuits, kolory, walls, roomShapes, lightGroups);
+  const control = buildControlRoutes(elements, circuits, kolory, walls, roomShapes, otwory, lightGroups);
   if (!panel) return control;
 
   /**
@@ -708,7 +712,7 @@ export function buildCableRoutes(
       const routed = routeAlongWalls(poczatek, t.end, walls, roomShapes, {
         from: poprzedni ? !przyscienny(poprzedni.type) : false,
         to: !przyscienny(t.type),
-      });
+      }, otwory);
       const surowe = routed ?? manhattanFallback(poczatek, t.end, walls, roomShapes);
       // Skos przy OBU końcach: przewód ma dochodzić do krawędzi symbolu, a nie
       // przebijać go na wylot. Koniec liczony wprost, początek — na odwróconej

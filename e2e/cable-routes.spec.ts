@@ -943,3 +943,124 @@ test("trasa do oprawy odbija na jej wysokosci i wchodzi POD KATEM PROSTYM", asyn
   // ...i nie doszla po drodze do prawej sciany pokoju
   expect(Math.max(...punkty.map((p) => p.x))).toBeLessThan(500);
 });
+
+/** Rysuje prostokatne pomieszczenie — box mierzony na nowo tuz przed przeciagnieciem,
+ *  bo wejscie w tryb „Pomieszczenie" dokłada nad plotnem pasek wyboru ksztaltu. */
+async function rysujPokoj(page: import("@playwright/test").Page, x1: number, y1: number, x2: number, y2: number) {
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  const box = await planBox(page);
+  await page.mouse.move(box.x + x1, box.y + y1);
+  await page.mouse.down();
+  await page.mouse.move(box.x + x2, box.y + y2, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Dwa pomieszczenia stykajace sie sciana x = 270 (ekran), rozdzielnica i gniazdo PRZY
+ * TEJ SCIANIE po jej dwoch stronach, na roznych wysokosciach. Uklad dobrany tak, zeby
+ * przejscie otworem bylo wyraznie krotsze niz obejscie naroznikiem — inaczej test nie
+ * odroznialby jednego od drugiego. Parametr decyduje, czy otwor w ogole jest.
+ */
+async function dwaPokoje(page: import("@playwright/test").Page, zDrzwiami: boolean) {
+  await openPlan(page);
+  await rysujPokoj(page, 80, 60, 270, 340);
+  await rysujPokoj(page, 270, 60, 460, 340);
+
+  if (zDrzwiami) {
+    await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
+    const box = await planBox(page);
+    // Dwa piksele od linii styku: klik DOKLADNIE w nia trafia w martwa strefe miedzy
+    // obszarami klikalnymi obu pomieszczen i nie stawia nic.
+    await page.mouse.click(box.x + 268, box.y + 200);
+    await page.waitForTimeout(900);
+  }
+
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 258, box.y + 140); // pokoj 1, przy wspolnej scianie
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 282, box.y + 265); // pokoj 2, przy tej samej scianie
+  await page.waitForTimeout(400);
+
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.getByRole("button", { name: "Pokaż trasy przewodów" }).click();
+  await page.waitForTimeout(400);
+
+  return page.evaluate(() => {
+    const konva = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { opacity(): number; points(): number[]; dash(): number[] | undefined }[] }[] } }
+    ).Konva;
+    const [linia] = (konva?.stages?.[0]?.find("Line") ?? []).filter((l) => Math.abs(l.opacity() - 0.9) < 0.01);
+    const pts: { x: number; y: number }[] = [];
+    const raw = linia?.points() ?? [];
+    for (let i = 0; i < raw.length; i += 2) pts.push({ x: raw[i], y: raw[i + 1] });
+    const draft = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!).draft;
+    return { pts, dashed: (linia?.dash()?.length ?? 0) > 0, otwory: draft.openings, pokoje: draft.roomShapes };
+  });
+}
+
+/**
+ * Wysokosci, na ktorych trasa przekracza pionowa sciane o podanym x. Liczone na
+ * ODCINKACH, nie na punktach: przez mur przechodzi ten odcinek, ktorego konce leza po
+ * jego dwoch stronach — samo „byc blisko" to jeszcze nie przejscie.
+ *
+ * Punkt lezacy DOKLADNIE na murze nie liczy sie do zadnej strony. To nie detal:
+ * osprzet przyscienny dotyka sciany obudowa/nozka, wiec trasa zaczyna sie i konczy
+ * na samej linii muru — bez tego kazde takie przylaczenie wygladalo jak przejscie
+ * na druga strone.
+ */
+function przejsciaPrzezMur(pts: { x: number; y: number }[], mur: number): number[] {
+  const strona = (x: number) => (x < mur - 0.5 ? -1 : x > mur + 0.5 ? 1 : 0);
+  const out: number[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    if (strona(a.x) * strona(b.x) !== -1) continue;
+    out.push(a.y + ((mur - a.x) / (b.x - a.x)) * (b.y - a.y));
+  }
+  return out;
+}
+
+/**
+ * Otwor dokłada DODATKOWA droge miedzy pomieszczeniami. Sciana sama w sobie nie jest
+ * przeszkoda — elektryk przewierca sie przez nia — ale gdy drzwi leza blizej niz
+ * narozniki, przewod idzie przez nie zamiast obchodzic pokoj.
+ */
+test("z drzwiami we wspolnej scianie trasa przechodzi przez OTWOR", async ({ page }) => {
+  const { pts, dashed, otwory } = await dwaPokoje(page, true);
+  expect(otwory).toHaveLength(1);
+  expect(dashed).toBe(false); // trasa policzona po geometrii, nie szacunek
+
+  const przejscia = przejsciaPrzezMur(pts, otwory[0].x);
+  expect(przejscia).toHaveLength(1);
+  expect(przejscia[0]).toBeCloseTo(otwory[0].y, 0);
+});
+
+/**
+ * Bez otworu przewod i tak przechodzi z pokoju do pokoju — przewiercajac sciane, tak
+ * jak robi to elektryk. Trasa zostaje CIAGLA (policzona po geometrii), tylko mur
+ * przekracza w narozniku, a nie w drzwiach.
+ */
+test("bez drzwi trasa nadal laczy pokoje — przewod idzie przez mur", async ({ page }) => {
+  const { pts, dashed, otwory, pokoje } = await dwaPokoje(page, false);
+  expect(otwory).toHaveLength(0);
+  expect(dashed).toBe(false);
+
+  // Wspolna sciana to prawa krawedz pierwszego pomieszczenia.
+  const mur = Math.max(...pokoje[0].points.map((p: { x: number }) => p.x));
+  const przejscia = przejsciaPrzezMur(pts, mur);
+  expect(przejscia).toHaveLength(1);
+  // Bez drzwi przejscie wypada przy NAROZNIKU — daleko od srodka wspolnej sciany.
+  const gora = Math.min(...pokoje[0].points.map((p: { y: number }) => p.y));
+  const dol = Math.max(...pokoje[0].points.map((p: { y: number }) => p.y));
+  const odNaroznika = Math.min(Math.abs(przejscia[0] - gora), Math.abs(przejscia[0] - dol));
+  expect(odNaroznika).toBeLessThan((dol - gora) / 4);
+});
