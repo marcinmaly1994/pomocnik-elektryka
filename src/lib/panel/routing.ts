@@ -93,10 +93,13 @@ interface Segment {
   a: Point;
   b: Point;
   /**
-   * Węzły „doskoków" dołożone na TYM odcinku przez `connectPoint` — patrz tam.
+   * Węzły dołożone na TYM odcinku: doskoki elementów (`connectPoint`) i brzegi przejść
+   * w otworach (`dodajPrzejscie`).
+   *
    * Trzymane przy odcinku, bo muszą się widzieć NAWZAJEM: dwa gniazda przy tej samej
    * ścianie wchodzą w sieć w dwóch różnych miejscach jednego odcinka i przewód ma
-   * przejść między nimi wprost, a nie naokoło przez narożnik.
+   * przejść między nimi wprost, a nie naokoło przez narożnik. Z tego samego powodu
+   * brzeg przejścia widzi doskoki — inaczej przewód do drzwi też nadkładałby drogi.
    */
   wejscia?: number[];
 }
@@ -281,14 +284,17 @@ function buildGraph(walls: Wall[], roomShapes: RoomShape[], wsuniecie = 0, otwor
 }
 
 /**
- * Przejście przez OTWÓR — jedyne miejsce, w którym przewód przechodzi z pomieszczenia
- * do pomieszczenia.
+ * Przejście przez OTWÓR — DODATKOWA droga między pomieszczeniami, nie jedyna.
  *
- * Ściana jest dla routingu przeszkodą litą; drzwi to dziura w niej i tamtędy naprawdę
- * biegnie kabel. Przejście to dwa punkty na trasach po obu stronach muru, spięte
- * krawędzią: `D ± n · wsuniecie`, gdzie `n` jest normalną do kierunku ściany w tym
- * miejscu (`angle`). Oba lądują dokładnie na wsuniętych obrysach sąsiadów, bo obrys
- * wsuwa się o tyle samo.
+ * Ściana nie jest dla przewodu przeszkodą: elektryk przewierca się przez nią i tak ma
+ * zostać (sąsiednie pokoje łączą się też narożnikami — patrz `nodeIndex`). Drzwi
+ * dokładają tylko drugą możliwość, a o tym, która zostanie użyta, decyduje sama
+ * długość: gdy otwór leży bliżej niż narożniki, Dijkstra prowadzi przewód przez niego,
+ * zamiast obchodzić pokój. Żadnej reguły „przez drzwi, bo drzwi" tu nie ma.
+ *
+ * Przejście to dwa punkty po obu stronach muru, spięte krawędzią: `D ± n · wsuniecie`,
+ * gdzie `n` jest normalną do kierunku ściany w tym miejscu (`angle`). Oba lądują
+ * dokładnie na wsuniętych obrysach sąsiadów, bo obrys wsuwa się o tyle samo.
  *
  * Szerokość otworu jest tu bez znaczenia: przewód przechodzi w jednym miejscu, a nie
  * całą szerokością skrzydła.
@@ -348,11 +354,19 @@ function projectOntoSegment(p: Point, a: Point, b: Point): { point: Point; distS
 }
 
 /**
- * „Doskakuje" punktem `p` (rozdzielnica albo odbiornik) do najbliższego miejsca na
- * najbliższym odcinku sieci — wstawia tam NOWY węzeł (albo reużywa istniejący, gdy
- * projekcja trafiła w promień `MERGE_TOLERANCE` od narożnika) i łączy go z obydwoma
- * końcami tego odcinka, żeby Dijkstra mógł stamtąd ruszyć w obie strony wzdłuż ściany.
- * Zwraca `null`, gdy w grafie nie ma żadnego odcinka (brak ścian/pomieszczeń).
+ * „Doskakuje" punktem `p` (rozdzielnica albo odbiornik) do sieci tras.
+ *
+ * Nie do jednego odcinka: kandydatów jest do `LICZBA_WEJSC`, każdy dostaje własny punkt
+ * wejścia i krawędź o wadze równej długości doskoku, a o wyborze decyduje dopiero
+ * Dijkstra na PEŁNEJ długości trasy — patrz komentarze niżej, tam jest powód.
+ *
+ * Punkty wejścia zakładane są przez `dodajWezel`, czyli BEZ scalania w promieniu
+ * `MERGE_TOLERANCE`. To istotne, a nie kosmetyczne: doskok ma `ODSUNIECIE_TRASY`
+ * długości i mieści się w tym promieniu w całości, więc scalanie wciągało punkt wejścia
+ * do węzła samego elementu i zostawała krawędź element → narożnik pokoju. Na rysunku
+ * wychodziła z tego skośna kreska przez całą ścianę.
+ *
+ * Zwraca `null`, gdy w grafie nie ma żadnego odcinka (brak ścian i pomieszczeń).
  */
 function connectPoint(graph: Graph, p: Point, swobodne: boolean): number | null {
   if (graph.segments.length === 0) return null;
