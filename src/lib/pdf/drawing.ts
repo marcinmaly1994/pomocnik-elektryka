@@ -42,6 +42,10 @@ export interface RysunekPdfOpcje {
   header: DocumentHeader;
   rysunek: PdfImage;
   legenda?: PozycjaLegendy[];
+  /** Klucz oznaczeń tras — obok legendy symboli. Pomijany, gdy tras na rysunku nie ma. */
+  kluczTras?: PozycjaKlucza[];
+  /** Spis obwodów na osobnej stronie — który kolor na rzucie jest którym obwodem. */
+  obwody?: PozycjaObwodu[];
   /** Zestawienie ilościowe na osobnej stronie za rysunkiem. Pominięte, gdy puste —
    *  pusta strona z samym nagłówkiem to gorszy dokument niż jego brak. */
   zestawienie?: PozycjaZestawienia[];
@@ -133,7 +137,7 @@ function rysujLegende(doc: PdfDoc, pozycje: PozycjaLegendy[], x: number, dol: nu
 }
 
 
-export function buildDrawingDoc({ tytul, header, rysunek, legenda, zestawienie }: RysunekPdfOpcje): PdfDoc {
+export function buildDrawingDoc({ tytul, header, rysunek, legenda, kluczTras, zestawienie, obwody }: RysunekPdfOpcje): PdfDoc {
   const doc = createPdfDoc({
     pageW: STRONA_W,
     pageH: STRONA_H,
@@ -164,12 +168,26 @@ export function buildDrawingDoc({ tytul, header, rysunek, legenda, zestawienie }
   const kolumnaW = pelnaW - (LEGENDA_W + 12);
   const skalaKolumna = Math.min(kolumnaW / rysunek.width, poleH / rysunek.height);
 
-  const kolumnyPaska = maLegende ? Math.max(1, Math.min(Math.floor(pelnaW / LEGENDA_W), legenda!.length)) : 1;
-  const pasek = maLegende ? wymiarLegendy(legenda!.length, kolumnyPaska) : { w: 0, h: 0 };
+  const maKlucz = !!kluczTras?.length;
+  // Klucz staje OBOK legendy w pasku pod rysunkiem, więc na kolumny dla legendy
+  // zostaje reszta szerokości.
+  const naLegende = pelnaW - (maKlucz ? KLUCZ_W + 12 : 0);
+  const kolumnyPaska = maLegende ? Math.max(1, Math.min(Math.floor(naLegende / LEGENDA_W), legenda!.length)) : 1;
+  const legendaPasek = maLegende ? wymiarLegendy(legenda!.length, kolumnyPaska) : { w: 0, h: 0 };
+  const pasek = {
+    w: legendaPasek.w + (maKlucz ? (maLegende ? 12 : 0) + KLUCZ_W : 0),
+    h: Math.max(legendaPasek.h, wysokoscKlucza(kluczTras?.length ?? 0)),
+  };
   const wysokoscNaRysunek = poleH - pasek.h - 12;
   const skalaPasek = wysokoscNaRysunek > 0 ? Math.min(pelnaW / rysunek.width, wysokoscNaRysunek / rysunek.height) : 0;
 
-  const podSpodem = maLegende && skalaPasek > skalaKolumna;
+  /**
+   * Z kluczem zawsze pasek pod rysunkiem — klucz nie ma sensownego miejsca w wąskiej
+   * kolumnie obok legendy, a rzuty i tak są szersze niż wyższe, więc pasek jest dla
+   * nich wyborem lepszym albo równym. Świadome uproszczenie: przy rysunku wysokim
+   * i wąskim kosztuje to trochę wysokości.
+   */
+  const podSpodem = maKlucz || (maLegende && skalaPasek > skalaKolumna);
   const poleW = podSpodem || !maLegende ? pelnaW : kolumnaW;
   const dostepnaH = podSpodem ? wysokoscNaRysunek : poleH;
 
@@ -202,10 +220,121 @@ export function buildDrawingDoc({ tytul, header, rysunek, legenda, zestawienie }
     }
   }
 
+  // Klucz oznaczeń tras — obok legendy w tym samym pasku, po jej prawej stronie.
+  if (maKlucz) {
+    const lewy = poleX + (pelnaW - pasek.w) / 2 + (maLegende ? legendaPasek.w + 12 : 0);
+    rysujKlucz(doc, kluczTras!, lewy, poleY, KLUCZ_W);
+  }
+
   if (zestawienie?.length) rysujZestawienie(doc, zestawienie);
+  if (obwody?.length) rysujSpisObwodow(doc, obwody);
 
   return doc;
 }
+
+/**
+ * Pozycja KLUCZA OZNACZEŃ — próbka linii i jej znaczenie.
+ *
+ * Legenda objaśnia symbole, ale nie trasy, a te niosą teraz trzy rozróżnienia naraz:
+ * kolor (który obwód), grubość (zasilanie czy sterowanie) i kreska (trasa policzona
+ * po ścianach czy szacunek). Bez klucza arkusz wysłany komuś innemu jest nieczytelny —
+ * kolory widać, ale nie wiadomo, co znaczą.
+ */
+export interface PozycjaKlucza {
+  opis: string;
+  /** Kolor próbki 0–1 na kanał. Szary tam, gdzie próbka pokazuje GRUBOŚĆ albo KRESKĘ,
+   *  a nie barwę — inaczej czytelnik bierze przykładowy kolor za znaczący. */
+  rgb: [number, number, number];
+  grubosc: number;
+  kreska?: number[];
+}
+
+/** Wiersz SPISU OBWODÓW — kolor trasy na rzucie plus to, czym ten obwód jest. */
+export interface PozycjaObwodu {
+  kolor: [number, number, number];
+  nazwa: string;
+  kabel: string;
+  zabezpieczenie: string;
+}
+
+/** Szerokość bloku klucza — mieści próbkę linii i CAŁY opis. Dobrana pod najdłuższy
+ *  z nich: przy węższej kolumnie `pdfFitText` ucinał je wielokropkiem, a ucięty klucz
+ *  tłumaczy mniej niż jego brak. */
+const KLUCZ_W = 246;
+const KLUCZ_WIERSZ = 16;
+const KLUCZ_PROBKA = 34;
+
+/** Wysokość bloku klucza — potrzebna układowi strony, zanim cokolwiek narysuje. */
+function wysokoscKlucza(pozycji: number): number {
+  return pozycji === 0 ? 0 : LEGENDA_NAGLOWEK + pozycji * KLUCZ_WIERSZ;
+}
+
+/** Rysuje klucz oznaczeń tras: próbka linii + opis, w kolumnie o zadanej szerokości. */
+function rysujKlucz(doc: PdfDoc, pozycje: PozycjaKlucza[], x: number, dol: number, szerokosc: number) {
+  const h = wysokoscKlucza(pozycje.length);
+  const gora = dol + h;
+
+  doc.box(x, dol, szerokosc, h, 0.985);
+  doc.line(x, dol, x + szerokosc, dol, 0.7, 0.55);
+  doc.line(x, gora, x + szerokosc, gora, 0.7, 0.55);
+  doc.line(x, dol, x, gora, 0.7, 0.55);
+  doc.line(x + szerokosc, dol, x + szerokosc, gora, 0.7, 0.55);
+
+  doc.box(x, gora - LEGENDA_NAGLOWEK, szerokosc, LEGENDA_NAGLOWEK, 0.88);
+  doc.text("OZNACZENIA TRAS", x + 8, gora - 14, 9, true);
+  doc.line(x, gora - LEGENDA_NAGLOWEK, x + szerokosc, gora - LEGENDA_NAGLOWEK, 0.5, 0.55);
+
+  pozycje.forEach((poz, i) => {
+    const srodek = gora - LEGENDA_NAGLOWEK - (i + 0.5) * KLUCZ_WIERSZ;
+    doc.liniaKolor(x + 8, srodek, x + 8 + KLUCZ_PROBKA, srodek, poz.rgb, poz.grubosc, poz.kreska);
+    const opisX = x + 8 + KLUCZ_PROBKA + 8;
+    doc.text(pdfFitText(poz.opis, szerokosc - (opisX - x) - 8, 7.5, false), opisX, srodek - 2.5, 7.5);
+  });
+}
+
+/**
+ * Spis obwodów: kolor trasy na rzucie, nazwa, przekrój i zabezpieczenie.
+ *
+ * Osobno od klucza i osobno od zestawienia elementów, bo odpowiada na inne pytanie.
+ * Klucz mówi, CO znaczy kreska; zestawienie — ile czego kupić; spis — który kabel na
+ * rzucie jest którym obwodem w rozdzielnicy. Bez niego kolor jest ładny, ale niemy.
+ */
+function rysujSpisObwodow(doc: PdfDoc, obwody: PozycjaObwodu[]): void {
+  doc.ensure(STRONA_H);
+  doc.text("SPIS OBWODÓW", MARGINES, doc.y - 12, 11, true);
+  doc.y -= 30;
+
+  const kolZabezp = STRONA_W - MARGINES - 90;
+  const kolKabel = kolZabezp - 150;
+  const kolNazwa = MARGINES + 40;
+
+  const naglowek = () => {
+    doc.text("Trasa", MARGINES, doc.y, 8, true, 0.35);
+    doc.text("Obwód", kolNazwa, doc.y, 8, true, 0.35);
+    doc.text("Przewód", kolKabel, doc.y, 8, true, 0.35);
+    doc.text("Zabezpieczenie", kolZabezp, doc.y, 8, true, 0.35);
+    doc.y -= 6;
+    doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.6, 0.55);
+    doc.y -= 12;
+  };
+  naglowek();
+
+  for (const o of obwody) {
+    if (doc.ensure(16)) {
+      doc.y -= 8;
+      naglowek();
+    }
+    // Próbka barwy dokładnie taka, jaką ma trasa na rzucie — to jedyne, co je łączy.
+    doc.liniaKolor(MARGINES, doc.y + 2.5, MARGINES + 28, doc.y + 2.5, o.kolor, 1.5);
+    doc.text(pdfFitText(o.nazwa, kolKabel - kolNazwa - 10, 8.5, false), kolNazwa, doc.y, 8.5);
+    doc.text(pdfFitText(o.kabel, kolZabezp - kolKabel - 10, 8.5, false), kolKabel, doc.y, 8.5);
+    doc.text(pdfFitText(o.zabezpieczenie, 84, 8.5, false), kolZabezp, doc.y, 8.5);
+    doc.y -= 8;
+    doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.3, 0.9);
+    doc.y -= 8;
+  }
+}
+
 
 /**
  * Zestawienie ilościowe na OSOBNEJ STRONIE, za rysunkiem.
@@ -277,3 +406,27 @@ export async function downloadDrawingPdf(opcje: RysunekPdfOpcje, bazaNazwy: stri
 export function buildDrawingPdf(...args: Parameters<typeof buildDrawingDoc>): Promise<Uint8Array> {
   return buildDrawingDoc(...args).finish();
 }
+
+/** Kolor `#rrggbb` na trójkę 0–1, w której liczy PDF. */
+export function hexNaRgb(hex: string): [number, number, number] {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return [0, 0, 0];
+  const n = parseInt(m[1], 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
+/**
+ * Klucz oznaczeń tras — stały, bo opisuje KONWENCJĘ rysunku, a nie zawartość projektu.
+ *
+ * Trzy rozróżnienia, które trasa niesie jednocześnie: grubość (zasilanie czy
+ * sterowanie), kreska (trasa policzona po ścianach czy szacunek) i kolor (który obwód).
+ * Próbki grubości i kreski są SZARE — inaczej czytelnik wziąłby przykładową barwę za
+ * znaczącą; o kolorze mówi osobny wiersz i spis obwodów.
+ */
+export const KLUCZ_TRAS = [
+  { opis: "Zasilanie obwodu", rgb: [0.35, 0.35, 0.35] as [number, number, number], grubosc: 1.5 },
+  // Bez strzałki „→": font dokumentu jej nie ma i wychodzi znak zapytania.
+  { opis: "Sterowanie: łącznik do oprawy", rgb: [0.35, 0.35, 0.35] as [number, number, number], grubosc: 1, kreska: [1, 3] },
+  { opis: "Trasa szacowana, bez routingu po ścianach", rgb: [0.35, 0.35, 0.35] as [number, number, number], grubosc: 1.5, kreska: [6, 4] },
+  { opis: "Kolor linii = obwód, patrz spis obwodów", rgb: [0.12, 0.44, 0.7] as [number, number, number], grubosc: 1.5 },
+];

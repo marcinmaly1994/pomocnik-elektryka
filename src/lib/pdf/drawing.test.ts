@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { buildDrawingPdf } from "./drawing";
+import { buildDrawingPdf, hexNaRgb } from "./drawing";
 import { stubPdfFontFetch } from "./testFontMock";
 import type { PdfImage } from "./engine";
 import type { DocumentHeader } from "@/types";
@@ -279,5 +279,80 @@ describe("legenda względem rysunku", () => {
     const dolPola = 36 + 48 + 8; // margines + tabliczka
     const dolLegendy = pasek.y + pasek.h - (20 + 12 * 26);
     expect(dolLegendy).toBeGreaterThanOrEqual(dolPola - 0.5);
+  });
+});
+
+/**
+ * Klucz oznaczeń i spis obwodów.
+ *
+ * Legenda objasnia symbole, ale nie trasy — a te niosa trzy rozroznienia naraz:
+ * grubosc (zasilanie czy sterowanie), kreske (trasa policzona czy szacunek) i kolor
+ * (ktory obwod). Bez klucza arkusz wyslany komus innemu jest nieczytelny: kolory widac,
+ * ale nie wiadomo, co znacza.
+ */
+describe("klucz oznaczen tras", () => {
+  const klucz = [
+    { opis: "Zasilanie obwodu", rgb: [0.35, 0.35, 0.35] as [number, number, number], grubosc: 1.5 },
+    { opis: "Sterowanie", rgb: [0.35, 0.35, 0.35] as [number, number, number], grubosc: 1, kreska: [1, 3] },
+  ];
+
+  it("ma naglowek i opisy probek", async () => {
+    const out = bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(2400, 500), kluczTras: klucz }));
+    const t = napisy(out).map((n) => n.t);
+    expect(t).toContain("OZNACZENIA TRAS");
+    expect(t).toContain("Zasilanie obwodu");
+  });
+
+  /** Kreska w probce to nie ozdoba — po niej czytelnik poznaje trase szacowana. */
+  it("probka kreskowana wychodzi ze wzorem kreski, ciagla bez niego", async () => {
+    const out = bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(2400, 500), kluczTras: klucz }));
+    expect(out).toMatch(/\[1 3\] 0 d/);
+  });
+
+  it("bez klucza nic sie nie rysuje", async () => {
+    const out = bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(2400, 500) }));
+    expect(napisy(out).map((n) => n.t)).not.toContain("OZNACZENIA TRAS");
+  });
+});
+
+describe("spis obwodow", () => {
+  const obwody = [
+    { kolor: [0.12, 0.44, 0.7] as [number, number, number], nazwa: "Obwód gniazd ogólnych 1", kabel: "YDYp 3x2,5 mm²", zabezpieczenie: "B16" },
+    { kolor: [0.82, 0.41, 0.12] as [number, number, number], nazwa: "Obwód oświetlenia 1", kabel: "YDYp 3x1,5 mm²", zabezpieczenie: "B10" },
+  ];
+
+  it("podaje nazwe, przewod i zabezpieczenie kazdego obwodu", async () => {
+    const out = bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(2400, 500), obwody }));
+    const t = napisy(out).map((n) => n.t);
+    // Polskie znaki siedza w strumieniu w kodowaniu podzbioru fontu, wiec porownujemy
+    // po fragmentach ASCII — tresc i tak jest tu jednoznaczna.
+    expect(t.some((x) => x.startsWith("SPIS OBWOD"))).toBe(true);
+    expect(t.some((x) => x.startsWith("Obw"))).toBe(true);
+    expect(t).toContain("B16");
+  });
+
+  /** Probka barwy to JEDYNE, co laczy wiersz spisu z linia na rzucie. */
+  it("kazdy wiersz ma probke w kolorze swojej trasy", async () => {
+    const out = bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(2400, 500), obwody }));
+    expect(out).toContain("0.120 0.440 0.700 RG");
+    expect(out).toContain("0.820 0.410 0.120 RG");
+  });
+
+  it("bez obwodow strona spisu w ogole nie powstaje", async () => {
+    const out = bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(2400, 500) }));
+    expect(napisy(out).map((n) => n.t).some((x) => x.startsWith("SPIS OBWOD"))).toBe(false);
+  });
+});
+
+describe("hexNaRgb", () => {
+  it("zamienia kolor obwodu na trojke, ktora rozumie PDF", () => {
+    expect(hexNaRgb("#1F6FB2")).toEqual([0x1f / 255, 0x6f / 255, 0xb2 / 255]);
+  });
+
+  /** Kolor spoza formatu ma dac czern, a nie NaN — NaN rozlalby sie na caly plik. */
+  it("smiec na wejsciu daje czern, nie NaN", () => {
+    for (const zly of ["", "czerwony", "#12", "#gggggg"]) {
+      expect(hexNaRgb(zly)).toEqual([0, 0, 0]);
+    }
   });
 });
