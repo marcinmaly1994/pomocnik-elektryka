@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Circuit, ElementType, Floor, InstallationElement, RoomShape } from "@/types";
+import type { Circuit, ElementType, Floor, InstallationElement, RoomShape, Point } from "@/types";
 import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, przytnijDoKrawedzi, zakonczPrzyNozce } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -878,29 +878,17 @@ describe("przytnijDoKrawedzi", () => {
 describe("zakonczPrzyNozce", () => {
   const trasa = (...p: [number, number][]) => p.map(([x, y]) => ({ x, y }));
 
-  /**
-   * Sedno zgloszenia. Trzonek gniazda jest PROSTOPADLY do sciany, a korytarz do niej
-   * rownolegly i lezy blizej muru niz siega symbol (5 jednostek kontra 10,5) — wejscie
-   * ukosem przecinalo wiec trzonek w poprzek. Odgalezienie prostopadle klada sie na nim.
-   */
-  it("odgalezienie jest PROSTOPADLE do trasy, czyli wzdluz trzonka", () => {
+  it("odbija pod 45 stopni: tyle wzdluz trasy, ile w poprzek do celu", () => {
     // Trasa w dol po x = 100, cel szesc jednostek w bok, na wysokosci jej konca.
     const out = zakonczPrzyNozce(trasa([100, 0], [100, 60]), { x: 106, y: 60 });
-    expect(out).toEqual(trasa([100, 0], [100, 60], [106, 60]));
-    // Ostatni odcinek nie ma skladowej WZDLUZ trasy — to jest definicja prostopadlosci.
-    expect(out[2].y - out[1].y).toBeCloseTo(0, 6);
-  });
-
-  /** Odgalezienie odchodzi na WYSOKOSCI gniazda, a nie na koncu trasy: korytarz biegnie
-   *  dalej swoja droga, przewod odbija w miejscu, w ktorym stoi osprzet. */
-  it("odchodzi w miejscu NAJBLIZSZYM celowi, nie na koncu lamanej", () => {
-    // Korytarz mija gniazdo w polowie i biegnie dalej.
-    const out = zakonczPrzyNozce(trasa([100, 0], [100, 200]), { x: 106, y: 80 });
-    expect(out).toEqual(trasa([100, 0], [100, 80], [106, 80]));
+    expect(out).toEqual(trasa([100, 0], [100, 54], [106, 60]));
+    // Skos ma rowne skladowe — to jest definicja 45 stopni, wiec sprawdzamy ja wprost.
+    expect(out[2].x - out[1].x).toBeCloseTo(out[2].y - out[1].y, 6);
   });
 
   it("cel LEZACY NA PRZEDLUZENIU trasy — przewod dochodzi wprost, bez zalamania", () => {
-    // Punkt odejscia wypadlby POSRODKU prostej, wiec znika — zostawiony dzielilby
+    // Gniazdo na koncu ciagu przy tej samej scianie: skos wypadlby za elementem.
+    // Dotychczasowy koniec lezy POSRODKU prostej, wiec znika — zostawiony dzielilby
     // odcinek na dwa, a te przy rozsuwaniu wiazki dostaja osobne przesuniecia
     // i przy elemencie robi sie mikroschodek.
     const out = zakonczPrzyNozce(trasa([0, 0], [100, 0]), { x: 110, y: 0 });
@@ -908,21 +896,20 @@ describe("zakonczPrzyNozce", () => {
   });
 
   /**
-   * Linia ma isc ROWNOLEGLE do sciany i odbijac dopiero przy elemencie. Skos rozlozony
-   * na cala dlugosc sciany jest bledem, nawet jesli konczy sie we wlasciwym punkcie.
+   * Sedno zgloszenia: linia ma isc ROWNOLEGLE do sciany i odbijac dopiero przy
+   * elemencie. Skos rozlozony na cala dlugosc sciany jest bledem, nawet jesli
+   * konczy sie we wlasciwym punkcie.
    */
-  it("odcinek biegnacy wzdluz sciany zostaje PROSTY", () => {
+  it("odcinek biegnacy wzdluz sciany zostaje PROSTY — skos tylko na koncu", () => {
     const out = zakonczPrzyNozce(trasa([514, 40], [514, 240]), { x: 520, y: 240 });
-    expect(out).toEqual(trasa([514, 40], [514, 240], [520, 240]));
+    expect(out).toEqual(trasa([514, 40], [514, 234], [520, 240]));
     // wszystko poza ostatnim odcinkiem trzyma sie jednej prostej x = 514
     expect(out.slice(0, -1).every((p) => p.x === 514)).toBe(true);
   });
 
-  /** Trasa dochodzaca do elementu PROSTOPADLE (np. rozdzielnica pod korytarzem) —
-   *  odgalezienie pokrywa sie z ostatnim odcinkiem, wiec nie ma czego dokladac. */
-  it("dojscie juz prostopadle nie dokłada zadnego punktu", () => {
-    const out = zakonczPrzyNozce(trasa([100, 0], [100, 2]), { x: 100, y: 8 });
-    expect(out).toEqual(trasa([100, 0], [100, 8]));
+  it("trasa krotsza niz potrzebne cofniecie zostaje cala, z doprowadzeniem do celu", () => {
+    const out = zakonczPrzyNozce(trasa([100, 0], [100, 2]), { x: 108, y: 2 });
+    expect(out).toEqual(trasa([100, 0], [100, 2], [108, 2]));
   });
 });
 
@@ -1240,5 +1227,59 @@ describe("estimateRoutes — obwod oswietleniowy sterowany lacznikiem", () => {
     const a = estimateRoutes(punkt, oprawy, 1, undefined, { geometria })!;
     const b = estimateRoutes(punkt, oprawy, 1, undefined, { geometria, wszystkieElementy: bezLacznika })!;
     expect(b).toEqual(a);
+  });
+});
+
+/**
+ * Ukos a TRZONEK gniazda — sprawdzenie tego, co przy poprzedniej zmianie zostalo
+ * przyjete na oko i okazalo sie nieprawda.
+ *
+ * Rozumowanie bylo takie: korytarz biegnie 5 jednostek od sciany, symbol siega 10,5,
+ * wiec ukos musi przeciac trzonek. Nie musi i nie przecina. Trzonek stoi PROSTOPADLE
+ * do sciany dokladnie na wysokosci gniazda, a ukos dochodzi do jego konca od BOKU —
+ * spotykaja sie w jednym punkcie, ktorym jest sam koniec trzonka.
+ */
+describe("zakonczPrzyNozce — ukos kontra trzonek", () => {
+  /** Czy odcinki maja punkt wspolny INNY niz podany (z tolerancja na zaokraglenia). */
+  function przecinaPozaPunktem(a1: Point, a2: Point, b1: Point, b2: Point, wspolny: Point): boolean {
+    const kier = (p: Point, q: Point, r: Point) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    // Probkujemy ukos gesto i sprawdzamy, czy ktorykolwiek punkt POZA `wspolny`
+    // lezy na drugim odcinku — prosciej i czytelniej niz analiza przypadkow.
+    for (let t = 0; t <= 1; t += 0.001) {
+      const p = { x: a1.x + (a2.x - a1.x) * t, y: a1.y + (a2.y - a1.y) * t };
+      if (Math.hypot(p.x - wspolny.x, p.y - wspolny.y) < 0.2) continue;
+      const naProstej = Math.abs(kier(b1, b2, p)) < 0.05;
+      const wZakresie = p.x >= Math.min(b1.x, b2.x) - 0.05 && p.x <= Math.max(b1.x, b2.x) + 0.05;
+      if (naProstej && wZakresie) return true;
+    }
+    return false;
+  }
+
+  it("ukos dotyka trzonka WYLACZNIE w jego koncu, nie przecina go po drodze", () => {
+    // Gniazdo przy lewej scianie x = 60, srodek 7,35 od niej; korytarz na x = 65.
+    const koniecTrzonka = { x: 59.65, y: 182 };
+    const trasa = zakonczPrzyNozce(
+      [
+        { x: 65, y: 255 },
+        { x: 65, y: 182 },
+      ],
+      koniecTrzonka
+    );
+    const ukos = trasa.slice(-2) as [Point, Point];
+    // Trzonek: od konca przy scianie w glab pokoju, na wysokosci gniazda.
+    const trzonek: [Point, Point] = [koniecTrzonka, { x: 59.65 + 8.4, y: 182 }];
+    expect(przecinaPozaPunktem(ukos[0], ukos[1], trzonek[0], trzonek[1], koniecTrzonka)).toBe(false);
+  });
+
+  it("ukos ma rowne skladowe — to jest definicja 45 stopni", () => {
+    const trasa = zakonczPrzyNozce(
+      [
+        { x: 65, y: 255 },
+        { x: 65, y: 182 },
+      ],
+      { x: 59.65, y: 182 }
+    );
+    const [a, b] = trasa.slice(-2);
+    expect(Math.abs(b.x - a.x)).toBeCloseTo(Math.abs(b.y - a.y), 5);
   });
 });
