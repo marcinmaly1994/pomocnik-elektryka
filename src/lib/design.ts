@@ -350,6 +350,17 @@ export function scaleOf(scales: Record<string, number>, floorId: string): number
  */
 export const MARGINES_KADROWANIA = 60;
 
+/**
+ * Zapas kadrowania, gdy obrys treści liczy się z ROGÓW symboli, a nie z ich środków
+ * (patrz `rogiSymbolu` w glyphs.ts) [jedn. planu].
+ *
+ * Same symbole mieszczą się wtedy w kadrze z definicji, więc zostaje tylko to, co
+ * rysuje się OBOK nich: etykiety wymiarów i numery grup sterowania. Stąd wartość
+ * kilkakrotnie mniejsza od `MARGINES_KADROWANIA`, który musiał pokryć najgorszy
+ * przypadek — wannę ze strefą — niezależnie od tego, co naprawdę stoi na planie.
+ */
+export const ZAPAS_ETYKIET = 14;
+
 export interface Obszar {
   x: number;
   y: number;

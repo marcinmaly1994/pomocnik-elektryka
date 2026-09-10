@@ -39,12 +39,12 @@ import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
+import { rogiSymbolu } from "@/lib/glyphs";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
   GRID,
   MANUAL_DRAW_SCALE_MPU,
-  MARGINES_KADROWANIA,
   ROOM_TYPE_LABELS,
   PROG_WASKIEGO_EKRANU,
   defaultOpeningWidth,
@@ -55,6 +55,7 @@ import {
   planSizeForImage,
   roomNameAfterMove,
   scaleOf,
+  ZAPAS_ETYKIET,
 } from "@/lib/design";
 import {
   autoSymbolScale,
@@ -91,6 +92,8 @@ import { bialePlotno, plotnoDoPdf, rysujPodzialke, svgDoPlotna, PIKSELI_NA_PUNKT
 import { projectFileName } from "@/lib/pdf/download";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { PdfPreview } from "@/components/ui/PdfPreview";
+
+
 
 const DEFAULT_ROOM_SUGGESTIONS = ["Salon", "Kuchnia", "Łazienka", "Sypialnia", "Korytarz"];
 
@@ -314,7 +317,28 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
      * siatka. Wydruk był nieczytelny nie dlatego, że rysunek jest zły, tylko dlatego,
      * że pokazywaliśmy głównie tło.
      */
-    const kadr = contentBounds(planSize, walls, roomShapes, elements, openings, MARGINES_KADROWANIA * autoSymbolScale(mpu)) ?? {
+    /**
+     * Kadr liczony z ROGÓW symboli, nie z ich środków — patrz `rogiSymbolu`. Zostaje
+     * już tylko zapas na to, co rysuje się OBOK symbolu: etykiety wymiarów i numery
+     * grup sterowania. Stały margines „na wannę" pomniejszał rzut o prawie ćwierć
+     * także wtedy, gdy żadnej wanny na nim nie było.
+     */
+    const skalaSymboli = elementRenderScale(mpu, elementScale);
+    /**
+     * Strefy ochronne przyborów sanitarnych wchodzą do kadru OSOBNO, bo sięgają dalej
+     * niż sam symbol i liczą się inną skalą — z kalibracji rzutu, a nie z rozmiaru
+     * symboli (patrz `computeSanitaryZones`). Przy wannie tuż przy ścianie zabrakłoby
+     * bez tego kilku jednostek i obwódka strefy wyszłaby poza kartkę.
+     */
+    const rogiStref = computeSanitaryZones(elements, activeFloorId, mpu).flatMap((z) => {
+      const r = Math.hypot(z.w, z.h) / 2 + z.zone2;
+      return [
+        { x: z.x - r, y: z.y - r },
+        { x: z.x + r, y: z.y + r },
+      ];
+    });
+    const rogi = [...elements.flatMap((e) => rogiSymbolu(e, skalaSymboli)), ...rogiStref];
+    const kadr = contentBounds(planSize, walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu)) ?? {
       x: 0,
       y: 0,
       w: planSize.w,

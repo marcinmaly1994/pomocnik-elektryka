@@ -17,11 +17,13 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU,
   DEFAULT_OPENING_WIDTH_UNITS,
   contentBounds,
   MARGINES_KADROWANIA,
+  ZAPAS_ETYKIET,
   detectRoomName,
   reassignRoomsOnFloor,
   reconcileRoomsOnLoad,
   roomNameAfterMove,
 } from "./design";
+import { rogiSymbolu } from "@/lib/glyphs";
 
 describe("roomColorForIndex", () => {
   it("cykluje przez paletę", () => {
@@ -377,5 +379,62 @@ describe("gruboscObrysuPokoju", () => {
   /** Im drobniejsza jednostka planu, tym WIECEJ jednostek na te same 8 cm. */
   it("gestszy rzut daje grubszy obrys w jednostkach", () => {
     expect(gruboscObrysuPokoju(0.01)).toBeGreaterThan(gruboscObrysuPokoju(0.05));
+  });
+});
+
+/**
+ * Kadrowanie liczone z ROGOW symboli, nie z ich srodkow.
+ *
+ * Wczesniej brало srodki i doklada­lo staly MARGINES_KADROWANIA (60 jedn.) — zapas
+ * na najgorszy przypadek, czyli wanne ze strefa. Przy rzucie mieszkania szerokim na
+ * 420 jednostek zjadal prawie cwierc obrazu, choc na planie staly same gniazda.
+ */
+describe("rogiSymbolu", () => {
+  const el = (type: InstallationElement["type"], over: Partial<InstallationElement> = {}): InstallationElement => ({
+    id: "x",
+    type,
+    x: 100,
+    y: 100,
+    room: "Salon",
+    floor: "parter",
+    dedicated: false,
+    note: "",
+    gangs: 1,
+    ...over,
+  });
+
+  it("obejmuje CALY symbol, nie tylko jego srodek", () => {
+    const [a, b] = rogiSymbolu(el("gniazdko"), 1);
+    expect(a.x).toBeLessThan(100);
+    expect(b.x).toBeGreaterThan(100);
+    // Promien to polowa przekatnej pudelka gniazdka (18 x 22).
+    expect(b.x - a.x).toBeCloseTo(Math.hypot(18, 22), 5);
+  });
+
+  it("PRZYBOR sanitarny zajmuje wyraznie wiecej niz gniazdko", () => {
+    const [ga, gb] = rogiSymbolu(el("gniazdko"), 1);
+    const [wa, wb] = rogiSymbolu(el("wanna"), 1);
+    expect(wb.x - wa.x).toBeGreaterThan((gb.x - ga.x) * 1.5);
+  });
+
+  it("skaluje sie razem z symbolami — suwak rozmiaru nie obcina rysunku", () => {
+    const [a1, b1] = rogiSymbolu(el("gniazdko"), 1);
+    const [a2, b2] = rogiSymbolu(el("gniazdko"), 2);
+    expect(b2.x - a2.x).toBeCloseTo((b1.x - a1.x) * 2, 5);
+  });
+
+  /** Sedno: kadr wokol samych gniazd ma byc CIASNY, a nie liczony jak dla wanny. */
+  it("kadr wokol samych gniazd jest ciasniejszy niz stary staly margines", () => {
+    const gniazda = [el("gniazdko", { x: 100, y: 100 }), el("gniazdko", { x: 300, y: 100 })];
+    const zRogow = contentBounds(
+      { w: 1000, h: 700 },
+      [],
+      [],
+      gniazda.flatMap((e) => rogiSymbolu(e, 1)),
+      [],
+      ZAPAS_ETYKIET
+    )!;
+    const poStaremu = contentBounds({ w: 1000, h: 700 }, [], [], gniazda, [], MARGINES_KADROWANIA)!;
+    expect(zRogow.w).toBeLessThan(poStaremu.w);
   });
 });

@@ -78,6 +78,60 @@ function dwieLinie(tekst: string, maxW: number, size: number): [string, string |
   const reszta = slowa.slice(i).join(" ");
   return [pierwsza, reszta ? pdfFitText(reszta, maxW, size, false) : null];
 }
+/** Wymiary bloku legendy przy zadanej liczbie kolumn. */
+function wymiarLegendy(pozycji: number, kolumny: number): { w: number; h: number } {
+  const wierszy = Math.ceil(pozycji / kolumny);
+  return { w: kolumny * LEGENDA_W, h: LEGENDA_NAGLOWEK + wierszy * LEGENDA_WIERSZ };
+}
+
+/**
+ * Rysuje blok legendy o lewym dolnym rogu w `(x, dol)`, w `kolumny` kolumnach.
+ *
+ * Wydzielone z układu strony, bo legenda ma teraz DWA miejsca: kolumnę po prawej albo
+ * pasek pod rysunkiem — patrz `wybierzUklad`.
+ */
+function rysujLegende(doc: PdfDoc, pozycje: PozycjaLegendy[], x: number, dol: number, kolumny: number) {
+  const { w, h } = wymiarLegendy(pozycje.length, kolumny);
+  const gora = dol + h;
+  const wierszy = Math.ceil(pozycje.length / kolumny);
+
+  doc.box(x, dol, w, h, 0.985);
+  doc.line(x, dol, x + w, dol, 0.7, 0.55);
+  doc.line(x, gora, x + w, gora, 0.7, 0.55);
+  doc.line(x, dol, x, gora, 0.7, 0.55);
+  doc.line(x + w, dol, x + w, gora, 0.7, 0.55);
+
+  doc.box(x, gora - LEGENDA_NAGLOWEK, w, LEGENDA_NAGLOWEK, 0.88);
+  doc.text("LEGENDA", x + 8, gora - 14, 9, true);
+  doc.line(x, gora - LEGENDA_NAGLOWEK, x + w, gora - LEGENDA_NAGLOWEK, 0.5, 0.55);
+
+  pozycje.forEach((poz, i) => {
+    // Czytamy WIERSZAMI, od lewej do prawej — tak samo jak tekst obok.
+    const kolumna = i % kolumny;
+    const wiersz = Math.floor(i / kolumny);
+    const lx = x + kolumna * LEGENDA_W;
+    const y = gora - LEGENDA_NAGLOWEK - (wiersz + 1) * LEGENDA_WIERSZ;
+    const srodek = y + LEGENDA_WIERSZ / 2;
+
+    doc.image(poz.symbol, lx + 8, srodek - LEGENDA_SYMBOL / 2, LEGENDA_SYMBOL, LEGENDA_SYMBOL);
+    const opisX = lx + 8 + LEGENDA_SYMBOL + 8;
+    const opisW = LEGENDA_W - (opisX - lx) - 8;
+    const [l1, l2] = dwieLinie(poz.opis, opisW, 7.5);
+    if (l2) {
+      doc.text(l1, opisX, srodek + 1, 7.5);
+      doc.text(l2, opisX, srodek - 8, 7.5);
+    } else {
+      doc.text(l1, opisX, srodek - 3, 7.5);
+    }
+
+    // Kreska tylko MIĘDZY wierszami: pod ostatnim leży już dolna ramka i podwójna
+    // linia w tym miejscu wygląda jak niedomknięta tabela.
+    if (wiersz < wierszy - 1) doc.line(lx, y, lx + LEGENDA_W, y, 0.3, 0.88);
+    // ...i pionowa między kolumnami, żeby dwie pozycje obok siebie się nie zlewały.
+    if (kolumna > 0) doc.line(lx, y, lx, y + LEGENDA_WIERSZ, 0.3, 0.88);
+  });
+}
+
 
 export function buildDrawingDoc({ tytul, header, rysunek, legenda, zestawienie }: RysunekPdfOpcje): PdfDoc {
   const doc = createPdfDoc({
@@ -90,63 +144,61 @@ export function buildDrawingDoc({ tytul, header, rysunek, legenda, zestawienie }
   const maLegende = !!legenda?.length;
   const poleX = MARGINES;
   const poleY = MARGINES + TABLICZKA_H;
-  const poleW = STRONA_W - MARGINES * 2 - (maLegende ? LEGENDA_W + 12 : 0);
+  const pelnaW = STRONA_W - MARGINES * 2;
   const poleH = STRONA_H - poleY - MARGINES;
+
+  /**
+   * Legenda idzie tam, gdzie kosztuje rysunek NAJMNIEJ — w kolumnę po prawej albo
+   * w pasek pod rysunkiem.
+   *
+   * Kolumna zabierała rysunkowi 188 z 770 punktów szerokości ZAWSZE, nawet gdy legenda
+   * miała cztery pozycje i sięgała jednej trzeciej wysokości kartki; pod nią zostawał
+   * pusty prostokąt przez całą wysokość. Przy rzucie szerszym niż wyższym — a takie są
+   * prawie wszystkie — pasek pod rysunkiem oddaje mu całą szerokość i wychodzi on
+   * o jedną trzecią większy. Przy rysunku wysokim i wąskim wygrywa kolumna, bo tam
+   * ograniczeniem jest wysokość, nie szerokość.
+   *
+   * Wybór przez PORÓWNANIE SKALI, a nie przez regułę „jeśli szeroki, to pod spodem":
+   * liczy się to, ile ostatecznie widać, a nie który wymiar jest większy.
+   */
+  const kolumnaW = pelnaW - (LEGENDA_W + 12);
+  const skalaKolumna = Math.min(kolumnaW / rysunek.width, poleH / rysunek.height);
+
+  const kolumnyPaska = maLegende ? Math.max(1, Math.min(Math.floor(pelnaW / LEGENDA_W), legenda!.length)) : 1;
+  const pasek = maLegende ? wymiarLegendy(legenda!.length, kolumnyPaska) : { w: 0, h: 0 };
+  const wysokoscNaRysunek = poleH - pasek.h - 12;
+  const skalaPasek = wysokoscNaRysunek > 0 ? Math.min(pelnaW / rysunek.width, wysokoscNaRysunek / rysunek.height) : 0;
+
+  const podSpodem = maLegende && skalaPasek > skalaKolumna;
+  const poleW = podSpodem || !maLegende ? pelnaW : kolumnaW;
+  const dostepnaH = podSpodem ? wysokoscNaRysunek : poleH;
 
   // Rysunek wpisany w pole Z ZACHOWANIEM PROPORCJI i wyśrodkowany. Rozciągnięcie do
   // pełnego pola zniekształciłoby symbole — a na rzucie instalacji proporcje niosą
   // informację (odległości, strefy), więc nie wolno ich naruszyć.
-  const skala = Math.min(poleW / rysunek.width, poleH / rysunek.height);
+  const skala = Math.min(poleW / rysunek.width, dostepnaH / rysunek.height);
   const rysW = rysunek.width * skala;
   const rysH = rysunek.height * skala;
-  const rysDol = poleY + (poleH - rysH) / 2;
+  const rysDol = poleY + (podSpodem ? pasek.h + 12 : 0) + (dostepnaH - rysH) / 2;
   doc.image(rysunek, poleX + (poleW - rysW) / 2, rysDol, rysW, rysH);
 
   if (maLegende) {
-    const lx = STRONA_W - MARGINES - LEGENDA_W;
-    // Dokładnie nagłówek + wiersze. Zapas „na oko" zostawiał pod ostatnią pozycją
-    // pusty pasek, który czytał się jak zaczęty, niedokończony wiersz tabeli.
-    const wysokosc = Math.min(poleH, LEGENDA_NAGLOWEK + legenda!.length * LEGENDA_WIERSZ);
-
-    // Góra legendy równo z górą RYSUNKU, a nie z górną krawędzią pola. Rysunek jest
-    // w pionie wyśrodkowany, więc przy przypięciu legendy do pola obie ramki zaczynały
-    // się na różnych wysokościach i kartka wyglądała na niepoprawnie złożoną.
-    //
-    // Dwa ograniczenia: legenda nie może zejść pod pole (weszłaby na tabliczkę
-    // rysunkową) ani wyjść ponad nie — przy długiej liście lub niskim rysunku
-    // wyrównanie ustępuje więc mieszczeniu się na kartce.
-    const gora = Math.min(poleY + poleH, Math.max(rysDol + rysH, poleY + wysokosc));
-    const dol = gora - wysokosc;
-
-    doc.box(lx, dol, LEGENDA_W, wysokosc, 0.985);
-    doc.line(lx, dol, lx + LEGENDA_W, dol, 0.7, 0.55);
-    doc.line(lx, gora, lx + LEGENDA_W, gora, 0.7, 0.55);
-    doc.line(lx, dol, lx, gora, 0.7, 0.55);
-    doc.line(lx + LEGENDA_W, dol, lx + LEGENDA_W, gora, 0.7, 0.55);
-
-    doc.box(lx, gora - LEGENDA_NAGLOWEK, LEGENDA_W, LEGENDA_NAGLOWEK, 0.88);
-    doc.text("LEGENDA", lx + 8, gora - 14, 9, true);
-    doc.line(lx, gora - LEGENDA_NAGLOWEK, lx + LEGENDA_W, gora - LEGENDA_NAGLOWEK, 0.5, 0.55);
-
-    let y = gora - LEGENDA_NAGLOWEK;
-    for (const poz of legenda!) {
-      y -= LEGENDA_WIERSZ;
-      const srodek = y + LEGENDA_WIERSZ / 2;
-      doc.image(poz.symbol, lx + 8, srodek - LEGENDA_SYMBOL / 2, LEGENDA_SYMBOL, LEGENDA_SYMBOL);
-
-      const opisX = lx + 8 + LEGENDA_SYMBOL + 8;
-      const opisW = LEGENDA_W - (opisX - lx) - 8;
-      const [l1, l2] = dwieLinie(poz.opis, opisW, 7.5);
-      if (l2) {
-        doc.text(l1, opisX, srodek + 1, 7.5);
-        doc.text(l2, opisX, srodek - 8, 7.5);
-      } else {
-        doc.text(l1, opisX, srodek - 3, 7.5);
-      }
-
-      // Kreska tylko MIĘDZY wierszami: pod ostatnim leży już dolna ramka i podwójna
-      // linia w tym miejscu wygląda jak niedomknięta tabela.
-      if (poz !== legenda![legenda!.length - 1]) doc.line(lx, y, lx + LEGENDA_W, y, 0.3, 0.88);
+    if (podSpodem) {
+      // Pasek wyśrodkowany pod rysunkiem, tuż nad tabliczką.
+      rysujLegende(doc, legenda!, poleX + (pelnaW - pasek.w) / 2, poleY, kolumnyPaska);
+    } else {
+      /**
+       * Góra legendy równo z górą RYSUNKU, a nie z górną krawędzią pola. Rysunek jest
+       * w pionie wyśrodkowany, więc przy przypięciu legendy do pola obie ramki zaczynały
+       * się na różnych wysokościach i kartka wyglądała na niepoprawnie złożoną.
+       *
+       * Dwa ograniczenia: legenda nie może zejść pod pole (weszłaby na tabliczkę
+       * rysunkową) ani wyjść ponad nie — przy długiej liście lub niskim rysunku
+       * wyrównanie ustępuje więc mieszczeniu się na kartce.
+       */
+      const wysokosc = Math.min(poleH, wymiarLegendy(legenda!.length, 1).h);
+      const gora = Math.min(poleY + poleH, Math.max(rysDol + rysH, poleY + wysokosc));
+      rysujLegende(doc, legenda!, STRONA_W - MARGINES - LEGENDA_W, gora - wysokosc, 1);
     }
   }
 
