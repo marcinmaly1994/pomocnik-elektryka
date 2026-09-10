@@ -1,7 +1,7 @@
 import type { Circuit, InstallationElement, RcdGroup, RoomShape } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
-import { isWetRoomName } from "@/lib/design";
+import { isWetRoomName, zastosowaniePokoju, ZASTOSOWANIE_OPIS, type ZastosowaniePokoju } from "@/lib/design";
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -172,12 +172,35 @@ export function computeCircuits(wszystkie: InstallationElement[], roomShapes: Ro
       add({ name: `Obwód gniazd — ${room}${i ? " " + (i + 1) : ""}`, type: "gniazdko", elements: g, cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true });
     });
   });
-  chunk(
-    regular.filter((e) => !isWetRoomName(e.room, roomShapes)),
-    8
-  ).forEach((g, i) => {
-    add({ name: `Obwód gniazd ogólnych ${i + 1}`, type: "gniazdko", elements: g, cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true });
-  });
+  /**
+   * Pomieszczenia SUCHE — wspólny obwód wolno dzielić tylko tym o tym samym
+   * ZASTOSOWANIU (patrz `zastosowaniePokoju`).
+   *
+   * Wcześniej wszystkie suche punkty szły do jednego worka dzielonego co 8 sztuk, więc
+   * garaż potrafił wylądować na jednym zabezpieczeniu z sypialnią, a pomieszczenie
+   * nazwane tak, że reguła mokra go nie rozpoznała — z pokojami. Dwa pokoje na jednym
+   * obwodzie są w porządku i dalej tak zostają; łączenie pomieszczeń o różnym
+   * przeznaczeniu nie.
+   */
+  const sucheWgZastosowania = new Map<ZastosowaniePokoju, InstallationElement[]>();
+  regular
+    .filter((e) => !isWetRoomName(e.room, roomShapes))
+    .forEach((e) => {
+      const z = zastosowaniePokoju(e.room, roomShapes);
+      if (!sucheWgZastosowania.has(z)) sucheWgZastosowania.set(z, []);
+      sucheWgZastosowania.get(z)!.push(e);
+    });
+  for (const [zastosowanie, lista] of sucheWgZastosowania) {
+    chunk(lista, 8).forEach((g, i) => {
+      // „Obwód gniazd ogólnych" zostaje bez dopisku: punkty bez rozpoznanego
+      // pomieszczenia to dokładnie to, co ta nazwa znaczyła od zawsze.
+      const name =
+        zastosowanie === "nieznane"
+          ? `Obwód gniazd ogólnych ${i + 1}`
+          : `Obwód gniazd — ${ZASTOSOWANIE_OPIS[zastosowanie]} ${i + 1}`;
+      add({ name, type: "gniazdko", elements: g, cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true });
+    });
+  }
 
   // Jedno wyliczenie grup dla całego planu — te same numery, które widać przy
   // łącznikach i lampach na rysunku, decydują teraz też o tym, co wyląduje na
@@ -362,6 +385,28 @@ export function ostrzezeniaObwodow(
       out.push({
         numer,
         tresc: `Obwód ${numer} miesza oświetlenie (${oprawy}) z gniazdami (${gniazda}). Dobór potraktuje go jako oświetleniowy — 1,5 mm² i B10, czyli za mało pod gniazda. Rozdziel je albo sprawdź dobór ręcznie.`,
+      });
+    }
+
+    /**
+     * Pomieszczenia o RÓŻNYM zastosowaniu na jednym obwodzie.
+     *
+     * Automat tego nie robi (patrz podział gniazd wyżej), ale ręczny numer omija ten
+     * podział bez słowa. Ostrzegamy, nie blokujemy: bywa uzasadnione — dwa sąsiadujące
+     * pomieszczenia przy jednym pionie, jedno gniazdo w garażu obok drzwi do domu —
+     * tyle że wspólny obwód znaczy wspólne zabezpieczenie, więc usterka w jednym gasi
+     * oba. Punkty bez rozpoznanego pomieszczenia (`nieznane`) nie liczą się do
+     * różnicy: nie wiadomo, do czego służą, więc nie ma czego zgłaszać.
+     */
+    const zastosowania = [...new Set(elementy.map((e) => zastosowaniePokoju(e.room, roomShapes)))].filter(
+      (z) => z !== "nieznane"
+    );
+    if (zastosowania.length > 1) {
+      out.push({
+        numer,
+        tresc: `Obwód ${numer} łączy pomieszczenia o różnym przeznaczeniu (${zastosowania
+          .map((z) => ZASTOSOWANIE_OPIS[z])
+          .join(" i ")}). Wspólny obwód to wspólne zabezpieczenie — usterka w jednym z nich wyłączy pozostałe. Jeśli to nie jest zamierzone, rozdziel je na osobne obwody.`,
       });
     }
 
