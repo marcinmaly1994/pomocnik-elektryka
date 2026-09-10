@@ -54,7 +54,7 @@ export function sizeProjectCircuits(
   return circuits.map((c) => {
     const kind = kindForElements(c.elements);
     const demand = circuitDemand(c.elements, kind);
-    const routes = estimateRoutesByFloor(panele, c.elements, opts.scales, undefined, { geometria: opts.geometria, kondygnacje: opts.kondygnacje });
+    const routes = estimateRoutesByFloor(panele, c.elements, opts.scales, undefined, { geometria: opts.geometria, kondygnacje: opts.kondygnacje, wszystkieElementy: allElements });
     // „3-faz." w etykiecie zabezpieczenia to sposób, w jaki obwody trójfazowe są
     // oznaczane w warstwie planu — tu tłumaczymy to na liczbę faz doboru.
     const phases = c.breaker.includes("3-faz.") ? "3" : "1";
@@ -134,7 +134,7 @@ export function routeLengths(
   const panele = findPanels(allElements);
   const out = new Map<string, number>();
   for (const c of circuits) {
-    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, { geometria, kondygnacje });
+    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, { geometria, kondygnacje, wszystkieElementy: allElements });
     if (r) out.set(c.id, r.totalM);
   }
   return out;
@@ -161,7 +161,7 @@ export function dlugosciDoboru(
   const panele = findPanels(allElements);
   const out = new Map<string, number>();
   for (const c of circuits) {
-    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, { geometria, kondygnacje });
+    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, { geometria, kondygnacje, wszystkieElementy: allElements });
     if (r) out.set(c.id, r.worstCaseM);
   }
   return out;

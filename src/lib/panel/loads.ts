@@ -222,12 +222,45 @@ export function estimateRoutes(
   panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5,
   /** Ten sam kształt co w `estimateRoutesByFloor` — obie funkcje biorą kontekst obiektem,
    *  żeby nie dało się pomylić, która chce gołą geometrię, a która opakowaną. */
-  kontekst: { geometria?: GeometriaKondygnacji } = {}
+  kontekst: {
+    geometria?: GeometriaKondygnacji;
+    /** Wszystkie elementy kondygnacji, nie tylko tego obwodu — po nich rozpoznaje się
+     *  ŁĄCZNIKI sterujące oprawami. Brak = łańcuch prosto do opraw, jak przed
+     *  uwzględnieniem sterowania. */
+    wszystkieElementy?: InstallationElement[];
+  } = {}
 ): RouteEstimate | null {
   if (!panel || metersPerUnit === null || !(metersPerUnit > 0) || elements.length === 0) return null;
   const geo = kontekst.geometria;
 
-  const lancuch = kolejnoscLancucha(panel, elements);
+  /**
+   * Zasilanie idzie do ŁĄCZNIKA, nie do oprawy — i to jest tu sedno.
+   *
+   * W typowej polskiej instalacji faza z rozdzielnicy dochodzi najpierw do puszki
+   * łącznika, a dopiero stamtąd przewód rozchodzi się do opraw (patrz
+   * `findControllingSwitch`). Rysunek robił tak od dawna, szacunek nie — pchał
+   * łańcuch z rozdzielnicy wprost do opraw i wychodził krótszy. Zmierzone na pokoju
+   * z łącznikiem przy przeciwległej ścianie: rysunek 1000 jednostek, szacunek 672.
+   * Znowu w stronę niebezpieczną, bo `worstCaseM` idzie do spadku napięcia.
+   */
+  const wszystkie = kontekst.wszystkieElementy;
+  const grupy = wszystkie ? computeLightGroups(wszystkie) : null;
+  const laczniki = new Map<string, InstallationElement>();
+  const bezposrednie: InstallationElement[] = [];
+  for (const e of elements) {
+    const sw = wszystkie && grupy && isLightPoint(e) ? findControllingSwitch(e, wszystkie, grupy) : null;
+    if (sw) laczniki.set(sw.id, sw);
+    else bezposrednie.push(e);
+  }
+  /** Ogniwa sterowania TEGO obwodu — łącznik → oprawa → oprawa, ta sama struktura,
+   *  którą rysuje `buildControlRoutes`. */
+  const sterowanie =
+    wszystkie && grupy && laczniki.size > 0
+      ? ogniwaSterowania(grupySterowania(wszystkie, grupy)).filter((o) => elements.some((e) => e.id === o.light.id))
+      : [];
+
+  const punktyZasilania = [...bezposrednie, ...laczniki.values()];
+  const lancuch = kolejnoscLancucha(panel, punktyZasilania);
   let total = 0;
   /**
    * Sam bieg POZIOMY łańcucha — osobno od `total`, bo tylko on jest wspólny dla
@@ -260,10 +293,27 @@ export function estimateRoutes(
     pierwszy = false;
   }
 
+  /**
+   * Odcinki ZA łącznikiem. Materiał to ich pełna suma; do spadku napięcia liczy się
+   * najdłuższa pojedyncza gałąź, przybliżona tu sumą ogniw jednej grupy.
+   *
+   * Przybliżenie jest świadomie w stronę DŁUŻSZĄ: prąd do ostatniej oprawy nie płynie
+   * przez wszystkie odgałęzienia grupy, ale zapas idzie po bezpiecznej stronie — tak
+   * samo jak przyjęcie pełnego prądu na całej długości łańcucha.
+   */
+  const poGrupach = new Map<string, number>();
+  for (const o of sterowanie) {
+    const odcinekM = biegPoziomyJedn(o.bestFrom, o.light, o.bestFrom.type, o.light.type, geo) * metersPerUnit;
+    const pion = pionMiedzyPunktami(mountingHeightM(o.bestFrom), mountingHeightM(o.light));
+    total += odcinekM + pion + SLACK_M;
+    poGrupach.set(o.bestFrom.id, (poGrupach.get(o.bestFrom.id) ?? 0) + odcinekM);
+  }
+  const najdluzszeSterowanie = Math.max(0, ...poGrupach.values());
+
   // Punkt elektrycznie najdalszy to OSTATNI w łańcuchu (kolejność narasta od
   // rozdzielnicy): cały bieg poziomy plus jedno zejście do tej właśnie puszki.
   const ostatni = lancuch[lancuch.length - 1];
-  const worst = poziomM + pionM(panelHeightM, mountingHeightM(ostatni)) + SLACK_M;
+  const worst = poziomM + najdluzszeSterowanie + pionM(panelHeightM, mountingHeightM(ostatni)) + SLACK_M;
   return { worstCaseM: round1(worst), totalM: round1(total) };
 }
 
@@ -301,6 +351,9 @@ export function estimateRoutesByFloor(
     /** Geometria CAŁEGO budynku — filtrowana tu po kondygnacji, tak samo jak `scales`.
      *  Brak = szacunek Manhattan, jak przed wpięciem tras w dobór. */
     geometria?: GeometriaKondygnacji;
+    /** Wszystkie elementy budynku — filtrowane tu po kondygnacji. Po nich rozpoznaje się
+     *  łączniki sterujące oprawami, patrz `estimateRoutes`. */
+    wszystkieElementy?: InstallationElement[];
     /** Kondygnacje w kolejności od dołu — z nich bierze się pion między piętrami.
      *  Brak = pion nie jest doliczany, czyli zachowanie sprzed tej poprawki. */
     kondygnacje?: Floor[];
@@ -325,6 +378,7 @@ export function estimateRoutesByFloor(
       typeof skala === "number" && skala > 0 ? skala : null,
       panelHeightM,
       {
+        wszystkieElementy: kontekst.wszystkieElementy?.filter((e) => e.floor === floor),
         geometria: geo && {
           walls: geo.walls.filter((w) => w.floor === floor),
           roomShapes: geo.roomShapes.filter((r2) => r2.floor === floor),
@@ -505,6 +559,77 @@ function withCoreCount(cableSpec: string, cores: 3 | 4): string {
   return cableSpec.replace(/(\d+)x/, `${cores}x`);
 }
 
+/** Grupa sterowania: łączniki i oprawy dzielące ten sam numer (patrz `computeLightGroups`). */
+type GrupaSterowania = Map<number, { controls: InstallationElement[]; lights: InstallationElement[] }>;
+
+/**
+ * OGNIWA łańcucha sterowania: łącznik → oprawa → oprawa → … dla każdej grupy.
+ *
+ * Wydzielone z `buildControlRoutes`, bo potrzebuje tego także `estimateRoutes`.
+ * Dopóki tylko rysunek znał tę strukturę, kosztorys i dobór liczyły obwód
+ * oświetleniowy tak, jakby przewód szedł z rozdzielnicy wprost do opraw — a idzie
+ * najpierw do łącznika i dopiero stamtąd rozchodzi się do nich. Zmierzone na pokoju
+ * z łącznikiem przy przeciwległej ścianie: rysunek 1000 jednostek, szacunek 672.
+ *
+ * START łańcucha to łącznik grupy leżący najbliżej KTÓREJKOLWIEK sterowanej oprawy —
+ * od niego fizycznie zaczyna się pętla przewodu. Dalej najbliższy sąsiad.
+ */
+function ogniwaSterowania(byGroup: GrupaSterowania): { bestFrom: InstallationElement; light: InstallationElement; cable: string }[] {
+  const out: { bestFrom: InstallationElement; light: InstallationElement; cable: string }[] = [];
+  byGroup.forEach((bucket) => {
+    if (bucket.controls.length === 0 || bucket.lights.length === 0) return;
+    const cable = cableSpecForCores(bucket.controls.some((c) => isDualPoleSwitch(c.type)) ? 4 : 3);
+
+    let chainEnd = bucket.controls[0];
+    let startDistSq = Infinity;
+    bucket.controls.forEach((c) => {
+      bucket.lights.forEach((l) => {
+        const distSq = (c.x - l.x) ** 2 + (c.y - l.y) ** 2;
+        if (distSq < startDistSq) {
+          startDistSq = distSq;
+          chainEnd = c;
+        }
+      });
+    });
+
+    const remaining = [...bucket.lights];
+    while (remaining.length > 0) {
+      let bestIdx = 0;
+      let bestDistSq = Infinity;
+      remaining.forEach((l, i) => {
+        const distSq = (l.x - chainEnd.x) ** 2 + (l.y - chainEnd.y) ** 2;
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          bestIdx = i;
+        }
+      });
+      const light = remaining[bestIdx];
+      remaining.splice(bestIdx, 1);
+      out.push({ bestFrom: chainEnd, light, cable });
+      chainEnd = light;
+    }
+  });
+  return out;
+}
+
+/** Grupy sterowania odczytane z planu — wspólne dla rysunku i szacunku. */
+function grupySterowania(elements: InstallationElement[], groups: Map<string, (number | undefined)[]>): GrupaSterowania {
+  const byGroup: GrupaSterowania = new Map();
+  elements.forEach((e) => {
+    const nums = groups.get(e.id);
+    if (!nums) return;
+    nums.forEach((n) => {
+      if (n == null) return;
+      const bucket = byGroup.get(n) ?? { controls: [], lights: [] };
+      if (isLightControl(e)) bucket.controls.push(e);
+      if (isLightPoint(e)) bucket.lights.push(e);
+      byGroup.set(n, bucket);
+    });
+  });
+  return byGroup;
+}
+
+
 /**
  * Trasy STEROWANIA: łącznik → oprawa (i, gdy jeden łącznik steruje kilkoma
  * oprawami, dalej oprawa → kolejna oprawa) — patrz `computeLightGroups` w
@@ -552,54 +677,11 @@ function buildControlRoutes(
   otwory: Opening[],
   groups: Map<string, (number | undefined)[]>
 ): CableRoute[] {
-  const byGroup = new Map<number, { controls: InstallationElement[]; lights: InstallationElement[] }>();
-  elements.forEach((e) => {
-    const nums = groups.get(e.id);
-    if (!nums) return;
-    nums.forEach((n) => {
-      if (n == null) return;
-      const bucket = byGroup.get(n) ?? { controls: [], lights: [] };
-      if (isLightControl(e)) bucket.controls.push(e);
-      if (isLightPoint(e)) bucket.lights.push(e);
-      byGroup.set(n, bucket);
-    });
-  });
+  const byGroup = grupySterowania(elements, groups);
 
   const out: CableRoute[] = [];
-  byGroup.forEach((bucket) => {
-    if (bucket.controls.length === 0 || bucket.lights.length === 0) return;
-    const cable = cableSpecForCores(bucket.controls.some((c) => isDualPoleSwitch(c.type)) ? 4 : 3);
-
-    // START łańcucha: łącznik grupy leżący najbliżej KTÓREJKOLWIEK sterowanej
-    // oprawy — od niego fizycznie zaczyna się pętla przewodu.
-    let chainEnd = bucket.controls[0];
-    let startDistSq = Infinity;
-    bucket.controls.forEach((c) => {
-      bucket.lights.forEach((l) => {
-        const distSq = (c.x - l.x) ** 2 + (c.y - l.y) ** 2;
-        if (distSq < startDistSq) {
-          startDistSq = distSq;
-          chainEnd = c;
-        }
-      });
-    });
-
-    const remaining = [...bucket.lights];
-    while (remaining.length > 0) {
-      let bestIdx = 0;
-      let bestDistSq = Infinity;
-      remaining.forEach((l, i) => {
-        const distSq = (l.x - chainEnd.x) ** 2 + (l.y - chainEnd.y) ** 2;
-        if (distSq < bestDistSq) {
-          bestDistSq = distSq;
-          bestIdx = i;
-        }
-      });
-      const light = remaining[bestIdx];
-      remaining.splice(bestIdx, 1);
-      const bestFrom = chainEnd;
-      chainEnd = light;
-
+  for (const { bestFrom, light, cable } of ogniwaSterowania(byGroup)) {
+    {
       const from: Point = { x: bestFrom.x, y: bestFrom.y };
       const to: Point = { x: light.x, y: light.y };
       // Oprawa wisi pod stropem — przewód biegnie do niej sufitem i może zejść do
@@ -624,7 +706,7 @@ function buildControlRoutes(
         lengthUnits: polylineLengthUnits(points),
       });
     }
-  });
+  }
   return out;
 }
 

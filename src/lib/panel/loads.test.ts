@@ -1163,3 +1163,69 @@ describe("estimateRoutesByFloor — pion miedzy kondygnacjami", () => {
     expect(a).toEqual(b);
   });
 });
+/**
+ * OBWOD OSWIETLENIOWY ZE STEROWANIEM.
+ *
+ * Zasilanie idzie do LACZNIKA, a dopiero stamtad przewod rozchodzi sie do opraw —
+ * rysunek robil tak od dawna, szacunek nie. Pchal lancuch z rozdzielnicy wprost do
+ * opraw i wychodzil krotszy. Zmierzone na pokoju z lacznikiem przy przeciwleglej
+ * scianie: rysunek 1000 jednostek, szacunek 677, czyli o jedna trzecia mniej.
+ * Znowu w strone niebezpieczna, bo `worstCaseM` idzie do spadku napiecia.
+ */
+describe("estimateRoutes — obwod oswietleniowy sterowany lacznikiem", () => {
+  const POKOJ: RoomShape = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 400, y: 0 },
+      { x: 400, y: 300 },
+      { x: 0, y: 300 },
+    ],
+  };
+  const geometria = { walls: [], roomShapes: [POKOJ], openings: [] };
+  const rozdzielnica = el("rozdzielnica", { x: 20, y: 287, rotation: 180 });
+  const punkt = { x: rozdzielnica.x, y: rozdzielnica.y };
+  /** Lacznik przy PRZECIWLEGLEJ scianie — zeby objazd przez niego byl wyrazny. */
+  const lacznik = el("wlacznik", { x: 380, y: 287, rotation: 180 });
+  const oprawy = [el("oswietlenie", { x: 150, y: 100 }), el("oswietlenie", { x: 300, y: 100 })];
+  const wszystkieElementy = [rozdzielnica, lacznik, ...oprawy];
+
+  /** Suma WSZYSTKICH odcinkow narysowanych na rzucie — zasilania i sterowania. */
+  function dlugoscRysunku(): number {
+    const c: Circuit = { id: "o1", name: "Obwód", type: "oswietlenie", elements: oprawy, cable: "", breaker: "", rcd: true };
+    return buildCableRoutes(punkt, [c], wszystkieElementy, [], [POKOJ], []).reduce((s, t) => s + t.lengthUnits, 0);
+  }
+
+  it("szacunek materialu zgadza sie z tym, co widac na rzucie", () => {
+    const r = estimateRoutes(punkt, oprawy, 1, undefined, { geometria, wszystkieElementy })!;
+    const rysunek = dlugoscRysunku();
+    expect(Math.abs(r.totalM - rysunek)).toBeLessThan(rysunek * 0.1);
+  });
+
+  it("bez wiedzy o laczniku szacunek jest ISTOTNIE krotszy — to jest naprawiany blad", () => {
+    const bez = estimateRoutes(punkt, oprawy, 1, undefined, { geometria })!;
+    const zLacznikiem = estimateRoutes(punkt, oprawy, 1, undefined, { geometria, wszystkieElementy })!;
+    expect(zLacznikiem.totalM).toBeGreaterThan(bez.totalM * 1.2);
+    expect(zLacznikiem.worstCaseM).toBeGreaterThan(bez.worstCaseM);
+  });
+
+  /** Gniazda nie maja sterowania, wiec podanie wszystkich elementow nie moze ich ruszyc. */
+  it("obwod gniazdowy nie zmienia sie od podania wszystkich elementow", () => {
+    const gniazda = [el("gniazdko", { x: 393, y: 60, rotation: 90 }), el("gniazdko", { x: 393, y: 150, rotation: 90 })];
+    const wszystko = [rozdzielnica, lacznik, ...gniazda];
+    const bez = estimateRoutes(punkt, gniazda, 1, undefined, { geometria })!;
+    const ze = estimateRoutes(punkt, gniazda, 1, undefined, { geometria, wszystkieElementy: wszystko })!;
+    expect(ze).toEqual(bez);
+  });
+
+  /** Oprawa BEZ lacznika na planie zasila sie wprost — nie ma czego przekierowywac. */
+  it("oprawa bez lacznika liczy sie jak dotad", () => {
+    const bezLacznika = [rozdzielnica, ...oprawy];
+    const a = estimateRoutes(punkt, oprawy, 1, undefined, { geometria })!;
+    const b = estimateRoutes(punkt, oprawy, 1, undefined, { geometria, wszystkieElementy: bezLacznika })!;
+    expect(b).toEqual(a);
+  });
+});
