@@ -1,5 +1,7 @@
 /**
- * Wybór numeru obwodu w menu pod prawym przyciskiem.
+ * Wybór numeru obwodu — w menu pod prawym przyciskiem I w oknie edycji elementu
+ * (dwuklik). Jeden komponent na obie drogi, żeby nie rozjechały się w tym, co
+ * pokazują: różni je tylko oprawa, patrz `wariant`.
  *
  * Numery są POWTARZALNE i wspólne dla projektu — po to, żeby dało się dołożyć
  * kolejne gniazdo do obwodu, który już istnieje. Dlatego menu pokazuje numery
@@ -27,6 +29,7 @@ export function WyborObwodu({
   uzyte,
   onWybierz,
   zablokowane,
+  wariant = "menu",
 }: {
   numerAktualny?: number;
   /** Numery obwodów już użyte w CAŁYM projekcie, rosnąco. */
@@ -34,19 +37,44 @@ export function WyborObwodu({
   onWybierz: (numer: number | undefined) => void;
   /** Wyjaśnienie, czemu wyboru nie ma — dla odbiorników z własnym obwodem. */
   zablokowane?: string;
+  /**
+   * Gdzie ten wybór stoi. `menu` to wąska kolumna pod prawym przyciskiem — stąd
+   * własne wcięcie i ograniczenie szerokości. `formularz` to okno edycji elementu,
+   * gdzie pola mają wspólną krawędź lewą i całą szerokość okna do dyspozycji;
+   * tamto wcięcie odsadziłoby ten jeden wiersz od reszty formularza.
+   */
+  wariant?: "menu" | "formularz";
 }) {
+  const wMenu = wariant === "menu";
+  const otoczka = wMenu ? "border-t border-border px-3 py-2" : "border-t border-border pt-3";
+  const szerokosc = wMenu ? "max-w-[220px]" : "";
+
   if (zablokowane) {
     return (
-      <div className="border-t border-border px-3 py-2">
+      <div className={otoczka}>
         <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Numer obwodu</div>
-        <p className="mt-1 max-w-[220px] text-[11px] leading-relaxed text-slate-500">{zablokowane}</p>
+        <p className={`mt-1 text-[11px] leading-relaxed text-slate-500 ${szerokosc}`}>{zablokowane}</p>
       </div>
     );
   }
 
+  /**
+   * Numer WYBRANY, ale jeszcze nieistniejący w projekcie (świeże „+ N"), dostaje
+   * własny chip.
+   *
+   * Lista `uzyte` pochodzi z zapisanych elementów, więc zaraz po kliknięciu „+ 3"
+   * numeru 3 jeszcze na niej nie ma. W menu pod prawym przyciskiem nie miało to
+   * znaczenia — wybór zamyka je natychmiast — ale w formularzu okno zostaje otwarte
+   * i bez tego chipa nie widać, co się właściwie zapisze.
+   */
+  const doPokazania =
+    numerAktualny === undefined || uzyte.some((u) => u.numer === numerAktualny)
+      ? uzyte
+      : [...uzyte, { numer: numerAktualny, gdzieIndziej: false }].sort((a, b) => a.numer - b.numer);
+
   // Następny wolny numer liczony z CAŁEGO projektu — inaczej „+ nowy" na piętrze
   // proponowałby numer zajęty na parterze i po cichu scalał dwa obwody w jeden.
-  const nastepny = (uzyte.length ? Math.max(...uzyte.map((u) => u.numer)) : 0) + 1;
+  const nastepny = (doPokazania.length ? Math.max(...doPokazania.map((u) => u.numer)) : 0) + 1;
   const klasa = (aktywny: boolean, gdzieIndziej = false) =>
     `rounded-md border px-2 py-1 text-[12px] leading-none transition-colors ${
       aktywny
@@ -57,13 +85,13 @@ export function WyborObwodu({
     }`;
 
   return (
-    <div className="border-t border-border px-3 py-2">
+    <div className={otoczka}>
       <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Numer obwodu</div>
-      <div className="mt-1.5 flex max-w-[220px] flex-wrap gap-1">
+      <div className={`mt-1.5 flex flex-wrap gap-1 ${szerokosc}`}>
         <button onClick={() => onWybierz(undefined)} className={klasa(numerAktualny === undefined)} title="Obwód dobierze automat">
           auto
         </button>
-        {uzyte.map(({ numer, gdzieIndziej }) => (
+        {doPokazania.map(({ numer, gdzieIndziej }) => (
           <button
             key={numer}
             onClick={() => onWybierz(numer)}
