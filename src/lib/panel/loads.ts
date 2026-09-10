@@ -11,7 +11,7 @@
 import type { CableRoute, Circuit, ElementType, Floor, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM } from "@/lib/elements";
 import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
-import { crossesGeometry, routeAlongWalls } from "./routing";
+import { crossesGeometry, projectOntoSegment, routeAlongWalls } from "./routing";
 import { kolorObwodu, KOLOR_BEZ_OBWODU } from "./circuits";
 import { kolejnoscLancucha } from "./lancuch";
 import { zasiegPrzyscienny } from "@/lib/glyphs";
@@ -1230,50 +1230,51 @@ export function przytnijDoKrawedzi(points: Point[], promien: number): Point[] {
 }
 
 /**
- * Zakończenie trasy przy osprzęcie PRZYŚCIENNYM: odczep pod 45° do nóżki symbolu.
+ * Zakończenie trasy przy osprzęcie PRZYŚCIENNYM: odgałęzienie PROSTOPADLE do ściany,
+ * wzdłuż trzonka symbolu.
  *
- * Trasa biegnie równolegle do ściany, kilka jednostek od niej (`ODSUNIECIE_TRASY`),
- * a gniazdko stoi trzonkiem do muru. Doprowadzenie przewodu do ŚRODKA symbolu
- * wyglądało tak, jakby kabel wchodził gniazdku w łuk — czyli od strony pomieszczenia,
- * a nie od strony puszki. Przewód ma trafić w koniec trzonka (`cel`).
+ * Trasa biegnie równolegle do ściany, `ODSUNIECIE_TRASY` od niej, a gniazdko stoi
+ * trzonkiem w mur. Przewód ma trafić w koniec trzonka (`cel`), bo tam siedzi puszka.
  *
- *      ─────E╮              E — miejsce, w którym trasa schodzi z „pasa" przy ścianie
- *             ╲             odcinek E→cel ma tyle samo wzdłuż co w poprzek trasy,
- *   ══════════◗cel          więc zawsze wychodzi dokładnie 45°
+ *      ─────────┬──────      korytarz biegnie dalej swoją drogą
+ *               │            odgałęzienie idzie DOKŁADNIE wzdłuż trzonka
+ *      ═════════◗cel         i nakłada się na niego zamiast go przecinać
  *
- * Kąt bierze się z geometrii, nie ze stałej: `E` odsuwamy od rzutu celu na trasę
- * o tyle, ile wynosi odległość celu OD tej trasy. Dzięki temu ukos zostaje pod 45°
- * niezależnie od tego, jak daleko od ściany biegnie pas przewodów i czy —
- * przy kilku trasach w wiązce — o `LANE_SPACING` dalej.
+ * Wcześniej było to wejście UKOSEM pod 45°. Wyglądało dobrze samo w sobie, ale trzonek
+ * jest prostopadły do ściany, a korytarz do niej równoległy i leży BLIŻEJ muru niż
+ * sięga symbol (5 jednostek kontra 10,5) — ukos przecinał więc trzonek w poprzek.
+ * Odgałęzienie prostopadłe kładzie się na nim, czyli czyta się jak kabel wchodzący
+ * do puszki, a nie jak dwa krzyżujące się przewody.
+ *
+ * Punkt odejścia to miejsce na łamanej NAJBLIŻSZE celowi — przy trasie równoległej
+ * do ściany wypada dokładnie na wysokości gniazda, więc odgałęzienie jest prostopadłe
+ * samo z siebie, bez liczenia kątów.
  */
 export function zakonczPrzyNozce(points: Point[], cel: Point): Point[] {
   if (points.length < 2) return [...points, cel];
-  const koniec = points[points.length - 1];
-  const przed = points[points.length - 2];
-  const dx = koniec.x - przed.x;
-  const dy = koniec.y - przed.y;
-  const dlug = Math.hypot(dx, dy);
-  // Odcinek zerowej długości nie ma kierunku — nie ma jak rozłożyć dojścia na
-  // „wzdłuż" i „w poprzek", więc zostaje samo doprowadzenie do celu.
-  if (dlug === 0) return [...points, cel];
-  const u = { x: dx / dlug, y: dy / dlug };
-  const v = { x: cel.x - koniec.x, y: cel.y - koniec.y };
-  const wzdluz = v.x * u.x + v.y * u.y;
-  const wPoprzek = Math.hypot(v.x - u.x * wzdluz, v.y - u.y * wzdluz);
-  const cofnij = wPoprzek - wzdluz;
+
+  let najlepszy: { punkt: Point; indeks: number; distSq: number } | null = null;
+  for (let i = 1; i < points.length; i++) {
+    const rzut = projectOntoSegment(cel, points[i - 1], points[i]);
+    if (!najlepszy || rzut.distSq < najlepszy.distSq) najlepszy = { punkt: rzut.point, indeks: i - 1, distSq: rzut.distSq };
+  }
+  if (!najlepszy) return [...points, cel];
+
   /**
-   * Cel leży już PRZED końcem trasy (albo dokładnie na jej przedłużeniu) — ukos
-   * wypadłby za elementem, więc przewód dochodzi wprost.
-   *
-   * Środek symbolu wypada wtedy NA odcinku „poprzedni → nóżka", czyli jest punktem
-   * pośrodku prostej. Zostawiony w łamanej dzieli ją na dwa odcinki, a te przy
+   * Ogon ZA punktem odejścia znika — to była droga do środka symbolu, a przewód
+   * kończy się na jego nóżce. Punkt odejścia dokładamy tylko wtedy, gdy nie pokrywa
+   * się z ostatnim zachowanym: powtórzony dzieliłby odcinek na dwa, a te przy
    * rozsuwaniu wiązki (`spreadOverlappingRoutes`) dostają osobne przesunięcia
-   * i przy elemencie robi się mikroschodek. Dlatego go tu porzucamy.
+   * i przy elemencie robi się mikroschodek.
    */
-  if (cofnij <= 0) return [...points.slice(0, wPoprzek < 0.001 ? -1 : undefined), cel];
-  const start = cofnijSieWzdluz(points, cofnij);
-  if (!start) return [...points, cel];
-  return [...points.slice(0, start.indeks + 1), start.punkt, cel];
+  const zachowane = points.slice(0, najlepszy.indeks + 1);
+  const ostatni = zachowane[zachowane.length - 1];
+  const doPunktu = { x: najlepszy.punkt.x - ostatni.x, y: najlepszy.punkt.y - ostatni.y };
+  const doCelu = { x: cel.x - najlepszy.punkt.x, y: cel.y - najlepszy.punkt.y };
+  // Punkt WSPÓŁLINIOWY z sąsiadami nic nie wnosi — pomijany także z tego powodu.
+  const wspolliniowy = Math.abs(doPunktu.x * doCelu.y - doPunktu.y * doCelu.x) < 0.001;
+  if (Math.hypot(doPunktu.x, doPunktu.y) > 0.001 && !wspolliniowy) zachowane.push(najlepszy.punkt);
+  return [...zachowane, cel];
 }
 
 /** Tyle o elemencie, ile potrzeba, żeby wiedzieć, GDZIE przy nim urwać przewód. */
