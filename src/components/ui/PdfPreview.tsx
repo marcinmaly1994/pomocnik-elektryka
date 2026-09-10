@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Download, ExternalLink, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { downloadPdfBytes } from "@/lib/pdf/download";
@@ -41,12 +41,23 @@ export interface PdfPreviewProps {
   filename: string;
   /** Składa dokument. Wywoływane raz na otwarcie okna. */
   build: () => Promise<Uint8Array>;
+  /**
+   * Znacznik WARIANTU składanego dokumentu. Zmiana wartości przebudowuje podgląd —
+   * po to, żeby okno mogło mieć własne przełączniki treści (patrz `opcje`), a nie
+   * tylko pokazywać to, co ustawiono przed jego otwarciem.
+   *
+   * Osobno od `build`, bo tamto bywa świeżym domknięciem przy każdym renderze
+   * rodzica i w zależnościach zapętliłoby składanie.
+   */
+  wariant?: string | number;
+  /** Przełączniki treści dokumentu, pokazywane nad podglądem. */
+  opcje?: ReactNode;
 }
 
 /** Zapas na pasek przewijania i oddech przy krawędziach kontenera stron. */
 const MARGINES_WEWN = 24;
 
-export function PdfPreview({ open, onOpenChange, title, filename, build }: PdfPreviewProps) {
+export function PdfPreview({ open, onOpenChange, title, filename, build, wariant, opcje }: PdfPreviewProps) {
   const [gotowe, setGotowe] = useState(false);
   const [blad, setBlad] = useState<string | null>(null);
   const [zablokowane, setZablokowane] = useState(false);
@@ -132,7 +143,7 @@ export function PdfPreview({ open, onOpenChange, title, filename, build }: PdfPr
     // zależności, podgląd przebudowywałby się w kółko. Otwarcie okna jest tu jedynym
     // zdarzeniem, które ma uruchamiać składanie.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, wariant]);
 
   const pobierz = () => {
     if (!bajtyRef.current) return;
@@ -142,6 +153,9 @@ export function PdfPreview({ open, onOpenChange, title, filename, build }: PdfPr
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title={title} className="flex h-[88vh] max-w-5xl flex-col">
+        {/* Przełączniki treści NAD podglądem, nie w stopce: zmiana ma być widoczna
+            w tym samym ruchu oka, w którym patrzy się na wynik. */}
+        {opcje && <div className="mb-2 flex flex-wrap items-center gap-4">{opcje}</div>}
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-border bg-slate-200">
           <div ref={kontenerRef} data-podglad-stron className="h-full w-full overflow-y-auto p-3" />
           {!gotowe && !blad && (

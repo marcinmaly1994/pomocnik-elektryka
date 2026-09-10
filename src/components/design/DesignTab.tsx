@@ -390,11 +390,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     /**
      * Klucz oznaczeń i spis obwodów — TYLKO gdy trasy są na rysunku.
      *
-     * Eksport rasteryzuje scenę taką, jaka jest, więc przewody trafiają na kartkę
-     * dokładnie wtedy, gdy są włączone w edytorze. Dokładanie klucza i spisu do rzutu
-     * bez tras dałoby dokument tłumaczący kreski, których na nim nie ma.
+     * Klucz przy rzucie bez tras tłumaczyłby kreski, których na nim nie ma, więc oba
+     * idą razem z przewodami — patrz `trasyWPdf`.
      */
-    const trasyNaRysunku = showRoutes ? cableRoutes : [];
+    const trasyNaRysunku = trasyPotrzebne ? cableRoutes : [];
     const obwodyPdf = [...new Map(trasyNaRysunku.map((r) => [r.circuitId || r.id, r])).values()].map((r) => ({
       kolor: hexNaRgb(r.color),
       nazwa: r.circuitName,
@@ -477,6 +476,13 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    *  zawsze potrzebna, i bez rozdzielnicy postawionej na planie i tak jest pusta
    *  (patrz `cableRoutes` niżej), więc nie ma po co narzucać jej od razu. */
   const [showRoutes, setShowRoutes] = useState(false);
+  /**
+   * Czy rzut w PDF-ie ma pokazywać trasy przewodów. DOMYŚLNIE tak, niezależnie od
+   * przełącznika w edytorze — rzut instalacji bez przewodów to nie jest rysunek
+   * instalacji, a eksport rasteryzuje scenę taką, jaka jest, więc bez tego wydruk po
+   * cichu zależał od tego, co akurat było włączone na ekranie.
+   */
+  const [trasyWPdf, setTrasyWPdf] = useState(true);
   /** Tryb wymiarowania — domyslnie WYLACZONY: przy rysowaniu wymiary przeszkadzaja,
    *  a potrzebne sa przy sprawdzaniu i przed wydrukiem. */
   const [showDimensions, setShowDimensions] = useState(false);
@@ -1553,12 +1559,19 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // punkty i sieć, po której routuje `buildCableRoutes`, zawsze mieszkają w tym samym
   // układzie współrzędnych. Puste trasy zasilania bez rozdzielnicy na planie — trasy
   // sterowania (łącznik→oprawa) działają niezależnie od niej, patrz `buildCableRoutes`.
+  /**
+   * Trasy liczone także wtedy, gdy edytor ich nie pokazuje, ale trwa eksport — muszą
+   * być na scenie, bo PDF powstaje z jej rasteryzacji. Poza tymi dwoma przypadkami
+   * liczenie jest pomijane: przy każdej zmianie elementu to kilkadziesiąt milisekund,
+   * których nie ma po co wydawać na warstwę, której nikt nie ogląda.
+   */
+  const trasyPotrzebne = showRoutes || (podgladPdf && trasyWPdf);
   const rawCableRoutes = useMemo(
     () =>
-      showRoutes
+      trasyPotrzebne
         ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes, openings, elementRenderScale(mpu, elementScale))
         : [],
-    [showRoutes, elements, walls, roomShapes, openings, mpu, elementScale]
+    [trasyPotrzebne, elements, walls, roomShapes, openings, mpu, elementScale]
   );
   // Ręczne poprawki (przeciągnięte przez użytkownika załamania, patrz DesignCanvas)
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
@@ -2206,6 +2219,18 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         title={`Rzut — ${floorName}`}
         filename={projectFileName(`rzut-${floorName}`, projectName, "pdf")}
         build={async () => (await zbudujDokumentRzutu()).finish()}
+        wariant={trasyWPdf ? "z-trasami" : "bez-tras"}
+        opcje={
+          <label className="flex items-center gap-2 text-[13px] text-slate-600">
+            <input
+              type="checkbox"
+              checked={trasyWPdf}
+              onChange={(e) => setTrasyWPdf(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            Trasy przewodów na rysunku
+          </label>
+        }
       />
 
       <EditorToolbar
