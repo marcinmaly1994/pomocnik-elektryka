@@ -85,7 +85,7 @@ import { EditElementModal } from "./EditElementModal";
 import type Konva from "konva";
 import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
-import { buildDrawingDoc } from "@/lib/pdf/drawing";
+import { buildDrawingDoc, hexNaRgb, KLUCZ_TRAS } from "@/lib/pdf/drawing";
 import type { PdfDoc } from "@/lib/pdf/engine";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { bialePlotno, plotnoDoPdf, rysujPodzialke, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
@@ -387,14 +387,31 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       legenda.push({ symbol: await plotnoDoPdf(await svgDoPlotna(svg, 96)), opis });
     }
 
+    /**
+     * Klucz oznaczeń i spis obwodów — TYLKO gdy trasy są na rysunku.
+     *
+     * Eksport rasteryzuje scenę taką, jaka jest, więc przewody trafiają na kartkę
+     * dokładnie wtedy, gdy są włączone w edytorze. Dokładanie klucza i spisu do rzutu
+     * bez tras dałoby dokument tłumaczący kreski, których na nim nie ma.
+     */
+    const trasyNaRysunku = showRoutes ? cableRoutes : [];
+    const obwodyPdf = [...new Map(trasyNaRysunku.map((r) => [r.circuitId || r.id, r])).values()].map((r) => ({
+      kolor: hexNaRgb(r.color),
+      nazwa: r.circuitName,
+      kabel: r.cable,
+      zabezpieczenie: r.breaker,
+    }));
+
     return buildDrawingDoc({
       tytul: `Rzut — ${floorName}`,
       header: docHeader,
       rysunek: await plotnoDoPdf(naBieli),
       legenda,
+      kluczTras: trasyNaRysunku.length ? KLUCZ_TRAS : undefined,
       // Rozbicie „rodzaj × pomieszczenie", nie sama suma per rodzaj: monter kupuje
       // według sumy, ale montuje pokój po pokoju i to jemu potrzebny jest podział.
       zestawienie: pozycjeZestawieniaDoPdf(elements),
+      obwody: obwodyPdf.length ? obwodyPdf : undefined,
     });
   }
   /**

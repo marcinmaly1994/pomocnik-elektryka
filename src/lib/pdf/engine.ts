@@ -175,6 +175,16 @@ export interface PdfDoc {
   setNewPageHandler(fn: (doc: PdfDoc) => void): void;
   text(str: string, x: number, y: number, size?: number, bold?: boolean, gray?: number): void;
   line(x1: number, y1: number, x2: number, y2: number, w?: number, gray?: number): void;
+  /**
+   * Linia w KOLORZE, opcjonalnie kreskowana. Osobno od `line`, bo tamta operuje
+   * odcieniem szarości — a rysunek techniczny potrzebuje szarości niemal wszędzie
+   * i koloru tylko tam, gdzie niesie on treść: przy próbkach tras obwodów.
+   *
+   * `kreska` to wzór w punktach PDF-a (np. `[1, 3]`), pusty albo pominięty = ciągła.
+   */
+  liniaKolor(x1: number, y1: number, x2: number, y2: number, rgb: [number, number, number], w?: number, kreska?: number[]): void;
+  /** Wypełniony prostokąt w KOLORZE — próbka barwy obwodu w spisie. */
+  boxKolor(x: number, y: number, w: number, h: number, rgb: [number, number, number]): void;
   box(x: number, y: number, w: number, h: number, gray?: number): void;
   /** Wstawia obraz. `x`,`y` to LEWY DOLNY róg — jak w `box`, bo PDF liczy od dołu. */
   image(img: PdfImage, x: number, y: number, w: number, h: number): void;
@@ -271,6 +281,17 @@ export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, foot
     },
     line(x1, y1, x2, y2, w = 0.6, gray = 0.75) {
       content.push(`${gray} G ${w} w ${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S`);
+    },
+    liniaKolor(x1, y1, x2, y2, rgb, w = 1, kreska) {
+      const [r, g, b] = rgb;
+      const wzor = kreska?.length ? `[${kreska.join(" ")}] 0 d ` : "";
+      content.push(
+        `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} RG ${w} w ${wzor}${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S [] 0 d 0 G`
+      );
+    },
+    boxKolor(x, yy, w, h, rgb) {
+      const [r, g, b] = rgb;
+      content.push(`${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg ${x.toFixed(1)} ${yy.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f 0 g`);
     },
     box(x, yy, w, h, gray = 0.93) {
       content.push(`${gray} g ${x.toFixed(1)} ${yy.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f 0 g`);
