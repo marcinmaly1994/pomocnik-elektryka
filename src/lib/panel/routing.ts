@@ -17,7 +17,7 @@
  * wtedy spaść na prostszy szacunek Manhattan, a nie zmyślać trasę donikąd.
  */
 
-import type { Point, RoomShape, Wall } from "@/types";
+import type { Opening, Point, RoomShape, Wall } from "@/types";
 import { clampNum } from "@/lib/geometry";
 
 /** Punkty bliższe niż to (jedn. planu) traktujemy jako TEN SAM narożnik — inaczej
@@ -93,10 +93,13 @@ interface Segment {
   a: Point;
   b: Point;
   /**
-   * Węzły „doskoków" dołożone na TYM odcinku przez `connectPoint` — patrz tam.
+   * Węzły dołożone na TYM odcinku: doskoki elementów (`connectPoint`) i brzegi przejść
+   * w otworach (`dodajPrzejscie`).
+   *
    * Trzymane przy odcinku, bo muszą się widzieć NAWZAJEM: dwa gniazda przy tej samej
    * ścianie wchodzą w sieć w dwóch różnych miejscach jednego odcinka i przewód ma
-   * przejść między nimi wprost, a nie naokoło przez narożnik.
+   * przejść między nimi wprost, a nie naokoło przez narożnik. Z tego samego powodu
+   * brzeg przejścia widzi doskoki — inaczej przewód do drzwi też nadkładałby drogi.
    */
   wejscia?: number[];
 }
@@ -105,6 +108,9 @@ interface Graph {
   nodes: Point[];
   adj: Map<number, Map<number, number>>;
   segments: Segment[];
+  /** Z którego pomieszczenia pochodzi węzeł (`null` = ze ściany albo z doskoku) —
+   *  patrz `nodeIndex` i `polaczSasiedniePokoje`. */
+  zrodloWezla: (number | null)[];
   /** Obrysy pomieszczeń w ORYGINALNYCH położeniach (bez wsunięcia) — po nich
    *  `connectPoint` poznaje, że doskok nie wychodzi poza pokój elementu. */
   pokoje: Point[][];
@@ -123,18 +129,62 @@ interface Graph {
  */
 function dodajWezel(graph: Graph, p: Point): number {
   graph.nodes.push(p);
+  graph.zrodloWezla.push(null);
   graph.adj.set(graph.nodes.length - 1, new Map());
   return graph.nodes.length - 1;
 }
 
-/** Zwraca indeks istniejącego węzła w promieniu `MERGE_TOLERANCE` albo dokłada nowy. */
-function nodeIndex(graph: Graph, p: Point): number {
+/**
+ * Zwraca indeks istniejącego węzła w promieniu `MERGE_TOLERANCE` albo dokłada nowy.
+ *
+ * Dwa RÓŻNE pomieszczenia nigdy się nie scalają i to jest tu sedno. Ich obrysy, każdy
+ * wsunięty o `ODSUNIECIE_TRASY`, mijają się w narożniku o dwa wsunięcia — czyli akurat
+ * tyle, ile wynosi tolerancja. Scalone w jeden węzeł przyjmowały pozycję tego pokoju,
+ * który trafił do grafu PIERWSZY, więc każdy przebieg drugiego startował dziesięć
+ * jednostek obok swojego korytarza, a różnica rozciągała się na całą długość ściany.
+ * Na rysunku linia przy wspólnej ścianie nie była do niej równoległa, tylko zapadnięta.
+ *
+ * Połączenie między pokojami nie znika — dostaje jawną krawędź, patrz
+ * `polaczSasiedniePokoje`. Scalanie zostaje tam, gdzie opisuje prawdę: dwa końce
+ * osobno rysowanych ŚCIAN, które nie trafiły w ten sam piksel, to jeden fizyczny róg.
+ */
+function nodeIndex(graph: Graph, p: Point, pokoj: number | null = null): number {
   for (let i = 0; i < graph.nodes.length; i++) {
+    const inny = graph.zrodloWezla[i];
+    if (pokoj !== null && inny !== null && inny !== pokoj) continue;
     if (dist(graph.nodes[i], p) <= MERGE_TOLERANCE) return i;
   }
   graph.nodes.push(p);
+  graph.zrodloWezla.push(pokoj);
   graph.adj.set(graph.nodes.length - 1, new Map());
   return graph.nodes.length - 1;
+}
+
+/**
+ * Spina narożniki SĄSIADUJĄCYCH pomieszczeń jawną krawędzią — tędy przewód przechodzi
+ * z pokoju do pokoju, przewiercając ścianę.
+ *
+ * Krawędź zamiast scalania: oba narożniki zostają tam, gdzie naprawdę są (każdy pięć
+ * jednostek w głąb swojego pokoju), a przejście widać jako krótki, prostopadły przeskok
+ * przy rogu. Waga to rzeczywista odległość, więc Dijkstra wie, ile ono kosztuje.
+ *
+ * Próg liczony z `wsuniecie`, a nie ze stałej: narożniki dwóch pokoi rysowanych wspólną
+ * ścianą dzieli dokładnie dwa wsunięcia. Dopóki zależało to od zbieżności
+ * `2 · ODSUNIECIE_TRASY === MERGE_TOLERANCE`, każda zmiana odsunięcia groziła cichym
+ * rozspojeniem planu i zrzuceniem wszystkich tras międzypokojowych na szacunek Manhattan.
+ */
+function polaczSasiedniePokoje(graph: Graph, wsuniecie: number) {
+  const prog = 2 * wsuniecie + 2;
+  for (let i = 0; i < graph.nodes.length; i++) {
+    const a = graph.zrodloWezla[i];
+    if (a === null) continue;
+    for (let j = i + 1; j < graph.nodes.length; j++) {
+      const b = graph.zrodloWezla[j];
+      if (b === null || b === a) continue;
+      const d = dist(graph.nodes[i], graph.nodes[j]);
+      if (d <= prog) addEdge(graph, i, j, d);
+    }
+  }
 }
 
 /** Krawędź o WADZE = odległości euklidesowej; przy powtórnym dodaniu (dwie ściany
@@ -149,9 +199,9 @@ function addEdge(graph: Graph, a: number, b: number, w: number) {
 
 /** Dokłada do grafu jedną łamaną (ścianę — otwartą, albo obrys pomieszczenia —
  *  zamknięty domykającym odcinkiem ostatni→pierwszy punkt). */
-function addPolyline(graph: Graph, points: Point[], closed: boolean) {
+function addPolyline(graph: Graph, points: Point[], closed: boolean, pokoj: number | null = null) {
   if (points.length < 2) return;
-  const idxs = points.map((p) => nodeIndex(graph, p));
+  const idxs = points.map((p) => nodeIndex(graph, p, pokoj));
   for (let i = 0; i < idxs.length - 1; i++) {
     graph.segments.push({ aIdx: idxs[i], bIdx: idxs[i + 1], a: points[i], b: points[i + 1] });
     addEdge(graph, idxs[i], idxs[i + 1], dist(points[i], points[i + 1]));
@@ -255,16 +305,63 @@ function zamknieta(points: Point[]): boolean {
  * z zerem, bo tam chodzi o PRAWDZIWE położenie ścian: kolizję trzeba sprawdzać
  * z tym, co stoi na planie, a nie z linią pomocniczą odsuniętą o kilka jednostek.
  */
-function buildGraph(walls: Wall[], roomShapes: RoomShape[], wsuniecie = 0): Graph {
-  const graph: Graph = { nodes: [], adj: new Map(), segments: [], pokoje: roomShapes.map((r) => r.points) };
+function buildGraph(walls: Wall[], roomShapes: RoomShape[], wsuniecie = 0, otwory: Opening[] = []): Graph {
+  const graph: Graph = { nodes: [], adj: new Map(), segments: [], zrodloWezla: [], pokoje: roomShapes.map((r) => r.points) };
   walls.forEach((w) => {
     // Ściana OTWARTA nie ma wnętrza, więc nie ma jej dokąd wsunąć — zostaje jak jest.
     const ring = zamknieta(w.points);
     const pts = wsuniecie > 0 && ring ? wsunObrys(w.points.slice(0, -1), wsuniecie) : w.points;
     addPolyline(graph, pts, wsuniecie > 0 && ring);
   });
-  roomShapes.forEach((r) => addPolyline(graph, wsuniecie > 0 ? wsunObrys(r.points, wsuniecie) : r.points, true));
+  roomShapes.forEach((r, i) => addPolyline(graph, wsuniecie > 0 ? wsunObrys(r.points, wsuniecie) : r.points, true, i));
+  // Przejscia miedzy pokojami DOPIERO teraz — wszystkie obrysy musza juz byc w grafie.
+  polaczSasiedniePokoje(graph, wsuniecie);
+  // Otwory dokładane NA KOŃCU: przejście musi mieć do czego się podpiąć, więc obrysy
+  // obu sąsiadujących pomieszczeń muszą już być w grafie.
+  if (wsuniecie > 0) otwory.forEach((o) => dodajPrzejscie(graph, o, wsuniecie));
   return graph;
+}
+
+/**
+ * Przejście przez OTWÓR — DODATKOWA droga między pomieszczeniami, nie jedyna.
+ *
+ * Ściana nie jest dla przewodu przeszkodą: elektryk przewierca się przez nią i tak ma
+ * zostać (sąsiednie pokoje łączą się też narożnikami — patrz `nodeIndex`). Drzwi
+ * dokładają tylko drugą możliwość, a o tym, która zostanie użyta, decyduje sama
+ * długość: gdy otwór leży bliżej niż narożniki, Dijkstra prowadzi przewód przez niego,
+ * zamiast obchodzić pokój. Żadnej reguły „przez drzwi, bo drzwi" tu nie ma.
+ *
+ * Przejście to dwa punkty po obu stronach muru, spięte krawędzią: `D ± n · wsuniecie`,
+ * gdzie `n` jest normalną do kierunku ściany w tym miejscu (`angle`). Oba lądują
+ * dokładnie na wsuniętych obrysach sąsiadów, bo obrys wsuwa się o tyle samo.
+ *
+ * Szerokość otworu jest tu bez znaczenia: przewód przechodzi w jednym miejscu, a nie
+ * całą szerokością skrzydła.
+ */
+function dodajPrzejscie(graph: Graph, otwor: Opening, wsuniecie: number) {
+  const n = { x: -Math.sin(otwor.angle), y: Math.cos(otwor.angle) };
+  const brzegi = [1, -1].map((strona) => {
+    const p = { x: otwor.x + n.x * wsuniecie * strona, y: otwor.y + n.y * wsuniecie * strona };
+    const wezel = dodajWezel(graph, p);
+    // Podpięcie do najbliższego odcinka sieci po TEJ stronie muru. Zwykle punkt leży
+    // dokładnie na nim (obrys wsunięty o to samo), więc doskok ma zerową długość —
+    // ale drzwi bywają też w ścianie rysowanej osobno, nie na krawędzi pomieszczenia.
+    const najblizszy = graph.segments
+      .map((seg) => ({ seg, ...projectOntoSegment(p, seg.a, seg.b) }))
+      .sort((a, b) => a.distSq - b.distSq)[0];
+    // Strona bez żadnej geometrii (drzwi zewnętrzne — na zewnątrz nie ma trasy)
+    // zostaje niepodpięta i przejście po prostu nigdzie nie prowadzi.
+    if (najblizszy && Math.sqrt(najblizszy.distSq) <= wsuniecie) {
+      const wejscie = dodajWezel(graph, najblizszy.point);
+      addEdge(graph, wejscie, najblizszy.seg.aIdx, dist(najblizszy.point, najblizszy.seg.a));
+      addEdge(graph, wejscie, najblizszy.seg.bIdx, dist(najblizszy.point, najblizszy.seg.b));
+      addEdge(graph, wezel, wejscie, dist(p, najblizszy.point));
+      for (const inne of (najblizszy.seg.wejscia ??= [])) addEdge(graph, wejscie, inne, dist(najblizszy.point, graph.nodes[inne]));
+      najblizszy.seg.wejscia.push(wejscie);
+    }
+    return wezel;
+  });
+  addEdge(graph, brzegi[0], brzegi[1], 2 * wsuniecie);
 }
 
 /**
@@ -296,11 +393,19 @@ function projectOntoSegment(p: Point, a: Point, b: Point): { point: Point; distS
 }
 
 /**
- * „Doskakuje" punktem `p` (rozdzielnica albo odbiornik) do najbliższego miejsca na
- * najbliższym odcinku sieci — wstawia tam NOWY węzeł (albo reużywa istniejący, gdy
- * projekcja trafiła w promień `MERGE_TOLERANCE` od narożnika) i łączy go z obydwoma
- * końcami tego odcinka, żeby Dijkstra mógł stamtąd ruszyć w obie strony wzdłuż ściany.
- * Zwraca `null`, gdy w grafie nie ma żadnego odcinka (brak ścian/pomieszczeń).
+ * „Doskakuje" punktem `p` (rozdzielnica albo odbiornik) do sieci tras.
+ *
+ * Nie do jednego odcinka: kandydatów jest do `LICZBA_WEJSC`, każdy dostaje własny punkt
+ * wejścia i krawędź o wadze równej długości doskoku, a o wyborze decyduje dopiero
+ * Dijkstra na PEŁNEJ długości trasy — patrz komentarze niżej, tam jest powód.
+ *
+ * Punkty wejścia zakładane są przez `dodajWezel`, czyli BEZ scalania w promieniu
+ * `MERGE_TOLERANCE`. To istotne, a nie kosmetyczne: doskok ma `ODSUNIECIE_TRASY`
+ * długości i mieści się w tym promieniu w całości, więc scalanie wciągało punkt wejścia
+ * do węzła samego elementu i zostawała krawędź element → narożnik pokoju. Na rysunku
+ * wychodziła z tego skośna kreska przez całą ścianę.
+ *
+ * Zwraca `null`, gdy w grafie nie ma żadnego odcinka (brak ścian i pomieszczeń).
  */
 function connectPoint(graph: Graph, p: Point, swobodne: boolean): number | null {
   if (graph.segments.length === 0) return null;
@@ -463,11 +568,14 @@ export function routeAlongWalls(
    * „doskok" przez pół pokoju do dalszej ściany byłby przewodem biegnącym środkiem
    * podłogi.
    */
-  swobodneWejscie: { from?: boolean; to?: boolean } = {}
+  swobodneWejscie: { from?: boolean; to?: boolean } = {},
+  /** Otwory (drzwi) tej kondygnacji — JEDYNE miejsca, którymi przewód przechodzi
+   *  z pomieszczenia do pomieszczenia, patrz `dodajPrzejscie`. */
+  otwory: Opening[] = []
 ): Point[] | null {
   // Graf na obrysach WSUNIĘTYCH do wnętrza — patrz `ODSUNIECIE_TRASY`. Trasa biegnie
   // wtedy obok ściany, a nie po jej osi, i widać ją na rysunku jako osobną linię.
-  const graph = buildGraph(walls, roomShapes, ODSUNIECIE_TRASY);
+  const graph = buildGraph(walls, roomShapes, ODSUNIECIE_TRASY, otwory);
   const start = connectPoint(graph, from, swobodneWejscie.from === true);
   const end = connectPoint(graph, to, swobodneWejscie.to === true);
   if (start === null || end === null) return null;

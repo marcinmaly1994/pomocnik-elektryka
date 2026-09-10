@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Point, RoomShape, Wall } from "@/types";
-import { crossesGeometry, routeAlongWalls, wsunObrys } from "./routing";
+import type { Opening, Point, RoomShape, Wall } from "@/types";
+import { crossesGeometry, ODSUNIECIE_TRASY, routeAlongWalls, wsunObrys } from "./routing";
 
 function wall(points: Point[]): Wall {
   return { id: Math.random().toString(36).slice(2), floor: "parter", points };
@@ -296,5 +296,133 @@ describe("routeAlongWalls — wejscie w siec z wlasnego pomieszczenia", () => {
     ]);
     const trasa = routeAlongWalls({ x: 200, y: 150 }, { x: 700, y: 150 }, [], [POKOJ, drugi]);
     expect(trasa).toBeNull(); // dwa rozlaczne kawalki geometrii — zostaje szacunek Manhattan
+  });
+});
+
+/**
+ * Przejscia miedzy pomieszczeniami.
+ *
+ * Sciana NIE jest dla przewodu przeszkoda — elektryk przewierca sie przez nia i tak
+ * ma zostac. Otwor dokłada tylko DODATKOWA droge: gdy drzwi leza blizej niz narozniki,
+ * trasa idzie przez nie zamiast obchodzic pokoj. Sprawdzana jest wiec nie „czy sciana
+ * blokuje", tylko „czy otwor jest wybierany wtedy, kiedy naprawde skraca droge".
+ */
+describe("routeAlongWalls — przejscia przez otwory", () => {
+  const A = room([
+    { x: 0, y: 0 },
+    { x: 200, y: 0 },
+    { x: 200, y: 300 },
+    { x: 0, y: 300 },
+  ]);
+  const B = room([
+    { x: 200, y: 0 },
+    { x: 400, y: 0 },
+    { x: 400, y: 300 },
+    { x: 200, y: 300 },
+  ]);
+  /** Drzwi we wspolnej, PIONOWEJ scianie x = 200 — `angle` to kierunek sciany. */
+  const drzwi: Opening = { id: "o1", floor: "parter", x: 200, y: 150, angle: Math.PI / 2, width: 18, kind: "drzwi" };
+
+  // Oba punkty PRZY WSPOLNEJ SCIANIE, na wysokosci drzwi i daleko od naroznikow —
+  // przejscie otworem ma tu kilkanascie jednostek, a obejscie rogiem prawie trzysta.
+  const zPokojuA = { x: 180, y: 150 };
+  const zPokojuB = { x: 220, y: 150 };
+
+  it("BEZ otworu trasa i tak laczy pokoje — przewod przechodzi przez mur", () => {
+    const trasa = routeAlongWalls(zPokojuA, zPokojuB, [], [A, B]);
+    expect(trasa).not.toBeNull();
+  });
+
+  it("Z otworem trasa przechodzi DOKLADNIE przez niego", () => {
+    const trasa = routeAlongWalls(zPokojuA, zPokojuB, [], [A, B], {}, [drzwi])!;
+    expect(trasa).not.toBeNull();
+    // Sciane x = 200 wolno przekroczyc WYLACZNIE na wysokosci drzwi. Sprawdzane na
+    // odcinkach, nie na punktach: samo „byc blisko muru" to jeszcze nie przejscie,
+    // przez mur przechodzi ten odcinek, ktorego konce leza po jego dwoch stronach.
+    const przejscia = [];
+    for (let i = 1; i < trasa.length; i++) {
+      const a = trasa[i - 1];
+      const b = trasa[i];
+      if (a.x < 200 === b.x < 200) continue;
+      const t = (200 - a.x) / (b.x - a.x);
+      przejscia.push(a.y + t * (b.y - a.y));
+    }
+    expect(przejscia).toHaveLength(1); // dokladnie jedno przejscie, nie dwa i nie zero
+    expect(przejscia[0]).toBeCloseTo(150, 6);
+  });
+
+  /** Bez tego test wyzej moglby przechodzic takze wtedy, gdyby otwor byl tylko
+   *  ozdoba: sprawdzamy, ze naprawde SKRACA droge, a nie ze trasa i tak by tamtedy
+   *  poszla. Roznica to obejscie rogiem — prawie dwie dlugosci pokoju. */
+  it("otwor SKRACA trase — bez niego przewod obchodzi pokoj rogiem", () => {
+    const bez = routeAlongWalls(zPokojuA, zPokojuB, [], [A, B])!;
+    const zDrzwiami = routeAlongWalls(zPokojuA, zPokojuB, [], [A, B], {}, [drzwi])!;
+    expect(polylineLength(zDrzwiami)).toBeLessThan(polylineLength(bez) / 2);
+  });
+
+  /** Otwór w scianie ZEWNETRZNEJ nie ma dokad prowadzic — ma nie psuc routingu
+   *  wewnatrz pokoju ani nie wyprowadzac trasy na zewnatrz budynku. */
+  it("otwor w scianie zewnetrznej niczego nie psuje", () => {
+    const wejsciowe: Opening = { id: "o2", floor: "parter", x: 0, y: 150, angle: Math.PI / 2, width: 18, kind: "drzwi" };
+    const trasa = routeAlongWalls({ x: 20, y: 20 }, { x: 180, y: 285 }, [], [A], {}, [wejsciowe])!;
+    expect(trasa).not.toBeNull();
+    expect(Math.min(...trasa.map((p) => p.x))).toBeGreaterThan(-1); // nic nie wyszlo poza budynek
+  });
+});
+/**
+ * WSPOLNA SCIANA dwoch pomieszczen.
+ *
+ * Zgloszenie: linia przy srodkowej scianie nie byla do niej rownolegla, tylko
+ * zapadnieta. Naroczniki obu pokoi — kazdy wsuniety o ODSUNIECIE_TRASY w glab SWOJEGO
+ * pomieszczenia — dzieli dokladnie dwa wsuniecia, czyli tyle, ile wynosi tolerancja
+ * scalania wezlow. Scalone w jeden wezel przyjmowaly pozycje tego pokoju, ktory trafil
+ * do grafu PIERWSZY, wiec kazdy przebieg drugiego startowal dziesiec jednostek obok
+ * swojego korytarza, a roznica rozciagala sie na cala dlugosc sciany.
+ */
+describe("routeAlongWalls — wspolna sciana dwoch pomieszczen", () => {
+  /** Gorny pokoj: y 0..200. Dolny: y 200..400. Wspolna sciana pozioma y = 200. */
+  const GORA = room([
+    { x: 0, y: 0 },
+    { x: 300, y: 0 },
+    { x: 300, y: 200 },
+    { x: 0, y: 200 },
+  ]);
+  const DOL = room([
+    { x: 0, y: 200 },
+    { x: 300, y: 200 },
+    { x: 300, y: 400 },
+    { x: 0, y: 400 },
+  ]);
+
+  it("przebieg wzdluz wspolnej sciany trzyma JEDNA prosta", () => {
+    // Oba punkty przy wspolnej scianie, po tej samej (dolnej) stronie.
+    const trasa = routeAlongWalls({ x: 60, y: 207 }, { x: 240, y: 207 }, [], [GORA, DOL])!;
+    expect(trasa).not.toBeNull();
+    // Punkty POSREDNIE (bez koncow siedzacych na osprzecie) leza na korytarzu dolnego
+    // pokoju, czyli na jednej wysokosci. Zapad objawial sie tu dwiema roznymi.
+    const wysokosci = [...new Set(trasa.slice(1, -1).map((p) => Math.round(p.y)))];
+    expect(wysokosci).toHaveLength(1);
+  });
+
+  /** Polaczenie miedzy pokojami ma ZOSTAC — zmiana dotyczy sposobu, nie tego, czy
+   *  przewod w ogole przechodzi przez mur. */
+  it("pokoje pozostaja polaczone — przewod nadal przechodzi przez sciane", () => {
+    const trasa = routeAlongWalls({ x: 60, y: 380 }, { x: 60, y: 20 }, [], [GORA, DOL]);
+    expect(trasa).not.toBeNull();
+  });
+
+  /** Przejscie jest KROTKIE i prostopadle do sciany, a nie rozciagniete na jej dlugosc:
+   *  odcinek przekraczajacy mur ma dlugosc dwoch wsuniec, nie pol pokoju. */
+  it("przejscie przez sciane jest krotkim przeskokiem, nie dlugim skosem", () => {
+    const trasa = routeAlongWalls({ x: 60, y: 380 }, { x: 60, y: 20 }, [], [GORA, DOL])!;
+    const przez = [];
+    for (let i = 1; i < trasa.length; i++) {
+      const a = trasa[i - 1];
+      const b = trasa[i];
+      if (a.y < 200 === b.y < 200) continue;
+      przez.push(Math.hypot(b.x - a.x, b.y - a.y));
+    }
+    expect(przez).toHaveLength(1);
+    expect(przez[0]).toBeLessThan(2 * ODSUNIECIE_TRASY + 2);
   });
 });

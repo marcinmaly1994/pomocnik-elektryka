@@ -1513,8 +1513,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   // układzie współrzędnych. Puste trasy zasilania bez rozdzielnicy na planie — trasy
   // sterowania (łącznik→oprawa) działają niezależnie od niej, patrz `buildCableRoutes`.
   const rawCableRoutes = useMemo(
-    () => (showRoutes ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes, elementRenderScale(mpu, elementScale)) : []),
-    [showRoutes, elements, walls, roomShapes, mpu, elementScale]
+    () =>
+      showRoutes
+        ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes, openings, elementRenderScale(mpu, elementScale))
+        : [],
+    [showRoutes, elements, walls, roomShapes, openings, mpu, elementScale]
   );
   // Ręczne poprawki (przeciągnięte przez użytkownika załamania, patrz DesignCanvas)
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się

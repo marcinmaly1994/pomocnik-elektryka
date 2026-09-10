@@ -477,6 +477,13 @@ function FinalCircuitsTable({ columns }: { columns: Column[] }) {
 export function SchemaTab() {
   const elements = useProjectStore((s) => s.draft.elements);
   const roomShapes = useProjectStore((s) => s.draft.roomShapes);
+  // Geometria CALEGO budynku — z niej dobor liczy bieg poziomy trasy, czyli te sama
+  // droge, ktora widac na rzucie. Bez niej zostawal szacunek Manhattan, KROTSZY od
+  // trasy rzeczywistej, wiec zanizajacy spadek napiecia (patrz `estimateRoutes`).
+  const walls = useProjectStore((s) => s.draft.walls);
+  const openings = useProjectStore((s) => s.draft.openings);
+  const floors = useProjectStore((s) => s.floors);
+  const geometria = useMemo(() => ({ walls, roomShapes, openings }), [walls, roomShapes, openings]);
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const projectName = useProjectStore((s) => s.projectName);
   const scales = useProjectStore((s) => s.scales);
@@ -549,8 +556,8 @@ export function SchemaTab() {
   // Te same obwody co w Rozdzielnicy — z doborem, nie ze stałymi z `computeCircuits`.
   // Inaczej schemat jednokreskowy pokazywałby inny przekrój niż front rozdzielnicy.
   const { circuits } = useMemo(
-    () => computeSizedCircuits(elements, { scales }, roomShapes),
-    [elements, scales, roomShapes]
+    () => computeSizedCircuits(elements, { scales, geometria, kondygnacje: floors }, roomShapes),
+    [elements, scales, geometria, floors, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   /**

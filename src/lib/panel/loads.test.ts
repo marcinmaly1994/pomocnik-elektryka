@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Circuit, ElementType, InstallationElement, RoomShape } from "@/types";
+import type { Circuit, ElementType, Floor, InstallationElement, RoomShape } from "@/types";
 import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, przytnijDoKrawedzi, zakonczPrzyNozce } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -652,7 +652,7 @@ describe("findPanel / kindForElements", () => {
 
 describe("estimateRoutesByFloor", () => {
   /** Jedna rozdzielnica na caly budynek — najczestszy uklad w domu jednorodzinnym. */
-  const panel = { poKondygnacji: new Map<string, { x: number; y: number }>(), glowna: { x: 0, y: 0 } };
+  const panel = { poKondygnacji: new Map<string, { x: number; y: number }>(), glowna: { x: 0, y: 0 }, glownaKondygnacja: "parter" };
   // Ten sam punkt planu na dwoch kondygnacjach — rozni je WYLACZNIE skala pietra.
   const naParterze = el("gniazdko", { x: 100, y: 0, floor: "parter" });
   const naPietrze = el("gniazdko", { x: 100, y: 0, floor: "pietro" });
@@ -695,7 +695,7 @@ describe("estimateRoutesByFloor", () => {
   });
 
   it("bez rozdzielnicy i bez elementow nie ma czego mierzyc", () => {
-    expect(estimateRoutesByFloor({ poKondygnacji: new Map(), glowna: null }, [naParterze], { parter: 0.05 })).toBeNull();
+    expect(estimateRoutesByFloor({ poKondygnacji: new Map(), glowna: null, glownaKondygnacja: null }, [naParterze], { parter: 0.05 })).toBeNull();
     expect(estimateRoutesByFloor(panel, [], { parter: 0.05 })).toBeNull();
   });
 });
@@ -971,5 +971,261 @@ describe("buildCableRoutes — poczatek przy rozdzielnicy", () => {
     ]);
     expect(trasy).toHaveLength(2);
     for (const r of trasy) expect(r.points[0]).toEqual({ x: 100, y: 200 });
+  });
+});
+
+/**
+ * Szacunek dlugosci a NARYSOWANA trasa.
+ *
+ * Kolejnosc punktow byla wspolna od dawna (`kolejnoscLancucha`), ale DLUGOSC kazdego
+ * ogniwa liczyly inaczej: szacunek w linii lamanej miedzy punktami, rysunek naokolo
+ * wzdluz scian. Roznica zalezy od ulozenia i wlasnie dlatego jest zdradliwa —
+ * zmierzone na pokoju 400 x 300: 3-5% przy gniazdach wzdluz jednej sciany, ale 22%,
+ * gdy lancuch przechodzi miedzy scianami PRZECIWLEGLYMI. Manhattan tnie wtedy przez
+ * srodek pokoju, a kabel musi obejsc.
+ *
+ * Blad szedl w strone NIEBEZPIECZNA: `worstCaseM` idzie wprost do spadku napiecia,
+ * wiec krotsza trasa to mniejszy spadek i zgoda na cienszy przewod, niz trzeba.
+ */
+describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
+  const POKOJ: RoomShape = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 400, y: 0 },
+      { x: 400, y: 300 },
+      { x: 0, y: 300 },
+    ],
+  };
+  const geo = { walls: [], roomShapes: [POKOJ], openings: [] };
+  const rozdzielnica = el("rozdzielnica", { x: 20, y: 287, rotation: 180 });
+  const punkt = { x: rozdzielnica.x, y: rozdzielnica.y };
+  /** Pion i zapas dla gniazda przy rozdzielnicy na 1,5 m: (2,8−1,5) + (2,8−0,3) + 1,5. */
+  const NADDATEK = 5.3;
+
+  /** Suma dlugosci odcinkow NARYSOWANYCH na rzucie [jednostki planu]. */
+  function dlugoscRysunku(gniazda: InstallationElement[]): number {
+    const c: Circuit = { id: "o1", name: "Obwód", type: "gniazdko", elements: gniazda, cable: "", breaker: "", rcd: true };
+    return buildCableRoutes(punkt, [c], [rozdzielnica, ...gniazda], geo.walls, geo.roomShapes, geo.openings).reduce(
+      (s, t) => s + t.lengthUnits,
+      0
+    );
+  }
+
+  const wzdluzJednejSciany = [
+    el("gniazdko", { x: 393, y: 60, rotation: 90 }),
+    el("gniazdko", { x: 393, y: 150, rotation: 90 }),
+    el("gniazdko", { x: 393, y: 240, rotation: 90 }),
+  ];
+  /** Uklad, w ktorym Manhattan tnie przez srodek pokoju, a kabel musi obejsc scianami. */
+  const scianyPrzeciwlegle = [
+    el("gniazdko", { x: 7, y: 60, rotation: 270 }),
+    el("gniazdko", { x: 393, y: 60, rotation: 90 }),
+  ];
+
+  /**
+   * Sedno poprawki. `metersPerUnit` = 1, wiec metry sa jednostkami planu i da sie
+   * porownac wprost; od `worstCaseM` odejmujemy naddatek pionowy, ktorego na rzucie
+   * nie widac.
+   *
+   * Zostaje kilka procent roznicy i to jest zrozumiale: rysunek dokłada na obu koncach
+   * dojscia do obudowy rozdzielnicy i do nozki gniazda (patrz `zakonczPrzyNozce`),
+   * a szacunek liczy od srodka do srodka i pokrywa to ryczaltem `SLACK_M`. Pilnujemy
+   * wiec ZGODNOSCI, nie identycznosci.
+   */
+  it("bieg poziomy zgadza sie z dlugoscia narysowanej trasy", () => {
+    for (const gniazda of [wzdluzJednejSciany, scianyPrzeciwlegle]) {
+      const poziom = estimateRoutes(punkt, gniazda, 1, undefined, { geometria: geo })!.worstCaseM - NADDATEK;
+      const rysunek = dlugoscRysunku(gniazda);
+      expect(Math.abs(poziom - rysunek)).toBeLessThan(rysunek * 0.1);
+    }
+  });
+
+  it("z geometria szacunek NIGDY nie jest krotszy niz bez niej", () => {
+    for (const gniazda of [wzdluzJednejSciany, scianyPrzeciwlegle]) {
+      const bez = estimateRoutes(punkt, gniazda, 1)!;
+      const zGeo = estimateRoutes(punkt, gniazda, 1, undefined, { geometria: geo })!;
+      expect(zGeo.worstCaseM).toBeGreaterThanOrEqual(bez.worstCaseM);
+      expect(zGeo.totalM).toBeGreaterThanOrEqual(bez.totalM);
+    }
+  });
+
+  /** Uklad, dla ktorego cala poprawka powstala: Manhattan zaniza tu o jedna piata. */
+  it("przy scianach PRZECIWLEGLYCH roznica jest istotna, nie kosmetyczna", () => {
+    const bez = estimateRoutes(punkt, scianyPrzeciwlegle, 1)!;
+    const zGeo = estimateRoutes(punkt, scianyPrzeciwlegle, 1, undefined, { geometria: geo })!;
+    expect(zGeo.worstCaseM - NADDATEK).toBeGreaterThan((bez.worstCaseM - NADDATEK) * 1.15);
+  });
+
+  /** Bez geometrii (brak rysunku, stare zapisy, testy doboru) zostaje dokladnie to,
+   *  co bylo — zeby wpiecie tras nie zmienilo po cichu wynikow tam, gdzie ich nie ma. */
+  it("bez geometrii zachowanie zostaje takie jak dotad (Manhattan)", () => {
+    const r = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1)!;
+    expect(r.worstCaseM).toBeCloseTo(7 + NADDATEK, 1); // (30+40) * 0,1 = 7 m
+  });
+
+  /** Gdy routing nie ma po czym prowadzic trasy, szacunek nie moze zwrocic zera ani
+   *  wyjatku — spada na Manhattan, dokladnie tak jak rysunek spada na przerywana. */
+  it("geometria bez scian i obrysow nie psuje wyniku — zostaje Manhattan", () => {
+    const pusta = { walls: [], roomShapes: [], openings: [] };
+    const zPusta = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1, undefined, { geometria: pusta })!;
+    const bez = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1)!;
+    expect(zPusta).toEqual(bez);
+  });
+});
+/**
+ * PION MIEDZY KONDYGNACJAMI.
+ *
+ * Trasa z rozdzielnicy na parterze do gniazda na pietrze dostawala sam rzut poziomy —
+ * plan nie wiedzial, ze po drodze jest strop. Przy typowej kondygnacji to kilka metrow
+ * na obwod, znowu zaniżonych, czyli w strone zbyt cienkiego przewodu.
+ *
+ * Kolejnosc w `floors` jest kolejnoscia kondygnacji (nowe dokladaja sie na koncu listy)
+ * i to jedyna informacja o ich ukladzie, jaka projekt niesie.
+ */
+describe("estimateRoutesByFloor — pion miedzy kondygnacjami", () => {
+  const FLOORS: Floor[] = [
+    { id: "parter", name: "Parter" },
+    { id: "pietro", name: "Piętro" },
+    { id: "poddasze", name: "Poddasze" },
+  ];
+  /** Wysokosc kondygnacji przyjeta w module (CEILING_RUN_M). */
+  const WYSOKOSC = 2.8;
+  const skale = { parter: 0.05, pietro: 0.05, poddasze: 0.05 };
+  /** Jedna rozdzielnica, na parterze — typowy dom. */
+  const tylkoParter = {
+    poKondygnacji: new Map([["parter", { x: 0, y: 0 }]]),
+    glowna: { x: 0, y: 0 },
+    glownaKondygnacja: "parter",
+  };
+  const naPietrze = el("gniazdko", { x: 100, y: 0, floor: "pietro" });
+
+  it("obwod siegajacy pietra dostaje pion o wysokosc kondygnacji", () => {
+    const bez = estimateRoutesByFloor(tylkoParter, [naPietrze], skale)!;
+    const zPionem = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.worstCaseM - bez.worstCaseM).toBeCloseTo(WYSOKOSC, 5);
+    expect(zPionem.totalM - bez.totalM).toBeCloseTo(WYSOKOSC, 5);
+  });
+
+  it("dwie kondygnacje wyzej to dwie wysokosci", () => {
+    const naPoddaszu = el("gniazdko", { x: 100, y: 0, floor: "poddasze" });
+    const bez = estimateRoutesByFloor(tylkoParter, [naPoddaszu], skale)!;
+    const zPionem = estimateRoutesByFloor(tylkoParter, [naPoddaszu], skale, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.worstCaseM - bez.worstCaseM).toBeCloseTo(2 * WYSOKOSC, 5);
+  });
+
+  /** Pietro z WLASNA podrozdzielnica liczy sie od niej — pionu nie ma, bo obwod nigdzie
+   *  nie przechodzi przez strop. Zasilanie samej podrozdzielnicy to osobna sprawa (WLZ). */
+  it("pietro z wlasna podrozdzielnica nie dostaje pionu", () => {
+    const zPodrozdzielnica = {
+      poKondygnacji: new Map([
+        ["parter", { x: 0, y: 0 }],
+        ["pietro", { x: 0, y: 0 }],
+      ]),
+      glowna: { x: 0, y: 0 },
+      glownaKondygnacja: "parter",
+    };
+    const bez = estimateRoutesByFloor(zPodrozdzielnica, [naPietrze], skale)!;
+    const zPionem = estimateRoutesByFloor(zPodrozdzielnica, [naPietrze], skale, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.worstCaseM).toBeCloseTo(bez.worstCaseM, 5);
+  });
+
+  /** Pion doliczany RAZ na kondygnacje, nie na punkt: kabel wchodzi na pietro jeden raz
+   *  i dopiero tam rozchodzi sie lancuchem. */
+  it("pion liczy sie raz na kondygnacje, a nie po razie na kazde gniazdo", () => {
+    const troje = [
+      el("gniazdko", { x: 100, y: 0, floor: "pietro" }),
+      el("gniazdko", { x: 120, y: 0, floor: "pietro" }),
+      el("gniazdko", { x: 140, y: 0, floor: "pietro" }),
+    ];
+    const bez = estimateRoutesByFloor(tylkoParter, troje, skale)!;
+    const zPionem = estimateRoutesByFloor(tylkoParter, troje, skale, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.totalM - bez.totalM).toBeCloseTo(WYSOKOSC, 5);
+  });
+
+  /** Kondygnacja spoza listy: lepiej nie doliczyc nic, niz doliczyc z pozycji zgadywanej. */
+  it("kondygnacja nieznana na liscie nie dostaje zadnego pionu", () => {
+    const gdzieIndziej = el("gniazdko", { x: 100, y: 0, floor: "piwnica" });
+    const skaleZPiwnica = { ...skale, piwnica: 0.05 };
+    const bez = estimateRoutesByFloor(tylkoParter, [gdzieIndziej], skaleZPiwnica)!;
+    const zPionem = estimateRoutesByFloor(tylkoParter, [gdzieIndziej], skaleZPiwnica, undefined, { kondygnacje: FLOORS })!;
+    expect(zPionem.worstCaseM).toBeCloseTo(bez.worstCaseM, 5);
+  });
+
+  /** Bez listy kondygnacji zostaje dokladnie to, co bylo — zeby wpiecie pionow nie
+   *  zmienilo po cichu wynikow tam, gdzie tej informacji nie ma. */
+  it("bez listy kondygnacji zachowanie zostaje takie jak dotad", () => {
+    const a = estimateRoutesByFloor(tylkoParter, [naPietrze], skale)!;
+    const b = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, {})!;
+    expect(a).toEqual(b);
+  });
+});
+/**
+ * OBWOD OSWIETLENIOWY ZE STEROWANIEM.
+ *
+ * Zasilanie idzie do LACZNIKA, a dopiero stamtad przewod rozchodzi sie do opraw —
+ * rysunek robil tak od dawna, szacunek nie. Pchal lancuch z rozdzielnicy wprost do
+ * opraw i wychodzil krotszy. Zmierzone na pokoju z lacznikiem przy przeciwleglej
+ * scianie: rysunek 1000 jednostek, szacunek 677, czyli o jedna trzecia mniej.
+ * Znowu w strone niebezpieczna, bo `worstCaseM` idzie do spadku napiecia.
+ */
+describe("estimateRoutes — obwod oswietleniowy sterowany lacznikiem", () => {
+  const POKOJ: RoomShape = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 400, y: 0 },
+      { x: 400, y: 300 },
+      { x: 0, y: 300 },
+    ],
+  };
+  const geometria = { walls: [], roomShapes: [POKOJ], openings: [] };
+  const rozdzielnica = el("rozdzielnica", { x: 20, y: 287, rotation: 180 });
+  const punkt = { x: rozdzielnica.x, y: rozdzielnica.y };
+  /** Lacznik przy PRZECIWLEGLEJ scianie — zeby objazd przez niego byl wyrazny. */
+  const lacznik = el("wlacznik", { x: 380, y: 287, rotation: 180 });
+  const oprawy = [el("oswietlenie", { x: 150, y: 100 }), el("oswietlenie", { x: 300, y: 100 })];
+  const wszystkieElementy = [rozdzielnica, lacznik, ...oprawy];
+
+  /** Suma WSZYSTKICH odcinkow narysowanych na rzucie — zasilania i sterowania. */
+  function dlugoscRysunku(): number {
+    const c: Circuit = { id: "o1", name: "Obwód", type: "oswietlenie", elements: oprawy, cable: "", breaker: "", rcd: true };
+    return buildCableRoutes(punkt, [c], wszystkieElementy, [], [POKOJ], []).reduce((s, t) => s + t.lengthUnits, 0);
+  }
+
+  it("szacunek materialu zgadza sie z tym, co widac na rzucie", () => {
+    const r = estimateRoutes(punkt, oprawy, 1, undefined, { geometria, wszystkieElementy })!;
+    const rysunek = dlugoscRysunku();
+    expect(Math.abs(r.totalM - rysunek)).toBeLessThan(rysunek * 0.1);
+  });
+
+  it("bez wiedzy o laczniku szacunek jest ISTOTNIE krotszy — to jest naprawiany blad", () => {
+    const bez = estimateRoutes(punkt, oprawy, 1, undefined, { geometria })!;
+    const zLacznikiem = estimateRoutes(punkt, oprawy, 1, undefined, { geometria, wszystkieElementy })!;
+    expect(zLacznikiem.totalM).toBeGreaterThan(bez.totalM * 1.2);
+    expect(zLacznikiem.worstCaseM).toBeGreaterThan(bez.worstCaseM);
+  });
+
+  /** Gniazda nie maja sterowania, wiec podanie wszystkich elementow nie moze ich ruszyc. */
+  it("obwod gniazdowy nie zmienia sie od podania wszystkich elementow", () => {
+    const gniazda = [el("gniazdko", { x: 393, y: 60, rotation: 90 }), el("gniazdko", { x: 393, y: 150, rotation: 90 })];
+    const wszystko = [rozdzielnica, lacznik, ...gniazda];
+    const bez = estimateRoutes(punkt, gniazda, 1, undefined, { geometria })!;
+    const ze = estimateRoutes(punkt, gniazda, 1, undefined, { geometria, wszystkieElementy: wszystko })!;
+    expect(ze).toEqual(bez);
+  });
+
+  /** Oprawa BEZ lacznika na planie zasila sie wprost — nie ma czego przekierowywac. */
+  it("oprawa bez lacznika liczy sie jak dotad", () => {
+    const bezLacznika = [rozdzielnica, ...oprawy];
+    const a = estimateRoutes(punkt, oprawy, 1, undefined, { geometria })!;
+    const b = estimateRoutes(punkt, oprawy, 1, undefined, { geometria, wszystkieElementy: bezLacznika })!;
+    expect(b).toEqual(a);
   });
 });
