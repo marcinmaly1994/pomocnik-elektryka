@@ -1038,7 +1038,7 @@ describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
    */
   it("bieg poziomy zgadza sie z dlugoscia narysowanej trasy", () => {
     for (const gniazda of [wzdluzJednejSciany, scianyPrzeciwlegle]) {
-      const poziom = estimateRoutes(punkt, gniazda, 1, undefined, geo)!.worstCaseM - NADDATEK;
+      const poziom = estimateRoutes(punkt, gniazda, 1, undefined, { geometria: geo })!.worstCaseM - NADDATEK;
       const rysunek = dlugoscRysunku(gniazda);
       expect(Math.abs(poziom - rysunek)).toBeLessThan(rysunek * 0.1);
     }
@@ -1047,7 +1047,7 @@ describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
   it("z geometria szacunek NIGDY nie jest krotszy niz bez niej", () => {
     for (const gniazda of [wzdluzJednejSciany, scianyPrzeciwlegle]) {
       const bez = estimateRoutes(punkt, gniazda, 1)!;
-      const zGeo = estimateRoutes(punkt, gniazda, 1, undefined, geo)!;
+      const zGeo = estimateRoutes(punkt, gniazda, 1, undefined, { geometria: geo })!;
       expect(zGeo.worstCaseM).toBeGreaterThanOrEqual(bez.worstCaseM);
       expect(zGeo.totalM).toBeGreaterThanOrEqual(bez.totalM);
     }
@@ -1056,7 +1056,7 @@ describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
   /** Uklad, dla ktorego cala poprawka powstala: Manhattan zaniza tu o jedna piata. */
   it("przy scianach PRZECIWLEGLYCH roznica jest istotna, nie kosmetyczna", () => {
     const bez = estimateRoutes(punkt, scianyPrzeciwlegle, 1)!;
-    const zGeo = estimateRoutes(punkt, scianyPrzeciwlegle, 1, undefined, geo)!;
+    const zGeo = estimateRoutes(punkt, scianyPrzeciwlegle, 1, undefined, { geometria: geo })!;
     expect(zGeo.worstCaseM - NADDATEK).toBeGreaterThan((bez.worstCaseM - NADDATEK) * 1.15);
   });
 
@@ -1071,7 +1071,7 @@ describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
    *  wyjatku — spada na Manhattan, dokladnie tak jak rysunek spada na przerywana. */
   it("geometria bez scian i obrysow nie psuje wyniku — zostaje Manhattan", () => {
     const pusta = { walls: [], roomShapes: [], openings: [] };
-    const zPusta = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1, undefined, pusta)!;
+    const zPusta = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1, undefined, { geometria: pusta })!;
     const bez = estimateRoutes({ x: 0, y: 0 }, [el("gniazdko", { x: 30, y: 40 })], 0.1)!;
     expect(zPusta).toEqual(bez);
   });

@@ -220,10 +220,12 @@ export function estimateRoutes(
   /** Wysokość montażu rozdzielnicy [m] — punkt startu pionu. Domyślnie wartość typowa
    *  dla rozdzielnicy; przekazywana jawnie tam, gdzie na planie stoi konkretna. */
   panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5,
-  /** Ściany, obrysy i otwory TEJ kondygnacji. Brak = szacunek Manhattan, jak dotąd. */
-  geo?: GeometriaKondygnacji
+  /** Ten sam kształt co w `estimateRoutesByFloor` — obie funkcje biorą kontekst obiektem,
+   *  żeby nie dało się pomylić, która chce gołą geometrię, a która opakowaną. */
+  kontekst: { geometria?: GeometriaKondygnacji } = {}
 ): RouteEstimate | null {
   if (!panel || metersPerUnit === null || !(metersPerUnit > 0) || elements.length === 0) return null;
+  const geo = kontekst.geometria;
 
   const lancuch = kolejnoscLancucha(panel, elements);
   let total = 0;
@@ -322,10 +324,12 @@ export function estimateRoutesByFloor(
       grupa,
       typeof skala === "number" && skala > 0 ? skala : null,
       panelHeightM,
-      geo && {
-        walls: geo.walls.filter((w) => w.floor === floor),
-        roomShapes: geo.roomShapes.filter((r2) => r2.floor === floor),
-        openings: geo.openings.filter((o) => o.floor === floor),
+      {
+        geometria: geo && {
+          walls: geo.walls.filter((w) => w.floor === floor),
+          roomShapes: geo.roomShapes.filter((r2) => r2.floor === floor),
+          openings: geo.openings.filter((o) => o.floor === floor),
+        },
       }
     );
     if (!r) return null;
@@ -396,8 +400,10 @@ export function findPanels(allElements: InstallationElement[]): Rozdzielnice {
  *
  * Kolejność w `floors` jest kolejnością kondygnacji — nowe piętra dokładają się na
  * końcu listy (patrz `addFloor` w store'ie) i to jedyna informacja o ich układzie,
- * jaką projekt niesie. Liczymy sumę wysokości kondygnacji POKONANYCH po drodze, bo
- * odległość od stropu do stropu to właśnie wysokość kondygnacji leżącej między nimi.
+ * jaką projekt niesie. Liczy się więc sama RÓŻNICA POZIOMÓW: odległość od stropu do
+ * stropu to wysokość jednej kondygnacji, a wszystkie mają tę samą, bo `CEILING_RUN_M`
+ * jest jedną stałą projektu. Gdyby wysokość dało się kiedyś ustawiać per piętro, to
+ * mnożenie zamieni się w sumę po kondygnacjach po drodze.
  *
  * To dokładka do `pionM`, nie zamiennik: tamta opisuje wyjście pod strop i zejście do
  * puszki W OBRĘBIE piętra, ta — przejście przez strop. Bez niej trasa z rozdzielnicy
@@ -412,10 +418,7 @@ function pionMiedzyKondygnacjami(od: string, doK: string, floors: Floor[]): numb
   const i = floors.findIndex((f) => f.id === od);
   const j = floors.findIndex((f) => f.id === doK);
   if (i < 0 || j < 0 || i === j) return 0;
-  const [nizej, wyzej] = i < j ? [i, j] : [j, i];
-  let m = 0;
-  for (let k = nizej + 1; k <= wyzej; k++) m += CEILING_RUN_M;
-  return m;
+  return Math.abs(i - j) * CEILING_RUN_M;
 }
 
 /**
