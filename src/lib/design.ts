@@ -303,7 +303,10 @@ const WET_ROOM_TYPES: readonly RoomType[] = ["kuchnia", "lazienka", "pralnia", "
  *  „Nazwij pomieszczenie", żeby nie zaczynać zawsze od „Inne". Użytkownik może ją
  *  swobodnie nadpisać wyborem z listy; to tylko domysł, nie źródło prawdy. */
 export function guessRoomType(name: string): RoomType {
-  if (/łazienk/i.test(name)) return "lazienka";
+  // „WC" i „Toaleta" to też pomieszczenia sanitarne. Bez nich pokój nazwany „WC"
+  // wypadał z reguł strefy mokrej i lądował we wspólnym obwodzie z sypialniami.
+  // „wc" tylko jako OSOBNY wyraz — inaczej wpadałyby w to zwykłe słowa („mówca").
+  if (/łazienk|toalet|(^|[^a-ząćęłńóśźż])wc([^a-ząćęłńóśźż]|$)/i.test(name)) return "lazienka";
   if (/kuchni/i.test(name)) return "kuchnia";
   if (/pralni/i.test(name)) return "pralnia";
   if (/kotłowni/i.test(name)) return "kotlownia";
@@ -329,9 +332,54 @@ export function guessRoomType(name: string): RoomType {
  * samej nazwie (`guessRoomType`), czyli do zachowania sprzed dodania tego pola.
  */
 export function isWetRoomName(roomName: string, roomShapes: RoomShape[]): boolean {
-  const shape = roomShapes.find((r) => r.name === roomName);
-  if (shape?.type) return WET_ROOM_TYPES.includes(shape.type);
-  return WET_ROOM_TYPES.includes(guessRoomType(roomName));
+  return WET_ROOM_TYPES.includes(typPomieszczenia(roomName, roomShapes));
+}
+
+/** Typ pomieszczenia o danej nazwie: jawny z obrysu, a w jego braku zgadnięty z nazwy. */
+export function typPomieszczenia(roomName: string, roomShapes: RoomShape[]): RoomType {
+  return roomShapes.find((r) => r.name === roomName)?.type ?? guessRoomType(roomName);
+}
+
+/**
+ * ZASTOSOWANIE pomieszczenia — kryterium, po którym wolno wpuścić dwa pokoje na jeden
+ * obwód gniazd (patrz `computeCircuits`).
+ *
+ * Wspólny obwód znaczy wspólne zabezpieczenie: zwarcie w jednym pokoju gasi wszystkie
+ * pozostałe na tym obwodzie. Między pomieszczeniami o tym samym zastosowaniu to koszt
+ * do przyjęcia — dwie sypialnie gasną razem i nic się przez to nie zmienia. Między
+ * różnymi już nie: łazienka i sypialnia mają inne obciążenie, inne wymagania (strefy,
+ * hermetyczność) i inny skutek zaniku napięcia, więc wspólny obwód znaczyłby tyle, że
+ * przy pierwszej lepszej usterce ciemno robi się w obu.
+ *
+ * `nieznane` to osobny kubełek, a nie „wszystko pozostałe": o punkcie bez pomieszczenia
+ * albo w pomieszczeniu typu „Inne" nie wiadomo, do czego służy, więc nie ma jak
+ * stwierdzić, z czym wolno mu dzielić obwód. Dołożenie go do pokoi byłoby zgadywaniem.
+ */
+export type ZastosowaniePokoju = "mieszkalne" | "kuchnia" | "sanitarne" | "gospodarcze" | "nieznane";
+
+const ZASTOSOWANIE: Record<RoomType, ZastosowaniePokoju> = {
+  salon: "mieszkalne",
+  sypialnia: "mieszkalne",
+  pokoj: "mieszkalne",
+  kuchnia: "kuchnia",
+  lazienka: "sanitarne",
+  pralnia: "gospodarcze",
+  kotlownia: "gospodarcze",
+  garaz: "gospodarcze",
+  inne: "nieznane",
+};
+
+/** Opis zastosowania w NAZWIE obwodu — stąd liczba mnoga i małe litery. */
+export const ZASTOSOWANIE_OPIS: Record<ZastosowaniePokoju, string> = {
+  mieszkalne: "pokoje",
+  kuchnia: "kuchnia",
+  sanitarne: "łazienki",
+  gospodarcze: "pomieszczenia gospodarcze",
+  nieznane: "ogólne",
+};
+
+export function zastosowaniePokoju(roomName: string, roomShapes: RoomShape[]): ZastosowaniePokoju {
+  return ZASTOSOWANIE[typPomieszczenia(roomName, roomShapes)];
 }
 
 /** Skala kondygnacji (metrów na jednostkę planu) albo `null`, jeśli nie skalibrowana. */

@@ -111,7 +111,7 @@ describe("chunkLightsByGroup", () => {
   });
 
   it("grupy z RÓŻNYCH kondygnacji o tym samym numerze nie scalają się w jedną grupę", () => {
-    // 6 lamp na parterze i 6 na piętrze, obie oznaczone numerem „1" — numeracja
+    // 6 lamp na parterze i 6 na piętrze, obie oznaczone numerem „1” — numeracja
     // w computeLightGroups liczy się OSOBNO na każdej kondygnacji, więc te same
     // cyfry na dwóch piętrach to w rzeczywistości dwie różne grupy. Gdyby klucz
     // pakowania ignorował piętro, wyszłaby JEDNA gałąź 12 lamp (grupa „większa niż
@@ -253,7 +253,8 @@ describe("computeCircuits — reczny numer obwodu", () => {
     ]);
     expect(obwody).toHaveLength(3);
     const auto = obwody.find((o) => o.elements.some((e) => e.id === "c"))!;
-    expect(auto.name).toMatch(/Obwód gniazd ogólnych/);
+    // „Salon” to pomieszczenie mieszkalne — automat nazywa obwód po ZASTOSOWANIU.
+    expect(auto.name).toMatch(/Obwód gniazd — pokoje/);
   });
 
   it("obwod z choc jedna oprawa dostaje przewod i zabezpieczenie oswietleniowe", () => {
@@ -275,7 +276,7 @@ describe("computeCircuits — reczny numer obwodu", () => {
   /**
    * Odbiornik z wlasnym obwodem z definicji IGNORUJE numer — jego obwod ma inny
    * przewod, inne zabezpieczenie i czesto inna liczbe faz, wiec dolaczenie go do
-   * wspolnego dalo by nie „obwod z ladowarka", tylko obwod z blednym doborem.
+   * wspolnego dalo by nie „obwod z ladowarka”, tylko obwod z blednym doborem.
    */
   it("ladowarka EV, gniazdo trojfazowe i wypust AGD zostaja przy swoim obwodzie mimo numeru", () => {
     const obwody = computeCircuits([
@@ -362,7 +363,7 @@ describe("ostrzezeniaObwodow — rozerwana grupa sterowania", () => {
     expect(rozerwane[0].tresc).toMatch(/nie da się wykonać/);
   });
 
-  /** „Auto" to tez osobne przypisanie — oprawa z numerem i oprawa bez trafiaja do
+  /** „Auto” to tez osobne przypisanie — oprawa z numerem i oprawa bez trafiaja do
    *  dwoch roznych obwodow tak samo skutecznie jak dwa rozne numery. */
   it("numer obok automatu w jednej grupie tez jest rozerwaniem", () => {
     const o = ostrzezeniaObwodow([lacznik({ id: "sw" }), oprawa({ id: "l1", x: 20, obwod: 1 }), oprawa({ id: "l2", x: 40 })]);
@@ -413,5 +414,111 @@ describe("kolorObwodu", () => {
 
   it("wszystkie kolory palety sa rozne — inaczej dwa obwody zlalyby sie mimo cyklu", () => {
     expect(new Set(KOLORY_OBWODOW).size).toBe(KOLORY_OBWODOW.length);
+  });
+});
+
+/**
+ * Jeden obwód gniazd wolno dzielić dwóm pokojom — ale tylko o tym samym ZASTOSOWANIU.
+ *
+ * Wcześniej wszystkie suche punkty szły do jednego worka dzielonego co 8 sztuk, więc o
+ * tym, co wyląduje na wspólnym zabezpieczeniu, decydowała KOLEJNOŚĆ stawiania: garaż
+ * trafiał na jeden obwód z sypialnią, jeśli tylko postawiono je po sobie.
+ */
+describe("computeCircuits — obwód gniazd a zastosowanie pomieszczenia", () => {
+  const gniazda = (...pokoje: string[]) => pokoje.map((room, i) => el({ type: "gniazdko", room, id: "g" + i }));
+  const nazwyGniazd = (obwody: ReturnType<typeof computeCircuits>) =>
+    obwody.filter((o) => o.type === "gniazdko").map((o) => o.name);
+
+  it("dwa pokoje mieszkalne dzielą JEDEN obwód", () => {
+    const obwody = computeCircuits(gniazda("Sypialnia", "Salon", "Pokój dzienny"));
+    expect(nazwyGniazd(obwody)).toEqual(["Obwód gniazd — pokoje 1"]);
+    expect(obwody[0].elements).toHaveLength(3);
+  });
+
+  it("garaż NIE wchodzi na obwód sypialni — inne zastosowanie, osobne zabezpieczenie", () => {
+    const obwody = computeCircuits(gniazda("Sypialnia", "Garaż"));
+    expect(obwody).toHaveLength(2);
+    const garaz = obwody.find((o) => o.elements.some((e) => e.room === "Garaż"))!;
+    const sypialnia = obwody.find((o) => o.elements.some((e) => e.room === "Sypialnia"))!;
+    expect(garaz.id).not.toBe(sypialnia.id);
+    expect(garaz.name).toContain("gospodarcze");
+    expect(sypialnia.name).toContain("pokoje");
+  });
+
+  /** Przykład podany wprost przez użytkownika: łazienki z sypialnią łączyć nie wolno. */
+  it("łazienka nie dzieli obwodu z sypialnią, choćby postawiono je po sobie", () => {
+    const obwody = computeCircuits(gniazda("Sypialnia", "Łazienka", "Sypialnia 2"));
+    const zLazienka = obwody.find((o) => o.elements.some((e) => e.room === "Łazienka"))!;
+    expect(zLazienka.elements.every((e) => e.room === "Łazienka")).toBe(true);
+  });
+
+  /**
+   * „WC” to łazienka, choć nie ma w nazwie słowa „łazienka”. Bez tego pomieszczenie
+   * sanitarne wypadało z reguł strefy mokrej i szło na wspólny obwód z pokojami.
+   */
+  it("pokój nazwany „WC” jest traktowany jak łazienka, nie jak pokój", () => {
+    const obwody = computeCircuits(gniazda("Sypialnia", "WC"));
+    const zWc = obwody.find((o) => o.elements.some((e) => e.room === "WC"))!;
+    expect(zWc.elements.every((e) => e.room === "WC")).toBe(true);
+    expect(zWc.name).toBe("Obwód gniazd — WC");
+  });
+
+  /** Nazwa nie decyduje, gdy obrys ma JAWNY typ — to on jest źródłem prawdy. */
+  it("jawny typ obrysu bije nazwę: „Pracownia” oznaczona jako garaż idzie z gospodarczymi", () => {
+    const obwody = computeCircuits(gniazda("Sypialnia", "Pracownia"), [
+      { id: "r1", floor: "f1", name: "Pracownia", color: "#fff", points: [], type: "garaz" },
+    ]);
+    const pracownia = obwody.find((o) => o.elements.some((e) => e.room === "Pracownia"))!;
+    expect(pracownia.name).toContain("gospodarcze");
+  });
+
+  /**
+   * Punkt bez rozpoznanego pomieszczenia nie ma z czym dzielić obwodu — o jego
+   * zastosowaniu nic nie wiadomo. Zostaje przy nazwie, którą ten obwód nosił od zawsze.
+   */
+  it("punkty bez pomieszczenia trafiają do obwodu ogólnego, osobno od pokoi", () => {
+    const obwody = computeCircuits(gniazda("Sypialnia", "Bez pomieszczenia"));
+    expect(nazwyGniazd(obwody).sort()).toEqual(["Obwód gniazd ogólnych 1", "Obwód gniazd — pokoje 1"]);
+  });
+
+  /** Limit 8 punktów na obwód działa DALEJ, tyle że w obrębie jednego zastosowania. */
+  it("dziewięć gniazd w pokojach to dwa obwody, nie jeden przeciążony", () => {
+    const obwody = computeCircuits(gniazda(...Array.from({ length: 9 }, () => "Sypialnia")));
+    expect(nazwyGniazd(obwody)).toEqual(["Obwód gniazd — pokoje 1", "Obwód gniazd — pokoje 2"]);
+    expect(obwody[0].elements).toHaveLength(8);
+    expect(obwody[1].elements).toHaveLength(1);
+  });
+});
+
+/**
+ * Ręczny numer obwodu omija podział po zastosowaniu — jedyne miejsce, w którym
+ * łazienka wciąż MOŻE trafić na jeden obwód z sypialnią. Mówimy o tym wprost.
+ */
+describe("ostrzezeniaObwodow — różne przeznaczenie na jednym obwodzie", () => {
+  it("zgłasza łazienkę razem z sypialnią pod jednym numerem", () => {
+    const [o] = ostrzezeniaObwodow([
+      el({ type: "gniazdko", room: "Sypialnia", obwod: 3 }),
+      el({ type: "gniazdko", room: "Łazienka", obwod: 3 }),
+    ]);
+    expect(o.numer).toBe(3);
+    expect(o.tresc).toContain("różnym przeznaczeniu");
+    expect(o.tresc).toContain("łazienki");
+  });
+
+  it("dwa pokoje mieszkalne pod jednym numerem to NIE ostrzeżenie — to dozwolone", () => {
+    const out = ostrzezeniaObwodow([
+      el({ type: "gniazdko", room: "Sypialnia", obwod: 3 }),
+      el({ type: "gniazdko", room: "Salon", obwod: 3 }),
+    ]);
+    expect(out).toEqual([]);
+  });
+
+  /** Punkt bez pomieszczenia nie jest „innym przeznaczeniem” — jest brakiem danych. */
+  it("gniazdo bez pomieszczenia dorzucone do obwodu pokoi nie wywołuje ostrzeżenia", () => {
+    const out = ostrzezeniaObwodow([
+      el({ type: "gniazdko", room: "Sypialnia", obwod: 3 }),
+      el({ type: "gniazdko", room: "Bez pomieszczenia", obwod: 3 }),
+    ]);
+    expect(out).toEqual([]);
   });
 });
