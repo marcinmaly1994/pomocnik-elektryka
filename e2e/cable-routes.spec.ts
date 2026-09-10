@@ -1064,3 +1064,58 @@ test("bez drzwi trasa nadal laczy pokoje — przewod idzie przez mur", async ({ 
   const odNaroznika = Math.min(Math.abs(przejscia[0] - gora), Math.abs(przejscia[0] - dol));
   expect(odNaroznika).toBeLessThan((dol - gora) / 4);
 });
+
+/**
+ * Trasy w EKSPORCIE nie zależą od przełącznika w pasku edytora.
+ *
+ * Eksport rasteryzuje scenę taką, jaka jest, więc przewody trafiały na kartkę tylko
+ * wtedy, gdy akurat były włączone w edytorze — a przełącznik jest domyślnie WYŁĄCZONY.
+ * Łatwo było wysłać komuś rzut bez ani jednego kabla i tego nie zauważyć: w podglądzie
+ * nic o tym nie mówiło. Teraz rzut do PDF-a domyślnie je ma, a zdjąć je można świadomie,
+ * przełącznikiem NAD podglądem.
+ */
+test("PDF: rzut ma trasy mimo wyłączonego przełącznika w edytorze, a checkbox je zdejmuje", async ({ page }) => {
+  await openPlan(page);
+
+  await page.getByRole("button", { name: /Rozdział/ }).click();
+  await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
+  let box = await planBox(page);
+  await page.mouse.click(box.x + 60, box.y + 60);
+
+  await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+  box = await planBox(page);
+  await page.mouse.click(box.x + 250, box.y + 80);
+  await page.waitForTimeout(300);
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+
+  // Przełącznik edytora zostaje WYŁĄCZONY przez cały test — napis „Pokaż" to jego stan.
+  const przelacznik = page.getByRole("button", { name: "Pokaż trasy przewodów" });
+  await expect(przelacznik).toBeVisible();
+  expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
+
+  const strony = page.locator("[data-podglad-stron] canvas");
+  await page.getByRole("button", { name: "Rzut do PDF" }).click();
+  await expect(strony.first()).toBeVisible({ timeout: 30000 });
+
+  // Scena rysuje trasy NA CZAS eksportu, choć w edytorze są schowane...
+  const wEksporcie = await routeLineCounts(page);
+  expect(wEksporcie.solid + wEksporcie.dashed).toBeGreaterThan(0);
+  // ...a skoro są trasy, dokument dostaje trzecią stronę: SPIS OBWODÓW.
+  await expect(strony).toHaveCount(3);
+
+  const checkbox = page.getByRole("checkbox", { name: /Trasy przewodów na rysunku/ });
+  await expect(checkbox).toBeChecked(); // domyślnie WŁĄCZONE
+  await checkbox.uncheck();
+
+  // Bez tras nie ma czego spisywać — spis obwodów znika razem z nimi.
+  await expect(strony).toHaveCount(2, { timeout: 30000 });
+  expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
+
+  // Zamknięcie podglądu nie zostawia tras na scenie — przełącznik edytora dalej mówi „Pokaż".
+  await checkbox.check();
+  await expect(strony).toHaveCount(3, { timeout: 30000 });
+  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).click();
+  expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
+  await expect(przelacznik).toBeVisible();
+});
