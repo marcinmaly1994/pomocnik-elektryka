@@ -5,6 +5,8 @@ import { circuitCount, isLightControl, isLightPoint, manualGroups } from "@/lib/
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
+import { maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
+import { WyborObwodu, type UzytyNumer } from "./WyborObwodu";
 
 export interface EditElementPatch {
   type: ElementType;
@@ -22,6 +24,10 @@ export interface EditElementPatch {
   /** Wymiary przyboru sanitarnego [m]; `undefined` = wartość typowa. */
   widthM?: number;
   depthM?: number;
+  /** Ręczny numer obwodu; `undefined` = dobór automatyczny (`computeCircuits`).
+   *  Klucz jest w łatce ZAWSZE, bo to on kasuje wcześniejszy numer przy powrocie
+   *  na „auto" — brakujący klucz zostawiłby stary numer nietknięty. */
+  obwod?: number;
 }
 
 interface EditElementModalProps {
@@ -30,6 +36,10 @@ interface EditElementModalProps {
   /** Numery wyliczone automatycznie, po jednym na obwód — pokazywane jako podpowiedź
    *  w polach, których użytkownik nie nadpisał. */
   autoLightGroups?: (number | undefined)[];
+  /** Numery obwodów użyte w CAŁYM projekcie — ta sama lista, co w menu pod prawym
+   *  przyciskiem. Bez niej dołożenie punktu do istniejącego obwodu wymagałoby
+   *  pamiętania, że taki numer w ogóle jest. */
+  uzyteObwody?: UzytyNumer[];
   onClose: () => void;
   onSave: (patch: EditElementPatch) => void;
 }
@@ -39,7 +49,14 @@ interface EditElementModalProps {
  * w ramce (tam, gdzie typ na to pozwala), przypisanego pomieszczenia i (dla
  * gniazdek) własnego obwodu.
  */
-export function EditElementModal({ element, roomSuggestions, autoLightGroups, onClose, onSave }: EditElementModalProps) {
+export function EditElementModal({
+  element,
+  roomSuggestions,
+  autoLightGroups,
+  uzyteObwody = [],
+  onClose,
+  onSave,
+}: EditElementModalProps) {
   const [type, setType] = useState<ElementType>(element.type);
   const [room, setRoom] = useState(element.room);
   const [gangs, setGangs] = useState(element.gangs || 1);
@@ -62,6 +79,7 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
   const [groupInputs, setGroupInputs] = useState<string[]>(() =>
     manualGroups(element).map((n) => (n != null ? String(n) : ""))
   );
+  const [obwod, setObwod] = useState<number | undefined>(element.obwod);
 
   /** Przybory sanitarne maja WYMIARY, a nie wysokosc montazu — to jedyne elementy,
    *  ktorych obrys jest jednoczesnie strefa ochronna. */
@@ -76,6 +94,14 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
   // Łącznik grupowy ma dwa niezależne obwody, więc dostaje dwa pola — przy jednym nie dało
   // się ustawić drugiej dźwigni, a wpisanie numeru po cichu gubiło jej numer.
   const circuits = circuitCount(type);
+  // Liczone z typu USTAWIANEGO WŁAŚNIE W TYM OKNIE, nie z zapisanego: zmiana gniazdka
+  // na ładowarkę EV albo zaznaczenie „dedykowane" ma od razu odebrać wybór numeru,
+  // zamiast pozwolić przypisać obwód, który i tak zostałby zignorowany.
+  const wlasnyObwod = maWlasnyObwodZDefinicji({
+    ...element,
+    type,
+    dedicated: type === "gniazdko" ? dedicated : false,
+  });
 
   useEffect(() => {
     setGangs((g) => Math.max(1, Math.min(maxGangs, g)));
@@ -107,6 +133,10 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
       heightM: parsedHeight,
       widthM: przyborem ? zCm(szer) : undefined,
       depthM: przyborem ? zCm(glab) : undefined,
+      // Odbiornik z własnym obwodem z definicji zachowuje zapisany numer nietknięty:
+      // dobór i tak go pomija (`recznyNumer`), a odznaczenie „dedykowane" ma oddać
+      // użytkownikowi ten sam obwód, w którym punkt był przedtem.
+      obwod: wlasnyObwod ? element.obwod : obwod,
     });
   }
 
@@ -346,6 +376,22 @@ export function EditElementModal({ element, roomSuggestions, autoLightGroups, on
               ))}
             </datalist>
           </label>
+
+          {/* Ten sam wybór, co w menu pod prawym przyciskiem — i ten sam komponent, żeby
+              obie drogi nie rozjechały się w tym, co pokazują. Dwuklik otwiera to okno,
+              więc bez tego numer obwodu był jedyną własnością elementu, której się tu
+              nie dało zmienić: trzeba było okno zamknąć i sięgnąć po prawy przycisk. */}
+          <WyborObwodu
+            wariant="formularz"
+            numerAktualny={obwod}
+            uzyte={uzyteObwody}
+            onWybierz={setObwod}
+            zablokowane={
+              wlasnyObwod
+                ? "Ten odbiornik ma własny obwód z definicji — inny przewód i inne zabezpieczenie niż obwód wspólny."
+                : undefined
+            }
+          />
 
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="ghost" className="flex-1" onClick={onClose}>

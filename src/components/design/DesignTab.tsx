@@ -2738,6 +2738,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           element={editingElement}
           roomSuggestions={roomSuggestions}
           autoLightGroups={lightGroups.get(editingElement.id)}
+          uzyteObwody={uzyteNumeryObwodow}
           onClose={() => setEditingId(null)}
           onSave={(patch) => {
             setDraft((d) => ({ ...d, elements: d.elements.map((e) => (e.id === editingElement.id ? { ...e, ...patch } : e)) }));

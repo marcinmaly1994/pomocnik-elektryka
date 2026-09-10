@@ -139,3 +139,78 @@ test("numery z innych kondygnacji sa widoczne, a nowy numer ich nie powtarza", a
   await expect(page.getByRole("button", { name: "+ 2" })).toBeVisible();
   await expect(page.getByRole("button", { name: "+ 1" })).toHaveCount(0);
 });
+
+/**
+ * Ta sama decyzja z DWUKLIKU, nie tylko z prawego przycisku.
+ *
+ * Dwuklik otwiera okno edycji elementu — i numer obwodu byl jedyna jego wlasnoscia,
+ * ktorej sie tam nie dalo zmienic: trzeba bylo okno zamknac i siegnac po menu
+ * kontekstowe. Obie drogi uzywaja tego samego komponentu wyboru, wiec pokazuja te
+ * sama liste numerow uzytych w projekcie.
+ */
+test("numer obwodu da sie nadac, zmienic i skasowac z okna edycji (dwuklik)", async ({ page }) => {
+  await otworzPlan(page);
+  const box = await postaw(page, /Gniazdo 230 V/, [
+    { x: 150, y: 150 },
+    { x: 220, y: 150 },
+  ]);
+
+  // Pierwsze gniazdo zaklada obwod 1 BEZ prawego przycisku.
+  await page.mouse.dblclick(box.x + 150, box.y + 150);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "+ 1" }).click();
+  // Wybor od razu widac na chipie — inaczej nie wiadomo, co sie zapisze.
+  await expect(page.getByRole("dialog").locator("button.border-copper")).toHaveText("1");
+  await page.getByRole("button", { name: "Zapisz" }).click();
+
+  // Drugie DOLACZA do istniejacego — lista numerow jest ta sama, co w menu.
+  await page.mouse.dblclick(box.x + 220, box.y + 150);
+  await page.getByTitle("Dołącz do obwodu 1").click();
+  await page.getByRole("button", { name: "Zapisz" }).click();
+  await page.waitForTimeout(900);
+
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  await expect(page.getByText("Obwód 1 — Bez pomieszczenia").first()).toBeVisible();
+  // Oba punkty na JEDNYM obwodzie — zaden nie zostal przy automacie.
+  await expect(page.getByText(/Obwód gniazd ogólnych/)).toHaveCount(0);
+
+  // Powrot na „auto" MUSI skasowac numer, a nie zostawic stary: to jedyna droga
+  // odwrotu od recznego przypisania inaczej niz przez cofanie.
+  await page.getByRole("button", { name: "Instalacja" }).first().click();
+  // Zakladka laduje sie dynamicznie — bez czekania na pasek narzedzi mierzylibysmy
+  // plotno, ktorego jeszcze nie ma. Powrot na zakladke wpasowuje tez rzut na nowo
+  // (tu: 87%), wiec powiekszenie trzeba przywrocic do 100% — inaczej klikniecie w te
+  // sama wspolrzedna ekranu trafia obok elementu.
+  await expect(page.getByRole("button", { name: "Zaznacz", exact: true })).toBeVisible();
+  const zoom = page.getByRole("button", { name: /Powiększenie \d+ procent/ });
+  if (!/100/.test((await zoom.innerText()) ?? "")) await zoom.click();
+  const box2 = await planBox(page);
+  await page.mouse.dblclick(box2.x + 220, box2.y + 150);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "auto" }).click();
+  await page.getByRole("button", { name: "Zapisz" }).click();
+  await page.waitForTimeout(900);
+
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  await expect(page.getByText(/Obwód gniazd ogólnych/).first()).toBeVisible();
+});
+
+/**
+ * Odbiornik z wlasnym obwodem z definicji nie dostaje wyboru numeru — a stan liczy
+ * sie z typu USTAWIANEGO W TYM OKNIE, nie z zapisanego. Inaczej dalo by sie zmienic
+ * gniazdko na ladowarke EV i w tym samym oknie przypisac jej numer, ktory dobor i
+ * tak by zignorowal.
+ */
+test("okno edycji odbiera wybor obwodu, gdy typ zmienia sie na taki z wlasnym obwodem", async ({ page }) => {
+  await otworzPlan(page);
+  const box = await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
+
+  await page.mouse.dblclick(box.x + 150, box.y + 150);
+  await expect(page.getByRole("button", { name: "+ 1" })).toBeVisible();
+
+  // Zaznaczenie „dedykowane" zabiera wybor natychmiast, bez zapisywania i ponownego
+  // otwierania okna.
+  await page.getByText("Gniazdo dedykowane (AGD, własny obwód)").click();
+  await expect(page.getByText(/ma własny obwód z definicji/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "+ 1" })).toHaveCount(0);
+});
