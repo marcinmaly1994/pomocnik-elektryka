@@ -628,9 +628,9 @@ test("dwa gniazda jednego obwodu: DRUGI odcinek startuje z pierwszego gniazda, n
  * Zgloszenie uzytkownika (z odreczna poprawka na zrzucie): przewod dochodzil do
  * SRODKA gniazdka, czyli wchodzil mu w luk — od strony pomieszczenia, a nie od
  * strony puszki. Gniazdo stoi trzonkiem w sciane i tam ma trafic przewod, odbijajac
- * od swojego pasa krotkim skosem pod 45 stopni.
+ * od swojego pasa krotkim odgalezieniem PROSTOPADLYM — czyli wzdluz trzonka.
  */
-test("gniazdo przy scianie: przewod odbija pod 45 stopni i konczy sie na nozce, po stronie sciany", async ({ page }) => {
+test("gniazdo przy scianie: przewod odbija PROSTOPADLE i konczy sie na nozce, po stronie sciany", async ({ page }) => {
   await openPlan(page);
 
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
@@ -668,12 +668,17 @@ test("gniazdo przy scianie: przewod odbija pod 45 stopni i konczy sie na nozce, 
 
   expect(punkty.length).toBeGreaterThanOrEqual(6); // co najmniej dwa zalamania + koniec
   const n = punkty.length;
+  const przedPrzed = { x: punkty[n - 6], y: punkty[n - 5] };
   const przed = { x: punkty[n - 4], y: punkty[n - 3] };
   const koniec = { x: punkty[n - 2], y: punkty[n - 1] };
 
-  // Ostatni odcinek to SKOS o rownych skladowych — czyli dokladnie 45 stopni.
-  expect(Math.abs(koniec.x - przed.x)).toBeGreaterThan(1);
-  expect(Math.abs(koniec.x - przed.x)).toBeCloseTo(Math.abs(koniec.y - przed.y), 0);
+  // Ostatni odcinek jest PROSTOPADLY do poprzedniego: korytarz biegnie wzdluz sciany,
+  // a odgalezienie odchodzi od niego w bok, wzdluz trzonka gniazda.
+  const korytarz = { x: przed.x - przedPrzed.x, y: przed.y - przedPrzed.y };
+  const odgalezienie = { x: koniec.x - przed.x, y: koniec.y - przed.y };
+  expect(Math.hypot(odgalezienie.x, odgalezienie.y)).toBeGreaterThan(1);
+  const iloczyn = korytarz.x * odgalezienie.x + korytarz.y * odgalezienie.y;
+  expect(Math.abs(iloczyn) / (Math.hypot(korytarz.x, korytarz.y) * Math.hypot(odgalezienie.x, odgalezienie.y))).toBeLessThan(0.05);
   // I biegnie W STRONE sciany (w prawo), a nie w glab pomieszczenia.
   expect(koniec.x).toBeGreaterThan(przed.x);
 });
@@ -747,7 +752,7 @@ test("trzy gniazda przy jednej scianie: zaden odcinek NIE ZAWRACA do naroznika",
  * wpadal do wezla samego elementu i zostawala jedna krawedz element → NAROZNIK.
  * Trasa ma isc ROWNOLEGLE do sciany i odbijac dopiero przy elemencie.
  */
-test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ page }) => {
+test("trasa wzdluz sciany jest PROSTA, odbicie dopiero przy elemencie", async ({ page }) => {
   await openPlan(page);
 
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
@@ -787,19 +792,17 @@ test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ pa
     return out;
   });
 
-  // Skos WYLACZNIE na obu koncach — przy obudowie rozdzielnicy i przy nozce gniazda.
-  // Wszystko pomiedzy ma byc pionowe albo poziome; skos rozlozony na dlugosc sciany
-  // zlamalby dokladnie ten warunek.
+  // KAZDY odcinek jest pionowy albo poziomy — takze dojscia do rozdzielnicy i do
+  // gniazda, bo odgalezienia ida prostopadle do korytarza, wzdluz trzonka symbolu.
+  // Skos rozlozony na dlugosc sciany zlamalby ten warunek na pierwszym odcinku.
   const odcinki: { dx: number; dy: number }[] = [];
   for (let i = 1; i < punkty.length; i++) {
     const dx = Math.abs(punkty[i].x - punkty[i - 1].x);
     const dy = Math.abs(punkty[i].y - punkty[i - 1].y);
     if (dx > 0.5 || dy > 0.5) odcinki.push({ dx, dy });
   }
-  expect(odcinki.length).toBeGreaterThanOrEqual(4);
-  for (const s of odcinki.slice(1, -1)) expect(Math.min(s.dx, s.dy)).toBeLessThan(0.5);
-  // ...a oba skrajne sa skosami o rownych skladowych, czyli pod 45 stopni
-  for (const s of [odcinki[0], odcinki[odcinki.length - 1]]) expect(s.dx).toBeCloseTo(s.dy, 0);
+  expect(odcinki.length).toBeGreaterThanOrEqual(3);
+  for (const s of odcinki) expect(Math.min(s.dx, s.dy)).toBeLessThan(0.5);
 });
 
 /**

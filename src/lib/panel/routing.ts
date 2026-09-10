@@ -382,7 +382,7 @@ function wTymSamymPokoju(graph: Graph, p: Point, q: Point): boolean {
 /** Rzut punktu `p` na ODCINEK [a,b], przycięty do samego odcinka (nie do prostej
  *  nieskończonej) — ten sam wzór co `nearestPointOnPolyline` w geometry.ts, tu
  *  osobno, bo tam wynik nie niesie ze sobą, KTÓRY to był odcinek. */
-function projectOntoSegment(p: Point, a: Point, b: Point): { point: Point; distSq: number } {
+export function projectOntoSegment(p: Point, a: Point, b: Point): { point: Point; distSq: number } {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const lenSq = dx * dx + dy * dy;

@@ -878,17 +878,29 @@ describe("przytnijDoKrawedzi", () => {
 describe("zakonczPrzyNozce", () => {
   const trasa = (...p: [number, number][]) => p.map(([x, y]) => ({ x, y }));
 
-  it("odbija pod 45 stopni: tyle wzdluz trasy, ile w poprzek do celu", () => {
+  /**
+   * Sedno zgloszenia. Trzonek gniazda jest PROSTOPADLY do sciany, a korytarz do niej
+   * rownolegly i lezy blizej muru niz siega symbol (5 jednostek kontra 10,5) — wejscie
+   * ukosem przecinalo wiec trzonek w poprzek. Odgalezienie prostopadle klada sie na nim.
+   */
+  it("odgalezienie jest PROSTOPADLE do trasy, czyli wzdluz trzonka", () => {
     // Trasa w dol po x = 100, cel szesc jednostek w bok, na wysokosci jej konca.
     const out = zakonczPrzyNozce(trasa([100, 0], [100, 60]), { x: 106, y: 60 });
-    expect(out).toEqual(trasa([100, 0], [100, 54], [106, 60]));
-    // Skos ma rowne skladowe — to jest definicja 45 stopni, wiec sprawdzamy ja wprost.
-    expect(out[2].x - out[1].x).toBeCloseTo(out[2].y - out[1].y, 6);
+    expect(out).toEqual(trasa([100, 0], [100, 60], [106, 60]));
+    // Ostatni odcinek nie ma skladowej WZDLUZ trasy — to jest definicja prostopadlosci.
+    expect(out[2].y - out[1].y).toBeCloseTo(0, 6);
+  });
+
+  /** Odgalezienie odchodzi na WYSOKOSCI gniazda, a nie na koncu trasy: korytarz biegnie
+   *  dalej swoja droga, przewod odbija w miejscu, w ktorym stoi osprzet. */
+  it("odchodzi w miejscu NAJBLIZSZYM celowi, nie na koncu lamanej", () => {
+    // Korytarz mija gniazdo w polowie i biegnie dalej.
+    const out = zakonczPrzyNozce(trasa([100, 0], [100, 200]), { x: 106, y: 80 });
+    expect(out).toEqual(trasa([100, 0], [100, 80], [106, 80]));
   });
 
   it("cel LEZACY NA PRZEDLUZENIU trasy — przewod dochodzi wprost, bez zalamania", () => {
-    // Gniazdo na koncu ciagu przy tej samej scianie: skos wypadlby za elementem.
-    // Dotychczasowy koniec lezy POSRODKU prostej, wiec znika — zostawiony dzielilby
+    // Punkt odejscia wypadlby POSRODKU prostej, wiec znika — zostawiony dzielilby
     // odcinek na dwa, a te przy rozsuwaniu wiazki dostaja osobne przesuniecia
     // i przy elemencie robi sie mikroschodek.
     const out = zakonczPrzyNozce(trasa([0, 0], [100, 0]), { x: 110, y: 0 });
@@ -896,20 +908,21 @@ describe("zakonczPrzyNozce", () => {
   });
 
   /**
-   * Sedno zgloszenia: linia ma isc ROWNOLEGLE do sciany i odbijac dopiero przy
-   * elemencie. Skos rozlozony na cala dlugosc sciany jest bledem, nawet jesli
-   * konczy sie we wlasciwym punkcie.
+   * Linia ma isc ROWNOLEGLE do sciany i odbijac dopiero przy elemencie. Skos rozlozony
+   * na cala dlugosc sciany jest bledem, nawet jesli konczy sie we wlasciwym punkcie.
    */
-  it("odcinek biegnacy wzdluz sciany zostaje PROSTY — skos tylko na koncu", () => {
+  it("odcinek biegnacy wzdluz sciany zostaje PROSTY", () => {
     const out = zakonczPrzyNozce(trasa([514, 40], [514, 240]), { x: 520, y: 240 });
-    expect(out).toEqual(trasa([514, 40], [514, 234], [520, 240]));
+    expect(out).toEqual(trasa([514, 40], [514, 240], [520, 240]));
     // wszystko poza ostatnim odcinkiem trzyma sie jednej prostej x = 514
     expect(out.slice(0, -1).every((p) => p.x === 514)).toBe(true);
   });
 
-  it("trasa krotsza niz potrzebne cofniecie zostaje cala, z doprowadzeniem do celu", () => {
-    const out = zakonczPrzyNozce(trasa([100, 0], [100, 2]), { x: 108, y: 2 });
-    expect(out).toEqual(trasa([100, 0], [100, 2], [108, 2]));
+  /** Trasa dochodzaca do elementu PROSTOPADLE (np. rozdzielnica pod korytarzem) —
+   *  odgalezienie pokrywa sie z ostatnim odcinkiem, wiec nie ma czego dokladac. */
+  it("dojscie juz prostopadle nie dokłada zadnego punktu", () => {
+    const out = zakonczPrzyNozce(trasa([100, 0], [100, 2]), { x: 100, y: 8 });
+    expect(out).toEqual(trasa([100, 0], [100, 8]));
   });
 });
 
