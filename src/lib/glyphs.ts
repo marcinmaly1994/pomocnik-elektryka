@@ -1,5 +1,5 @@
-import type { ElementType } from "@/types";
-import { SANITARY_FIXTURES } from "@/lib/elements";
+import type { ElementType, InstallationElement, Point } from "@/types";
+import { fixtureSizeM, SANITARY_FIXTURES } from "@/lib/elements";
 import { JEDNOSTKI_NA_METR } from "@/lib/symbolScale";
 
 /** Geometria siatki gniazd w ramce (1–6 gniazd: do 2 w kolumnie, więcej w rzędzie). Przeniesione 1:1 z `socketGridMetrics`. */
@@ -248,4 +248,27 @@ export function zasiegPrzyscienny(type: ElementType): number {
   // wentylator, oprawa zewnętrzna) to symbole wpisane w swoje pudełko — dotykają
   // ściany jego krawędzią.
   return glyphBoxSize(type).h / 2;
+}
+
+/**
+ * Rogi symbolu elementu [jedn. planu] — to one, a nie sam środek, wyznaczają, gdzie
+ * kończy się narysowana treść.
+ *
+ * Kadrowanie brało dotąd środki elementów i dokładało `MARGINES_KADROWANIA` (60 jedn.)
+ * z każdej strony, żeby nie obciąć symbolu. To zapas na NAJGORSZY przypadek — wannę
+ * z jej strefą — więc przy rzucie mieszkania szerokim na 420 jednostek zjadał prawie
+ * ćwierć obrazu, choć na planie stały same gniazda o zasięgu kilkunastu jednostek.
+ * Licząc pudełko każdego symbolu z osobna (tego samego, którym rysuje go płótno)
+ * dostajemy kadr ciasny tam, gdzie może być ciasny, i szeroki tam, gdzie musi.
+ */
+export function rogiSymbolu(e: InstallationElement, skala: number): Point[] {
+  const { w, h } = glyphBoxSize(e.type, fixtureSizeM(e) ?? undefined);
+  // Obrót symbolu nie jest tu uwzględniany — bierzemy połowę PRZEKĄTNEJ, czyli
+  // okrąg opisany na pudełku. Przy obrocie o 45° pudełko i tak zajmuje tyle miejsca,
+  // a kadr ma nie obcinać niezależnie od tego, jak element stoi.
+  const r = (Math.hypot(w, h) / 2) * skala;
+  return [
+    { x: e.x - r, y: e.y - r },
+    { x: e.x + r, y: e.y + r },
+  ];
 }

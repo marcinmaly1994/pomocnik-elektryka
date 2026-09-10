@@ -85,19 +85,9 @@ describe("buildDrawingPdf", () => {
   });
 
   it("bez legendy rysunek dostaje CAŁĄ szerokość kartki", async () => {
-    const bez = obrazy(bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(1000, 500) })));
-    const z = obrazy(
-      bytesToAscii(
-        await buildDrawingPdf({
-          tytul: "Rzut",
-          header,
-          rysunek: obraz(1000, 500),
-          legenda: [{ symbol: obraz(40, 40), opis: "Gniazdo 230 V" }],
-        })
-      )
-    );
-    // Przy legendzie rysunek musi się zwęzić — inaczej wchodziłby pod nią.
-    expect(z[0].w).toBeLessThan(bez[0].w);
+    const bez = obrazy(bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(1000, 500) })))[0];
+    expect(bez.x).toBeCloseTo(36, 0);
+    expect(bez.x + bez.w).toBeCloseTo(STRONA_W - 36, 0);
   });
 
   describe("legenda", () => {
@@ -128,15 +118,15 @@ describe("buildDrawingPdf", () => {
       for (const n of wLegendzie) expect(n.t).not.toMatch(/^\d+\s*[x×]$/i);
     });
 
-    it("stoi po PRAWEJ stronie kartki, obok rysunku", async () => {
+    it("nie zachodzi na rysunek — lezy obok niego albo pod nim", async () => {
       const out = bytesToAscii(
         await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(1000, 600), legenda })
       );
       const naglowek = napisy(out).find((n) => n.t === "LEGENDA")!;
       const rys = obrazy(out).find((o) => o.im === 1)!;
-      expect(naglowek.x).toBeGreaterThan(STRONA_W / 2);
-      // Rysunek kończy się, zanim zacznie się legenda — nie zachodzą na siebie.
-      expect(rys.x + rys.w).toBeLessThanOrEqual(naglowek.x);
+      const obok = rys.x + rys.w <= naglowek.x + 0.5;
+      const podSpodem = naglowek.y < rys.y;
+      expect(obok || podSpodem).toBe(true);
     });
 
     it("każdy wpis dostaje SWÓJ symbol jako osobny obraz", async () => {
@@ -229,38 +219,65 @@ describe("tabliczka rysunkowa", () => {
  * krawędzi pola zaczynała się wyżej niż on i kartka wyglądała na niepoprawnie złożoną.
  * Zgłoszone przez użytkownika: „obniż legendę, aby była na równo z planem".
  */
+/**
+ * Gdzie ląduje legenda i ile zostaje dla rysunku.
+ *
+ * Kolumna po prawej zabierała rysunkowi 188 z 770 punktów szerokosci ZAWSZE — takze
+ * wtedy, gdy legenda miala cztery pozycje i siegala jednej trzeciej wysokosci kartki,
+ * a pod nia zostawal pusty prostokat przez cala jej wysokosc. Legenda idzie teraz tam,
+ * gdzie kosztuje rysunek NAJMNIEJ, a o wyborze decyduje porownanie skali, nie regula
+ * „jesli szeroki, to pod spodem".
+ */
 describe("legenda względem rysunku", () => {
   const poz = (n: number) =>
     Array.from({ length: n }, (_, i) => ({ symbol: obraz(40, 40), opis: `Symbol ${i + 1}` }));
 
-  /** Górna krawędź ramki legendy = linia bazowa „LEGENDA" + reszta paska nagłówka. */
-  async function ukladu(rysW: number, rysH: number, ile: number) {
+  /** Pasek naglowka legendy to prostokat o szarosci 0.88 — po nim poznajemy jej miejsce. */
+  async function uklad(rysW: number, rysH: number, ile: number) {
     const out = bytesToAscii(
       await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(rysW, rysH), legenda: poz(ile) })
     );
     const rys = obrazy(out).find((o) => o.im === 1)!;
-    // Pasek nagłówka legendy to prostokąt o szarości 0.88 i szerokości kolumny legendy.
     const pasek = [...out.matchAll(/0\.88 g ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re f/g)]
       .map((m) => ({ x: +m[1], y: +m[2], w: +m[3], h: +m[4] }))
-      .find((r) => r.w > 100 && r.w < 200)!;
-    return { goraRysunku: rys.y + rys.h, goraLegendy: pasek.y + pasek.h, dolLegendy: pasek.y + pasek.h - (20 + ile * 26) };
+      .find((r) => r.w >= 176 && r.h < 30)!;
+    return { rys, pasek };
   }
 
-  it("góra legendy równa się górze rysunku", async () => {
-    const u = await ukladu(1000, 600, 3);
-    expect(u.goraLegendy).toBeCloseTo(u.goraRysunku, 1);
+  it("przy SZEROKIM rysunku legenda idzie pod niego, a rysunek dostaje cala szerokosc", async () => {
+    const { rys, pasek } = await uklad(2400, 500, 4);
+    // Rysunek siega obu marginesow kartki — kolumna nie zabiera mu juz szerokosci.
+    expect(rys.x).toBeCloseTo(36, 0);
+    expect(rys.x + rys.w).toBeCloseTo(STRONA_W - 36, 0);
+    // Legenda lezy PONIZEJ rysunku, nie obok.
+    expect(pasek.y).toBeLessThan(rys.y);
   });
 
-  it("wyrównanie działa też dla niskiego, szerokiego rysunku", async () => {
-    const u = await ukladu(2400, 500, 2);
-    expect(u.goraLegendy).toBeCloseTo(u.goraRysunku, 1);
+  it("przy WYSOKIM rysunku legenda zostaje w kolumnie po prawej", async () => {
+    const { rys, pasek } = await uklad(400, 1000, 3);
+    expect(pasek.x).toBeGreaterThan(STRONA_W / 2);
+    // Rysunek konczy sie, zanim zacznie sie legenda — nie zachodza na siebie.
+    expect(rys.x + rys.w).toBeLessThanOrEqual(pasek.x + 0.5);
   });
 
-  it("długa legenda nie schodzi pod pole rysunku — wyrównanie ustępuje mieszczeniu się", async () => {
-    // Przy dwunastu pozycjach i niskim rysunku legenda nie zmieściłaby się pod jego
-    // górną krawędzią; wtedy ma zostać na kartce, a nie wejść na tabliczkę rysunkową.
-    const u = await ukladu(2400, 400, 12);
+  /** Sedno poprawki: legenda nie moze pomniejszac rysunku bardziej, niz to konieczne. */
+  it("legenda nigdy nie zmniejsza rysunku bardziej niz musi", async () => {
+    const bez = obrazy(bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: obraz(2400, 500) })))[0];
+    const { rys } = await uklad(2400, 500, 4);
+    // Przy szerokim rysunku dolozenie legendy NIE zwęża go wcale — pasek zabiera
+    // wysokosc, ktorej i tak nie wykorzystywal.
+    expect(rys.w).toBeCloseTo(bez.w, 0);
+  });
+
+  it("w kolumnie gora legendy rowna sie gorze rysunku", async () => {
+    const { rys, pasek } = await uklad(400, 1000, 3);
+    expect(pasek.y + pasek.h).toBeCloseTo(rys.y + rys.h, 1);
+  });
+
+  it("dluga legenda nie schodzi pod pole rysunku — nie wchodzi na tabliczke", async () => {
+    const { pasek } = await uklad(400, 1000, 12);
     const dolPola = 36 + 48 + 8; // margines + tabliczka
-    expect(u.dolLegendy).toBeGreaterThanOrEqual(dolPola - 0.5);
+    const dolLegendy = pasek.y + pasek.h - (20 + 12 * 26);
+    expect(dolLegendy).toBeGreaterThanOrEqual(dolPola - 0.5);
   });
 });
