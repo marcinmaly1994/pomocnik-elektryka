@@ -477,6 +477,65 @@ export function estimateRoutesByFloor(
   return { worstCaseM: round1(worst), totalM: round1(total), zapasM: round1(zapas), szacunek };
 }
 
+/**
+ * Metry przewodu dla punktów łączonych GWIAZDĄ — każdy własnym kablem od punktu
+ * zbiorczego [m]. Tak układa się niskoprądówkę: LAN i koncentryk idą do każdego
+ * gniazda osobno, bo to połączenia punkt-punkt, a nie obwód.
+ *
+ * Dlatego nie da się tu użyć `estimateRoutesByFloor`: tamta liczy ŁAŃCUCH i dokłada
+ * pion RAZ na kondygnację (kabel wchodzi na piętro jeden raz i dopiero tam się
+ * rozchodzi). Przy gwieździe każdy kabel pokonuje ten pion OSOBNO — cztery gniazda
+ * RJ45 na piętrze to cztery przejścia przez strop, nie jedno.
+ *
+ * `null`, gdy nie ma od czego mierzyć: bez punktu zbiorczego albo bez skali. Kosztorys
+ * wraca wtedy do ryczałtu i mówi o tym wprost — tak samo jak przy zasilaniu.
+ */
+export function estimateGwiazdaByFloor(
+  panele: Rozdzielnice,
+  elements: InstallationElement[],
+  scales: Record<string, number>,
+  panelHeightM: number = MOUNTING_HEIGHTS_M.rozdzielnica ?? 1.5,
+  kontekst: {
+    geometria?: GeometriaKondygnacji;
+    kondygnacje?: Floor[];
+    zapasNaPunktM?: number;
+  } = {}
+): { totalM: number; szacunek: boolean } | null {
+  if (elements.length === 0 || !panele.glowna) return null;
+  const { geometria: geo, kondygnacje } = kontekst;
+  const zapasNaPunkt =
+    kontekst.zapasNaPunktM !== undefined && kontekst.zapasNaPunktM >= 0 ? kontekst.zapasNaPunktM : ZAPAS_MONTAZOWY_M;
+
+  let total = 0;
+  let szacunek = false;
+  let policzone = 0;
+  for (const e of elements) {
+    const skala = scales[e.floor];
+    if (!(typeof skala === "number" && skala > 0)) continue;
+    const wysokoscM = wysokoscKondygnacji(kondygnacje?.find((f) => f.id === e.floor));
+    const geoKondygnacji = geo && {
+      walls: geo.walls.filter((w) => w.floor === e.floor),
+      roomShapes: geo.roomShapes.filter((r) => r.floor === e.floor),
+      openings: geo.openings.filter((o) => o.floor === e.floor),
+    };
+    // Punkt zbiorczy: rozdzielnica tej kondygnacji, a gdy jej nie ma — główna. Plan nie
+    // wie, gdzie stoi szafka teletechniczna (nie ma takiego elementu w bibliotece), a
+    // rozdzielnica jest jedynym miejscem, o którym wiadomo, że kable się w nim schodzą.
+    const zrodlo = panelDlaKondygnacji(panele, e.floor) ?? panele.glowna;
+    const bieg = biegPoziomyJedn(zrodlo, e, null, e.type, geoKondygnacji);
+    szacunek = szacunek || bieg.szacunek;
+    const pionWlasny = pionM(panelHeightM, mountingHeightM(e, wysokoscM), wysokoscM);
+    // Pion na KAŻDY kabel osobno — patrz akapit wyżej.
+    const pionPieter =
+      kondygnacje && !panele.poKondygnacji.has(e.floor) && panele.glownaKondygnacja
+        ? pionMiedzyKondygnacjami(panele.glownaKondygnacja, e.floor, kondygnacje)
+        : 0;
+    total += bieg.jedn * skala + pionWlasny + pionPieter + zapasNaPunkt;
+    policzone++;
+  }
+  return policzone > 0 ? { totalM: round1(total), szacunek } : null;
+}
+
 /** Znajduje rozdzielnicę wśród PODANYCH elementów — punkt odniesienia dla tras.
  *  Wołane z listą JEDNEJ kondygnacji (patrz `cableRoutes` w DesignTab); dla całego
  *  budynku służy `findPanels`, bo tam liczy się, na którym piętrze co stoi. */
