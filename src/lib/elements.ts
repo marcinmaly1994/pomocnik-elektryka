@@ -320,20 +320,40 @@ export const MOUNTING_HEIGHTS_M: Partial<Record<ElementType, number>> = {
  *  nie są osprzętem elektrycznym i nie mają czego montować na wysokości. */
 const DEFAULT_MOUNTING_HEIGHT_M = 0.3;
 
-/** Wysokość montażu elementu [m]: nadpisana przez użytkownika albo typowa dla typu. */
-export function mountingHeightM(e: Pick<InstallationElement, "type" | "heightM">): number {
+/**
+ * Typy montowane PRZY STROPIE. Ich wysokość to nie liczba z tabeli, tylko wysokość
+ * kondygnacji — punkt sufitowy wisi tam, gdzie jest sufit.
+ *
+ * Dwa skutki. Na rysunku: nie wymiaruje się ich wysokości, bo to po prostu sufit,
+ * a „+280" przy każdym punkcie świetlnym w mieszkaniu to kilkanaście liczb, które nic
+ * nie wnoszą (patrz `mountingLabel` — etykieta pojawia się tylko przy wartości wpisanej
+ * ręcznie, np. dla sufitu podwieszanego). W obliczeniach: przewód nie schodzi do nich
+ * wcale, więc na kondygnacji wyższej niż typowa nie wolno doliczać zejścia, którego nie
+ * ma (patrz `pionM` w panel/loads.ts).
+ */
+export const POD_STROPEM: readonly ElementType[] = ["oswietlenie", "czujnikDymu"];
+
+/**
+ * Wysokość montażu elementu [m]: nadpisana przez użytkownika, a w jej braku wysokość
+ * typowa dla typu — przy czym dla typów spod stropu „typowa" znaczy „przy stropie tej
+ * kondygnacji", nie stała z tabeli.
+ *
+ * `wysokoscKondygnacjiM` jest opcjonalna, bo `elements.ts` nie może sięgnąć po wartość
+ * domyślną do `panel/loads.ts` (to on importuje stąd, nie odwrotnie). Jej brak daje
+ * wartość z tabeli, równą typowej wysokości kondygnacji — czyli zachowanie sprzed
+ * wprowadzenia wysokości per kondygnacja.
+ */
+export function mountingHeightM(
+  e: Pick<InstallationElement, "type" | "heightM">,
+  wysokoscKondygnacjiM?: number
+): number {
   if (typeof e.heightM === "number" && e.heightM >= 0) return e.heightM;
+  if (POD_STROPEM.includes(e.type) && typeof wysokoscKondygnacjiM === "number" && wysokoscKondygnacjiM > 0) {
+    return wysokoscKondygnacjiM;
+  }
   return MOUNTING_HEIGHTS_M[e.type] ?? DEFAULT_MOUNTING_HEIGHT_M;
 }
 
-/**
- * Typy montowane pod stropem. Na rysunku instalacyjnym nie wymiaruje się ich wysokości,
- * bo to po prostu sufit — a „+280" przy każdym punkcie świetlnym w mieszkaniu to
- * kilkanaście liczb, które nic nie wnoszą i zaśmiecają rzut. Etykieta pojawia się przy
- * nich tylko wtedy, gdy użytkownik świadomie wpisał WŁASNĄ wartość (np. sufit
- * podwieszany albo skos) — wtedy jest to informacja, a nie powtórzenie oczywistości.
- */
-const POD_STROPEM: readonly ElementType[] = ["oswietlenie", "czujnikDymu"];
 
 /**
  * Etykieta wysokości montażu przy symbolu na rzucie — w CENTYMETRACH nad podłogą,

@@ -1396,3 +1396,36 @@ describe("estimateRoutesByFloor — wlasna wysokosc kondygnacji", () => {
     expect(wysoka.worstCaseM).toBeGreaterThan(typowa.worstCaseM);
   });
 });
+
+/**
+ * Wyzsza kondygnacja a punkt SUFITOWY.
+ *
+ * Do oprawy pod stropem przewod nie schodzi wcale — ona JEST pod stropem. Dopoki
+ * wysokosc montazu byla stala 2,8 m, kondygnacja 3,6 m dokladala 0,8 m zejscia,
+ * ktorego nie ma. Blad szedl w strone bezpieczna (dlugosc zawyzona), ale byl bledem.
+ */
+describe("estimateRoutesByFloor — punkt sufitowy a wysokosc kondygnacji", () => {
+  const skale = { parter: 0.05 };
+  const panele = {
+    poKondygnacji: new Map([["parter", { x: 0, y: 0 }]]),
+    glowna: { x: 0, y: 0 },
+    glownaKondygnacja: "parter",
+  };
+  const pietra = (h?: number): Floor[] => [{ id: "parter", name: "Parter", ...(h === undefined ? {} : { heightM: h }) }];
+
+  it("oprawa sufitowa nie dostaje zejscia, ktorego nie ma", () => {
+    const lampa = [el("oswietlenie", { x: 100, y: 0, floor: "parter" })];
+    const typowa = estimateRoutesByFloor(panele, lampa, skale, undefined, { kondygnacje: pietra() })!;
+    const wysoka = estimateRoutesByFloor(panele, lampa, skale, undefined, { kondygnacje: pietra(3.6) })!;
+    // Rosnie TYLKO podejscie od rozdzielnicy pod strop (3,6 − 2,8), a nie ono i zejscie.
+    expect(wysoka.worstCaseM - typowa.worstCaseM).toBeCloseTo(3.6 - 2.8, 5);
+  });
+
+  /** Dla gniazdka przy podlodze wyzszy strop wydluza OBA odcinki — podejscie i zejscie. */
+  it("gniazdko przy podlodze dostaje podwojna roznice, bo przewod i wchodzi, i schodzi", () => {
+    const gniazdo = [el("gniazdko", { x: 100, y: 0, floor: "parter" })];
+    const typowa = estimateRoutesByFloor(panele, gniazdo, skale, undefined, { kondygnacje: pietra() })!;
+    const wysoka = estimateRoutesByFloor(panele, gniazdo, skale, undefined, { kondygnacje: pietra(3.6) })!;
+    expect(wysoka.worstCaseM - typowa.worstCaseM).toBeCloseTo(2 * (3.6 - 2.8), 5);
+  });
+});

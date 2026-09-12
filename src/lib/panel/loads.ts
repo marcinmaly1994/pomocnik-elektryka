@@ -328,12 +328,12 @@ export function estimateRoutes(
     // Pierwszy odcinek wychodzi z ROZDZIELNICY — pod strop i w dół do puszki.
     // Kolejne idą z puszki do puszki, więc liczy się sama różnica wysokości.
     const pion = pierwszy
-      ? pionM(panelHeightM, mountingHeightM(e), wysokoscM)
-      : pionMiedzyPunktami(wysokoscPoprzedniego, mountingHeightM(e));
+      ? pionM(panelHeightM, mountingHeightM(e, wysokoscM), wysokoscM)
+      : pionMiedzyPunktami(wysokoscPoprzedniego, mountingHeightM(e, wysokoscM));
     total += odcinekM + pion + SLACK_M;
     poprzedni = e;
     poprzedniTyp = e.type;
-    wysokoscPoprzedniego = mountingHeightM(e);
+    wysokoscPoprzedniego = mountingHeightM(e, wysokoscM);
     pierwszy = false;
   }
 
@@ -350,7 +350,7 @@ export function estimateRoutes(
     const bieg = biegPoziomyJedn(o.bestFrom, o.light, o.bestFrom.type, o.light.type, geo);
     szacunek = szacunek || bieg.szacunek;
     const odcinekM = bieg.jedn * metersPerUnit;
-    const pion = pionMiedzyPunktami(mountingHeightM(o.bestFrom), mountingHeightM(o.light));
+    const pion = pionMiedzyPunktami(mountingHeightM(o.bestFrom, wysokoscM), mountingHeightM(o.light, wysokoscM));
     total += odcinekM + pion + SLACK_M;
     poGrupach.set(o.bestFrom.id, (poGrupach.get(o.bestFrom.id) ?? 0) + odcinekM);
   }
@@ -359,7 +359,7 @@ export function estimateRoutes(
   // Punkt elektrycznie najdalszy to OSTATNI w łańcuchu (kolejność narasta od
   // rozdzielnicy): cały bieg poziomy plus jedno zejście do tej właśnie puszki.
   const ostatni = lancuch[lancuch.length - 1];
-  const worst = poziomM + najdluzszeSterowanie + pionM(panelHeightM, mountingHeightM(ostatni), wysokoscM) + SLACK_M;
+  const worst = poziomM + najdluzszeSterowanie + pionM(panelHeightM, mountingHeightM(ostatni, wysokoscM), wysokoscM) + SLACK_M;
   return { worstCaseM: round1(worst), totalM: round1(total), szacunek };
 }
 
