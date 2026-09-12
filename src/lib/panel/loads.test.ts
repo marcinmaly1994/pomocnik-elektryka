@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ZAPAS_MONTAZOWY_M } from "./norms";
 import type { Circuit, ElementType, Floor, InstallationElement, RoomShape, Point } from "@/types";
 import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, przytnijDoKrawedzi, zakonczPrzyNozce } from "./loads";
 
@@ -57,11 +58,11 @@ describe("estimateRoutes", () => {
   const panel = { x: 0, y: 0 };
 
   /** Pion + zapas dla gniazda na 0,3 m przy rozdzielnicy na 1,5 m i kondygnacji 2,8 m:
-   *  podejście (2,8 − 1,5) + zejście (2,8 − 0,3) + zapas 1,5 = 5,3 m. */
-  const NADDATEK_GNIAZDO = 5.3;
+   *  podejście (2,8 − 1,5) + zejście (2,8 − 0,3) + zapas 0,5 = 4,3 m. */
+  const NADDATEK_GNIAZDO = 4.3;
   /** Sam zapas montazowy w puszce — tyle dokłada kolejne gniazdo na tej samej
    *  wysokosci, bo miedzy puszkami przewod nie wraca pod strop. */
-  const ZAPAS = 1.5;
+  const ZAPAS = ZAPAS_MONTAZOWY_M;
 
   it("liczy trasę po obrysie (Manhattan), nie po przekątnej", () => {
     // punkt (30,40) przy skali 0,1 m/jedn.: (30+40)·0,1 = 7 m + naddatek pionowy
@@ -1004,7 +1005,7 @@ describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
   const rozdzielnica = el("rozdzielnica", { x: 20, y: 287, rotation: 180 });
   const punkt = { x: rozdzielnica.x, y: rozdzielnica.y };
   /** Pion i zapas dla gniazda przy rozdzielnicy na 1,5 m: (2,8−1,5) + (2,8−0,3) + 1,5. */
-  const NADDATEK = 5.3;
+  const NADDATEK = 4.3;
 
   /** Suma dlugosci odcinkow NARYSOWANYCH na rzucie [jednostki planu]. */
   function dlugoscRysunku(gniazda: InstallationElement[]): number {

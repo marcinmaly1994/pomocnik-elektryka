@@ -47,11 +47,17 @@ export type LayingMethod = "w_scianie" | "w_scianie_ocieplonej" | "w_rurce" | "n
  * przepuszczało zbyt cienki przewód.
  */
 /**
- * Domyślny zapas montażowy na punkt [m] — zejście do puszki i luz zostawiany w niej
- * na podłączenie. Doliczany do KAŻDEGO punktu osobno, więc przy stu punktach to
- * sto pięćdziesiąt metrów kabla w kosztorysie; dlatego jest nastawą, a nie stałą.
+ * Domyślny zapas montażowy na punkt [m] — luz zostawiany w puszce na podłączenie.
+ *
+ * Doliczany do KAŻDEGO punktu osobno, więc przy stu punktach to pięćdziesiąt metrów
+ * kabla w kosztorysie — dlatego jest nastawą, a nie stałą (patrz `WarunkiDoboru`).
+ *
+ * 0,5 m to wartość przyjęta przez właściciela projektu jako typowa praktyka montażowa.
+ * Wcześniej było tu 1,5 m; zmiana skraca policzony przewód, a więc także spadek
+ * napięcia — o jeden zapas na obwód w długości decydującej o doborze. Kto zostawia
+ * w puszce więcej, wpisuje więcej: pole „Zapas na punkt" w warunkach doboru.
  */
-export const ZAPAS_MONTAZOWY_M = 1.5;
+export const ZAPAS_MONTAZOWY_M = 0.5;
 
 export interface WarunkiDoboru {
   sposobUlozenia: LayingMethod;

@@ -47,12 +47,12 @@ test("zapas montazowy: widoczny w kosztorysie i do ustawienia w rozdzielnicy", a
   await postaw(page, "rozdzielnica", /^Rozdzielnica$/, 60, 300, true);
   for (const x of [200, 260, 320, 380]) await postaw(page, "gniazdo 230", /Gniazdo 230 V/, x, 60);
 
-  // Cztery gniazda po 1,5 m = 6 m zapasu.
-  expect(await zapasZKosztorysu(page)).toBe(6);
+  // Cztery gniazda po 0,5 m (wartosc domyslna) = 2 m zapasu.
+  expect(await zapasZKosztorysu(page)).toBe(2);
 
   // Nastawa w Rozdzielnicy zmienia liczbe w Kosztorysie — jedno pokretlo, nie dwa.
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
-  await page.getByLabel("Zapas montażowy na punkt w metrach").fill("0.5");
+  await page.getByLabel("Zapas montażowy na punkt w metrach").fill("1.5");
   await page.waitForTimeout(500);
-  expect(await zapasZKosztorysu(page)).toBe(2);
+  expect(await zapasZKosztorysu(page)).toBe(6);
 });
