@@ -11,7 +11,6 @@ import {
   sanitaryRenderScale,
   skalaZRysunku,
   ROZPIETOSC_ODNIESIENIA,
-  ROZPIETOSC_PLANU_ODNIESIENIA,
 } from "./symbolScale";
 
 describe("autoSymbolScale", () => {
@@ -100,35 +99,34 @@ describe("glyphBoxSize dla przyborów sanitarnych", () => {
  */
 describe("skalaZRysunku — rzut bez kalibracji", () => {
   it("rysunek typowej wielkosci nie zmienia niczego", () => {
-    expect(skalaZRysunku(ROZPIETOSC_ODNIESIENIA, 1000)).toBe(1);
+    expect(skalaZRysunku(ROZPIETOSC_ODNIESIENIA)).toBe(1);
   });
 
   it("rysunek dziesiec razy wiekszy daje dziesiec razy wieksze symbole", () => {
-    expect(skalaZRysunku(10 * ROZPIETOSC_ODNIESIENIA, 1000)).toBeCloseTo(10, 10);
+    expect(skalaZRysunku(10 * ROZPIETOSC_ODNIESIENIA)).toBeCloseTo(10, 10);
   });
 
   /** Tylko powieksza. Rysunek mniejszy od typowego bywa po prostu ZACZETY — jedna
    *  sciana, jeden pokoj — i zmniejszanie symboli na takiej podstawie psuloby
    *  czytelnosc zamiast ja poprawiac. */
   it("rysunek mniejszy od typowego NIE zmniejsza symboli", () => {
-    expect(skalaZRysunku(30, 1000)).toBe(1);
-    expect(skalaZRysunku(ROZPIETOSC_ODNIESIENIA / 2, 1000)).toBe(1);
+    expect(skalaZRysunku(30)).toBe(1);
+    expect(skalaZRysunku(ROZPIETOSC_ODNIESIENIA / 2)).toBe(1);
   });
 
   it("jedno zablakane klikniecie daleko od domu nie hoduje symboli bez konca", () => {
-    expect(skalaZRysunku(500000, 1000)).toBeLessThanOrEqual(20);
+    expect(skalaZRysunku(500000)).toBeLessThanOrEqual(20);
   });
 
-  /** Dopoki nie ma czego mierzyc na rysunku, zostaje sam obszar planu. */
-  it("bez narysowanych scian liczy z obszaru planu", () => {
-    expect(skalaZRysunku(null, ROZPIETOSC_PLANU_ODNIESIENIA)).toBe(1);
-    expect(skalaZRysunku(null, 4 * ROZPIETOSC_PLANU_ODNIESIENIA)).toBeCloseTo(4, 10);
-    expect(skalaZRysunku(null, null)).toBe(1);
-  });
-
-  it("narysowane sciany bija obszar planu — to one mowia, jak duzy jest rzut", () => {
-    // Wielki obszar planu, maly rysunek: decyduje rysunek, wiec bez zmian.
-    expect(skalaZRysunku(ROZPIETOSC_ODNIESIENIA, 9000)).toBe(1);
+  /**
+   * Pusta kondygnacja zostaje przy rozmiarze bazowym — NIE bierze rozpietosci obszaru
+   * planu. Obszar dopasowuje sie do proporcji wgranego podkladu (`planSizeForImage`),
+   * wiec panorama 3:1 dawalaby symbole 1,45x wieksze, a pierwszy narysowany pokoj
+   * zrzucalby je z powrotem do 1,0x — skok w dol w nagrode za narysowanie czegokolwiek.
+   */
+  it("bez narysowanych scian zostaje rozmiar bazowy", () => {
+    expect(skalaZRysunku(null)).toBe(1);
+    expect(skalaZRysunku(0)).toBe(1);
   });
 });
 

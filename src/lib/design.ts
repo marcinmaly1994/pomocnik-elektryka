@@ -417,18 +417,6 @@ export interface Obszar {
 }
 
 /**
- * Prostokąt obejmujący całą narysowaną treść kondygnacji [jedn. planu], z marginesem.
- * `null`, gdy nie ma czego kadrować.
- *
- * Po co: eksport do PDF brał dotąd CAŁY obszar planu (1000 × 700 jedn. = 50 × 35 m przy
- * rysowaniu od zera), więc mieszkanie 10 × 8 m zajmowało jedną piątą kartki, a resztę
- * wypełniała pusta siatka. Wydruk wychodził nieczytelny nie dlatego, że rysunek jest
- * zły, tylko dlatego, że pokazywaliśmy głównie tło.
- *
- * Wynik jest PRZYCINANY do obszaru planu: margines dodany przy krawędzi wyszedłby poza
- * scenę, a `toCanvas` zwróciłby wtedy pas przezroczystych pikseli.
- */
-/**
  * Rozpiętość narysowanego rzutu: dłuższy bok obrysu ścian i pomieszczeń, w jednostkach
  * planu. `null`, gdy nie ma jeszcze ani jednej ściany i ani jednego pomieszczenia.
  *
@@ -447,6 +435,18 @@ export function rozpietoscRysunku(
   return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
 }
 
+/**
+ * Prostokąt obejmujący całą narysowaną treść kondygnacji [jedn. planu], z marginesem.
+ * `null`, gdy nie ma czego kadrować.
+ *
+ * Po co: eksport do PDF brał dotąd CAŁY obszar planu (1000 × 700 jedn. = 50 × 35 m przy
+ * rysowaniu od zera), więc mieszkanie 10 × 8 m zajmowało jedną piątą kartki, a resztę
+ * wypełniała pusta siatka. Wydruk wychodził nieczytelny nie dlatego, że rysunek jest
+ * zły, tylko dlatego, że pokazywaliśmy głównie tło.
+ *
+ * Wynik jest PRZYCINANY do obszaru planu: margines dodany przy krawędzi wyszedłby poza
+ * scenę, a `toCanvas` zwróciłby wtedy pas przezroczystych pikseli.
+ */
 export function contentBounds(
   planSize: PlanSize,
   walls: { points: Point[] }[],

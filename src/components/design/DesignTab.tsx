@@ -436,8 +436,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    * jest bez znaczenia: `autoSymbolScale` bierze wtedy zmierzone `mpu`.
    */
   const skalaBezKalibracji = useMemo(
-    () => skalaZRysunku(rozpietoscRysunku(walls, roomShapes), Math.max(planSize.w, planSize.h)),
-    [walls, roomShapes, planSize]
+    () => skalaZRysunku(rozpietoscRysunku(walls, roomShapes)),
+    [walls, roomShapes]
   );
 
   const [sidebarTab, setSidebarTab] = useState<"elementy" | "pomieszczenia">("elementy");

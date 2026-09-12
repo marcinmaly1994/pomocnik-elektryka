@@ -67,10 +67,6 @@ export function autoSymbolScale(mpu: number | null, zRysunku = 1): number {
  */
 export const ROZPIETOSC_ODNIESIENIA = 240;
 
-/** To samo dla OBSZARU planu — używane, dopóki nie ma czego mierzyć na rysunku.
- *  1000 jedn. to szerokość domyślnego obszaru (`DEFAULT_PLAN_SIZE`). */
-export const ROZPIETOSC_PLANU_ODNIESIENIA = 1000;
-
 /** Sufit dla zgadywanej skali. Jedno zabłąkane kliknięcie daleko poza domem rozdyma
  *  obrys rysunku i bez tego wyhodowałoby symbole większe od pokoju. */
 const MAKS_SKALA_Z_RYSUNKU = 20;
@@ -85,7 +81,7 @@ const MAKS_SKALA_Z_RYSUNKU = 20;
  * od typowego, to znaczy, że jednostka planu jest dziesięć razy mniejsza niż przy
  * rysowaniu odręcznym, i symbol ma urosnąć tyle samo.
  *
- * To ZGADYWANIE, nie pomiar — stąd dwie ostrożności, których nie ma ścieżka
+ * To ZGADYWANIE, nie pomiar — stąd trzy ostrożności, których nie ma ścieżka
  * skalibrowana (`autoSymbolScale`):
  *
  * 1. Wynik nigdy nie schodzi PONIŻEJ 1. Rysunek mniejszy od typowego bywa po prostu
@@ -93,18 +89,19 @@ const MAKS_SKALA_Z_RYSUNKU = 20;
  *    śladu psułoby czytelność zamiast ją poprawiać. Zmiana wyłącznie powiększa, więc
  *    żaden dzisiejszy rzut nie może przez nią wyglądać gorzej.
  * 2. Wynik jest ograniczony z góry — patrz `MAKS_SKALA_Z_RYSUNKU`.
+ * 3. Dopóki nie ma ANI JEDNEJ ściany i ani jednego pomieszczenia, zostaje rozmiar
+ *    bazowy. Kuszące było wziąć wtedy rozpiętość obszaru planu, ale obszar dopasowuje
+ *    się do PROPORCJI wgranego podkładu przy zachowaniu pola (`planSizeForImage`):
+ *    panorama 3:1 daje 1449 × 483, więc symbole robiłyby się 1,45× większe, a po
+ *    narysowaniu pierwszego normalnego pokoju spadały z powrotem do 1,0×. Skok w dół
+ *    w nagrodę za narysowanie czegokolwiek jest gorszy niż spokojne czekanie na rysunek.
  *
  * Po skalibrowaniu skali ta funkcja przestaje mieć znaczenie: `autoSymbolScale` bierze
  * wtedy zmierzone `mpu`, czyli liczbę, a nie domysł.
  */
-export function skalaZRysunku(rozpietoscRysunku: number | null, rozpietoscPlanu: number | null): number {
-  const rozpietosc =
-    rozpietoscRysunku !== null && rozpietoscRysunku > 0
-      ? rozpietoscRysunku / ROZPIETOSC_ODNIESIENIA
-      : rozpietoscPlanu !== null && rozpietoscPlanu > 0
-        ? rozpietoscPlanu / ROZPIETOSC_PLANU_ODNIESIENIA
-        : 1;
-  return Math.min(MAKS_SKALA_Z_RYSUNKU, Math.max(1, rozpietosc));
+export function skalaZRysunku(rozpietosc: number | null): number {
+  if (rozpietosc === null || !(rozpietosc > 0)) return 1;
+  return Math.min(MAKS_SKALA_Z_RYSUNKU, Math.max(1, rozpietosc / ROZPIETOSC_ODNIESIENIA));
 }
 
 /** Skala renderu osprzętu: umowny rozmiar symbolu razy ustawienie suwaka. */
