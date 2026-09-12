@@ -45,6 +45,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   GRID,
   MANUAL_DRAW_SCALE_MPU,
+  rozpietoscRysunku,
   ROOM_TYPE_LABELS,
   PROG_WASKIEGO_EKRANU,
   defaultOpeningWidth,
@@ -59,6 +60,7 @@ import {
 } from "@/lib/design";
 import {
   autoSymbolScale,
+  skalaZRysunku,
   DEFAULT_ELEMENT_SCALE,
   elementRenderScale,
   sanitaryRenderScale,
@@ -323,7 +325,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
      * grup sterowania. Stały margines „na wannę" pomniejszał rzut o prawie ćwierć
      * także wtedy, gdy żadnej wanny na nim nie było.
      */
-    const skalaSymboli = elementRenderScale(mpu, elementScale);
+    const skalaSymboli = elementRenderScale(mpu, elementScale, skalaBezKalibracji);
     /**
      * Strefy ochronne przyborów sanitarnych wchodzą do kadru OSOBNO, bo sięgają dalej
      * niż sam symbol i liczą się inną skalą — z kalibracji rzutu, a nie z rozmiaru
@@ -338,7 +340,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       ];
     });
     const rogi = [...elements.flatMap((e) => rogiSymbolu(e, skalaSymboli)), ...rogiStref];
-    const kadr = contentBounds(planSize, walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu)) ?? {
+    const kadr = contentBounds(planSize, walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
       x: 0,
       y: 0,
       w: planSize.w,
@@ -427,6 +429,16 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const walls = useActiveFloorWalls();
   const roomShapes = useActiveFloorRoomShapes();
   const openings = useActiveFloorOpenings();
+
+  /**
+   * Zastępcza skala symboli dla kondygnacji BEZ skalibrowanej skali — zgadywana
+   * z wielkości samego rysunku (patrz `skalaZRysunku`). Przy skalibrowanym rzucie
+   * jest bez znaczenia: `autoSymbolScale` bierze wtedy zmierzone `mpu`.
+   */
+  const skalaBezKalibracji = useMemo(
+    () => skalaZRysunku(rozpietoscRysunku(walls, roomShapes)),
+    [walls, roomShapes]
+  );
 
   const [sidebarTab, setSidebarTab] = useState<"elementy" | "pomieszczenia">("elementy");
   const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
@@ -1165,7 +1177,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     const tolerancja = mpu ? WALL_SNAP_TOLERANCE_M / mpu : GRID / 2;
     // Skala renderu symboli musi tu dojść ta sama, którą rysuje płótno — odsunięcie od
     // ściany jest podane w jednostkach glifu, a element żyje w jednostkach planu.
-    const skala = elementRenderScale(mpu, elementScale);
+    const skala = elementRenderScale(mpu, elementScale, skalaBezKalibracji);
     return (
       snapElementToWall(p, walls, roomShapes, tolerancja, type, skala) ?? { x: p.x, y: p.y, rotation: obecnyObrot }
     );
@@ -1569,9 +1581,9 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const rawCableRoutes = useMemo(
     () =>
       trasyPotrzebne
-        ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes, openings, elementRenderScale(mpu, elementScale))
+        ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes, openings, elementRenderScale(mpu, elementScale, skalaBezKalibracji))
         : [],
-    [trasyPotrzebne, elements, walls, roomShapes, openings, mpu, elementScale]
+    [trasyPotrzebne, elements, walls, roomShapes, openings, mpu, elementScale, skalaBezKalibracji]
   );
   // Ręczne poprawki (przeciągnięte przez użytkownika załamania, patrz DesignCanvas)
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
@@ -2517,8 +2529,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             cableRoutes={cableRoutes}
             routeOverrides={routeOverrides}
             lightGroups={lightGroups}
-            elementScale={elementRenderScale(mpu, elementScale)}
-            sanitaryScale={sanitaryRenderScale(mpu)}
+            elementScale={elementRenderScale(mpu, elementScale, skalaBezKalibracji)}
+            sanitaryScale={sanitaryRenderScale(mpu, skalaBezKalibracji)}
             planSize={planSize}
             metersPerUnit={mpu}
             onOutsidePlan={flashOutsideHint}

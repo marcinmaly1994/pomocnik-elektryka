@@ -54,13 +54,59 @@ export const JEDNOSTKI_NA_METR = 1 / (SKALA_ODNIESIENIA_MPU * BASE_ELEMENT_SCALE
  * przypadki, a niepoprawne (ktoś podał 5 m dla dwóch punktów odległych o 3 jednostki)
  * i tak są już zepsute wszędzie indziej: strefy i podziałka też nie mają ograniczeń.
  */
-export function autoSymbolScale(mpu: number | null): number {
-  return mpu !== null && mpu > 0 ? SKALA_ODNIESIENIA_MPU / mpu : 1;
+export function autoSymbolScale(mpu: number | null, zRysunku = 1): number {
+  return mpu !== null && mpu > 0 ? SKALA_ODNIESIENIA_MPU / mpu : zRysunku;
+}
+
+/**
+ * Rozpiętość rysunku (jedn. planu), przy której symbole mają rozmiar bazowy.
+ *
+ * 240 jedn. to 12 m w skali rysowania odręcznego (`MANUAL_DRAW_SCALE_MPU`) — tyle ma
+ * w dłuższym boku typowy dom jednorodzinny albo mieszkanie. Pod taki właśnie rysunek
+ * dobrana jest geometria glifów, więc rzut tej wielkości nie zmienia się ani o piksel.
+ */
+export const ROZPIETOSC_ODNIESIENIA = 240;
+
+/** Sufit dla zgadywanej skali. Jedno zabłąkane kliknięcie daleko poza domem rozdyma
+ *  obrys rysunku i bez tego wyhodowałoby symbole większe od pokoju. */
+const MAKS_SKALA_Z_RYSUNKU = 20;
+
+/**
+ * Skala symboli dla rzutu BEZ SKALIBROWANEJ SKALI — zgadywana z wielkości rysunku.
+ *
+ * Bez kalibracji nie wiadomo, ile metrów ma jednostka planu, więc dotąd symbole miały
+ * po prostu rozmiar bazowy: na rzucie rozciągniętym na kilka tysięcy jednostek gniazdko
+ * schodziło do kilku pikseli i rysunek stawał się nieczytelny. Jedyna informacja, jaka
+ * tu jest, to sam rysunek — jeśli obrys ścian i pomieszczeń jest dziesięć razy większy
+ * od typowego, to znaczy, że jednostka planu jest dziesięć razy mniejsza niż przy
+ * rysowaniu odręcznym, i symbol ma urosnąć tyle samo.
+ *
+ * To ZGADYWANIE, nie pomiar — stąd trzy ostrożności, których nie ma ścieżka
+ * skalibrowana (`autoSymbolScale`):
+ *
+ * 1. Wynik nigdy nie schodzi PONIŻEJ 1. Rysunek mniejszy od typowego bywa po prostu
+ *    zaczęty (jedna ściana, jeden pokój) i zmniejszanie symboli na podstawie takiego
+ *    śladu psułoby czytelność zamiast ją poprawiać. Zmiana wyłącznie powiększa, więc
+ *    żaden dzisiejszy rzut nie może przez nią wyglądać gorzej.
+ * 2. Wynik jest ograniczony z góry — patrz `MAKS_SKALA_Z_RYSUNKU`.
+ * 3. Dopóki nie ma ANI JEDNEJ ściany i ani jednego pomieszczenia, zostaje rozmiar
+ *    bazowy. Kuszące było wziąć wtedy rozpiętość obszaru planu, ale obszar dopasowuje
+ *    się do PROPORCJI wgranego podkładu przy zachowaniu pola (`planSizeForImage`):
+ *    panorama 3:1 daje 1449 × 483, więc symbole robiłyby się 1,45× większe, a po
+ *    narysowaniu pierwszego normalnego pokoju spadały z powrotem do 1,0×. Skok w dół
+ *    w nagrodę za narysowanie czegokolwiek jest gorszy niż spokojne czekanie na rysunek.
+ *
+ * Po skalibrowaniu skali ta funkcja przestaje mieć znaczenie: `autoSymbolScale` bierze
+ * wtedy zmierzone `mpu`, czyli liczbę, a nie domysł.
+ */
+export function skalaZRysunku(rozpietosc: number | null): number {
+  if (rozpietosc === null || !(rozpietosc > 0)) return 1;
+  return Math.min(MAKS_SKALA_Z_RYSUNKU, Math.max(1, rozpietosc / ROZPIETOSC_ODNIESIENIA));
 }
 
 /** Skala renderu osprzętu: umowny rozmiar symbolu razy ustawienie suwaka. */
-export function elementRenderScale(mpu: number | null, suwak: number): number {
-  return suwak * BASE_ELEMENT_SCALE * autoSymbolScale(mpu);
+export function elementRenderScale(mpu: number | null, suwak: number, zRysunku = 1): number {
+  return suwak * BASE_ELEMENT_SCALE * autoSymbolScale(mpu, zRysunku);
 }
 
 /**
@@ -71,7 +117,13 @@ export function elementRenderScale(mpu: number | null, suwak: number): number {
  * powiększał również przybory, rysunek pokazywałby wannę większą niż strefa, którą
  * aplikacja faktycznie sprawdza — czyli kłamałby o jedynym miejscu, w którym pomyłka
  * kończy się porażeniem. Suwak zostaje przy osprzęcie, gdzie zmienia tylko czytelność.
+ *
+ * Zgadywana skala z rysunku (`zRysunku`) to co innego niż suwak i przybory JĄ słuchają.
+ * Wchodzi w grę wyłącznie wtedy, gdy skali nie ma — a wtedy `checkPlan` w ogóle nie
+ * sprawdza stref i mówi o tym wprost („Strefy ochronne niesprawdzone — brak skali").
+ * Nie ma więc strefy, o której obrys mógłby kłamać; jest za to rysunek, na którym wanna
+ * ma wyglądać jak wanna, a nie jak kropka obok pokoju szerokiego na tysiąc jednostek.
  */
-export function sanitaryRenderScale(mpu: number | null): number {
-  return BASE_ELEMENT_SCALE * autoSymbolScale(mpu);
+export function sanitaryRenderScale(mpu: number | null, zRysunku = 1): number {
+  return BASE_ELEMENT_SCALE * autoSymbolScale(mpu, zRysunku);
 }

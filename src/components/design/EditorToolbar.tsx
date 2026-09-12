@@ -253,7 +253,7 @@ export function EditorToolbar({
           stoją w osobnych grupach (zoom siedzi po prawej, przy dopasowaniu widoku). */}
       <label
         className="flex items-center gap-1.5 text-xs text-slate-500"
-        title="Rozmiar symboli osprzętu względem skali rzutu. Sam rozmiar dopasowuje się do skali automatycznie — ten suwak służy do korekty czytelności. Przybory sanitarne go nie słuchają: rysują się w prawdziwych wymiarach, bo ich obrys jest strefą ochronną."
+        title="Rozmiar symboli osprzętu. Sam rozmiar dopasowuje się automatycznie: przy skalibrowanej skali symbol zajmuje zawsze tyle samo centymetrów ściany, a bez skali — tyle samo względem wielkości rysunku. Ten suwak służy do korekty czytelności. Przybory sanitarne go nie słuchają: rysują się w prawdziwych wymiarach, bo ich obrys jest strefą ochronną."
       >
         <span className="whitespace-nowrap">Rozmiar elementów</span>
         <input

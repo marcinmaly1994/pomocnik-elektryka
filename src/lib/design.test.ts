@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { InstallationElement, RoomShape } from "@/types";
 import { NO_ROOM } from "./elements";
-import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU,
+import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   ROOM_COLORS,
   roomColorForIndex,
   nextRoomName,
@@ -436,5 +436,25 @@ describe("rogiSymbolu", () => {
     )!;
     const poStaremu = contentBounds({ w: 1000, h: 700 }, [], [], gniazda, [], MARGINES_KADROWANIA)!;
     expect(zRogow.w).toBeLessThan(poStaremu.w);
+  });
+});
+
+describe("rozpietoscRysunku", () => {
+  const sciana = (pts: { x: number; y: number }[]) => ({ points: pts });
+
+  it("bez scian i pomieszczen nie ma czego mierzyc", () => {
+    expect(rozpietoscRysunku([], [])).toBeNull();
+  });
+
+  it("mierzy DLUZSZY bok obrysu, nie przekatna", () => {
+    expect(rozpietoscRysunku([sciana([{ x: 100, y: 50 }, { x: 400, y: 250 }])], [])).toBe(300);
+  });
+
+  it("laczy sciany z pomieszczeniami w jeden obrys", () => {
+    const r = rozpietoscRysunku(
+      [sciana([{ x: 0, y: 0 }, { x: 100, y: 0 }])],
+      [{ points: [{ x: 0, y: 0 }, { x: 0, y: 900 }] }]
+    );
+    expect(r).toBe(900);
   });
 });

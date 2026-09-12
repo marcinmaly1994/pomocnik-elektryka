@@ -155,3 +155,72 @@ test("suwak rozmiaru rusza osprzetem, ale nie przyborem sanitarnym", async ({ pa
   // Wanna ma pozostac wanna: jej obrys jest strefa ochronna, a nie ozdoba.
   expect(wannaPo).toBeCloseTo(wannaPrzed!, 5);
 });
+
+/**
+ * Rzut BEZ skalibrowanej skali: rozmiar symboli bierze sie z WIELKOSCI RYSUNKU.
+ *
+ * Bez kalibracji nie wiadomo, ile metrow ma jednostka planu, wiec symbole mialy tu
+ * po prostu rozmiar bazowy — na rysunku rozciagnietym na caly obszar planu gniazdko
+ * schodzilo do kilku pikseli. Arytmetyka ma testy w `lib/symbolScale.test.ts`;
+ * tutaj chodzi o to, czy rozpietosc NARYSOWANEGO rzutu w ogole dociera do renderu.
+ */
+async function pustyBezSkali(page: Page) {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  const pomin = page.getByRole("button", { name: "Pomiń — ustawię później" });
+  if (await pomin.count()) await pomin.click();
+  await page.getByRole("button", { name: "Instalacja" }).first().click();
+  // „Pomiń — zacznę na pustym planie" NIE ustawia skali (robi to dopiero „Narysuj dom
+  // samodzielnie" albo kalibracja) — i o ten stan tu chodzi.
+  const naPustym = page.getByRole("button", { name: "Pomiń — zacznę na pustym planie" });
+  await naPustym.waitFor({ state: "visible", timeout: 5000 });
+  await naPustym.click();
+  await expect(page.getByText(/Skala:\s*nieustawiona/)).toBeVisible();
+}
+
+async function narysujPokoj(page: Page, x1: number, y1: number, x2: number, y2: number) {
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  const a = await naEkranie(page, x1, y1);
+  const b = await naEkranie(page, x2, y2);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 8 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+}
+
+/** Skala renderu symbolu osprzetu — ta sama sciezka pomiaru, co w tescie wyzej. */
+async function skalaOsprzetu(page: Page) {
+  return page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { find(s: string): unknown[] }[] } }).Konva;
+    type P = { getParent(): { scaleX(): number } };
+    const p = k.stages[0].find("Path") as P[];
+    return p.length ? p[0].getParent().scaleX() : null;
+  });
+}
+
+test("bez skali symbol ROSNIE razem z rysunkiem", async ({ page }) => {
+  await pustyBezSkali(page);
+  // Pokoj szeroki na 540 jedn. — rysunek ponad dwa razy wiekszy od typowego domu
+  // w skali odniesienia (240 jedn.).
+  await narysujPokoj(page, 60, 60, 600, 300);
+  await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
+  await klikNaPlanie(page, 300, 70);
+
+  const skala = await skalaOsprzetu(page);
+  // 540 / 240 = 2,25 razy rozmiar bazowy (0,7).
+  expect(skala).toBeCloseTo(0.7 * (540 / 240), 1);
+});
+
+test("bez skali MALY rysunek zostaje przy dotychczasowym rozmiarze", async ({ page }) => {
+  await pustyBezSkali(page);
+  await narysujPokoj(page, 100, 100, 300, 250);
+  await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
+  await klikNaPlanie(page, 200, 110);
+
+  // Domysl z rysunku tylko POWIEKSZA: rysunek mniejszy od typowego bywa po prostu
+  // zaczety, a zmniejszanie symboli na takiej podstawie psuloby czytelnosc.
+  expect(await skalaOsprzetu(page)).toBeCloseTo(0.7, 5);
+});
