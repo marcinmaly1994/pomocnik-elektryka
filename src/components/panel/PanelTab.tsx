@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
-import { useProjectStore } from "@/store/useProjectStore";
+import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups, ostrzezeniaObwodow } from "@/lib/panel/circuits";
-import { OPIS_ULOZENIA, type LayingMethod } from "@/lib/panel/norms";
+import { OPIS_ULOZENIA, ZAPAS_MONTAZOWY_M, type LayingMethod } from "@/lib/panel/norms";
 import { ELEMENT_TYPES, NO_ROOM } from "@/lib/elements";
 import {
   balancePhases,
@@ -147,22 +147,10 @@ export function PanelTab() {
         .map((id) => floors.find((f) => f.id === id)?.name ?? id),
     [elements, scales, floors]
   );
+  const opcjeDoboru = useOpcjeDoboru();
   const { circuits, sized: sizedRaw } = useMemo(
-    () =>
-      computeSizedCircuits(
-        elements,
-        {
-          scales,
-          geometria,
-          kondygnacje: floors,
-          sposob_ulozenia: warunki.sposobUlozenia,
-          temperatura_otoczenia_C: warunki.temperaturaC,
-          obwodow_w_wiazce: warunki.obwodowWWiazce,
-          spadek_wlz_pct: warunki.spadekWlzPct,
-        },
-        roomShapes
-      ),
-    [elements, scales, geometria, floors, roomShapes, warunki]
+    () => computeSizedCircuits(elements, opcjeDoboru, roomShapes),
+    [elements, opcjeDoboru, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const sized = useMemo(() => assignPhases(sizedRaw, supply3f), [sizedRaw, supply3f]);
@@ -794,6 +782,23 @@ export function PanelTab() {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Zapas na punkt [m]</div>
+            <input
+              type="number"
+              min={0}
+              max={5}
+              step={0.1}
+              value={warunki.zapasNaPunktM}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value.replace(",", "."));
+                setWarunki({ zapasNaPunktM: Number.isFinite(v) && v >= 0 ? v : ZAPAS_MONTAZOWY_M });
+              }}
+              aria-label="Zapas montażowy na punkt w metrach"
+              className="pe-input w-full text-sm tabular-nums"
+              title="Zejście do puszki i luz zostawiany w niej na podłączenie. Doliczany do KAŻDEGO punktu osobno, więc przy stu punktach to kilkaset metrów kabla w kosztorysie. Wchodzi też (raz) w długość decydującą o spadku napięcia."
+            />
           </label>
           <label className="block">
             <div className="mb-1 text-xs text-slate-500">Spadek na WLZ [%]</div>

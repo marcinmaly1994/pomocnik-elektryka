@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { AlertTriangle, Download, FileText, Info, Upload, X } from "lucide-react";
-import { useProjectStore } from "@/store/useProjectStore";
+import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
-import { computeSizedCircuits, routeLengths } from "@/lib/panel/project";
+import { computeSizedCircuits, routeSummaries } from "@/lib/panel/project";
+import { ZAPAS_MONTAZOWY_M } from "@/lib/panel/norms";
 import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, VAT_RATE } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 import { buildCostsDoc, buildCostsPdf } from "@/lib/pdf/costs";
@@ -51,14 +52,21 @@ export function CostsTab() {
   // Te same obwody co w Rozdzielnicy/Schemacie — przekroje z doboru trafiają wprost
   // do pozycji kosztorysu, więc zamawiany materiał zgadza się z rysunkiem. Skale idą
   // CAŁĄ MAPĄ, bo obwód potrafi sięgać kilku pięter (patrz `estimateRoutesByFloor`).
+  const opcjeDoboru = useOpcjeDoboru();
   const { circuits } = useMemo(
-    () => computeSizedCircuits(elements, { scales, geometria, kondygnacje: floors }, roomShapes),
-    [elements, scales, geometria, floors, roomShapes]
+    () => computeSizedCircuits(elements, opcjeDoboru, roomShapes),
+    [elements, opcjeDoboru, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
+  /** Metraż z ROZBICIEM na zapasy montażowe — patrz `routeSummaries` i akapit pod tabelą. */
+  const trasy = useMemo(
+    () => routeSummaries(circuits, elements, scales, geometria, floors, opcjeDoboru.zapas_na_punkt_m),
+    [circuits, elements, scales, geometria, floors, opcjeDoboru.zapas_na_punkt_m]
+  );
+  const zapasRazemM = useMemo(() => [...trasy.values()].reduce((a, r) => a + r.zapasM, 0), [trasy]);
   const { quantities, cableLengthSource } = useMemo(
-    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: routeLengths(circuits, elements, scales, geometria, floors) }),
-    [elements, circuits, rcdGroups, scales, geometria, floors]
+    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: new Map([...trasy].map(([id, r]) => [id, r.totalM])) }),
+    [elements, circuits, rcdGroups, trasy]
   );
 
   const rows = kosztorysRows(quantities, prices, costOverrides, qtyOverrides);
@@ -158,6 +166,20 @@ export function CostsTab() {
             <span>
               Metry kabla policzone z tras po planie (od rozdzielnicy do każdego punktu, wzdłuż ścian,
               z naddatkiem na zejście i zapas montażowy).
+              {/*
+                Zapas ma NAZWĘ i liczbę, bo to pozycja, którą da się zakwestionować: przy stu
+                punktach robi się z niego kilkaset metrów kabla, a dotąd siedział w sumie
+                nierozróżnialny od zmierzonej trasy. Ustawia się go tam, gdzie resztę założeń
+                o instalacji — w Rozdzielnicy — żeby jedna liczba nie miała dwóch pokręteł.
+              */}
+              {zapasRazemM > 0 && (
+                <>
+                  {" "}
+                  Z tego <strong>{Math.round(zapasRazemM)} m</strong> to zapasy montażowe —
+                  po {String(opcjeDoboru.zapas_na_punkt_m ?? ZAPAS_MONTAZOWY_M).replace(".", ",")} m na punkt
+                  (zejście do puszki i luz na podłączenie). Zmienisz to w Rozdzielnicy, w warunkach doboru.
+                </>
+              )}
             </span>
           ) : (
             <span>

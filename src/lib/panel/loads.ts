@@ -17,6 +17,7 @@ import { kolejnoscLancucha } from "./lancuch";
 import { zasiegPrzyscienny } from "@/lib/glyphs";
 import { przyscienny, punktPrzyscienny } from "@/lib/wallSnap";
 import { nearestPointOnPolyline } from "@/lib/geometry";
+import { ZAPAS_MONTAZOWY_M } from "./norms";
 
 /**
  * Moc typowa pojedynczego punktu [W] — wartości projektowe, nie katalogowe.
@@ -109,8 +110,8 @@ export function wysokoscKondygnacji(floor: Floor | undefined): number {
   const h = floor?.heightM;
   return typeof h === "number" && h > 0 ? h : WYSOKOSC_KONDYGNACJI_M;
 }
-/** Zapas na zejście do osprzętu i zapas montażowy w puszce [m]. */
-const SLACK_M = 1.5;
+// Zapas montażowy mieszka teraz w `norms.ts` razem z resztą warunków, bo stał się
+// NASTAWĄ projektu, a nie stałą tego modułu — patrz `ZAPAS_MONTAZOWY_M`.
 
 /**
  * Naddatek pionowy trasy [m]: wyjście z rozdzielnicy pod strop i zejście do osprzętu.
@@ -167,6 +168,17 @@ export interface RouteEstimate {
    * do ostatniego punktu tych metrów nie ma.
    */
   totalM: number;
+  /**
+   * Ile z `totalM` to ZAPASY MONTAŻOWE [m] — po jednym na punkt.
+   *
+   * Wydzielone, żeby kosztorys mógł powiedzieć, ile z metrażu to zejścia i luz w puszce.
+   * Przy stu punktach to sto pięćdziesiąt metrów, które dotąd nie miały nazwy i przez to
+   * wyglądały jak zmierzona trasa.
+   *
+   * Dotyczy TYLKO `totalM` (materiał). W `worstCaseM` zapas też jest, ale jeden — na
+   * drodze prądu do najdalszego punktu pośrednie zejścia się nie liczą.
+   */
+  zapasM: number;
   /**
    * Czy choć jeden odcinek policzył się zapasowym szacunkiem Manhattan zamiast trasą
    * po ścianach.
@@ -268,11 +280,17 @@ export function estimateRoutes(
      *  człon, który naprawdę waży — liczy `pionMiedzyKondygnacjami` z osobna i po
      *  właściwych kondygnacjach. */
     wysokoscKondygnacjiM?: number;
+    /** Zapas montażowy na punkt [m]. Brak = wartość domyślna (`ZAPAS_MONTAZOWY_M`). */
+    zapasNaPunktM?: number;
   } = {}
 ): RouteEstimate | null {
   if (!panel || metersPerUnit === null || !(metersPerUnit > 0) || elements.length === 0) return null;
   const geo = kontekst.geometria;
   const wysokoscM = kontekst.wysokoscKondygnacjiM ?? WYSOKOSC_KONDYGNACJI_M;
+  // Ujemny zapas skrocilby przewod, wiec — jak wszedzie tutaj — wartosc bezsensowna
+  // wraca do domyslnej zamiast mylic sie w strone niebezpieczna.
+  const zapasNaPunkt = kontekst.zapasNaPunktM !== undefined && kontekst.zapasNaPunktM >= 0 ? kontekst.zapasNaPunktM : ZAPAS_MONTAZOWY_M;
+  let zapasM = 0;
 
   /**
    * Zasilanie idzie do ŁĄCZNIKA, nie do oprawy — i to jest tu sedno.
@@ -330,7 +348,8 @@ export function estimateRoutes(
     const pion = pierwszy
       ? pionM(panelHeightM, mountingHeightM(e, wysokoscM), wysokoscM)
       : pionMiedzyPunktami(wysokoscPoprzedniego, mountingHeightM(e, wysokoscM));
-    total += odcinekM + pion + SLACK_M;
+    total += odcinekM + pion + zapasNaPunkt;
+    zapasM += zapasNaPunkt;
     poprzedni = e;
     poprzedniTyp = e.type;
     wysokoscPoprzedniego = mountingHeightM(e, wysokoscM);
@@ -351,7 +370,8 @@ export function estimateRoutes(
     szacunek = szacunek || bieg.szacunek;
     const odcinekM = bieg.jedn * metersPerUnit;
     const pion = pionMiedzyPunktami(mountingHeightM(o.bestFrom, wysokoscM), mountingHeightM(o.light, wysokoscM));
-    total += odcinekM + pion + SLACK_M;
+    total += odcinekM + pion + zapasNaPunkt;
+    zapasM += zapasNaPunkt;
     poGrupach.set(o.bestFrom.id, (poGrupach.get(o.bestFrom.id) ?? 0) + odcinekM);
   }
   const najdluzszeSterowanie = Math.max(0, ...poGrupach.values());
@@ -359,8 +379,8 @@ export function estimateRoutes(
   // Punkt elektrycznie najdalszy to OSTATNI w łańcuchu (kolejność narasta od
   // rozdzielnicy): cały bieg poziomy plus jedno zejście do tej właśnie puszki.
   const ostatni = lancuch[lancuch.length - 1];
-  const worst = poziomM + najdluzszeSterowanie + pionM(panelHeightM, mountingHeightM(ostatni, wysokoscM), wysokoscM) + SLACK_M;
-  return { worstCaseM: round1(worst), totalM: round1(total), szacunek };
+  const worst = poziomM + najdluzszeSterowanie + pionM(panelHeightM, mountingHeightM(ostatni, wysokoscM), wysokoscM) + zapasNaPunkt;
+  return { worstCaseM: round1(worst), totalM: round1(total), zapasM: round1(zapasM), szacunek };
 }
 
 /**
@@ -403,6 +423,8 @@ export function estimateRoutesByFloor(
     /** Kondygnacje w kolejności od dołu — z nich bierze się pion między piętrami.
      *  Brak = pion nie jest doliczany, czyli zachowanie sprzed tej poprawki. */
     kondygnacje?: Floor[];
+    /** Zapas montażowy na punkt [m] — patrz `estimateRoutes`. */
+    zapasNaPunktM?: number;
   } = {}
 ): RouteEstimate | null {
   if (elements.length === 0) return null;
@@ -416,6 +438,7 @@ export function estimateRoutesByFloor(
 
   let worst = 0;
   let total = 0;
+  let zapas = 0;
   let szacunek = false;
   for (const [floor, grupa] of poKondygnacjach) {
     const skala = scales[floor];
@@ -427,6 +450,7 @@ export function estimateRoutesByFloor(
       {
         wszystkieElementy: kontekst.wszystkieElementy?.filter((e) => e.floor === floor),
         wysokoscKondygnacjiM: wysokoscKondygnacji(kondygnacje?.find((f) => f.id === floor)),
+        zapasNaPunktM: kontekst.zapasNaPunktM,
         geometria: geo && {
           walls: geo.walls.filter((w) => w.floor === floor),
           roomShapes: geo.roomShapes.filter((r2) => r2.floor === floor),
@@ -436,6 +460,7 @@ export function estimateRoutesByFloor(
     );
     if (!r) return null;
     szacunek = szacunek || r.szacunek;
+    zapas += r.zapasM;
     /**
      * Pion doliczany RAZ na kondygnację, nie na punkt: kabel wchodzi na piętro jeden
      * raz i dopiero tam rozchodzi się łańcuchem. Zerowy, gdy piętro ma własną
@@ -449,7 +474,7 @@ export function estimateRoutesByFloor(
     total += r.totalM + pion;
     if (r.worstCaseM + pion > worst) worst = r.worstCaseM + pion;
   }
-  return { worstCaseM: round1(worst), totalM: round1(total), szacunek };
+  return { worstCaseM: round1(worst), totalM: round1(total), zapasM: round1(zapas), szacunek };
 }
 
 /** Znajduje rozdzielnicę wśród PODANYCH elementów — punkt odniesienia dla tras.

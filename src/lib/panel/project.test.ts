@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ElementType, InstallationElement } from "@/types";
 import { computeCircuits } from "./circuits";
-import { applySizing, assignPhases, computeSizedCircuits, dlugosciDoboru, panelCapacity, phaseBalance, routeLengths, sizeProjectCircuits } from "./project";
+import { applySizing, assignPhases, computeSizedCircuits, dlugosciDoboru, panelCapacity, phaseBalance, routeLengths, routeSummaries, sizeProjectCircuits } from "./project";
 import type { SizedCircuit } from "./sizing";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -463,5 +463,62 @@ describe("sizeProjectCircuits — dlugosc ze szacunku", () => {
     // Sedno ostrzezenia: szacunek byl KROTSZY od trasy po scianach, wiec spadek
     // napiecia policzony z niego jest MNIEJSZY niz prawdziwy.
     expect(zGeo.spadek_napiecia_pct!).toBeGreaterThan(bez.spadek_napiecia_pct!);
+  });
+});
+
+/**
+ * Zapas montazowy — zejscie do puszki i luz na podlaczenie, doliczany do KAZDEGO punktu.
+ *
+ * Dla doboru to kierunek bezpieczny (dlugosc zawyzona), ale w KOSZTORYSIE przy stu
+ * punktach robi sie z niego sto piecdziesiat metrow kabla, ktore dotad nie mialy nazwy
+ * i wygladaly jak zmierzona trasa.
+ */
+describe("zapas montazowy na punkt", () => {
+  const elementy = [
+    el("rozdzielnica", { x: 20, y: 480 }),
+    ...Array.from({ length: 4 }, (_, i) => el("gniazdko", { x: 200 + i * 60, y: 20 })),
+  ];
+  const opts = { scales: { parter: 0.05 } };
+
+  it("rozbicie mowi, ile z metrazu to zapasy — po jednym na punkt", () => {
+    const obwody = computeCircuits(elementy);
+    const [trasa] = [...routeSummaries(obwody, elementy, opts.scales).values()];
+    // Cztery gniazda, wiec cztery zapasy po 1,5 m.
+    expect(trasa.zapasM).toBeCloseTo(4 * 1.5, 5);
+    expect(trasa.zapasM).toBeLessThan(trasa.totalM);
+  });
+
+  it("wlasny zapas zmienia metraz dokladnie o roznice razy liczba punktow", () => {
+    const obwody = computeCircuits(elementy);
+    const domyslny = [...routeSummaries(obwody, elementy, opts.scales).values()][0];
+    const wlasny = [...routeSummaries(obwody, elementy, opts.scales, undefined, undefined, 0.5).values()][0];
+    expect(wlasny.zapasM).toBeCloseTo(4 * 0.5, 5);
+    expect(domyslny.totalM - wlasny.totalM).toBeCloseTo(4 * (1.5 - 0.5), 1);
+  });
+
+  /** Zapas ujemny SKROCILBY przewod, wiec wartosc bezsensowna wraca do domyslnej. */
+  it("ujemny zapas wraca do domyslnego, zamiast skracac przewod", () => {
+    const obwody = computeCircuits(elementy);
+    const domyslny = [...routeSummaries(obwody, elementy, opts.scales).values()][0];
+    const bezsens = [...routeSummaries(obwody, elementy, opts.scales, undefined, undefined, -2).values()][0];
+    expect(bezsens.totalM).toBeCloseTo(domyslny.totalM, 5);
+  });
+
+  /** Zapas wchodzi tez w dlugosc decydujaca o spadku napiecia — ale tylko RAZ,
+   *  bo na drodze pradu do najdalszego punktu posrednie zejscia sie nie licza. */
+  it("mniejszy zapas skraca takze dlugosc do doboru, o jedna sztuke", () => {
+    const obwody = computeCircuits(elementy);
+    const domyslny = sizeProjectCircuits(obwody, elementy, opts).find((s2) => s2.typ === "gniazda")!;
+    const maly = sizeProjectCircuits(obwody, elementy, { ...opts, zapas_na_punkt_m: 0.5 }).find((s2) => s2.typ === "gniazda")!;
+    expect(maly.spadek_napiecia_pct!).toBeLessThan(domyslny.spadek_napiecia_pct!);
+  });
+
+  /** `routeLengths` zostaje zgodne z rozbiciem — to ten sam pomiar, inaczej podany. */
+  it("routeLengths i routeSummaries daja te sama sume", () => {
+    const obwody = computeCircuits(elementy);
+    const sumy = routeLengths(obwody, elementy, opts.scales);
+    for (const [id, r] of routeSummaries(obwody, elementy, opts.scales)) {
+      expect(sumy.get(id)).toBe(r.totalM);
+    }
   });
 });
