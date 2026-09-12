@@ -3,6 +3,7 @@ import type { ElementType, InstallationElement } from "@/types";
 import { computeCircuits } from "./circuits";
 import { applySizing, assignPhases, computeSizedCircuits, dlugosciDoboru, panelCapacity, phaseBalance, routeLengths, routeSummaries, sizeProjectCircuits } from "./project";
 import type { SizedCircuit } from "./sizing";
+import { ZAPAS_MONTAZOWY_M } from "./norms";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
   return {
@@ -484,16 +485,16 @@ describe("zapas montazowy na punkt", () => {
     const obwody = computeCircuits(elementy);
     const [trasa] = [...routeSummaries(obwody, elementy, opts.scales).values()];
     // Cztery gniazda, wiec cztery zapasy po 1,5 m.
-    expect(trasa.zapasM).toBeCloseTo(4 * 1.5, 5);
+    expect(trasa.zapasM).toBeCloseTo(4 * ZAPAS_MONTAZOWY_M, 5);
     expect(trasa.zapasM).toBeLessThan(trasa.totalM);
   });
 
   it("wlasny zapas zmienia metraz dokladnie o roznice razy liczba punktow", () => {
     const obwody = computeCircuits(elementy);
     const domyslny = [...routeSummaries(obwody, elementy, opts.scales).values()][0];
-    const wlasny = [...routeSummaries(obwody, elementy, opts.scales, undefined, undefined, 0.5).values()][0];
-    expect(wlasny.zapasM).toBeCloseTo(4 * 0.5, 5);
-    expect(domyslny.totalM - wlasny.totalM).toBeCloseTo(4 * (1.5 - 0.5), 1);
+    const wlasny = [...routeSummaries(obwody, elementy, opts.scales, undefined, undefined, 2).values()][0];
+    expect(wlasny.zapasM).toBeCloseTo(4 * 2, 5);
+    expect(wlasny.totalM - domyslny.totalM).toBeCloseTo(4 * (2 - ZAPAS_MONTAZOWY_M), 1);
   });
 
   /** Zapas ujemny SKROCILBY przewod, wiec wartosc bezsensowna wraca do domyslnej. */
@@ -506,11 +507,11 @@ describe("zapas montazowy na punkt", () => {
 
   /** Zapas wchodzi tez w dlugosc decydujaca o spadku napiecia — ale tylko RAZ,
    *  bo na drodze pradu do najdalszego punktu posrednie zejscia sie nie licza. */
-  it("mniejszy zapas skraca takze dlugosc do doboru, o jedna sztuke", () => {
+  it("wiekszy zapas wydluza takze dlugosc do doboru, o jedna sztuke", () => {
     const obwody = computeCircuits(elementy);
     const domyslny = sizeProjectCircuits(obwody, elementy, opts).find((s2) => s2.typ === "gniazda")!;
-    const maly = sizeProjectCircuits(obwody, elementy, { ...opts, zapas_na_punkt_m: 0.5 }).find((s2) => s2.typ === "gniazda")!;
-    expect(maly.spadek_napiecia_pct!).toBeLessThan(domyslny.spadek_napiecia_pct!);
+    const duzy = sizeProjectCircuits(obwody, elementy, { ...opts, zapas_na_punkt_m: 2 }).find((s2) => s2.typ === "gniazda")!;
+    expect(duzy.spadek_napiecia_pct!).toBeGreaterThan(domyslny.spadek_napiecia_pct!);
   });
 
   /** `routeLengths` zostaje zgodne z rozbiciem — to ten sam pomiar, inaczej podany. */
