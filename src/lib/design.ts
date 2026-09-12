@@ -428,6 +428,25 @@ export interface Obszar {
  * Wynik jest PRZYCINANY do obszaru planu: margines dodany przy krawędzi wyszedłby poza
  * scenę, a `toCanvas` zwróciłby wtedy pas przezroczystych pikseli.
  */
+/**
+ * Rozpiętość narysowanego rzutu: dłuższy bok obrysu ścian i pomieszczeń, w jednostkach
+ * planu. `null`, gdy nie ma jeszcze ani jednej ściany i ani jednego pomieszczenia.
+ *
+ * Liczona WYŁĄCZNIE z geometrii rysowanej ręcznie — bez elementów. Rozmiar symbolu
+ * elementu zależy od tej liczby (patrz `skalaZRysunku`), więc wliczenie elementów
+ * zamknęłoby pętlę: większy symbol rozdymałby obrys, a większy obrys symbol.
+ */
+export function rozpietoscRysunku(
+  walls: { points: Point[] }[],
+  roomShapes: { points: Point[] }[]
+): number | null {
+  const punkty = [...walls.flatMap((w) => w.points), ...roomShapes.flatMap((r) => r.points)];
+  if (punkty.length === 0) return null;
+  const xs = punkty.map((p) => p.x);
+  const ys = punkty.map((p) => p.y);
+  return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+}
+
 export function contentBounds(
   planSize: PlanSize,
   walls: { points: Point[] }[],
