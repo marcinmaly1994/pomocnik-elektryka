@@ -37,7 +37,7 @@ import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
-import { przyscienny, snapElementToWall } from "@/lib/wallSnap";
+import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
 import { rogiSymbolu } from "@/lib/glyphs";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
@@ -325,7 +325,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
      * grup sterowania. Stały margines „na wannę" pomniejszał rzut o prawie ćwierć
      * także wtedy, gdy żadnej wanny na nim nie było.
      */
-    const skalaSymboli = elementRenderScale(mpu, elementScale, skalaBezKalibracji);
     /**
      * Strefy ochronne przyborów sanitarnych wchodzą do kadru OSOBNO, bo sięgają dalej
      * niż sam symbol i liczą się inną skalą — z kalibracji rzutu, a nie z rozmiaru
@@ -339,7 +338,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         { x: z.x + r, y: z.y + r },
       ];
     });
-    const rogi = [...elements.flatMap((e) => rogiSymbolu(e, skalaSymboli)), ...rogiStref];
+    const rogi = [...elements.flatMap((e) => rogiSymbolu(e, skalaOsprzetu)), ...rogiStref];
     const kadr = contentBounds(planSize, walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
       x: 0,
       y: 0,
@@ -1177,9 +1176,8 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     const tolerancja = mpu ? WALL_SNAP_TOLERANCE_M / mpu : GRID / 2;
     // Skala renderu symboli musi tu dojść ta sama, którą rysuje płótno — odsunięcie od
     // ściany jest podane w jednostkach glifu, a element żyje w jednostkach planu.
-    const skala = elementRenderScale(mpu, elementScale, skalaBezKalibracji);
     return (
-      snapElementToWall(p, walls, roomShapes, tolerancja, type, skala) ?? { x: p.x, y: p.y, rotation: obecnyObrot }
+      snapElementToWall(p, walls, roomShapes, tolerancja, type, skalaOsprzetu) ?? { x: p.x, y: p.y, rotation: obecnyObrot }
     );
   }
 
@@ -1578,10 +1576,49 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    * których nie ma po co wydawać na warstwę, której nikt nie ogląda.
    */
   const trasyPotrzebne = showRoutes || (podgladPdf && trasyWPdf);
+  /**
+   * Skala renderu osprzętu — jedna liczba, od której zależy i rysunek, i odsunięcie
+   * elementów od ściany. Wydzielona, bo pilnuje jej efekt niżej.
+   */
+  const skalaOsprzetu = elementRenderScale(mpu, elementScale, skalaBezKalibracji);
+
+  /**
+   * Zmiana skali symboli przesuwa osprzęt PRZYKLEJONY do ścian, żeby dalej ich dotykał.
+   *
+   * Pozycja zapisana przez `snapElementToWall` jest odsunięta od ściany o tyle, ile
+   * mierzył symbol W CHWILI STAWIANIA. Gdy skala zmieni się później — kalibracja rzutu,
+   * suwak rozmiaru, rozpoznana wielkość rysunku — symbol rośnie wokół starej kotwicy
+   * i trzonek gniazdka wchodzi w mur. Szczegóły przeliczenia: `przeliczPrzyscienneDoSkali`.
+   *
+   * `commit: false`, bo to nie jest czynność użytkownika: poprawka ma jechać razem
+   * z jego następną zmianą, a nie zajmować własnego kroku w „Cofnij".
+   *
+   * Ref zamiast zależności efektu: interesuje nas RÓŻNICA między skalami, a pierwsze
+   * uruchomienie (montaż, wczytanie projektu) żadnej różnicy nie ma i nie może niczego
+   * przesunąć.
+   */
+  const poprzedniaSkalaOsprzetu = useRef(skalaOsprzetu);
+  useEffect(() => {
+    const stara = poprzedniaSkalaOsprzetu.current;
+    poprzedniaSkalaOsprzetu.current = skalaOsprzetu;
+    if (stara === skalaOsprzetu) return;
+    setDraft(
+      (d) => {
+        const next = przeliczPrzyscienneDoSkali(d.elements, walls, roomShapes, stara, skalaOsprzetu);
+        return next === d.elements ? d : { ...d, elements: next };
+      },
+      { commit: false }
+    );
+    // `walls`/`roomShapes` celowo poza zależnościami: rysowanie kolejnej ściany ma
+    // przeliczać osprzęt tylko wtedy, gdy zmieniło SKALĘ — a wtedy i tak zmienia się
+    // `skalaOsprzetu`. Bez tego każde tknięcie obrysu ruszałoby elementami bez powodu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skalaOsprzetu, setDraft]);
+
   const rawCableRoutes = useMemo(
     () =>
       trasyPotrzebne
-        ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes, openings, elementRenderScale(mpu, elementScale, skalaBezKalibracji))
+        ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes, openings, skalaOsprzetu)
         : [],
     [trasyPotrzebne, elements, walls, roomShapes, openings, mpu, elementScale, skalaBezKalibracji]
   );
@@ -2529,7 +2566,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             cableRoutes={cableRoutes}
             routeOverrides={routeOverrides}
             lightGroups={lightGroups}
-            elementScale={elementRenderScale(mpu, elementScale, skalaBezKalibracji)}
+            elementScale={skalaOsprzetu}
             sanitaryScale={sanitaryRenderScale(mpu, skalaBezKalibracji)}
             planSize={planSize}
             metersPerUnit={mpu}

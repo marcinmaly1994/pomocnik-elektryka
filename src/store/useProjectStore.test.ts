@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useProjectStore } from "./useProjectStore";
+import { renderHook, act } from "@testing-library/react";
+import { useProjectStore, useActiveFloorWalls, useActiveFloorElements } from "./useProjectStore";
 
 const sampleElement = {
   id: "e1", type: "gniazdko" as const, x: 100, y: 100, room: "Salon", floor: "f1",
@@ -419,5 +420,51 @@ describe("perRow w konfiguracji rozdzielnicy", () => {
     useProjectStore.getState().setPanelConfig({ perRow: 24 });
     useProjectStore.getState().resetProject();
     expect(useProjectStore.getState().panelConfig.perRow).toBe(12);
+  });
+});
+
+/**
+ * Tozsamosc wyniku selektorow kondygnacji.
+ *
+ * `filter` tworzy NOWA tablice przy kazdym odczycie, wiec bez porownania po zawartosci
+ * kazda zmiana store'a — takze zupelnie niezwiazana — dawala nowa tozsamosc i kazde
+ * `useMemo` oparte na tych tablicach liczylo sie od nowa. Na wiekszym planie to
+ * kilkadziesiat milisekund na przeliczenie tras przewodow, wydane bez powodu.
+ */
+describe("selektory kondygnacji — stabilna tozsamosc", () => {
+  it("zmiana NIEZWIAZANA ze scianami nie zmienia tozsamosci tablicy scian", () => {
+    const { result } = renderHook(() => useActiveFloorWalls());
+    const przed = result.current;
+
+    act(() => {
+      useProjectStore.getState().setProjectName("Inna nazwa");
+    });
+
+    expect(result.current).toBe(przed);
+  });
+
+  it("dorzucenie elementu nie zmienia tozsamosci tablicy SCIAN", () => {
+    const { result } = renderHook(() => useActiveFloorWalls());
+    const przed = result.current;
+
+    act(() => {
+      useProjectStore.getState().setDraft((d) => ({ ...d, elements: [...d.elements, sampleElement] }));
+    });
+
+    expect(result.current).toBe(przed);
+  });
+
+  /** Stabilnosc nie moze isc za daleko: zmiana, ktora naprawde dotyczy tej tablicy,
+   *  MA dac nowa tozsamosc — inaczej widok przestalby sie odswiezac. */
+  it("dorzucenie elementu ZMIENIA tozsamosc tablicy elementow", () => {
+    const { result } = renderHook(() => useActiveFloorElements());
+    const przed = result.current;
+
+    act(() => {
+      useProjectStore.getState().setDraft((d) => ({ ...d, elements: [...d.elements, sampleElement] }));
+    });
+
+    expect(result.current).not.toBe(przed);
+    expect(result.current).toHaveLength(przed.length + 1);
   });
 });

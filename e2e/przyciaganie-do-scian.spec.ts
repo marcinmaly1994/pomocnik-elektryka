@@ -147,3 +147,40 @@ test("wylaczenie przyciagania zostawia element tam, gdzie klikneto", async ({ pa
   expect(g.x).toBeGreaterThan(lewaKrawedz(draft) + 1);
   expect(g.rotation).toBe(0);
 });
+
+/**
+ * Osprzet JUZ POSTAWIONY a zmiana skali symboli.
+ *
+ * `snapElementToWall` zapisuje pozycje odsunieta od sciany o tyle, ile mierzyl symbol
+ * w chwili stawiania. Gdy skala zmieni sie pozniej — tu suwakiem rozmiaru, ale tak samo
+ * dziala kalibracja rzutu i rozpoznana wielkosc rysunku — symbol rosl wokol starej
+ * kotwicy i trzonek gniazdka wchodzil w mur. Arytmetyke przeliczenia pilnuje
+ * `przeliczPrzyscienneDoSkali` w testach jednostkowych; tutaj chodzi o to, czy zmiana
+ * skali w ogole DOCIERA do zapisanych elementow.
+ */
+test("powiekszenie symboli odsuwa juz postawione gniazdko, zeby dalej dotykalo sciany", async ({ page }) => {
+  await pustyProjekt(page);
+  await narysujPokoj(page);
+  await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
+  await klikNaPlanie(page, 204, 300);
+
+  const przed = await stan(page);
+  const gPrzed = przed.elements.find((e: { type: string }) => e.type === "gniazdko");
+  const odsunieciePrzed = gPrzed.x - lewaKrawedz(przed);
+
+  // Suwak „Rozmiar elementow" z 1,0x na 2,0x — czyli symbol dwa razy wiekszy.
+  await page.locator('input[type="range"]').first().fill("2");
+  await page.waitForTimeout(300);
+
+  const po = await stan(page);
+  const gPo = po.elements.find((e: { type: string }) => e.type === "gniazdko");
+  const odsunieciePo = gPo.x - lewaKrawedz(po);
+
+  // Odsuniecie urosło proporcjonalnie do symbolu — trzonek dalej konczy sie na scianie,
+  // zamiast wjechac w nia na polowe swojej dlugosci.
+  expect(odsunieciePo / odsunieciePrzed).toBeCloseTo(2, 1);
+  // Element nie powedrowal WZDLUZ sciany ani sie nie obrocil — zmienilo sie wylacznie
+  // odsuniecie od niej.
+  expect(gPo.y).toBeCloseTo(gPrzed.y, 5);
+  expect(gPo.rotation).toBe(gPrzed.rotation);
+});

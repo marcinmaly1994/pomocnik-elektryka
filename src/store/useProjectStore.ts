@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type {
   InstallationElement,
   Wall,
@@ -1244,19 +1245,28 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 }));
 
-/** Selektory pomocnicze — komponent pobiera tylko elementy bieżącej kondygnacji,
- *  bez subskrybowania się na zmiany na innych piętrach. */
+/**
+ * Selektory pomocnicze — komponent pobiera tylko elementy bieżącej kondygnacji,
+ * bez subskrybowania się na zmiany na innych piętrach.
+ *
+ * `useShallow` NIE jest kosmetyką: `filter` tworzy nową tablicę przy każdym odczycie,
+ * więc bez porównania po zawartości wynik miał nową tożsamość po KAŻDEJ zmianie
+ * store'a — także zupełnie niezwiązanej (ceny, protokoły, nagłówek dokumentu). Każde
+ * `useMemo` oparte na tych tablicach przeliczało się wtedy od nowa, łącznie z trasami
+ * przewodów, które na większym planie kosztują kilkadziesiąt milisekund. Obietnica
+ * z akapitu wyżej dopiero teraz jest prawdziwa.
+ */
 export const useActiveFloorElements = () =>
-  useProjectStore((s) => s.draft.elements.filter((e) => e.floor === s.activeFloorId));
+  useProjectStore(useShallow((s) => s.draft.elements.filter((e) => e.floor === s.activeFloorId)));
 
 export const useActiveFloorWalls = () =>
-  useProjectStore((s) => s.draft.walls.filter((w) => w.floor === s.activeFloorId));
+  useProjectStore(useShallow((s) => s.draft.walls.filter((w) => w.floor === s.activeFloorId)));
 
 export const useActiveFloorRoomShapes = () =>
-  useProjectStore((s) => s.draft.roomShapes.filter((r) => r.floor === s.activeFloorId));
+  useProjectStore(useShallow((s) => s.draft.roomShapes.filter((r) => r.floor === s.activeFloorId)));
 
 export const useActiveFloorOpenings = () =>
-  useProjectStore((s) => s.draft.openings.filter((o) => o.floor === s.activeFloorId));
+  useProjectStore(useShallow((s) => s.draft.openings.filter((o) => o.floor === s.activeFloorId)));
 
 /**
  * Autozapis lokalny — projekt nie ma jeszcze wymogu konta w chmurze (Supabase jest
