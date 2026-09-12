@@ -8,9 +8,9 @@
  * wiedzieć nic o tablicach obciążalności.
  */
 
-import type { Circuit, Floor, InstallationElement, RoomShape } from "@/types";
+import type { Circuit, ElementType, Floor, InstallationElement, RoomShape } from "@/types";
 import { computeCircuits } from "./circuits";
-import { circuitDemand, estimateRoutesByFloor, findPanels, kindForElements, type GeometriaKondygnacji } from "./loads";
+import { circuitDemand, estimateGwiazdaByFloor, estimateRoutesByFloor, findPanels, kindForElements, type GeometriaKondygnacji } from "./loads";
 import { sizeCircuit, type PhaseAssignment, type SizedCircuit } from "./sizing";
 import type { LayingMethod } from "./norms";
 import { isWetRoomName } from "@/lib/design";
@@ -299,4 +299,35 @@ export function panelCapacity(usedModules: number, modulesPerRow = 12): PanelCap
 
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
+}
+
+/**
+ * Metry przewodu niskoprądowego liczone z PLANU, a nie ryczałtem.
+ *
+ * Kosztorys brał dotąd 15 mb na każdy punkt — niezależnie od tego, gdzie ten punkt stoi.
+ * Gniazdo RJ45 metr od rozdzielnicy i takie na drugim końcu domu dostawały tyle samo,
+ * czyli dokładnie to, co przy zasilaniu nazwaliśmy zgadywaniem, a nie kosztorysem.
+ *
+ * Osobno LAN i koncentryk, bo to dwa różne materiały w dwóch pozycjach. Domofon idzie
+ * z LAN-em, tak jak w dotychczasowym ryczałcie — to przewód tej samej klasy i tak też
+ * jest wyceniany.
+ *
+ * `null`, gdy nie ma od czego mierzyć (brak rozdzielnicy albo skali) — kosztorys wraca
+ * wtedy do ryczałtu i mówi o tym wprost.
+ */
+export function lowVoltageLengths(
+  allElements: InstallationElement[],
+  opts: ProjectSizingOptions
+): { lan: number; koncentryk: number; szacunek: boolean } | null {
+  const panele = findPanels(allElements);
+  const wKlasie = (typy: ElementType[]) => allElements.filter((e) => typy.includes(e.type));
+  const kontekst = { geometria: opts.geometria, kondygnacje: opts.kondygnacje, zapasNaPunktM: opts.zapas_na_punkt_m };
+  const lan = estimateGwiazdaByFloor(panele, wKlasie(["rj45", "domofon"]), opts.scales, undefined, kontekst);
+  const koncentryk = estimateGwiazdaByFloor(panele, wKlasie(["rtvsat"]), opts.scales, undefined, kontekst);
+  if (!lan && !koncentryk) return null;
+  return {
+    lan: lan?.totalM ?? 0,
+    koncentryk: koncentryk?.totalM ?? 0,
+    szacunek: !!lan?.szacunek || !!koncentryk?.szacunek,
+  };
 }

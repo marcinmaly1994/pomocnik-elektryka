@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ElementType, InstallationElement } from "@/types";
 import { computeCircuits } from "./circuits";
-import { applySizing, assignPhases, computeSizedCircuits, dlugosciDoboru, panelCapacity, phaseBalance, routeLengths, routeSummaries, sizeProjectCircuits } from "./project";
+import { applySizing, assignPhases, computeSizedCircuits, dlugosciDoboru, lowVoltageLengths, panelCapacity, phaseBalance, routeLengths, routeSummaries, sizeProjectCircuits } from "./project";
 import type { SizedCircuit } from "./sizing";
 import { ZAPAS_MONTAZOWY_M } from "./norms";
 
@@ -521,5 +521,66 @@ describe("zapas montazowy na punkt", () => {
     for (const [id, r] of routeSummaries(obwody, elementy, opts.scales)) {
       expect(sumy.get(id)).toBe(r.totalM);
     }
+  });
+});
+
+/**
+ * Niskopradowka: LAN i koncentryk licza sie z PLANU, nie ryczaltem 15 mb na punkt.
+ *
+ * Gniazdo RJ45 metr od rozdzielnicy i takie na drugim koncu domu dostawaly dotad tyle
+ * samo metrow — dokladnie to, co przy zasilaniu nazwalismy zgadywaniem.
+ */
+describe("lowVoltageLengths", () => {
+  const opts = { scales: { parter: 0.05, pietro: 0.05 } };
+  const rozdzielnica = el("rozdzielnica", { x: 0, y: 0 });
+
+  it("blizsze gniazdo daje mniej metrow niz dalsze — ryczalt dawal tyle samo", () => {
+    const blisko = lowVoltageLengths([rozdzielnica, el("rj45", { x: 40, y: 0 })], opts)!;
+    const daleko = lowVoltageLengths([rozdzielnica, el("rj45", { x: 600, y: 0 })], opts)!;
+    expect(daleko.lan).toBeGreaterThan(blisko.lan);
+  });
+
+  it("LAN i koncentryk ida do osobnych pozycji", () => {
+    const r = lowVoltageLengths([rozdzielnica, el("rj45", { x: 200, y: 0 }), el("rtvsat", { x: 200, y: 0 })], opts)!;
+    expect(r.lan).toBeGreaterThan(0);
+    expect(r.koncentryk).toBeGreaterThan(0);
+    // Ten sam punkt, ta sama droga — rozni je tylko rodzaj przewodu.
+    expect(r.lan).toBeCloseTo(r.koncentryk, 5);
+  });
+
+  /** Domofon jedzie z LAN-em, tak jak w dotychczasowym ryczalcie. */
+  it("domofon dolicza sie do LAN-u", () => {
+    const bez = lowVoltageLengths([rozdzielnica, el("rj45", { x: 200, y: 0 })], opts)!;
+    const z = lowVoltageLengths([rozdzielnica, el("rj45", { x: 200, y: 0 }), el("domofon", { x: 200, y: 0 })], opts)!;
+    expect(z.lan).toBeGreaterThan(bez.lan);
+  });
+
+  /**
+   * SEDNO roznicy wobec zasilania: gwiazda to osobny kabel do kazdego punktu, wiec
+   * KAZDY pokonuje pion miedzy pietrami z osobna. Lancuch wchodzi na pietro raz.
+   */
+  it("kazdy kabel pokonuje pion miedzy pietrami OSOBNO", () => {
+    const pietra = [
+      { id: "parter", name: "Parter" },
+      { id: "pietro", name: "Piętro" },
+    ];
+    const jedno = lowVoltageLengths([rozdzielnica, el("rj45", { x: 200, y: 0, floor: "pietro" })], { ...opts, kondygnacje: pietra })!;
+    const dwa = lowVoltageLengths(
+      [rozdzielnica, el("rj45", { x: 200, y: 0, floor: "pietro" }), el("rj45", { x: 200, y: 0, floor: "pietro" })],
+      { ...opts, kondygnacje: pietra }
+    )!;
+    // Drugie gniazdo w tym samym miejscu dokłada CALY swoj kabel razem z pionem 2,8 m.
+    expect(dwa.lan - jedno.lan).toBeCloseTo(jedno.lan, 5);
+  });
+
+  it("bez rozdzielnicy albo bez skali nie ma od czego mierzyc", () => {
+    expect(lowVoltageLengths([el("rj45", { x: 200, y: 0 })], opts)).toBeNull();
+    expect(lowVoltageLengths([rozdzielnica, el("rj45", { x: 200, y: 0 })], { scales: {} })).toBeNull();
+  });
+
+  /** Bez narysowanych scian trasa spada na szacunek — tak samo jak przy zasilaniu. */
+  it("mowi, kiedy trasa jest tylko szacunkiem", () => {
+    const bezGeo = lowVoltageLengths([rozdzielnica, el("rj45", { x: 200, y: 0 })], opts)!;
+    expect(bezGeo.szacunek).toBe(true);
   });
 });

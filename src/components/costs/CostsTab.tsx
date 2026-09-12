@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { AlertTriangle, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
-import { computeSizedCircuits, routeSummaries } from "@/lib/panel/project";
+import { computeSizedCircuits, lowVoltageLengths, routeSummaries } from "@/lib/panel/project";
 import { ZAPAS_MONTAZOWY_M } from "@/lib/panel/norms";
 import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, VAT_RATE } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
@@ -64,9 +64,16 @@ export function CostsTab() {
     [circuits, elements, scales, geometria, floors, opcjeDoboru.zapas_na_punkt_m]
   );
   const zapasRazemM = useMemo(() => [...trasy.values()].reduce((a, r) => a + r.zapasM, 0), [trasy]);
+  /** Niskoprądówka łączy się GWIAZDĄ — każdy punkt własnym kablem — więc liczy się
+   *  osobno od obwodów (patrz `lowVoltageLengths`). `null` = nie ma od czego mierzyć. */
+  const niskopradowe = useMemo(() => lowVoltageLengths(elements, opcjeDoboru), [elements, opcjeDoboru]);
   const { quantities, cableLengthSource } = useMemo(
-    () => computeCosts(elements, circuits, rcdGroups, { routeLengthsM: new Map([...trasy].map(([id, r]) => [id, r.totalM])) }),
-    [elements, circuits, rcdGroups, trasy]
+    () =>
+      computeCosts(elements, circuits, rcdGroups, {
+        routeLengthsM: new Map([...trasy].map(([id, r]) => [id, r.totalM])),
+        lvLengthsM: niskopradowe ?? undefined,
+      }),
+    [elements, circuits, rcdGroups, trasy, niskopradowe]
   );
 
   const rows = kosztorysRows(quantities, prices, costOverrides, qtyOverrides);
@@ -80,6 +87,9 @@ export function CostsTab() {
   // komplet, choć brakuje w nim np. całej robocizny. Zbieramy je, żeby powiedzieć to
   // wprost — aplikacja jest adresowana głównie do laików, którzy nie wychwycą tego sami.
   const unpriced = pozycjeBezCeny(rows);
+  /** Czy w kosztorysie w ogóle jest niskoprądówka — bez niej zdanie o niej byłoby
+   *  odpowiedzią na pytanie, którego nikt nie zadał. */
+  const niskopradoweWKosztorysie = (quantities.kabelLan ?? 0) > 0 || (quantities.kabelKoncentryk ?? 0) > 0;
 
   function handleCsvImport(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -149,6 +159,36 @@ export function CostsTab() {
         Import cen: wgraj plik CSV w formacie <span className="pe-mono">nazwa;cena</span> — aplikacja dopasuje pozycje po
         słowach kluczowych. Ceny nie pobierają się automatycznie ze stron sklepów.
       </div>
+
+      {/*
+        Niskoprądówka OSOBNO, a nie w zdaniu o zasilaniu: ma wlasny los i wlasny warunek.
+        Liczy sie gwiazda od rozdzielnicy, wiec bywa zmierzona wtedy, gdy zasilanie i tak
+        idzie ryczaltem — i na odwrót. Jedno zdanie na oba przypadki mylilo by, ktore
+        metry sa policzone.
+      */}
+      {niskopradoweWKosztorysie && (
+        <div
+          className="flex items-start gap-2.5 py-1 text-xs"
+          style={{
+            borderLeft: `3px solid ${niskopradowe ? "#3B8C63" : "#C1793F"}`,
+            paddingLeft: 12,
+            color: niskopradowe ? "#2C6B4A" : "#8A5526",
+          }}
+        >
+          {niskopradowe ? <Info size={15} className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0" />}
+          {niskopradowe ? (
+            <span>
+              Przewody niskoprądowe (LAN, koncentryk) policzone z planu — osobnym kablem do
+              każdego punktu, bo to połączenia punkt-punkt, a nie obwód.
+            </span>
+          ) : (
+            <span>
+              Przewody niskoprądowe (LAN, koncentryk) nadal z ryczałtu 15 mb na punkt — nie ma ich
+              od czego mierzyć. Ustaw skalę i postaw rozdzielnicę, żeby policzyć realny metraż.
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Skąd wzięły się metry kabla — bez tego kosztorys wygląda tak samo policzony
           niezależnie od tego, czy metraż pochodzi z planu, czy z ryczałtu na punkt. */}

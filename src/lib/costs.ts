@@ -102,6 +102,11 @@ export interface CostOptions {
    *  `routeLengths` w `lib/panel/project.ts`). Pusta mapa = brak kalibracji
    *  skali albo brak rozdzielnicy na rysunku. */
   routeLengthsM?: Map<string, number>;
+  /**
+   * Metry przewodu NISKOPRĄDOWEGO policzone z planu (patrz `lowVoltageLengths`).
+   * Brak = ryczałt 15 mb na punkt, czyli zachowanie sprzed mierzenia tych tras.
+   */
+  lvLengthsM?: { lan: number; koncentryk: number };
 }
 
 /**
@@ -193,8 +198,11 @@ export function computeCosts(
   });
   for (const [klucz, metry] of metryKabla) q[klucz] = Math.round(metry);
 
-  q.kabelLan = (q.rj45 + q.domofon) * 15;
-  q.kabelKoncentryk = q.rtvsat * 15;
+  // Ryczałt 15 mb na punkt zostaje TYLKO wtedy, gdy nie ma od czego mierzyć: bez
+  // rozdzielnicy na planie albo bez skali. Gdy trasy da się policzyć, liczą się tak samo
+  // jak przy zasilaniu — patrz `lowVoltageLengths`.
+  q.kabelLan = Math.round(opts.lvLengthsM ? opts.lvLengthsM.lan : (q.rj45 + q.domofon) * 15);
+  q.kabelKoncentryk = Math.round(opts.lvLengthsM ? opts.lvLengthsM.koncentryk : q.rtvsat * 15);
 
   const threePhase = circuits.filter((c) => c.breaker.includes("3-faz.")).length;
   q.mcb3f = threePhase;
