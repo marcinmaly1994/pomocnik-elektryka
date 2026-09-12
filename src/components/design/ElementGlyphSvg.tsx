@@ -244,6 +244,19 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter, wymiaryM }: Gly
       );
     }
 
+    /** Ten sam symbol co na płótnie — patrz `ElementGlyphKonva`. */
+    case "szafkaTeletech": {
+      const { w, h } = glyphBoxSize(type, wymiaryM);
+      return (
+        <>
+          <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={3} fill="#fff" stroke={color} strokeWidth={2.4} />
+          {[-7, -1, 5].map((y) => (
+            <rect key={y} x={-w / 2 + 4} y={y} width={w - 8} height={3.5} rx={1} fill={color} opacity={0.75} />
+          ))}
+        </>
+      );
+    }
+
     case "roleta": {
       const { w, h } = glyphBoxSize(type, wymiaryM);
       return (

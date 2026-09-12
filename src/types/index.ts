@@ -31,7 +31,7 @@ export type ElementType =
   | "oswietlenie" | "kinkiet" | "oswietlenieZewn" | "tasmaLed"
   | "roleta" | "napedBramy" | "wentylator" | "termostat"
   | "rj45" | "rtvsat" | "domofon" | "dzwonek" | "czujnikDymu" | "czujnikCzadu"
-  | "rozdzielnica" | "puszka"
+  | "rozdzielnica" | "puszka" | "szafkaTeletech"
   | "wanna" | "prysznic" | "umywalka";
 
 export interface ElementTypeDef {

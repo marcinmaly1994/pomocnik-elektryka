@@ -18,7 +18,7 @@ export const DEFAULT_PRICES: PriceTable = {
   // pozycja bez ceny trafia na liste „uzupelnij" (patrz `pozycjeBezCeny`).
   kabel3x16: 0, kabel3x25: 0, kabel5x6: 0, kabel5x10: 0, kabel5x16: 0, kabel5x25: 0,
   kabelInny: 0,
-  mcb: 15, mcb3f: 45, rcd: 90, glowny: 60, rozdzielnica: 130, robocizna: 0,
+  mcb: 15, mcb3f: 45, rcd: 90, glowny: 60, rozdzielnica: 130, szafkaTeletech: 0, robocizna: 0,
 };
 
 /** Podstawowa stawka VAT. Dla materiałów i usług elektrycznych w budownictwie
@@ -74,6 +74,7 @@ export const PRICE_LABELS: Record<string, string> = {
   rcd: "Wyłącznik różnicowoprądowy 30mA (szt.)",
   glowny: "Wyłącznik główny (szt.)",
   rozdzielnica: "Obudowa rozdzielnicy (szt.)",
+  szafkaTeletech: "Szafka teletechniczna / rack (szt., opcjonalnie)",
   robocizna: "Robocizna za punkt instalacyjny (szt., opcjonalnie)",
 };
 
@@ -88,7 +89,7 @@ const TYPE_TO_PRICE_KEY: Partial<Record<ElementType, string>> = {
   oswietlenie: "oprawa", kinkiet: "oprawa", oswietlenieZewn: "oprawa", tasmaLed: "tasmaLed",
   roleta: "napedRolety", napedBramy: "napedBramy", wentylator: "wentylator", termostat: "termostat",
   rj45: "rj45", rtvsat: "rtvsat", domofon: "domofon", dzwonek: "dzwonek", czujnikDymu: "czujnikDymu", czujnikCzadu: "czujnikCzadu",
-  puszka: "puszkaRozgalezna", rozdzielnica: "rozdzielnica",
+  puszka: "puszkaRozgalezna", rozdzielnica: "rozdzielnica", szafkaTeletech: "szafkaTeletech",
 };
 
 export interface CostResult {
@@ -179,7 +180,9 @@ export function computeCosts(
     if (key) q[key] += count;
   });
 
-  const pointElements = elements.filter((e) => !["rozdzielnica", "puszka"].includes(e.type) && ELEMENT_TYPES[e.type]?.role !== "sanitary");
+  // Szafka teletechniczna dolacza do rozdzielnicy i puszki: to obudowa, a nie punkt
+  // instalacyjny — nie ma przy niej puszki podtynkowej ani osobnej robocizny za punkt.
+  const pointElements = elements.filter((e) => !["rozdzielnica", "puszka", "szafkaTeletech"].includes(e.type) && ELEMENT_TYPES[e.type]?.role !== "sanitary");
   const rooms = new Set(elements.map((e) => e.room)).size || 1;
   q.puszkaPodtynkowa = pointElements.length;
   q.puszkaRozgalezna = Math.max(q.puszkaRozgalezna, rooms);

@@ -180,6 +180,17 @@ export function CostsTab() {
             <span>
               Przewody niskoprądowe (LAN, koncentryk) policzone z planu — osobnym kablem do
               każdego punktu, bo to połączenia punkt-punkt, a nie obwód.
+              {/* Od CZEGO mierzone, bo to zmienia wynik przy każdym punkcie naraz:
+                  szafka bywa w zupełnie innym miejscu niż tablica z bezpiecznikami. */}
+              {niskopradowe.odSzafki ? (
+                <> Mierzone od szafki teletechnicznej.</>
+              ) : (
+                <>
+                  {" "}
+                  Mierzone od <strong>rozdzielnicy</strong>, bo na planie nie ma szafki teletechnicznej —
+                  postaw ją tam, gdzie naprawdę stoi router, żeby metraż nie był domysłem.
+                </>
+              )}
             </span>
           ) : (
             <span>

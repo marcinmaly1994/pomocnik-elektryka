@@ -584,3 +584,60 @@ describe("lowVoltageLengths", () => {
     expect(bezGeo.szacunek).toBe(true);
   });
 });
+
+/**
+ * Szafka teletechniczna jako punkt zbiorczy niskopradowki.
+ *
+ * Bez niej LAN mierzyl sie od rozdzielnicy — to bylo ZALOZENIE, nie fakt: router i
+ * patchpanel stoja czesto w zupelnie innym miejscu niz tablica z bezpiecznikami. Przy
+ * gwiezdzie taka pomylka mnozy sie przez liczbe punktow.
+ */
+describe("lowVoltageLengths — punkt zbiorczy", () => {
+  const opts = { scales: { parter: 0.05 } };
+  const rozdzielnica = el("rozdzielnica", { x: 0, y: 0 });
+  const gniazda = [el("rj45", { x: 600, y: 0 }), el("rj45", { x: 600, y: 40 })];
+
+  it("bez szafki mierzy od rozdzielnicy i MOWI o tym", () => {
+    const r = lowVoltageLengths([rozdzielnica, ...gniazda], opts)!;
+    expect(r.odSzafki).toBe(false);
+    expect(r.lan).toBeGreaterThan(0);
+  });
+
+  it("szafka bije rozdzielnice — metraz liczy sie od NIEJ", () => {
+    // Szafka tuz przy gniazdach, rozdzielnica daleko: metraz musi zmalec.
+    const zSzafka = lowVoltageLengths([rozdzielnica, el("szafkaTeletech", { x: 600, y: 20 }), ...gniazda], opts)!;
+    const bezSzafki = lowVoltageLengths([rozdzielnica, ...gniazda], opts)!;
+    expect(zSzafka.odSzafki).toBe(true);
+    expect(zSzafka.lan).toBeLessThan(bezSzafki.lan);
+  });
+
+  /** Zasilanie liczy sie DALEJ od rozdzielnicy — szafka nie ma z nim nic wspolnego. */
+  it("szafka nie rusza metrazu zasilania", () => {
+    const elementy = [rozdzielnica, el("gniazdko", { x: 400, y: 0 })];
+    const obwody = computeCircuits(elementy);
+    const bez = [...routeSummaries(obwody, elementy, opts.scales).values()][0];
+    const zSzafka = [
+      ...routeSummaries(obwody, [...elementy, el("szafkaTeletech", { x: 30, y: 0 })], opts.scales).values(),
+    ][0];
+    expect(zSzafka.totalM).toBeCloseTo(bez.totalM, 5);
+  });
+
+  /** Szafka na pietrze jest punktem zbiorczym TEGO pietra — kabel nie schodzi po nia
+   *  na parter, wiec pion miedzy kondygnacjami odpada. */
+  it("szafka na pietrze zdejmuje pion miedzy kondygnacjami", () => {
+    const pietra = [
+      { id: "parter", name: "Parter" },
+      { id: "pietro", name: "Piętro" },
+    ];
+    const naPietrze = el("rj45", { x: 100, y: 0, floor: "pietro" });
+    const zParteru = lowVoltageLengths([rozdzielnica, naPietrze], {
+      scales: { parter: 0.05, pietro: 0.05 },
+      kondygnacje: pietra,
+    })!;
+    const zSzafkaNaPietrze = lowVoltageLengths(
+      [rozdzielnica, el("szafkaTeletech", { x: 0, y: 0, floor: "pietro" }), naPietrze],
+      { scales: { parter: 0.05, pietro: 0.05 }, kondygnacje: pietra }
+    )!;
+    expect(zSzafkaNaPietrze.lan).toBeCloseTo(zParteru.lan - 2.8, 1);
+  });
+});

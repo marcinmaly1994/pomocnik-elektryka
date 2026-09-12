@@ -172,6 +172,7 @@ export function glyphBoxSize(type: ElementType, wymiaryM?: { widthM: number; dep
   if (type === "roleta") return { w: 24, h: 20 };
   if (type === "tasmaLed") return { w: 28, h: 14 };
   if (type === "rozdzielnica") return { w: 28, h: 26 };
+  if (type === "szafkaTeletech") return { w: 28, h: 26 };
   // Przybory sanitarne NIE mają rozmiaru umownego — rysujemy je w ich prawdziwych
   // wymiarach (`SANITARY_FIXTURES`), bo obrys wanny i brodzika JEST strefą 1 wg
   // PN-HD 60364-7-701 i walidator mierzy odległości dokładnie od niego. Dobrane
