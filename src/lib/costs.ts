@@ -11,6 +11,13 @@ export const DEFAULT_PRICES: PriceTable = {
   rj45: 20, rtvsat: 20, domofon: 0, dzwonek: 30, czujnikDymu: 55, czujnikCzadu: 80,
   puszkaPodtynkowa: 2, puszkaRozgalezna: 5,
   kabel15: 2.5, kabel25: 3.5, kabel4: 6, kabelLan: 2, kabelKoncentryk: 2,
+  // Przekroje, ktore w domu wychodza realnie (kuchnia, ladowarka, dluga trasa) —
+  // ceny orientacyjne, tak samo jak trzy powyzej, i tak samo do poprawienia recznie.
+  kabel3x4: 5.5, kabel3x6: 8, kabel3x10: 13,
+  // Rzadkie: zostaja BEZ ceny, bo zmyslona liczba jest gorsza od jawnego pytania —
+  // pozycja bez ceny trafia na liste „uzupelnij" (patrz `pozycjeBezCeny`).
+  kabel3x16: 0, kabel3x25: 0, kabel5x6: 0, kabel5x10: 0, kabel5x16: 0, kabel5x25: 0,
+  kabelInny: 0,
   mcb: 15, mcb3f: 45, rcd: 90, glowny: 60, rozdzielnica: 130, robocizna: 0,
 };
 
@@ -50,6 +57,16 @@ export const PRICE_LABELS: Record<string, string> = {
   kabel15: "Przewód YDYp 3×1,5 mm² (mb)",
   kabel25: "Przewód YDYp 3×2,5 mm² (mb)",
   kabel4: "Przewód YDYp 5×2,5 / 5×4 mm² (mb)",
+  kabel3x4: "Przewód YDYp 3×4 mm² (mb)",
+  kabel3x6: "Przewód YDYp 3×6 mm² (mb)",
+  kabel3x10: "Przewód YDYp 3×10 mm² (mb)",
+  kabel3x16: "Przewód YDYp 3×16 mm² (mb)",
+  kabel3x25: "Przewód YDYp 3×25 mm² (mb)",
+  kabel5x6: "Przewód YDYp 5×6 mm² (mb)",
+  kabel5x10: "Przewód YDYp 5×10 mm² (mb)",
+  kabel5x16: "Przewód YDYp 5×16 mm² (mb)",
+  kabel5x25: "Przewód YDYp 5×25 mm² (mb)",
+  kabelInny: "Przewód YDYp — inny przekrój (mb)",
   kabelLan: "Przewód UTP kat. 6 (mb)",
   kabelKoncentryk: "Przewód koncentryczny RG-6 (mb)",
   mcb: "Wyłącznik nadprądowy 1-faz. B10/16 (szt.)",
@@ -88,6 +105,47 @@ export interface CostOptions {
 }
 
 /**
+ * Pozycja kosztorysu dla kabla opisanego tak jak w doborze („YDYp 3x2,5 mm²").
+ *
+ * Dotąd kubełki były trzy i dopasowywały się po FRAGMENCIE tekstu: wszystko, co nie
+ * miało w nazwie „1,5" ani pięciu żył, lądowało w pozycji „3×2,5 mm²". Obwód dobrany
+ * na 6 mm² — a takie wychodzą, odkąd warunki doboru da się ustawić uczciwie — był więc
+ * wyceniany jako 2,5 mm², czyli za mniej więcej połowę tego, co realnie kosztuje.
+ * Kosztorys kazał kupić cieńszy kabel, niż sam zaprojektował.
+ *
+ * Przekrój czytamy z opisu, zamiast zgadywać po podciągu. Kombinacja spoza listy trafia
+ * do pozycji „inny przekrój" — widocznej i bez ceny, bo lepiej zapytać niż po cichu
+ * doliczyć do niewłaściwego wiersza.
+ */
+export function kluczKabla(cable: string): string {
+  const m = cable.match(/(\d+)\s*[x×]\s*(\d+(?:[.,]\d+)?)/i);
+  if (!m) return "kabelInny";
+  const zyl = m[1];
+  const przekroj = m[2].replace(".", ",");
+  return KLUCZE_KABLI[`${zyl}x${przekroj}`] ?? "kabelInny";
+}
+
+/** Żyły × przekrój → pozycja kosztorysu. Klucze `kabel15`/`kabel25`/`kabel4` zostają
+ *  przy swoich starych nazwach mimo nierównej konwencji: to po nich zapisane projekty
+ *  trzymają ręcznie poprawione ceny, a zmiana nazwy po cichu by je porzuciła. */
+const KLUCZE_KABLI: Record<string, string> = {
+  "3x1,5": "kabel15",
+  "3x2,5": "kabel25",
+  "3x4": "kabel3x4",
+  "3x6": "kabel3x6",
+  "3x10": "kabel3x10",
+  "3x16": "kabel3x16",
+  "3x25": "kabel3x25",
+  // Pięciożyłowe 2,5 i 4 dzielą jedną pozycję od zawsze — tak też jest opisana.
+  "5x2,5": "kabel4",
+  "5x4": "kabel4",
+  "5x6": "kabel5x6",
+  "5x10": "kabel5x10",
+  "5x16": "kabel5x16",
+  "5x25": "kabel5x25",
+};
+
+/**
  * Szacuje ilości materiałów i robocizny z elementów na planie i obwodów.
  *
  * Długości przewodów bierze z realnych tras po planie, jeśli plan ma
@@ -122,23 +180,18 @@ export function computeCosts(
   q.puszkaRozgalezna = Math.max(q.puszkaRozgalezna, rooms);
   q.robocizna = pointElements.length;
 
-  let kabel15 = 0;
-  let kabel25 = 0;
-  let kabel4 = 0;
   // Trasa policzona po planie bije ryczałt: obwód z pięcioma gniazdami tuż przy
   // rozdzielnicy i taki sam obwód na drugim końcu domu dostawały dotąd identyczne
   // 35 mb, co jest zgadywaniem, nie kosztorysem.
   const measured = opts.routeLengthsM;
   const hasMeasured = !!measured && circuits.some((c) => measured.has(c.id));
+  const metryKabla = new Map<string, number>();
   circuits.forEach((c) => {
     const len = measured?.get(c.id) ?? c.elements.length * 5 + 10;
-    if (c.cable.includes("1,5")) kabel15 += len;
-    else if (c.cable.includes("5x2,5") || c.cable.includes("5x4")) kabel4 += len;
-    else kabel25 += len;
+    const klucz = kluczKabla(c.cable);
+    metryKabla.set(klucz, (metryKabla.get(klucz) ?? 0) + len);
   });
-  q.kabel15 = Math.round(kabel15);
-  q.kabel25 = Math.round(kabel25);
-  q.kabel4 = Math.round(kabel4);
+  for (const [klucz, metry] of metryKabla) q[klucz] = Math.round(metry);
 
   q.kabelLan = (q.rj45 + q.domofon) * 15;
   q.kabelKoncentryk = q.rtvsat * 15;
@@ -271,9 +324,20 @@ const CSV_KEYWORD_MAP: Record<string, string[]> = {
   wlacznik: ["włącznik", "lacznik", "łącznik"],
   puszkaPodtynkowa: ["puszka podtynkowa"],
   puszkaRozgalezna: ["puszka rozgałęźna", "rozgalezna"],
+  // Pięciożyłowe PRZED trzyżyłowymi: „5x4" zawiera „4", więc odwrotna kolejność
+  // wrzucałaby cenę kabla pięciożyłowego do pozycji 3×4 mm².
+  kabel4: ["ydyp 5x2,5", "ydyp 5×2,5", "5x4", "5×4"],
+  kabel5x6: ["5x6", "5×6"],
+  kabel5x10: ["5x10", "5×10"],
+  kabel5x16: ["5x16", "5×16"],
+  kabel5x25: ["5x25", "5×25"],
   kabel15: ["ydyp 3x1,5", "ydyp 3×1,5", "1,5 mm"],
   kabel25: ["ydyp 3x2,5", "ydyp 3×2,5", "2,5 mm"],
-  kabel4: ["ydyp 3x4", "ydyp 5x2,5", "4 mm"],
+  kabel3x4: ["ydyp 3x4", "ydyp 3×4", "4 mm"],
+  kabel3x6: ["ydyp 3x6", "ydyp 3×6", "6 mm"],
+  kabel3x10: ["ydyp 3x10", "ydyp 3×10", "10 mm"],
+  kabel3x16: ["ydyp 3x16", "ydyp 3×16", "16 mm"],
+  kabel3x25: ["ydyp 3x25", "ydyp 3×25", "25 mm"],
   mcb: ["wyłącznik nadprądowy", "wylacznik nadpradowy", " b16", " b10", " b20"],
   rcd: ["różnicowoprądowy", "roznicowopradowy", "rcd"],
   glowny: ["wyłącznik główny", "wylacznik glowny", "rozłącznik izolacyjny", "rozlacznik izolacyjny"],
