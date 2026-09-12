@@ -167,6 +167,16 @@ export interface RouteEstimate {
    * do ostatniego punktu tych metrów nie ma.
    */
   totalM: number;
+  /**
+   * Czy choć jeden odcinek policzył się zapasowym szacunkiem Manhattan zamiast trasą
+   * po ścianach.
+   *
+   * Manhattan jest KRÓTSZY od drogi, którą przewód naprawdę pokona — nie omija ścian
+   * ani nie wchodzi w drzwi — więc zaniża spadek napięcia. Zaniżenie to jedyny kierunek
+   * błędu, który w tej aplikacji jest niebezpieczny, a dotąd działo się po cichu: brak
+   * skali aplikacja zgłasza wprost, brak geometrii nie zgłaszał niczego.
+   */
+  szacunek: boolean;
 }
 
 /**
@@ -190,9 +200,15 @@ export interface GeometriaKondygnacji {
  * Flagi `swobodneWejscie` powtórzone za `buildCableRoutes` — bez nich ta sama para
  * punktów dawałaby tu inną trasę niż na rysunku, a o to w tej całej poprawce chodzi.
  */
-function biegPoziomyJedn(a: Point, b: Point, typA: ElementType | null, typB: ElementType, geo?: GeometriaKondygnacji): number {
+function biegPoziomyJedn(
+  a: Point,
+  b: Point,
+  typA: ElementType | null,
+  typB: ElementType,
+  geo?: GeometriaKondygnacji
+): { jedn: number; szacunek: boolean } {
   const manhattan = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
-  if (!geo) return manhattan;
+  if (!geo) return { jedn: manhattan, szacunek: true };
   const trasa = routeAlongWalls(
     a,
     b,
@@ -201,7 +217,10 @@ function biegPoziomyJedn(a: Point, b: Point, typA: ElementType | null, typB: Ele
     { from: typA ? !przyscienny(typA) : false, to: !przyscienny(typB) },
     geo.openings
   );
-  return trasa ? polylineLengthUnits(trasa) : manhattan;
+  // Routing zwraca `null` także wtedy, gdy geometria JEST, ale nie prowadzi z punktu do
+  // punktu — np. kondygnacja ma narysowaną jedną ścianę i nic poza nią. Oba przypadki
+  // kończą się tym samym szacunkiem, więc oba muszą być tak samo widoczne.
+  return trasa ? { jedn: polylineLengthUnits(trasa), szacunek: false } : { jedn: manhattan, szacunek: true };
 }
 
 /**
@@ -300,8 +319,11 @@ export function estimateRoutes(
   let poprzedniTyp: ElementType | null = null;
   let wysokoscPoprzedniego = panelHeightM;
   let pierwszy = true;
+  let szacunek = false;
   for (const e of lancuch) {
-    const odcinekM = biegPoziomyJedn(poprzedni, e, poprzedniTyp, e.type, geo) * metersPerUnit;
+    const bieg = biegPoziomyJedn(poprzedni, e, poprzedniTyp, e.type, geo);
+    szacunek = szacunek || bieg.szacunek;
+    const odcinekM = bieg.jedn * metersPerUnit;
     poziomM += odcinekM;
     // Pierwszy odcinek wychodzi z ROZDZIELNICY — pod strop i w dół do puszki.
     // Kolejne idą z puszki do puszki, więc liczy się sama różnica wysokości.
@@ -325,7 +347,9 @@ export function estimateRoutes(
    */
   const poGrupach = new Map<string, number>();
   for (const o of sterowanie) {
-    const odcinekM = biegPoziomyJedn(o.bestFrom, o.light, o.bestFrom.type, o.light.type, geo) * metersPerUnit;
+    const bieg = biegPoziomyJedn(o.bestFrom, o.light, o.bestFrom.type, o.light.type, geo);
+    szacunek = szacunek || bieg.szacunek;
+    const odcinekM = bieg.jedn * metersPerUnit;
     const pion = pionMiedzyPunktami(mountingHeightM(o.bestFrom), mountingHeightM(o.light));
     total += odcinekM + pion + SLACK_M;
     poGrupach.set(o.bestFrom.id, (poGrupach.get(o.bestFrom.id) ?? 0) + odcinekM);
@@ -336,7 +360,7 @@ export function estimateRoutes(
   // rozdzielnicy): cały bieg poziomy plus jedno zejście do tej właśnie puszki.
   const ostatni = lancuch[lancuch.length - 1];
   const worst = poziomM + najdluzszeSterowanie + pionM(panelHeightM, mountingHeightM(ostatni), wysokoscM) + SLACK_M;
-  return { worstCaseM: round1(worst), totalM: round1(total) };
+  return { worstCaseM: round1(worst), totalM: round1(total), szacunek };
 }
 
 /**
@@ -392,6 +416,7 @@ export function estimateRoutesByFloor(
 
   let worst = 0;
   let total = 0;
+  let szacunek = false;
   for (const [floor, grupa] of poKondygnacjach) {
     const skala = scales[floor];
     const r = estimateRoutes(
@@ -410,6 +435,7 @@ export function estimateRoutesByFloor(
       }
     );
     if (!r) return null;
+    szacunek = szacunek || r.szacunek;
     /**
      * Pion doliczany RAZ na kondygnację, nie na punkt: kabel wchodzi na piętro jeden
      * raz i dopiero tam rozchodzi się łańcuchem. Zerowy, gdy piętro ma własną
@@ -423,7 +449,7 @@ export function estimateRoutesByFloor(
     total += r.totalM + pion;
     if (r.worstCaseM + pion > worst) worst = r.worstCaseM + pion;
   }
-  return { worstCaseM: round1(worst), totalM: round1(total) };
+  return { worstCaseM: round1(worst), totalM: round1(total), szacunek };
 }
 
 /** Znajduje rozdzielnicę wśród PODANYCH elementów — punkt odniesienia dla tras.
