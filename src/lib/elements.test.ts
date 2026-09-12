@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeSanitaryZones, fixtureSizeM, MAX_WYMIAR_PRZYBORU_M, mountingHeightM, mountingLabel } from "./elements";
-import type { InstallationElement } from "@/types";
+import type { ElementType, InstallationElement } from "@/types";
 
 const wanna: InstallationElement = {
   id: "w1", type: "wanna", x: 100, y: 100, room: "Łazienka", floor: "f1",
@@ -137,5 +137,38 @@ describe("fixtureSizeM", () => {
     expect(krotsza.w).toBeCloseTo(1.5 / 0.02, 5);
     // Zasięg strefy 2 poza krawędź się nie zmienia — zmienia się krawędź.
     expect(krotsza.zone2).toBeCloseTo(0.6 / 0.02, 5);
+  });
+});
+
+/**
+ * Punkt sufitowy wisi tam, gdzie jest sufit — a sufit ma od niedawna wlasna wysokosc
+ * per kondygnacja (`Floor.heightM`). Stala 2,8 z tabeli zostala po czasach, gdy
+ * wysokosc byla jedna dla calego projektu.
+ */
+describe("mountingHeightM — typy przy stropie", () => {
+  const el = (type: ElementType, heightM?: number) => ({ type, heightM });
+
+  it("punkt sufitowy i czujnik dymu ida za wysokoscia kondygnacji", () => {
+    expect(mountingHeightM(el("oswietlenie"), 3.6)).toBe(3.6);
+    expect(mountingHeightM(el("czujnikDymu"), 3.6)).toBe(3.6);
+    expect(mountingHeightM(el("oswietlenie"), 2.5)).toBe(2.5);
+  });
+
+  it("osprzet przyscienny NIE idzie — kinkiet na 2 m zostaje na 2 m niezaleznie od sufitu", () => {
+    expect(mountingHeightM(el("kinkiet"), 3.6)).toBe(2);
+    expect(mountingHeightM(el("gniazdko"), 3.6)).toBe(0.3);
+    expect(mountingHeightM(el("wlacznik"), 3.6)).toBe(1.1);
+  });
+
+  /** Wpis uzytkownika bije wszystko — sufit podwieszany albo skos. */
+  it("wlasna wysokosc bije i tabele, i wysokosc kondygnacji", () => {
+    expect(mountingHeightM(el("oswietlenie", 2.2), 3.6)).toBe(2.2);
+  });
+
+  /** Bez podanej wysokosci kondygnacji zostaje wartosc z tabeli — czyli zachowanie
+   *  sprzed wprowadzenia wysokosci per kondygnacja. */
+  it("bez wysokosci kondygnacji zostaje wartosc typowa", () => {
+    expect(mountingHeightM(el("oswietlenie"))).toBe(2.8);
+    expect(mountingHeightM(el("oswietlenie"), 0)).toBe(2.8);
   });
 });
