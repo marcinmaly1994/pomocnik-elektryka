@@ -1067,6 +1067,28 @@ describe("estimateRoutes — zgodnosc z narysowana trasa", () => {
     expect(r.worstCaseM).toBeCloseTo(7 + NADDATEK, 1); // (30+40) * 0,1 = 7 m
   });
 
+  /**
+   * Szacunek Manhattan jest KROTSZY od drogi, ktora przewod naprawde pokona, wiec zaniza
+   * spadek napiecia. Zaniżenie to jedyny kierunek bledu, ktory w tej aplikacji jest
+   * niebezpieczny — i dotad dzialo sie po cichu. Teraz wynik NIESIE te informacje.
+   */
+  it("bez geometrii wynik jest oznaczony jako SZACUNEK", () => {
+    expect(estimateRoutes(punkt, [el("gniazdko", { x: 300, y: 50 })], 0.05)!.szacunek).toBe(true);
+  });
+
+  it("z geometria, po ktorej da sie poprowadzic trase, wynik NIE jest szacunkiem", () => {
+    const r = estimateRoutes(punkt, [el("gniazdko", { x: 300, y: 50 })], 0.05, undefined, { geometria: geo })!;
+    expect(r.szacunek).toBe(false);
+  });
+
+  /** Geometria JEST, ale pusta — routing nie ma po czym prowadzic, wiec wynik jest
+   *  szacunkiem tak samo jak przy jej calkowitym braku. */
+  it("pusta geometria liczy sie jako szacunek", () => {
+    const pusta = { walls: [], roomShapes: [], openings: [] };
+    const r = estimateRoutes(punkt, [el("gniazdko", { x: 300, y: 50 })], 0.05, undefined, { geometria: pusta })!;
+    expect(r.szacunek).toBe(true);
+  });
+
   /** Gdy routing nie ma po czym prowadzic trasy, szacunek nie moze zwrocic zera ani
    *  wyjatku — spada na Manhattan, dokladnie tak jak rysunek spada na przerywana. */
   it("geometria bez scian i obrysow nie psuje wyniku — zostaje Manhattan", () => {

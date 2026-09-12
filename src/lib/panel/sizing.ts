@@ -58,6 +58,14 @@ export interface CircuitSpec {
   faza?: PhaseAssignment;
   /** Długość trasy [m] — bez niej nie da się sprawdzić spadku napięcia. */
   dlugosc_m?: number;
+  /**
+   * Czy długość jest SZACUNKIEM (Manhattan), a nie trasą policzoną po ścianach.
+   *
+   * Szacunek jest KRÓTSZY od drogi, którą przewód naprawdę pokona, więc zaniża spadek
+   * napięcia — a zaniżenie to jedyny kierunek błędu, który tu jest niebezpieczny.
+   * Nie blokuje doboru: liczymy i mówimy, z czego liczymy (patrz `DLUGOSC_SZACOWANA`).
+   */
+  dlugosc_szacowana?: boolean;
   sposob_ulozenia: LayingMethod;
   temperatura_otoczenia_C?: number;
   /** Odbiornik z rozruchem silnikowym (lodówka, pompa, klimatyzacja) → charakterystyka C. */
@@ -388,6 +396,19 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
       code: "BRAK_DLUGOSCI",
       level: "warn",
       message: `Obwód „${spec.nazwa}" nie ma podanej długości trasy — spadek napięcia NIE został sprawdzony. Dobór pokrywa wyłącznie obciążalność.`,
+    });
+  }
+
+  /**
+   * Długość ze szacunku, nie z trasy po ścianach. Mówimy o tym TYLKO wtedy, gdy spadek
+   * napięcia faktycznie się policzył — przy braku długości mamy już mocniejsze
+   * ostrzeżenie wyżej i dublowanie go niczego nie doda.
+   */
+  if (spec.dlugosc_szacowana && chosen.drop !== null) {
+    warnings.push({
+      code: "DLUGOSC_SZACOWANA",
+      level: "warn",
+      message: `Długość trasy obwodu „${spec.nazwa}" to szacunek (odległość prostokątna), bo na kondygnacji nie ma narysowanych ścian ani pomieszczeń, po których dałoby się poprowadzić przewód. Prawdziwa trasa będzie DŁUŻSZA, więc spadek napięcia ${chosen.drop.toFixed(2)}% jest zaniżony. Narysuj ściany albo obrysy pomieszczeń, żeby policzyć go z rzeczywistej drogi.`,
     });
   }
 

@@ -416,3 +416,52 @@ describe("sizeProjectCircuits — warunki doboru", () => {
     expect(bez).toEqual(zDomyslnymi);
   });
 });
+
+/**
+ * Dlugosc ze SZACUNKU, nie z trasy po scianach.
+ *
+ * Brak skali aplikacja zglaszala wprost („spadek napiecia NIE zostal sprawdzony"), a
+ * brak geometrii — niczego. Tymczasem szacunek Manhattan jest KROTSZY od drogi, ktora
+ * przewod naprawde pokona, wiec zaniza spadek napiecia. Cichy blad w strone
+ * niebezpieczna.
+ */
+describe("sizeProjectCircuits — dlugosc ze szacunku", () => {
+  const POKOJ = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 600, y: 0 },
+      { x: 600, y: 500 },
+      { x: 0, y: 500 },
+    ],
+  };
+  const elementy = [
+    el("rozdzielnica", { x: 20, y: 480 }),
+    ...Array.from({ length: 3 }, (_, i) => el("gniazdko", { x: 200 + i * 60, y: 20 })),
+  ];
+  const opts = { scales: { parter: 0.05 } };
+  const gniazdowy = (w: ReturnType<typeof sizeProjectCircuits>) => w.find((s2) => s2.typ === "gniazda")!;
+
+  it("bez narysowanej geometrii dobor MOWI, ze dlugosc jest szacunkiem", () => {
+    const obwody = computeCircuits(elementy);
+    const bez = gniazdowy(sizeProjectCircuits(obwody, elementy, opts));
+    const o = bez.ostrzezenia.find((x) => x.code === "DLUGOSC_SZACOWANA");
+    expect(o).toBeTruthy();
+    expect(o!.message).toContain("zaniżony");
+  });
+
+  it("z narysowanym pomieszczeniem ostrzezenia nie ma, a trasa jest DLUZSZA", () => {
+    const obwody = computeCircuits(elementy);
+    const bez = gniazdowy(sizeProjectCircuits(obwody, elementy, opts));
+    const zGeo = gniazdowy(
+      sizeProjectCircuits(obwody, elementy, { ...opts, geometria: { walls: [], roomShapes: [POKOJ], openings: [] } })
+    );
+    expect(zGeo.ostrzezenia.some((x) => x.code === "DLUGOSC_SZACOWANA")).toBe(false);
+    // Sedno ostrzezenia: szacunek byl KROTSZY od trasy po scianach, wiec spadek
+    // napiecia policzony z niego jest MNIEJSZY niz prawdziwy.
+    expect(zGeo.spadek_napiecia_pct!).toBeGreaterThan(bez.spadek_napiecia_pct!);
+  });
+});

@@ -76,6 +76,7 @@ export function sizeProjectCircuits(
       moc_W: demand.powerW,
       liczba_faz: phases,
       dlugosc_m: routes?.worstCaseM,
+      dlugosc_szacowana: routes?.szacunek,
       sposob_ulozenia: opts.sposob_ulozenia ?? "w_scianie",
       temperatura_otoczenia_C: opts.temperatura_otoczenia_C,
       obwodow_w_wiazce: opts.obwodow_w_wiazce,
