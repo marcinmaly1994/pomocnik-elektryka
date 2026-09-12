@@ -54,18 +54,24 @@ export const JEDNOSTKI_NA_METR = 1 / (SKALA_ODNIESIENIA_MPU * BASE_ELEMENT_SCALE
  * przypadki, a niepoprawne (ktoś podał 5 m dla dwóch punktów odległych o 3 jednostki)
  * i tak są już zepsute wszędzie indziej: strefy i podziałka też nie mają ograniczeń.
  */
-export function autoSymbolScale(mpu: number | null, zRysunku = 1): number {
+export function autoSymbolScale(mpu: number | null, zRysunku: number): number {
   return mpu !== null && mpu > 0 ? SKALA_ODNIESIENIA_MPU / mpu : zRysunku;
 }
+
+/** Dłuższy bok typowego domu jednorodzinnego albo mieszkania [m] — pod rysunek tej
+ *  wielkości dobrana jest geometria glifów. */
+export const TYPOWY_DOM_M = 12;
 
 /**
  * Rozpiętość rysunku (jedn. planu), przy której symbole mają rozmiar bazowy.
  *
- * 240 jedn. to 12 m w skali rysowania odręcznego (`MANUAL_DRAW_SCALE_MPU`) — tyle ma
- * w dłuższym boku typowy dom jednorodzinny albo mieszkanie. Pod taki właśnie rysunek
- * dobrana jest geometria glifów, więc rzut tej wielkości nie zmienia się ani o piksel.
+ * Wyprowadzona, nie wpisana: to `TYPOWY_DOM_M` przeliczone skalą rysowania odręcznego,
+ * czyli tą samą, pod którą dobrana jest geometria glifów. Wpisana na sztywno rozjechałaby
+ * się po cichu przy zmianie `MANUAL_DRAW_SCALE_MPU` — a wtedy rzut typowej wielkości
+ * przestałby wychodzić 1,0× i zmiana skali rysowania zmieniałaby rozmiar symboli
+ * na rzutach bez kalibracji.
  */
-export const ROZPIETOSC_ODNIESIENIA = 240;
+export const ROZPIETOSC_ODNIESIENIA = TYPOWY_DOM_M / SKALA_ODNIESIENIA_MPU;
 
 /** Sufit dla zgadywanej skali. Jedno zabłąkane kliknięcie daleko poza domem rozdyma
  *  obrys rysunku i bez tego wyhodowałoby symbole większe od pokoju. */
@@ -104,8 +110,17 @@ export function skalaZRysunku(rozpietosc: number | null): number {
   return Math.min(MAKS_SKALA_Z_RYSUNKU, Math.max(1, rozpietosc / ROZPIETOSC_ODNIESIENIA));
 }
 
+/**
+ * „Nie ma domysłu do uwzględnienia" — wartość neutralna dla `zRysunku`.
+ *
+ * Parametr jest WYMAGANY (nie ma wartości domyślnej) po to, żeby nowe wywołanie nie
+ * mogło po cichu zgubić skalowania bez kalibracji: pominięcie go jest błędem
+ * kompilacji, a rezygnacja z niego — świadomym, wyszukiwalnym wyborem.
+ */
+export const BEZ_DOMYSLU = 1;
+
 /** Skala renderu osprzętu: umowny rozmiar symbolu razy ustawienie suwaka. */
-export function elementRenderScale(mpu: number | null, suwak: number, zRysunku = 1): number {
+export function elementRenderScale(mpu: number | null, suwak: number, zRysunku: number): number {
   return suwak * BASE_ELEMENT_SCALE * autoSymbolScale(mpu, zRysunku);
 }
 
@@ -124,6 +139,6 @@ export function elementRenderScale(mpu: number | null, suwak: number, zRysunku =
  * Nie ma więc strefy, o której obrys mógłby kłamać; jest za to rysunek, na którym wanna
  * ma wyglądać jak wanna, a nie jak kropka obok pokoju szerokiego na tysiąc jednostek.
  */
-export function sanitaryRenderScale(mpu: number | null, zRysunku = 1): number {
+export function sanitaryRenderScale(mpu: number | null, zRysunku: number): number {
   return BASE_ELEMENT_SCALE * autoSymbolScale(mpu, zRysunku);
 }
