@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups, ostrzezeniaObwodow } from "@/lib/panel/circuits";
+import { OPIS_ULOZENIA, type LayingMethod } from "@/lib/panel/norms";
 import { ELEMENT_TYPES, NO_ROOM } from "@/lib/elements";
 import {
   balancePhases,
@@ -90,6 +91,11 @@ export function PanelTab() {
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const setPanelConfig = useProjectStore((s) => s.setPanelConfig);
   const { supply3f, mainRating, perRow } = panelConfig;
+  // Warunki doboru mieszkają w PROJEKCIE z tego samego powodu co zasilanie: to
+  // założenia o instalacji, nie preferencja widoku, i decydują o doborze przewodu
+  // w każdej zakładce, która go pokazuje.
+  const warunki = useProjectStore((s) => s.warunkiDoboru);
+  const setWarunki = useProjectStore((s) => s.setWarunkiDoboru);
   // Aparaty, ukryte pozycje i tryb mieszkają w PROJEKCIE, nie w stanie komponentu.
   // Wcześniej ręcznie dołożone aparaty i skasowane pozycje przepadały przy odświeżeniu
   // i nie trafiały do zapisu — a bez trwałości nie da się złożyć rozdzielnicy bez rzutu.
@@ -142,8 +148,21 @@ export function PanelTab() {
     [elements, scales, floors]
   );
   const { circuits, sized: sizedRaw } = useMemo(
-    () => computeSizedCircuits(elements, { scales, geometria, kondygnacje: floors }, roomShapes),
-    [elements, scales, geometria, floors, roomShapes]
+    () =>
+      computeSizedCircuits(
+        elements,
+        {
+          scales,
+          geometria,
+          kondygnacje: floors,
+          sposob_ulozenia: warunki.sposobUlozenia,
+          temperatura_otoczenia_C: warunki.temperaturaC,
+          obwodow_w_wiazce: warunki.obwodowWWiazce,
+          spadek_wlz_pct: warunki.spadekWlzPct,
+        },
+        roomShapes
+      ),
+    [elements, scales, geometria, floors, roomShapes, warunki]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   const sized = useMemo(() => assignPhases(sizedRaw, supply3f), [sizedRaw, supply3f]);
@@ -718,6 +737,82 @@ export function PanelTab() {
             </span>
           )}
         </p>
+
+        {/*
+          Warunki doboru stoja PRZY TABELI, a nie w ustawieniach obudowy wyzej: zasilanie
+          i rozlacznik opisuja rozdzielnice jako urzadzenie, a te cztery liczby to
+          zalozenia o instalacji i widac po nich wprost, ktora kolumne nizej zmieniaja.
+        */}
+        <div className="mb-3 flex flex-wrap items-end gap-3">
+          {/*
+            WARUNKI DOBORU. Z rysunku nie da się odczytać, czy trasa idzie przez nieocieplone
+            poddasze ani ile obwodów dzieli jedną rurę — a jedno i drugie OBNIŻA obciążalność
+            przewodu. Dobór projektu przyjmował dotąd warunki najłagodniejsze (30 °C, jeden
+            obwód w wiązce), czyli mylił się w stronę niebezpieczną. Ten sam silnik liczy
+            kalkulator, który te nastawy miał od dawna.
+          */}
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Sposób ułożenia</div>
+            <select
+              value={warunki.sposobUlozenia}
+              onChange={(e) => setWarunki({ sposobUlozenia: e.target.value as LayingMethod })}
+              className="pe-input text-sm"
+            >
+              {(Object.keys(OPIS_ULOZENIA) as LayingMethod[]).map((m) => (
+                <option key={m} value={m}>
+                  {OPIS_ULOZENIA[m]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Temperatura otoczenia</div>
+            <select
+              value={warunki.temperaturaC}
+              onChange={(e) => setWarunki({ temperaturaC: Number(e.target.value) })}
+              className="pe-input text-sm"
+              title="30 °C to warunek odniesienia tablic obciążalności. Wyższa temperatura — trasa przez nieocieplone poddasze albo kotłownię — obniża obciążalność przewodu."
+            >
+              {[25, 30, 35, 40, 45, 50].map((t) => (
+                <option key={t} value={t}>
+                  {t} °C
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Obwodów w wiązce</div>
+            <select
+              value={warunki.obwodowWWiazce}
+              onChange={(e) => setWarunki({ obwodowWWiazce: Number(e.target.value) })}
+              className="pe-input text-sm"
+              title="Ile obwodów dzieli wspólną trasę (rurę, korytko). Im więcej, tym niższa obciążalność każdego z nich — rozdzielenie tras podnosi ją z powrotem."
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Spadek na WLZ [%]</div>
+            <input
+              type="number"
+              min={0}
+              max={5}
+              step={0.1}
+              value={warunki.spadekWlzPct}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value.replace(",", "."));
+                setWarunki({ spadekWlzPct: Number.isFinite(v) && v >= 0 ? v : 0 });
+              }}
+              aria-label="Spadek napięcia na WLZ w procentach"
+              className="pe-input w-full text-sm tabular-nums"
+              title="Spadek napięcia zużyty już na odcinku od złącza do rozdzielnicy. Limit 3/5% dotyczy CAŁEJ drogi, więc to, co zjadła WLZ, nie jest już dostępne dla obwodów. Policzysz go w Kalkulatorach."
+            />
+          </label>
+        </div>
 
         <div className="pe-scroll overflow-x-auto">
           <table className="w-full text-left text-[11.5px]">

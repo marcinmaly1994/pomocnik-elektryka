@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { WARUNKI_DOBORU_DOMYSLNE, type WarunkiDoboru } from "@/lib/panel/norms";
 import { useShallow } from "zustand/react/shallow";
 import type {
   InstallationElement,
@@ -106,6 +107,10 @@ export interface ProtocolState {
 /** Dane projektu do zapisu lokalnego/w chmurze — patrz `getProjectPayload`/`loadProjectPayload`. */
 export interface ProjectPayload {
   draft: Draft;
+  /** Warunki doboru — patrz `WarunkiDoboru`. Zapisy sprzed ich wprowadzenia tego pola
+   *  nie mają i dostają wartości domyślne, czyli dokładnie to, co dobór zakładał
+   *  dotąd milcząco. */
+  warunkiDoboru?: WarunkiDoboru;
   floors: Floor[];
   activeFloorId: string;
   bgImages: Record<string, string>;
@@ -210,6 +215,9 @@ interface PanelSnapshot {
 }
 
 interface ProjectState {
+  warunkiDoboru: WarunkiDoboru;
+  /** Zmienia pojedyncze warunki doboru, zostawiając resztę bez zmian. */
+  setWarunkiDoboru: (patch: Partial<WarunkiDoboru>) => void;
   draft: Draft;
   floors: Floor[];
   activeFloorId: string;
@@ -448,6 +456,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectName: "Mój dom",
   protocols: {},
   panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
+  warunkiDoboru: WARUNKI_DOBORU_DOMYSLNE,
   panelDevices: [],
   panelHidden: [],
   panelTryb: "zRzutu",
@@ -555,6 +564,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       activeFloorId: "f1",
       projectName: "Mój dom",
       panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
+  warunkiDoboru: WARUNKI_DOBORU_DOMYSLNE,
       panelDevices: [],
       panelHidden: [],
       panelTryb: "zRzutu",
@@ -578,8 +588,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   getProjectPayload: () => {
-    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding } = get();
-    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
+    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding } = get();
+    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
   },
 
   loadProjectPayload: (payload) => {
@@ -618,6 +628,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // `panelConfig` już mają. Bez tego rozdzielnica wczytana ze starego projektu
       // miałaby rząd o szerokości `undefined` i nie policzyłaby modułów.
       panelConfig: { supply3f: true, mainRating: 40, perRow: 12, ...((payload.panelConfig ?? {}) as Partial<PanelConfig>) },
+      // Warunki doboru doszły po pierwszych zapisach — starsze migawki ich nie mają, a
+      // wartości domyślne to dokładnie to, co dobór zakładał wtedy milcząco (30 °C,
+      // jeden obwód w wiązce, układanie w ścianie, zero spadku na WLZ). Nakładane NA
+      // obiekt, żeby migawka z częścią pól nie zostawiła reszty jako `undefined`.
+      warunkiDoboru: { ...WARUNKI_DOBORU_DOMYSLNE, ...(payload.warunkiDoboru ?? {}) },
       // Projekty zapisane przed wprowadzeniem trwałej rozdzielnicy nie mają tych pól —
       // wracają wtedy do trybu „z rzutu" i odbudowują aparaty z obwodów, czyli
       // dokładnie tak, jak działały do tej pory.
@@ -636,6 +651,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       panelFuture: [],
     });
   },
+
+  setWarunkiDoboru: (patch) => set((state) => ({ warunkiDoboru: { ...state.warunkiDoboru, ...patch } })),
 
   setActiveFloorId: (id) => set({ activeFloorId: id }),
 
