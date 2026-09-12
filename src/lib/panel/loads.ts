@@ -203,6 +203,37 @@ export interface GeometriaKondygnacji {
 }
 
 /**
+ * Geometria jednej kondygnacji, wycięta z geometrii całego budynku — ZAPAMIĘTANA.
+ *
+ * Nie chodzi o koszt samego `filter`, tylko o TOŻSAMOŚĆ wyniku: routing trzyma
+ * zbudowany graf pod tożsamością tablic wejściowych (patrz `grafDla` w routing.ts).
+ * Świeże tablice przy każdym obwodzie kasowały tę pamięć, więc graf budował się od nowa
+ * dla każdego obwodu z osobna — a przy 24 pokojach to dwie trzecie kosztu trasy.
+ *
+ * `WeakMap` po obiekcie geometrii budynku: gdy plan się zmieni, komponent zbuduje nowy
+ * obiekt, a stary wpis zniknie razem z nim. Nie ma czego unieważniać ręcznie.
+ */
+const geoPoKondygnacji = new WeakMap<GeometriaKondygnacji, Map<string, GeometriaKondygnacji>>();
+
+function geoDlaKondygnacji(geo: GeometriaKondygnacji | undefined, floor: string): GeometriaKondygnacji | undefined {
+  if (!geo) return undefined;
+  let wgPietra = geoPoKondygnacji.get(geo);
+  if (!wgPietra) {
+    wgPietra = new Map();
+    geoPoKondygnacji.set(geo, wgPietra);
+  }
+  const gotowe = wgPietra.get(floor);
+  if (gotowe) return gotowe;
+  const wyciete = {
+    walls: geo.walls.filter((w) => w.floor === floor),
+    roomShapes: geo.roomShapes.filter((r) => r.floor === floor),
+    openings: geo.openings.filter((o) => o.floor === floor),
+  };
+  wgPietra.set(floor, wyciete);
+  return wyciete;
+}
+
+/**
  * Bieg POZIOMY jednego ogniwa łańcucha [jednostki planu].
  *
  * Z geometrią — długość trasy policzonej przez `routeAlongWalls`, czyli dokładnie
@@ -451,11 +482,7 @@ export function estimateRoutesByFloor(
         wszystkieElementy: kontekst.wszystkieElementy?.filter((e) => e.floor === floor),
         wysokoscKondygnacjiM: wysokoscKondygnacji(kondygnacje?.find((f) => f.id === floor)),
         zapasNaPunktM: kontekst.zapasNaPunktM,
-        geometria: geo && {
-          walls: geo.walls.filter((w) => w.floor === floor),
-          roomShapes: geo.roomShapes.filter((r2) => r2.floor === floor),
-          openings: geo.openings.filter((o) => o.floor === floor),
-        },
+        geometria: geoDlaKondygnacji(geo, floor),
       }
     );
     if (!r) return null;
@@ -513,11 +540,7 @@ export function estimateGwiazdaByFloor(
     const skala = scales[e.floor];
     if (!(typeof skala === "number" && skala > 0)) continue;
     const wysokoscM = wysokoscKondygnacji(kondygnacje?.find((f) => f.id === e.floor));
-    const geoKondygnacji = geo && {
-      walls: geo.walls.filter((w) => w.floor === e.floor),
-      roomShapes: geo.roomShapes.filter((r) => r.floor === e.floor),
-      openings: geo.openings.filter((o) => o.floor === e.floor),
-    };
+    const geoKondygnacji = geoDlaKondygnacji(geo, e.floor);
     // Punkt zbiorczy: rozdzielnica tej kondygnacji, a gdy jej nie ma — główna. Plan nie
     // wie, gdzie stoi szafka teletechniczna (nie ma takiego elementu w bibliotece), a
     // rozdzielnica jest jedynym miejscem, o którym wiadomo, że kable się w nim schodzą.
