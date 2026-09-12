@@ -46,6 +46,13 @@ export type LayingMethod = "w_scianie" | "w_scianie_ocieplonej" | "w_rurce" | "n
  * wiązka OBNIŻAJĄ obciążalność, więc przyjmowanie warunków najłagodniejszych
  * przepuszczało zbyt cienki przewód.
  */
+/**
+ * Domyślny zapas montażowy na punkt [m] — zejście do puszki i luz zostawiany w niej
+ * na podłączenie. Doliczany do KAŻDEGO punktu osobno, więc przy stu punktach to
+ * sto pięćdziesiąt metrów kabla w kosztorysie; dlatego jest nastawą, a nie stałą.
+ */
+export const ZAPAS_MONTAZOWY_M = 1.5;
+
 export interface WarunkiDoboru {
   sposobUlozenia: LayingMethod;
   /** Temperatura otoczenia [°C]. 30 °C to warunek odniesienia tablic obciążalności. */
@@ -60,6 +67,8 @@ export interface WarunkiDoboru {
    * potrafi przekraczać limit jako całość — i tym bardziej, im dłuższa jest WLZ.
    */
   spadekWlzPct: number;
+  /** Zapas montażowy na punkt [m] — patrz `ZAPAS_MONTAZOWY_M`. */
+  zapasNaPunktM: number;
 }
 
 /** Warunki przyjmowane, dopóki użytkownik nie ustawi własnych. Zgodne z tym, co dobór
@@ -69,6 +78,7 @@ export const WARUNKI_DOBORU_DOMYSLNE: WarunkiDoboru = {
   temperaturaC: 30,
   obwodowWWiazce: 1,
   spadekWlzPct: 0,
+  zapasNaPunktM: ZAPAS_MONTAZOWY_M,
 };
 
 /** Opisy sposobów ułożenia do listy wyboru — te same, którymi posługuje się kalkulator. */

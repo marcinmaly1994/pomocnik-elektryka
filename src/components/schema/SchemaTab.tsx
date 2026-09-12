@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, FileText } from "lucide-react";
-import { useProjectStore } from "@/store/useProjectStore";
+import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { downloadBlob, downloadPdfBytes, projectFileName } from "@/lib/pdf/download";
 import { buildDrawingDoc } from "@/lib/pdf/drawing";
 import type { PdfDoc } from "@/lib/pdf/engine";
@@ -477,16 +477,11 @@ function FinalCircuitsTable({ columns }: { columns: Column[] }) {
 export function SchemaTab() {
   const elements = useProjectStore((s) => s.draft.elements);
   const roomShapes = useProjectStore((s) => s.draft.roomShapes);
-  // Geometria CALEGO budynku — z niej dobor liczy bieg poziomy trasy, czyli te sama
-  // droge, ktora widac na rzucie. Bez niej zostawal szacunek Manhattan, KROTSZY od
-  // trasy rzeczywistej, wiec zanizajacy spadek napiecia (patrz `estimateRoutes`).
-  const walls = useProjectStore((s) => s.draft.walls);
-  const openings = useProjectStore((s) => s.draft.openings);
-  const floors = useProjectStore((s) => s.floors);
-  const geometria = useMemo(() => ({ walls, roomShapes, openings }), [walls, roomShapes, openings]);
+  // Warunki, skale i geometria CALEGO budynku ida jednym pakietem wspolnym z
+  // Rozdzielnica i Kosztorysem — patrz `useOpcjeDoboru`.
+  const opcjeDoboru = useOpcjeDoboru();
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const projectName = useProjectStore((s) => s.projectName);
-  const scales = useProjectStore((s) => s.scales);
   const svgRef = useRef<SVGSVGElement>(null);
   const rawDocHeader = useProjectStore((s) => s.docHeader);
   // Nazwa projektu jako domyślny „Obiekt" — dzięki temu tabliczka rysunkowa i nazwa
@@ -556,8 +551,8 @@ export function SchemaTab() {
   // Te same obwody co w Rozdzielnicy — z doborem, nie ze stałymi z `computeCircuits`.
   // Inaczej schemat jednokreskowy pokazywałby inny przekrój niż front rozdzielnicy.
   const { circuits } = useMemo(
-    () => computeSizedCircuits(elements, { scales, geometria, kondygnacje: floors }, roomShapes),
-    [elements, scales, geometria, floors, roomShapes]
+    () => computeSizedCircuits(elements, opcjeDoboru, roomShapes),
+    [elements, opcjeDoboru, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
   /**

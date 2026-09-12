@@ -48,6 +48,9 @@ export interface ProjectSizingOptions {
    * Kalkulator uwzględniał to od dawna; dobór projektu dostaje to dopiero teraz.
    */
   spadek_wlz_pct?: number;
+  /** Zapas montażowy na punkt [m] — patrz `ZAPAS_MONTAZOWY_M`. Wchodzi w metraż
+   *  kosztorysu i (raz) w długość decydującą o spadku napięcia. */
+  zapas_na_punkt_m?: number;
 }
 
 /** Obwód z planu przepuszczony przez dobór — zachowuje `id` obwodu źródłowego. */
@@ -63,7 +66,7 @@ export function sizeProjectCircuits(
   return circuits.map((c) => {
     const kind = kindForElements(c.elements);
     const demand = circuitDemand(c.elements, kind);
-    const routes = estimateRoutesByFloor(panele, c.elements, opts.scales, undefined, { geometria: opts.geometria, kondygnacje: opts.kondygnacje, wszystkieElementy: allElements });
+    const routes = estimateRoutesByFloor(panele, c.elements, opts.scales, undefined, { geometria: opts.geometria, kondygnacje: opts.kondygnacje, wszystkieElementy: allElements, zapasNaPunktM: opts.zapas_na_punkt_m });
     // „3-faz." w etykiecie zabezpieczenia to sposób, w jaki obwody trójfazowe są
     // oznaczane w warstwie planu — tu tłumaczymy to na liczbę faz doboru.
     const phases = c.breaker.includes("3-faz.") ? "3" : "1";
@@ -138,15 +141,34 @@ export function routeLengths(
   allElements: InstallationElement[],
   scales: Record<string, number>,
   geometria?: GeometriaKondygnacji,
-  kondygnacje?: Floor[]
+  kondygnacje?: Floor[],
+  zapasNaPunktM?: number
 ): Map<string, number> {
+  return new Map([...routeSummaries(circuits, allElements, scales, geometria, kondygnacje, zapasNaPunktM)].map(([id, r]) => [id, r.totalM]));
+}
+
+/**
+ * To samo co `routeLengths`, ale z ROZBICIEM: ile z metrażu to zapasy montażowe.
+ *
+ * Kosztorys pokazuje sumę metrów kabla, w której siedzi po jednym zapasie na punkt —
+ * przy stu punktach sto pięćdziesiąt metrów. Dopóki ta liczba nie miała nazwy, wyglądała
+ * jak zmierzona trasa i nie dawało się jej ani sprawdzić, ani zakwestionować.
+ */
+export function routeSummaries(
+  circuits: Circuit[],
+  allElements: InstallationElement[],
+  scales: Record<string, number>,
+  geometria?: GeometriaKondygnacji,
+  kondygnacje?: Floor[],
+  zapasNaPunktM?: number
+): Map<string, { totalM: number; zapasM: number }> {
   // Rozdzielnice CALEGO budynku, z podzialem na kondygnacje — obwod na pietrze liczy
   // sie od tamtejszej podrozdzielnicy, nie od pierwszej z brzegu (patrz `findPanels`).
   const panele = findPanels(allElements);
-  const out = new Map<string, number>();
+  const out = new Map<string, { totalM: number; zapasM: number }>();
   for (const c of circuits) {
-    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, { geometria, kondygnacje, wszystkieElementy: allElements });
-    if (r) out.set(c.id, r.totalM);
+    const r = estimateRoutesByFloor(panele, c.elements, scales, undefined, { geometria, kondygnacje, wszystkieElementy: allElements, zapasNaPunktM });
+    if (r) out.set(c.id, { totalM: r.totalM, zapasM: r.zapasM });
   }
   return out;
 }

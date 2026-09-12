@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { WARUNKI_DOBORU_DOMYSLNE, type WarunkiDoboru } from "@/lib/panel/norms";
+import type { ProjectSizingOptions } from "@/lib/panel/project";
+import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type {
   InstallationElement,
@@ -1312,6 +1314,40 @@ export const useActiveFloorRoomShapes = () =>
 
 export const useActiveFloorOpenings = () =>
   useProjectStore(useShallow((s) => s.draft.openings.filter((o) => o.floor === s.activeFloorId)));
+
+/**
+ * Opcje doboru wspólne dla Rozdzielnicy, Schematu i Kosztorysu.
+ *
+ * Muszą być JEDNE. Te trzy zakładki pokazują ten sam obwód — front rozdzielnicy,
+ * gałąź schematu i pozycję kosztorysu — a przekrój i zabezpieczenie nadpisuje w nich
+ * `applySizing`. Gdy jedna z nich liczyła z innymi warunkami niż pozostałe, aparat
+ * mówił „6 mm²", a kosztorys zamawiał 2,5 mm² i nic tej sprzeczności nie zgłaszało.
+ * Dokładnie to stało się, gdy warunki doboru dostała tylko Rozdzielnica.
+ *
+ * Geometria CAŁEGO budynku, nie bieżącej kondygnacji: obwód potrafi sięgać kilku pięter,
+ * a długość trasy liczy się osobno na każdym (patrz `estimateRoutesByFloor`).
+ */
+export function useOpcjeDoboru(): ProjectSizingOptions {
+  const walls = useProjectStore((s) => s.draft.walls);
+  const roomShapes = useProjectStore((s) => s.draft.roomShapes);
+  const openings = useProjectStore((s) => s.draft.openings);
+  const scales = useProjectStore((s) => s.scales);
+  const floors = useProjectStore((s) => s.floors);
+  const warunki = useProjectStore((s) => s.warunkiDoboru);
+  return useMemo(
+    () => ({
+      scales,
+      geometria: { walls, roomShapes, openings },
+      kondygnacje: floors,
+      sposob_ulozenia: warunki.sposobUlozenia,
+      temperatura_otoczenia_C: warunki.temperaturaC,
+      obwodow_w_wiazce: warunki.obwodowWWiazce,
+      spadek_wlz_pct: warunki.spadekWlzPct,
+      zapas_na_punkt_m: warunki.zapasNaPunktM,
+    }),
+    [walls, roomShapes, openings, scales, floors, warunki]
+  );
+}
 
 /**
  * Autozapis lokalny — projekt nie ma jeszcze wymogu konta w chmurze (Supabase jest
