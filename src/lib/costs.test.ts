@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny } from "./costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny , kluczKabla } from "./costs";
 import type { Circuit, InstallationElement, RcdGroup } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -254,5 +254,75 @@ describe("kosztorysRows — poprawiona ilosc", () => {
     // ...ale zerowa ILOSC to pozycja, ktorej po prostu nie ma. Rada „uzupelnij cene"
     // byla by wtedy nie na temat.
     expect(pozycjeBezCeny(kosztorysRows({ robocizna: 30 }, { robocizna: 0 }, {}, { robocizna: 0 }))).toEqual([]);
+  });
+});
+
+/**
+ * Pozycja kosztorysu wg PRZEKROJU, nie wg fragmentu tekstu.
+ *
+ * Kubelki byly trzy i dopasowywaly sie po podciagu: wszystko, co nie mialo w nazwie
+ * „1,5" ani pieciu zyl, ladowalo w pozycji „3x2,5 mm2". Obwod dobrany na 6 mm2 — a
+ * takie wychodza, odkad warunki doboru da sie ustawic uczciwie — byl wiec wyceniany
+ * jako 2,5 mm2. Kosztorys kazal kupic cienszy kabel, niz sam zaprojektowal.
+ */
+describe("kluczKabla", () => {
+  it("rozpoznaje przekroj z opisu, tak jak zapisuje go dobor", () => {
+    expect(kluczKabla("YDYp 3x1,5 mm²")).toBe("kabel15");
+    expect(kluczKabla("YDYp 3x2,5 mm²")).toBe("kabel25");
+    expect(kluczKabla("YDYp 3x4 mm²")).toBe("kabel3x4");
+    expect(kluczKabla("YDYp 3x6 mm²")).toBe("kabel3x6");
+    expect(kluczKabla("YDYp 3x10 mm²")).toBe("kabel3x10");
+  });
+
+  /** SEDNO poprawki: grubszy przewod NIE moze juz wpasc do pozycji 2,5 mm2. */
+  it("grubszy przewod dostaje wlasna pozycje, a nie pozycje 2,5 mm2", () => {
+    for (const kabel of ["YDYp 3x4 mm²", "YDYp 3x6 mm²", "YDYp 3x10 mm²", "YDYp 3x16 mm²"]) {
+      expect(kluczKabla(kabel)).not.toBe("kabel25");
+    }
+  });
+
+  it("pieciozylowe 2,5 i 4 dziela jedna pozycje, tak jak byly opisane od zawsze", () => {
+    expect(kluczKabla("YDYp 5x2,5 mm²")).toBe("kabel4");
+    expect(kluczKabla("YDYp 5x4 mm²")).toBe("kabel4");
+    // ...ale grubsze pieciozylowe juz nie — to inny material i inna cena.
+    expect(kluczKabla("YDYp 5x6 mm²")).toBe("kabel5x6");
+    expect(kluczKabla("YDYp 5x10 mm²")).toBe("kabel5x10");
+  });
+
+  it("znak mnozenia i separator dziesietny nie decyduja o dopasowaniu", () => {
+    expect(kluczKabla("YDYp 3×2,5 mm²")).toBe("kabel25");
+    expect(kluczKabla("YDYp 3x2.5 mm²")).toBe("kabel25");
+  });
+
+  /** Kombinacja spoza listy ma byc WIDOCZNA, a nie po cichu doliczona gdzie indziej. */
+  it("nieznany przekroj trafia do pozycji „inny”, zamiast do niewlasciwej", () => {
+    expect(kluczKabla("YDYp 4x35 mm²")).toBe("kabelInny");
+    expect(kluczKabla("cokolwiek bez liczb")).toBe("kabelInny");
+  });
+});
+
+describe("computeCosts — metraz wg przekroju", () => {
+  const obwod = (id: string, cable: string, punktow: number): Circuit => ({
+    id,
+    name: id,
+    type: "gniazdko",
+    elements: Array.from({ length: punktow }, () => el({ type: "gniazdko" })),
+    cable,
+    breaker: "B16",
+    rcd: true,
+  });
+
+  it("obwody o roznych przekrojach ida do roznych pozycji", () => {
+    const { quantities } = computeCosts([], [obwod("a", "YDYp 3x2,5 mm²", 2), obwod("b", "YDYp 3x6 mm²", 2)], []);
+    expect(quantities.kabel25).toBe(20);
+    expect(quantities.kabel3x6).toBe(20);
+  });
+
+  /** Bez tej poprawki oba obwody wyladowalyby w jednej pozycji i wycena grubszego
+   *  byla by liczona cena cienszego. */
+  it("metraz grubszego przewodu NIE dolicza sie do pozycji 2,5 mm2", () => {
+    const { quantities } = computeCosts([], [obwod("b", "YDYp 3x10 mm²", 3)], []);
+    expect(quantities.kabel25 ?? 0).toBe(0);
+    expect(quantities.kabel3x10).toBe(25);
   });
 });
