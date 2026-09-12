@@ -10,30 +10,32 @@ import {
   JEDNOSTKI_NA_METR,
   sanitaryRenderScale,
   skalaZRysunku,
+  BEZ_DOMYSLU,
+  TYPOWY_DOM_M,
   ROZPIETOSC_ODNIESIENIA,
 } from "./symbolScale";
 
 describe("autoSymbolScale", () => {
   it("nie zmienia niczego przy skali ręcznego rysowania", () => {
-    expect(autoSymbolScale(MANUAL_DRAW_SCALE_MPU)).toBe(1);
+    expect(autoSymbolScale(MANUAL_DRAW_SCALE_MPU, BEZ_DOMYSLU)).toBe(1);
   });
 
   it("powiększa symbole na rzucie skalibrowanym gęściej", () => {
     // 1 jedn. = 1 cm, czyli pięć razy gęściej niż skala odniesienia (1 jedn. = 5 cm).
-    expect(autoSymbolScale(0.01)).toBeCloseTo(5, 10);
+    expect(autoSymbolScale(0.01, BEZ_DOMYSLU)).toBeCloseTo(5, 10);
   });
 
   it("zmniejsza symbole na rzucie skalibrowanym rzadziej", () => {
-    expect(autoSymbolScale(0.2)).toBeCloseTo(0.25, 10);
+    expect(autoSymbolScale(0.2, BEZ_DOMYSLU)).toBeCloseTo(0.25, 10);
   });
 
   it("bez kalibracji zostawia dotychczasowe zachowanie", () => {
-    expect(autoSymbolScale(null)).toBe(1);
+    expect(autoSymbolScale(null, BEZ_DOMYSLU)).toBe(1);
   });
 
   it("odrzuca skalę zerową i ujemną zamiast dzielić przez zero", () => {
-    expect(autoSymbolScale(0)).toBe(1);
-    expect(autoSymbolScale(-0.05)).toBe(1);
+    expect(autoSymbolScale(0, BEZ_DOMYSLU)).toBe(1);
+    expect(autoSymbolScale(-0.05, BEZ_DOMYSLU)).toBe(1);
   });
 });
 
@@ -41,17 +43,17 @@ describe("elementRenderScale", () => {
   it("przy skali odniesienia i suwaku domyślnym daje dokładnie bazowy mnożnik", () => {
     // To jest gwarancja braku regresji: projekty rysowane od zera mają wyglądać
     // identycznie jak przed wprowadzeniem skalowania.
-    expect(elementRenderScale(MANUAL_DRAW_SCALE_MPU, DEFAULT_ELEMENT_SCALE)).toBe(BASE_ELEMENT_SCALE);
-    expect(elementRenderScale(null, DEFAULT_ELEMENT_SCALE)).toBe(BASE_ELEMENT_SCALE);
+    expect(elementRenderScale(MANUAL_DRAW_SCALE_MPU, DEFAULT_ELEMENT_SCALE, BEZ_DOMYSLU)).toBe(BASE_ELEMENT_SCALE);
+    expect(elementRenderScale(null, DEFAULT_ELEMENT_SCALE, BEZ_DOMYSLU)).toBe(BASE_ELEMENT_SCALE);
   });
 
   it("suwak mnoży się z wyrównaniem do skali, nie zastępuje go", () => {
-    expect(elementRenderScale(0.01, 2)).toBeCloseTo(2 * BASE_ELEMENT_SCALE * 5, 10);
+    expect(elementRenderScale(0.01, 2, BEZ_DOMYSLU)).toBeCloseTo(2 * BASE_ELEMENT_SCALE * 5, 10);
   });
 
   it("symbol zajmuje tyle samo METRÓW niezależnie od kalibracji", () => {
     const { w } = glyphBoxSize("gniazdko");
-    const szerokoscM = (mpu: number) => w * elementRenderScale(mpu, DEFAULT_ELEMENT_SCALE) * mpu;
+    const szerokoscM = (mpu: number) => w * elementRenderScale(mpu, DEFAULT_ELEMENT_SCALE, BEZ_DOMYSLU) * mpu;
     expect(szerokoscM(0.01)).toBeCloseTo(szerokoscM(MANUAL_DRAW_SCALE_MPU), 10);
     expect(szerokoscM(0.2)).toBeCloseTo(szerokoscM(MANUAL_DRAW_SCALE_MPU), 10);
   });
@@ -59,7 +61,7 @@ describe("elementRenderScale", () => {
 
 describe("sanitaryRenderScale", () => {
   it("nie słucha suwaka — bierze tylko skalę rzutu", () => {
-    expect(sanitaryRenderScale(0.01)).toBeCloseTo(BASE_ELEMENT_SCALE * 5, 10);
+    expect(sanitaryRenderScale(0.01, BEZ_DOMYSLU)).toBeCloseTo(BASE_ELEMENT_SCALE * 5, 10);
   });
 
   /**
@@ -73,8 +75,8 @@ describe("sanitaryRenderScale", () => {
       const f = SANITARY_FIXTURES[type]!;
       for (const mpu of [0.05, 0.01, 0.2, 0.004]) {
         const box = glyphBoxSize(type);
-        expect(box.w * sanitaryRenderScale(mpu)).toBeCloseTo(f.widthM / mpu, 8);
-        expect(box.h * sanitaryRenderScale(mpu)).toBeCloseTo(f.depthM / mpu, 8);
+        expect(box.w * sanitaryRenderScale(mpu, BEZ_DOMYSLU)).toBeCloseTo(f.widthM / mpu, 8);
+        expect(box.h * sanitaryRenderScale(mpu, BEZ_DOMYSLU)).toBeCloseTo(f.depthM / mpu, 8);
       }
     }
   );
@@ -150,8 +152,25 @@ describe("zmierzona skala bije domysl z rysunku", () => {
     expect(sanitaryRenderScale(null, 6)).toBe(elementRenderScale(null, DEFAULT_ELEMENT_SCALE, 6));
   });
 
-  it("pominiety domysl zachowuje dotychczasowe zachowanie", () => {
-    expect(autoSymbolScale(null)).toBe(1);
-    expect(elementRenderScale(null, DEFAULT_ELEMENT_SCALE)).toBe(BASE_ELEMENT_SCALE);
+  /** `BEZ_DOMYSLU` to wartosc neutralna: wywolanie z nia zachowuje sie dokladnie tak,
+   *  jak cala ta rodzina funkcji przed dodaniem domyslu z rysunku. Sam parametr jest
+   *  WYMAGANY, wiec pominac go po cichu juz sie nie da — to blad kompilacji. */
+  it("BEZ_DOMYSLU zachowuje zachowanie sprzed dodania domyslu z rysunku", () => {
+    expect(BEZ_DOMYSLU).toBe(1);
+    expect(autoSymbolScale(null, BEZ_DOMYSLU)).toBe(1);
+    expect(elementRenderScale(null, DEFAULT_ELEMENT_SCALE, BEZ_DOMYSLU)).toBe(BASE_ELEMENT_SCALE);
+  });
+});
+
+/** Stala wpisana na sztywno rozjechalaby sie po cichu przy zmianie skali rysowania
+ *  odrecznego — a wtedy rzut typowej wielkosci przestalby wychodzic 1,0x. */
+describe("ROZPIETOSC_ODNIESIENIA", () => {
+  it("to typowy dom przeliczony skala rysowania odrecznego", () => {
+    expect(ROZPIETOSC_ODNIESIENIA).toBe(TYPOWY_DOM_M / MANUAL_DRAW_SCALE_MPU);
+    expect(ROZPIETOSC_ODNIESIENIA).toBe(240);
+  });
+
+  it("rysunek dlugosci typowego domu daje rozmiar bazowy", () => {
+    expect(skalaZRysunku(TYPOWY_DOM_M / MANUAL_DRAW_SCALE_MPU)).toBe(1);
   });
 });
