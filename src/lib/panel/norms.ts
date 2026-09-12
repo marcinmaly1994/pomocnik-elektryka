@@ -35,6 +35,50 @@ export type LayingMethod = "w_scianie" | "w_scianie_ocieplonej" | "w_rurce" | "n
  * - `w_rurce` → B1: żyły w rurce instalacyjnej na/w ścianie.
  * - `natynkowo` → C: przewód mocowany bezpośrednio do ściany, chłodzony powietrzem.
  */
+/**
+ * Warunki, w jakich liczy się dobór CAŁEGO projektu.
+ *
+ * To założenia inżynierskie, nie dane z rysunku — z planu nie da się odczytać, czy
+ * trasa idzie przez nieocieplone poddasze ani ile obwodów dzieli jedną rurę. Dotąd
+ * dobór projektu brał je milcząco: 30 °C, jeden obwód w wiązce, układanie w ścianie —
+ * mimo że kalkulator pozwalał je ustawić i ten sam silnik (`sizeCircuit`) je rozumie.
+ * Dwa pierwsze domysły myliły się w stronę NIEBEZPIECZNĄ: wyższa temperatura i większa
+ * wiązka OBNIŻAJĄ obciążalność, więc przyjmowanie warunków najłagodniejszych
+ * przepuszczało zbyt cienki przewód.
+ */
+export interface WarunkiDoboru {
+  sposobUlozenia: LayingMethod;
+  /** Temperatura otoczenia [°C]. 30 °C to warunek odniesienia tablic obciążalności. */
+  temperaturaC: number;
+  /** Ile obwodów dzieli wspólną trasę — im więcej, tym niższa obciążalność każdego. */
+  obwodowWWiazce: number;
+  /**
+   * Spadek napięcia zużyty JUŻ na WLZ [%] — odcinek od złącza do rozdzielnicy.
+   *
+   * Limit 3/5% dotyczy CAŁEJ drogi od złącza do odbiornika. Obwód liczony w oderwaniu
+   * od WLZ dostaje cały limit dla siebie, więc instalacja poprawna obwód po obwodzie
+   * potrafi przekraczać limit jako całość — i tym bardziej, im dłuższa jest WLZ.
+   */
+  spadekWlzPct: number;
+}
+
+/** Warunki przyjmowane, dopóki użytkownik nie ustawi własnych. Zgodne z tym, co dobór
+ *  projektu zakładał milcząco, więc istniejące projekty liczą się tak jak dotąd. */
+export const WARUNKI_DOBORU_DOMYSLNE: WarunkiDoboru = {
+  sposobUlozenia: "w_scianie",
+  temperaturaC: 30,
+  obwodowWWiazce: 1,
+  spadekWlzPct: 0,
+};
+
+/** Opisy sposobów ułożenia do listy wyboru — te same, którymi posługuje się kalkulator. */
+export const OPIS_ULOZENIA: Record<LayingMethod, string> = {
+  w_scianie: "W ścianie murowanej (pod tynkiem)",
+  w_scianie_ocieplonej: "W ścianie ocieplonej (styropian/wełna)",
+  w_rurce: "W rurce / peszlu",
+  natynkowo: "Natynkowo",
+};
+
 export const REFERENCE_METHOD_FOR: Record<LayingMethod, ReferenceMethod> = {
   w_scianie: "B2",
   w_scianie_ocieplonej: "A1",

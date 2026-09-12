@@ -39,6 +39,15 @@ export interface ProjectSizingOptions {
   temperatura_otoczenia_C?: number;
   /** Ile obwodów dzieli wspólną trasę — wpływa na współczynnik grupowania. */
   obwodow_w_wiazce?: number;
+  /**
+   * Spadek napięcia zużyty JUŻ na WLZ [%].
+   *
+   * Limit 3/5% dotyczy CAŁEJ drogi od złącza do odbiornika. Bez tej liczby każdy obwód
+   * dostawał cały limit dla siebie, więc instalacja poprawna obwód po obwodzie
+   * potrafiła przekraczać limit jako całość — i tym bardziej, im dłuższa jest WLZ.
+   * Kalkulator uwzględniał to od dawna; dobór projektu dostaje to dopiero teraz.
+   */
+  spadek_wlz_pct?: number;
 }
 
 /** Obwód z planu przepuszczony przez dobór — zachowuje `id` obwodu źródłowego. */
@@ -70,6 +79,7 @@ export function sizeProjectCircuits(
       sposob_ulozenia: opts.sposob_ulozenia ?? "w_scianie",
       temperatura_otoczenia_C: opts.temperatura_otoczenia_C,
       obwodow_w_wiazce: opts.obwodow_w_wiazce,
+      spadek_wlz_pct: opts.spadek_wlz_pct,
       rozruch_silnikowy: /lodówk|pomp|klimatyz|wentylat/i.test(c.name),
     });
   });

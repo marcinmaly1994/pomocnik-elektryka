@@ -319,3 +319,100 @@ describe("dlugosciDoboru", () => {
     expect(sized[0].spadek_napiecia_pct).toBeNull();
   });
 });
+
+/**
+ * Warunki doboru CALEGO projektu.
+ *
+ * Ten sam silnik (`sizeCircuit`) liczy kalkulator, ktory te nastawy mial od dawna —
+ * dobor projektu bral je milczaco: 30 stopni, jeden obwod w wiazce, zero spadku na WLZ.
+ * Dwa pierwsze domysly myla sie w strone NIEBEZPIECZNA: wyzsza temperatura i wieksza
+ * wiazka OBNIZAJA obciazalnosc, wiec przyjmowanie warunkow najlagodniejszych
+ * przepuszcza zbyt cienki przewod.
+ */
+describe("sizeProjectCircuits — warunki doboru", () => {
+  /** Obwod dosc dlugi i obciazony, zeby dobor mial co zaostrzac. */
+  const plan = () => {
+    const elementy = [
+      el("rozdzielnica", { x: 0, y: 0 }),
+      ...Array.from({ length: 6 }, (_, i) => el("gniazdko", { x: 300 + i * 40, y: 400 })),
+    ];
+    return { elementy, opts: { scales: { parter: 0.05 } } };
+  };
+  const gniazdowy = (wynik: ReturnType<typeof sizeProjectCircuits>) =>
+    wynik.find((s2) => s2.typ === "gniazda")!;
+
+  it("wyzsza temperatura otoczenia obniza obciazalnosc dobranego przewodu", () => {
+    const { elementy, opts } = plan();
+    const obwody = computeCircuits(elementy);
+    const w30 = gniazdowy(sizeProjectCircuits(obwody, elementy, opts));
+    const w50 = gniazdowy(sizeProjectCircuits(obwody, elementy, { ...opts, temperatura_otoczenia_C: 50 }));
+    expect(w50.Iz_A!).toBeLessThan(w30.Iz_A!);
+    expect(w50.ostrzezenia.some((o) => o.code === "TEMPERATURA")).toBe(true);
+    // Bez podanej temperatury ostrzezenie nie ma prawa sie pojawic — i o to chodzilo:
+    // przy domyslnych 30 stopniach ten warunek NIGDY nie zachodzil.
+    expect(w30.ostrzezenia.some((o) => o.code === "TEMPERATURA")).toBe(false);
+  });
+
+  it("wiecej obwodow w wiazce obniza obciazalnosc i zglasza grupowanie", () => {
+    const { elementy, opts } = plan();
+    const obwody = computeCircuits(elementy);
+    const sam = gniazdowy(sizeProjectCircuits(obwody, elementy, opts));
+    const wWiazce = gniazdowy(sizeProjectCircuits(obwody, elementy, { ...opts, obwodow_w_wiazce: 6 }));
+    expect(wWiazce.Iz_A!).toBeLessThan(sam.Iz_A!);
+    expect(wWiazce.ostrzezenia.some((o) => o.code === "GRUPOWANIE")).toBe(true);
+  });
+
+  it("sciana ocieplona jest ostrzejsza od murowanej", () => {
+    const { elementy, opts } = plan();
+    const obwody = computeCircuits(elementy);
+    const mur = gniazdowy(sizeProjectCircuits(obwody, elementy, opts));
+    const ocieplona = gniazdowy(sizeProjectCircuits(obwody, elementy, { ...opts, sposob_ulozenia: "w_scianie_ocieplonej" }));
+    expect(ocieplona.Iz_A!).toBeLessThan(mur.Iz_A!);
+  });
+
+  /** Limit 3/5% dotyczy CALEJ drogi od zlacza. To, co zjadla WLZ, nie jest juz dostepne
+   *  dla obwodu — bez tego instalacja poprawna obwod po obwodzie potrafila przekraczac
+   *  limit jako calosc. */
+  it("spadek na WLZ dolicza sie do spadku obwodu, bo limit dotyczy CALEJ drogi", () => {
+    const { elementy, opts } = plan();
+    const obwody = computeCircuits(elementy);
+    const bezWlz = gniazdowy(sizeProjectCircuits(obwody, elementy, opts));
+    const zWlz = gniazdowy(sizeProjectCircuits(obwody, elementy, { ...opts, spadek_wlz_pct: 2 }));
+    // Sam obwod jest ten sam — 2% na WLZ jeszcze miesci sie w limicie...
+    expect(zWlz.kabel).toBe(bezWlz.kabel);
+    // ...ale liczba, ktora porownuje sie z limitem, urosla o tyle, ile zjadla WLZ.
+    expect(zWlz.spadek_calkowity_pct).toBeCloseTo(bezWlz.spadek_calkowity_pct! + 2, 1);
+  });
+
+  /**
+   * Sedno poprawki: gdy WLZ zjadla wiekszosc budzetu, dobor MUSI pogrubic przewod.
+   * Bez tej liczby obwod dostawal caly limit dla siebie i przechodzil na 2,5 mm2,
+   * mimo ze instalacja jako calosc limit przekraczala.
+   */
+  it("WLZ zjadajaca wiekszosc budzetu wymusza grubszy przewod", () => {
+    const { elementy, opts } = plan();
+    const obwody = computeCircuits(elementy);
+    const bezWlz = gniazdowy(sizeProjectCircuits(obwody, elementy, opts));
+    const zWlz = gniazdowy(sizeProjectCircuits(obwody, elementy, { ...opts, spadek_wlz_pct: 4 }));
+    expect(zWlz.kabel).not.toBe(bezWlz.kabel);
+    expect(zWlz.spadek_napiecia_pct!).toBeLessThan(bezWlz.spadek_napiecia_pct!);
+    // Calosc miesci sie w limicie dopiero dzieki pogrubieniu — i aplikacja mowi o tym wprost.
+    expect(zWlz.spadek_calkowity_pct!).toBeLessThanOrEqual(zWlz.spadek_napiecia_limit_pct);
+    expect(zWlz.ostrzezenia.some((o) => o.code === "PRZEKROJ_PODNIESIONY_SPADEK")).toBe(true);
+  });
+
+  /** Projekty sprzed wprowadzenia warunkow nie moga zmienic ani jednej liczby. */
+  it("brak warunkow liczy sie tak samo jak wpisane wartosci domyslne", () => {
+    const { elementy, opts } = plan();
+    const obwody = computeCircuits(elementy);
+    const bez = sizeProjectCircuits(obwody, elementy, opts);
+    const zDomyslnymi = sizeProjectCircuits(obwody, elementy, {
+      ...opts,
+      sposob_ulozenia: "w_scianie",
+      temperatura_otoczenia_C: 30,
+      obwodow_w_wiazce: 1,
+      spadek_wlz_pct: 0,
+    });
+    expect(bez).toEqual(zDomyslnymi);
+  });
+});
