@@ -1,4 +1,4 @@
-import type { ElementType, Point, RoomShape, Wall } from "@/types";
+import type { ElementType, InstallationElement, Point, RoomShape, Wall } from "@/types";
 import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
 import { montazPrzyscienny, zasiegPrzyscienny } from "@/lib/glyphs";
 
@@ -50,11 +50,18 @@ export function punktPrzyscienny(
   skala: number
 ): Point | null {
   if (!przyscienny(el.type)) return null;
-  // Obrót glifu bez korekty montażowej — czyli ten sam kąt, który `snapElementToWall`
-  // dostaje od ściany. Przy nim lokalne (0, −1) idzie na (sin θ, −cos θ).
-  const rad = (((el.rotation ?? 0) - montazPrzyscienny(el.type)) * Math.PI) / 180;
+  const k = kierunekWSciane(el);
   const zasieg = zasiegPrzyscienny(el.type) * skala;
-  return { x: el.x + Math.sin(rad) * zasieg, y: el.y - Math.cos(rad) * zasieg };
+  return { x: el.x + k.x * zasieg, y: el.y + k.y * zasieg };
+}
+
+/** Wektor jednostkowy od środka symbolu W ŚCIANĘ — kierunek trzonka gniazda, dźwigni
+ *  łącznika, pleców kinkietu. Obrót glifu BEZ korekty montażowej, czyli ten sam kąt,
+ *  który `snapElementToWall` dostaje od ściany: przy nim lokalne (0, −1) idzie na
+ *  (sin θ, −cos θ). */
+function kierunekWSciane(el: { type: ElementType; rotation?: number }): Point {
+  const rad = (((el.rotation ?? 0) - montazPrzyscienny(el.type)) * Math.PI) / 180;
+  return { x: Math.sin(rad), y: -Math.cos(rad) };
 }
 
 export interface WynikPrzyciagania {
@@ -209,4 +216,62 @@ export function snapElementToWall(
     y: trafienie.y - wSciane.y * kotwica,
     rotation: (trafienie.rotation + montazPrzyscienny(type) + 360) % 360,
   };
+}
+
+/** Jak blisko ściany musi wypaść odtworzony punkt dotknięcia, żeby uznać element za
+ *  PRZYKLEJONY. Pozycja zapisana przez `snapElementToWall` trafia w linię ściany co do
+ *  błędu zaokrąglenia, więc próg może być ciasny — i ma być, bo wszystko poza nim to
+ *  element postawiony swobodnie, którego nie wolno ruszać. */
+const PROG_PRZYKLEJENIA = 1;
+
+/**
+ * Przesuwa osprzęt PRZYKLEJONY DO ŚCIAN tak, żeby po zmianie skali symboli nadal jej
+ * dotykał.
+ *
+ * Problem: `snapElementToWall` zapisuje POZYCJĘ odsuniętą od ściany o `zasiegPrzyscienny`
+ * razy skala renderu — czyli o tyle, ile wtedy mierzył symbol. Skala potrafi się później
+ * zmienić (kalibracja rzutu, suwak rozmiaru, rozpoznana wielkość rysunku), a zapisana
+ * pozycja zostaje. Symbol rośnie wtedy wokół starej kotwicy i trzonek gniazdka wchodzi
+ * w mur albo wisi w powietrzu — zależnie od kierunku zmiany.
+ *
+ * Poprawka jest ODTWORZENIEM, nie zgadywaniem: `punktPrzyscienny` liczy z pozycji,
+ * obrotu i STAREJ skali punkt, którym symbol dotykał ściany, a nowa pozycja to ten sam
+ * punkt cofnięty o zasięg w nowej skali. Element nie wędruje więc wzdłuż ściany ani nie
+ * zmienia obrotu — zmienia się wyłącznie odsunięcie.
+ *
+ * Ruszane są TYLKO te elementy, których odtworzony punkt naprawdę leży na ścianie albo
+ * obrysie pomieszczenia (`PROG_PRZYKLEJENIA`). Gniazdko postawione swobodnie na środku
+ * pokoju — przy wyłączonym przyciąganiu albo odciągnięte od muru ręcznie — zostaje
+ * dokładnie tam, gdzie je postawiono.
+ *
+ * Zwraca tę samą tablicę, gdy nic się nie zmienia: wynik idzie prosto do stanu, a nowa
+ * tożsamość przy każdej zmianie skali przeliczałaby na nowo wszystko, co od elementów
+ * zależy (trasy, obwody, kadr do PDF-a).
+ */
+export function przeliczPrzyscienneDoSkali<T extends InstallationElement>(
+  elements: T[],
+  walls: Wall[],
+  roomShapes: RoomShape[],
+  staraSkala: number,
+  nowaSkala: number
+): T[] {
+  if (!(staraSkala > 0) || !(nowaSkala > 0) || staraSkala === nowaSkala) return elements;
+
+  let zmienione = false;
+  const next = elements.map((el) => {
+    const naScianie = punktPrzyscienny(el, staraSkala);
+    if (!naScianie) return el;
+    if (!snapToWall(naScianie, walls, roomShapes, PROG_PRZYKLEJENIA)) return el;
+
+    // Ten sam punkt na ścianie, cofnięty o zasięg w NOWEJ skali — czyli dokładnie to,
+    // co zrobiłby `snapElementToWall`, gdyby element stawiać dzisiaj.
+    const k = kierunekWSciane(el);
+    const zasieg = zasiegPrzyscienny(el.type) * nowaSkala;
+    const x = naScianie.x - k.x * zasieg;
+    const y = naScianie.y - k.y * zasieg;
+    if (x === el.x && y === el.y) return el;
+    zmienione = true;
+    return { ...el, x, y };
+  });
+  return zmienione ? next : elements;
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { RoomShape, Wall } from "@/types";
-import { przyscienny, punktPrzyscienny, snapElementToWall, snapToWall } from "./wallSnap";
+import type { InstallationElement, RoomShape, Wall } from "@/types";
+import { przeliczPrzyscienneDoSkali, przyscienny, punktPrzyscienny, snapElementToWall, snapToWall } from "./wallSnap";
 import { montazPrzyscienny, zasiegPrzyscienny } from "./glyphs";
 
 /** Pokoj 200 x 200 z lewym gornym rogiem w (0,0); srodek w (100,100). */
@@ -244,5 +244,82 @@ describe("punktPrzyscienny", () => {
 
   it("typ NIEprzyscienny (punkt sufitowy) nie ma strony przysciennej", () => {
     expect(punktPrzyscienny({ type: "oswietlenie", x: 100, y: 100, rotation: 0 }, 1)).toBeNull();
+  });
+});
+
+/**
+ * Zmiana skali symboli a osprzet JUZ POSTAWIONY przy scianie.
+ *
+ * `snapElementToWall` zapisuje pozycje odsunieta od sciany o tyle, ile mierzyl symbol
+ * w chwili stawiania. Skala zmienia sie pozniej (kalibracja, suwak, rozpoznana wielkosc
+ * rysunku), a zapisana pozycja zostaje — symbol rosnie wtedy wokol starej kotwicy i
+ * trzonek gniazdka wchodzi w mur.
+ */
+describe("przeliczPrzyscienneDoSkali", () => {
+  const el = (over: Partial<InstallationElement> = {}): InstallationElement => ({
+    id: "e1", type: "gniazdko", x: 0, y: 0, room: "Salon", floor: "f1",
+    dedicated: false, note: "", gangs: 1, ...over,
+  });
+
+  /** Gniazdko postawione przy scianie y = 0 w skali `skala` — dokladnie tak, jak
+   *  zrobilaby to aplikacja. */
+  const postawione = (skala: number) => {
+    const w = snapElementToWall({ x: 100, y: 4 }, [SCIANA_POZIOMA], [POKOJ], 10, "gniazdko", skala)!;
+    return el({ x: w.x, y: w.y, rotation: w.rotation });
+  };
+
+  it("po powiekszeniu symbolu element dalej DOTYKA sciany, a nie wchodzi w nia", () => {
+    const przed = postawione(0.7);
+    const [po] = przeliczPrzyscienneDoSkali([przed], [SCIANA_POZIOMA], [POKOJ], 0.7, 2.8);
+
+    // Punkt dotkniecia sciany jest ten sam co przedtem — zmienilo sie tylko odsuniecie.
+    const dotyk = punktPrzyscienny(po, 2.8)!;
+    expect(dotyk.x).toBeCloseTo(100, 6);
+    expect(dotyk.y).toBeCloseTo(0, 6);
+    // Element odsunal sie od sciany w glab pokoju dokladnie o przyrost zasiegu.
+    expect(po.y - przed.y).toBeCloseTo(zasiegPrzyscienny("gniazdko") * (2.8 - 0.7), 6);
+  });
+
+  it("dziala tak samo w druga strone — po zmniejszeniu symbolu element wraca do sciany", () => {
+    const przed = postawione(2.8);
+    const [po] = przeliczPrzyscienneDoSkali([przed], [SCIANA_POZIOMA], [POKOJ], 2.8, 0.7);
+    const dotyk = punktPrzyscienny(po, 0.7)!;
+    expect(dotyk.y).toBeCloseTo(0, 6);
+    expect(po.y).toBeLessThan(przed.y);
+  });
+
+  it("nie rusza elementu wzdluz sciany ani nie zmienia obrotu", () => {
+    const przed = postawione(0.7);
+    const [po] = przeliczPrzyscienneDoSkali([przed], [SCIANA_POZIOMA], [POKOJ], 0.7, 3);
+    expect(po.x).toBeCloseTo(przed.x, 6);
+    expect(po.rotation).toBe(przed.rotation);
+  });
+
+  /** Sedno ostroznosci: gniazdko postawione swobodnie na srodku pokoju (przyciaganie
+   *  wylaczone albo odciagniete od muru recznie) NIE JEST przyklejone i ma zostac
+   *  dokladnie tam, gdzie je postawiono. */
+  it("element postawiony SWOBODNIE zostaje nietkniety", () => {
+    const wolny = el({ x: 100, y: 100, rotation: 0 });
+    const [po] = przeliczPrzyscienneDoSkali([wolny], [SCIANA_POZIOMA], [POKOJ], 0.7, 5);
+    expect(po).toBe(wolny);
+  });
+
+  it("punkt sufitowy nie ma strony przysciennej, wiec nie podlega przeliczeniu", () => {
+    const lampa = el({ id: "l1", type: "oswietlenie", x: 100, y: 100 });
+    const [po] = przeliczPrzyscienneDoSkali([lampa], [SCIANA_POZIOMA], [POKOJ], 0.7, 5);
+    expect(po).toBe(lampa);
+  });
+
+  /** Wynik idzie prosto do stanu, wiec nowa tozsamosc bez powodu przeliczalaby wszystko,
+   *  co od elementow zalezy: trasy, obwody, kadr do PDF-a. */
+  it("bez zmiany skali oddaje TE SAMA tablice", () => {
+    const lista = [postawione(0.7)];
+    expect(przeliczPrzyscienneDoSkali(lista, [SCIANA_POZIOMA], [POKOJ], 0.7, 0.7)).toBe(lista);
+    expect(przeliczPrzyscienneDoSkali(lista, [SCIANA_POZIOMA], [POKOJ], 0, 2)).toBe(lista);
+  });
+
+  it("gdy zaden element nie jest przyklejony, oddaje TE SAMA tablice", () => {
+    const lista = [el({ x: 100, y: 100 }), el({ id: "e2", type: "oswietlenie", x: 120, y: 120 })];
+    expect(przeliczPrzyscienneDoSkali(lista, [SCIANA_POZIOMA], [POKOJ], 0.7, 5)).toBe(lista);
   });
 });
