@@ -567,11 +567,28 @@ export interface Rozdzielnice {
  * która zasila który obwód, a zgadywanie byłoby gorsze od jawnego uproszczenia.
  */
 export function findPanels(allElements: InstallationElement[]): Rozdzielnice {
+  return punktyZbiorcze(allElements, "rozdzielnica");
+}
+
+/**
+ * Punkty zbiorcze NISKOPRĄDÓWKI — szafki teletechniczne, z których wychodzi LAN i
+ * koncentryk (patrz `lowVoltageLengths`).
+ *
+ * Ta sama struktura co rozdzielnice, bo pytanie jest to samo: gdzie na tej kondygnacji
+ * schodzą się kable, a gdzie jest punkt główny całego budynku. Dopóki na planie nie ma
+ * ani jednej szafki, niskoprądówka mierzy się od rozdzielnicy — to założenie, nie fakt,
+ * i teraz da się je zastąpić prawdą, stawiając szafkę tam, gdzie naprawdę stoi.
+ */
+export function findPunktyZbiorcze(allElements: InstallationElement[]): Rozdzielnice {
+  return punktyZbiorcze(allElements, "szafkaTeletech");
+}
+
+function punktyZbiorcze(allElements: InstallationElement[], typ: ElementType): Rozdzielnice {
   const poKondygnacji = new Map<string, Point>();
   let glowna: Point | null = null;
   let glownaKondygnacja: string | null = null;
   for (const e of allElements) {
-    if (e.type !== "rozdzielnica") continue;
+    if (e.type !== typ) continue;
     const punkt = { x: e.x, y: e.y };
     if (!poKondygnacji.has(e.floor)) poKondygnacji.set(e.floor, punkt);
     if (glowna === null) {

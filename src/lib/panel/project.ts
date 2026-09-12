@@ -10,7 +10,7 @@
 
 import type { Circuit, ElementType, Floor, InstallationElement, RoomShape } from "@/types";
 import { computeCircuits } from "./circuits";
-import { circuitDemand, estimateGwiazdaByFloor, estimateRoutesByFloor, findPanels, kindForElements, type GeometriaKondygnacji } from "./loads";
+import { circuitDemand, estimateGwiazdaByFloor, estimateRoutesByFloor, findPanels, findPunktyZbiorcze, kindForElements, type GeometriaKondygnacji } from "./loads";
 import { sizeCircuit, type PhaseAssignment, type SizedCircuit } from "./sizing";
 import type { LayingMethod } from "./norms";
 import { isWetRoomName } from "@/lib/design";
@@ -318,8 +318,12 @@ function round1(v: number): number {
 export function lowVoltageLengths(
   allElements: InstallationElement[],
   opts: ProjectSizingOptions
-): { lan: number; koncentryk: number; szacunek: boolean } | null {
-  const panele = findPanels(allElements);
+): { lan: number; koncentryk: number; szacunek: boolean; odSzafki: boolean } | null {
+  // Szafka teletechniczna BIJE rozdzielnicę: jest postawiona po to, żeby powiedzieć,
+  // gdzie naprawdę siedzi router i patchpanel. Rozdzielnica zostaje domysłem na czas,
+  // gdy szafki na planie nie ma — i kosztorys mówi, którego z tych dwóch użył.
+  const szafki = findPunktyZbiorcze(allElements);
+  const panele = szafki.glowna ? szafki : findPanels(allElements);
   const wKlasie = (typy: ElementType[]) => allElements.filter((e) => typy.includes(e.type));
   const kontekst = { geometria: opts.geometria, kondygnacje: opts.kondygnacje, zapasNaPunktM: opts.zapas_na_punkt_m };
   const lan = estimateGwiazdaByFloor(panele, wKlasie(["rj45", "domofon"]), opts.scales, undefined, kontekst);
@@ -329,5 +333,6 @@ export function lowVoltageLengths(
     lan: lan?.totalM ?? 0,
     koncentryk: koncentryk?.totalM ?? 0,
     szacunek: !!lan?.szacunek || !!koncentryk?.szacunek,
+    odSzafki: !!szafki.glowna,
   };
 }

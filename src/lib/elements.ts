@@ -41,6 +41,10 @@ export const ELEMENT_TYPES: Record<ElementType, ElementTypeDef> = {
   czujnikCzadu: { label: "Czujnik czadu (CO)", code: "CO", color: "#0F8A9E", role: "lv" },
 
   rozdzielnica: { label: "Rozdzielnica", code: "TG", color: "#16202B", role: "infra" },
+  // Kolor teletechniczny, nie czarny jak rozdzielnica: to punkt zbiorczy INNEJ
+  // instalacji i na rzucie ma się od niej odróżniać. Rola `infra`, bo tak jak
+  // rozdzielnica sam nie tworzy obwodu — jest miejscem, do którego kable dochodzą.
+  szafkaTeletech: { label: "Szafka teletechniczna", code: "ST", color: "#0F8A9E", role: "infra" },
   puszka: { label: "Puszka rozgał.", code: "J", color: "#16202B", role: "infra" },
 
   wanna: { label: "Wanna", code: "WAN", color: "#0F8A9E", role: "sanitary" },
@@ -90,7 +94,7 @@ export const ELEMENT_SECTIONS: ElementSection[] = [
   { title: "Rolety i klimat", items: [{ key: "roleta" }, { key: "napedBramy" }, { key: "wentylator" }, { key: "termostat" }] },
   {
     title: "Teletechnika",
-    items: [{ key: "rj45" }, { key: "rtvsat" }, { key: "domofon" }, { key: "dzwonek" }, { key: "czujnikDymu" }, { key: "czujnikCzadu" }],
+    items: [{ key: "szafkaTeletech" }, { key: "rj45" }, { key: "rtvsat" }, { key: "domofon" }, { key: "dzwonek" }, { key: "czujnikDymu" }, { key: "czujnikCzadu" }],
   },
   { title: "Rozdział", items: [{ key: "rozdzielnica" }, { key: "puszka" }] },
   { title: "Wyposażenie sanitarne", items: [{ key: "wanna" }, { key: "prysznic" }, { key: "umywalka" }] },
@@ -128,6 +132,7 @@ export const LIB_SUBTITLES: Partial<Record<ElementType, string>> = {
   czujnikDymu: "detekcja pożaru",
   czujnikCzadu: "detekcja tlenku węgla",
   rozdzielnica: "tablica główna",
+  szafkaTeletech: "router, patchpanel — punkt zbiorczy LAN/RTV",
   puszka: "połączenia przewodów",
   wanna: "wyznacza strefy ochronne, nie tworzy obwodu",
   prysznic: "wyznacza strefy ochronne, nie tworzy obwodu",
@@ -313,6 +318,7 @@ export const MOUNTING_HEIGHTS_M: Partial<Record<ElementType, number>> = {
   czujnikCzadu: 1.5,
 
   rozdzielnica: 1.5,
+  szafkaTeletech: 1.5,
   puszka: 0.3,
 };
 

@@ -252,6 +252,24 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter, wymiaryM }: G
       );
     }
 
+    /**
+     * Szafka teletechniczna: obudowa z PÓŁKAMI (1U), a nie z siatką modułów jak
+     * rozdzielnica. Oba symbole to prostokąty tej samej wielkości, więc muszą różnić
+     * się treścią — na rzucie stoją czasem obok siebie i pomylenie ich znaczy, że
+     * monter ciągnie skrętkę do tablicy z bezpiecznikami.
+     */
+    case "szafkaTeletech": {
+      const { w, h } = glyphBoxSize(type, wymiaryM);
+      return (
+        <>
+          <Rect x={-w / 2} y={-h / 2} width={w} height={h} cornerRadius={3} fill="#fff" stroke={color} strokeWidth={2.4} />
+          {[-7, -1, 5].map((y) => (
+            <Rect key={y} x={-w / 2 + 4} y={y} width={w - 8} height={3.5} cornerRadius={1} fill={color} opacity={0.75} />
+          ))}
+        </>
+      );
+    }
+
     case "roleta": {
       const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
