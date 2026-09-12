@@ -93,10 +93,22 @@ export function circuitDemand(
 }
 
 /**
- * Wysokość kondygnacji przyjmowana do naddatku pionowego [m]. Trasa nie biegnie
- * po podłodze w linii prostej: przewód idzie pod sufit i schodzi do puszki.
+ * DOMYŚLNA wysokość kondygnacji [m] — używana, dopóki użytkownik nie poda własnej
+ * (patrz `Floor.heightM`). Trasa nie biegnie po podłodze w linii prostej: przewód
+ * idzie pod sufit i schodzi do puszki.
+ *
+ * 2,8 m to typowa wysokość w świetle stropów w budownictwie mieszkaniowym. Zapisy
+ * sprzed wprowadzenia wysokości per kondygnacja liczą się więc dokładnie tak jak dotąd.
  */
-const CEILING_RUN_M = 2.8;
+export const WYSOKOSC_KONDYGNACJI_M = 2.8;
+
+/** Wysokość danej kondygnacji albo wartość typowa. Odrzuca wartości bezsensowne
+ *  (zero, ujemne, nie-liczby) — wysokość zaniżona skraca policzony przewód, a to
+ *  kierunek niebezpieczny: zaniżony spadek napięcia przepuszcza za cienki kabel. */
+export function wysokoscKondygnacji(floor: Floor | undefined): number {
+  const h = floor?.heightM;
+  return typeof h === "number" && h > 0 ? h : WYSOKOSC_KONDYGNACJI_M;
+}
 /** Zapas na zejście do osprzętu i zapas montażowy w puszce [m]. */
 const SLACK_M = 1.5;
 
@@ -112,8 +124,8 @@ const SLACK_M = 1.5;
  * `Math.max(0, …)` bo osprzęt bywa MONTOWANY pod stropem (punkt sufitowy na 2,8 m,
  * czujnik dymu) — wtedy zejścia nie ma, ale ujemna długość przewodu nie istnieje.
  */
-function pionM(panelHeightM: number, deviceHeightM: number): number {
-  return Math.max(0, CEILING_RUN_M - panelHeightM) + Math.max(0, CEILING_RUN_M - deviceHeightM);
+function pionM(panelHeightM: number, deviceHeightM: number, wysokoscM: number): number {
+  return Math.max(0, wysokoscM - panelHeightM) + Math.max(0, wysokoscM - deviceHeightM);
 }
 
 /**
@@ -228,10 +240,20 @@ export function estimateRoutes(
      *  ŁĄCZNIKI sterujące oprawami. Brak = łańcuch prosto do opraw, jak przed
      *  uwzględnieniem sterowania. */
     wszystkieElementy?: InstallationElement[];
+    /** Wysokość TEJ kondygnacji [m] — z niej liczy się podejście pod strop i zejście
+     *  do puszki. Brak = wartość typowa (`WYSOKOSC_KONDYGNACJI_M`).
+     *
+     *  Jedna liczba na całe wywołanie, także wtedy, gdy rozdzielnica stoi piętro niżej:
+     *  jej własne podejście pod strop liczyłoby się wysokością TAMTEGO piętra. Różnica
+     *  to ułamek metra przy typowych wysokościach, a przejście między piętrami — czyli
+     *  człon, który naprawdę waży — liczy `pionMiedzyKondygnacjami` z osobna i po
+     *  właściwych kondygnacjach. */
+    wysokoscKondygnacjiM?: number;
   } = {}
 ): RouteEstimate | null {
   if (!panel || metersPerUnit === null || !(metersPerUnit > 0) || elements.length === 0) return null;
   const geo = kontekst.geometria;
+  const wysokoscM = kontekst.wysokoscKondygnacjiM ?? WYSOKOSC_KONDYGNACJI_M;
 
   /**
    * Zasilanie idzie do ŁĄCZNIKA, nie do oprawy — i to jest tu sedno.
@@ -284,7 +306,7 @@ export function estimateRoutes(
     // Pierwszy odcinek wychodzi z ROZDZIELNICY — pod strop i w dół do puszki.
     // Kolejne idą z puszki do puszki, więc liczy się sama różnica wysokości.
     const pion = pierwszy
-      ? pionM(panelHeightM, mountingHeightM(e))
+      ? pionM(panelHeightM, mountingHeightM(e), wysokoscM)
       : pionMiedzyPunktami(wysokoscPoprzedniego, mountingHeightM(e));
     total += odcinekM + pion + SLACK_M;
     poprzedni = e;
@@ -313,7 +335,7 @@ export function estimateRoutes(
   // Punkt elektrycznie najdalszy to OSTATNI w łańcuchu (kolejność narasta od
   // rozdzielnicy): cały bieg poziomy plus jedno zejście do tej właśnie puszki.
   const ostatni = lancuch[lancuch.length - 1];
-  const worst = poziomM + najdluzszeSterowanie + pionM(panelHeightM, mountingHeightM(ostatni)) + SLACK_M;
+  const worst = poziomM + najdluzszeSterowanie + pionM(panelHeightM, mountingHeightM(ostatni), wysokoscM) + SLACK_M;
   return { worstCaseM: round1(worst), totalM: round1(total) };
 }
 
@@ -379,6 +401,7 @@ export function estimateRoutesByFloor(
       panelHeightM,
       {
         wszystkieElementy: kontekst.wszystkieElementy?.filter((e) => e.floor === floor),
+        wysokoscKondygnacjiM: wysokoscKondygnacji(kondygnacje?.find((f) => f.id === floor)),
         geometria: geo && {
           walls: geo.walls.filter((w) => w.floor === floor),
           roomShapes: geo.roomShapes.filter((r2) => r2.floor === floor),
@@ -454,10 +477,13 @@ export function findPanels(allElements: InstallationElement[]): Rozdzielnice {
  *
  * Kolejność w `floors` jest kolejnością kondygnacji — nowe piętra dokładają się na
  * końcu listy (patrz `addFloor` w store'ie) i to jedyna informacja o ich układzie,
- * jaką projekt niesie. Liczy się więc sama RÓŻNICA POZIOMÓW: odległość od stropu do
- * stropu to wysokość jednej kondygnacji, a wszystkie mają tę samą, bo `CEILING_RUN_M`
- * jest jedną stałą projektu. Gdyby wysokość dało się kiedyś ustawiać per piętro, to
- * mnożenie zamieni się w sumę po kondygnacjach po drodze.
+ * jaką projekt niesie. Liczy się SUMA wysokości pięter PO DRODZE, a nie różnica
+ * poziomów razy jedna stała: od kiedy wysokość da się ustawić per kondygnacja
+ * (`Floor.heightM`), wysoki parter i niskie poddasze dają różne piony.
+ *
+ * Sumowane są wysokości pięter DOLNYCH każdej pary, bo to one dzielą dwa poziomy:
+ * droga z piętra `k` na `k+1` to wysokość piętra `k`. Gdy wszystkie kondygnacje mają
+ * tę samą wysokość, wynik jest identyczny jak przed tą zmianą.
  *
  * To dokładka do `pionM`, nie zamiennik: tamta opisuje wyjście pod strop i zejście do
  * puszki W OBRĘBIE piętra, ta — przejście przez strop. Bez niej trasa z rozdzielnicy
@@ -472,7 +498,9 @@ function pionMiedzyKondygnacjami(od: string, doK: string, floors: Floor[]): numb
   const i = floors.findIndex((f) => f.id === od);
   const j = floors.findIndex((f) => f.id === doK);
   if (i < 0 || j < 0 || i === j) return 0;
-  return Math.abs(i - j) * CEILING_RUN_M;
+  let suma = 0;
+  for (let k = Math.min(i, j); k < Math.max(i, j); k++) suma += wysokoscKondygnacji(floors[k]);
+  return suma;
 }
 
 /**

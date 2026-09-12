@@ -56,6 +56,7 @@ export function FloorBar() {
   const addFloor = useProjectStore((s) => s.addFloor);
   const duplicateFloor = useProjectStore((s) => s.duplicateFloor);
   const removeFloor = useProjectStore((s) => s.removeFloor);
+  const setFloorHeight = useProjectStore((s) => s.setFloorHeight);
   const elements = useProjectStore((s) => s.draft.elements);
   const [newFloorName, setNewFloorName] = useState("Piętro 1");
   const aktywna = floors.find((f) => f.id === activeFloorId);
@@ -124,6 +125,36 @@ export function FloorBar() {
           </DialogTrigger>
         </DialogContent>
       </Dialog>
+
+      {/*
+        Wysokość BIEŻĄCEJ kondygnacji. Puste pole = wartość typowa (2,8 m), tak samo jak
+        puste pole wysokości montażu przy elemencie — liczba nie ma stanu „nie podano",
+        a to on odróżnia projekt, w którym nikt tego nie ruszał.
+
+        Stoi przy kondygnacjach, a nie w ustawieniach planu, bo dotyczy JEDNEJ z nich
+        i zmienia się razem z przełączeniem piętra.
+      */}
+      <label
+        className="ml-1 flex items-center gap-1 text-xs text-slate-500"
+        title="Wysokość bieżącej kondygnacji w świetle stropów. Wchodzi w DŁUGOŚĆ przewodu: podejście pod strop, zejście do puszki i przejście na sąsiednie piętro. Za mała wysokość zaniża policzony spadek napięcia, więc przy wysokim parterze albo poddaszu warto ją podać. Puste pole oznacza wartość typową 2,8 m."
+      >
+        <span className="whitespace-nowrap">Wys. kondygnacji</span>
+        <input
+          type="number"
+          min={1.5}
+          max={6}
+          step={0.1}
+          value={aktywna?.heightM ?? ""}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value.replace(",", "."));
+            setFloorHeight(activeFloorId, Number.isFinite(v) && v > 0 ? v : undefined);
+          }}
+          placeholder="2,8"
+          aria-label="Wysokość kondygnacji w metrach"
+          className="w-14 rounded border border-border px-1.5 py-1 text-xs tabular-nums"
+        />
+        <span aria-hidden="true">m</span>
+      </label>
 
       <Dialog>
         <DialogTrigger asChild>

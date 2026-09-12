@@ -178,6 +178,15 @@ export interface Point {
 export interface Floor {
   id: string;
   name: string;
+  /**
+   * Wysokość kondygnacji w świetle stropów [m]. Brak = wartość typowa
+   * (`WYSOKOSC_KONDYGNACJI_M` w lib/panel/loads.ts).
+   *
+   * Wchodzi w DŁUGOŚĆ przewodu: podejście pod strop, zejście do puszki i przejście
+   * na sąsiednie piętro liczą się z tej liczby. Zapisy sprzed dodania tego pola jej
+   * nie mają i mają się liczyć dokładnie tak jak dotąd, stąd wartość opcjonalna.
+   */
+  heightM?: number;
 }
 
 export interface Circuit {

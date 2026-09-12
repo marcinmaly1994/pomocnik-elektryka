@@ -363,6 +363,8 @@ interface ProjectState {
 
   setActiveFloorId: (id: string) => void;
   addFloor: (name: string) => void;
+  /** Wysokość kondygnacji [m]; `undefined` przywraca wartość typową. */
+  setFloorHeight: (id: string, heightM: number | undefined) => void;
   /** Kopiuje kondygnację razem z geometrią i osprzętem — patrz implementacja. */
   duplicateFloor: (id: string, name: string) => void;
   removeFloor: (id: string) => void;
@@ -637,6 +639,27 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setActiveFloorId: (id) => set({ activeFloorId: id }),
 
+  /**
+   * Wysokość kondygnacji [m]. `undefined` kasuje wpis i przywraca wartość typową —
+   * pole ma stan „nie podano", bo to on odróżnia projekt, w którym nikt tej liczby nie
+   * ruszał, od takiego, w którym ktoś świadomie wpisał 2,8.
+   *
+   * Wartości bezsensowne (zero, ujemne) są odrzucane już tutaj: wysokość zaniża
+   * długość przewodu, a zaniżona długość to zaniżony spadek napięcia, czyli dobór
+   * przepuszczający za cienki kabel.
+   */
+  setFloorHeight: (id, heightM) =>
+    set((state) => ({
+      floors: state.floors.map((f) => {
+        if (f.id !== id) return f;
+        if (heightM === undefined || !(heightM > 0)) {
+          const { heightM: _pominiete, ...reszta } = f;
+          return reszta;
+        }
+        return { ...f, heightM };
+      }),
+    })),
+
   addFloor: (name) =>
     set((state) => {
       const id = crypto.randomUUID();
@@ -648,8 +671,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         scaleOf(state.scales, state.activeFloorId) ??
         state.floors.map((f) => state.scales[f.id]).find((v) => typeof v === "number" && v > 0) ??
         null;
+      // Wysokość dziedziczy się z tego samego powodu co skala: piętra w jednym domu
+      // mają zwykle tę samą wysokość, a wpisywanie jej od nowa przy każdym to
+      // powtarzanie tej samej czynności — i okazja, żeby piętro po cichu wróciło do
+      // wartości typowej, mimo że parter jej nie ma.
+      const wysokosc = state.floors.find((f) => f.id === state.activeFloorId)?.heightM;
       return {
-        floors: [...state.floors, { id, name }],
+        floors: [...state.floors, wysokosc === undefined ? { id, name } : { id, name, heightM: wysokosc }],
         activeFloorId: id,
         scales: inherited === null ? state.scales : { ...state.scales, [id]: inherited },
         // Obszar planu też jest wspólny — inaczej odziedziczona skala opisywałaby

@@ -1092,7 +1092,8 @@ describe("estimateRoutesByFloor — pion miedzy kondygnacjami", () => {
     { id: "pietro", name: "Piętro" },
     { id: "poddasze", name: "Poddasze" },
   ];
-  /** Wysokosc kondygnacji przyjeta w module (CEILING_RUN_M). */
+  /** Domyslna wysokosc kondygnacji (WYSOKOSC_KONDYGNACJI_M) — obowiazuje, dopoki
+   *  projekt nie poda wlasnej w `Floor.heightM`. */
   const WYSOKOSC = 2.8;
   const skale = { parter: 0.05, pietro: 0.05, poddasze: 0.05 };
   /** Jedna rozdzielnica, na parterze — typowy dom. */
@@ -1281,5 +1282,95 @@ describe("zakonczPrzyNozce — ukos kontra trzonek", () => {
     );
     const [a, b] = trasa.slice(-2);
     expect(Math.abs(b.x - a.x)).toBeCloseTo(Math.abs(b.y - a.y), 5);
+  });
+});
+
+/**
+ * Wysokosc kondygnacji podana w projekcie (`Floor.heightM`).
+ *
+ * Pion miedzy pietrami liczyl sie dotad jako roznica poziomow razy jedna stala 2,8 m.
+ * Przy wysokim parterze albo poddaszu dawalo to przewod KROTSZY od rzeczywistego — a za
+ * krotki przewod to za maly policzony spadek napiecia, czyli dobor przepuszczajacy zbyt
+ * cienki kabel. To jedyny kierunek bledu, ktory w tej aplikacji jest niebezpieczny.
+ */
+describe("estimateRoutesByFloor — wlasna wysokosc kondygnacji", () => {
+  const skale = { parter: 0.05, pietro: 0.05, poddasze: 0.05 };
+  const tylkoParter = {
+    poKondygnacji: new Map([["parter", { x: 0, y: 0 }]]),
+    glowna: { x: 0, y: 0 },
+    glownaKondygnacja: "parter",
+  };
+  const naPietrze = el("gniazdko", { x: 100, y: 0, floor: "pietro" });
+  const pietra = (parterH?: number, pietroH?: number): Floor[] => [
+    { id: "parter", name: "Parter", ...(parterH === undefined ? {} : { heightM: parterH }) },
+    { id: "pietro", name: "Piętro", ...(pietroH === undefined ? {} : { heightM: pietroH }) },
+    { id: "poddasze", name: "Poddasze" },
+  ];
+
+  it("wysoki parter wydluza pion o roznice wysokosci", () => {
+    const typowy = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra() })!;
+    const wysoki = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra(3.6) })!;
+    expect(wysoki.worstCaseM - typowy.worstCaseM).toBeCloseTo(3.6 - 2.8, 5);
+  });
+
+  /**
+   * Sumowane sa wysokosci pieter PO DRODZE i tylko one. Poddasze lezy nad pietrem, na
+   * ktorym konczy sie obwod, wiec jego wysokosc nie ma prawa niczego zmienic.
+   */
+  it("wysokosc kondygnacji SPOZA drogi przewodu nic nie zmienia", () => {
+    const zwykle = pietra();
+    const wysokiePoddasze: Floor[] = [zwykle[0], zwykle[1], { ...zwykle[2], heightM: 4.5 }];
+    const a = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: zwykle })!;
+    const b = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: wysokiePoddasze })!;
+    expect(b).toEqual(a);
+  });
+
+  /**
+   * Wysokosc pietra DOCELOWEGO wazy wiecej niz wysokosc tego, przez ktore przewod tylko
+   * przechodzi — i tak ma byc. Przez strop przewod przechodzi RAZ (jedna wysokosc
+   * parteru), a na pietrze docelowym idzie pod strop I schodzi do puszki, czyli jego
+   * wysokosc liczy sie dwa razy.
+   */
+  it("wyzsze pietro DOCELOWE wydluza trase bardziej niz wyzszy parter po drodze", () => {
+    const wysokiParter = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra(3.6) })!;
+    const wysokiePietro = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra(undefined, 3.6) })!;
+    const typowe = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra() })!;
+    expect(wysokiParter.worstCaseM - typowe.worstCaseM).toBeCloseTo(3.6 - 2.8, 5);
+    expect(wysokiePietro.worstCaseM - typowe.worstCaseM).toBeCloseTo(2 * (3.6 - 2.8), 5);
+  });
+
+  it("droga na poddasze to SUMA wysokosci pieter po drodze, a nie wielokrotnosc jednej", () => {
+    const naPoddaszu = el("gniazdko", { x: 100, y: 0, floor: "poddasze" });
+    const rozne = estimateRoutesByFloor(tylkoParter, [naPoddaszu], skale, undefined, { kondygnacje: pietra(3.6, 2.5) })!;
+    const typowe = estimateRoutesByFloor(tylkoParter, [naPoddaszu], skale, undefined, { kondygnacje: pietra() })!;
+    // 3,6 + 2,5 zamiast 2,8 + 2,8.
+    expect(rozne.worstCaseM - typowe.worstCaseM).toBeCloseTo(3.6 + 2.5 - 2 * 2.8, 5);
+  });
+
+  /** Projekty sprzed dodania tego pola nie moga zmienic ani jednej liczby. */
+  it("brak wysokosci w projekcie liczy sie tak samo jak wpisana wartosc typowa", () => {
+    const bezPola = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra() })!;
+    const zTypowa = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra(2.8, 2.8) })!;
+    expect(bezPola).toEqual(zTypowa);
+  });
+
+  /** Wysokosc bezsensowna nie moze SKROCIC przewodu — zaniżona dlugosc to zanizony
+   *  spadek napiecia. Zero i wartosci ujemne wracaja do wartosci typowej. */
+  it("zerowa i ujemna wysokosc wraca do typowej, zamiast skracac przewod", () => {
+    const typowa = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra() })!;
+    for (const bezsens of [0, -3]) {
+      const wynik = estimateRoutesByFloor(tylkoParter, [naPietrze], skale, undefined, { kondygnacje: pietra(bezsens) })!;
+      expect(wynik.worstCaseM).toBeCloseTo(typowa.worstCaseM, 5);
+    }
+  });
+
+  /** Wysokosc kondygnacji to nie tylko przejscie przez strop: na wlasnym pietrze przewod
+   *  idzie pod strop i schodzi do puszki, wiec wyzsza kondygnacja wydluza takze trase,
+   *  ktora nigdzie nie przechodzi. */
+  it("wyzsza kondygnacja wydluza trase takze BEZ przechodzenia miedzy pietrami", () => {
+    const naParterze = el("gniazdko", { x: 100, y: 0, floor: "parter" });
+    const typowa = estimateRoutesByFloor(tylkoParter, [naParterze], skale, undefined, { kondygnacje: pietra() })!;
+    const wysoka = estimateRoutesByFloor(tylkoParter, [naParterze], skale, undefined, { kondygnacje: pietra(3.6) })!;
+    expect(wysoka.worstCaseM).toBeGreaterThan(typowa.worstCaseM);
   });
 });
