@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { AlertTriangle, Download, FileText, Info, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, lowVoltageLengths, routeSummaries } from "@/lib/panel/project";
@@ -10,6 +10,8 @@ import { buildCostsDoc, buildCostsPdf } from "@/lib/pdf/costs";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { resolveDocHeader } from "@/lib/docHeader";
+import { Button } from "@/components/ui/button";
+import { useRoute } from "@/hooks/useRoute";
 
 /**
  * Kosztorys instalacji elektrycznej — ilości materiałów i robocizny szacowane
@@ -46,6 +48,10 @@ export function CostsTab() {
   // w Rozdzielnicy).
   const docHeader = resolveDocHeader(rawDocHeader, projectName);
   const [podgladPdf, setPodgladPdf] = useState(false);
+  // Pusty kosztorys odsyła wprost do Instalacji. Hook wolno wywołać w kilku
+  // komponentach naraz — każdy dostaje własną subskrypcję i ten sam odczyt z adresu
+  // (patrz komentarz przy `useRoute`).
+  const [, nawiguj] = useRoute();
   const scales = useProjectStore((s) => s.scales);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -90,6 +96,41 @@ export function CostsTab() {
   /** Czy w kosztorysie w ogóle jest niskoprądówka — bez niej zdanie o niej byłoby
    *  odpowiedzią na pytanie, którego nikt nie zadał. */
   const niskopradoweWKosztorysie = (quantities.kabelLan ?? 0) > 0 || (quantities.kabelKoncentryk ?? 0) > 0;
+
+  /**
+   * Pusty ekran, dopóki nie ma czego wyceniać — ten sam wzorzec co w Rozdzielnicy
+   * (patrz `PanelTab`), która miała go od początku, a Kosztorys nie.
+   *
+   * Dotąd pusty projekt dostawał TU pełny warsztat kosztorysu: pasek z importem
+   * cennika i eksportem do PDF, akapit o formacie CSV, ostrzeżenie o metrach kabla
+   * „z ryczałtu" i tabelę z jedną puszką rozgałęźną za 6,15 zł brutto. Puszka była
+   * skutkiem `|| 1` przy liczeniu pomieszczeń w `computeCosts` (naprawione tam),
+   * ale sam warsztat i tak wstawał nad pustą tabelą, zanim cokolwiek narysowano.
+   *
+   * Wcześniejszy pusty ekran istniał (`rows.length === 0` niżej), tylko nigdy się nie
+   * pokazywał — ta jedna widmowa pozycja wystarczała, żeby lista nie była pusta.
+   *
+   * Stoi PO wszystkich hookach, więc zgłoszenie producenta do kompletu dokumentacji
+   * (`zarejestrujProducenta` wyżej) dzieje się tak samo na pustym projekcie: komplet
+   * ma dostać kosztorys — choćby zerowy — a nie przestać go widzieć.
+   */
+  if (rows.length === 0) {
+    return (
+      <div className="pe-card p-8 text-center">
+        <h2 className="pe-display mb-2 text-xl">Kosztorys instalacji elektrycznej</h2>
+        <p className="mx-auto max-w-lg text-sm text-slate-500">
+          Kosztorys policzy się sam, gdy rozstawisz elementy w zakładce „Instalacja” — materiał i robocizna
+          biorą się z punktów na rzucie i z policzonych obwodów.
+        </p>
+        <p className="mx-auto mt-4 max-w-lg text-sm text-slate-500">
+          Ceny domyślne są orientacyjne. Po wycenie podmienisz je ręcznie albo zaimportujesz własny cennik z CSV.
+        </p>
+        <Button variant="copper" size="sm" onClick={() => nawiguj("projekt")} className="mt-4">
+          <ArrowLeft size={14} /> Wróć do Instalacji
+        </Button>
+      </div>
+    );
+  }
 
   function handleCsvImport(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -241,13 +282,11 @@ export function CostsTab() {
         </div>
       )}
 
-      {rows.length === 0 ? (
-        <div className="pe-card p-8 text-center">
-          <p className="text-sm text-slate-500">
-            Kosztorys wyliczy się automatycznie po dodaniu elementów w zakładce „Zaprojektuj instalację”.
-          </p>
-        </div>
-      ) : (
+      {/* Bez rozgałęzienia na pustą listę: brak pozycji jest obsłużony WYŻEJ, wczesnym
+          powrotem z całego widoku (patrz `rows.length === 0`). Stojący tu wcześniej
+          wariant pusty był i tak nieosiągalny — widmowa puszka rozgałęźna sprawiała,
+          że lista nigdy nie była pusta — a przy okazji odsyłał do zakładki
+          „Zaprojektuj instalację", która nazywa się „Instalacja" od kroku 62. */}
         <div className="pe-card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
@@ -361,7 +400,6 @@ export function CostsTab() {
             </tfoot>
           </table>
         </div>
-      )}
 
       {unpriced.length > 0 && (
         <div className="flex gap-2.5 rounded-md p-3 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>

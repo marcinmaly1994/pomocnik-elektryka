@@ -44,7 +44,7 @@ test("warunki doboru z rozdzielnicy docieraja do doboru i przezywaja odswiezenie
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await expect(page.getByText("Zacznij projektować instalację")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toBeVisible();
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
   const rozumiem = page.getByRole("button", { name: "Rozumiem" });
   if (await rozumiem.count()) await rozumiem.click();

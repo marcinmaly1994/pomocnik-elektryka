@@ -32,13 +32,13 @@ const card = (page: Page) => page.getByRole("complementary", { name: /Zacznij w 
 /** Ekran startowy nie jest osobnym landmarkiem — identyfikujemy go po nagłówku,
  *  unikalnym dla tego jednego, pierwszego ekranu. */
 async function skipEntryScreen(page: Page) {
-  await expect(page.getByText("Zacznij projektować instalację")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toBeVisible();
   await page.getByRole("button", { name: "Pomiń — zacznę na pustym planie" }).click();
 }
 
 test("ekran startowy prowadzi od wgrania rzutu przez skalę do pierwszego elementu i znika po ukończeniu", async ({ page }) => {
   await freshDesign(page);
-  await expect(page.getByText("Zacznij projektować instalację")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toBeVisible();
   // dopóki nie padł żaden wybór, karta „3 kroki" jeszcze nie istnieje — to ekran
   // startowy zadaje to samo pytanie, dublowanie byłoby dokładnie zgłoszoną bolączką
   await expect(card(page)).toHaveCount(0);
@@ -143,7 +143,7 @@ test("kalibracja odpalona z paska narzędzi (po pominięciu ekranu startowego) o
 test("pominięcie ekranu startowego odblokowuje pracę i nie wraca po odświeżeniu", async ({ page }) => {
   await freshDesign(page);
   await skipEntryScreen(page);
-  await expect(page.getByText("Zacznij projektować instalację")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toHaveCount(0);
 
   // praca bez skali jest możliwa, ale ostrzeżenie jest trwałe
   const box = await planBox(page);
@@ -154,7 +154,7 @@ test("pominięcie ekranu startowego odblokowuje pracę i nie wraca po odświeże
   await page.waitForTimeout(900); // debounce autozapisu
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
-  await expect(page.getByText("Zacznij projektować instalację")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toHaveCount(0);
   await expect(card(page)).toBeHidden();
   await expect(page.getByRole("button", { name: /Otwórz przewodnik/ })).toBeVisible();
 });
@@ -167,7 +167,7 @@ test("dyskretny przycisk pomocy przywraca KARTĘ (nie ekran startowy) na żądan
   // wraca skromna karta — pominięty ekran startowy się NIE wskrzesza, inaczej
   // „Pomiń" na nim nic by nie znaczyło
   await expect(card(page)).toBeVisible();
-  await expect(page.getByText("Zacznij projektować instalację")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toHaveCount(0);
 });
 
 test("podmiana podkładu po kalibracji proponuje rekalibrację zamiast kasować skalę", async ({ page }) => {
@@ -230,7 +230,7 @@ test("kolejna kondygnacja dziedziczy skalę, ale prosi o własne pomieszczenia",
   // ...ale pomieszczenia są własne i aplikacja o nie prosi
   await expect(page.getByText(/ma już skalę z parteru, ale nie ma jeszcze pomieszczeń/)).toBeVisible();
   // ekran startowy pozostaje pominięty (skala jest projektowa, nie per kondygnacja)
-  await expect(page.getByText("Zacznij projektować instalację")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toHaveCount(0);
   // przewodnik NIE cofa się do kroku 1 — ale i tak jest pominięty, więc karty nie ma
   await expect(card(page)).toHaveCount(0);
 });
@@ -253,7 +253,7 @@ test("szybka ścieżka: rzut w znanej skali ustawia skalę bez mierzenia", async
 
 test("„Narysuj dom samodzielnie” z EKRANU STARTOWEGO ustawia standardową skalę i odhacza krok 1", async ({ page }) => {
   await freshDesign(page);
-  await expect(page.getByText("Zacznij projektować instalację")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toBeVisible();
 
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
 

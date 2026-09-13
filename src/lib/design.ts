@@ -227,6 +227,20 @@ export function colorForRoomName(roomName: string, roomShapes: RoomShape[]): str
 export const ROOM_SNAP_TOLERANCE_M = 0.4;
 
 /**
+ * Zasięg przyciągania osprzętu do ŚCIANY [m] — trochę ciaśniej niż tolerancja
+ * przypisania do pomieszczenia wyżej, bo tamta tylko OPISUJE element, a ta go
+ * PRZESUWA. Za szeroka ściągałaby na ścianę gniazdo postawione świadomie w podłodze
+ * albo w wyspie kuchennej.
+ *
+ * Mieszkał dotąd jako stała lokalna w `DesignTab` — przeniesiony tutaj, obok
+ * bliźniaczej tolerancji pomieszczenia, gdy drugim wołającym stał się generator
+ * projektu przykładowego (`przyklejDoScian` w lib/demoProjekt.ts). Przykład MUSI
+ * doklejać osprzęt tą samą miarą co kliknięcie na planie, inaczej wygląda inaczej
+ * niż wszystko, co narysuje użytkownik.
+ */
+export const WALL_SNAP_TOLERANCE_M = 0.35;
+
+/**
  * W którym narysowanym pomieszczeniu leży punkt planu — wnętrze obrysu, a gdy
  * poza nim, to najbliższa krawędź w promieniu `ROOM_SNAP_TOLERANCE_M`.
  * `NO_ROOM`, gdy nic nie pasuje.

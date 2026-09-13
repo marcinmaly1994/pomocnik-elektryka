@@ -123,7 +123,10 @@ test("na ekranie startowym stopka siedzi przy dole okna, bez pasa gołego tła p
   await expect(page.getByRole("button", { name: "Narysuj dom samodzielnie" })).toBeVisible();
 
   const stopka = (await page.locator("footer").boundingBox())!;
-  const karta = (await page.locator(".pe-card").filter({ hasText: "Zacznij projektować" }).boundingBox())!;
+  // Karta ekranu startowego rozpoznawana po rzędzie miniatur „Co z tego powstanie"
+  // (`CoPowstanie`) — jedynym napisie, który istnieje TYLKO na niej. Nagłówek karty
+  // powtarza teraz hasło spod logo w nagłówku strony, więc sam w sobie nie wystarcza.
+  const karta = (await page.locator(".pe-card").filter({ hasText: "Co z tego powstanie" }).boundingBox())!;
 
   // Pod stopką zostaje najwyżej własny margines strony (`p-6`), a nie 281 px
   // gołego tła, jak przed poprawką.

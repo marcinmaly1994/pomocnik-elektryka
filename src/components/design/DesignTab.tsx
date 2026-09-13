@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Eye,
   Layers,
   Loader2,
   Pencil,
@@ -48,6 +49,7 @@ import {
   MANUAL_DRAW_SCALE_MPU,
   rozpietoscRysunku,
   ROOM_TYPE_LABELS,
+  WALL_SNAP_TOLERANCE_M,
   PROG_WASKIEGO_EKRANU,
   defaultOpeningWidth,
   detectRoomName,
@@ -75,6 +77,7 @@ import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { CoachMark } from "@/components/onboarding/CoachMark";
+import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
 import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
@@ -770,6 +773,12 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
   // --- onboarding ------------------------------------------------------------
   const onboarding = useOnboardingProgress();
   const setOnboarding = useProjectStore((s) => s.setOnboarding);
+  /** „Zobacz gotowy przykład" na ekranie startowym — dane dociągane dynamicznie
+   *  przez store (patrz `wczytajPrzyklad` w useProjectStore.ts). */
+  const wczytajPrzyklad = useProjectStore((s) => s.wczytajPrzyklad);
+  /** Gasi zachęty do założenia konta — w przykładzie nie ma czego zabezpieczać
+   *  (patrz oba banery niżej). */
+  const projektPrzykladowy = useProjectStore((s) => s.projektPrzykladowy);
   const { dismissScaleStale } = onboarding;
 
   /**
@@ -1315,14 +1324,6 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
     if (!VARIANTS_FOR[t]) return 1;
     return gangsByType[t] || 1;
   }
-
-  /**
-   * Zasięg przyciągania do ściany [m] — trochę ciaśniej niż tolerancja przypisania do
-   * pomieszczenia (`ROOM_SNAP_TOLERANCE_M`), bo tamta tylko OPISUJE element, a ta go
-   * PRZESUWA. Za szeroka ściągałaby na ścianę gniazdo postawione świadomie w podłodze
-   * albo w wyspie kuchennej.
-   */
-  const WALL_SNAP_TOLERANCE_M = 0.35;
 
   /**
    * Pozycja i obrót elementu po ewentualnym przyklejeniu do ściany.
@@ -2276,8 +2277,11 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
           danych albo zmiana przeglądarki/urządzenia kasowała pracę bez ostrzeżenia.
           Widoczny cały czas, dopóki jest cokolwiek do stracenia (pusty projekt nie
           jest jeszcze problemem) i użytkownik nie jest zalogowany — bez opcji
-          trwałego wyciszenia, bo ryzyko nie znika, dopóki nie założy konta. */}
-      {!session && (elements.length > 0 || walls.length > 0 || roomShapes.length > 0 || !!bgImageUrl) && (
+          trwałego wyciszenia, bo ryzyko nie znika, dopóki nie założy konta.
+          NIE dotyczy projektu PRZYKŁADOWEGO: nie ma tam czego stracić (dane siedzą
+          w kodzie aplikacji i wczytują się jednym kliknięciem z powrotem), a ostrzeżenie
+          o utracie pracy pod cudzym mieszkaniem jest po prostu nieprawdziwe. */}
+      {!session && !projektPrzykladowy && (elements.length > 0 || walls.length > 0 || roomShapes.length > 0 || !!bgImageUrl) && (
         <div
           role="status"
           className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
@@ -2296,8 +2300,12 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
 
       {/* Delikatny, JEDNORAZOWY prompt po włożeniu realnej pracy (>10 elementów) —
           w odróżnieniu od banera wyżej, ten da się odrzucić na stałe (patrz
-          `kontoPromptOdrzucony`), żeby nie przypominać o tym samym w kółko. */}
-      {!session && !kontoPromptOdrzucony && elements.length > KONTO_PROMPT_PROG_ELEMENTOW && (
+          `kontoPromptOdrzucony`), żeby nie przypominać o tym samym w kółko.
+          Na przykładzie zgaszony z tego samego powodu co baner wyżej — a do tego
+          jego próg (>10 elementów) przykład przekracza od pierwszej sekundy, więc
+          bez tej straży „włożyłeś już sporo pracy" witałoby kogoś, kto nie włożył
+          w ten projekt ani jednego kliknięcia. */}
+      {!session && !kontoPromptOdrzucony && !projektPrzykladowy && elements.length > KONTO_PROMPT_PROG_ELEMENTOW && (
         <div
           role="status"
           className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
@@ -2336,12 +2344,22 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
         // `flex-1` + `justify-center`: karta rośnie na całą wolną wysokość, a jej treść
         // stoi w pionowym środku. Sama treść jest ta sama co wcześniej — problemem był
         // wyłącznie pas gołego tła pod spodem, nie to, co na karcie stoi.
-        <div className="pe-card flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
-          <h2 className="pe-display text-xl">Zacznij projektować instalację</h2>
-          <p className="max-w-md text-sm text-slate-500">
-            Wgraj zdjęcie albo skan rzutu mieszkania, żeby rozmieścić elementy na prawdziwym planie — albo narysuj
-            ściany od zera, bez podkładu.
+        <div className="pe-card flex flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+          {/* Nagłówek mówi, co ta aplikacja ROBI, a nie co użytkownik ma kliknąć.
+              Poprzednie „Zacznij projektować instalację" było poleceniem wydanym
+              komuś, kto jeszcze nie wie, gdzie trafił — a jedyne zdanie tłumaczące
+              aplikację stoi na tej stronie jako hasło 12,5 px pod logo. */}
+          <h2 className="pe-display text-xl">Zaprojektuj instalację elektryczną w swoim domu</h2>
+          <p className="max-w-lg text-sm text-slate-500">
+            Rozstaw gniazdka i oświetlenie na rzucie mieszkania. Rozdzielnica, schemat jednokreskowy
+            i kosztorys policzą się z tego same.
           </p>
+
+          {/* Obietnica przed instrukcją — patrz `CoPowstanie`. */}
+          <div className="my-1 w-full max-w-2xl border-y border-border py-4">
+            <CoPowstanie />
+          </div>
+
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Button variant="copper" onClick={() => fileRef.current?.click()}>
               <Upload size={16} /> Wgraj rzut / zdjęcie
@@ -2353,6 +2371,19 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
               Narysuj dom samodzielnie
             </Button>
           </div>
+
+          {/* TRZECIA droga: nie robić nic i zobaczyć gotowy wynik. Stoi OSOBNO, pod
+              dwiema pozostałymi i lżejszym stylem, bo to nie jest sposób na zaczęcie
+              własnego projektu — tylko odpowiedź na pytanie „co ta strona w ogóle
+              robi", którego dwa przyciski wyżej nie adresują wcale. Kto ma rzut pod
+              ręką, ma nad nim kliknąć dalej. */}
+          <button
+            onClick={() => void wczytajPrzyklad()}
+            className="flex items-center gap-1.5 text-sm font-medium text-blueprint underline-offset-2 hover:underline"
+          >
+            <Eye size={15} /> Zobacz gotowy przykład — mieszkanie 70 m²
+          </button>
+
           <button onClick={onboarding.dismissEntryScreen} className="text-xs text-slate-400 underline hover:text-slate-600">
             Pomiń — zacznę na pustym planie
           </button>
