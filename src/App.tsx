@@ -419,6 +419,16 @@ export default function App() {
   const loadFromCloud = useProjectStore((s) => s.loadFromCloud);
   const resetProject = useProjectStore((s) => s.resetProject);
   const elementCount = useProjectStore((s) => s.draft.elements.length);
+  /**
+   * Czy w projekcie nie ma JESZCZE NICZEGO — ani osprzętu, ani ścian, ani pomieszczeń.
+   *
+   * Steruje widocznością pigułki „Dalej" (patrz niżej). Liczy KAŻDY narysowany obiekt,
+   * nie tylko elementy instalacji: kto postawił same ściany, zaczął już projekt i nie
+   * ma powodu odbierać mu wygodnego skrótu do kolejnego kroku.
+   */
+  const projektPusty = useProjectStore(
+    (s) => s.draft.elements.length === 0 && s.draft.walls.length === 0 && s.draft.roomShapes.length === 0
+  );
   const localSaveError = useProjectStore((s) => s.localSaveError);
   const lastLocalSaveAt = useProjectStore((s) => s.lastLocalSaveAt);
   const projectName = useProjectStore((s) => s.projectName);
@@ -454,7 +464,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen p-6">
+    // Kolumna z rozciągliwym środkiem: stopka ma siedzieć przy DOLE OKNA, gdy treść
+    // jest krótsza niż ekran. Wcześniej kończyła się tam, gdzie kończyła się treść,
+    // i na ekranie startowym (najkrótszym w całej aplikacji) zostawiało to 281 px
+    // gołego tła POD stopką przy oknie 1440×900 — najważniejsza strona wyglądała na
+    // uciętą w połowie. `min-h-screen` samo tego nie robiło: rozciągało tło, ale nie
+    // rozdzielało wysokości między dzieci.
+    <div className="flex min-h-screen flex-col p-6">
       {/* Nagłówek niesie jedyną informację o tym, CZYM jest ta strona, więc logo i hasło
           dostają realną wagę: znak graficzny jako punkt zaczepienia dla oka, nazwa w
           rozmiarze tytułu i hasło w kolorze tekstu, a nie wyszarzonym. Wcześniej logo
@@ -685,6 +701,12 @@ export default function App() {
           po prostu przejść gdzie indziej. `key={tab}` zeruje ją przy każdej zmianie
           zakładki — bez tego raz złapany błąd zostawałby na ekranie na zawsze, także
           po przejściu na sprawną zakładkę. */}
+      {/* Rozciągliwy środek kolumny — to on spycha stopkę na dół okna (patrz komentarz
+          przy korzeniu wyżej). `flex flex-col`, a nie zwykły blok, żeby zakładka mogła
+          SAMA sięgnąć po tę wysokość, gdy ma z niej pożytek: ekran startowy Instalacji
+          rozciąga się na całą wolną przestrzeń i centruje w niej swoją treść, zamiast
+          zostawiać pod sobą pas pustego tła (patrz `showEntryScreen` w DesignTab). */}
+      <div className="flex flex-1 flex-col">
       <ErrorBoundary key={tab} onReset={() => setTab(ZAKLADKA_DOMYSLNA)}>
       {tab === "kalkulatory" && (
         <Suspense fallback={<TabLoading />}>
@@ -724,6 +746,7 @@ export default function App() {
         </>
       )}
       </ErrorBoundary>
+      </div>
 
       {/*
         Duży, zawsze widoczny przycisk „Dalej” — bez niego jedyną drogą do kolejnego
@@ -781,6 +804,15 @@ export default function App() {
         const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
         const nastepny = idx >= 0 ? KOLEJNOSC_KROKOW[idx + 1] : undefined;
         if (!nastepny) return null;
+        // Na PUSTYM projekcie „Dalej" nie ma dokąd prowadzić: rozdzielnica bez ani
+        // jednego odbiornika nie ma czego dobrać, schemat nie ma czego narysować,
+        // a kosztorys czego policzyć. Świecąca zachęta do przejścia dalej, zanim
+        // cokolwiek powstało, wysyła nowego użytkownika w trzy puste ekrany zamiast
+        // do rysowania — a rysowanie jest tym, po co tu przyszedł.
+        // Tylko ta pigułka, nie „Cofnij": powrót nigdy nie jest przedwczesny.
+        // Kafle 01/02/03/04 u góry działają bez zmian, więc to skrót, nie blokada
+        // (ten sam argument co przy chowaniu obu pigułek poniżej `md`).
+        if (projektPusty) return null;
         return (
           <button
             onClick={() => setTab(nastepny.id)}

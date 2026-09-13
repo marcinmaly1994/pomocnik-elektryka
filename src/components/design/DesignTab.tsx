@@ -826,20 +826,35 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       // pod kursorem dokładnie w chwili, gdy użytkownik coś na nim stawia. Baner niech
       // więc spycha rysunek w dół (i wydłuża stronę), a nie przeskalowuje go.
       //
-      // Suma dwóch STAŁYCH odcinków:
-      //  • od góry dokumentu do korzenia zakładki — nagłówek strony i pasek etapów,
-      //  • od korzenia edytora do kolumny płótna — pasek kondygnacji i pasek narzędzi.
-      // Banery leżą MIĘDZY korzeniem zakładki a korzeniem edytora, więc wypadają
-      // z rachunku same z siebie.
+      // Bierzemy PRAWDZIWĄ górną krawędź kolumny płótna i odejmujemy od niej to, co
+      // zajmują dziś banery — czyli wszyscy bracia stojący PRZED korzeniem edytora.
+      // Wychodzi z tego położenie, w którym płótno byłoby, gdyby żadnego banera nie
+      // było: wielkość stała, niezależna od tego, ile ich akurat wisi.
+      //
+      // HISTORIA: stała tu suma dwóch odcinków (góra dokumentu → korzeń zakładki oraz
+      // korzeń edytora → kolumna płótna). Milcząco zakładała, że MIĘDZY tymi korzeniami
+      // nie ma nic poza banerami — a jest jeszcze odstęp `space-y-4`. Dopóki korzeń
+      // zakładki był zwykłym blokiem, margines schodził na zewnątrz i suma się zgadzała;
+      // po zmianie strony na kolumnę flexową (stopka przy dole okna) marginesy przestały
+      // się scalać i rachunek zaniżał się o równe 16 px — akurat tyle, żeby płótno znów
+      // sięgnęło pod pigułkę „Dalej". Odejmowanie MIERZONYCH banerów jest odporne na
+      // każdy taki odstęp, bo nie zakłada o nim niczego.
       const kolumna = kolumnaPlotnaRef.current;
       const korzenEdytora = pelnyEkranRef.current;
       const korzenZakladki = korzenZakladkiRef.current;
-      const gora =
-        kolumna && korzenEdytora && korzenZakladki
-          ? korzenZakladki.getBoundingClientRect().top +
-            window.scrollY +
-            (kolumna.getBoundingClientRect().top - korzenEdytora.getBoundingClientRect().top)
-          : null;
+      let gora: number | null = null;
+      if (kolumna && korzenEdytora && korzenZakladki) {
+        let banery = 0;
+        for (const brat of Array.from(korzenZakladki.children)) {
+          if (brat === korzenEdytora) break;
+          const box = brat.getBoundingClientRect();
+          // Ukryty input pliku i inne zerowej wysokości nie zajmują miejsca, ale
+          // `space-y-4` i tak dopisuje im margines — obie rzeczy trzeba pominąć razem.
+          if (box.height === 0) continue;
+          banery += box.height + parseFloat(getComputedStyle(brat).marginTop || "0");
+        }
+        gora = kolumna.getBoundingClientRect().top + window.scrollY - banery;
+      }
       const nowa = pelnyEkran ? Math.max(320, window.innerHeight - 16 - zajetePionowo) : wysokoscPlotna(gora);
       // Próg 1 px: `getBoundingClientRect` potrafi oddać ułamek piksela, a każda taka
       // różnica jest dla Reacta nowym stanem. Bez progu obserwator niżej budziłby się
@@ -2136,7 +2151,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   );
 
   return (
-    <div className="space-y-4" ref={korzenZakladkiRef}>
+    // Na ekranie startowym zakładka sięga po CAŁĄ wolną wysokość okna (rodzic jest
+    // rozciągliwą kolumną — patrz App.tsx), żeby powitanie wypełniło ekran zamiast
+    // wisieć wąskim paskiem u góry. W pozostałych stanach zakładka jest i tak wyższa
+    // niż okno, więc rozciąganie nic by nie dało — zostaje zwykły blok.
+    <div className={showEntryScreen ? "flex flex-1 flex-col space-y-4" : "space-y-4"} ref={korzenZakladkiRef}>
       {/* Zamontowany ZAWSZE, niezależnie od tego, który ekran jest aktywny (edytor,
           weryfikacja detekcji, błąd wczytania) — inaczej `fileRef.current` bywał
           `null` akurat wtedy, gdy „Wgraj inny plik" na ekranie weryfikacji/błędu
@@ -2235,7 +2254,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           do niego — inaczej wracalibyśmy do tego samego nagromadzenia wezwań do
           działania, tylko w innej kolejności. */}
       {showEntryScreen && (
-        <div className="pe-card flex flex-col items-center gap-4 px-6 py-16 text-center">
+        // `flex-1` + `justify-center`: karta rośnie na całą wolną wysokość, a jej treść
+        // stoi w pionowym środku. Sama treść jest ta sama co wcześniej — problemem był
+        // wyłącznie pas gołego tła pod spodem, nie to, co na karcie stoi.
+        <div className="pe-card flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
           <h2 className="pe-display text-xl">Zacznij projektować instalację</h2>
           <p className="max-w-md text-sm text-slate-500">
             Wgraj zdjęcie albo skan rzutu mieszkania, żeby rozmieścić elementy na prawdziwym planie — albo narysuj

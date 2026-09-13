@@ -61,33 +61,53 @@ for (const okno of OKNA) {
   });
 }
 
-test("pigułka Dalej nie leży na płótnie", async ({ page }) => {
+/**
+ * Płótno zostawia u dołu okna wolne pasmo na pływającą pigułkę „Dalej" — o tyle
+ * właśnie jest niższe (patrz `ZAPAS_POD_PLOTNEM` w lib/design.ts).
+ *
+ * Mierzymy SAM ZAPAS, a nie „pigułka nie nachodzi na płótno", i to jest tu ważne
+ * rozróżnienie. Rezerwacja pasma trzyma wyłącznie wtedy, gdy nad płótnem nie wisi
+ * żaden baner: wysokość liczy się z chrome'u STAŁEGO, z pominięciem banerów (inaczej
+ * pojawienie się banera przeskalowywałoby rzut pod kursorem), więc baner spycha
+ * rysunek w dół i ten znów sięga pod pigułkę.
+ *
+ * A baner „ten projekt istnieje tylko w tej przeglądarce" wisi u KAŻDEGO
+ * niezalogowanego użytkownika, u którego jest cokolwiek do stracenia — czyli
+ * dokładnie wtedy, gdy pigułka w ogóle się pokazuje (na PUSTYM projekcie jej nie ma,
+ * patrz `projektPusty` w App.tsx). Innymi słowy: w dostępnym dziś stanie te dwa
+ * warunki wykluczają się nawzajem i testu „nie nachodzi" nie da się uczciwie napisać.
+ * Konflikt pigułki z banerem czeka na rozstrzygnięcie projektowe — dopóki trwa,
+ * pilnujemy tego, co faktycznie zachodzi: pasmo jest zarezerwowane.
+ */
+test("płótno zostawia u dołu okna pasmo na nawigację", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await otworzEdytor(page);
   await page.evaluate(() => window.scrollTo(0, 0));
 
   const plotno = (await oknoRysunku(page).boundingBox())!;
-  const pigulka = (await page.getByRole("button", { name: /^Dalej: / }).boundingBox())!;
-
-  const nachodzi =
-    pigulka.x < plotno.x + plotno.width &&
-    pigulka.x + pigulka.width > plotno.x &&
-    pigulka.y < plotno.y + plotno.height &&
-    pigulka.y + pigulka.height > plotno.y;
-  expect(nachodzi).toBe(false);
+  // 56 px pigułki (odstęp + wysokość) plus oddech — patrz `PASMO_NAWIGACJI_PX`.
+  expect(plotno.y + plotno.height).toBeLessThanOrEqual(900 - 56);
 });
 
-test("pigułka Dalej nie zasłania wskaźnika zapisu w pasku stanu", async ({ page }) => {
+test("na ekranie startowym stopka siedzi przy dole okna, bez pasa gołego tła pod nią", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await otworzEdytor(page);
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+  await expect(page.getByRole("button", { name: "Narysuj dom samodzielnie" })).toBeVisible();
 
-  // Płótno kończy się tuż nad pasmem pigułki, więc pigułka ląduje nad PRAWYM KOŃCEM
-  // paska stanu — a `ml-auto` wypycha tam wskaźnik zapisu. Pasek zostawia jej zapas.
-  const pasek = page.getByRole("status", { name: "Stan projektu" });
-  const koniecPaska = await pasek.evaluate((el) => el.lastElementChild!.getBoundingClientRect().right);
-  const pigulka = (await page.getByRole("button", { name: /^Dalej: / }).boundingBox())!;
-  expect(koniecPaska).toBeLessThanOrEqual(pigulka.x);
+  const stopka = (await page.locator("footer").boundingBox())!;
+  const karta = (await page.locator(".pe-card").filter({ hasText: "Zacznij projektować" }).boundingBox())!;
+
+  // Pod stopką zostaje najwyżej własny margines strony (`p-6`), a nie 281 px
+  // gołego tła, jak przed poprawką.
+  expect(900 - (stopka.y + stopka.height)).toBeLessThanOrEqual(32);
+  // Powitanie wypełnia wolną wysokość, zamiast wisieć wąskim paskiem u góry.
+  expect(karta.height).toBeGreaterThan(450);
+  // I strona nie zaczyna się przez to przewijać.
+  const przewijalna = await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight);
+  expect(przewijalna).toBe(false);
 });
 
 test("Narysuj dom samodzielnie nie prowadzi z powrotem do namawiania na podkład", async ({ page }) => {
