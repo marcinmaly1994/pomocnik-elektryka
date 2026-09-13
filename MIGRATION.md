@@ -3841,6 +3841,72 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     plik eksportuje obok komponentu także hooka), `npx playwright test` **418/418**
     (+1: dwa nowe testy w miejsce jednego przepisanego).
 
+84. **Panel boczny nie proponuje elementów, zanim jest gdzie je postawić** — panel
+    startował ZAWSZE na katalogu osprzętu, także na zupełnie pustej kondygnacji.
+    Pierwszą rzeczą do przeczytania w kolumnie narzędzi była więc lista gniazd
+    trójfazowych, wypustów AGD i ładowarek EV — zamiast podpowiedzi, że plan zaczyna
+    się od obrysowania pokoi. Od pomieszczenia zależy podział na obwody i strefy
+    ochronne w kuchni i łazience, więc to nie jest kolejność obojętna.
+
+    Reguła w `lib/panelBoczny.ts` (czysta funkcja, z testem): dopóki użytkownik sam
+    nie kliknie zakładki, panel pokazuje „Pomieszczenia" na kondygnacji, która nie ma
+    ANI pomieszczeń, ANI elementów — i „Elementy" w każdym innym przypadku. Dwie
+    rzeczy, które ta reguła musi respektować:
+    - **osprzęt postawiony BEZ pomieszczeń zdejmuje podpowiedź.** Praca bez obrysów
+      jest dozwolona; kto już nią poszedł, minął moment, w którym „zacznij od pokoi"
+      jest pomocne — teraz byłoby cofaniem go do punktu, który zostawił za sobą.
+    - **ręczny wybór zakładki wygrywa zawsze.** Podpowiedź ma być podpowiedzią, a nie
+      przestawianiem panelu pod palcami.
+
+    Ręczny wybór jest zerowany przy ZMIANIE KONDYGNACJI, bo podpowiedź dotyczy tej,
+    na którą się właśnie weszło: nowe, puste piętro ma poprosić o pomieszczenia tak
+    samo jak parter, nawet jeśli na parterze panel stoi na elementach.
+
+    Pusty stan `RoomPanel` przestał przy tej okazji być samym stwierdzeniem faktu.
+    „Brak pomieszczeń na tej kondygnacji." nie mówiło ani po co je rysować, ani co
+    się stanie bez nich — a to jest teraz pierwsze zdanie, jakie czyta nowy
+    użytkownik w kolumnie narzędzi.
+
+    **Napięcie z wcześniejszą decyzją, świadomie rozstrzygnięte:** nagłówek
+    `panel-zwijanie.spec.ts` zapisuje odrzucony wariant „panel widoczny wyłącznie
+    przy narzędziach Wstaw Element / Narysuj Pomieszczenie", z uzasadnieniem, że
+    biblioteka jest punktem startu i nowy użytkownik zobaczyłby pusty plan bez śladu
+    po katalogu. Ta zmiana tamtego nie cofa: panel jest rozwinięty tak samo jak był,
+    obie zakładki stoją na wierzchu, a katalog jest JEDNO kliknięcie stąd. Zmienia
+    się wyłącznie to, która zakładka jest otwarta, i tylko na kondygnacji, na której
+    osprzętu nie ma jeszcze gdzie postawić.
+
+    **Testy e2e: 59 przypadków w 18 plikach** klikało w katalog od razu na czystym
+    rzucie. Doszedł pomocnik `otworzKatalogElementow` w `_flow.ts` — rusza WYŁĄCZNIE
+    zakładkę panelu, nie narzędzie, w odróżnieniu od kliknięcia w „Wstaw Element"
+    w pasku, które zmienia jedno i drugie i mogłoby po cichu zmienić sens testu.
+    Trzy miejsca wymagały czegoś więcej niż wstawki:
+    - `numer-obwodu.spec.ts` — jego `postaw` odsłaniał katalog, klikając w sekcję
+      akordeonu. Po dołożeniu przełączenia zakładki sekcja bywała już otwarta i to
+      kliknięcie ZWIJAŁO ją z powrotem; teraz oba lekarstwa stosuje się po kolei,
+      ze sprawdzeniem między nimi.
+    - `plan-upload.spec.ts` i `panel-zwijanie.spec.ts` sprawdzały „edytor jest
+      widoczny" przez obecność katalogu — teraz sprawdzają PANEL (obie zakładki),
+      bo to on jest tym, co ma być widoczne.
+    - `przewodnik-karta.spec.ts` pilnował, żeby kolumna narzędzi kończyła się nad
+      kartą przewodnika, z tolerancją 1 px. Wyszło 3 px zachodzenia i pogoń za tym
+      doprowadziła do PĘTLI SPRZĘŻENIA sprzed tej zmiany: wysokość listy zależy od
+      położenia karty, położenie karty od jej wysokości, a ta od szerokości okna —
+      którą zmienia pasek przewijania strony, pojawiający się i znikający wraz
+      z wysokością listy. Pętla ustala się na punkcie stałym, w którym pod kartę
+      wchodzi kilka pikseli dolnego paddingu kolumny. Test pilnuje teraz tego, o co
+      naprawdę chodziło — że karta nie zasłania LISTY, z której wybiera się element —
+      a kolumnie zostawia 4 px luzu, z opisem dlaczego. Próba naprawy przez ponowny
+      pomiar w następnej klatce została WYCOFANA: nie pomogła, więc byłaby
+      niewyjaśnionym kodem.
+
+    Nowe testy: `panelBoczny.test.ts` (4 przypadki — pusta kondygnacja, kondygnacja
+    z pomieszczeniami, osprzęt bez pomieszczeń, wygrana ręcznego wyboru).
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1433/1433** (+4),
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **418/418**.
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +

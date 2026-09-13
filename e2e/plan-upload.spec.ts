@@ -53,8 +53,12 @@ test("wgrywanie planu: ekran startowy widoczny bez scrollowania, zwija się po w
   await expect(cta).toHaveCount(0);
   await otworzMenuPaska(page, "Plan");
   await expect(page.getByRole("button", { name: "Zmień" })).toBeVisible();
-  // ekran startowy nie wraca — edytor (biblioteka elementów) jest teraz widoczny
-  await expect(page.getByRole("button", { name: /Gniazda i zasilanie/ })).toBeVisible();
+  // ekran startowy nie wraca — jest edytor z panelem bocznym. Sprawdzamy PANEL, a nie
+  // sam katalog osprzętu: na kondygnacji bez pomieszczeń panel otwiera się teraz na
+  // „Pomieszczeniach" (patrz `zakladkaPanelu`), a wgrany podkład tego nie zmienia —
+  // podkład to jeszcze nie obrysowane pokoje.
+  await expect(page.getByRole("button", { name: "Elementy", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Pomieszczenia/ })).toBeVisible();
 
   // „Usuń" wraca do wezwania do działania — projekt jest znów zupełnie świeży
   // (bez podkładu, skali, elementów), więc to znów ekran startowy, nie edytor

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Grupy sterowania oświetleniem. Testowane e2e, bo wartość tej funkcji leży w spięciu
@@ -101,8 +101,10 @@ test("łącznik i światło w jednym pomieszczeniu dostają ten sam numer na pla
   await skipEntryScreen(page);
 
   await drawRoom(page, 60, 40, 380, 250);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await place(page, /Łącznik jednobiegunowy/, 100, 80);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await place(page, /Punkt sufitowy/, 300, 210);
 
@@ -136,8 +138,10 @@ test("łącznik i światło numerują się też bez narysowanego pomieszczenia",
 
   // Celowo BEZ drawRoom — elementy lądują z room = NO_ROOM ("Bez pomieszczenia").
   // Wcześniej numeracja w tym wypadku w ogóle się nie uruchamiała.
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await place(page, /Łącznik jednobiegunowy/, 100, 80);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await place(page, /Punkt sufitowy/, 300, 210);
 
@@ -163,8 +167,10 @@ test("ręczna zmiana grupy z okna edycji nadpisuje automat", async ({ page }) =>
   await skipEntryScreen(page);
 
   await drawRoom(page, 60, 40, 380, 250);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await place(page, /Łącznik jednobiegunowy/, 100, 80);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await place(page, /Punkt sufitowy/, 300, 210);
 
@@ -203,8 +209,10 @@ test("łącznik grupowy ma DWA pola — po jednym na dźwignię, ustawialne osob
   await skipEntryScreen(page);
 
   await drawRoom(page, 60, 40, 560, 250);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await place(page, /Łącznik grupowy/, 300, 210);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await place(page, /Punkt sufitowy/, 130, 90);
   await place(page, /Punkt sufitowy/, 470, 90);

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen, otworzMenuPaska } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, otworzKatalogElementow } from "./_flow";
 
 /**
  * Powłoka aplikacji: nagłówek, suwak rozmiaru symboli i stopka.
@@ -22,6 +22,7 @@ test("suwak zmienia rozmiar symboli, nie ich położenie", async ({ page }) => {
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 120);

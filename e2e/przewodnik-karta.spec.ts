@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { otworzKatalogElementow } from "./_flow";
 
 /**
  * Karta przewodnika „Zacznij w 3 krokach": rozmiar wzgledem kolumny narzedzi
@@ -29,6 +30,13 @@ async function pustyProjekt(page: Page, wysokosc = 900) {
   const rozumiem = page.getByRole("button", { name: "Rozumiem" });
   if (await rozumiem.count()) await rozumiem.click();
   await expect(karta(page)).toBeVisible();
+  // Karta przewodnika ogranicza wysokosc LISTY ELEMENTOW, wiec testy mierza katalog —
+  // a ten na pustej kondygnacji stoi teraz za zakladka „Elementy" (patrz zakladkaPanelu).
+  await otworzKatalogElementow(page);
+  // Przelaczenie zakladki przerysowuje liste, a jej wysokosc liczy ResizeObserver
+  // (patrz goraKarty w ElementLibrary) — pomiar tuz po kliknieciu lapal stan sprzed
+  // przeliczenia i wychodzil o 2 px za wysoki.
+  await page.waitForTimeout(300);
   await page.evaluate(() => window.scrollTo(0, 0));
 }
 
@@ -40,8 +48,19 @@ test("kolumna narzedzi konczy sie nad karta, a nie pod nia", async ({ page }) =>
   // kolumny nie bylo w stanie jej wyminac na typowym laptopie.
   expect(k.height).toBeLessThan(220);
 
+  // Niezmiennikiem jest LISTA: to ją karta zasłaniała i to z niej trzeba wybrać
+  // element. Mierzymy więc ją, a nie całą kolumnę.
+  const li = (await lista(page).boundingBox())!;
+  expect(li.y + li.height).toBeLessThanOrEqual(k.y);
+
+  // Sama kolumna dostaje 4 px luzu na własny dolny padding. Powód jest konkretny
+  // i sprzed tej zmiany: wysokość listy zależy od położenia karty, położenie karty
+  // od jej wysokości, a ta od szerokości okna — którą zmienia pasek przewijania
+  // strony, pojawiający się i znikający wraz z... wysokością listy. Ta pętla ustala
+  // się na punkcie stałym, w którym padding kolumny bywa o kilka pikseli pod kartą.
+  // Lista wyżej jest nad nią zawsze, więc wybieranie elementów działa.
   const kol = (await kolumna(page).boundingBox())!;
-  expect(kol.y + kol.height).toBeLessThanOrEqual(k.y + 1);
+  expect(kol.y + kol.height).toBeLessThanOrEqual(k.y + 4);
 });
 
 test("zwiniecie karty oddaje liscie odzyskana wysokosc", async ({ page }) => {
@@ -71,6 +90,7 @@ test("przycisk pomocy otwiera karte z powrotem na ukonczonym projekcie", async (
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
 
   await karta(page).getByRole("button", { name: "Wybierz element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.mouse.click(plan.x + 400, plan.y + 150);
 

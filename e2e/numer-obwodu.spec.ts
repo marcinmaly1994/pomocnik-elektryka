@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen, otworzMenuPaska } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, otworzKatalogElementow } from "./_flow";
 
 /**
  * Numer obwodu nadawany RECZNIE z menu pod prawym przyciskiem.
@@ -35,7 +35,12 @@ async function planBox(page: import("@playwright/test").Page) {
 
 /** Stawia element wybranego typu w podanych punktach planu. */
 async function postaw(page: import("@playwright/test").Page, przycisk: RegExp, punkty: { x: number; y: number }[]) {
+  // Katalog bywa schowany z DWOCH roznych powodow i kazdy ma wlasne lekarstwo: panel
+  // stoi na zakladce „Pomieszczenia" (pusta kondygnacja — patrz `zakladkaPanelu`) albo
+  // sekcja akordeonu jest zwinieta. Rozwiazujemy je PO KOLEI, ze sprawdzeniem miedzy —
+  // klikniecie w sekcje, ktora wlasnie sie odslonila otwarta, zwinieloby ja z powrotem.
   const cel = page.getByRole("button", { name: przycisk }).first();
+  if (!(await cel.isVisible().catch(() => false))) await otworzKatalogElementow(page);
   if (!(await cel.isVisible().catch(() => false))) {
     await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
   }
@@ -96,6 +101,7 @@ test("obwod mieszajacy oswietlenie z gniazdami jest zglaszany w rozdzielnicy", a
   await otworzPlan(page);
   const box = await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   await page.mouse.click(box.x + 220, box.y + 150);

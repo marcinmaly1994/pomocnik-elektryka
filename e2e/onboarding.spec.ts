@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { otworzMenuPaska } from "./_flow";
+import { otworzMenuPaska, otworzKatalogElementow } from "./_flow";
 
 /**
  * Onboarding: EKRAN STARTOWY (pierwszy wybór na zupełnie świeżym projekcie —
@@ -116,6 +116,7 @@ test("ekran startowy prowadzi od wgrania rzutu przez skalę do pierwszego elemen
 
   // KROK 3 — postawienie elementu kończy przewodnik
   await card(page).getByRole("button", { name: "Wybierz element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   const box3 = await planBox(page);
   await page.mouse.click(box3.x + 150, box3.y + 120);
@@ -149,6 +150,7 @@ test("pominięcie ekranu startowego odblokowuje pracę i nie wraca po odświeże
 
   // praca bez skali jest możliwa, ale ostrzeżenie jest trwałe
   const box = await planBox(page);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.mouse.click(box.x + 150, box.y + 120);
   await expect(page.getByText(/Skala nieustawiona/)).toBeVisible();

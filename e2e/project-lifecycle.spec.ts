@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Cykl życia projektu: autozapis lokalny + „Nowy projekt".
@@ -19,6 +19,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
   // (odsłania trwały baner ryzyka nad płótnem) potrafią przesunąć płótno w dół,
   // więc box zmierzony wcześniej staje się nieaktualny (patrz `zoomAndBox` w
   // room-editing.spec.ts — ten sam wzorzec).
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (let i = 0; i < 4; i++) {
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -67,6 +68,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
   // anulowanie NIE kasuje
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
   const box2 = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;

@@ -52,3 +52,26 @@ export async function otworzMenuPaska(page: Page, etykieta: "Plan" | "Rysunek"):
 export async function zamknijMenuPaska(page: Page): Promise<void> {
   await page.keyboard.press("Escape");
 }
+
+/**
+ * Otwiera w panelu bocznym zakładkę „Elementy" (katalog osprzętu).
+ *
+ * Od kroku 84 panel na PUSTEJ kondygnacji startuje na „Pomieszczeniach" — osprzętu
+ * nie ma tam jeszcze gdzie postawić, więc katalog nie jest tym, co powinno się czytać
+ * najpierw (patrz `zakladkaPanelu` w lib/panelBoczny.ts). Testy, które sięgają po
+ * element od razu na czystym rzucie, muszą więc katalog otworzyć.
+ *
+ * Rusza WYŁĄCZNIE zakładkę panelu, nie narzędzie — w odróżnieniu od kliknięcia
+ * w „Wstaw Element" w pasku narzędzi, które zmienia jedno i drugie i mogłoby po cichu
+ * zmienić sens testu. Bezpieczne do powtórzenia i do wywołania tam, gdzie zakładka
+ * już jest otwarta albo gdzie panelu w ogóle nie ma.
+ */
+export async function otworzKatalogElementow(page: Page): Promise<void> {
+  const zakladka = page.getByRole("button", { name: "Elementy", exact: true });
+  try {
+    await zakladka.waitFor({ state: "visible", timeout: 2000 });
+    await zakladka.click();
+  } catch {
+    // panel zwinięty albo widok bez panelu — nie ma czego otwierać
+  }
+}

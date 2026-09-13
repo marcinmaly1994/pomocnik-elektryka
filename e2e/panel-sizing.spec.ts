@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Dobór normatywny widoczny w Rozdzielnicy.
@@ -30,6 +30,7 @@ test("rozdzielnica pokazuje przekrój i zabezpieczenie policzone, a nie wpisane 
   // się nieaktualny w trakcie tej samej serii kliknięć.
 
   // 3 gniazda → obwód gniazdowy, oczekiwany 2,5 mm² / B16
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (const dx of [120, 220, 320]) {
     const box = await planBox(page);
@@ -38,6 +39,7 @@ test("rozdzielnica pokazuje przekrój i zabezpieczenie policzone, a nie wpisane 
 
   // 2 punkty sufitowe → obwód oświetleniowy, oczekiwany 1,5 mm² / B10.
   // Kategoria „Oświetlenie" w bibliotece jest zwinięta — najpierw trzeba ją rozwinąć.
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   for (const dx of [150, 280]) {
@@ -72,6 +74,7 @@ test("bez kalibracji skali spadek napięcia jest zgłoszony jako niesprawdzony, 
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 120, box.y + 90);
@@ -95,6 +98,7 @@ test("bilans faz podaje udział procentowy, nie tylko ampery", async ({ page }) 
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (let i = 0; i < 3; i++) {
     const box = await planBox(page);
