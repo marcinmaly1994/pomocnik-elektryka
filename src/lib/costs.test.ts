@@ -54,13 +54,13 @@ describe("computeCosts — długość kabla", () => {
 });
 
 describe("computeCosts", () => {
-  it("brak elementów -> same zera poza minimum jednej puszki rozgałęźnej", () => {
-    // tak jak w oryginale: dom ma co najmniej jedno pomieszczenie, więc co najmniej
-    // jedną puszkę rozgałęźną, nawet zanim cokolwiek postawiono na planie
+  it("brak elementów -> same zera", () => {
+    // Do tej pory stało tu „poza minimum jednej puszki rozgałęźnej" z uzasadnieniem
+    // „tak jak w oryginale: dom ma co najmniej jedno pomieszczenie". To był
+    // przeniesiony z wersji JS skutek uboczny `|| 1` przy liczeniu pomieszczeń, a nie
+    // decyzja — patrz `computeCosts` i „pusty projekt" na dole tego pliku.
     const { quantities } = computeCosts([], [], []);
-    const { puszkaRozgalezna, ...rest } = quantities;
-    expect(puszkaRozgalezna).toBe(1);
-    expect(Object.values(rest).every((v) => v === 0)).toBe(true);
+    expect(Object.values(quantities).every((v) => v === 0)).toBe(true);
   });
 
   it("gniazdko wielokrotne liczy się wg liczby gangów", () => {
@@ -324,5 +324,22 @@ describe("computeCosts — metraz wg przekroju", () => {
     const { quantities } = computeCosts([], [obwod("b", "YDYp 3x10 mm²", 3)], []);
     expect(quantities.kabel25 ?? 0).toBe(0);
     expect(quantities.kabel3x10).toBe(25);
+  });
+});
+
+describe("computeCosts — pusty projekt", () => {
+  it("nie wystawia rachunku za dom, którego nie ma", () => {
+    const { quantities } = computeCosts([], [], []);
+    // Bez ani jednego elementu na rzucie nie ma ANI JEDNEGO pomieszczenia do
+    // zapuszkowania. `|| 1` w liczbie pomieszczeń to zabezpieczenie dla elementów
+    // bez przypisanego pokoju, nie wartość domyślna pustego projektu — a wystawiało
+    // jedną puszkę rozgałęźną i 6,15 zł brutto komuś, kto dopiero wszedł na stronę.
+    expect(quantities.puszkaRozgalezna).toBe(0);
+    expect(kosztorysRows(quantities, { puszkaRozgalezna: 5 })).toEqual([]);
+  });
+
+  it("element bez przypisanego pomieszczenia nadal liczy się jako jedno", () => {
+    const { quantities } = computeCosts([el({ type: "gniazdko", room: "" })], [], []);
+    expect(quantities.puszkaRozgalezna).toBe(1);
   });
 });

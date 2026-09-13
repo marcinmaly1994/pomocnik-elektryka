@@ -3598,6 +3598,99 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń, `npx
     playwright test` **100/100** (+3 nowe).
 
+81. **Ekran startowy mówi, CO POWSTANIE — plus projekt przykładowy i uczciwy
+    pusty kosztorys** — przegląd strony startowej i zakładki „Instalacja" oczami
+    kogoś, kto wchodzi tu pierwszy raz. Diagnoza: aplikacja mówiła wyłącznie, co
+    użytkownik ma ZROBIĆ („wgraj rzut albo narysuj ściany"), a nigdy, co z tego
+    BĘDZIE MIAŁ. Najmocniejsza rzecz w całym produkcie — że rozdzielnica, schemat
+    i kosztorys wypełniają się same z rzutu — była widoczna tylko jako cztery
+    wyszarzone kafle etapów, które czyta się jak nieaktywne zakładki. Do tego nie
+    było ŻADNEJ drogi obejrzenia wyniku bez przejścia całej ścieżki: znajdź skan
+    rzutu → wgraj → skalibruj skalę → obrysuj pokoje → ponazywaj → postaw
+    elementy. Kto wszedł „zobaczyć, co to jest", odbijał się od pierwszego kroku.
+
+    **Obietnica przed instrukcją** (`components/onboarding/CoPowstanie.tsx`).
+    Na ekranie startowym, między nagłówkiem a przyciskami, rząd czterech miniatur
+    etapów: rzut → rozdzielnica → schemat → kosztorys. Rysunki SVG, nie zrzuty
+    ekranu — zrzut trzeba by odświeżać przy każdej zmianie wyglądu zakładek
+    (a nikt o tym nie pamięta), waży kilkadziesiąt razy więcej i w tym rozmiarze
+    i tak jest papką; rysunek pokazuje KSZTAŁT rzeczy („to jest tabelka, a tamto
+    szyna z aparatami"), nie jej szczegóły. Miniatury są `aria-hidden`, bo niosą
+    to samo co podpisy pod nimi. Sam nagłówek karty zszedł z polecenia („Zacznij
+    projektować instalację") na zdanie o tym, czym ta strona jest.
+
+    **Projekt przykładowy** (`lib/demoProjekt.ts` + `wczytajPrzyklad` w store).
+    Trzeci, lżejszy przycisk pod dwiema drogami startu: „Zobacz gotowy przykład —
+    mieszkanie 70 m²". Wczytuje kompletne mieszkanie (5 pomieszczeń, 38 punktów,
+    drzwi, ściany) i po jednym kliknięciu WSZYSTKIE cztery zakładki są pełne —
+    rozdzielnica dobrana z obwodów, schemat narysowany, kosztorys policzony
+    z tras po planie. Decyzje:
+    - **Bez podkładu** — podkład to data URL w `bgImages`, czyli setki kilobajtów
+      base64 w paczce i w każdym autozapisie. Rysunek stoi na czystej siatce
+      w `MANUAL_DRAW_SCALE_MPU`, dokładnie jak dom z „Narysuj dom samodzielnie".
+    - **Dynamiczny `import()`** — nikt, kto przyszedł rysować własny dom, nie musi
+      pobierać czterdziestu elementów wpisanych w kod. Osobny kawałek, 4,4 kB.
+    - **Osprzęt doklejany tą samą funkcją co kliknięcie** (`przyklejDoScian` woła
+      `snapElementToWall` z tymi samymi argumentami co `zPrzyciaganiemDoSciany`).
+      Bez tego dane „mniej więcej przy ścianie" renderowały się okrakiem na murze
+      — gniazdko wpisane 20 cm od osi jest niższe niż własny symbol. Przy okazji
+      `WALL_SNAP_TOLERANCE_M` przeniosła się ze stałej lokalnej w `DesignTab`
+      do `lib/design.ts`, obok bliźniaczej `ROOM_SNAP_TOLERANCE_M`.
+    - **Własny `planSize` 240×180 jedn.** zamiast domyślnych 1000×700 —
+      `dopasujZoom` mieści w oknie CAŁY obszar planu, a nie to, co na nim
+      narysowano, więc na arkuszu 50×35 m mieszkanie otwierało się jako znaczek
+      pocztowy w rogu szarego tła.
+    - **Oprawy zsunięte ze środków pokoi**, bo dokładnie tam rysowana jest nazwa
+      pomieszczenia i symbol ją zasłaniał.
+    - **`projektPrzykladowy` w `ProjectPayload`**, nie w stanie komponentu: przykład
+      jest normalnym projektem w store, więc przeżywa przełączanie zakładek i F5,
+      i pasek „to jest przykład" ma z nim zostać. Gaśnie przy `resetProject`
+      i przy wczytaniu czegokolwiek innego (żaden projekt użytkownika tego pola
+      nie ma). Flaga robi jeszcze dwie rzeczy: **blokuje autozapis w chmurze**
+      (inaczej samo obejrzenie przykładu zakładałoby zalogowanemu wiersz
+      „Przykład: mieszkanie 70 m²" na liście projektów) i **gasi oba banery
+      o koncie** — mówią o ryzyku utraty pracy, której tu nie ma, a próg drugiego
+      z nich (>10 elementów) przykład przekracza od pierwszej sekundy.
+
+    **Pasek przykładu** (`components/onboarding/PasekPrzykladu.tsx`) stoi w `App`,
+    nad treścią KAŻDEJ zakładki i poza granicą błędu: cały sens przykładu jest
+    w tym, żeby obejrzeć Rozdzielnicę, Schemat i Kosztorys — i to tam najłatwiej
+    zapomnieć, że ogląda się cudze mieszkanie. Wyjście („Zacznij własny projekt")
+    idzie przez `resetProject`, ale z KRÓTSZYM potwierdzeniem niż „Nowy projekt":
+    przy kasowaniu przykładu nie ma czego żałować.
+
+    **Pusty kosztorys przestał wystawiać rachunek za dom, którego nie ma.**
+    `computeCosts` liczyło pomieszczenia jako `new Set(...).size || 1`; `|| 1` jest
+    tam dla elementów bez przypisanego pokoju, ale na PUSTYM projekcie dawało jedną
+    puszkę rozgałęźną i 6,15 zł brutto komuś, kto dopiero wszedł na stronę — razem
+    z całym warsztatem (import cennika, eksport CSV, przycisk PDF, ostrzeżenie
+    o metrach z ryczałtu). Teraz `elements.length ? … : 0`. Pusty ekran dla
+    Kosztorysu ISTNIAŁ już wcześniej, tylko był nieosiągalny — ta jedna widmowa
+    pozycja wystarczała, żeby lista nie była pusta; przeniesiony na wczesny powrót
+    z całego widoku (wzorzec z `PanelTab`), z aktualną nazwą zakładki („Instalacja",
+    nie „Zaprojektuj instalację") i przyciskiem prowadzącym tam, gdzie powstaje
+    treść. Stary test jednostkowy ENSHRINOWAŁ ten błąd („brak elementów → same zera
+    poza minimum jednej puszki", z uzasadnieniem „tak jak w oryginale") — to był
+    przeniesiony z wersji JS skutek uboczny, nie decyzja.
+
+    Dwadzieścia testów e2e rozpoznawało ekran startowy po napisie „Zacznij
+    projektować instalację"; po zmianie nagłówka przestawiłem je na
+    `getByRole("heading", …)` — nowy nagłówek powtarza hasło spod logo, więc samo
+    `getByText` trafiałoby w dwa miejsca.
+
+    Nowe testy: `demoProjekt.test.ts` (9 przypadków — metraż zgodny z nazwą
+    projektu, każdy element w istniejącym pomieszczeniu i w obszarze planu,
+    rozdzielnica na planie, wypełnione obwody i kosztorys, jawne typy pomieszczeń
+    mokrych, brak podkładu, świeży obiekt przy każdym wywołaniu), dwa przypadki
+    pustego projektu w `costs.test.ts`, oraz `e2e/projekt-przykladowy.spec.ts`
+    (6 przypadków — obietnica na ekranie startowym, wypełnienie czterech zakładek,
+    pasek na każdej z nich, brak zachęt do konta, wyjście do własnego projektu,
+    pusty kosztorys).
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1419/1419** (+11),
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **412/412** (+6).
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +

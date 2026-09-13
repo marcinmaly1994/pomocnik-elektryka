@@ -183,7 +183,13 @@ export function computeCosts(
   // Szafka teletechniczna dolacza do rozdzielnicy i puszki: to obudowa, a nie punkt
   // instalacyjny — nie ma przy niej puszki podtynkowej ani osobnej robocizny za punkt.
   const pointElements = elements.filter((e) => !["rozdzielnica", "puszka", "szafkaTeletech"].includes(e.type) && ELEMENT_TYPES[e.type]?.role !== "sanitary");
-  const rooms = new Set(elements.map((e) => e.room)).size || 1;
+  // `|| 1` ratuje przypadek, w którym elementy SĄ, ale żaden nie ma przypisanego
+  // pomieszczenia — wtedy zbiór nazw jest pusty, a puszka rozgałęźna i tak jest
+  // potrzebna. Na PUSTYM projekcie ten sam fallback wystawiał jednak rachunek za dom,
+  // którego nie ma: jedna puszka, 6,15 zł brutto i pełna tabela kosztorysu u kogoś,
+  // kto dopiero wszedł na stronę i niczego jeszcze nie narysował. Stąd warunek na
+  // `elements.length` — zero elementów to zero pomieszczeń, nie „co najmniej jedno".
+  const rooms = elements.length ? new Set(elements.map((e) => e.room)).size || 1 : 0;
   q.puszkaPodtynkowa = pointElements.length;
   q.puszkaRozgalezna = Math.max(q.puszkaRozgalezna, rooms);
   q.robocizna = pointElements.length;

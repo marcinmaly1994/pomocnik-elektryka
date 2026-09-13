@@ -30,6 +30,7 @@ import { AuthModal } from "@/components/auth/AuthModal";
 import { ProjectsModal } from "@/components/auth/ProjectsModal";
 import { AccountModal, type AccountModalTab } from "@/components/auth/AccountModal";
 import { HelpModal } from "@/components/help/HelpModal";
+import { PasekPrzykladu } from "@/components/onboarding/PasekPrzykladu";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { KompletDialog } from "@/components/ui/KompletDialog";
 import { PdfPreview } from "@/components/ui/PdfPreview";
@@ -715,6 +716,10 @@ export default function App() {
           rozciąga się na całą wolną przestrzeń i centruje w niej swoją treść, zamiast
           zostawiać pod sobą pas pustego tła (patrz `showEntryScreen` w DesignTab). */}
       <div className="flex flex-1 flex-col">
+      {/* Pasek przykładu stoi PONAD granicą błędu i poza nią: dotyczy projektu, a nie
+          zakładki, więc ma być widoczny na każdej z nich — i ma przeżyć awarię
+          dowolnej z nich, bo to stąd prowadzi wyjście do własnego projektu. */}
+      <PasekPrzykladu />
       <ErrorBoundary key={tab} onReset={() => setTab(ZAKLADKA_DOMYSLNA)}>
       {tab === "kalkulatory" && (
         <Suspense fallback={<TabLoading />}>

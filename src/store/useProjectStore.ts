@@ -164,6 +164,24 @@ export interface ProjectPayload {
   /** Postęp onboardingu „Zacznij w 3 krokach" — per projekt, żeby po powrocie
    *  do zapisanego projektu przewodnik się nie powtarzał. */
   onboarding: OnboardingState;
+  /**
+   * To jest PROJEKT PRZYKŁADOWY wczytany z „Zobacz gotowy przykład" na ekranie
+   * startowym (patrz `zbudujProjektPrzykladowy` w lib/demoProjekt.ts), a nie praca
+   * użytkownika.
+   *
+   * Musi żyć w zapisywanym stanie, nie w stanie komponentu: przykład jest normalnym
+   * projektem w store'rze, więc przeżywa przełączanie zakładek i odświeżenie strony
+   * przez autozapis — a pasek „To jest przykład" ma zostać z nim przez cały ten czas.
+   * Inaczej po powrocie z Kosztorysu albo po F5 cudzy dom wyglądałby na własny.
+   *
+   * Gaśnie dopiero przy „Nowy projekt" (`resetProject`) i przy wczytaniu czegokolwiek
+   * innego, bo `loadProjectPayload` bierze wartość z wczytywanej migawki — a żaden
+   * projekt użytkownika jej nie ma.
+   *
+   * Opcjonalna, jak `otwartyRecznie` czy `rysowanieBezPodkladu` — zapisy sprzed tej
+   * zmiany jej nie mają i mają być traktowane jak to, czym są: własną pracą.
+   */
+  projektPrzykladowy?: boolean;
 }
 
 /**
@@ -246,6 +264,13 @@ interface ProjectState {
    *  dopasowuje się do proporcji wgranego rzutu — patrz planSizeForImage. */
   planSize: PlanSize;
   onboarding: OnboardingState;
+  /** Bieżący projekt to wczytany PRZYKŁAD, a nie praca użytkownika — patrz pole
+   *  o tej samej nazwie w `ProjectPayload`. */
+  projektPrzykladowy: boolean;
+  /** Wczytuje gotowy projekt przykładowy (lib/demoProjekt.ts). Osobno od
+   *  `loadProjectPayload`, bo sam sięga po dane — komponent nie musi ich znać,
+   *  a moduł z przykładem dociąga się dopiero na kliknięcie (dynamiczny `import()`). */
+  wczytajPrzyklad: () => Promise<void>;
 
   /**
    * Ile elementów dostało poprawione przypisanie do pomieszczenia przy ostatnim
@@ -465,6 +490,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   panelOverrides: {},
   planSize: DEFAULT_PLAN_SIZE,
   onboarding: INITIAL_ONBOARDING,
+  projektPrzykladowy: false,
   roomsFixedOnLoad: 0,
   dismissRoomsFixedOnLoad: () => set({ roomsFixedOnLoad: 0 }),
   session: loadStoredSession(),
@@ -573,6 +599,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       panelOverrides: {},
       planSize: DEFAULT_PLAN_SIZE,
       onboarding: INITIAL_ONBOARDING,
+      // „Nowy projekt" jest jedynym wyjściem z przykładu — i to jest to wyjście.
+      projektPrzykladowy: false,
       // Nowy, pusty projekt nie ma czego prostować — komunikat po poprzednim
       // wczytaniu nie może mu zostać na ekranie.
       roomsFixedOnLoad: 0,
@@ -590,8 +618,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   getProjectPayload: () => {
-    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding } = get();
-    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding };
+    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding, projektPrzykladowy } = get();
+    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding, projektPrzykladowy };
   },
 
   loadProjectPayload: (payload) => {
@@ -647,6 +675,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // migawki sprzed onboardingu go nie mają — traktujemy je jak projekt
       // prowadzony bez przewodnika, więc bez wskrzeszania go po latach
       onboarding: payload.onboarding || { ...INITIAL_ONBOARDING, pominiety: true },
+      // Bierzemy z migawki, więc wczytanie CZEGOKOLWIEK innego (projekt z chmury,
+      // autozapis własnej pracy) samo gasi pasek „To jest przykład" — żaden projekt
+      // użytkownika tego pola nie ma.
+      projektPrzykladowy: payload.projektPrzykladowy === true,
       past: [],
       future: [],
       panelPast: [],
@@ -900,6 +932,23 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setPlanSize: (size) => set({ planSize: size }),
 
   setOnboarding: (patch) => set((state) => ({ onboarding: { ...state.onboarding, ...patch } })),
+
+  wczytajPrzyklad: async () => {
+    // Dynamiczny `import()`, bo przykład to kilkadziesiąt elementów, ścian i obrysów
+    // wpisanych wprost w kod — nikt, kto przyszedł rysować własny dom, nie musi tego
+    // pobierać. Moduł trafia do osobnego kawałka i dociąga się na kliknięcie.
+    const { zbudujProjektPrzykladowy } = await import("@/lib/demoProjekt");
+    // Przykład wchodzi TĄ SAMĄ drogą co projekt z chmury i z autozapisu — łącznie
+    // z zerowaniem historii cofnij/ponów i remontem przypisań do pomieszczeń.
+    get().loadProjectPayload(zbudujProjektPrzykladowy());
+    // Nowy, świeżo wczytany przykład nie jest ŻADNYM wierszem w chmurze. Bez tego
+    // autozapis w tle nadpisałby projekt, który był otwarty wcześniej (patrz ta sama
+    // ostrożność w `resetProject`).
+    lastCloudSavedJson = null;
+    znaneUpdatedAt = null;
+    ostatniaZapisanaNazwa = null;
+    set({ cloudId: null, lastCloudSaveAt: null, cloudSaveError: null, konfliktChmury: null });
+  },
 
   setProtocolState: (key, patch) =>
     set((state) => ({
@@ -1467,6 +1516,12 @@ let cloudAutosaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 useProjectStore.subscribe(() => {
   if (!useProjectStore.getState().session || !SUPABASE_CONFIGURED) return;
+  // Przykład NIE jest projektem użytkownika i nie ma czego robić na jego liście
+  // w chmurze. Bez tej straży samo kliknięcie „Zobacz gotowy przykład" zakładałoby
+  // komuś zalogowanemu wiersz „Przykład: mieszkanie 70 m²", którego nigdy nie chciał
+  // zapisać — a potem wracałby do niego przy każdym wejściu w „Moje projekty".
+  // Lokalny autozapis działa dalej, więc odświeżenie strony przykładu nie gubi.
+  if (useProjectStore.getState().projektPrzykladowy) return;
   if (cloudAutosaveTimer) clearTimeout(cloudAutosaveTimer);
   cloudAutosaveTimer = setTimeout(() => {
     cloudAutosaveTimer = null;
