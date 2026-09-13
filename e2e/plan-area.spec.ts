@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska } from "./_flow";
 import { makePng } from "./_png";
 
 /**
@@ -52,6 +52,7 @@ test("wgrany rzut nie jest rozciągany — plan przyjmuje jego proporcje", async
   // Po wgraniu pliku otwiera się najpierw przycinanie — ten test go nie
   // dotyczy, więc pomijamy. Pominięcie ma zostawić wgrany podkład nietknięty.
   await page.getByRole("button", { name: "Pomiń — użyj całego rzutu" }).click();
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByText(/Podkład: rzut.png/)).toBeVisible();
 
   const after = await planSize(page);

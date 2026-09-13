@@ -24,3 +24,31 @@ export async function skipEntryScreen(page: Page): Promise<void> {
     // ekran startowy się nie pojawił — nic do pominięcia
   }
 }
+
+/**
+ * Otwiera rozwijane menu paska edytora („Plan" albo „Rysunek").
+ *
+ * Od kroku 83 pasek edytora mieści się w JEDNYM rzędzie, bo rzeczy ustawiane raz
+ * (kondygnacje, podkład, przyciąganie, rozmiar symboli) schowały się pod te dwa
+ * menu — patrz `PasekMenu` i komentarz przy `return` w EditorToolbar.tsx. Testy,
+ * które sięgają po te kontrolki, muszą więc najpierw menu otworzyć.
+ *
+ * Bezpieczne do powtórzenia: gdy panel już stoi otwarty, nie klikamy drugi raz
+ * (co by go zamknęło).
+ */
+export async function otworzMenuPaska(page: Page, etykieta: "Plan" | "Rysunek"): Promise<void> {
+  const przycisk = page.getByRole("button", { name: etykieta, exact: true });
+  if ((await przycisk.getAttribute("aria-expanded")) !== "true") await przycisk.click();
+}
+
+/**
+ * Zamyka rozwinięty panel paska edytora.
+ *
+ * Panel leży NAD kolumną narzędzi, więc dopóki stoi otwarty, przechwytuje kliknięcia
+ * w bibliotekę elementów. W aplikacji zamyka go kliknięcie obok; w teście, który
+ * zaraz sięga po element z listy, trzeba go domknąć jawnie. Escape, bo to ta sama
+ * droga, którą ma użytkownik, i nie wymaga trafiania w żaden konkretny piksel.
+ */
+export async function zamknijMenuPaska(page: Page): Promise<void> {
+  await page.keyboard.press("Escape");
+}

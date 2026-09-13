@@ -3,11 +3,19 @@ import { Copy, Layers, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
+import { useZamknijPasekMenu } from "./PasekMenu";
 
 /**
- * Wybór kondygnacji — przeniesiony z powłoki aplikacji do paska edytora, bo dotyczy
- * wyłącznie rysowania planu i nigdzie indziej nie ma znaczenia. Przy okazji odzyskuje
- * to cały rząd wysokości nad płótnem.
+ * Kondygnacje — przeniesione z powłoki aplikacji do paska edytora, bo dotyczą
+ * wyłącznie rysowania planu i nigdzie indziej nie mają znaczenia. Przy okazji
+ * odzyskuje to cały rząd wysokości nad płótnem.
+ *
+ * Rozdzielone na DWIE części, bo to dwie różne częstotliwości użycia:
+ *  - `FloorTabs` — PRZEŁĄCZANIE piętra. Czynność nawigacyjna, robiona w kółko
+ *    w trakcie rysowania, więc zostaje w pasku na wierzchu.
+ *  - `FloorManagement` — DODAWANIE, duplikowanie, usuwanie i wysokość kondygnacji.
+ *    Ustawia się to raz i schodzi pod „Plan" (patrz `PasekMenu`), żeby nie zajmowało
+ *    pół rzędu paska przez cały czas pracy.
  */
 
 /** Usunięcie kondygnacji kasuje razem z nią wszystkie postawione na niej elementy,
@@ -49,10 +57,37 @@ function DeleteFloorButton({ name, elementCount, onConfirm }: { name: string; el
   );
 }
 
-export function FloorBar() {
+/** Same zakładki kondygnacji — w pasku, na wierzchu. Przy jednej kondygnacji to
+ *  jeden mały przycisk; przełączanie pięter jest zbyt częste, żeby chować je
+ *  w rozwijanym menu razem z zarządzaniem. */
+export function FloorTabs() {
   const floors = useProjectStore((s) => s.floors);
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const setActiveFloorId = useProjectStore((s) => s.setActiveFloorId);
+
+  return (
+    <div className="flex items-center gap-1">
+      <Layers size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
+      {floors.map((f) => (
+        <Button
+          key={f.id}
+          variant={f.id === activeFloorId ? "copper" : "ghost"}
+          size="sm"
+          onClick={() => setActiveFloorId(f.id)}
+        >
+          {f.name}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+/** Zarządzanie kondygnacjami — treść rozwijanego „Plan". Usuwanie stoi TUTAJ, przy
+ *  każdej kondygnacji z osobna, bo skasowanie piętra to nie to samo co przejście
+ *  na nie i nie ma prawa być kliknięciem obok zakładki. */
+export function FloorManagement() {
+  const floors = useProjectStore((s) => s.floors);
+  const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const addFloor = useProjectStore((s) => s.addFloor);
   const duplicateFloor = useProjectStore((s) => s.duplicateFloor);
   const removeFloor = useProjectStore((s) => s.removeFloor);
@@ -61,6 +96,10 @@ export function FloorBar() {
   const [newFloorName, setNewFloorName] = useState("Piętro 1");
   const aktywna = floors.find((f) => f.id === activeFloorId);
   const [nazwaKopii, setNazwaKopii] = useState("");
+  /** Zamyka rozwinięte „Plan" po zatwierdzeniu okna — panel zostawał inaczej otwarty
+   *  NAD kolumną narzędzi i przechwytywał kliknięcia w bibliotekę elementów, czyli
+   *  w to, co robi się zaraz po dodaniu kondygnacji (patrz `useZamknijPasekMenu`). */
+  const zamknijMenu = useZamknijPasekMenu();
 
   const counts = elements.reduce<Record<string, number>>((acc, e) => {
     acc[e.floor] = (acc[e.floor] ?? 0) + 1;
@@ -68,21 +107,20 @@ export function FloorBar() {
   }, {});
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Layers size={14} className="text-slate-400" aria-hidden="true" />
-      {floors.map((f) => (
-        <span key={f.id} className="flex items-center">
-          <Button variant={f.id === activeFloorId ? "copper" : "ghost"} size="sm" onClick={() => setActiveFloorId(f.id)}>
-            {f.name}
-          </Button>
-          {/* Usuwanie tylko przy więcej niż jednej kondygnacji — ostatniej nie ma jak
-              skasować (plan musi mieć gdzie istnieć), więc przycisk znika zamiast być
-              wyszarzony bez wyjaśnienia. */}
-          {floors.length > 1 && (
-            <DeleteFloorButton name={f.name} elementCount={counts[f.id] ?? 0} onConfirm={() => removeFloor(f.id)} />
-          )}
-        </span>
-      ))}
+    <div className="flex flex-col gap-2">
+      {/* Usuwanie tylko przy więcej niż jednej kondygnacji — ostatniej nie ma jak
+          skasować (plan musi mieć gdzie istnieć), więc wiersz z koszami znika
+          w całości, zamiast stać wyszarzony bez wyjaśnienia. */}
+      {floors.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border pb-2">
+          {floors.map((f) => (
+            <span key={f.id} className="flex items-center gap-0.5 text-xs text-slate-500">
+              {f.name}
+              <DeleteFloorButton name={f.name} elementCount={counts[f.id] ?? 0} onConfirm={() => removeFloor(f.id)} />
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Duplikowanie BIEŻĄCEJ kondygnacji. Piętra w budynku wielorodzinnym bywają
           identyczne albo różnią się kilkoma elementami — przerysowywanie ich od zera to
@@ -118,7 +156,10 @@ export function FloorBar() {
             <Button
               variant="copper"
               className="w-full"
-              onClick={() => duplicateFloor(activeFloorId, nazwaKopii || `${aktywna?.name ?? "Kondygnacja"} — kopia`)}
+              onClick={() => {
+                duplicateFloor(activeFloorId, nazwaKopii || `${aktywna?.name ?? "Kondygnacja"} — kopia`);
+                zamknijMenu();
+              }}
             >
               Duplikuj kondygnację
             </Button>
@@ -135,7 +176,7 @@ export function FloorBar() {
         i zmienia się razem z przełączeniem piętra.
       */}
       <label
-        className="ml-1 flex items-center gap-1 text-xs text-slate-500"
+        className="flex items-center gap-1 text-xs text-slate-500"
         title="Wysokość bieżącej kondygnacji w świetle stropów. Wchodzi w DŁUGOŚĆ przewodu: podejście pod strop, zejście do puszki i przejście na sąsiednie piętro. Za mała wysokość zaniża policzony spadek napięcia, więc przy wysokim parterze albo poddaszu warto ją podać. Puste pole oznacza wartość typową 2,8 m."
       >
         <span className="whitespace-nowrap">Wys. kondygnacji</span>
@@ -171,7 +212,14 @@ export function FloorBar() {
             className="mb-4 w-full rounded border border-border px-3 py-1.5 text-sm"
           />
           <DialogTrigger asChild>
-            <Button variant="copper" className="w-full" onClick={() => addFloor(newFloorName || `Piętro ${floors.length}`)}>
+            <Button
+              variant="copper"
+              className="w-full"
+              onClick={() => {
+                addFloor(newFloorName || `Piętro ${floors.length}`);
+                zamknijMenu();
+              }}
+            >
               Dodaj
             </Button>
           </DialogTrigger>

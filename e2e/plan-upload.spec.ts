@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { otworzMenuPaska } from "./_flow";
 
 // 1x1 px PNG — wystarczy, żeby aplikacja uznała podkład za wgrany
 const PNG = Buffer.from(
@@ -47,14 +48,17 @@ test("wgrywanie planu: ekran startowy widoczny bez scrollowania, zwija się po w
   await page.getByRole("button", { name: "Pomiń — użyj całego rzutu" }).click();
   // Po wgraniu sterowanie podkładem przenosi się do paska edytora i pokazuje NAZWĘ
   // pliku — przy kilku kondygnacjach to jedyny sposób sprawdzenia, który rzut leży pod spodem.
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByText(/Podkład: rzut.png/)).toBeVisible();
   await expect(cta).toHaveCount(0);
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByRole("button", { name: "Zmień" })).toBeVisible();
   // ekran startowy nie wraca — edytor (biblioteka elementów) jest teraz widoczny
   await expect(page.getByRole("button", { name: /Gniazda i zasilanie/ })).toBeVisible();
 
   // „Usuń" wraca do wezwania do działania — projekt jest znów zupełnie świeży
   // (bez podkładu, skali, elementów), więc to znów ekran startowy, nie edytor
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "Usuń", exact: true }).click();
   await expect(cta).toBeVisible();
 });

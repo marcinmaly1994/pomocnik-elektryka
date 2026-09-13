@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { otworzMenuPaska } from "./_flow";
 
 /**
  * Przyciaganie osprzetu do scian z obrotem symbolu.
@@ -138,6 +139,7 @@ test("punkt sufitowy NIE przykleja sie do sciany — wisi tam, gdzie go postawio
 test("wylaczenie przyciagania zostawia element tam, gdzie klikneto", async ({ page }) => {
   await pustyProjekt(page);
   await narysujPokoj(page);
+  await otworzMenuPaska(page, "Rysunek");
   await page.getByRole("checkbox", { name: "Przyciągaj osprzęt do ścian" }).uncheck();
   await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
   await klikNaPlanie(page, 204, 300);
@@ -169,6 +171,7 @@ test("powiekszenie symboli odsuwa juz postawione gniazdko, zeby dalej dotykalo s
   const odsunieciePrzed = gPrzed.x - lewaKrawedz(przed);
 
   // Suwak „Rozmiar elementow" z 1,0x na 2,0x — czyli symbol dwa razy wiekszy.
+  await otworzMenuPaska(page, "Rysunek");
   await page.locator('input[type="range"]').first().fill("2");
   await page.waitForTimeout(300);
 

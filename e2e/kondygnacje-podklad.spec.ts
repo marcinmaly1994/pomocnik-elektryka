@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { otworzMenuPaska } from "./_flow";
 
 /**
  * Podglad kondygnacji ponizej i duplikowanie kondygnacji.
@@ -43,6 +44,7 @@ test("przycisk podkladu pojawia sie dopiero, gdy jest kondygnacja ponizej", asyn
   // Na parterze nie ma czego pokazac — przycisk nie istnieje, zamiast byc wyszarzony.
   await expect(page.getByRole("button", { name: "Pokaż kondygnację poniżej" })).toHaveCount(0);
 
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
@@ -52,6 +54,7 @@ test("przycisk podkladu pojawia sie dopiero, gdy jest kondygnacja ponizej", asyn
 test("podklad da sie wlaczyc i wylaczyc", async ({ page }) => {
   await pustyProjekt(page);
   await postawGniazdko(page, 200, 200);
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
@@ -71,6 +74,7 @@ test("duplikowanie kopiuje geometrie i osprzet na nowa kondygnacje", async ({ pa
   const przed = await stan(page);
   expect(przed.floors).toHaveLength(1);
 
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: /Duplikuj/ }).first().click();
   await page.getByRole("button", { name: "Duplikuj kondygnację" }).click();
 

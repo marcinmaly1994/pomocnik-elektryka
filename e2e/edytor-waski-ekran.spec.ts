@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { otworzMenuPaska, zamknijMenuPaska } from "./_flow";
 
 /**
  * Edytor planu na ekranie telefonu.
@@ -82,27 +83,47 @@ test("recznie rozwiniety panel zostaje rozwiniety po odswiezeniu telefonu", asyn
   await expect(page.getByRole("button", { name: /panel boczny/ })).toHaveAttribute("aria-expanded", "true");
 });
 
-test("ustawienia planu chowaja sie na telefonie, a na monitorze stoja odkryte", async ({ page }) => {
-  await page.setViewportSize(TELEFON);
-  await otworzEdytor(page);
+test("pasek edytora jest nizszy niz przed zwinieciem — na monitorze jeden rzad", async ({ page }) => {
+  // Zmierzone PRZED krokiem 83: 84 px i na telefonie, i na monitorze. Zwijanie
+  // („Ustawienia planu") wlaczalo sie wtedy WYLACZNIE ponizej 768 px, wiec na
+  // monitorze — czyli tam, gdzie te dwa rzedy realnie zjadaly rysunek — nie robilo nic.
+  const PROGI = { telefon: 84, monitor: 70 } as const;
 
-  const przelacznik = page.getByRole("button", { name: "Ustawienia planu" });
-  await expect(przelacznik).toBeVisible();
-  await expect(przelacznik).toHaveAttribute("aria-expanded", "false");
-  // Kondygnacje i podklad sa schowane...
-  await expect(page.getByRole("button", { name: "Wgraj podkład" })).toHaveCount(0);
-  // ...ale to, czego uzywa sie W TRAKCIE rysowania, zostaje pod reka.
-  await expect(page.getByRole("button", { name: "Cofnij" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Dopasuj widok do planu" })).toBeVisible();
+  for (const [nazwa, rozmiar] of [["telefon", TELEFON], ["monitor", MONITOR]] as const) {
+    await page.setViewportSize(rozmiar);
+    await otworzEdytor(page);
 
-  await przelacznik.click();
-  await expect(page.getByRole("button", { name: "Wgraj podkład" })).toBeVisible();
+    const pasek = page
+      .getByRole("button", { name: "Plan", exact: true })
+      .locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]");
+    const wysokosc = (await pasek.boundingBox())!.height;
+    expect(wysokosc, `pasek na szerokosci: ${nazwa}`).toBeLessThanOrEqual(PROGI[nazwa]);
 
-  // Na monitorze przelacznika nie ma w ogole, a ustawienia sa widoczne od razu.
+    // Schowane jest to, co ustawia sie RAZ...
+    await expect(page.getByRole("button", { name: "Wgraj podkład" })).toHaveCount(0);
+    await otworzMenuPaska(page, "Plan");
+    await expect(page.getByRole("button", { name: "Wgraj podkład" })).toBeVisible();
+    await zamknijMenuPaska(page);
+
+    // ...a pod reka zostaje to, czego uzywa sie W TRAKCIE rysowania.
+    await expect(page.getByRole("button", { name: "Cofnij" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Dopasuj widok do planu" })).toBeVisible();
+  }
+});
+
+test("zakladki kondygnacji sa w pasku na monitorze, a na telefonie w menu „Plan”", async ({ page }) => {
+  // Roznica jest czysto arytmetyczna: przy 375 px zakladki obok trzech przyciskow menu
+  // robia z paska trzeci rzad, czyli WIECEJ niz przed zwinieciem. Na monitorze miejsca
+  // jest az nadto, a przelaczanie pieter to nawigacja i nie ma kosztowac klikniecia.
   await page.setViewportSize(MONITOR);
   await otworzEdytor(page);
-  await expect(page.getByRole("button", { name: "Ustawienia planu" })).toBeHidden();
-  await expect(page.getByRole("button", { name: "Wgraj podkład" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Parter", exact: true })).toBeVisible();
+
+  await page.setViewportSize(TELEFON);
+  await otworzEdytor(page);
+  await expect(page.getByRole("button", { name: "Parter", exact: true })).toHaveCount(0);
+  await otworzMenuPaska(page, "Plan");
+  await expect(page.getByRole("button", { name: "Parter", exact: true })).toBeVisible();
 });
 
 /**

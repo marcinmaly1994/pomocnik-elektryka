@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
 
 test("dodanie nowej kondygnacji przez dialog", async ({ page }) => {
   await page.goto("/");
   await skipEntryScreen(page);
   await expect(page.getByRole("button", { name: "Parter" })).toBeVisible();
 
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   const input = page.getByRole("textbox");
   await input.fill("Piętro 1");
@@ -39,11 +40,15 @@ test("usuwanie kondygnacji: przycisk dopiero przy drugiej, kasuje jej elementy",
   }
 
   // ostatniej kondygnacji nie da się usunąć — plan musi mieć gdzie istnieć
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByRole("button", { name: /^Usuń kondygnację/ })).toHaveCount(0);
 
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByRole("button", { name: /^Usuń kondygnację/ })).toHaveCount(2);
+  await zamknijMenuPaska(page);
 
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (const dx of [120, 180]) {
@@ -52,10 +57,12 @@ test("usuwanie kondygnacji: przycisk dopiero przy drugiej, kasuje jej elementy",
     await page.mouse.click(box2.x + dx, box2.y + 200);
   }
 
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "Usuń kondygnację Piętro 1" }).click();
   await expect(page.getByText(/zniknie 2 elementy/)).toBeVisible();
   await page.getByRole("button", { name: "Usuń kondygnację", exact: true }).click();
 
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByRole("button", { name: /^Usuń kondygnację/ })).toHaveCount(0);
   await page.waitForTimeout(900); // debounce autozapisu
   const left = await page.evaluate(() => {

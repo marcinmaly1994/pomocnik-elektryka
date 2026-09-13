@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska } from "./_flow";
 
 /**
  * Sprawdzenie rzutu (`checkPlan`) — warstwa, której nie widać z testu jednostkowego:
@@ -166,6 +166,7 @@ test("sprawdzenie dotyczy BIEŻĄCEJ kondygnacji, nie całego projektu", async (
   await przeciagnij(page, 500, 380, 205, 205);
   await expect(karta(page)).toContainText("Osprzęt w strefie 1");
 
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 

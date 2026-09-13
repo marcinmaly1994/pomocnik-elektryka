@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { otworzMenuPaska } from "./_flow";
 
 /**
  * Zestawienie ilosciowe w zakladce Instalacja.
@@ -72,6 +73,7 @@ test("zestawienie dotyczy BIEZACEJ kondygnacji", async ({ page }) => {
   await postaw(page, "gniazdo 230", /Gniazdo 230 V/, 200, 200);
   await expect(karta(page)).toContainText("1 szt.");
 
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 

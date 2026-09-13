@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska } from "./_flow";
 
 /**
  * Numer obwodu nadawany RECZNIE z menu pod prawym przyciskiem.
@@ -125,6 +125,7 @@ test("numery z innych kondygnacji sa widoczne, a nowy numer ich nie powtarza", a
   await page.getByRole("button", { name: "+ 1" }).click();
   await page.waitForTimeout(900);
 
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("textbox").fill("Piętro 1");
   await page.getByRole("button", { name: "Dodaj" }).click();

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { otworzMenuPaska } from "./_flow";
 
 /**
  * Wysokosc kondygnacji a DLUGOSC przewodu.
@@ -55,6 +56,7 @@ test("wysokosc kondygnacji wchodzi w policzony spadek napiecia", async ({ page }
   await postaw(page, "rozdzielnica", /^Rozdzielnica$/, 80, 80, true);
 
   // ...a gniazdo PIETRO WYZEJ, zeby obwod musial przejsc przez strop.
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("textbox").first().fill("Piętro 1");
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
@@ -66,6 +68,7 @@ test("wysokosc kondygnacji wchodzi w policzony spadek napiecia", async ({ page }
   // Wysokosc BIEZACEJ kondygnacji — wracamy na parter i podnosimy go do 3,6 m.
   await page.getByRole("button", { name: "Instalacja" }).first().click();
   await page.getByRole("button", { name: "Parter", exact: true }).click();
+  await otworzMenuPaska(page, "Plan");
   const wysokosc = page.getByLabel("Wysokość kondygnacji w metrach");
   await expect(wysokosc).toHaveValue("");
   await wysokosc.fill("3.6");
@@ -78,6 +81,7 @@ test("wysokosc kondygnacji wchodzi w policzony spadek napiecia", async ({ page }
   // Wyczyszczenie pola wraca do wartosci typowej — inaczej nie dalo by sie odkrecic
   // wpisanej liczby inaczej niz przez cofanie.
   await page.getByRole("button", { name: "Instalacja" }).first().click();
+  await otworzMenuPaska(page, "Plan");
   await page.getByLabel("Wysokość kondygnacji w metrach").fill("");
   await page.waitForTimeout(400);
   expect(await spadek(page)).toBeCloseTo(przed, 5);
