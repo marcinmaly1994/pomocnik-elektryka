@@ -104,3 +104,51 @@ test("ustawienia planu chowaja sie na telefonie, a na monitorze stoja odkryte", 
   await expect(page.getByRole("button", { name: "Ustawienia planu" })).toBeHidden();
   await expect(page.getByRole("button", { name: "Wgraj podkład" })).toBeVisible();
 });
+
+/**
+ * Po wybraniu drogi startu telefon LADUJE NA RYSUNKU, a nie na tym samym naglowku,
+ * ktory uzytkownik ogladal przed klknieciem.
+ *
+ * Zmierzone przed zmiana (okno 375 x 812): plotno zaczynalo sie 543 px w dol strony —
+ * nad nim staly naglowek (210 px), pasek etapow, banery, pasek kondygnacji i pasek
+ * narzedzi. Klikniecie „Narysuj dom samodzielnie" nie zmienialo NICZEGO w kadrze,
+ * wiec nie bylo zadnego znaku, ze gdzies nizej czeka kartka do rysowania.
+ *
+ * Celem przewijania jest WIERSZ EDYTORA, nie samo plotno: wiersz zaczyna sie paskiem
+ * narzedzi, wiec po przewinieciu widac i czym rysowac, i po czym.
+ */
+test("telefon: po wybraniu drogi startu rysunek jest w kadrze, razem z paskiem narzedzi", async ({ page }) => {
+  await page.setViewportSize(TELEFON);
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+  await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
+
+  const plotno = page.locator("canvas").first();
+  await expect(plotno).toBeVisible();
+  // Przewijanie jest plynne (`behavior: "smooth"`), wiec czekamy na jego koniec.
+  await expect
+    .poll(async () => Math.round(await page.evaluate(() => window.scrollY)), { timeout: 3000 })
+    .toBeGreaterThan(200);
+
+  const rail = (await page.locator('nav[aria-label="Narzędzia rysowania"]').boundingBox())!;
+  const box = (await plotno.boundingBox())!;
+  // Pasek narzedzi na gorze kadru, plotno tuz pod nim — jedno i drugie widoczne
+  // bez dalszego przewijania.
+  expect(rail.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(TELEFON.height);
+});
+
+test("monitor: strona NIE drga — tam edytor i tak mieści się w oknie", async ({ page }) => {
+  await page.setViewportSize(MONITOR);
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+  await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
+  await expect(page.locator("canvas").first()).toBeVisible();
+
+  await page.waitForTimeout(600);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
