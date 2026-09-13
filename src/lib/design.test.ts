@@ -19,6 +19,7 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   MARGINES_KADROWANIA,
   ZAPAS_ETYKIET,
   wysokoscPlotna,
+  wierzcholkiZamknietejSciany,
   PASMO_NAWIGACJI_PX,
   MIN_WYS_PLOTNA,
   MAX_WYS_PLOTNA,
@@ -502,5 +503,68 @@ describe("wysokoscPlotna", () => {
     // przycinanie podkładu). Ma dać cokolwiek sensownego, a nie zero.
     expect(wysokoscPlotna(null, 900)).toBe(640);
     expect(wysokoscPlotna(null, 1400)).toBe(1100);
+  });
+});
+
+describe("wierzcholkiZamknietejSciany", () => {
+  /** Prostokąt zamknięty tak, jak zapisuje go `closeWall`: ostatni punkt to
+   *  POWTÓRZONY pierwszy. */
+  const PETLA = [
+    { x: 0, y: 0 },
+    { x: 200, y: 0 },
+    { x: 200, y: 150 },
+    { x: 0, y: 150 },
+    { x: 0, y: 0 },
+  ];
+
+  it("zwraca same wierzchołki, bez powtórzonego domknięcia", () => {
+    expect(wierzcholkiZamknietejSciany(PETLA)).toEqual([
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 150 },
+      { x: 0, y: 150 },
+    ]);
+  });
+
+  it("ściana otwarta to nie pomieszczenie", () => {
+    expect(wierzcholkiZamknietejSciany(PETLA.slice(0, -1))).toBeNull();
+  });
+
+  it("zwykły odcinek to nie pomieszczenie", () => {
+    expect(wierzcholkiZamknietejSciany([{ x: 0, y: 0 }, { x: 100, y: 0 }])).toBeNull();
+  });
+
+  /** Trójkąt to najmniejsze pomieszczenie, jakie da się obrysować — 3 wierzchołki
+   *  plus punkt domykający. */
+  it("trójkąt przechodzi", () => {
+    const trojkat = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 80 }, { x: 0, y: 0 }];
+    expect(wierzcholkiZamknietejSciany(trojkat)).toHaveLength(3);
+  });
+
+  /** Ściana narysowana „tam i z powrotem" formalnie wraca do początku, ale nie
+   *  otacza żadnej powierzchni — pomieszczenie z niej byłoby puste. */
+  it("figura o zerowym polu odpada", () => {
+    const tamIzPowrotem = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 0 }, { x: 0, y: 0 }];
+    expect(wierzcholkiZamknietejSciany(tamIzPowrotem)).toBeNull();
+  });
+
+  /** Zapis potrafi przejść przez JSON albo przeliczenie skali — pół jednostki planu
+   *  to przy rysunku odręcznym 2,5 cm, czyli mniej niż najcieńsza ścianka. */
+  it("domknięcie z drobną niedokładnością nadal się liczy", () => {
+    const prawieDomkniete = [...PETLA.slice(0, -1), { x: 0.3, y: -0.2 }];
+    expect(wierzcholkiZamknietejSciany(prawieDomkniete)).toHaveLength(4);
+  });
+
+  it("wyraźna szczelina to świadomie otwarta ściana", () => {
+    const zeSzczelina = [...PETLA.slice(0, -1), { x: 20, y: 0 }];
+    expect(wierzcholkiZamknietejSciany(zeSzczelina)).toBeNull();
+  });
+
+  /** Odwrotność `createWallFromRoom`: ściana zrobiona z obrysu pokoju musi dać się
+   *  zamienić z powrotem na dokładnie ten sam obrys. */
+  it("jest odwrotnością tworzenia ściany z obrysu pomieszczenia", () => {
+    const obrys = [{ x: 10, y: 10 }, { x: 90, y: 10 }, { x: 90, y: 70 }, { x: 10, y: 70 }];
+    const zeSciany = wierzcholkiZamknietejSciany([...obrys, obrys[0]]);
+    expect(zeSciany).toEqual(obrys);
   });
 });

@@ -31,7 +31,8 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, OpeningKind, Point, RoomType } from "@/types";
+import type { ElementType, OpeningKind, Point, RoomType, Wall } from "@/types";
+import { pointInPolygon } from "@/lib/geometry";
 import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
@@ -56,6 +57,7 @@ import {
   planSizeForImage,
   roomNameAfterMove,
   scaleOf,
+  wierzcholkiZamknietejSciany,
   wysokoscPlotna,
   ZAPAS_ETYKIET,
 } from "@/lib/design";
@@ -483,6 +485,17 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     const t = setTimeout(() => setSkalaPotwierdzenie(null), 4000);
     return () => clearTimeout(t);
   }, [skalaPotwierdzenie]);
+  /**
+   * Id ściany właśnie zamkniętej w pętlę — podstawa propozycji „zrób z tego
+   * pomieszczenie" w pigułce kontrolek.
+   *
+   * Moment jest tu całą wartością. Kto domknął obrys murem, ma ten pokój przed
+   * oczami; przewodnik zaraz każe mu „obrysować pomieszczenia", a bez tej propozycji
+   * jedyną drogą jest przejechanie po raz drugi dokładnie tej samej figury. Propozycja,
+   * nie automat: pętla ściany bywa obrysem całego domu albo korytarza wokół klatki,
+   * a nie każdy obrys jest pomieszczeniem.
+   */
+  const [petlaDoNazwania, setPetlaDoNazwania] = useState<string | null>(null);
   const [showZones, setShowZones] = useState(true);
   /** Widoczność tras przewodów — domyślnie WYŁĄCZONA: to warstwa poglądowa, nie
    *  zawsze potrzebna, i bez rozdzielnicy postawionej na planie i tak jest pusta
@@ -946,6 +959,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     // wisiałyby na planie i doklejałyby się po powrocie do rysowania.
     if (id !== "pomieszczenie") setDrawingRoomPoints([]);
     if (id !== "sciany") setDrawingWall([]);
+    // Propozycja „zrób z tej pętli pomieszczenie" dotyczy CHWILI zaraz po domknięciu
+    // obrysu. Wyjście z narzędzia ściany jest odpowiedzią „nie teraz" — wskrzeszanie
+    // jej przy powrocie do rysowania pół godziny później byłoby natręctwem. Sama
+    // operacja zostaje dostępna w menu kontekstowym ściany, więc nic nie przepada.
+    if (id !== "sciany") setPetlaDoNazwania(null);
     setToolMode(id);
     // Zakładka panelu ma pokazywać zawartość ZGODNĄ z wybranym narzędziem —
     // „Wstaw element” podświetla „Elementy”, „Obrysuj pomieszczenie” podświetla
@@ -1400,10 +1418,15 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   function closeWall(p: Point) {
     const points = [...drawingWall, p];
     if (points.length >= 2) {
+      const id = crypto.randomUUID();
       setDraft((d) => ({
         ...d,
-        walls: [...d.walls, { id: crypto.randomUUID(), floor: activeFloorId, points, thickness: wallThickness }],
+        walls: [...d.walls, { id, floor: activeFloorId, points, thickness: wallThickness }],
       }));
+      // Domknięta pętla to obrys pomieszczenia narysowany murem — proponujemy zrobić
+      // z niej pokój OD RAZU, zamiast kazać przejechać po raz drugi tę samą figurę
+      // (patrz `petlaDoNazwania` i `createRoomFromWall`).
+      if (wierzcholkiZamknietejSciany(points)) setPetlaDoNazwania(id);
     }
     setDrawingWall([]);
   }
@@ -1430,6 +1453,52 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       ],
     }));
   }
+
+  /**
+   * Droga W DRUGĄ STRONĘ niż `createWallFromRoom`: ze ściany zamkniętej w pętlę robi
+   * pomieszczenie o dokładnie tym samym obrysie.
+   *
+   * Tej strony brakowało, a to ona jest naturalna po „Narysuj dom samodzielnie":
+   * użytkownik dostaje narzędzie ściany, obrysowuje nim dom albo pokój, po czym
+   * przewodnik każe mu „obrysować pomieszczenia" — czyli przejechać po raz drugi
+   * dokładnie tę samą figurę. Tu wystarczy nazwać.
+   *
+   * Prowadzi przez ZWYKŁE okno „Nazwij pomieszczenie" (`pendingRoom`), a nie tworzy
+   * pomieszczenia po cichu: typ pomieszczenia decyduje o regułach doboru (gniazda
+   * hermetyczne, strefa mokra), więc pokój bez świadomie wybranego typu jest wart
+   * mniej niż jego brak. To ta sama droga, którą idzie każde inne pomieszczenie.
+   */
+  function createRoomFromWall(wallId: string) {
+    const wall = walls.find((w) => w.id === wallId);
+    const punkty = wall && wierzcholkiZamknietejSciany(wall.points);
+    if (!punkty) return;
+    const name = nextRoomName(roomShapes.length);
+    setPendingRoom({ points: punkty, name, type: guessRoomType(name), typeTouched: false });
+  }
+
+  /**
+   * Ściany tej kondygnacji, które są zamkniętą pętlą i NIE mają jeszcze swojego
+   * pomieszczenia — czyli te, dla których propozycja „zrób z tego pomieszczenie"
+   * ma sens.
+   *
+   * „Nie mają pomieszczenia" liczone przez środek ciężkości obrysu: jeśli wpada on
+   * do któregoś z narysowanych pokoi, ktoś już ten obszar obrysował i przypominanie
+   * o tym byłoby dokładnie tym natręctwem, które gasimy w innych banerach.
+   */
+  const petleBezPomieszczenia = useMemo(
+    () =>
+      walls
+        .map((w) => ({ wall: w, punkty: wierzcholkiZamknietejSciany(w.points) }))
+        .filter((x): x is { wall: Wall; punkty: Point[] } => x.punkty !== null)
+        .filter(({ punkty }) => {
+          const srodek = {
+            x: punkty.reduce((s, p) => s + p.x, 0) / punkty.length,
+            y: punkty.reduce((s, p) => s + p.y, 0) / punkty.length,
+          };
+          return !roomShapes.some((r) => r.points.length >= 3 && pointInPolygon(srodek, r.points));
+        }),
+    [walls, roomShapes]
+  );
 
   /** Przesuwa JEDEN narożnik zapisanej ściany — edycja przeciąganiem na planie,
    *  ten sam wzorzec co `moveRoomShapePoint` w store, ale ściany (w odróżnieniu
@@ -1744,6 +1813,19 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    * warunek obejmował także ten przypadek, „Zwiń panel" w trybie Pomieszczenie/Ściana
    * rozwijałby się natychmiast z powrotem i wyglądał na zepsuty przycisk.
    */
+  /**
+   * Pętla ścian czekająca na propozycję „zrób z niej pomieszczenie" — albo `null`.
+   *
+   * WYLICZANA, a nie trzymana w stanie: gdy pętla dostanie już swoje pomieszczenie
+   * (tędy albo zwykłym obrysowaniem), wypada z `petleBezPomieszczenia` i propozycja
+   * gaśnie sama. Gaszenie ręczne wymagałoby pamiętania o tym w każdym miejscu,
+   * którym może powstać pomieszczenie.
+   */
+  const propozycjaPokoju =
+    petlaDoNazwania && toolMode === "sciany"
+      ? petleBezPomieszczenia.find((x) => x.wall.id === petlaDoNazwania) ?? null
+      : null;
+
   const blokujaceKontrolki = drawingWall.length > 0 || drawingRoomPoints.length > 0 || toolMode === "skala";
   useEffect(() => {
     if (!pelnyEkran && blokujaceKontrolki && panelZwiniety) rozwinPanel();
@@ -2023,6 +2105,32 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         <span className="flex items-center gap-1.5 text-sm font-medium" style={{ color: "#2C6B4A" }}>
           <Check size={15} /> {skalaPotwierdzenie}
         </span>
+      )}
+
+      {/* Propozycja tuż po domknięciu obrysu murem — patrz `petlaDoNazwania`.
+          Widoczność jest WYLICZANA, nie gaszona ręcznie: pętla, która dostała już
+          pomieszczenie, wypada z `petleBezPomieszczenia` i propozycja znika sama,
+          niezależnie od tego, którędy pokój powstał. */}
+      {propozycjaPokoju && (
+        // Kolumna, nie wiersz: w widoku standardowym pigułka stoi w WĄSKIM panelu
+        // bocznym (patrz oba miejsca renderowania `kontekstoweTresc`), gdzie zdanie
+        // obok przycisku łamie się na trzy linijki i rozpycha panel.
+        <div className="flex min-w-0 flex-col items-start gap-1.5">
+          <span className="text-xs font-medium text-slate-600">Obrys zamknięty</span>
+          <button
+            onClick={() => createRoomFromWall(propozycjaPokoju.wall.id)}
+            className="pe-btn-copper flex items-center gap-1.5 px-2.5 py-1 text-xs"
+          >
+            <Layers size={13} /> Zrób z niego pomieszczenie
+          </button>
+          <button
+            onClick={() => setPetlaDoNazwania(null)}
+            className="text-[11px] text-slate-400 underline hover:text-slate-600"
+            aria-label="Odrzuć propozycję pomieszczenia"
+          >
+            Nie teraz
+          </button>
+        </div>
       )}
     </>
   );
@@ -2975,6 +3083,21 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                 })()}
               </>
             ) : contextMenu.kind === "wall" ? (
+              <>
+                {/* Tylko dla ściany zamkniętej w pętlę — z otwartej łamanej nie ma
+                    czego zrobić. Lustro pozycji „Utwórz ścianę z obrysu" w menu
+                    pomieszczenia niżej: ta sama operacja, druga strona. */}
+                {petleBezPomieszczenia.some((p) => p.wall.id === contextMenu.id) && (
+                  <button
+                    onClick={() => {
+                      createRoomFromWall(contextMenu.id);
+                      setContextMenu(null);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
+                  >
+                    <Layers size={14} /> Utwórz pomieszczenie z obrysu
+                  </button>
+                )}
               <button
                 onClick={() => {
                   // Usunięcie ściany kasuje też JEJ otwory — inaczej zostałyby
@@ -2991,6 +3114,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               >
                 <Trash2 size={14} /> Usuń ścianę
               </button>
+              </>
             ) : contextMenu.kind === "opening" ? (
               <>
                 <button

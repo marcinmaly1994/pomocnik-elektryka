@@ -6,7 +6,7 @@
 
 import type { InstallationElement, OpeningKind, Point, RoomShape, RoomType } from "@/types";
 import { NO_ROOM } from "@/lib/elements";
-import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
+import { nearestPointOnPolyline, pointInPolygon, polygonArea } from "@/lib/geometry";
 
 /** Domyślny logiczny rozmiar planu i skok siatki — jak VB_DEFAULT/GRID w wersji JS.
  *  Domyślny, bo obszar planu jest teraz zapisywany w projekcie (`planSize` w store)
@@ -567,4 +567,45 @@ export const GRUBOSC_OBRYSU_POKOJU_M = 0.08;
 export function gruboscObrysuPokoju(metersPerUnit: number | null): number {
   const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
   return GRUBOSC_OBRYSU_POKOJU_M / mpu;
+}
+
+/**
+ * Tolerancja domknięcia obrysu ściany [jedn. planu].
+ *
+ * Ściana zamykana kliknięciem dostaje DOKŁADNIE swój pierwszy punkt (patrz
+ * `zPrzyciaganiem` w DesignCanvas.tsx), więc teoretycznie wystarczyłaby równość.
+ * Zapisy potrafią jednak przejść przez JSON, przeliczenie skali albo przeciągnięcie
+ * narożnika o włos — a pół jednostki planu to przy rysunku odręcznym 2,5 cm, czyli
+ * mniej niż grubość najcieńszej ścianki. Nic, co byłoby świadomą szczeliną.
+ */
+const TOLERANCJA_DOMKNIECIA = 0.5;
+
+/**
+ * Wierzchołki ściany narysowanej jako ZAMKNIĘTA PĘTLA — albo `null`, gdy ściana
+ * pętli nie tworzy.
+ *
+ * Po co: ściana zamknięta w pętlę to obrys pomieszczenia narysowany murem. Droga
+ * w drugą stronę istniała od dawna (`createWallFromRoom` — „Utwórz ścianę z obrysu"),
+ * ta nie istniała wcale. A to właśnie ta strona jest naturalna po „Narysuj dom
+ * samodzielnie": użytkownik dostaje narzędzie ściany, obrysowuje nim dom, po czym
+ * przewodnik każe mu „obrysować pomieszczenia" — czyli przejechać po raz drugi
+ * dokładnie tę samą figurę, którą przed chwilą narysował.
+ *
+ * Zwracane są SAME wierzchołki, bez powtórzonego punktu domykającego: pomieszczenie
+ * trzyma obrys jako listę rogów, a domknięcie jest w nim dorozumiane (odwrotnie niż
+ * ściana, która domknięcie ma zapisane jawnie).
+ *
+ * Figura o zerowym polu (wszystkie punkty na jednej linii — np. ściana narysowana
+ * tam i z powrotem) jest odrzucana: to nie jest pomieszczenie, choć formalnie
+ * „wraca do początku".
+ */
+export function wierzcholkiZamknietejSciany(points: Point[]): Point[] | null {
+  if (points.length < 4) return null;
+  const pierwszy = points[0];
+  const ostatni = points[points.length - 1];
+  if (Math.hypot(ostatni.x - pierwszy.x, ostatni.y - pierwszy.y) > TOLERANCJA_DOMKNIECIA) return null;
+  const wierzcholki = points.slice(0, -1);
+  if (wierzcholki.length < 3) return null;
+  if (polygonArea(wierzcholki) <= 0) return null;
+  return wierzcholki;
 }
