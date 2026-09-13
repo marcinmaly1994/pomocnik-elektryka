@@ -775,7 +775,12 @@ export function DesignCanvas({
     // `null` poza obszarem planu, żeby nie pokazywać współrzędnych spoza rysunku.
     onPointerMove?.(stage ? planPoint(stage, planSize) : null);
 
-    if (toolMode === "sciany" && drawingWall.length > 0) {
+    // Bez warunku na `drawingWall.length`: zaczep pokazujemy JUŻ PRZED pierwszym
+    // kliknięciem, bo pierwszy punkt ściany też się przyciąga (patrz `punktSciany`).
+    // Wcześniej ta gałąź wymagała postawionego punktu, więc najczęstszy start —
+    // „zacznij ściankę działową od narożnika tamtej ściany" — przyciągał się
+    // niewidzialnie, czyli dokładnie w stanie, który znacznik miał zlikwidować.
+    if (toolMode === "sciany") {
       const raw = stage && clampedPlanPoint(stage, planSize);
       if (!raw) {
         setWallCursor(null);
@@ -783,7 +788,9 @@ export function DesignCanvas({
         return;
       }
       const punkt = punktSciany(raw);
-      setWallCursor(punkt);
+      // Gumowy odcinek dopiero od drugiego punktu — przed pierwszym kliknięciem nie ma
+      // od czego go ciągnąć.
+      setWallCursor(drawingWall.length > 0 ? punkt : null);
       setZaczep(zaczepDlaPunktu(raw, punkt));
       return;
     }
@@ -803,10 +810,14 @@ export function DesignCanvas({
       // Kotwica z pierwszego kliknięcia działa tak samo jak wciśnięty przycisk —
       // podgląd prostokąta ma iść za kursorem w OBU trybach, inaczej po pierwszym
       // kliknięciu ekran wyglądałby, jakby nic się nie stało.
-      const start = roomRectStartRef.current ?? rectAnchor;
-      if (!start) return;
+      // Zaczep liczony PRZED sprawdzeniem kotwicy: pierwszy narożnik prostokąta
+      // przyciąga się tak samo jak każdy następny, a przed pierwszym kliknięciem
+      // kotwicy jeszcze nie ma. Bez tego najczęstszy start — „obrysuj pokój od rogu
+      // muru" — przyciągał się niewidzialnie.
       const rog = snapPunktuPokoju(raw);
       setZaczep(zaczepDlaPunktu(raw, rog));
+      const start = roomRectStartRef.current ?? rectAnchor;
+      if (!start) return;
       const rect = rectBetween(start, rog);
       roomRectRef.current = rect;
       setRoomRect(rect);
@@ -2046,9 +2057,13 @@ export function DesignCanvas({
               robią programy CAD, i wystarczy spojrzeć, żeby wiedzieć, czy punkt
               wylądował w rogu sąsiada, czy gdzieś wzdłuż jego ściany.
 
-              Tylko w TRAKCIE rysowania: poza nim `zaczep` bywa nieaktualny, a kropka
-              nad rzutem bez rysowanej figury nie znaczyłaby nic. */}
-          {zaczep && (drawingWall.length > 0 || drawingRoomPoints.length > 0 || roomRect !== null) && (
+              Tylko przy AKTYWNYM narzędziu rysującym: w „zaznacz" czy „pan" nikt nie
+              stawia punktu, więc kropka nad rzutem nic by nie znaczyła. Warunek celowo
+              NIE pyta o postawione już punkty — pierwszy punkt figury przyciąga się tak
+              samo jak każdy następny, a to jego właśnie stawia się najczęściej „od rogu
+              tamtej ściany". Świeżość zaczepu trzyma sama obsługa ruchu myszy: każdy
+              ruch go przelicza, a wyjście poza plan i porzucenie figury zerują. */}
+          {zaczep && (toolMode === "sciany" || drawingRoom) && (
             <>
               {zaczep.rodzaj === "naroznik" ? (
                 <Rect

@@ -32,7 +32,7 @@ import {
   useProjectStore,
 } from "@/store/useProjectStore";
 import type { ElementType, OpeningKind, Point, RoomType, Wall } from "@/types";
-import { pointInPolygon } from "@/lib/geometry";
+import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
@@ -1523,9 +1523,21 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
    * pomieszczenia — czyli te, dla których propozycja „zrób z tego pomieszczenie"
    * ma sens.
    *
-   * „Nie mają pomieszczenia" liczone przez środek ciężkości obrysu: jeśli wpada on
-   * do któregoś z narysowanych pokoi, ktoś już ten obszar obrysował i przypominanie
-   * o tym byłoby dokładnie tym natręctwem, które gasimy w innych banerach.
+   * „Nie mają pomieszczenia" liczone przez punkt WEWNĄTRZ obrysu: jeśli wpada on do
+   * któregoś z narysowanych pokoi, ktoś już ten obszar obrysował i przypominanie o tym
+   * byłoby dokładnie tym natręctwem, które gasimy w innych banerach.
+   *
+   * Punkt bierzemy z `punktWewnatrzWielokata`, a NIE ze średniej wierzchołków, i to jest
+   * tu istotne. Dla obrysu wklęsłego — a mieszkania w kształcie L i U są na rzutach
+   * regułą — średnia wypada w samym wcięciu, czyli poza figurą. Pętla dostawała wtedy
+   * odpowiedź „nie ma pomieszczenia" nawet tuż po tym, jak użytkownik zrobił z niej
+   * pokój o dokładnie tym samym obrysie, więc menu kontekstowe dalej proponowało
+   * „Utwórz pomieszczenie z obrysu" i dawało się zrobić drugi, nakładający się pokój
+   * (zdublowana powierzchnia w zestawieniu).
+   *
+   * `null` (figura bez wnętrza) traktujemy jako „nie wiemy" i propozycji NIE gasimy:
+   * `wierzcholkiZamknietejSciany` odrzuca już figury o zerowym polu, więc tu jest to
+   * przypadek czysto teoretyczny, a milczenie byłoby gorsze od zbędnej propozycji.
    */
   const petleBezPomieszczenia = useMemo(
     () =>
@@ -1533,11 +1545,9 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
         .map((w) => ({ wall: w, punkty: wierzcholkiZamknietejSciany(w.points) }))
         .filter((x): x is { wall: Wall; punkty: Point[] } => x.punkty !== null)
         .filter(({ punkty }) => {
-          const srodek = {
-            x: punkty.reduce((s, p) => s + p.x, 0) / punkty.length,
-            y: punkty.reduce((s, p) => s + p.y, 0) / punkty.length,
-          };
-          return !roomShapes.some((r) => r.points.length >= 3 && pointInPolygon(srodek, r.points));
+          const wnetrze = punktWewnatrzWielokata(punkty);
+          if (!wnetrze) return true;
+          return !roomShapes.some((r) => r.points.length >= 3 && pointInPolygon(wnetrze, r.points));
         }),
     [walls, roomShapes]
   );

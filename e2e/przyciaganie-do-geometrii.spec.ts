@@ -258,3 +258,85 @@ test.describe("pomieszczenie z zamkniętej pętli ścian", () => {
     await expect(page.getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeHidden();
   });
 });
+
+/**
+ * Znacznik zaczepu ma być widoczny TAKŻE przy pierwszym punkcie figury — a to on
+ * najczęściej startuje „od narożnika tamtej ściany". Wcześniej podgląd był liczony
+ * dopiero po postawieniu pierwszego punktu, więc ten jeden przyciągał się niewidzialnie.
+ *
+ * Sprawdzane przez węzły sceny Konvy, bo znacznik jest rysunkiem na płótnie, nie DOM-em.
+ */
+async function znacznikiZaczepu(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const k = (window as unknown as { Konva?: { stages: { find(sel: string): { stroke(): string }[] }[] } }).Konva;
+    const stage = k?.stages[0];
+    if (!stage) return 0;
+    // Kolor zaczepu — patrz znacznik w DesignCanvas.tsx.
+    return [...stage.find("Rect"), ...stage.find("Circle")].filter((n) => n.stroke() === "#2C6B4A").length;
+  });
+}
+
+test("zaczep widać już przy PIERWSZYM punkcie ściany, zanim cokolwiek postawiono", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await page.mouse.click(box.x + 300, box.y + 100);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+
+  // Kursor daleko od muru — nie ma czego podświetlać.
+  await page.mouse.move(box.x + 200, box.y + 300);
+  expect(await znacznikiZaczepu(page)).toBe(0);
+
+  // Kursor tuż przy narożniku gotowej ściany, ANI JEDNEGO punktu nowej jeszcze nie ma.
+  await page.mouse.move(box.x + 303, box.y + 103);
+  expect(await znacznikiZaczepu(page)).toBeGreaterThan(0);
+});
+
+test("to samo w narzędziu pomieszczenia — przed pierwszym narożnikiem prostokąta", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+  await narysujPetleSciany(page, box);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  await page.mouse.move(box.x + 83, box.y + 63);
+  expect(await znacznikiZaczepu(page)).toBeGreaterThan(0);
+});
+
+/**
+ * Propozycja „zrób z tego pomieszczenie" musi gasnąć także dla obrysu WKLĘSŁEGO.
+ *
+ * Sprawdzenie „czy pętla ma już pomieszczenie" pytało o średnią wierzchołków, a ta dla
+ * litery U wypada w samym wcięciu — poza figurą. Pętla wyglądała więc na wolną nawet
+ * tuż po zrobieniu z niej pokoju i dawało się utworzyć drugi, nakładający się.
+ */
+test("obrys w kształcie U przestaje prosić o pomieszczenie, gdy już je dostał", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+
+  // Litera U: wcięcie od góry, między lewym a prawym ramieniem.
+  await page.mouse.click(box.x + 80, box.y + 60);
+  await page.mouse.click(box.x + 340, box.y + 60);
+  await page.mouse.click(box.x + 340, box.y + 260);
+  await page.mouse.click(box.x + 260, box.y + 260);
+  await page.mouse.click(box.x + 260, box.y + 140);
+  await page.mouse.click(box.x + 160, box.y + 140);
+  await page.mouse.click(box.x + 160, box.y + 260);
+  await page.mouse.click(box.x + 80, box.y + 260);
+  await page.mouse.click(box.x + 80, box.y + 60); // domknięcie
+
+  await expect(page.getByText("Obrys zamknięty")).toBeVisible();
+  await page.getByRole("button", { name: "Zrób z niego pomieszczenie" }).click();
+  await page.keyboard.type("Salon");
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  // Pętla dostała swój pokój — propozycja gaśnie i menu kontekstowe jej nie wskrzesza.
+  await expect(page.getByText("Obrys zamknięty")).toBeHidden();
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.mouse.click(box.x + 210, box.y + 60, { button: "right" });
+  await expect(page.getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeHidden();
+});

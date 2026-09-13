@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM } from "./geometry";
+import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata } from "./geometry";
 
 describe("snap", () => {
   it("zaokrągla do siatki 20", () => {
@@ -191,5 +191,81 @@ describe("rectangleSizeM", () => {
   it("bez skali nie ma czego przeliczać", () => {
     expect(rectangleSizeM(prostokat, null)).toBeNull();
     expect(rectangleSizeM(prostokat, 0)).toBeNull();
+  });
+});
+
+describe("punktWewnatrzWielokata", () => {
+  const PROSTOKAT = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 60 },
+    { x: 0, y: 60 },
+  ];
+
+  /** Obrys w ksztalcie U: wciecie od gory, miedzy x=30 a x=70, ponizej y=40. */
+  const LITERA_U = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+    { x: 70, y: 100 },
+    { x: 70, y: 40 },
+    { x: 30, y: 40 },
+    { x: 30, y: 100 },
+    { x: 0, y: 100 },
+  ];
+
+  /** Obrys w ksztalcie L. */
+  const LITERA_L = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 50 },
+    { x: 50, y: 50 },
+    { x: 50, y: 100 },
+    { x: 0, y: 100 },
+  ];
+
+  it("dla prostokata zwraca punkt w srodku", () => {
+    const p = punktWewnatrzWielokata(PROSTOKAT)!;
+    expect(pointInPolygon(p, PROSTOKAT)).toBe(true);
+  });
+
+  /**
+   * Sedno: srednia wierzcholkow litery U wypada w jej WCIECIU, czyli poza figura.
+   * Test najpierw to pokazuje, potem sprawdza, ze funkcja tego bledu nie robi.
+   */
+  it("dla figury wklesłej zwraca punkt NAPRAWDE wewnatrz — srednia wierzcholkow by nie wystarczyla", () => {
+    const srednia = {
+      x: LITERA_U.reduce((s, p) => s + p.x, 0) / LITERA_U.length,
+      y: LITERA_U.reduce((s, p) => s + p.y, 0) / LITERA_U.length,
+    };
+    expect(pointInPolygon(srednia, LITERA_U)).toBe(false);
+
+    const p = punktWewnatrzWielokata(LITERA_U)!;
+    expect(pointInPolygon(p, LITERA_U)).toBe(true);
+  });
+
+  it("radzi sobie tez z litera L", () => {
+    const p = punktWewnatrzWielokata(LITERA_L)!;
+    expect(pointInPolygon(p, LITERA_L)).toBe(true);
+  });
+
+  it("trojkat tez ma wnetrze", () => {
+    const trojkat = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 80 }];
+    expect(pointInPolygon(punktWewnatrzWielokata(trojkat)!, trojkat)).toBe(true);
+  });
+
+  it("figura bez wnetrza zwraca null", () => {
+    expect(punktWewnatrzWielokata([])).toBeNull();
+    expect(punktWewnatrzWielokata([{ x: 0, y: 0 }, { x: 10, y: 10 }])).toBeNull();
+    // Wszystkie punkty na jednej poziomej linii — zerowa wysokosc.
+    expect(punktWewnatrzWielokata([{ x: 0, y: 5 }, { x: 10, y: 5 }, { x: 20, y: 5 }])).toBeNull();
+    // Wspolliniowe pionowo — sa przeciecia, ale kazdy odcinek ma zerowa szerokosc.
+    expect(punktWewnatrzWielokata([{ x: 5, y: 0 }, { x: 5, y: 10 }, { x: 5, y: 20 }])).toBeNull();
+  });
+
+  /** Obrys narysowany „w lewo" ma ujemna orientacje — wnetrze jest to samo. */
+  it("kierunek obrysu nie ma znaczenia", () => {
+    const odwrotny = [...LITERA_U].reverse();
+    expect(pointInPolygon(punktWewnatrzWielokata(odwrotny)!, odwrotny)).toBe(true);
   });
 });

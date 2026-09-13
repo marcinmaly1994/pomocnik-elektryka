@@ -122,3 +122,58 @@ export function rectangleSizeM(points: Point[], metersPerUnit: number | null): {
     h: (Math.abs(ys[1] - ys[0]) / 1000) * metersPerUnit,
   };
 }
+
+/**
+ * Punkt leżący NA PEWNO wewnątrz wielokąta — albo `null`, gdy figura wnętrza nie ma
+ * (mniej niż 3 wierzchołki, zerowa wysokość, same punkty współliniowe).
+ *
+ * Po co osobna funkcja, skoro jest środek ciężkości: dla figury WKLĘSŁEJ ani średnia
+ * wierzchołków, ani środek ciężkości nie muszą leżeć w środku. Obrys w kształcie
+ * litery U ma je w samym wcięciu, czyli poza sobą — a wtedy `pointInPolygon` odpowiada
+ * „nie", choć pytanie dotyczyło TEJ WŁAŚNIE figury. Mieszkania w kształcie L i U są
+ * na rzutach regułą, nie przypadkiem brzegowym.
+ *
+ * Jak: prowadzimy poziomą linię przez wnętrze, zbieramy jej przecięcia z krawędziami
+ * i bierzemy środek NAJSZERSZEGO odcinka między kolejną parą przecięć. Taki odcinek
+ * w całości leży wewnątrz figury (to ta sama zasada, na której stoi `pointInPolygon`),
+ * a wybór najszerszego trzyma wynik z dala od krawędzi.
+ *
+ * Kilka wysokości, nie jedna: linia poprowadzona dokładnie przez wierzchołek albo
+ * wzdłuż poziomej krawędzi daje zdegenerowany przekrój (nieparzysta liczba przecięć
+ * albo zero). Wtedy próbujemy innej wysokości, zamiast zwracać nieprawdę.
+ */
+export function punktWewnatrzWielokata(points: Point[]): Point | null {
+  if (points.length < 3) return null;
+  const ys = points.map((p) => p.y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  if (!(maxY > minY)) return null;
+
+  for (const t of [0.5, 0.37, 0.63, 0.21, 0.79]) {
+    const y = minY + (maxY - minY) * t;
+    const przeciecia: number[] = [];
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const a = points[j];
+      const b = points[i];
+      // Ten sam warunek co w `pointInPolygon` — krawędź liczy się, gdy linia przechodzi
+      // między jej końcami. Poziome krawędzie odpadają same (oba końce po tej samej
+      // stronie), więc nie ma dzielenia przez zero.
+      if (a.y > y === b.y > y) continue;
+      przeciecia.push(a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x));
+    }
+    if (przeciecia.length < 2 || przeciecia.length % 2 !== 0) continue;
+    przeciecia.sort((p, q) => p - q);
+
+    let najlepszy: Point | null = null;
+    let najszerszy = 0;
+    for (let i = 0; i + 1 < przeciecia.length; i += 2) {
+      const szerokosc = przeciecia[i + 1] - przeciecia[i];
+      if (szerokosc > najszerszy) {
+        najszerszy = szerokosc;
+        najlepszy = { x: (przeciecia[i] + przeciecia[i + 1]) / 2, y };
+      }
+    }
+    if (najlepszy && najszerszy > 0) return najlepszy;
+  }
+  return null;
+}
