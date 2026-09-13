@@ -625,10 +625,18 @@ export function DesignCanvas({
    * Przyciąganie do istniejącej geometrii idzie na SAM KONIEC i wygrywa z siatką oraz
    * z kątem prostym, ale PRZEGRYWA z domknięciem i narożnikiem prostokąta. Powód
    * kolejności: te dwa dotyczą ściany RYSOWANEJ W TEJ CHWILI, więc mówią o zamiarze
-   * dokładniej niż cokolwiek stojącego obok. Wygrywanie z kątem prostym jest świadome
-   * i zgodne z tym, co robi już domknięcie („niezależnie od trybu ortogonalnego"):
-   * dociągnięcie do narożnika sąsiedniej ściany to świadome wskazanie konkretnego
-   * punktu, a tryb ortogonalny jest tylko pomocą w trzymaniu osi.
+   * dokładniej niż cokolwiek stojącego obok.
+   *
+   * ROZSTRZYGNIĘTE, nie przeoczone: przyciąganie do cudzej geometrii wygrywa z trybem
+   * „Ortogonalnie" ŚWIADOMIE. Skutek uboczny jest realny i został zaakceptowany — przy
+   * włączonym wymuszaniu kątów prostych punkt, który wypadnie w promieniu 0,6 m od
+   * narożnika sąsiedniej ściany, odskoczy z osi i odcinek wyjdzie lekko skośny. Wybrano
+   * to, bo dociągnięcie do konkretnego, widocznego narożnika jest wskazaniem MIEJSCA,
+   * a tryb ortogonalny tylko pomocą w trzymaniu osi — dokładnie tak samo traktuje go
+   * domknięcie figury („niezależnie od trybu ortogonalnego" wyżej). Pilnuje tego test
+   * „przyciąganie do geometrii WYGRYWA z trybem ortogonalnym" w
+   * e2e/przyciaganie-do-geometrii.spec.ts: gdyby ktoś odwrócił ten priorytet uznając go
+   * za błąd, dowie się o tym od razu.
    *
    * Liczone z `raw`, nie z punktu po siatce — pytanie brzmi „gdzie użytkownik
    * NAPRAWDĘ pokazał", a nie „gdzie wylądował po zaokrągleniu do oczka".

@@ -340,3 +340,46 @@ test("obrys w kształcie U przestaje prosić o pomieszczenie, gdy już je dosta�
   await page.mouse.click(box.x + 210, box.y + 60, { button: "right" });
   await expect(page.getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeHidden();
 });
+
+/**
+ * ROZSTRZYGNIECIE PRODUKTOWE, nie przeoczenie.
+ *
+ * Przyciaganie do cudzej geometrii WYGRYWA z trybem „Ortogonalnie". Skutek uboczny
+ * jest realny i zostal zaakceptowany: przy wlaczonym wymuszaniu katow prostych punkt,
+ * ktory wypadnie w zasiegu naroznika sasiedniej sciany, odskoczy z osi i odcinek
+ * wyjdzie lekko skosny.
+ *
+ * Wybrano to, bo dociagniecie do konkretnego, WIDOCZNEGO naroznika jest wskazaniem
+ * MIEJSCA, a tryb ortogonalny tylko pomoca w trzymaniu osi — dokladnie tak samo
+ * traktuje go domkniecie figury („niezaleznie od trybu ortogonalnego" w `zPrzyciaganiem`).
+ *
+ * Ten test jest tu po to, zeby nikt nie „naprawil" tego priorytetu jako bledu. Jesli
+ * padnie, to znaczy, ze ktos go odwrocil — i powinien wrocic do tej decyzji, a nie
+ * poprawiac test.
+ */
+test("przyciąganie do geometrii WYGRYWA z trybem ortogonalnym", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+
+  // Sciana odniesienia: pionowa, z wyraznym naroznikiem u dolu.
+  await page.mouse.click(box.x + 300, box.y + 100);
+  await page.mouse.click(box.x + 300, box.y + 240);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+  const [odniesienie] = await sciany(page);
+  const naroznik = odniesienie.points[1];
+
+  // Nowa scianka z WLACZONYM wymuszaniem katow prostych, prowadzona poziomo —
+  // drugi punkt kilka pikseli OBOK naroznika tamtej sciany.
+  await page.getByTestId("wall-ortho-checkbox").check();
+  await page.mouse.click(box.x + 120, box.y + 236);
+  await page.mouse.click(box.x + 304, box.y + 236);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+
+  const wszystkie = await sciany(page);
+  const [start, koniec] = wszystkie[1].points;
+  // Punkt wyladowal DOKLADNIE na narozniku sasiada — to on zadecydowal, nie kat prosty.
+  expect(koniec).toEqual(naroznik);
+  // I wlasnie dlatego odcinek NIE jest idealnie poziomy. To jest ta zaakceptowana cena.
+  expect(koniec.y).not.toBe(start.y);
+});
