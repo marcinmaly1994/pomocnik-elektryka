@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Zwijanie panelu bocznego (Elementy / Pomieszczenia).
@@ -21,6 +21,14 @@ test("panel jest domyślnie widoczny — katalog nie jest schowany przed nowym u
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await skipEntryScreen(page);
+
+  // Panel JEST rozwinięty od razu — i to jest treść tej decyzji (patrz nagłówek pliku).
+  // Od kroku 84 na pustej kondygnacji otwiera się na „Pomieszczeniach", bo osprzętu nie
+  // ma tam jeszcze gdzie postawić — ale obie zakładki stoją na wierzchu, więc katalog
+  // nie jest ani schowany, ani niewidoczny: jest jedno kliknięcie stąd.
+  await expect(page.getByRole("button", { name: "Elementy", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Pomieszczenia/ })).toBeVisible();
+  await otworzKatalogElementow(page);
   await expect(biblioteka(page)).toBeVisible();
 });
 
@@ -29,6 +37,7 @@ test("zwijanie i rozwijanie panelu uchwytem", async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
 
   await page.getByRole("button", { name: "Zwiń panel boczny" }).click();
   await expect(biblioteka(page)).toHaveCount(0);
@@ -45,12 +54,14 @@ test("zwinięcie panelu przeżywa odświeżenie strony", async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
 
   await page.getByRole("button", { name: "Zwiń panel boczny" }).click();
   await expect(biblioteka(page)).toHaveCount(0);
 
   await page.reload();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
   await expect(biblioteka(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Pokaż panel boczny" })).toBeVisible();
 });
@@ -60,6 +71,7 @@ test("„Wstaw Element” rozwija zwinięty panel, ale inne narzędzia go nie za
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
 
   await page.getByRole("button", { name: "Zwiń panel boczny" }).click();
   await expect(biblioteka(page)).toHaveCount(0);
@@ -82,6 +94,7 @@ test("„Narysuj Pomieszczenie” też rozwija zwinięty panel", async ({ page }
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
 
   await page.getByRole("button", { name: "Zwiń panel boczny" }).click();
   await expect(biblioteka(page)).toHaveCount(0);
@@ -95,6 +108,7 @@ test("zwijanie panelu nie przesuwa rysunku w widoku standardowym", async ({ page
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
 
   // Ręczne przybliżenie wyłącza automatyczne dopasowanie i sprawia, że rzut
   // przestaje się mieścić — dopiero wtedy jest co przewijać i dopiero wtedy
@@ -131,6 +145,7 @@ test("zwinięty panel oddaje miejsce planowi", async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
 
   const szerokoscKarty = async () =>
     (await page.locator('nav[aria-label="Narzędzia rysowania"]').locator("..").boundingBox())!.width;

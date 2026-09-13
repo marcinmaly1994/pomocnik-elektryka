@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Weryfikuje ścieżkę, której nie dało się sprawdzić przez syntetyczne
@@ -30,6 +30,7 @@ test("stawianie elementów na planie odblokowuje bilans faz i selektywność w r
   // elementu samo w sobie odsłania trwały baner ryzyka nad płótnem („Ten projekt
   // istnieje tylko w tej przeglądarce...", gated na `elements.length > 0`), co
   // przesuwa płótno w dół — box zmierzony wcześniej staje się nieaktualny.
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (const dx of [100, 250, 400]) {
     await page.evaluate(() => window.scrollTo(0, 0));

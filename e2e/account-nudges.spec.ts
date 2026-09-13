@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Zachęty do założenia konta — projekt bez konta żyje WYŁĄCZNIE w localStorage
@@ -33,6 +33,7 @@ test("baner ryzyka pojawia się po dodaniu pierwszego elementu i otwiera logowan
   // Box mierzony PO kliknięciu, które zmienia narzędzie, ze scrollTo(0,0) tuż
   // przedtem: takie kliknięcie potrafi przesunąć stronę, więc box zmierzony
   // wcześniej byłby nieaktualny (patrz `zoomAndBox` w room-editing.spec.ts).
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
   const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
@@ -46,6 +47,7 @@ test("baner ryzyka pojawia się po dodaniu pierwszego elementu i otwiera logowan
 
 test("prompt „sporo pracy” nie pojawia się poniżej progu elementów", async ({ page }) => {
   await wejdz(page);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
   const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
@@ -57,6 +59,7 @@ test("prompt „sporo pracy” nie pojawia się poniżej progu elementów", asyn
 
 test("prompt „sporo pracy” pojawia się po przekroczeniu progu i da się odrzucić na stałe", async ({ page }) => {
   await wejdz(page);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   // Box mierzony na nowo PRZED KAŻDYM kliknięciem, ze scrollTo(0,0) tuż przedtem:
   // postawienie PIERWSZEGO elementu odsłania trwały baner ryzyka nad płótnem, co

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Symbole łączników wg zestawu symboli instalacyjnych przesłanego przez użytkownika.
@@ -14,6 +14,7 @@ test("symbole łączników: biblioteka i plan", async ({ page }) => {
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   const names = [
     "Łącznik jednobiegunowy",

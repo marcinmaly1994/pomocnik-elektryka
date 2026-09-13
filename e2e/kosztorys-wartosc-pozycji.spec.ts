@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Recznie wpisana WARTOSC pozycji kosztorysu.
@@ -30,6 +30,7 @@ async function kosztorysZTrzemaGniazdkami(page: Page) {
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
   const plotno = page.locator("div.overflow-auto.rounded-card.border").first();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (const dx of [100, 250, 400]) {
     await page.evaluate(() => window.scrollTo(0, 0));

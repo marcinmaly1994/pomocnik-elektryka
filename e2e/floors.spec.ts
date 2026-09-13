@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska, otworzKatalogElementow } from "./_flow";
 
 test("dodanie nowej kondygnacji przez dialog", async ({ page }) => {
   await page.goto("/");
@@ -27,6 +27,7 @@ test("usuwanie kondygnacji: przycisk dopiero przy drugiej, kasuje jej elementy",
   // Box mierzony PO kliknięciu, które zmienia narzędzie — takie kliknięcie potrafi
   // doscrollować stronę, więc box zmierzony wcześniej byłby nieaktualny (patrz
   // `zoomAndBox` w room-editing.spec.ts, ten sam wzorzec).
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   // Box trzeba pobierać na nowo PRZED KAŻDYM kliknięciem, nie raz na całą pętlę:
   // pojawienie się PIERWSZEGO elementu odsłania trwały baner ryzyka („Ten projekt
@@ -50,6 +51,7 @@ test("usuwanie kondygnacji: przycisk dopiero przy drugiej, kasuje jej elementy",
   await expect(page.getByRole("button", { name: /^Usuń kondygnację/ })).toHaveCount(2);
   await zamknijMenuPaska(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (const dx of [120, 180]) {
     await page.evaluate(() => window.scrollTo(0, 0));

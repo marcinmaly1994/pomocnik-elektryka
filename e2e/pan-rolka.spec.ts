@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
  * Przesuwanie planu wciśniętą rolką myszy — konwencja z programów CAD, działająca
@@ -61,6 +61,7 @@ test("przesuwanie rolką nie stawia elementu ani nie rysuje", async ({ page }) =
   await skipEntryScreen(page);
 
   // Najgorszy możliwy przypadek: aktywne narzędzie stawiające elementy.
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   const box = await przyblizIZwrocBox(page);
 
@@ -140,6 +141,7 @@ test("lewy przycisk nadal stawia element — zabezpieczenie rolki nie zablokowa�
   await skipEntryScreen(page);
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
 
   await page.evaluate(() => window.scrollTo(0, 0));

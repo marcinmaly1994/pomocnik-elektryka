@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /** Umieszcza 3 gniazdka na planie realnymi kliknięciami — wspólny punkt startowy dla
  *  Protokołów/Schematu/Kosztorysu, które (jak Rozdzielnica) wymagają elementów na planie,
@@ -15,6 +15,7 @@ async function placeThreeSockets(page: import("@playwright/test").Page) {
   // trwały baner ryzyka nad płótnem) potrafią przesunąć płótno w dół, więc box
   // zmierzony wcześniej staje się nieaktualny dla kolejnych kliknięć (ten sam
   // wzorzec co `zoomAndBox` w room-editing.spec.ts).
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (const dx of [100, 250, 400]) {
     await page.evaluate(() => window.scrollTo(0, 0));

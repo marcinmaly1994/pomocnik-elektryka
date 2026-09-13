@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen, otworzMenuPaska } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, otworzKatalogElementow } from "./_flow";
 import { makePng } from "./_png";
 
 /**
@@ -80,6 +80,7 @@ test("kliknięcie poza obszarem planu nic nie stawia i mówi dlaczego", async ({
     konva!.stages[0].draw();
   });
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
   const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;

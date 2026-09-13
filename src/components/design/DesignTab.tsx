@@ -75,6 +75,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
+import { zakladkaPanelu, type ZakladkaPanelu } from "@/lib/panelBoczny";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
@@ -453,7 +454,21 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
     [walls, roomShapes]
   );
 
-  const [sidebarTab, setSidebarTab] = useState<"elementy" | "pomieszczenia">("elementy");
+  /**
+   * Zakładka panelu bocznego wybrana RĘCZNIE, albo `null` — „jeszcze nic nie kliknąłem
+   * na tej kondygnacji", czyli decyduje podpowiedź (patrz `zakladkaPanelu`).
+   *
+   * Zerowane przy zmianie kondygnacji, bo podpowiedź dotyczy TEJ kondygnacji, na którą
+   * się właśnie weszło: nowe, puste piętro ma poprosić o pomieszczenia tak samo jak
+   * parter, nawet jeśli na parterze użytkownik przełączył panel na elementy.
+   */
+  const [sidebarTabReczny, setSidebarTabReczny] = useState<ZakladkaPanelu | null>(null);
+  useEffect(() => setSidebarTabReczny(null), [activeFloorId]);
+  const sidebarTab = zakladkaPanelu(sidebarTabReczny, {
+    maPomieszczenia: roomShapes.length > 0,
+    maElementy: elements.length > 0,
+  });
+  const setSidebarTab = setSidebarTabReczny;
   const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
 
   const [toolMode, setToolMode] = useState<ToolMode>("zaznacz");

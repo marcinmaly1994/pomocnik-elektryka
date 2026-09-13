@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /** Prog odrozniajacy trase ZASILANIA od STEROWANIA po grubosci linii — w polowie
  *  miedzy nimi (1,5 kontra 1; patrz `strokeWidth` przy trasach w DesignCanvas).
@@ -57,6 +57,7 @@ async function routeLineCounts(page: import("@playwright/test").Page) {
 
 test("bez rozdzielnicy na planie przełącznik nic nie rysuje", async ({ page }) => {
   await openPlan(page);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 100);
@@ -70,16 +71,20 @@ test("bez rozdzielnicy na planie przełącznik nic nie rysuje", async ({ page })
 test("rozdzielnica + gniazdo + lampa BEZ ścian: przełącznik rysuje dwie trasy, przerywane (szacunek Manhattan), domyślnie ukryte", async ({ page }) => {
   await openPlan(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 60, box.y + 60);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 250, box.y + 80);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   box = await planBox(page);
@@ -123,16 +128,20 @@ test("obwod gniazd i obwod oswietlenia W TYM SAMYM pokoju maja ROZNE kolory", as
   await page.waitForTimeout(300);
 
   await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 100, box.y + 240);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 355, box.y + 160);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   box = await planBox(page);
@@ -165,12 +174,15 @@ test("rozdzielnica i gniazdo połączone ścianą: trasa jest CIĄGŁA (routowan
   await page.mouse.click(box.x + 300, box.y + 80);
   await page.getByRole("button", { name: "Zakończ" }).click();
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 60, box.y + 60);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 300, box.y + 110);
@@ -185,11 +197,13 @@ test("rozdzielnica i gniazdo połączone ścianą: trasa jest CIĄGŁA (routowan
 test("łącznik i oprawa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się nawet BEZ rozdzielnicy na planie", async ({ page }) => {
   await openPlan(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 100);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
   box = await planBox(page);
@@ -215,16 +229,19 @@ test("łącznik i oprawa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się
 test("z rozdzielnicą na planie: zasilanie oprawy STEROWANEJ łącznikiem ląduje na łączniku, nie na oprawie — dopiero sterowanie prowadzi dalej do oprawy", async ({ page }) => {
   await openPlan(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 60, box.y + 60);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   box = await planBox(page);
   await page.mouse.click(box.x + 250, box.y + 100);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
   box = await planBox(page);
@@ -264,11 +281,13 @@ test("z rozdzielnicą na planie: zasilanie oprawy STEROWANEJ łącznikiem ląduj
 test("z rozdzielnicą: KILKA opraw JEDNEGO obwodu na jednym łączniku — TYLKO JEDNA gruba linia zasilania do łącznika, nie po jednej na oprawę", async ({ page }) => {
   await openPlan(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 60, box.y + 60);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   box = await planBox(page);
@@ -278,6 +297,7 @@ test("z rozdzielnicą: KILKA opraw JEDNEGO obwodu na jednym łączniku — TYLKO
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   await page.mouse.click(box.x + 220, box.y + 140);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
   box = await planBox(page);
@@ -309,6 +329,7 @@ test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania d
   // porównuje POZYCJĘ ekranową kliknięcia z narysowanymi punktami trasy.
   await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   let box = await planBox(page);
@@ -318,6 +339,7 @@ test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania d
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   await page.mouse.click(box.x + 250, box.y + 240);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
   box = await planBox(page);
@@ -364,6 +386,7 @@ test("cztery oprawy na jednym łączniku: łańcuch, nie drzewo — ŻADNA opraw
     { x: 46, y: 104 }, // A — dalej, ale bliżej B niż C
     { x: 196, y: 341 }, // D — dalej, bliżej C niż A
   ];
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   let box = await planBox(page);
   for (const p of points) {
@@ -371,6 +394,7 @@ test("cztery oprawy na jednym łączniku: łańcuch, nie drzewo — ŻADNA opraw
     await page.mouse.click(box.x + p.x, box.y + p.y);
   }
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
   await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
   box = await planBox(page);
@@ -427,12 +451,15 @@ async function setupEditableRoute(page: import("@playwright/test").Page) {
   await openPlan(page);
   await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 60, box.y + 60);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 250, box.y + 80);
@@ -542,16 +569,20 @@ test("dwa obwody gniazdek dzielące ten sam odcinek ściany: trasy się NIE zlew
   await page.mouse.click(box.x + 300, box.y + 80);
   await page.getByRole("button", { name: "Zakończ" }).click();
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 60, box.y + 60);
 
   // dwa gniazdka, oba bliżej TEJ SAMEJ ściany, więc obie trasy routują się przez nią
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 280, box.y + 100);
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 100);
@@ -584,14 +615,17 @@ test("dwa gniazda jednego obwodu: DRUGI odcinek startuje z pierwszego gniazda, n
   await openPlan(page);
   await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 330);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
   box = await planBox(page);
   for (const y of [170, 100]) {
+    await otworzKatalogElementow(page);
     await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
     await page.mouse.click(box.x + 300, box.y + y);
   }
@@ -643,12 +677,15 @@ test("gniazdo przy scianie: przewod odbija pod 45 stopni i konczy sie na nozce, 
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
 
   await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 120, box.y + 290); // przy dolnej scianie
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 415, box.y + 160); // przyklejone do PRAWEJ sciany
@@ -698,14 +735,17 @@ test("trzy gniazda przy jednej scianie: zaden odcinek NIE ZAWRACA do naroznika",
   await page.waitForTimeout(300);
 
   await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 110, box.y + 330);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
   box = await planBox(page);
   for (const y of [130, 210, 290]) {
+    await otworzKatalogElementow(page);
     await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
     await page.mouse.click(box.x + 455, box.y + y);
   }
@@ -761,12 +801,15 @@ test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ pa
   await page.waitForTimeout(300);
 
   await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 110, box.y + 330); // przy dolnej scianie, lewy dol
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 455, box.y + 130); // prawa sciana, wysoko
@@ -823,18 +866,22 @@ test("obwod gniazdowy i oswietleniowy dziela sciane: rownolegle pasy, gniazda bl
   await page.waitForTimeout(300);
 
   await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 335); // dolna sciana, srodek
 
   // gniazdo przy PRAWEJ scianie — jego trasa idzie dolem w prawo, przez cala sciane
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 455, box.y + 200);
 
   // oprawa na srodku — jej trasa idzie dolem w prawo tylko KAWALEK, potem w gore
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   box = await planBox(page);
@@ -897,12 +944,14 @@ test("trasa do oprawy odbija na jej wysokosci i wchodzi POD KATEM PROSTYM", asyn
   await page.waitForTimeout(300);
 
   await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 110, box.y + 335); // dolna sciana, lewy dol
 
   // Oprawa BLIZEJ prawej sciany niz dolnej — ale to dolna daje krotsza cala trase.
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
   box = await planBox(page);
@@ -979,12 +1028,15 @@ async function dwaPokoje(page: import("@playwright/test").Page, zDrzwiami: boole
   }
 
   await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 258, box.y + 140); // pokoj 1, przy wspolnej scianie
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 282, box.y + 265); // pokoj 2, przy tej samej scianie
@@ -1077,12 +1129,15 @@ test("bez drzwi trasa nadal laczy pokoje — przewod idzie przez mur", async ({ 
 test("PDF: rzut ma trasy mimo wyłączonego przełącznika w edytorze, a checkbox je zdejmuje", async ({ page }) => {
   await openPlan(page);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 60, box.y + 60);
 
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
+  await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 250, box.y + 80);
