@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { otworzMenuPaska } from "./_flow";
 
 /**
  * Skala jest wlasnoscia KONDYGNACJI, nie projektu.
@@ -74,6 +75,7 @@ test("metraz kabla nie zalezy od tego, ktora kondygnacja jest otwarta", async ({
   // PIETRO: wlasna, wyraznie inna skala i wlasne gniazdko. Nowa kondygnacja dziedziczy
   // skale poprzedniej, wiec zeby zobaczyc blad, trzeba ja swiadomie przekalibrowac —
   // dokladnie tak, jak robi to ktos wgrywajacy osobny skan na kazde pietro.
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
   await skalibruj(page, 200, 1); // 1 jedn. = 0,5 cm, dziesieciokrotnie gesciej niz parter

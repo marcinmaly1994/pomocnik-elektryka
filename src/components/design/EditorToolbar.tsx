@@ -1,16 +1,18 @@
-import { useState, type ReactNode } from "react";
-import { ArrowUpFromLine, Cable, ChevronDown, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
+import { type ReactNode } from "react";
+import { ArrowUpFromLine, Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, minZoom } from "./DesignCanvas";
-import { FloorBar } from "./FloorBar";
+import { FloorManagement, FloorTabs } from "./FloorBar";
+import { PasekMenu, useSzerokieOkno } from "./PasekMenu";
 
 /**
- * JEDEN pasek edytora: kondygnacje, podkład, siatka, rozmiar symboli, strefy,
- * cofnij/ponów, powiększenie i wejście w pełny ekran.
+ * JEDEN pasek edytora, w JEDNYM rzędzie: zakładki kondygnacji, dwa rozwijane menu
+ * („Plan" i „Rysunek"), przełączniki warstw, cofnij/ponów, powiększenie, pełny
+ * ekran, PDF i zapis.
  *
- * Kondygnacje mieszkały wcześniej w osobnym rzędzie NAD paskiem. Dwa rzędy kontrolek
- * zjadały plan z góry i rozbijały uwagę na dwie wysepki, choć konceptualnie to jedno:
- * ustawienia tego, co i jak widzę na planie. Po scaleniu ten pas wraca do rysunku.
+ * Kondygnacje mieszkały kiedyś w osobnym rzędzie NAD paskiem; po scaleniu pasek i tak
+ * zawijał się na dwa rzędy, bo kontrolek było kilkanaście. Co i dlaczego zeszło pod
+ * menu — patrz komentarz przy `return` niżej.
  *
  * Narzędzia rysowania nadal mieszkają osobno, w pionowym `ToolRail` — to inna
  * kategoria (czym rysuję vs. jak patrzę), a przy krawędzi płótna nie zabierają mu
@@ -128,82 +130,85 @@ export function EditorToolbar({
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(minZoom(), Math.round(z * 100) / 100));
 
   /**
-   * Ustawienia planu schowane pod jednym przyciskiem — ale TYLKO na wąskim ekranie.
+   * Zakładki kondygnacji stoją w pasku na monitorze, a na telefonie schodzą na GÓRĘ
+   * panelu „Plan" — do reszty spraw kondygnacji.
    *
-   * Ten pasek ma kilkanaście kontrolek i przy 375 px zawijał się w blok wysoki na
-   * 250 px, czyli jedną trzecią ekranu telefonu, spychając rzut poniżej krawędzi.
-   * Na monitorze nic się nie zmienia: opakowanie ma `md:contents`, więc od 768 px
-   * w górę znika z układu i pasek wygląda dokładnie tak jak przedtem.
+   * Powód jest czysto arytmetyczny: przy 375 px trzy przyciski menu plus zakładki nie
+   * mieszczą się w dwóch rzędach i pasek robi się WYŻSZY, niż był przed tą zmianą
+   * (zmierzone 118 px wobec 84 px). Na monitorze miejsca jest aż nadto, a przełączanie
+   * pięter to czynność nawigacyjna i nie ma prawa kosztować kliknięcia w menu.
    *
-   * Przy planie zostaje to, czego używa się W TRAKCIE rysowania — cofnij/ponów,
-   * powiększenie, dopasowanie widoku, pełny ekran, zapis i PDF. Chowa się to, co
-   * ustawia się RAZ: kondygnacje, podkład, przyciąganie, rozmiar symboli i
-   * przełączniki warstw.
+   * Wybór przez `matchMedia`, a nie klasy CSS: zakładki mają istnieć w drzewie
+   * DOKŁADNIE RAZ, inaczej każde `getByRole("button", { name: "Parter" })` trafiałoby
+   * w dwa elementy.
    */
-  const [ustawieniaOtwarte, setUstawieniaOtwarte] = useState(false);
+  const szerokieOkno = useSzerokieOkno();
 
+  /**
+   * JEDEN RZĄD, na każdej szerokości okna.
+   *
+   * Pasek miał kilkanaście kontrolek i przy typowym oknie 1440×900 zawijał się na
+   * DWA rzędy — zmierzone 84 px zabrane rysunkowi na rzeczy, które ustawia się raz.
+   * Na telefonie było jeszcze gorzej: blok wysoki na ~250 px, czyli jedna trzecia
+   * ekranu. Rzeczy „ustawiane raz" schodzą więc pod dwa rozwijane menu (patrz
+   * `PasekMenu`), a w pasku zostaje to, czego używa się W TRAKCIE rysowania.
+   *
+   * Zastąpiło to dawne „Ustawienia planu" — zwijanie włączane WYŁĄCZNIE poniżej
+   * 768 px. Tamto rozwiązanie miało dwie wady, które ta zmiana usuwa: na monitorze
+   * nie robiło nic (a to tam stały te dwa rzędy), i dawało inny układ paska na
+   * telefonie niż na laptopie, czyli dwa zachowania do utrzymania i przetestowania
+   * zamiast jednego.
+   *
+   * Podział jest wg CZĘSTOTLIWOŚCI, nie wg tematu:
+   *  - w pasku: zakładki kondygnacji (nawigacja, robiona w kółko), przełączniki
+   *    warstw (jedno kliknięcie, ikona), cofnij/ponów, powiększenie, pełny ekran,
+   *    PDF i zapis;
+   *  - „Plan": kondygnacje do dodania/skopiowania/usunięcia, wysokość kondygnacji
+   *    i podkład;
+   *  - „Rysunek": przyciąganie do siatki, przyciąganie osprzętu do ścian i rozmiar
+   *    symboli.
+   */
   return (
     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-card border border-border bg-white px-2.5 py-1.5">
-      <button
-        onClick={() => setUstawieniaOtwarte((v) => !v)}
-        aria-expanded={ustawieniaOtwarte}
-        className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs text-slate-600 transition-colors hover:text-copper md:hidden"
-      >
-        <SlidersHorizontal size={14} />
-        Ustawienia planu
-        <ChevronDown size={13} className={ustawieniaOtwarte ? "rotate-180 transition-transform" : "transition-transform"} />
-      </button>
+      {szerokieOkno && <FloorTabs />}
 
-      {/* `contents` zamiast `block`: opakowanie ma zniknąć z układu, żeby jego dzieci
-          zostały bezpośrednimi elementami paska i zawijały się jak dotąd. Inaczej
-          całość stałaby się jednym blokiem i pasek rozjechałby się na monitorze. */}
-      <div className={ustawieniaOtwarte ? "contents" : "hidden md:contents"}>
-      <FloorBar />
+      <PasekMenu etykieta="Plan" ikona={<SlidersHorizontal size={14} />} szerokosc={320}>
+        {!szerokieOkno && <FloorTabs />}
+        <FloorManagement />
 
-      <Separator />
-
-      {/* Podkład: nazwa pliku zamiast samego „wgrany" — przy kilku kondygnacjach
-          to jedyny sposób, żeby sprawdzić, czy pod spodem leży właściwy rzut. */}
-      <span className="flex items-center gap-1.5 text-xs">
-        <ImageIcon size={14} className="shrink-0 text-blueprint" />
-        {bgImageUrl ? (
-          <>
-            {/* Przedrostek „Podkład:" zostaje mimo walki o miejsce — sama nazwa pliku
-                obok ikonki nie mówi, CZYM ten plik jest w projekcie. */}
-            <span className="max-w-[160px] truncate text-slate-600" title={bgName ?? undefined}>
-              Podkład: {bgName ?? "wgrany"}
-            </span>
+        {/* Podkład: nazwa pliku zamiast samego „wgrany" — przy kilku kondygnacjach
+            to jedyny sposób, żeby sprawdzić, czy pod spodem leży właściwy rzut. */}
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2 text-xs">
+          <ImageIcon size={14} className="shrink-0 text-blueprint" />
+          {bgImageUrl ? (
+            <>
+              {/* Przedrostek „Podkład:" zostaje mimo walki o miejsce — sama nazwa pliku
+                  obok ikonki nie mówi, CZYM ten plik jest w projekcie. */}
+              <span className="max-w-[160px] truncate text-slate-600" title={bgName ?? undefined}>
+                Podkład: {bgName ?? "wgrany"}
+              </span>
+              <button onClick={onPickBg} className="text-blueprint hover:underline">
+                Zmień
+              </button>
+              <button onClick={onClearBg} className="text-red-500 hover:underline">
+                Usuń
+              </button>
+            </>
+          ) : (
             <button onClick={onPickBg} className="text-blueprint hover:underline">
-              Zmień
+              Wgraj podkład
             </button>
-            <button onClick={onClearBg} className="text-red-500 hover:underline">
-              Usuń
-            </button>
-          </>
-        ) : (
-          <button onClick={onPickBg} className="text-blueprint hover:underline">
-            Wgraj podkład
-          </button>
-        )}
-      </span>
+          )}
+        </div>
+      </PasekMenu>
 
-      <Separator />
-
-      {/* Dwie RÓŻNE rzeczy stojące obok siebie, obie z pełną nazwą — skrót „Siatka"
-          przy jednej z nich zacierał różnicę. Przełącznik decyduje, czy siatkę WIDAĆ;
-          checkbox — czy elementy się do niej PRZYCIĄGAJĄ. Można wyłączyć samą kratkę
-          (przeszkadza na wgranym rzucie) i dalej rysować z przyciąganiem. */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => onGridChange(!gridOn)}
-        title={gridOn ? "Wyłącz siatkę" : "Włącz siatkę"}
-        aria-label={gridOn ? "Wyłącz siatkę" : "Włącz siatkę"}
-        aria-pressed={gridOn}
-      >
-        <Grid3x3 size={15} className={gridOn ? "text-copper" : undefined} />
-      </Button>
-
+      {/* Dwie RÓŻNE rzeczy, które stały dotąd obok siebie w pasku — i właśnie dlatego
+          rozeszły się w tej zmianie. Przełącznik decyduje, czy siatkę WIDAĆ (to warstwa
+          rysunku, więc jego ikona zostaje w pasku razem z pozostałymi przełącznikami
+          warstw); checkbox — czy elementy się do niej PRZYCIĄGAJĄ (to ustawienie
+          rysowania, więc siedzi tutaj). Można wyłączyć samą kratkę, bo przeszkadza na
+          wgranym rzucie, i dalej rysować z przyciąganiem. */}
+      <PasekMenu etykieta="Rysunek" ikona={<Ruler size={14} />} szerokosc={300}>
       <label
         className="flex items-center gap-1.5 text-xs text-slate-500"
         title={
@@ -273,6 +278,25 @@ export function EditorToolbar({
           </button>
         )}
       </label>
+      </PasekMenu>
+
+      <Separator />
+
+      {/* PRZEŁĄCZNIKI WARSTW — co widać na rysunku. Na monitorze stoją WPROST w pasku
+          (`rozwinNaSzerokim`): to jedno kliknięcie w ikonę, używane w trakcie pracy,
+          a sześć ikon po 32 px nic tam nie kosztuje. Na telefonie ten sam rząd byłby
+          całym rzędem paska, więc tam schodzą pod „Warstwy". */}
+      <PasekMenu etykieta="Warstwy" ikona={<Layers2 size={14} />} szerokosc={220} rozwinNaSzerokim>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onGridChange(!gridOn)}
+        title={gridOn ? "Wyłącz siatkę" : "Włącz siatkę"}
+        aria-label={gridOn ? "Wyłącz siatkę" : "Włącz siatkę"}
+        aria-pressed={gridOn}
+      >
+        <Grid3x3 size={15} className={gridOn ? "text-copper" : undefined} />
+      </Button>
 
       <Button variant="ghost" size="icon" onClick={onToggleZones} title="Pokaż strefy ochronne w łazience">
         {showZones ? <Eye size={15} /> : <EyeOff size={15} />}
@@ -336,7 +360,10 @@ export function EditorToolbar({
           <Layers2 size={15} className={showUnderlay ? "text-copper" : undefined} />
         </Button>
       )}
-      </div>
+
+      </PasekMenu>
+
+      <Separator />
 
       <div className="flex items-center">
         <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title="Cofnij">

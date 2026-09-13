@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { otworzMenuPaska } from "./_flow";
 
 /**
  * Onboarding: EKRAN STARTOWY (pierwszy wybór na zupełnie świeżym projekcie —
@@ -53,6 +54,7 @@ test("ekran startowy prowadzi od wgrania rzutu przez skalę do pierwszego elemen
   // przewodnik onboardingu, nie przycinanie, więc pomijamy je. Pominięcie MUSI
   // zostawić wgrany podkład: to sedno wyjścia awaryjnego.
   await page.getByRole("button", { name: "Pomiń — użyj całego rzutu" }).click();
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByText(/Podkład: rzut.png/)).toBeVisible();
 
   // Podkład wgrany — aplikacja sama wchodzi w krok 1 (skala) i tłumaczy go dymkiem
@@ -222,6 +224,7 @@ test("kolejna kondygnacja dziedziczy skalę, ale prosi o własne pomieszczenia",
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
 
   // nowa kondygnacja
+  await otworzMenuPaska(page, "Plan");
   await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 

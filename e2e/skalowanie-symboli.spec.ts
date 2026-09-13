@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { otworzMenuPaska } from "./_flow";
 
 /**
  * Skalowanie symboli razem ze skala rzutu.
@@ -141,6 +142,7 @@ test("suwak rozmiaru rusza osprzetem, ale nie przyborem sanitarnym", async ({ pa
   });
   const wannaPrzed = await skalaSymbolu(page, 9);
 
+  await otworzMenuPaska(page, "Rysunek");
   const suwak = page.getByLabel("Rozmiar elementów");
   await suwak.fill("2");
 

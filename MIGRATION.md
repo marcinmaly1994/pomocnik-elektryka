@@ -3760,6 +3760,87 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
     `npx playwright test` **417/417** (+5).
 
+83. **Pasek edytora w jednym rzędzie — płótno odzyskuje 50 px** — pasek miał
+    kilkanaście kontrolek i przy typowym oknie 1440×900 zawijał się na DWA rzędy.
+    Zmierzone przed i po: **84 px → 46 px**, płótno **800×560 → 850×595**, jego
+    górna krawędź **279 px → 241 px** od góry okna, udział powierzchni okna
+    **35% → 39%**.
+
+    Kontrolki rozdzielone wg CZĘSTOTLIWOŚCI użycia, nie wg tematu:
+    - **w pasku** — zakładki kondygnacji (nawigacja, robiona w kółko), sześć
+      przełączników warstw (jedno kliknięcie w ikonę), cofnij/ponów, powiększenie,
+      pełny ekran, PDF i zapis;
+    - **„Plan"** — dodawanie, duplikowanie i usuwanie kondygnacji, wysokość
+      kondygnacji, podkład;
+    - **„Rysunek"** — przyciąganie do siatki, przyciąganie osprzętu do ścian,
+      rozmiar symboli.
+
+    Przełącznik widoczności SIATKI został przy tej okazji odklejony od checkboxa
+    „przyciągaj do siatki", obok którego stał od zawsze — i właśnie dlatego, że stały
+    obok siebie, myliły się ze sobą. Pierwszy mówi, co WIDAĆ (warstwa rysunku, więc
+    ikona zostaje w pasku), drugi — jak się RYSUJE (więc schodzi pod „Rysunek").
+
+    **`PasekMenu`** (nowy komponent) to zwykły popover, a NIE `DropdownMenu`
+    z Radiksa, którego aplikacja używa gdzie indziej: tamto jest menu POLECEŃ —
+    pozycje przejmują nawigację strzałkami i zamykają się po wyborze. Tu w środku
+    siedzą pola wyboru, suwak, pole liczbowe i przyciski otwierające własne okna
+    dialogowe, czyli formularz. Zamyka się kliknięciem obok (`pointerdown`, nie
+    `click` — inaczej kliknięcie w płótno pod panelem zamykało panel I stawiało
+    element naraz), Escape'em i ponownym kliknięciem w przycisk. Okna otwierane
+    z wnętrza panelu są wyjątkiem od zamykania (renderują się w portalu, poza
+    pudłem), ale po ich zatwierdzeniu panel zamyka się sam przez
+    `useZamknijPasekMenu` — bez tego zostawał otwarty NAD kolumną narzędzi
+    i przechwytywał kliknięcia w bibliotekę elementów, czyli w to, co robi się
+    zaraz po dodaniu kondygnacji.
+
+    **To zastąpiło dawne „Ustawienia planu"** — zwijanie włączane WYŁĄCZNIE poniżej
+    768 px. Tamto miało dwie wady: na monitorze nie robiło nic (a to tam stały te
+    dwa rzędy), i dawało inny układ paska na telefonie niż na laptopie, czyli dwa
+    zachowania do utrzymania zamiast jednego.
+
+    **Telefon nie mógł na tym stracić** i to wyszło dopiero z pomiaru: sam podział
+    na menu dał przy 375 px pasek na **118 px**, czyli WYŻSZY niż wyjściowe 84.
+    Stąd dwie rzeczy sterowane `matchMedia` (`useSzerokieOkno`), a nie klasami CSS —
+    wybór ma decydować o tym, co w ogóle TRAFIA do drzewa, bo dwie kopie tych samych
+    kontrolek (jedna schowana `display:none`) dałyby dwa elementy o tej samej nazwie
+    dostępnościowej i dwa trafienia w każdym `getByRole`:
+    - przełączniki warstw stoją wprost w pasku od 768 px w górę
+      (`rozwinNaSzerokim`), a niżej schodzą pod „Warstwy";
+    - zakładki kondygnacji stoją w pasku na monitorze, a na telefonie przenoszą się
+      na górę panelu „Plan".
+
+    Po tym: **telefon 84 → 78 px**, monitor 84 → 46 px. `FloorBar` rozpadł się przy
+    okazji na `FloorTabs` (przełączanie) i `FloorManagement` (zarządzanie) — to dwie
+    różne częstotliwości i trafiają w dwa różne miejsca.
+
+    **Testy e2e: 33 przypadki w 18 plikach** sięgały po kontrolki, które zeszły pod
+    menu. Doszły dwa pomocniki w `_flow.ts` (`otworzMenuPaska`, `zamknijMenuPaska`)
+    i wywołania przed tymi kontrolkami. Trzy testy trzeba było NAPISAĆ OD NOWA, bo
+    zmieniło się ich założenie, a nie tylko selektor:
+    - „ustawienia planu chowaja sie na telefonie, a na monitorze stoja odkryte" →
+      dwa testy: o wysokości paska na obu szerokościach (z progami z POMIARU, nie
+      z oka) i o tym, gdzie mieszkają zakładki kondygnacji;
+    - „kondygnacje mieszkają w jednym pasku razem z podkładem i siatką" → to samo
+      stwierdzenie, ale przez oba menu.
+
+    Dwa testy w `fullscreen.spec.ts` namierzały pasek przez
+    `getByLabel("Rozmiar elementów")` i jego przodka `rounded-card` — a ta kontrolka
+    siedzi teraz w PANELU, który sam jest kartą `rounded-card`, więc przodek trafiał
+    w panel zamiast w pasek. Kotwicą jest teraz przycisk „Plan", który stoi wprost
+    w pasku i jest widoczny zawsze.
+
+    **Nie zrobione, zgłoszone jako osobna sprawa:** strona nadal przewija się przy
+    oknie 1440×900 (dokument 1233 px), bo kolumna z biblioteką elementów ma 820 px
+    wysokości — o 260 px więcej niż płótno obok niej. Przycięcie jej do wysokości
+    płótna zlikwidowałoby przewijanie, ale skróciłoby listę elementów z ~560 px do
+    ~300 px i to jest decyzja produktowa, nie porządkowa.
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1429/1429**,
+    `npx vite build` bez błędów, `eslint` bez błędów (2 nowe ostrzeżenia
+    `react-refresh` w `PasekMenu.tsx` — ta sama kategoria co siedem istniejących:
+    plik eksportuje obok komponentu także hooka), `npx playwright test` **418/418**
+    (+1: dwa nowe testy w miejsce jednego przepisanego).
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +

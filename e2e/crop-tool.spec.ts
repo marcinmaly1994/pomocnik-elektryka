@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska } from "./_flow";
 import { makePlanPng } from "./_png";
 
 /**
@@ -61,6 +61,7 @@ test("„Pomiń — użyj całego rzutu” wraca wprost do edytora, w oryginalny
 
   // wraca zwykły edytor — nie ma już ekranu weryfikacji
   await expect(page.getByRole("button", { name: "Kalibracja skali" })).toBeVisible();
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByText(/Podkład: rzut\.png/)).toBeVisible();
   await page.waitForTimeout(900); // debounce autozapisu
 
@@ -86,6 +87,7 @@ test("zaznaczenie i przycięcie prowadzi do edytora z przyciętym podkładem", a
   await przytnij.click();
 
   await expect(page.getByRole("button", { name: "Kalibracja skali" })).toBeVisible();
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByText(/Podkład: rzut\.png/)).toBeVisible();
 });
 
@@ -146,6 +148,7 @@ test("Enter zatwierdza gotowy prostokąt tak samo jak klik w przycisk", async ({
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("button", { name: "Kalibracja skali" })).toBeVisible();
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByText(/Podkład: rzut\.png/)).toBeVisible();
 });
 
@@ -159,5 +162,6 @@ test("kliknięcie na gotowym prostokącie zatwierdza go bez klikania w przycisk"
   await klikW(svg, 0.7, 0.5);
 
   await expect(page.getByRole("button", { name: "Kalibracja skali" })).toBeVisible();
+  await otworzMenuPaska(page, "Plan");
   await expect(page.getByText(/Podkład: rzut\.png/)).toBeVisible();
 });

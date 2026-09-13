@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
 
 /**
  * Przyciąganie rysowanego punktu do geometrii, która JUŻ jest na rzucie, oraz
@@ -71,8 +71,12 @@ test.describe("przyciąganie do istniejącej geometrii", () => {
    * Siatka domyślnie i tak jest wyłączona na wgranym podkładzie.
    */
   async function bezSiatki(page: Page) {
+    await otworzMenuPaska(page, "Rysunek");
     const siatka = page.getByLabel("Przyciągaj ściany do siatki");
     if (await siatka.isChecked()) await siatka.uncheck();
+    // Panel menu lezy NAD kolumna narzedzi i nad plotnem, wiec zostawiony otwarty
+    // przechwytywalby kliknięcia rysujące ściane.
+    await zamknijMenuPaska(page);
   }
 
   test("punkt nowej ściany dociąga się do narożnika ściany już narysowanej", async ({ page }) => {

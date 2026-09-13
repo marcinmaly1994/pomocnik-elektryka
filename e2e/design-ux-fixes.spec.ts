@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska } from "./_flow";
 
 /**
  * Zestaw poprawek zgłoszonych jedną paczką uwag UI/UX do edytora planu:
@@ -119,6 +119,7 @@ test("element da się przeciągnąć w narzędziu „Wstaw element”, bez prze�
   await pustyProjekt(page);
   // Bez przyciągania do siatki: postawiony element ląduje DOKŁADNIE pod kursorem,
   // więc test może wrócić w to samo miejsce ekranu, żeby go złapać do przeciągnięcia.
+  await otworzMenuPaska(page, "Rysunek");
   await page.getByLabel("Przyciągaj ściany do siatki").uncheck();
   await page.getByRole("button", { name: "Wstaw Element" }).click();
 

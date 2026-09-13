@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
 
 /**
  * Tryb pełnoekranowy: plan dostaje całe okno pomniejszone o dwa niskie paski
@@ -145,7 +145,10 @@ test("pasek kontrolek stoi tuż nad płótnem, bez pustego rzędu pod spodem", a
   await page.goto("/");
   await skipEntryScreen(page);
 
-  const pasek = (await page.getByLabel("Rozmiar elementów").locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]").boundingBox())!;
+  // Kotwica to przycisk „Plan" — stoi wprost w pasku i jest widoczny zawsze. Dawne
+  // celowanie w „Rozmiar elementów" przestalo dzialac, odkad ta kontrolka siedzi
+  // w PANELU menu, ktory sam jest karta `rounded-card`.
+  const pasek = (await page.getByRole("button", { name: "Plan", exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]").boundingBox())!;
   const wiersz = (await page.locator('nav[aria-label="Narzędzia rysowania"]').locator("xpath=ancestor::div[contains(@class,'items-start')][1]").boundingBox())!;
 
   // Pusty rząd kontrolek kontekstowych ma znikać z układu (`empty:hidden`), a nie
@@ -331,7 +334,10 @@ test("przypięty panel po lewej NIE zasłania górnego paska", async ({ page }) 
   await page.waitForTimeout(400);
 
   const karta = (await lewaKarta(page).boundingBox())!;
-  const pasek = (await page.getByLabel("Rozmiar elementów").locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]").boundingBox())!;
+  // Kotwica to przycisk „Plan" — stoi wprost w pasku i jest widoczny zawsze. Dawne
+  // celowanie w „Rozmiar elementów" przestalo dzialac, odkad ta kontrolka siedzi
+  // w PANELU menu, ktory sam jest karta `rounded-card`.
+  const pasek = (await page.getByRole("button", { name: "Plan", exact: true }).locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]").boundingBox())!;
 
   // Wszystkie panele mają ten sam z-index, więc o wierzchu decydowała kolejność
   // w DOM — karta przykrywała lewy koniec paska, czyli kondygnacje i podkład.
@@ -359,6 +365,7 @@ test("paski poziome stoją na stałe i nie chowają się przed kursorem", async 
   // Chowa się WYŁĄCZNIE panel boczny — on jeden ma szerokość, która realnie
   // zmienia ilość miejsca dla planu. Paski poziome są niskie, więc chowanie ich
   // dawało znikomy zysk, a wchodziło w drogę przypiętym narzędziom.
+  await otworzMenuPaska(page, "Rysunek");
   const pasek = page.getByLabel("Rozmiar elementów");
   const dane = page.getByText(/Obszar planu:/);
   await expect(pasek).toBeVisible();
@@ -387,15 +394,22 @@ test("paski poziome stoją na stałe i nie chowają się przed kursorem", async 
   }
 });
 
-test("kondygnacje mieszkają w jednym pasku razem z podkładem i siatką", async ({ page }) => {
+test("pasek edytora trzyma wszystkie ustawienia planu w JEDNEJ karcie", async ({ page }) => {
   await page.goto("/");
   await skipEntryScreen(page);
 
-  // Wszystkie cztery kontrolki dzielą JEDNĄ kartę paska — po scaleniu nie ma już
-  // osobnego rzędu na kondygnacje.
-  const pasek = page.getByRole("button", { name: "Parter" }).locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]");
+  // Po scaleniu nie ma juz osobnego rzedu na kondygnacje — a od kroku 83 rzeczy
+  // ustawiane raz siedza pod „Plan" i „Rysunek", ale nadal w TEJ SAMEJ karcie paska.
+  const pasek = page
+    .getByRole("button", { name: "Parter", exact: true })
+    .locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]");
+
+  await otworzMenuPaska(page, "Plan");
   await expect(pasek.getByRole("button", { name: "+ Dodaj kondygnację" })).toBeVisible();
   await expect(pasek.getByRole("button", { name: "Wgraj podkład" })).toBeVisible();
+  await zamknijMenuPaska(page);
+
+  await otworzMenuPaska(page, "Rysunek");
   await expect(pasek.getByLabel("Przyciągaj ściany do siatki")).toBeVisible();
   await expect(pasek.getByLabel("Rozmiar elementów")).toBeVisible();
 });

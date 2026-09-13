@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska } from "./_flow";
 
 /**
  * Powłoka aplikacji: nagłówek, suwak rozmiaru symboli i stopka.
@@ -45,6 +45,7 @@ test("suwak zmienia rozmiar symboli, nie ich położenie", async ({ page }) => {
   const before = await glyph();
   expect(before.scale).toBeCloseTo(DISPLAY_DEFAULT * BASE_ELEMENT_SCALE, 5);
 
+  await otworzMenuPaska(page, "Rysunek");
   await page.getByLabel("Rozmiar elementów").fill("2");
   await expect(page.getByText("2.0×")).toBeVisible();
 
@@ -184,6 +185,7 @@ test("siatkę da się wyłączyć niezależnie od przyciągania", async ({ page 
   expect(bezSiatki).toBeLessThan(zSiatka * 0.5);
 
   // Przyciąganie to OSOBNA kontrolka i wyłączenie kratki nie może jej ruszyć.
+  await otworzMenuPaska(page, "Rysunek");
   await expect(page.getByLabel("Przyciągaj ściany do siatki")).toBeVisible();
 
   await page.getByRole("button", { name: "Włącz siatkę" }).click();
