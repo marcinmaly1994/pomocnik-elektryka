@@ -16,6 +16,75 @@ export const DEFAULT_PLAN_HEIGHT = 700;
 export const GRID = 20;
 
 /**
+ * Pasmo u dołu okna zajęte przez pływające pigułki „Cofnij"/„Dalej" (App.tsx):
+ * odstęp od krawędzi okna plus wysokość samej pigułki.
+ *
+ * Dlaczego TUTAJ, a nie przy przycisku: potrzebują tej liczby dwa miejsca po dwóch
+ * stronach podziału kodu na kawałki — App.tsx rysuje pigułki, a edytor planu musi
+ * zostawić im wolne miejsce pod płótnem (patrz `wysokoscPlotna` w DesignCanvas.tsx).
+ * Import w drugą stronę, z DesignCanvas do App, wciągnąłby Konvę do kawałka
+ * wejściowego, czyli zniweczył cały podział zakładek na `lazy()`.
+ *
+ * Powód istnienia: pigułka „Dalej: Rozdzielnica" leżała NA płótnie — przy oknie
+ * 1440×900 zajmowała prostokąt 109×36 px w prawym dolnym rogu obszaru rysowania
+ * i zjadała tam kliknięcia. Płótno jest powierzchnią roboczą; nawigacja nie ma prawa
+ * na niej stać.
+ */
+export const NAWIGACJA_ODSTEP_PX = 20;
+/** Wysokość pigułki nawigacji — stała, bo to jeden rozmiar tekstu i stały padding. */
+export const NAWIGACJA_WYSOKOSC_PX = 36;
+export const PASMO_NAWIGACJI_PX = NAWIGACJA_ODSTEP_PX + NAWIGACJA_WYSOKOSC_PX;
+
+/** Oddech między dolną krawędzią płótna a tym, co pod nim, żeby rysunek nie kończył
+ *  się dokładnie na krawędzi. */
+const ODDECH_POD_PLOTNEM = 12;
+
+/** Ile miejsca u dołu okna zostaje nietknięte: pasmo pływających pigułek nawigacji
+ *  plus oddech. Płótno jest powierzchnią roboczą i nawigacja nie ma prawa na niej stać. */
+export const ZAPAS_POD_PLOTNEM = PASMO_NAWIGACJI_PX + ODDECH_POD_PLOTNEM;
+
+/** Najmniejsze sensowne okno rysunku. Wchodzi w grę tam, gdzie nad płótnem stoi tyle
+ *  (telefon: nagłówek zawinięty na cztery wiersze, banery, biblioteka elementów), że
+ *  z okna nie zostaje już nic. Poniżej tego progu przewijanie do rysunku jest i tak
+ *  nieuniknione, więc pigułki nawigacji mogą znów wypaść na płótnie — na oknie tak
+ *  niskim nie ma układu, w którym mieści się jedno i drugie. */
+export const MIN_WYS_PLOTNA = 360;
+
+/** Górna granica: powyżej tego rysunek przestaje być czytelny jako całość, a i tak
+ *  ogranicza go szerokość kolumny. */
+export const MAX_WYS_PLOTNA = 1100;
+
+/**
+ * Wysokość okna płótna: tyle, żeby DOLNA krawędź rysunku wypadła przy dolnej krawędzi
+ * okna, gdy strona jest przewinięta na sam początek.
+ *
+ * `goraPlotna` to odległość od góry DOKUMENTU do góry kolumny płótna — czyli zmierzona
+ * wysokość wszystkiego, co nad nią stoi: nagłówka strony, paska etapów, banerów
+ * (pojawiają się i znikają w trakcie pracy!), paska kondygnacji i paska narzędzi.
+ *
+ * HISTORIA: stał tu szacunek `okno - 260` i był ZŁY — tego, co nad płótnem, jest realnie
+ * około 480 px. Przy oknie 1440×900 strona wychodziła na 1291 px, przy 1600×1200 na
+ * 1480 px, czyli edytor nie mieścił się w oknie NIGDY, na żadnym monitorze: dolną
+ * krawędź rysunku dało się zobaczyć wyłącznie przewijając całą stronę — razem z paskiem
+ * narzędzi, którym się w tej chwili rysuje. Tryb pełnoekranowy liczył to poprawnie od
+ * początku (mierzy `rozmiaryChrome` w DesignTab.tsx), więc tutaj też MIERZYMY, zamiast
+ * zgadywać.
+ *
+ * `null` (kolumna płótna jeszcze niezamontowana — ekran wejściowy, przycinanie podkładu)
+ * wraca do dawnego szacunku: to wyłącznie wartość startowa, którą pierwszy pomiar po
+ * zamontowaniu zaraz zastąpi.
+ *
+ * `okno` wstrzykiwalne, żeby dało się to sprawdzić bez przeglądarki.
+ */
+export function wysokoscPlotna(
+  goraPlotna: number | null = null,
+  okno: number = typeof window === "undefined" ? 900 : window.innerHeight
+): number {
+  if (goraPlotna === null) return Math.max(640, Math.min(MAX_WYS_PLOTNA, okno - 260));
+  return Math.max(MIN_WYS_PLOTNA, Math.min(MAX_WYS_PLOTNA, okno - goraPlotna - ZAPAS_POD_PLOTNEM));
+}
+
+/**
  * Poniżej tej szerokości okna edytor układa się „telefonicznie": panel boczny
  * startuje zwinięty, a ustawienia planu chowają się pod jeden przycisk.
  *

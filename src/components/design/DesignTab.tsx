@@ -56,6 +56,7 @@ import {
   planSizeForImage,
   roomNameAfterMove,
   scaleOf,
+  wysokoscPlotna,
   ZAPAS_ETYKIET,
 } from "@/lib/design";
 import {
@@ -73,7 +74,7 @@ import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
-import { DesignCanvas, MAX_ZOOM, minZoom, wysokoscPlotna, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
+import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
 import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
 import { EditorStatusBar } from "./EditorStatusBar";
@@ -532,6 +533,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    *  lewej karty zmienia się ze zwinięciem panelu, a wysokość górnego paska zależy
    *  od tego, czy zawinie się na węższym ekranie. */
   const [rozmiaryChrome, setRozmiaryChrome] = useState({ gora: 0, lewo: 0, dol: 0 });
+  /** Korzeń CAŁEJ zakładki — jego górna krawędź to wysokość nagłówka strony i paska
+   *  etapów, czyli tej części chrome'u, która nigdy się nie zmienia. Potrzebna do
+   *  policzenia wysokości płótna z pominięciem banerów (patrz efekt `wysPlotna`). */
+  const korzenZakladkiRef = useRef<HTMLDivElement>(null);
   const pelnyEkranRef = useRef<HTMLDivElement>(null);
   const gornyPasekRef = useRef<HTMLDivElement>(null);
   const lewaKartaRef = useRef<HTMLDivElement>(null);
@@ -581,20 +586,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     const z = Math.min(dostepnaSzer / planSize.w, wysPlotna / planSize.h);
     setZoom(Math.round(Math.min(MAX_ZOOM, Math.max(minZoom(), z)) * 100) / 100);
   }, [planSize.w, planSize.h, wysPlotna]);
-
-  useEffect(() => {
-    // W pełnym ekranie płótno bierze całą wysokość okna: paski leżą NAD nim jako
-    // nakładki, więc nie ma już nagłówka ani paska etapów, na które trzeba zostawić
-    // zapas (patrz `wysokoscPlotna`).
-    // Przypięte paski zajmują górę/dół okna na stałe, więc płótno musi o tyle
-    // zmaleć — inaczej jego dolna krawędź chowałaby się pod przypiętym paskiem stanu.
-    const zajetePionowo = rozmiaryChrome.gora + rozmiaryChrome.dol;
-    const przelicz = () =>
-      setWysPlotna(pelnyEkran ? Math.max(320, window.innerHeight - 16 - zajetePionowo) : wysokoscPlotna());
-    przelicz();
-    window.addEventListener("resize", przelicz);
-    return () => window.removeEventListener("resize", przelicz);
-  }, [pelnyEkran, rozmiaryChrome.gora, rozmiaryChrome.dol]);
 
   /** Wejście i wyjście z pełnego ekranu zmienia dostępne miejsce skokowo, więc rzut
    *  dopasowujemy na nowo — nawet jeśli użytkownik wcześniej ustawił zoom ręcznie.
@@ -799,6 +790,70 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const kondygnacjaPusta = elements.length === 0 && walls.length === 0 && roomShapes.length === 0;
 
   /**
+   * Wysokość okna rysunku. Stoi TUTAJ, a nie przy pozostałych efektach układu wyżej,
+   * bo potrzebuje `showEntryScreen` i `wgrywanie.stan` — a te są zadeklarowane dopiero
+   * nad tym miejscem.
+   */
+  useEffect(() => {
+    // W pełnym ekranie płótno bierze całą wysokość okna: paski leżą NAD nim jako
+    // nakładki, więc nie ma już nagłówka ani paska etapów, na które trzeba zostawić
+    // zapas (patrz `wysokoscPlotna`).
+    // Przypięte paski zajmują górę/dół okna na stałe, więc płótno musi o tyle
+    // zmaleć — inaczej jego dolna krawędź chowałaby się pod przypiętym paskiem stanu.
+    const zajetePionowo = rozmiaryChrome.gora + rozmiaryChrome.dol;
+    const przelicz = () => {
+      // W widoku standardowym MIERZYMY, ile stoi nad płótnem, zamiast zgadywać stałą —
+      // patrz `wysokoscPlotna`.
+      //
+      // Mierzymy jednak WYŁĄCZNIE chrome STAŁY, z pominięciem banerów, i to jest tu
+      // najważniejsza decyzja. Banery („zacznij od podkładu", „brak skali", „zabezpiecz
+      // kontem") pojawiają się i znikają W TRAKCIE pracy — pierwszy postawiony element
+      // gasi jeden z nich. Gdyby wchodziły do rachunku, płótno zmieniałoby wtedy
+      // wysokość, dopasowanie widoku przeliczałoby powiększenie i CAŁY rzut skakałby
+      // pod kursorem dokładnie w chwili, gdy użytkownik coś na nim stawia. Baner niech
+      // więc spycha rysunek w dół (i wydłuża stronę), a nie przeskalowuje go.
+      //
+      // Suma dwóch STAŁYCH odcinków:
+      //  • od góry dokumentu do korzenia zakładki — nagłówek strony i pasek etapów,
+      //  • od korzenia edytora do kolumny płótna — pasek kondygnacji i pasek narzędzi.
+      // Banery leżą MIĘDZY korzeniem zakładki a korzeniem edytora, więc wypadają
+      // z rachunku same z siebie.
+      const kolumna = kolumnaPlotnaRef.current;
+      const korzenEdytora = pelnyEkranRef.current;
+      const korzenZakladki = korzenZakladkiRef.current;
+      const gora =
+        kolumna && korzenEdytora && korzenZakladki
+          ? korzenZakladki.getBoundingClientRect().top +
+            window.scrollY +
+            (kolumna.getBoundingClientRect().top - korzenEdytora.getBoundingClientRect().top)
+          : null;
+      const nowa = pelnyEkran ? Math.max(320, window.innerHeight - 16 - zajetePionowo) : wysokoscPlotna(gora);
+      // Próg 1 px: `getBoundingClientRect` potrafi oddać ułamek piksela, a każda taka
+      // różnica jest dla Reacta nowym stanem. Bez progu obserwator niżej budziłby się
+      // w kółko na własnym skutku.
+      setWysPlotna((poprzednia) => (Math.abs(nowa - poprzednia) > 1 ? nowa : poprzednia));
+    };
+    przelicz();
+    window.addEventListener("resize", przelicz);
+    // Stały chrome też potrafi zmienić wysokość bez zmiany rozmiaru okna: pasek narzędzi
+    // zawija się na węższej kolumnie, pasek kondygnacji rośnie po dodaniu piętra.
+    // Obserwujemy więc korzeń edytora — to on obejmuje oba te paski.
+    const korzen = pelnyEkranRef.current;
+    if (typeof ResizeObserver === "undefined" || !korzen) {
+      return () => window.removeEventListener("resize", przelicz);
+    }
+    const ro = new ResizeObserver(przelicz);
+    ro.observe(korzen);
+    return () => {
+      window.removeEventListener("resize", przelicz);
+      ro.disconnect();
+    };
+    // `showEntryScreen`/`wgrywanie.stan`: dopiero po ich zmianie korzeń edytora (a z nim
+    // kolumna płótna) w ogóle jest w drzewie — bez tego obserwator dopinałby się do
+    // `null` i nigdy nie wracał. Ten sam powód co przy obserwatorze szerokości niżej.
+  }, [pelnyEkran, rozmiaryChrome.gora, rozmiaryChrome.dol, showEntryScreen, wgrywanie.stan]);
+
+  /**
    * Dopasowanie zoomu działa też wtedy, gdy kolumna płótna DOPIERO CO się
    * pojawiła. Dopóki trwa `showEntryScreen` albo przycinanie podkładu, ta
    * kolumna w ogóle nie jest zamontowana (`kolumnaPlotnaRef.current === null`),
@@ -865,6 +920,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    *  skali (`facts.maSkale`, patrz lib/onboarding.ts) — więc odhacza się automatycznie. */
   function startManualDrawing() {
     markOnboardingSeen();
+    // Zapamiętujemy SAM WYBÓR, bo nic innego po nim nie zostaje: skala i narzędzie to
+    // za mało, żeby ktokolwiek później odczytał „ten użytkownik świadomie nie ma rzutu"
+    // (patrz `rysowanieBezPodkladu` w lib/onboarding.ts). Bez tego baner namawiający
+    // do wgrania podkładu wstawał natychmiast po kliknięciu tego przycisku.
+    onboarding.chooseManualDrawing();
     setScale(activeFloorId, MANUAL_DRAW_SCALE_MPU);
     // Przy TEJ skali jedno oczko siatki to równo 1 metr (patrz MANUAL_DRAW_SCALE_MPU),
     // więc przyciąganie przestaje być „pomocą w wyrównywaniu", a staje się sposobem
@@ -1968,7 +2028,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={korzenZakladkiRef}>
       {/* Zamontowany ZAWSZE, niezależnie od tego, który ekran jest aktywny (edytor,
           weryfikacja detekcji, błąd wczytania) — inaczej `fileRef.current` bywał
           `null` akurat wtedy, gdy „Wgraj inny plik" na ekranie weryfikacji/błędu
@@ -2100,8 +2160,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           Zgaszony na czas `showEntryScreen`, który oferuje DOKŁADNIE ten sam wybór —
           inaczej stałby POD nim i dublował go, czyli wracał do zgłoszonej bolączki.
           Zgaszony też, gdy na kondygnacji cokolwiek już stoi (`kondygnacjaPusta`):
-          propozycja podkładu dotyczy STARTU, a po nim jest już tylko szumem. */}
-      {!bgImageUrl && !showEntryScreen && kondygnacjaPusta && (
+          propozycja podkładu dotyczy STARTU, a po nim jest już tylko szumem.
+          I zgaszony, gdy użytkownik wybrał drugą drogę startu („Narysuj dom
+          samodzielnie", `manualDrawingChosen`) — sam ten wybór nie tworzy jeszcze ani
+          ściany, ani pomieszczenia, więc `kondygnacjaPusta` zostaje prawdziwe i baner
+          wstawał NATYCHMIAST po kliknięciu, ponawiając pytanie, na które użytkownik
+          właśnie odpowiedział. „Wgraj podkład" zostaje w pasku narzędzi, więc nikomu
+          niczego to nie zamyka. */}
+      {!bgImageUrl && !showEntryScreen && kondygnacjaPusta && !onboarding.manualDrawingChosen && (
         <div
           role="status"
           className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
@@ -2678,6 +2744,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             elementCount={elements.length}
             metersPerUnit={mpu}
             cursor={cursor}
+            zapasNaNawigacje={!pelnyEkran}
           />
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
             <span className="text-slate-400">Obszar planu: {planSize.w} × {planSize.h} jedn.</span>
@@ -2741,6 +2808,12 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               // kolejnej literze wpisywanej w polu nazwy.
               setPendingRoom((p) => (p ? { ...p, name, type: p.typeTouched ? p.type : guessRoomType(name) } : p));
             }}
+            // Nazwa zastępcza („Pomieszczenie 1") jest od razu ZAZNACZONA, więc pierwsza
+            // wpisana litera ją kasuje. Bez tego `autoFocus` stawiał kursor na KOŃCU
+            // wpisanej wartości i wpisanie „Kuchnia" dawało „Pomieszczenie 1Kuchnia" —
+            // typ rozpoznawał się poprawnie, a do projektu trafiała śmieciowa nazwa,
+            // widoczna potem na rzucie, w zestawieniu i w kosztorysie.
+            onFocus={(e) => e.currentTarget.select()}
             // Enter zatwierdza nazwę i dodaje pomieszczenie — bez tego trzeba było
             // sięgnąć po mysz mimo trwającej pracy klawiaturą (wpisywanie nazwy).
             onKeyDown={(e) => {

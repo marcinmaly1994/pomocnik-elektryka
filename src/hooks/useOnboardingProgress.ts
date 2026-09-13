@@ -33,6 +33,10 @@ export interface OnboardingProgress {
    *  lib/onboarding.ts. W odróżnieniu od `skipped`, `reopen()` tego NIE zdejmuje. */
   entryScreenDismissed: boolean;
   dismissEntryScreen: () => void;
+  /** Użytkownik wybrał „Narysuj dom samodzielnie" — patrz `rysowanieBezPodkladu`
+   *  w lib/onboarding.ts. Gasi propozycję wgrania podkładu. */
+  manualDrawingChosen: boolean;
+  chooseManualDrawing: () => void;
   /** Skala straciła ważność po podmianie podkładu. */
   scaleStale: boolean;
   /** Projekt ma elementy, ale nie ma skali — powód trwałego banera. */
@@ -126,6 +130,10 @@ export function useOnboardingProgress(): OnboardingProgress {
     markOnboardingSeen();
     setOnboarding({ ekranStartowyPominiety: true, pominiety: true, ostatnioOtwarty: false });
   }, [setOnboarding]);
+  // W odróżnieniu od `dismissEntryScreen` NIE pomija przewodnika: „narysuję sam" to
+  // wybór drogi, a nie odmowa prowadzenia za rękę — trzy kroki (skala, pomieszczenia,
+  // pierwszy element) są przy rysowaniu od zera tak samo na miejscu.
+  const chooseManualDrawing = useCallback(() => setOnboarding({ rysowanieBezPodkladu: true }), [setOnboarding]);
 
   return {
     steps: stepsFor(merged),
@@ -135,6 +143,8 @@ export function useOnboardingProgress(): OnboardingProgress {
     skipped: merged.pominiety,
     entryScreenDismissed: merged.ekranStartowyPominiety,
     dismissEntryScreen,
+    manualDrawingChosen: merged.rysowanieBezPodkladu === true,
+    chooseManualDrawing,
     scaleStale: merged.skalaNieaktualna,
     // Baner ma sens dopiero, gdy jest co mierzyć — pusty projekt bez skali
     // nie jest jeszcze problemem, tylko stanem wyjściowym.

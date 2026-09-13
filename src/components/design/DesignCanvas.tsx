@@ -35,21 +35,6 @@ const WALL_RECT_SNAP_RADIUS = 6;
 const MIN_ROOM_SIZE = 8;
 
 /** Granice powiększenia widoku planu — wspólne dla Ctrl+scroll i przycisków paska. */
-/**
- * Wysokość okna płótna liczona z okna przeglądarki, a nie stała 640 px.
- *
- * Na monitorze 1440p sztywna wysokość zostawiała pod płótnem pas pustego tła,
- * a rzut i tak nie mógł urosnąć, bo dopasowanie ogranicza się WYSOKOŚCIĄ.
- * Odejmujemy zapas na nagłówek, pasek etapów, pasek narzędzi i pasek stanu.
- */
-export function wysokoscPlotna(): number {
-  const okno = typeof window === "undefined" ? 900 : window.innerHeight;
-  // Dolna granica to dotychczasowe 640 px, NIE mniej: pierwsza wersja liczyła
-  // `okno - 300` z podłogą 420 i przy oknie 720 px zmniejszała płótno o 220 px
-  // względem stanu poprzedniego — czyli na laptopie pogarszała to, co miała
-  // poprawić. Rośniemy tylko tam, gdzie jest z czego rosnąć.
-  return Math.max(640, Math.min(1100, okno - 260));
-}
 export const MIN_ZOOM = 0.4;
 export const MAX_ZOOM = 4;
 

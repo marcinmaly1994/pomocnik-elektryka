@@ -33,6 +33,7 @@ import { HelpModal } from "@/components/help/HelpModal";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { KompletDialog } from "@/components/ui/KompletDialog";
 import { PdfPreview } from "@/components/ui/PdfPreview";
+import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
@@ -762,7 +763,13 @@ export default function App() {
             // elementów albo zakładkach panelu, zasłaniając je. Kafle „01/02/03/04”
             // u góry dają dokładnie tę samą nawigację, więc chowamy tu tylko wygodny
             // skrót, nie funkcję.
-            className="fixed bottom-5 left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
+            //
+            // Odstęp od dolnej krawędzi ze WSPÓLNEJ stałej, nie z klasy `bottom-5`:
+            // edytor planu odejmuje to samo pasmo od wysokości płótna, żeby pigułka
+            // nie leżała na rysunku (patrz `PASMO_NAWIGACJI_PX`). Dwie liczby w dwóch
+            // plikach rozjechałyby się przy pierwszej zmianie stylu.
+            style={{ bottom: NAWIGACJA_ODSTEP_PX }}
+            className="fixed left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
           >
             <ArrowLeft size={15} />
             Cofnij: {poprzedni.tytul}
@@ -779,8 +786,10 @@ export default function App() {
             onClick={() => setTab(nastepny.id)}
             onPointerEnter={() => pobierzZawczasu(nastepny.id)}
             onFocus={() => pobierzZawczasu(nastepny.id)}
-            // Patrz komentarz przy „Cofnij" wyżej — ten sam powód, ten sam próg.
-            className="fixed bottom-5 right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
+            // Patrz komentarz przy „Cofnij" wyżej — ten sam powód, ten sam próg,
+            // ten sam odstęp ze wspólnej stałej.
+            style={{ bottom: NAWIGACJA_ODSTEP_PX }}
+            className="fixed right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
           >
             Dalej: {nastepny.tytul}
             <ArrowRight size={15} />

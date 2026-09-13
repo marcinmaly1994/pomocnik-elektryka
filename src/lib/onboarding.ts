@@ -49,6 +49,23 @@ export interface OnboardingState {
    * który bierze `payload.onboarding` wprost, bez scalania z `INITIAL_ONBOARDING`).
    */
   otwartyRecznie?: boolean;
+  /**
+   * Użytkownik świadomie wybrał „Narysuj dom samodzielnie" — drugą, RÓWNORZĘDNĄ
+   * drogę startu obok wgrania rzutu (patrz `startManualDrawing` w DesignTab.tsx).
+   *
+   * Po co osobna flaga: ten wybór nie zostawia po sobie ŻADNEGO śladu, który dałoby
+   * się później odczytać z projektu. Ustawia skalę i narzędzie, ale nie tworzy ani
+   * ściany, ani pomieszczenia, ani elementu — więc kondygnacja zostaje pusta i baner
+   * „Zacznij od wgrania rzutu…" wstawał NATYCHMIAST po kliknięciu, zadając pytanie,
+   * na które użytkownik przed sekundą odpowiedział.
+   *
+   * Świadomie na poziomie PROJEKTU, nie kondygnacji: „rysuję bez podkładu" to
+   * odpowiedź o całym domu, a nie o parterze. Kto nie ma rzutu parteru, nie ma go
+   * też dla piętra. Wgranie podkładu nadal jest dostępne w pasku narzędzi.
+   *
+   * Opcjonalna, jak `otwartyRecznie` — zapisy sprzed tej zmiany jej nie mają.
+   */
+  rysowanieBezPodkladu?: boolean;
 }
 
 export const INITIAL_ONBOARDING: OnboardingState = {
@@ -60,6 +77,7 @@ export const INITIAL_ONBOARDING: OnboardingState = {
   skalaNieaktualna: false,
   ekranStartowyPominiety: false,
   otwartyRecznie: false,
+  rysowanieBezPodkladu: false,
 };
 
 /** Co da się sprawdzić w projekcie niezależnie od zapisanych flag. */

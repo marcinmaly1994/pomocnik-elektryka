@@ -18,6 +18,10 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   contentBounds,
   MARGINES_KADROWANIA,
   ZAPAS_ETYKIET,
+  wysokoscPlotna,
+  PASMO_NAWIGACJI_PX,
+  MIN_WYS_PLOTNA,
+  MAX_WYS_PLOTNA,
   detectRoomName,
   reassignRoomsOnFloor,
   reconcileRoomsOnLoad,
@@ -456,5 +460,47 @@ describe("rozpietoscRysunku", () => {
       [{ points: [{ x: 0, y: 0 }, { x: 0, y: 900 }] }]
     );
     expect(r).toBe(900);
+  });
+});
+
+describe("wysokoscPlotna", () => {
+  // Wszystkie liczby „ile stoi nad płótnem" (312 px) są zmierzone w przeglądarce na
+  // zakładce Instalacja: nagłówek strony, pasek etapów, pasek kondygnacji i pasek
+  // narzędzi. To ta wartość, którą kod przez długi czas ZGADYWAŁ jako 260.
+  const GORA = 312;
+
+  it("kończy płótno nad pasmem pigułek nawigacji, nie pod dolną krawędzią okna", () => {
+    const h = wysokoscPlotna(GORA, 900);
+    // Dół płótna musi wypaść nad górną krawędzią pigułki „Dalej", inaczej pigułka
+    // leży NA rysunku i zjada tam kliknięcia.
+    expect(GORA + h).toBeLessThanOrEqual(900 - PASMO_NAWIGACJI_PX);
+  });
+
+  it("rośnie razem z oknem", () => {
+    expect(wysokoscPlotna(GORA, 1200)).toBeGreaterThan(wysokoscPlotna(GORA, 900));
+  });
+
+  it("kurczy się, gdy nad płótnem przybywa banerów", () => {
+    // Baner „Zacznij od wgrania rzutu" spycha płótno o kilkadziesiąt pikseli w dół;
+    // gdyby wysokość go nie uwzględniała, dół rysunku wychodziłby poza okno.
+    const zBanerem = wysokoscPlotna(GORA + 48, 900);
+    expect(zBanerem).toBe(wysokoscPlotna(GORA, 900) - 48);
+  });
+
+  it("nie schodzi poniżej minimum, choćby nad płótnem stało całe okno", () => {
+    // Telefon: nagłówek, banery i biblioteka elementów potrafią zająć więcej niż
+    // wysokość ekranu. Ujemne płótno nie jest odpowiedzią.
+    expect(wysokoscPlotna(1500, 812)).toBe(MIN_WYS_PLOTNA);
+  });
+
+  it("nie przekracza maksimum na bardzo wysokim oknie", () => {
+    expect(wysokoscPlotna(GORA, 4000)).toBe(MAX_WYS_PLOTNA);
+  });
+
+  it("bez pomiaru wraca do dawnego szacunku — to tylko wartość startowa", () => {
+    // `null` znaczy „kolumna płótna jeszcze nie istnieje" (ekran wejściowy,
+    // przycinanie podkładu). Ma dać cokolwiek sensownego, a nie zero.
+    expect(wysokoscPlotna(null, 900)).toBe(640);
+    expect(wysokoscPlotna(null, 1400)).toBe(1100);
   });
 });
