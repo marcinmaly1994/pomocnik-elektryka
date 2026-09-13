@@ -3691,6 +3691,75 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
     `npx playwright test` **412/412** (+6).
 
+82. **Kafle etapów pokazują STAN, a nie tylko nazwę** — cztery kafle paska
+    przepływu (01 Instalacja → 02 Rozdzielnica → 03 Schemat → 04 Kosztorys)
+    wyglądały identycznie i wszystkie były klikalne, więc nowy użytkownik obchodził
+    je po kolei i trafiał w trzy puste ekrany. Nic na nich nie mówiło, że etapy
+    02-04 nie są równoległymi zakładkami, tylko NASTĘPSTWEM tego, co powstanie
+    na 01 — ani czego konkretnie im brakuje.
+
+    Stała plakietka „auto" na etapach 02-03 ustąpiła ŻYWEJ, liczonej w
+    `lib/postepKrokow.ts` (czysta funkcja, bez Reacta i bez store'a — stan etapu
+    to wniosek z kilku liczb, więc domyka się testem bez montowania aplikacji):
+    - 01 — „zacznij tutaj" / „5 pom." / „38 el.",
+    - 02 — „czeka" / „9 obw." / „ręcznie",
+    - 03 i 04 — „czeka" / „gotowy".
+
+    Plakietka jest zielona, gdy etap ma treść, i szara, gdy czeka (ta sama zieleń
+    co ukończony krok w przewodniku). Informacja, którą niosło „auto", nie zginęła:
+    przejście „czeka" → „9 obw." pokazuje tę samą automatyczność na przykładzie,
+    a `title` kafla mówi to wprost — i to on jest właściwą odpowiedzią na
+    zgłoszony problem, bo plakietka mówi „czeka", a dopiero opis mówi NA CO
+    („Wypełni się sama, gdy rozstawisz osprzęt na rzucie — albo złóż ją ręcznie").
+    `title` pełni przy okazji rolę opisu przycisku dla czytnika ekranu; plakietka
+    i podtytuł zostają `aria-hidden`, więc nazwą dostępnościową kafla nadal jest
+    sam tytuł etapu — od tego zależy kilkanaście testów e2e.
+
+    **Kafel „czeka" jest nadal w pełni klikalny** — świadomie. Odbieranie
+    nawigacji byłoby gorsze niż problem, który naprawiamy: rozdzielnicę da się
+    złożyć ręcznie, bez rzutu, a czasem po prostu chce się zajrzeć. Kafel ma
+    mówić prawdę, nie stawiać bramek.
+
+    Dwie rzeczy, które reguła musiała złapać, a których nie widać z samego
+    „czy są elementy":
+    - **Tryb ręczny rozdzielnicy** zapala 02 i 03 bez ani jednego punktu na
+      rzucie (`panelTryb === "reczny"` albo aparaty z `manual`), bo dobór
+      rozdzielnicy bywa zadaniem samym w sobie — próg liczony z zawartości rzutu
+      mówiłby „czeka" komuś, kto ma pełną rozdzielnicę.
+    - **Kosztorys NIE** zapala się od ręcznej rozdzielnicy: liczy się wyłącznie
+      z rzutu, bo sama lista aparatów nie mówi, ile metrów kabla i ile puszek
+      trzeba kupić.
+
+    **Bundle.** `computeCircuits` wszedł do kawałka WEJŚCIOWEGO — świadome
+    odstępstwo od podziału z kroku 62, bo liczba obwodów stoi na kaflu, a pasek
+    etapów jest widoczny na każdej zakładce, więc nie da się go odłożyć do żadnej
+    z nich. Cena zmierzona, nie zgadnięta: **+7,9 kB surowo / +2,8 kB po gzipie**.
+    To tania połowa doboru — czyste grupowanie elementów w obwody, bez tablic
+    normatywnych; `computeSizedCircuits` i `computeCosts` zostają tam, gdzie były.
+    Odrzucona alternatywa: meldowanie liczby obwodów do store'a z zakładek, które
+    i tak ją liczą — dawała stan „jeszcze nie wiadomo" na kaflu u kogoś, kto
+    wszedł prosto w Kosztorys, plus drugie źródło prawdy do utrzymania.
+
+    Przy okazji doszła odmiana liczebników (`odmianaElementow`/`-Pomieszczen`/
+    `-Obwodow`) z pułapką 12-14, bo opisy czyta laik i „2 elementów" wygląda jak
+    usterka.
+
+    **Odrzucone z tego samego przeglądu:** podpisy tekstowe przy ikonach paska
+    narzędzi (propozycja pomocy dla laika na czas onboardingu). Użytkownik
+    rozstrzygnął, że przy symbolach nie ma być opisów — pasek narzędzi zszedł
+    kiedyś z podpisów na same ikony właśnie dlatego, że siedem podpisów robiło
+    ścianę tekstu (patrz komentarz w `ToolRail.tsx`), i tak ma zostać.
+
+    Nowe testy: `postepKrokow.test.ts` (10 przypadków — pusty projekt, zaczęty
+    rzut bez osprzętu, komplet, nieznana liczba obwodów jako `null` zamiast zera,
+    tryb ręczny, długości plakietek, kolejność etapów, odmiana liczebników) oraz
+    `e2e/kafle-etapow.spec.ts` (5 przypadków — plakietki w obu stanach, reakcja
+    na zmianę projektu, klikalność kafla „czeka", ręczna rozdzielnica).
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1429/1429** (+10),
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **417/417** (+5).
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +

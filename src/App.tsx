@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -37,6 +37,21 @@ import { PdfPreview } from "@/components/ui/PdfPreview";
 import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
+import { etapy, type Etap, type StanEtapu } from "@/lib/postepKrokow";
+/**
+ * ŚWIADOME odstępstwo od podziału na kawałki opisanego niżej: `computeCircuits`
+ * wchodzi do kawałka wejściowego, bo liczba obwodów stoi na kaflu etapu 02 —
+ * a pasek etapów jest widoczny na KAŻDEJ zakładce, więc nie da się go odłożyć
+ * do żadnej z nich.
+ *
+ * Cena zmierzona, nie zgadnięta: +7,9 kB surowo / +2,8 kB po gzipie na wejściu.
+ * To TANIA połowa doboru — czyste grupowanie elementów w obwody, bez tablic
+ * normatywnych i bez `computeSizedCircuits`/`computeCosts`, które zostają tam,
+ * gdzie były. Alternatywą było meldowanie liczby obwodów do store'a z zakładek,
+ * które i tak ją liczą — odrzucone: dawało stan „jeszcze nie wiadomo" na kaflu
+ * u kogoś, kto wszedł prosto w Kosztorys, i drugie źródło prawdy do utrzymania.
+ */
+import { computeCircuits } from "@/lib/panel/circuits";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
 
 /**
@@ -167,16 +182,31 @@ interface TabButtonProps {
 }
 
 /**
- * Kafel etapu w pasku przepływu: numer w kółku, tytuł i podtytuł mówiący, co się
- * na tym etapie dzieje. Podtytuł jest tu po to, żeby laik wiedział, czego się
- * spodziewać PRZED kliknięciem — „Rozdzielnica" samo w sobie nic mu nie mówi.
+ * Kafel etapu w pasku przepływu: numer w kółku, tytuł, plakietka stanu i podtytuł
+ * mówiący, co się na tym etapie dzieje. Podtytuł jest tu po to, żeby laik wiedział,
+ * czego się spodziewać PRZED kliknięciem — „Rozdzielnica" samo w sobie nic mu
+ * nie mówi.
+ *
+ * PLAKIETKA jest ŻYWA (patrz `lib/postepKrokow.ts`): pokazuje „czeka", „8 obw."
+ * albo „38 el." zamiast dawnego, stałego „auto" na etapach 02-03. Powód: cztery
+ * kafle wyglądały identycznie i wszystkie były klikalne, więc nowy użytkownik
+ * obchodził je po kolei i trafiał w trzy puste ekrany — nic nie mówiło, że etapy
+ * 02-04 są NASTĘPSTWEM tego, co powstanie na 01. Plakietka „auto" nie zniknęła
+ * bez śladu: przejście „czeka" → „8 obw." pokazuje to samo, tylko na przykładzie,
+ * a `opis` w tooltipie mówi to wprost („Wypełni się sama, gdy rozstawisz osprzęt").
+ *
+ * Kafel „czeka" jest nadal w pełni klikalny. Odbieranie nawigacji byłoby gorsze
+ * niż problem, który naprawiamy — rozdzielnicę da się złożyć ręcznie, bez rzutu,
+ * a czasem po prostu chce się zajrzeć. Kafel ma mówić prawdę, nie stawiać bramek.
  */
 function FlowCard({
   step,
   title,
   subtitle,
   isActive,
-  badge,
+  plakietka,
+  stan,
+  opis,
   tab,
   onPick,
   children,
@@ -185,13 +215,18 @@ function FlowCard({
   title: string;
   subtitle: string;
   isActive: boolean;
-  badge?: string;
+  plakietka: string;
+  stan: StanEtapu;
+  /** Pełne zdanie: co na tym etapie jest albo czego mu brakuje — do `title`
+   *  przycisku, czyli i do dymka, i do opisu dla czytnika ekranu. */
+  opis: string;
   /** Zakładka tego etapu — stąd i przejście, i pobranie kodu z wyprzedzeniem.
    *  Wcześniej kafel dostawał samo `onClick`, więc nie wiedział, DOKĄD prowadzi. */
   tab: AppTab;
   onPick: (tab: AppTab) => void;
   children?: React.ReactNode;
 }) {
+  const gotowy = stan === "gotowy";
   return (
     <div
       className="flex shrink-0 items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors"
@@ -202,12 +237,14 @@ function FlowCard({
       }
     >
       {/* Numer, plakietka i podtytuł są `aria-hidden`, żeby nazwą dostępnościową
-          przycisku został sam tytuł etapu („Rozdzielnica", nie „02 Rozdzielnica auto
-          Dobór i schemat") — dla czytników ekranu i testów e2e. */}
+          przycisku został sam tytuł etapu („Rozdzielnica", nie „02 Rozdzielnica 8 obw.
+          Dobór zabezpieczeń") — dla czytników ekranu i testów e2e. Stan nie ginie
+          przez to dla czytnika: niesie go `title` przycisku, czyli jego OPIS. */}
       <button
         onClick={() => onPick(tab)}
         onPointerEnter={() => pobierzZawczasu(tab)}
         onFocus={() => pobierzZawczasu(tab)}
+        title={opis}
         className="flex items-center gap-2.5 text-left"
       >
         <span
@@ -222,15 +259,22 @@ function FlowCard({
             <span className="text-[13px] font-semibold" style={{ color: isActive ? "#16202B" : "#475569" }}>
               {title}
             </span>
-            {badge && (
-              <span
-                aria-hidden="true"
-                className="pe-mono rounded px-1 py-0.5 text-[8px] uppercase tracking-wider text-slate-400"
-                style={{ background: "#EEF1F4" }}
-              >
-                {badge}
-              </span>
-            )}
+            {/* Kolor niesie stan szybciej niż napis: zielony = jest treść, szary =
+                czeka. Ta sama zieleń co ukończony krok w przewodniku (`Kropki`
+                w OnboardingChecklist), żeby „zrobione" wyglądało w całej aplikacji
+                tak samo. `lowercase`, nie `uppercase` jak dawne „AUTO" — plakietka
+                niesie teraz liczby („8 obw."), a wersaliki robiły z nich krzyk. */}
+            <span
+              aria-hidden="true"
+              className="pe-mono shrink-0 rounded px-1 py-0.5 text-[8.5px] tracking-wide"
+              style={
+                gotowy
+                  ? { background: "#3B8C6318", color: "#2C6B4A", fontWeight: 600 }
+                  : { background: "#EEF1F4", color: "#94A3B8" }
+              }
+            >
+              {plakietka}
+            </span>
           </span>
           <span aria-hidden="true" className="block text-[10.5px] leading-tight text-slate-400">
             {subtitle}
@@ -441,6 +485,38 @@ export default function App() {
   const localSaveError = useProjectStore((s) => s.localSaveError);
   const lastLocalSaveAt = useProjectStore((s) => s.lastLocalSaveAt);
   const projectName = useProjectStore((s) => s.projectName);
+
+  /**
+   * Żywy stan czterech kafli etapów — patrz `lib/postepKrokow.ts`, gdzie mieszka
+   * cała reguła (i jej testy).
+   *
+   * Elementy i obrysy bierzemy z CAŁEGO projektu, nie z bieżącej kondygnacji:
+   * pasek etapów opisuje projekt, a rozdzielnica i kosztorys liczą się ze
+   * wszystkich pięter naraz.
+   */
+  const elements = useProjectStore((s) => s.draft.elements);
+  const roomShapes = useProjectStore((s) => s.draft.roomShapes);
+  const wallCount = useProjectStore((s) => s.draft.walls.length);
+  const panelTryb = useProjectStore((s) => s.panelTryb);
+  const aparatyReczne = useProjectStore((s) => s.panelDevices.filter((d) => d.manual).length);
+  /** `useMemo` na `elements`/`roomShapes`, nie na ich długościach: obwody zmieniają
+   *  się też przy samym PRZENIESIENIU elementu do innego pokoju, przy tej samej
+   *  liczbie punktów. Przeliczenie jest tanie (grupowanie, bez doboru), ale nie ma
+   *  powodu robić go przy każdym renderze powłoki. */
+  const stanEtapow = useMemo<Etap[]>(() => {
+    const obwody = elements.length > 0 ? computeCircuits(elements, roomShapes).length : null;
+    return etapy({
+      elementy: elements.length,
+      // „Nazwane" jak w onboardingu: obrys bez nazwy nie niesie jeszcze informacji
+      // o tym, czym pomieszczenie jest (patrz `OnboardingFacts` w lib/onboarding.ts).
+      pomieszczenia: roomShapes.filter((r) => r.name.trim().length > 0).length,
+      sciany: wallCount,
+      obwody,
+      trybReczny: panelTryb === "reczny",
+      aparatyReczne,
+    });
+  }, [elements, roomShapes, wallCount, panelTryb, aparatyReczne]);
+  const etap = (id: Etap["id"]) => stanEtapow.find((e) => e.id === id)!;
 
   const [authOpen, setAuthOpen] = useState(false);
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -660,20 +736,27 @@ export default function App() {
             title="Instalacja"
             subtitle="Projekt instalacji"
             isActive={tab === "projekt"}
+            plakietka={etap("projekt").plakietka}
+            stan={etap("projekt").stan}
+            opis={etap("projekt").opis}
             tab="projekt"
             onPick={setTab}
           />
           <FlowArrow />
           {/* Rozdzielnica i Schemat to dwa OSOBNE etapy, choć oba powstają automatycznie
-              z planu — stąd plakietka „auto" na obu. Podtytuł etapu 02 mówi już tylko
-              o doborze: schemat ma własny kafel i obiecywanie go tutaj wprowadzałoby
-              w błąd co do tego, gdzie go szukać. */}
+              z planu. Podtytuł etapu 02 mówi już tylko o doborze: schemat ma własny
+              kafel i obiecywanie go tutaj wprowadzałoby w błąd co do tego, gdzie go
+              szukać. Stała plakietka „auto" stała dotąd na obu — zastąpiła ją żywa
+              (patrz `FlowCard` wyżej): „czeka" → „8 obw." pokazuje tę samą
+              automatyczność, tylko na przykładzie zamiast w deklaracji. */}
           <FlowCard
             step="02"
             title="Rozdzielnica"
             subtitle="Dobór zabezpieczeń"
-            badge="auto"
             isActive={tab === "rozdzielnica"}
+            plakietka={etap("rozdzielnica").plakietka}
+            stan={etap("rozdzielnica").stan}
+            opis={etap("rozdzielnica").opis}
             tab="rozdzielnica"
             onPick={setTab}
           />
@@ -682,8 +765,10 @@ export default function App() {
             step="03"
             title="Schemat"
             subtitle="Schemat jednokreskowy"
-            badge="auto"
             isActive={tab === "schemat"}
+            plakietka={etap("schemat").plakietka}
+            stan={etap("schemat").stan}
+            opis={etap("schemat").opis}
             tab="schemat"
             onPick={setTab}
           />
@@ -693,6 +778,9 @@ export default function App() {
             title="Kosztorys"
             subtitle="Zestawienie kosztów"
             isActive={tab === "kosztorys"}
+            plakietka={etap("kosztorys").plakietka}
+            stan={etap("kosztorys").stan}
+            opis={etap("kosztorys").opis}
             tab="kosztorys"
             onPick={setTab}
           />
