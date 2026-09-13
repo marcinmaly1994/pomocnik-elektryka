@@ -1,0 +1,122 @@
+import type { Point, RoomShape, Wall } from "@/types";
+import { nearestPointOnPolyline } from "@/lib/geometry";
+import { MANUAL_DRAW_SCALE_MPU } from "@/lib/design";
+
+/**
+ * Przyciąganie RYSOWANEGO punktu do geometrii, która już jest na rzucie — obrysów
+ * pomieszczeń i ścian.
+ *
+ * Pokoje i ściany w domu stykają się ze sobą, a bez przyciągania trafienie w tę samą
+ * linię wymagało celowania z dokładnością do jednostki planu. Efekt: albo szczelina,
+ * albo zachodzenie na siebie — a jedno i drugie psuje potem powierzchnie w zestawieniu
+ * i przypisanie osprzętu do pomieszczeń (`detectRoomName`).
+ *
+ * Siatka (`GRID`) tego nie załatwia: bok pomieszczenia może mieć dowolną długość, więc
+ * jego krawędź wcale nie musi leżeć na linii siatki, i wtedy sąsiad przyciągnięty do
+ * siatki mija się z nią o kilka jednostek. Na wgranym podkładzie jest jeszcze gorzej —
+ * siatkę się tam gasi, bo ściany na zdjęciu nie leżą na jej oczkach.
+ *
+ * HISTORIA: moduł nazywał się `roomSnap` i znał WYŁĄCZNIE pomieszczenia. Ściany były
+ * więc jedyną figurą bez przyciągania do czegokolwiek poza siatką: dorysowanie ścianki
+ * działowej do już postawionej ściany wymagało trafienia co do piksela, a pomieszczenie
+ * rysowane wewnątrz gotowego obrysu ścian nie łapało go wcale. Argument z akapitu wyżej
+ * stosuje się do ścian tak samo jak do pokoi, więc cele przyciągania to teraz JEDNO
+ * i DRUGIE, a korzystają z tego oba narzędzia rysujące.
+ */
+
+/**
+ * Zasięgi przyciągania podane w METRACH, nie w jednostkach planu.
+ *
+ * Bo to jest stwierdzenie o budynku, a nie o precyzji myszy: „kliknąłeś pół metra od
+ * ściany, więc chodziło ci o tę ścianę". W jednostkach planu ten sam próg znaczyłby co
+ * innego na rysunku odręcznym (1 jedn. = 5 cm) niż na skalibrowanym podkładzie
+ * (1 jedn. = 1 cm) — na tym drugim przyciąganie działałoby pięć razy ciaśniej, choć
+ * ręka użytkownika drży tak samo.
+ *
+ * NAROŻNIK ma zasięg większy niż krawędź: to punkt widoczny na rysunku i celuje się
+ * w niego świadomie. Krawędź ciągnie się przez całą długość ściany, więc przy szerokim
+ * progu odbierałaby punkty stawiane obok celowo — np. wąski przedpokój wzdłuż pokoju.
+ */
+export const PROMIEN_NAROZNIKA_M = 0.6;
+export const PROMIEN_KRAWEDZI_M = 0.4;
+
+/** Te same zasięgi w jednostkach planu. Bez kalibracji obowiązuje skala rysunku
+ *  odręcznego — ta sama zasada co przy grubości obrysu (`gruboscObrysuPokoju`). */
+export function promieniePrzyciagania(metersPerUnit: number | null): { naroznik: number; krawedz: number } {
+  const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
+  return { naroznik: PROMIEN_NAROZNIKA_M / mpu, krawedz: PROMIEN_KRAWEDZI_M / mpu };
+}
+
+/** Zamknięty obrys jako łamana — ostatni punkt wraca do pierwszego. Pomieszczenie
+ *  trzyma same wierzchołki, bez powtórzonego domknięcia (inaczej niż ściana, która
+ *  domknięcie ma zapisane jawnie — patrz `closeWall` w DesignTab.tsx). */
+function zamkniety(points: Point[]): Point[] {
+  return points.length > 0 ? [...points, points[0]] : [];
+}
+
+/** Skąd wzięliśmy punkt zaczepienia — do podświetlenia na płótnie i do testów. */
+export type ZrodloPrzyciagniecia = { kind: "room"; id: string } | { kind: "wall"; id: string };
+
+export interface Przyciagniecie {
+  point: Point;
+  /** Co złapało — wierzchołek sąsiada czy punkt na jego krawędzi. */
+  rodzaj: "naroznik" | "krawedz";
+  zrodlo: ZrodloPrzyciagniecia;
+}
+
+/** Co bierzemy pod uwagę przy przyciąganiu. Obie listy są opcjonalne, bo narzędzie
+ *  potrafi działać na rzucie, na którym jednej z nich jeszcze nie ma. */
+export interface CelePrzyciagania {
+  roomShapes?: RoomShape[];
+  walls?: Wall[];
+}
+
+/**
+ * Najbliższy punkt zaczepienia w istniejącej geometrii albo `null`, gdy nic nie jest
+ * w zasięgu.
+ *
+ * NAROŻNIKI mają pierwszeństwo przed krawędziami, i to bezwarunkowe: narożnik leżący
+ * dalej (ale w swoim promieniu) wygrywa z bliższym punktem na krawędzi. Inaczej przy
+ * dociąganiu nowego pokoju do rogu sąsiada punkt lądowałby na krawędzi tuż obok rogu —
+ * czyli o włos od tego, o co chodziło, i z zostawioną szczeliną.
+ *
+ * Pomieszczenia są sprawdzane PRZED ścianami przy równej odległości, bo to one niosą
+ * powierzchnię i przypisanie osprzętu; ściana jest rysunkiem muru wokół nich. Przy
+ * różnych odległościach decyduje odległość, nie kolejność.
+ */
+export function snapDoGeometrii(
+  p: Point,
+  cele: CelePrzyciagania,
+  promienNaroznika: number,
+  promienKrawedzi: number
+): Przyciagniecie | null {
+  const trafienia: { trafienie: Przyciagniecie; dist: number }[] = [];
+
+  const rozwaz = (wierzcholki: Point[], lamana: Point[], zrodlo: ZrodloPrzyciagniecia) => {
+    for (const v of wierzcholki) {
+      const dist = Math.hypot(p.x - v.x, p.y - v.y);
+      if (dist <= promienNaroznika) {
+        trafienia.push({ trafienie: { point: { x: v.x, y: v.y }, rodzaj: "naroznik", zrodlo }, dist });
+      }
+    }
+    const n = nearestPointOnPolyline(p, lamana);
+    if (!n) return;
+    const dist = Math.hypot(p.x - n.point.x, p.y - n.point.y);
+    if (dist <= promienKrawedzi) {
+      trafienia.push({ trafienie: { point: n.point, rodzaj: "krawedz", zrodlo }, dist });
+    }
+  };
+
+  for (const r of cele.roomShapes ?? []) rozwaz(r.points, zamkniety(r.points), { kind: "room", id: r.id });
+  // Ściana jest ŁAMANĄ, nie wielokątem: zamknięcie (jeśli jest) siedzi już w jej
+  // punktach jako powtórzony pierwszy wierzchołek, więc domykanie jej tutaj po raz
+  // drugi dołożyłoby zerowej długości odcinek.
+  for (const w of cele.walls ?? []) rozwaz(w.points, w.points, { kind: "wall", id: w.id });
+
+  const najblizszy = (rodzaj: Przyciagniecie["rodzaj"]) =>
+    trafienia
+      .filter((t) => t.trafienie.rodzaj === rodzaj)
+      .reduce<(typeof trafienia)[number] | null>((best, t) => (!best || t.dist < best.dist ? t : best), null);
+
+  return (najblizszy("naroznik") ?? najblizszy("krawedz"))?.trafienie ?? null;
+}

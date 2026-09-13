@@ -37,7 +37,27 @@ export default defineConfig({
     {
       name: "dev",
       testIgnore: /offline\.spec\.ts/,
-      use: { baseURL: "http://localhost:5173" },
+      use: {
+        baseURL: "http://localhost:5173",
+        /**
+         * Okno WYŻSZE niż domyślne 1280×720 Playwrighta.
+         *
+         * Od kiedy wysokość płótna bierze się z pomiaru (patrz `wysokoscPlotna`
+         * w lib/design.ts), rysunek mieści się w oknie — ale na oknie tak niskim jak
+         * 720 px zostaje na niego mniej niż 350 px, bo samej chrome nad płótnem jest
+         * ponad 300 px. Przy takim płótnie dopasowanie widoku ogranicza WYSOKOŚĆ,
+         * powiększenie spada poniżej 0,6, a promienie przyciągania — podawane
+         * w jednostkach planu — robią się na ekranie kilkupikselowe. Dziesiątki testów
+         * klikają w płótno pod stałym offsetem w pikselach i przestają trafiać.
+         *
+         * 1000 px wysokości to okno, w którym dopasowanie ogranicza SZEROKOŚĆ kolumny,
+         * czyli dokładnie tak jak wcześniej — i przy okazji realistyczniejsze niż 720 px
+         * (to wysokość okna na monitorze 1080p, a nie na nieistniejącym laptopie).
+         * Testy, które celowo sprawdzają wąskie/niskie okno, i tak ustawiają własny
+         * rozmiar (`edytor-waski-ekran.spec.ts`, `fullscreen.spec.ts`).
+         */
+        viewport: { width: 1280, height: 1000 },
+      },
     },
     {
       name: OFFLINE,

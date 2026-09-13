@@ -33,6 +33,7 @@ import { HelpModal } from "@/components/help/HelpModal";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { KompletDialog } from "@/components/ui/KompletDialog";
 import { PdfPreview } from "@/components/ui/PdfPreview";
+import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
@@ -418,6 +419,24 @@ export default function App() {
   const loadFromCloud = useProjectStore((s) => s.loadFromCloud);
   const resetProject = useProjectStore((s) => s.resetProject);
   const elementCount = useProjectStore((s) => s.draft.elements.length);
+  /**
+   * Czy w projekcie nie ma JESZCZE NICZEGO — ani osprzętu, ani ścian, ani pomieszczeń.
+   *
+   * Steruje widocznością przycisku „Dalej" NA INSTALACJI (patrz `nastepnyKrok` niżej).
+   * Liczy KAŻDY narysowany obiekt, nie tylko elementy instalacji: kto postawił same
+   * ściany, zaczął już projekt i nie ma powodu odbierać mu skrótu do kolejnego kroku.
+   *
+   * Dotyczy WYŁĄCZNIE tej jednej zakładki, bo tylko o nią chodziło: świecąca zachęta
+   * do przejścia dalej, zanim cokolwiek powstało, wysyłała nowego użytkownika w trzy
+   * puste ekrany zamiast do rysowania. Na dalszych krokach ten sam próg byłby FAŁSZYWY
+   * — rozdzielnicę da się złożyć ręcznie, bez rzutu (patrz pigułka niżej).
+   */
+  const projektPusty = useProjectStore(
+    (s) => s.draft.elements.length === 0 && s.draft.walls.length === 0 && s.draft.roomShapes.length === 0
+  );
+  /** Krok następujący po „Instalacji" — czyta się z kolejności przepływu, a nie
+   *  wpisuje na sztywno, żeby przestawienie kroków nie zostawiło tu martwej nazwy. */
+  const krokPoInstalacji = KOLEJNOSC_KROKOW[KOLEJNOSC_KROKOW.findIndex((k) => k.id === "projekt") + 1];
   const localSaveError = useProjectStore((s) => s.localSaveError);
   const lastLocalSaveAt = useProjectStore((s) => s.lastLocalSaveAt);
   const projectName = useProjectStore((s) => s.projectName);
@@ -453,7 +472,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen p-6">
+    // Kolumna z rozciągliwym środkiem: stopka ma siedzieć przy DOLE OKNA, gdy treść
+    // jest krótsza niż ekran. Wcześniej kończyła się tam, gdzie kończyła się treść,
+    // i na ekranie startowym (najkrótszym w całej aplikacji) zostawiało to 281 px
+    // gołego tła POD stopką przy oknie 1440×900 — najważniejsza strona wyglądała na
+    // uciętą w połowie. `min-h-screen` samo tego nie robiło: rozciągało tło, ale nie
+    // rozdzielało wysokości między dzieci.
+    <div className="flex min-h-screen flex-col p-6">
       {/* Nagłówek niesie jedyną informację o tym, CZYM jest ta strona, więc logo i hasło
           dostają realną wagę: znak graficzny jako punkt zaczepienia dla oka, nazwa w
           rozmiarze tytułu i hasło w kolorze tekstu, a nie wyszarzonym. Wcześniej logo
@@ -684,6 +709,12 @@ export default function App() {
           po prostu przejść gdzie indziej. `key={tab}` zeruje ją przy każdej zmianie
           zakładki — bez tego raz złapany błąd zostawałby na ekranie na zawsze, także
           po przejściu na sprawną zakładkę. */}
+      {/* Rozciągliwy środek kolumny — to on spycha stopkę na dół okna (patrz komentarz
+          przy korzeniu wyżej). `flex flex-col`, a nie zwykły blok, żeby zakładka mogła
+          SAMA sięgnąć po tę wysokość, gdy ma z niej pożytek: ekran startowy Instalacji
+          rozciąga się na całą wolną przestrzeń i centruje w niej swoją treść, zamiast
+          zostawiać pod sobą pas pustego tła (patrz `showEntryScreen` w DesignTab). */}
+      <div className="flex flex-1 flex-col">
       <ErrorBoundary key={tab} onReset={() => setTab(ZAKLADKA_DOMYSLNA)}>
       {tab === "kalkulatory" && (
         <Suspense fallback={<TabLoading />}>
@@ -718,11 +749,29 @@ export default function App() {
       {tab === "projekt" && (
         <>
           <Suspense fallback={<TabLoading />}>
-            <DesignTab onOpenAuth={() => setAuthOpen(true)} />
+            {/* Przejście do kolejnego kroku wędruje TUTAJ, zamiast pływać pigułką
+                w rogu okna — na tej jednej zakładce, bo na tej jednej pigułka leżała
+                na powierzchni roboczej (patrz `NAWIGACJA_ODSTEP_PX` w lib/design.ts
+                i `nastepnyKrok` w EditorStatusBar). `undefined` na pustym projekcie:
+                ten sam próg co przy pigułce na pozostałych zakładkach, liczony w tym
+                samym miejscu, żeby obie drogi nie mogły się rozjechać. */}
+            <DesignTab
+              onOpenAuth={() => setAuthOpen(true)}
+              nastepnyKrok={
+                projektPusty || !krokPoInstalacji
+                  ? undefined
+                  : {
+                      tytul: krokPoInstalacji.tytul,
+                      przejdz: () => setTab(krokPoInstalacji.id),
+                      pobierz: () => pobierzZawczasu(krokPoInstalacji.id),
+                    }
+              }
+            />
           </Suspense>
         </>
       )}
       </ErrorBoundary>
+      </div>
 
       {/*
         Duży, zawsze widoczny przycisk „Dalej” — bez niego jedyną drogą do kolejnego
@@ -762,7 +811,11 @@ export default function App() {
             // elementów albo zakładkach panelu, zasłaniając je. Kafle „01/02/03/04”
             // u góry dają dokładnie tę samą nawigację, więc chowamy tu tylko wygodny
             // skrót, nie funkcję.
-            className="fixed bottom-5 left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
+            //
+            // Odstęp od dolnej krawędzi ze wspólnej stałej, nie z klasy `bottom-5` —
+            // patrz `NAWIGACJA_ODSTEP_PX`, gdzie stoi też historia pigułki na płótnie.
+            style={{ bottom: NAWIGACJA_ODSTEP_PX }}
+            className="fixed left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
           >
             <ArrowLeft size={15} />
             Cofnij: {poprzedni.tytul}
@@ -774,13 +827,28 @@ export default function App() {
         const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
         const nastepny = idx >= 0 ? KOLEJNOSC_KROKOW[idx + 1] : undefined;
         if (!nastepny) return null;
+        // Na Instalacji tego przycisku tu NIE MA — przenosi się do paska stanu pod
+        // rysunkiem, bo pływając w rogu okna leżał na płótnie i zjadał tam kliknięcia
+        // (patrz `nastepnyKrok` przekazywane do `DesignTab` wyżej). Tam też, i TYLKO
+        // tam, działa próg pustego projektu.
+        //
+        // Świadomie NIE gasimy pigułki na dalszych krokach pustym rzutem, choć
+        // pierwsza wersja tak robiła. Rozdzielnicę da się złożyć RĘCZNIE, bez
+        // rysowania czegokolwiek („Zbuduj rozdzielnicę bez rzutu" — aparaty żyją
+        // w `panelDevices`, nie w `draft`), a schemat powstaje właśnie z niej. Próg
+        // liczony z zawartości rzutu zabierałby wtedy „Dalej: Schemat" komuś, kto ma
+        // pełną rozdzielnicę — czyli gasiłby skrót dokładnie tam, gdzie jest dokąd iść.
+        // Na dalszych krokach użytkownik i tak już świadomie tam wszedł.
+        if (tab === "projekt") return null;
         return (
           <button
             onClick={() => setTab(nastepny.id)}
             onPointerEnter={() => pobierzZawczasu(nastepny.id)}
             onFocus={() => pobierzZawczasu(nastepny.id)}
-            // Patrz komentarz przy „Cofnij" wyżej — ten sam powód, ten sam próg.
-            className="fixed bottom-5 right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
+            // Patrz komentarz przy „Cofnij" wyżej — ten sam powód, ten sam próg,
+            // ten sam odstęp ze wspólnej stałej.
+            style={{ bottom: NAWIGACJA_ODSTEP_PX }}
+            className="fixed right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
           >
             Dalej: {nastepny.tytul}
             <ArrowRight size={15} />

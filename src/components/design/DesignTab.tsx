@@ -31,7 +31,8 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, OpeningKind, Point, RoomType } from "@/types";
+import type { ElementType, OpeningKind, Point, RoomType, Wall } from "@/types";
+import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
@@ -56,7 +57,10 @@ import {
   planSizeForImage,
   roomNameAfterMove,
   scaleOf,
+  wierzcholkiZamknietejSciany,
+  wysokoscPlotna,
   ZAPAS_ETYKIET,
+  ZAPAS_POD_PLOTNEM,
 } from "@/lib/design";
 import {
   autoSymbolScale,
@@ -73,7 +77,7 @@ import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
-import { DesignCanvas, MAX_ZOOM, minZoom, wysokoscPlotna, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
+import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
 import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
 import { EditorStatusBar } from "./EditorStatusBar";
@@ -208,9 +212,16 @@ export interface DesignTabProps {
   /** Otwiera modal logowania — sam DesignTab go nie renderuje (żyje w App.tsx
    *  razem z resztą kont/chmury), więc oddajemy sterowanie do rodzica. */
   onOpenAuth: () => void;
+  /**
+   * Kolejny krok przepływu — ląduje jako przycisk na prawym końcu paska stanu
+   * (patrz `nastepnyKrok` w EditorStatusBar). Na pozostałych zakładkach tę rolę
+   * pełni pływająca pigułka w rogu okna; tutaj nie może, bo leżałaby na rysunku.
+   * `undefined`, gdy nie ma dokąd iść — projekt jest jeszcze pusty.
+   */
+  nastepnyKrok?: { tytul: string; przejdz: () => void; pobierz: () => void };
 }
 
-export function DesignTab({ onOpenAuth }: DesignTabProps) {
+export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
   const session = useProjectStore((s) => s.session);
   const roomsFixedOnLoad = useProjectStore((s) => s.roomsFixedOnLoad);
   const dismissRoomsFixedOnLoad = useProjectStore((s) => s.dismissRoomsFixedOnLoad);
@@ -482,6 +493,17 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     const t = setTimeout(() => setSkalaPotwierdzenie(null), 4000);
     return () => clearTimeout(t);
   }, [skalaPotwierdzenie]);
+  /**
+   * Id ściany właśnie zamkniętej w pętlę — podstawa propozycji „zrób z tego
+   * pomieszczenie" w pigułce kontrolek.
+   *
+   * Moment jest tu całą wartością. Kto domknął obrys murem, ma ten pokój przed
+   * oczami; przewodnik zaraz każe mu „obrysować pomieszczenia", a bez tej propozycji
+   * jedyną drogą jest przejechanie po raz drugi dokładnie tej samej figury. Propozycja,
+   * nie automat: pętla ściany bywa obrysem całego domu albo korytarza wokół klatki,
+   * a nie każdy obrys jest pomieszczeniem.
+   */
+  const [petlaDoNazwania, setPetlaDoNazwania] = useState<string | null>(null);
   const [showZones, setShowZones] = useState(true);
   /** Widoczność tras przewodów — domyślnie WYŁĄCZONA: to warstwa poglądowa, nie
    *  zawsze potrzebna, i bez rozdzielnicy postawionej na planie i tak jest pusta
@@ -532,6 +554,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    *  lewej karty zmienia się ze zwinięciem panelu, a wysokość górnego paska zależy
    *  od tego, czy zawinie się na węższym ekranie. */
   const [rozmiaryChrome, setRozmiaryChrome] = useState({ gora: 0, lewo: 0, dol: 0 });
+  /** Korzeń CAŁEJ zakładki — jego górna krawędź to wysokość nagłówka strony i paska
+   *  etapów, czyli tej części chrome'u, która nigdy się nie zmienia. Potrzebna do
+   *  policzenia wysokości płótna z pominięciem banerów (patrz efekt `wysPlotna`). */
+  const korzenZakladkiRef = useRef<HTMLDivElement>(null);
   const pelnyEkranRef = useRef<HTMLDivElement>(null);
   const gornyPasekRef = useRef<HTMLDivElement>(null);
   const lewaKartaRef = useRef<HTMLDivElement>(null);
@@ -581,20 +607,6 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     const z = Math.min(dostepnaSzer / planSize.w, wysPlotna / planSize.h);
     setZoom(Math.round(Math.min(MAX_ZOOM, Math.max(minZoom(), z)) * 100) / 100);
   }, [planSize.w, planSize.h, wysPlotna]);
-
-  useEffect(() => {
-    // W pełnym ekranie płótno bierze całą wysokość okna: paski leżą NAD nim jako
-    // nakładki, więc nie ma już nagłówka ani paska etapów, na które trzeba zostawić
-    // zapas (patrz `wysokoscPlotna`).
-    // Przypięte paski zajmują górę/dół okna na stałe, więc płótno musi o tyle
-    // zmaleć — inaczej jego dolna krawędź chowałaby się pod przypiętym paskiem stanu.
-    const zajetePionowo = rozmiaryChrome.gora + rozmiaryChrome.dol;
-    const przelicz = () =>
-      setWysPlotna(pelnyEkran ? Math.max(320, window.innerHeight - 16 - zajetePionowo) : wysokoscPlotna());
-    przelicz();
-    window.addEventListener("resize", przelicz);
-    return () => window.removeEventListener("resize", przelicz);
-  }, [pelnyEkran, rozmiaryChrome.gora, rozmiaryChrome.dol]);
 
   /** Wejście i wyjście z pełnego ekranu zmienia dostępne miejsce skokowo, więc rzut
    *  dopasowujemy na nowo — nawet jeśli użytkownik wcześniej ustawił zoom ręcznie.
@@ -799,6 +811,104 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   const kondygnacjaPusta = elements.length === 0 && walls.length === 0 && roomShapes.length === 0;
 
   /**
+   * Wysokość okna rysunku. Stoi TUTAJ, a nie przy pozostałych efektach układu wyżej,
+   * bo potrzebuje `showEntryScreen` i `wgrywanie.stan` — a te są zadeklarowane dopiero
+   * nad tym miejscem.
+   */
+  useEffect(() => {
+    // W pełnym ekranie płótno bierze całą wysokość okna: paski leżą NAD nim jako
+    // nakładki, więc nie ma już nagłówka ani paska etapów, na które trzeba zostawić
+    // zapas (patrz `wysokoscPlotna`).
+    // Przypięte paski zajmują górę/dół okna na stałe, więc płótno musi o tyle
+    // zmaleć — inaczej jego dolna krawędź chowałaby się pod przypiętym paskiem stanu.
+    const zajetePionowo = rozmiaryChrome.gora + rozmiaryChrome.dol;
+    const przelicz = () => {
+      // W widoku standardowym MIERZYMY, ile stoi nad płótnem, zamiast zgadywać stałą —
+      // patrz `wysokoscPlotna`.
+      //
+      // Mierzymy jednak WYŁĄCZNIE chrome STAŁY, z pominięciem banerów, i to jest tu
+      // najważniejsza decyzja. Banery („zacznij od podkładu", „brak skali", „zabezpiecz
+      // kontem") pojawiają się i znikają W TRAKCIE pracy — pierwszy postawiony element
+      // gasi jeden z nich. Gdyby wchodziły do rachunku, płótno zmieniałoby wtedy
+      // wysokość, dopasowanie widoku przeliczałoby powiększenie i CAŁY rzut skakałby
+      // pod kursorem dokładnie w chwili, gdy użytkownik coś na nim stawia. Baner niech
+      // więc spycha rysunek w dół (i wydłuża stronę), a nie przeskalowuje go.
+      //
+      // Bierzemy PRAWDZIWĄ górną krawędź kolumny płótna i odejmujemy od niej to, co
+      // zajmują dziś banery — czyli wszyscy bracia stojący PRZED korzeniem edytora.
+      // Wychodzi z tego położenie, w którym płótno byłoby, gdyby żadnego banera nie
+      // było: wielkość stała, niezależna od tego, ile ich akurat wisi.
+      //
+      // HISTORIA: stała tu suma dwóch odcinków (góra dokumentu → korzeń zakładki oraz
+      // korzeń edytora → kolumna płótna). Milcząco zakładała, że MIĘDZY tymi korzeniami
+      // nie ma nic poza banerami — a jest jeszcze odstęp `space-y-4`. Dopóki korzeń
+      // zakładki był zwykłym blokiem, margines schodził na zewnątrz i suma się zgadzała;
+      // po zmianie strony na kolumnę flexową (stopka przy dole okna) marginesy przestały
+      // się scalać i rachunek zaniżał się o równe 16 px — akurat tyle, żeby płótno znów
+      // sięgnęło pod pigułkę „Dalej". Odejmowanie MIERZONYCH banerów jest odporne na
+      // każdy taki odstęp, bo nie zakłada o nim niczego.
+      const kolumna = kolumnaPlotnaRef.current;
+      const korzenEdytora = pelnyEkranRef.current;
+      const korzenZakladki = korzenZakladkiRef.current;
+      let gora: number | null = null;
+      if (kolumna && korzenEdytora && korzenZakladki) {
+        let banery = 0;
+        for (const brat of Array.from(korzenZakladki.children)) {
+          if (brat === korzenEdytora) break;
+          const box = brat.getBoundingClientRect();
+          // Ukryty input pliku i inne zerowej wysokości nie zajmują miejsca, ale
+          // `space-y-4` i tak dopisuje im margines — obie rzeczy trzeba pominąć razem.
+          if (box.height === 0) continue;
+          banery += box.height + parseFloat(getComputedStyle(brat).marginTop || "0");
+        }
+        gora = kolumna.getBoundingClientRect().top + window.scrollY - banery;
+      }
+      // SAM pasek stanu — REZERWUJEMY mu miejsce, żeby nie wypadł pod zgięcie. Niesie
+      // powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku; rysowanie bez ani
+      // jednej z tych rzeczy przed oczami to ten sam problem co rysowanie po niewidocznej
+      // części planu. Mierzony, nie zgadywany: na węższym oknie pasek się zawija i rośnie.
+      //
+      // Świadomie bez wiersza „Obszar planu… / rzut ≈ … m" spod paska: to informacja
+      // pomocnicza, którą można doczytać po przewinięciu, a każdy zarezerwowany piksel
+      // odbiera się rysunkowi.
+      //
+      // Szukany po `aria-label`, bo to część kontraktu `EditorStatusBar` (pilnują go
+      // testy e2e) — bliżej mu do trwałej nazwy niż do szczegółu budowy drzewa.
+      const pasekStanu = dolnyPasekRef.current?.querySelector<HTMLElement>('[aria-label="Stan projektu"]');
+      const zapasPod = pasekStanu
+        ? pasekStanu.getBoundingClientRect().height +
+          parseFloat(getComputedStyle(pasekStanu).marginTop || "0") +
+          ZAPAS_POD_PLOTNEM
+        : ZAPAS_POD_PLOTNEM;
+      const nowa = pelnyEkran
+        ? Math.max(320, window.innerHeight - 16 - zajetePionowo)
+        : wysokoscPlotna(gora, window.innerHeight, zapasPod);
+      // Próg 1 px: `getBoundingClientRect` potrafi oddać ułamek piksela, a każda taka
+      // różnica jest dla Reacta nowym stanem. Bez progu obserwator niżej budziłby się
+      // w kółko na własnym skutku.
+      setWysPlotna((poprzednia) => (Math.abs(nowa - poprzednia) > 1 ? nowa : poprzednia));
+    };
+    przelicz();
+    window.addEventListener("resize", przelicz);
+    // Stały chrome też potrafi zmienić wysokość bez zmiany rozmiaru okna: pasek narzędzi
+    // zawija się na węższej kolumnie, pasek kondygnacji rośnie po dodaniu piętra.
+    // Obserwujemy więc korzeń edytora — to on obejmuje oba te paski.
+    const korzen = pelnyEkranRef.current;
+    if (typeof ResizeObserver === "undefined" || !korzen) {
+      return () => window.removeEventListener("resize", przelicz);
+    }
+    const ro = new ResizeObserver(przelicz);
+    ro.observe(korzen);
+    return () => {
+      window.removeEventListener("resize", przelicz);
+      ro.disconnect();
+    };
+    // `showEntryScreen`/`wgrywanie.stan`: dopiero po ich zmianie korzeń edytora (a z nim
+    // kolumna płótna) w ogóle jest w drzewie — bez tego obserwator dopinałby się do
+    // `null` i nigdy nie wracał. Ten sam powód co przy obserwatorze szerokości niżej.
+  }, [pelnyEkran, rozmiaryChrome.gora, rozmiaryChrome.dol, showEntryScreen, wgrywanie.stan]);
+
+  /**
    * Dopasowanie zoomu działa też wtedy, gdy kolumna płótna DOPIERO CO się
    * pojawiła. Dopóki trwa `showEntryScreen` albo przycinanie podkładu, ta
    * kolumna w ogóle nie jest zamontowana (`kolumnaPlotnaRef.current === null`),
@@ -865,6 +975,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    *  skali (`facts.maSkale`, patrz lib/onboarding.ts) — więc odhacza się automatycznie. */
   function startManualDrawing() {
     markOnboardingSeen();
+    // Zapamiętujemy SAM WYBÓR, bo nic innego po nim nie zostaje: skala i narzędzie to
+    // za mało, żeby ktokolwiek później odczytał „ten użytkownik świadomie nie ma rzutu"
+    // (patrz `rysowanieBezPodkladu` w lib/onboarding.ts). Bez tego baner namawiający
+    // do wgrania podkładu wstawał natychmiast po kliknięciu tego przycisku.
+    onboarding.chooseManualDrawing();
     setScale(activeFloorId, MANUAL_DRAW_SCALE_MPU);
     // Przy TEJ skali jedno oczko siatki to równo 1 metr (patrz MANUAL_DRAW_SCALE_MPU),
     // więc przyciąganie przestaje być „pomocą w wyrównywaniu", a staje się sposobem
@@ -886,6 +1001,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
     // wisiałyby na planie i doklejałyby się po powrocie do rysowania.
     if (id !== "pomieszczenie") setDrawingRoomPoints([]);
     if (id !== "sciany") setDrawingWall([]);
+    // Propozycja „zrób z tej pętli pomieszczenie" dotyczy CHWILI zaraz po domknięciu
+    // obrysu. Wyjście z narzędzia ściany jest odpowiedzią „nie teraz" — wskrzeszanie
+    // jej przy powrocie do rysowania pół godziny później byłoby natręctwem. Sama
+    // operacja zostaje dostępna w menu kontekstowym ściany, więc nic nie przepada.
+    if (id !== "sciany") setPetlaDoNazwania(null);
     setToolMode(id);
     // Zakładka panelu ma pokazywać zawartość ZGODNĄ z wybranym narzędziem —
     // „Wstaw element” podświetla „Elementy”, „Obrysuj pomieszczenie” podświetla
@@ -1340,10 +1460,15 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
   function closeWall(p: Point) {
     const points = [...drawingWall, p];
     if (points.length >= 2) {
+      const id = crypto.randomUUID();
       setDraft((d) => ({
         ...d,
-        walls: [...d.walls, { id: crypto.randomUUID(), floor: activeFloorId, points, thickness: wallThickness }],
+        walls: [...d.walls, { id, floor: activeFloorId, points, thickness: wallThickness }],
       }));
+      // Domknięta pętla to obrys pomieszczenia narysowany murem — proponujemy zrobić
+      // z niej pokój OD RAZU, zamiast kazać przejechać po raz drugi tę samą figurę
+      // (patrz `petlaDoNazwania` i `createRoomFromWall`).
+      if (wierzcholkiZamknietejSciany(points)) setPetlaDoNazwania(id);
     }
     setDrawingWall([]);
   }
@@ -1370,6 +1495,62 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
       ],
     }));
   }
+
+  /**
+   * Droga W DRUGĄ STRONĘ niż `createWallFromRoom`: ze ściany zamkniętej w pętlę robi
+   * pomieszczenie o dokładnie tym samym obrysie.
+   *
+   * Tej strony brakowało, a to ona jest naturalna po „Narysuj dom samodzielnie":
+   * użytkownik dostaje narzędzie ściany, obrysowuje nim dom albo pokój, po czym
+   * przewodnik każe mu „obrysować pomieszczenia" — czyli przejechać po raz drugi
+   * dokładnie tę samą figurę. Tu wystarczy nazwać.
+   *
+   * Prowadzi przez ZWYKŁE okno „Nazwij pomieszczenie" (`pendingRoom`), a nie tworzy
+   * pomieszczenia po cichu: typ pomieszczenia decyduje o regułach doboru (gniazda
+   * hermetyczne, strefa mokra), więc pokój bez świadomie wybranego typu jest wart
+   * mniej niż jego brak. To ta sama droga, którą idzie każde inne pomieszczenie.
+   */
+  function createRoomFromWall(wallId: string) {
+    const wall = walls.find((w) => w.id === wallId);
+    const punkty = wall && wierzcholkiZamknietejSciany(wall.points);
+    if (!punkty) return;
+    const name = nextRoomName(roomShapes.length);
+    setPendingRoom({ points: punkty, name, type: guessRoomType(name), typeTouched: false });
+  }
+
+  /**
+   * Ściany tej kondygnacji, które są zamkniętą pętlą i NIE mają jeszcze swojego
+   * pomieszczenia — czyli te, dla których propozycja „zrób z tego pomieszczenie"
+   * ma sens.
+   *
+   * „Nie mają pomieszczenia" liczone przez punkt WEWNĄTRZ obrysu: jeśli wpada on do
+   * któregoś z narysowanych pokoi, ktoś już ten obszar obrysował i przypominanie o tym
+   * byłoby dokładnie tym natręctwem, które gasimy w innych banerach.
+   *
+   * Punkt bierzemy z `punktWewnatrzWielokata`, a NIE ze średniej wierzchołków, i to jest
+   * tu istotne. Dla obrysu wklęsłego — a mieszkania w kształcie L i U są na rzutach
+   * regułą — średnia wypada w samym wcięciu, czyli poza figurą. Pętla dostawała wtedy
+   * odpowiedź „nie ma pomieszczenia" nawet tuż po tym, jak użytkownik zrobił z niej
+   * pokój o dokładnie tym samym obrysie, więc menu kontekstowe dalej proponowało
+   * „Utwórz pomieszczenie z obrysu" i dawało się zrobić drugi, nakładający się pokój
+   * (zdublowana powierzchnia w zestawieniu).
+   *
+   * `null` (figura bez wnętrza) traktujemy jako „nie wiemy" i propozycji NIE gasimy:
+   * `wierzcholkiZamknietejSciany` odrzuca już figury o zerowym polu, więc tu jest to
+   * przypadek czysto teoretyczny, a milczenie byłoby gorsze od zbędnej propozycji.
+   */
+  const petleBezPomieszczenia = useMemo(
+    () =>
+      walls
+        .map((w) => ({ wall: w, punkty: wierzcholkiZamknietejSciany(w.points) }))
+        .filter((x): x is { wall: Wall; punkty: Point[] } => x.punkty !== null)
+        .filter(({ punkty }) => {
+          const wnetrze = punktWewnatrzWielokata(punkty);
+          if (!wnetrze) return true;
+          return !roomShapes.some((r) => r.points.length >= 3 && pointInPolygon(wnetrze, r.points));
+        }),
+    [walls, roomShapes]
+  );
 
   /** Przesuwa JEDEN narożnik zapisanej ściany — edycja przeciąganiem na planie,
    *  ten sam wzorzec co `moveRoomShapePoint` w store, ale ściany (w odróżnieniu
@@ -1684,6 +1865,19 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
    * warunek obejmował także ten przypadek, „Zwiń panel" w trybie Pomieszczenie/Ściana
    * rozwijałby się natychmiast z powrotem i wyglądał na zepsuty przycisk.
    */
+  /**
+   * Pętla ścian czekająca na propozycję „zrób z niej pomieszczenie" — albo `null`.
+   *
+   * WYLICZANA, a nie trzymana w stanie: gdy pętla dostanie już swoje pomieszczenie
+   * (tędy albo zwykłym obrysowaniem), wypada z `petleBezPomieszczenia` i propozycja
+   * gaśnie sama. Gaszenie ręczne wymagałoby pamiętania o tym w każdym miejscu,
+   * którym może powstać pomieszczenie.
+   */
+  const propozycjaPokoju =
+    petlaDoNazwania && toolMode === "sciany"
+      ? petleBezPomieszczenia.find((x) => x.wall.id === petlaDoNazwania) ?? null
+      : null;
+
   const blokujaceKontrolki = drawingWall.length > 0 || drawingRoomPoints.length > 0 || toolMode === "skala";
   useEffect(() => {
     if (!pelnyEkran && blokujaceKontrolki && panelZwiniety) rozwinPanel();
@@ -1964,11 +2158,41 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           <Check size={15} /> {skalaPotwierdzenie}
         </span>
       )}
+
+      {/* Propozycja tuż po domknięciu obrysu murem — patrz `petlaDoNazwania`.
+          Widoczność jest WYLICZANA, nie gaszona ręcznie: pętla, która dostała już
+          pomieszczenie, wypada z `petleBezPomieszczenia` i propozycja znika sama,
+          niezależnie od tego, którędy pokój powstał. */}
+      {propozycjaPokoju && (
+        // Kolumna, nie wiersz: w widoku standardowym pigułka stoi w WĄSKIM panelu
+        // bocznym (patrz oba miejsca renderowania `kontekstoweTresc`), gdzie zdanie
+        // obok przycisku łamie się na trzy linijki i rozpycha panel.
+        <div className="flex min-w-0 flex-col items-start gap-1.5">
+          <span className="text-xs font-medium text-slate-600">Obrys zamknięty</span>
+          <button
+            onClick={() => createRoomFromWall(propozycjaPokoju.wall.id)}
+            className="pe-btn-copper flex items-center gap-1.5 px-2.5 py-1 text-xs"
+          >
+            <Layers size={13} /> Zrób z niego pomieszczenie
+          </button>
+          <button
+            onClick={() => setPetlaDoNazwania(null)}
+            className="text-[11px] text-slate-400 underline hover:text-slate-600"
+            aria-label="Odrzuć propozycję pomieszczenia"
+          >
+            Nie teraz
+          </button>
+        </div>
+      )}
     </>
   );
 
   return (
-    <div className="space-y-4">
+    // Na ekranie startowym zakładka sięga po CAŁĄ wolną wysokość okna (rodzic jest
+    // rozciągliwą kolumną — patrz App.tsx), żeby powitanie wypełniło ekran zamiast
+    // wisieć wąskim paskiem u góry. W pozostałych stanach zakładka jest i tak wyższa
+    // niż okno, więc rozciąganie nic by nie dało — zostaje zwykły blok.
+    <div className={showEntryScreen ? "flex flex-1 flex-col space-y-4" : "space-y-4"} ref={korzenZakladkiRef}>
       {/* Zamontowany ZAWSZE, niezależnie od tego, który ekran jest aktywny (edytor,
           weryfikacja detekcji, błąd wczytania) — inaczej `fileRef.current` bywał
           `null` akurat wtedy, gdy „Wgraj inny plik" na ekranie weryfikacji/błędu
@@ -2067,7 +2291,10 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           do niego — inaczej wracalibyśmy do tego samego nagromadzenia wezwań do
           działania, tylko w innej kolejności. */}
       {showEntryScreen && (
-        <div className="pe-card flex flex-col items-center gap-4 px-6 py-16 text-center">
+        // `flex-1` + `justify-center`: karta rośnie na całą wolną wysokość, a jej treść
+        // stoi w pionowym środku. Sama treść jest ta sama co wcześniej — problemem był
+        // wyłącznie pas gołego tła pod spodem, nie to, co na karcie stoi.
+        <div className="pe-card flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
           <h2 className="pe-display text-xl">Zacznij projektować instalację</h2>
           <p className="max-w-md text-sm text-slate-500">
             Wgraj zdjęcie albo skan rzutu mieszkania, żeby rozmieścić elementy na prawdziwym planie — albo narysuj
@@ -2100,8 +2327,14 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
           Zgaszony na czas `showEntryScreen`, który oferuje DOKŁADNIE ten sam wybór —
           inaczej stałby POD nim i dublował go, czyli wracał do zgłoszonej bolączki.
           Zgaszony też, gdy na kondygnacji cokolwiek już stoi (`kondygnacjaPusta`):
-          propozycja podkładu dotyczy STARTU, a po nim jest już tylko szumem. */}
-      {!bgImageUrl && !showEntryScreen && kondygnacjaPusta && (
+          propozycja podkładu dotyczy STARTU, a po nim jest już tylko szumem.
+          I zgaszony, gdy użytkownik wybrał drugą drogę startu („Narysuj dom
+          samodzielnie", `manualDrawingChosen`) — sam ten wybór nie tworzy jeszcze ani
+          ściany, ani pomieszczenia, więc `kondygnacjaPusta` zostaje prawdziwe i baner
+          wstawał NATYCHMIAST po kliknięciu, ponawiając pytanie, na które użytkownik
+          właśnie odpowiedział. „Wgraj podkład" zostaje w pasku narzędzi, więc nikomu
+          niczego to nie zamyka. */}
+      {!bgImageUrl && !showEntryScreen && kondygnacjaPusta && !onboarding.manualDrawingChosen && (
         <div
           role="status"
           className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
@@ -2678,6 +2911,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             elementCount={elements.length}
             metersPerUnit={mpu}
             cursor={cursor}
+            // W pełnym ekranie NIE: ten tryb jest o skupieniu na rysunku, a pasek stanu
+            // leży wtedy jako wysuwana nakładka — przycisk wyprowadzający z zakładki nie
+            // ma czego tam szukać. Ta sama zasada, według której chowa się w pełnym
+            // ekranie reszta nawigacji (patrz `z-30` pigułek w App.tsx).
+            nastepnyKrok={pelnyEkran ? undefined : nastepnyKrok}
           />
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
             <span className="text-slate-400">Obszar planu: {planSize.w} × {planSize.h} jedn.</span>
@@ -2741,6 +2979,12 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               // kolejnej literze wpisywanej w polu nazwy.
               setPendingRoom((p) => (p ? { ...p, name, type: p.typeTouched ? p.type : guessRoomType(name) } : p));
             }}
+            // Nazwa zastępcza („Pomieszczenie 1") jest od razu ZAZNACZONA, więc pierwsza
+            // wpisana litera ją kasuje. Bez tego `autoFocus` stawiał kursor na KOŃCU
+            // wpisanej wartości i wpisanie „Kuchnia" dawało „Pomieszczenie 1Kuchnia" —
+            // typ rozpoznawał się poprawnie, a do projektu trafiała śmieciowa nazwa,
+            // widoczna potem na rzucie, w zestawieniu i w kosztorysie.
+            onFocus={(e) => e.currentTarget.select()}
             // Enter zatwierdza nazwę i dodaje pomieszczenie — bez tego trzeba było
             // sięgnąć po mysz mimo trwającej pracy klawiaturą (wpisywanie nazwy).
             onKeyDown={(e) => {
@@ -2902,6 +3146,21 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
                 })()}
               </>
             ) : contextMenu.kind === "wall" ? (
+              <>
+                {/* Tylko dla ściany zamkniętej w pętlę — z otwartej łamanej nie ma
+                    czego zrobić. Lustro pozycji „Utwórz ścianę z obrysu" w menu
+                    pomieszczenia niżej: ta sama operacja, druga strona. */}
+                {petleBezPomieszczenia.some((p) => p.wall.id === contextMenu.id) && (
+                  <button
+                    onClick={() => {
+                      createRoomFromWall(contextMenu.id);
+                      setContextMenu(null);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
+                  >
+                    <Layers size={14} /> Utwórz pomieszczenie z obrysu
+                  </button>
+                )}
               <button
                 onClick={() => {
                   // Usunięcie ściany kasuje też JEJ otwory — inaczej zostałyby
@@ -2918,6 +3177,7 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
               >
                 <Trash2 size={14} /> Usuń ścianę
               </button>
+              </>
             ) : contextMenu.kind === "opening" ? (
               <>
                 <button

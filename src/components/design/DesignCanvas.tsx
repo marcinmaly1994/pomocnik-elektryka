@@ -5,7 +5,7 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import { DEFAULT_WALL_THICKNESS, GRID, gruboscObrysuPokoju, PROG_WASKIEGO_EKRANU, type PlanSize } from "@/lib/design";
-import { promienieDoPokoi, snapDoPokoi } from "@/lib/roomSnap";
+import { promieniePrzyciagania, snapDoGeometrii, type Przyciagniecie } from "@/lib/drawSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
@@ -35,21 +35,6 @@ const WALL_RECT_SNAP_RADIUS = 6;
 const MIN_ROOM_SIZE = 8;
 
 /** Granice powiększenia widoku planu — wspólne dla Ctrl+scroll i przycisków paska. */
-/**
- * Wysokość okna płótna liczona z okna przeglądarki, a nie stała 640 px.
- *
- * Na monitorze 1440p sztywna wysokość zostawiała pod płótnem pas pustego tła,
- * a rzut i tak nie mógł urosnąć, bo dopasowanie ogranicza się WYSOKOŚCIĄ.
- * Odejmujemy zapas na nagłówek, pasek etapów, pasek narzędzi i pasek stanu.
- */
-export function wysokoscPlotna(): number {
-  const okno = typeof window === "undefined" ? 900 : window.innerHeight;
-  // Dolna granica to dotychczasowe 640 px, NIE mniej: pierwsza wersja liczyła
-  // `okno - 300` z podłogą 420 i przy oknie 720 px zmniejszała płótno o 220 px
-  // względem stanu poprzedniego — czyli na laptopie pogarszała to, co miała
-  // poprawić. Rośniemy tylko tam, gdzie jest z czego rosnąć.
-  return Math.max(640, Math.min(1100, okno - 260));
-}
 export const MIN_ZOOM = 0.4;
 export const MAX_ZOOM = 4;
 
@@ -466,6 +451,7 @@ export function DesignCanvas({
     marqueeRectRef.current = null;
     setRoomRect(null);
     setMarqueeRect(null);
+    setZaczep(null);
     return bylo;
   }
 
@@ -484,6 +470,23 @@ export function DesignCanvas({
   // To samo dla rysowania ścian — „gumowy" odcinek od ostatniego postawionego
   // punktu do kursora, z etykietą bieżącej długości (patrz render niżej).
   const [wallCursor, setWallCursor] = useState<Point | null>(null);
+  /**
+   * Zaczep, na którym stoi w tej chwili rysowany punkt — narożnik albo krawędź już
+   * narysowanej ściany/pomieszczenia, do której go przyciągnęło (`null`, gdy stoi
+   * wolno). Wyłącznie do PODŚWIETLENIA: bez niego przyciąganie jest niewidzialne,
+   * a niewidzialne przyciąganie jest nie do odróżnienia od celnego kliknięcia —
+   * użytkownik nie wie, czy ściany faktycznie się zeszły, czy tylko tak wyglądają.
+   */
+  const [zaczep, setZaczep] = useState<Przyciagniecie | null>(null);
+
+  /** Zaczep POD WARUNKIEM, że to on wygrał — punkt mógł równie dobrze trafić
+   *  w domknięcie figury albo w wyliczony narożnik prostokąta, które mają
+   *  pierwszeństwo (patrz `punktSciany`). Podświetlamy tylko to, co naprawdę
+   *  zadecydowało o położeniu punktu. */
+  function zaczepDlaPunktu(raw: Point, wynik: Point): Przyciagniecie | null {
+    const z = przyciagnijDoGeometrii(raw);
+    return z && z.point.x === wynik.x && z.point.y === wynik.y ? z : null;
+  }
 
   const drawingRoom = toolMode === "pomieszczenie";
 
@@ -527,24 +530,38 @@ export function DesignCanvas({
   }
 
   /**
-   * Przyciąganie punktu RYSOWANEGO POMIESZCZENIA — najpierw do sąsiadów, dopiero potem
-   * do siatki.
+   * Przyciągnięcie do GEOMETRII, która już jest na rzucie — obrysów pomieszczeń
+   * i ścian. `null`, gdy nic nie jest w zasięgu.
+   *
+   * NIE zależy od przełącznika „przyciągaj do siatki" i to jest świadome. Siatkę gasi
+   * się na wgranym podkładzie, bo ściany na zdjęciu nie leżą na jej oczkach (patrz
+   * `setSnapOn` w DesignTab) — ale to jest argument przeciwko SIATCE, nie przeciwko
+   * dociąganiu do ściany, którą użytkownik sam przed chwilą narysował. Szczelina kilku
+   * centymetrów między dwoma pokojami nie jest niczyim zamiarem.
+   *
+   * Wspólne dla OBU narzędzi rysujących, i to jest sedno tej funkcji: ściana ma łapać
+   * ścianę i pokój, pokój ma łapać pokój i ścianę. Wcześniej przyciągały się wyłącznie
+   * pomieszczenia do pomieszczeń, więc dorysowanie ścianki działowej do już postawionej
+   * ściany wymagało trafienia co do piksela, a pokój rysowany wewnątrz gotowego obrysu
+   * ścian nie łapał go wcale (patrz `lib/drawSnap.ts`).
+   */
+  function przyciagnijDoGeometrii(p: Point): Przyciagniecie | null {
+    const { naroznik, krawedz } = promieniePrzyciagania(metersPerUnit);
+    return snapDoGeometrii(p, { roomShapes, walls }, naroznik, krawedz);
+  }
+
+  /**
+   * Przyciąganie punktu RYSOWANEGO POMIESZCZENIA — najpierw do istniejącej geometrii,
+   * dopiero potem do siatki.
    *
    * Kolejność jest tu całą treścią: pokoje w domu stykają się ścianami, więc trafienie
    * w krawędź sąsiada jest ważniejsze niż trafienie w linię siatki. Bok pomieszczenia
    * może mieć dowolną długość, więc jego krawędź wcale nie musi leżeć na siatce —
    * i wtedy sąsiad przyciągnięty do siatki mija się z nią o kilka jednostek, zostawiając
-   * szczelinę albo zachodząc na niego (patrz `lib/roomSnap.ts`).
-   *
-   * NIE zależy od przełącznika „przyciągaj do siatki" i to jest świadome. Siatkę gasi
-   * się na wgranym podkładzie, bo ściany na zdjęciu nie leżą na jej oczkach (patrz
-   * `setSnapOn` w DesignTab) — ale to jest argument przeciwko SIATCE, nie przeciwko
-   * dociąganiu do pokoju, który użytkownik sam przed chwilą narysował. Szczelina
-   * kilku centymetrów między dwoma pokojami nie jest niczyim zamiarem.
+   * szczelinę albo zachodząc na niego.
    */
   function snapPunktuPokoju(p: Point): Point {
-    const { naroznik, krawedz } = promienieDoPokoi(metersPerUnit);
-    return snapDoPokoi(p, roomShapes, naroznik, krawedz)?.point ?? withSnap(p);
+    return przyciagnijDoGeometrii(p)?.point ?? withSnap(p);
   }
 
   /** Przy rysowaniu ortogonalnym zamraża oś BLIŻSZĄ poprzedniemu punktowi na jego
@@ -581,20 +598,21 @@ export function DesignCanvas({
    *    drobnej niedokładności kliknięcia, nie zamiennik świadomego stawiania punktu
    *    w pobliżu — inaczej niż (1), bo to punkt WYLICZONY, nigdzie nie narysowany.
    *
-   * Poza tymi dwoma przypadkami zwraca `p` bez zmian.
+   * Poza tymi dwoma przypadkami zwraca `null` — „nic z rysowanej ściany nie złapało",
+   * co `punktSciany` odróżnia od trafienia i dopiero wtedy pyta o geometrię obok.
    */
-  function zPrzyciaganiem(p: Point): Point {
+  function zPrzyciaganiem(p: Point): Point | null {
     if (closesWall(p)) return drawingWall[0];
     if (orthoWalls && drawingWall.length === 3) {
       const naroznik = sugerowanyNaroznik(drawingWall[0], drawingWall[1], drawingWall[2]);
       if (Math.hypot(p.x - naroznik.x, p.y - naroznik.y) <= WALL_RECT_SNAP_RADIUS) return naroznik;
     }
-    return p;
+    return null;
   }
 
   /**
    * Punkt ściany po WSZYSTKICH przyciąganiach, w kolejności, która ma znaczenie:
-   * siatka → kąt prosty → domknięcie/narożnik.
+   * siatka → kąt prosty → domknięcie/narożnik → istniejąca geometria.
    *
    * Jedna funkcja dla PODGLĄDU („gumowy" odcinek z etykietą długości) i dla KLIKNIĘCIA,
    * które punkt zatwierdza. Dotąd były to dwie osobne ścieżki i rozjechały się:
@@ -605,12 +623,23 @@ export function DesignCanvas({
    * Kolejność jest wymuszona: siatka MUSI iść pierwsza, bo `zPrzyciaganiem` zwraca
    * albo dokładnie pierwszy punkt ściany (domknięcie), albo wyliczony narożnik —
    * dosnapowanie ich po fakcie odsunęłoby figurę od punktu, do którego miała trafić.
+   *
+   * Przyciąganie do istniejącej geometrii idzie na SAM KONIEC i wygrywa z siatką oraz
+   * z kątem prostym, ale PRZEGRYWA z domknięciem i narożnikiem prostokąta. Powód
+   * kolejności: te dwa dotyczą ściany RYSOWANEJ W TEJ CHWILI, więc mówią o zamiarze
+   * dokładniej niż cokolwiek stojącego obok. Wygrywanie z kątem prostym jest świadome
+   * i zgodne z tym, co robi już domknięcie („niezależnie od trybu ortogonalnego"):
+   * dociągnięcie do narożnika sąsiedniej ściany to świadome wskazanie konkretnego
+   * punktu, a tryb ortogonalny jest tylko pomocą w trzymaniu osi.
+   *
+   * Liczone z `raw`, nie z punktu po siatce — pytanie brzmi „gdzie użytkownik
+   * NAPRAWDĘ pokazał", a nie „gdzie wylądował po zaokrągleniu do oczka".
    */
   function punktSciany(raw: Point): Point {
     const naSiatce = withSnap(raw);
     const ostatni = drawingWall[drawingWall.length - 1];
     const ortho = orthoWalls && ostatni ? orthoSnap(ostatni, naSiatce) : naSiatce;
-    return zPrzyciaganiem(ortho);
+    return zPrzyciaganiem(ortho) ?? przyciagnijDoGeometrii(raw)?.point ?? ortho;
   }
 
   /** Długość odcinka w jednostkach planu, sformatowana do etykiety: metry, jeśli
@@ -746,13 +775,23 @@ export function DesignCanvas({
     // `null` poza obszarem planu, żeby nie pokazywać współrzędnych spoza rysunku.
     onPointerMove?.(stage ? planPoint(stage, planSize) : null);
 
-    if (toolMode === "sciany" && drawingWall.length > 0) {
+    // Bez warunku na `drawingWall.length`: zaczep pokazujemy JUŻ PRZED pierwszym
+    // kliknięciem, bo pierwszy punkt ściany też się przyciąga (patrz `punktSciany`).
+    // Wcześniej ta gałąź wymagała postawionego punktu, więc najczęstszy start —
+    // „zacznij ściankę działową od narożnika tamtej ściany" — przyciągał się
+    // niewidzialnie, czyli dokładnie w stanie, który znacznik miał zlikwidować.
+    if (toolMode === "sciany") {
       const raw = stage && clampedPlanPoint(stage, planSize);
       if (!raw) {
         setWallCursor(null);
+        setZaczep(null);
         return;
       }
-      setWallCursor(punktSciany(raw));
+      const punkt = punktSciany(raw);
+      // Gumowy odcinek dopiero od drugiego punktu — przed pierwszym kliknięciem nie ma
+      // od czego go ciągnąć.
+      setWallCursor(drawingWall.length > 0 ? punkt : null);
+      setZaczep(zaczepDlaPunktu(raw, punkt));
       return;
     }
 
@@ -762,15 +801,24 @@ export function DesignCanvas({
       if (roomMode === "wielobok") {
         // przy kursorze w pobliżu startu pokazujemy punkt startowy, nie pozycję myszy —
         // dzięki temu widać dokładnie, gdzie figura się domknie
-        setRoomCursor(closesPolygon(raw) ? drawingRoomPoints[0] : snapPunktuPokoju(raw));
+        const domyka = closesPolygon(raw);
+        const punkt = domyka ? drawingRoomPoints[0] : snapPunktuPokoju(raw);
+        setRoomCursor(punkt);
+        setZaczep(domyka ? null : zaczepDlaPunktu(raw, punkt));
         return;
       }
       // Kotwica z pierwszego kliknięcia działa tak samo jak wciśnięty przycisk —
       // podgląd prostokąta ma iść za kursorem w OBU trybach, inaczej po pierwszym
       // kliknięciu ekran wyglądałby, jakby nic się nie stało.
+      // Zaczep liczony PRZED sprawdzeniem kotwicy: pierwszy narożnik prostokąta
+      // przyciąga się tak samo jak każdy następny, a przed pierwszym kliknięciem
+      // kotwicy jeszcze nie ma. Bez tego najczęstszy start — „obrysuj pokój od rogu
+      // muru" — przyciągał się niewidzialnie.
+      const rog = snapPunktuPokoju(raw);
+      setZaczep(zaczepDlaPunktu(raw, rog));
       const start = roomRectStartRef.current ?? rectAnchor;
       if (!start) return;
-      const rect = rectBetween(start, snapPunktuPokoju(raw));
+      const rect = rectBetween(start, rog);
       roomRectRef.current = rect;
       setRoomRect(rect);
       return;
@@ -889,6 +937,7 @@ export function DesignCanvas({
       if (closesPolygon(p)) {
         onCloseRoomPolygon();
         setRoomCursor(null);
+        setZaczep(null);
         return;
       }
       onAddRoomPoint(snapPunktuPokoju(p));
@@ -1989,6 +2038,45 @@ export function DesignCanvas({
                   fill="#8A5526"
                   listening={false}
                 />
+              )}
+            </>
+          )}
+
+          {/* Znacznik ZACZEPU: punkt właśnie stoi na narożniku albo krawędzi figury,
+              która już jest na rzucie (patrz `zaczep` wyżej). Bez tego przyciąganie
+              jest niewidzialne i nie do odróżnienia od celnego kliknięcia — a różnica
+              jest zasadnicza: przyciągnięty punkt to ta SAMA współrzędna co u sąsiada,
+              celne kliknięcie to współrzędna o kilka jednostek obok, czyli szczelina
+              albo zachodzenie, które wyjdzie dopiero w metrażu.
+
+              Zielony, a nie niebieski/miedziany: oba kolory rysowania są już zajęte
+              (ściana, pomieszczenie), a zaczep ma się czytać jako osobny sygnał
+              „złapało", niezależny od tego, co się właśnie rysuje.
+
+              Kwadrat na narożniku, kółko na krawędzi — to samo rozróżnienie, które
+              robią programy CAD, i wystarczy spojrzeć, żeby wiedzieć, czy punkt
+              wylądował w rogu sąsiada, czy gdzieś wzdłuż jego ściany.
+
+              Tylko przy AKTYWNYM narzędziu rysującym: w „zaznacz" czy „pan" nikt nie
+              stawia punktu, więc kropka nad rzutem nic by nie znaczyła. Warunek celowo
+              NIE pyta o postawione już punkty — pierwszy punkt figury przyciąga się tak
+              samo jak każdy następny, a to jego właśnie stawia się najczęściej „od rogu
+              tamtej ściany". Świeżość zaczepu trzyma sama obsługa ruchu myszy: każdy
+              ruch go przelicza, a wyjście poza plan i porzucenie figury zerują. */}
+          {zaczep && (toolMode === "sciany" || drawingRoom) && (
+            <>
+              {zaczep.rodzaj === "naroznik" ? (
+                <Rect
+                  x={zaczep.point.x - 6}
+                  y={zaczep.point.y - 6}
+                  width={12}
+                  height={12}
+                  stroke="#2C6B4A"
+                  strokeWidth={2}
+                  listening={false}
+                />
+              ) : (
+                <Circle x={zaczep.point.x} y={zaczep.point.y} radius={6} stroke="#2C6B4A" strokeWidth={2} listening={false} />
               )}
             </>
           )}

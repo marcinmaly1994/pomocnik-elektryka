@@ -18,6 +18,11 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   contentBounds,
   MARGINES_KADROWANIA,
   ZAPAS_ETYKIET,
+  wysokoscPlotna,
+  wierzcholkiZamknietejSciany,
+  ZAPAS_POD_PLOTNEM,
+  MIN_WYS_PLOTNA,
+  MAX_WYS_PLOTNA,
   detectRoomName,
   reassignRoomsOnFloor,
   reconcileRoomsOnLoad,
@@ -456,5 +461,113 @@ describe("rozpietoscRysunku", () => {
       [{ points: [{ x: 0, y: 0 }, { x: 0, y: 900 }] }]
     );
     expect(r).toBe(900);
+  });
+});
+
+describe("wysokoscPlotna", () => {
+  // Wszystkie liczby „ile stoi nad płótnem" (312 px) są zmierzone w przeglądarce na
+  // zakładce Instalacja: nagłówek strony, pasek etapów, pasek kondygnacji i pasek
+  // narzędzi. To ta wartość, którą kod przez długi czas ZGADYWAŁ jako 260.
+  const GORA = 312;
+
+  /** Zmierzona wysokość paska stanu razem z wierszem o obszarze planu. */
+  const PASEK_STANU = 60;
+
+  it("zostawia miejsce na pasek stanu pod płótnem", () => {
+    const h = wysokoscPlotna(GORA, 900, PASEK_STANU + ZAPAS_POD_PLOTNEM);
+    // Pasek stanu niesie powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku —
+    // musi być widoczny bez przewijania, więc płótno kończy się NAD nim.
+    expect(GORA + h + PASEK_STANU).toBeLessThanOrEqual(900);
+  });
+
+  it("rośnie razem z oknem", () => {
+    expect(wysokoscPlotna(GORA, 1200)).toBeGreaterThan(wysokoscPlotna(GORA, 900));
+  });
+
+  it("kurczy się, gdy nad płótnem przybywa banerów", () => {
+    // Baner „Zacznij od wgrania rzutu" spycha płótno o kilkadziesiąt pikseli w dół;
+    // gdyby wysokość go nie uwzględniała, dół rysunku wychodziłby poza okno.
+    const zBanerem = wysokoscPlotna(GORA + 48, 900);
+    expect(zBanerem).toBe(wysokoscPlotna(GORA, 900) - 48);
+  });
+
+  it("nie schodzi poniżej minimum, choćby nad płótnem stało całe okno", () => {
+    // Telefon: nagłówek, banery i biblioteka elementów potrafią zająć więcej niż
+    // wysokość ekranu. Ujemne płótno nie jest odpowiedzią.
+    expect(wysokoscPlotna(1500, 812)).toBe(MIN_WYS_PLOTNA);
+  });
+
+  it("nie przekracza maksimum na bardzo wysokim oknie", () => {
+    expect(wysokoscPlotna(GORA, 4000)).toBe(MAX_WYS_PLOTNA);
+  });
+
+  it("bez pomiaru wraca do dawnego szacunku — to tylko wartość startowa", () => {
+    // `null` znaczy „kolumna płótna jeszcze nie istnieje" (ekran wejściowy,
+    // przycinanie podkładu). Ma dać cokolwiek sensownego, a nie zero.
+    expect(wysokoscPlotna(null, 900)).toBe(640);
+    expect(wysokoscPlotna(null, 1400)).toBe(1100);
+  });
+});
+
+describe("wierzcholkiZamknietejSciany", () => {
+  /** Prostokąt zamknięty tak, jak zapisuje go `closeWall`: ostatni punkt to
+   *  POWTÓRZONY pierwszy. */
+  const PETLA = [
+    { x: 0, y: 0 },
+    { x: 200, y: 0 },
+    { x: 200, y: 150 },
+    { x: 0, y: 150 },
+    { x: 0, y: 0 },
+  ];
+
+  it("zwraca same wierzchołki, bez powtórzonego domknięcia", () => {
+    expect(wierzcholkiZamknietejSciany(PETLA)).toEqual([
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 150 },
+      { x: 0, y: 150 },
+    ]);
+  });
+
+  it("ściana otwarta to nie pomieszczenie", () => {
+    expect(wierzcholkiZamknietejSciany(PETLA.slice(0, -1))).toBeNull();
+  });
+
+  it("zwykły odcinek to nie pomieszczenie", () => {
+    expect(wierzcholkiZamknietejSciany([{ x: 0, y: 0 }, { x: 100, y: 0 }])).toBeNull();
+  });
+
+  /** Trójkąt to najmniejsze pomieszczenie, jakie da się obrysować — 3 wierzchołki
+   *  plus punkt domykający. */
+  it("trójkąt przechodzi", () => {
+    const trojkat = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 80 }, { x: 0, y: 0 }];
+    expect(wierzcholkiZamknietejSciany(trojkat)).toHaveLength(3);
+  });
+
+  /** Ściana narysowana „tam i z powrotem" formalnie wraca do początku, ale nie
+   *  otacza żadnej powierzchni — pomieszczenie z niej byłoby puste. */
+  it("figura o zerowym polu odpada", () => {
+    const tamIzPowrotem = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 0 }, { x: 0, y: 0 }];
+    expect(wierzcholkiZamknietejSciany(tamIzPowrotem)).toBeNull();
+  });
+
+  /** Zapis potrafi przejść przez JSON albo przeliczenie skali — pół jednostki planu
+   *  to przy rysunku odręcznym 2,5 cm, czyli mniej niż najcieńsza ścianka. */
+  it("domknięcie z drobną niedokładnością nadal się liczy", () => {
+    const prawieDomkniete = [...PETLA.slice(0, -1), { x: 0.3, y: -0.2 }];
+    expect(wierzcholkiZamknietejSciany(prawieDomkniete)).toHaveLength(4);
+  });
+
+  it("wyraźna szczelina to świadomie otwarta ściana", () => {
+    const zeSzczelina = [...PETLA.slice(0, -1), { x: 20, y: 0 }];
+    expect(wierzcholkiZamknietejSciany(zeSzczelina)).toBeNull();
+  });
+
+  /** Odwrotność `createWallFromRoom`: ściana zrobiona z obrysu pokoju musi dać się
+   *  zamienić z powrotem na dokładnie ten sam obrys. */
+  it("jest odwrotnością tworzenia ściany z obrysu pomieszczenia", () => {
+    const obrys = [{ x: 10, y: 10 }, { x: 90, y: 10 }, { x: 90, y: 70 }, { x: 10, y: 70 }];
+    const zeSciany = wierzcholkiZamknietejSciany([...obrys, obrys[0]]);
+    expect(zeSciany).toEqual(obrys);
   });
 });

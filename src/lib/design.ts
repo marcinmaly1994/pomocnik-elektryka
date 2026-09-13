@@ -6,7 +6,7 @@
 
 import type { InstallationElement, OpeningKind, Point, RoomShape, RoomType } from "@/types";
 import { NO_ROOM } from "@/lib/elements";
-import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
+import { nearestPointOnPolyline, pointInPolygon, polygonArea } from "@/lib/geometry";
 
 /** Domyślny logiczny rozmiar planu i skok siatki — jak VB_DEFAULT/GRID w wersji JS.
  *  Domyślny, bo obszar planu jest teraz zapisywany w projekcie (`planSize` w store)
@@ -14,6 +14,79 @@ import { nearestPointOnPolyline, pointInPolygon } from "@/lib/geometry";
 export const DEFAULT_PLAN_WIDTH = 1000;
 export const DEFAULT_PLAN_HEIGHT = 700;
 export const GRID = 20;
+
+/**
+ * Odstęp pływających pigułek nawigacji („Cofnij"/„Dalej" w App.tsx) od dolnej
+ * krawędzi okna.
+ *
+ * Na zakładce Instalacja pigułki „Dalej" NIE MA: tam przycisk kolejnego kroku siedzi
+ * w pasku stanu pod rysunkiem (patrz `EditorStatusBar`). Powód: pływająca pigułka
+ * leżała NA płótnie — przy oknie 1440×900 zajmowała prostokąt 109×36 px w prawym
+ * dolnym rogu obszaru rysowania i zjadała tam kliknięcia. Rezerwowanie jej pasma
+ * pod płótnem nie było odpowiedzią: wysokość rysunku liczy się z chrome'u STAŁEGO,
+ * z pominięciem banerów, a baner „ten projekt istnieje tylko w tej przeglądarce"
+ * (stały u każdego niezalogowanego, kto ma cokolwiek do stracenia) spychał rysunek
+ * o swoją wysokość w dół i pigułka wracała na płótno. Płótno jest powierzchnią
+ * roboczą — nawigacja nie ma prawa na niej stać w ŻADNYM stanie, więc zeszła z niej
+ * zupełnie, zamiast negocjować o piksele.
+ */
+export const NAWIGACJA_ODSTEP_PX = 20;
+
+/** Oddech między dolną krawędzią płótna a tym, co pod nim, żeby rysunek nie kończył
+ *  się dokładnie na krawędzi. */
+const ODDECH_POD_PLOTNEM = 12;
+
+/** Domyślny zapas pod płótnem, gdy nie znamy wysokości paska stanu (pierwszy render,
+ *  zanim cokolwiek zmierzymy). Faktyczny zapas podaje `DesignTab` z pomiaru — patrz
+ *  trzeci argument `wysokoscPlotna`. */
+export const ZAPAS_POD_PLOTNEM = ODDECH_POD_PLOTNEM;
+
+/** Najmniejsze sensowne okno rysunku. Wchodzi w grę tam, gdzie nad płótnem stoi tyle
+ *  (telefon: nagłówek zawinięty na cztery wiersze, banery, biblioteka elementów), że
+ *  z okna nie zostaje już nic — wtedy przewijanie do rysunku jest nieuniknione i lepiej
+ *  dać mu uczciwe 360 px niż wysokość ujemną. */
+export const MIN_WYS_PLOTNA = 360;
+
+/** Górna granica: powyżej tego rysunek przestaje być czytelny jako całość, a i tak
+ *  ogranicza go szerokość kolumny. */
+export const MAX_WYS_PLOTNA = 1100;
+
+/**
+ * Wysokość okna płótna: tyle, żeby DOLNA krawędź rysunku wypadła przy dolnej krawędzi
+ * okna, gdy strona jest przewinięta na sam początek.
+ *
+ * `goraPlotna` to odległość od góry DOKUMENTU do góry kolumny płótna — czyli zmierzona
+ * wysokość wszystkiego, co nad nią stoi: nagłówka strony, paska etapów, banerów
+ * (pojawiają się i znikają w trakcie pracy!), paska kondygnacji i paska narzędzi.
+ *
+ * HISTORIA: stał tu szacunek `okno - 260` i był ZŁY — tego, co nad płótnem, jest realnie
+ * około 480 px. Przy oknie 1440×900 strona wychodziła na 1291 px, przy 1600×1200 na
+ * 1480 px, czyli edytor nie mieścił się w oknie NIGDY, na żadnym monitorze: dolną
+ * krawędź rysunku dało się zobaczyć wyłącznie przewijając całą stronę — razem z paskiem
+ * narzędzi, którym się w tej chwili rysuje. Tryb pełnoekranowy liczył to poprawnie od
+ * początku (mierzy `rozmiaryChrome` w DesignTab.tsx), więc tutaj też MIERZYMY, zamiast
+ * zgadywać.
+ *
+ * `null` (kolumna płótna jeszcze niezamontowana — ekran wejściowy, przycinanie podkładu)
+ * wraca do dawnego szacunku: to wyłącznie wartość startowa, którą pierwszy pomiar po
+ * zamontowaniu zaraz zastąpi.
+ *
+ * `zapasPod` to miejsce zostawione POD płótnem: pasek stanu razem z wierszem o obszarze
+ * planu, plus oddech. Podawany z POMIARU, nie zgadywany — pasek zawija się na węższym
+ * oknie, więc jego wysokość nie jest stała. Rezerwujemy go, bo to on niesie
+ * powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku: gdyby wypadł pod zgięcie,
+ * użytkownik rysowałby bez ani jednej z tych informacji przed oczami.
+ *
+ * `okno` wstrzykiwalne, żeby dało się to sprawdzić bez przeglądarki.
+ */
+export function wysokoscPlotna(
+  goraPlotna: number | null = null,
+  okno: number = typeof window === "undefined" ? 900 : window.innerHeight,
+  zapasPod: number = ZAPAS_POD_PLOTNEM
+): number {
+  if (goraPlotna === null) return Math.max(640, Math.min(MAX_WYS_PLOTNA, okno - 260));
+  return Math.max(MIN_WYS_PLOTNA, Math.min(MAX_WYS_PLOTNA, okno - goraPlotna - zapasPod));
+}
 
 /**
  * Poniżej tej szerokości okna edytor układa się „telefonicznie": panel boczny
@@ -498,4 +571,45 @@ export const GRUBOSC_OBRYSU_POKOJU_M = 0.08;
 export function gruboscObrysuPokoju(metersPerUnit: number | null): number {
   const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
   return GRUBOSC_OBRYSU_POKOJU_M / mpu;
+}
+
+/**
+ * Tolerancja domknięcia obrysu ściany [jedn. planu].
+ *
+ * Ściana zamykana kliknięciem dostaje DOKŁADNIE swój pierwszy punkt (patrz
+ * `zPrzyciaganiem` w DesignCanvas.tsx), więc teoretycznie wystarczyłaby równość.
+ * Zapisy potrafią jednak przejść przez JSON, przeliczenie skali albo przeciągnięcie
+ * narożnika o włos — a pół jednostki planu to przy rysunku odręcznym 2,5 cm, czyli
+ * mniej niż grubość najcieńszej ścianki. Nic, co byłoby świadomą szczeliną.
+ */
+const TOLERANCJA_DOMKNIECIA = 0.5;
+
+/**
+ * Wierzchołki ściany narysowanej jako ZAMKNIĘTA PĘTLA — albo `null`, gdy ściana
+ * pętli nie tworzy.
+ *
+ * Po co: ściana zamknięta w pętlę to obrys pomieszczenia narysowany murem. Droga
+ * w drugą stronę istniała od dawna (`createWallFromRoom` — „Utwórz ścianę z obrysu"),
+ * ta nie istniała wcale. A to właśnie ta strona jest naturalna po „Narysuj dom
+ * samodzielnie": użytkownik dostaje narzędzie ściany, obrysowuje nim dom, po czym
+ * przewodnik każe mu „obrysować pomieszczenia" — czyli przejechać po raz drugi
+ * dokładnie tę samą figurę, którą przed chwilą narysował.
+ *
+ * Zwracane są SAME wierzchołki, bez powtórzonego punktu domykającego: pomieszczenie
+ * trzyma obrys jako listę rogów, a domknięcie jest w nim dorozumiane (odwrotnie niż
+ * ściana, która domknięcie ma zapisane jawnie).
+ *
+ * Figura o zerowym polu (wszystkie punkty na jednej linii — np. ściana narysowana
+ * tam i z powrotem) jest odrzucana: to nie jest pomieszczenie, choć formalnie
+ * „wraca do początku".
+ */
+export function wierzcholkiZamknietejSciany(points: Point[]): Point[] | null {
+  if (points.length < 4) return null;
+  const pierwszy = points[0];
+  const ostatni = points[points.length - 1];
+  if (Math.hypot(ostatni.x - pierwszy.x, ostatni.y - pierwszy.y) > TOLERANCJA_DOMKNIECIA) return null;
+  const wierzcholki = points.slice(0, -1);
+  if (wierzcholki.length < 3) return null;
+  if (polygonArea(wierzcholki) <= 0) return null;
+  return wierzcholki;
 }

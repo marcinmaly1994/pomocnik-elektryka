@@ -1,0 +1,342 @@
+import { test, expect, type Page } from "@playwright/test";
+import { skipEntryScreen } from "./_flow";
+
+/**
+ * Przyciąganie rysowanego punktu do geometrii, która JUŻ jest na rzucie, oraz
+ * robienie pomieszczenia z zamkniętej pętli ścian.
+ *
+ * Dwie strony tej samej luki. Przyciągały się dotąd wyłącznie pomieszczenia do
+ * pomieszczeń: dorysowanie ścianki działowej do już postawionej ściany wymagało
+ * trafienia co do piksela, a pokój rysowany wewnątrz gotowego obrysu ścian nie łapał
+ * go wcale. Drogą w drugą stronę — z obrysu pokoju zrobić ścianę — dało się pójść od
+ * dawna („Utwórz ścianę z obrysu"), ale z pętli ścian zrobić pokoju nie dało się
+ * wcale, mimo że to WŁAŚNIE ta kolejność wychodzi po „Narysuj dom samodzielnie":
+ * narzędzie ściany, obrys domu, a potem przewodnik każący „obrysować pomieszczenia",
+ * czyli przejechać po raz drugi tę samą figurę.
+ *
+ * Testowane e2e, bo liczy się tu styk zdarzeń myszy na płótnie Konvy z tym, co
+ * naprawdę wylądowało w zapisie — sam `snapDoGeometrii` ma testy jednostkowe.
+ */
+
+const PLOTNO = "div.overflow-auto.rounded-card.border";
+
+async function otworzPlan(page: Page) {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
+}
+
+/** Box płótna mierzony PO wybraniu narzędzia i po powrocie na górę strony —
+ *  kliknięcie narzędzia potrafi przesunąć stronę (patrz `openPlan` w wall-drawing). */
+async function boxPlotna(page: Page) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  return (await page.locator(PLOTNO).first().boundingBox())!;
+}
+
+async function sciany(page: Page) {
+  await page.waitForTimeout(900); // debounce autozapisu (600 ms) + zapas
+  return page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.walls as { id: string; points: { x: number; y: number }[] }[];
+  });
+}
+
+async function pomieszczenia(page: Page) {
+  await page.waitForTimeout(900);
+  return page.evaluate(() => {
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    return JSON.parse(raw!).draft.roomShapes as { name: string; points: { x: number; y: number }[] }[];
+  });
+}
+
+/**
+ * Rysuje prostokątną, ZAMKNIĘTĄ ścianę o podanych rogach (w pikselach względem
+ * płótna) i zwraca box płótna. Domknięcie przez kliknięcie w pierwszy punkt —
+ * tak samo, jak zamyka ją użytkownik.
+ */
+async function narysujPetleSciany(page: Page, box: { x: number; y: number }, w = 260, h = 200) {
+  await page.mouse.click(box.x + 80, box.y + 60);
+  await page.mouse.click(box.x + 80 + w, box.y + 60);
+  await page.mouse.click(box.x + 80 + w, box.y + 60 + h);
+  await page.mouse.click(box.x + 80, box.y + 60 + h);
+  await page.mouse.click(box.x + 80, box.y + 60); // domknięcie
+}
+
+test.describe("przyciąganie do istniejącej geometrii", () => {
+  /**
+   * Bez przyciągania do siatki, bo to ONO ma tu nie mieć nic do rzeczy: chodzi
+   * o dociągnięcie do konkretnej, już narysowanej ściany, a nie do najbliższego oczka.
+   * Siatka domyślnie i tak jest wyłączona na wgranym podkładzie.
+   */
+  async function bezSiatki(page: Page) {
+    const siatka = page.getByLabel("Przyciągaj ściany do siatki");
+    if (await siatka.isChecked()) await siatka.uncheck();
+  }
+
+  test("punkt nowej ściany dociąga się do narożnika ściany już narysowanej", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    await bezSiatki(page);
+    const box = await boxPlotna(page);
+
+    await page.mouse.click(box.x + 100, box.y + 100);
+    await page.mouse.click(box.x + 300, box.y + 100);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+    const [pierwsza] = await sciany(page);
+
+    // Nowa ścianka startuje KILKA PIKSELI obok końca tamtej — dotąd zostawała
+    // tam, gdzie kliknięto, czyli ze szczeliną.
+    await page.mouse.click(box.x + 304, box.y + 96);
+    await page.mouse.click(box.x + 304, box.y + 250);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+
+    const wszystkie = await sciany(page);
+    expect(wszystkie).toHaveLength(2);
+    const koniecPierwszej = pierwsza.points[1];
+    expect(wszystkie[1].points[0]).toEqual(koniecPierwszej);
+  });
+
+  test("punkt nowej ściany dociąga się do KRAWĘDZI ściany, nie tylko do jej rogów", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    await bezSiatki(page);
+    const box = await boxPlotna(page);
+
+    await page.mouse.click(box.x + 100, box.y + 100);
+    await page.mouse.click(box.x + 100, box.y + 300);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+    const [pionowa] = await sciany(page);
+
+    // Ścianka działowa dochodząca do POŁOWY tamtej ściany, kliknięta obok linii.
+    await page.mouse.click(box.x + 104, box.y + 200);
+    await page.mouse.click(box.x + 250, box.y + 200);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+
+    const wszystkie = await sciany(page);
+    // Ta sama współrzędna X co ściana pionowa — czyli punkt siedzi DOKŁADNIE na niej.
+    expect(wszystkie[1].points[0].x).toBe(pionowa.points[0].x);
+  });
+
+  test("klik wyraźnie dalej od ściany NIE jest do niej dociągany", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    await bezSiatki(page);
+    const box = await boxPlotna(page);
+
+    await page.mouse.click(box.x + 100, box.y + 100);
+    await page.mouse.click(box.x + 100, box.y + 300);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+    const [pionowa] = await sciany(page);
+
+    // Ponad metr od tamtej ściany — świadomie postawiony punkt obok, nie chybienie.
+    await page.mouse.click(box.x + 180, box.y + 200);
+    await page.mouse.click(box.x + 300, box.y + 200);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+
+    const wszystkie = await sciany(page);
+    expect(wszystkie[1].points[0].x).not.toBe(pionowa.points[0].x);
+  });
+
+  test("punkt rysowanego POMIESZCZENIA dociąga się do ściany", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    await bezSiatki(page);
+    const box = await boxPlotna(page);
+    await narysujPetleSciany(page, box);
+    const [petla] = await sciany(page);
+
+    // Obrys pokoju rysowany „na oko" wewnątrz gotowych ścian — rogi kilka pikseli
+    // od rogów muru. Dotąd pokój nie łapał ściany wcale.
+    await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+    await page.getByRole("button", { name: "Prostokąt" }).click();
+    await page.mouse.move(box.x + 84, box.y + 64);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 336, box.y + 256, { steps: 8 });
+    await page.mouse.up();
+    await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+    const [pokoj] = await pomieszczenia(page);
+    const rogiSciany = petla.points.slice(0, -1);
+    const xSciany = new Set(rogiSciany.map((p) => p.x));
+    const ySciany = new Set(rogiSciany.map((p) => p.y));
+    // Każdy róg pokoju leży na linii muru — w obu osiach.
+    for (const p of pokoj.points) {
+      expect(xSciany.has(p.x)).toBe(true);
+      expect(ySciany.has(p.y)).toBe(true);
+    }
+  });
+});
+
+test.describe("pomieszczenie z zamkniętej pętli ścian", () => {
+  test("domknięcie obrysu proponuje zrobienie z niego pomieszczenia", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    const box = await boxPlotna(page);
+
+    await expect(page.getByText("Obrys zamknięty")).toBeHidden();
+    await narysujPetleSciany(page, box);
+    await expect(page.getByText("Obrys zamknięty")).toBeVisible();
+  });
+
+  test("otwarta ściana nie dostaje propozycji — nie ma czego zamknąć", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    const box = await boxPlotna(page);
+
+    await page.mouse.click(box.x + 100, box.y + 100);
+    await page.mouse.click(box.x + 300, box.y + 100);
+    await page.mouse.click(box.x + 300, box.y + 250);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+
+    await expect(page.getByText("Obrys zamknięty")).toBeHidden();
+  });
+
+  test("pomieszczenie z pętli ma DOKŁADNIE ten sam obrys co ściana", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    const box = await boxPlotna(page);
+    await narysujPetleSciany(page, box);
+    const [petla] = await sciany(page);
+
+    await page.getByRole("button", { name: "Zrób z niego pomieszczenie" }).click();
+    // Idzie przez ZWYKŁE okno nazywania — typ pomieszczenia decyduje o regułach
+    // doboru, więc pokój nie powstaje po cichu.
+    await expect(page.getByText("Nazwij pomieszczenie")).toBeVisible();
+    await page.keyboard.type("Kuchnia");
+    await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+    const pokoje = await pomieszczenia(page);
+    expect(pokoje).toHaveLength(1);
+    expect(pokoje[0].name).toBe("Kuchnia");
+    // Ściana trzyma domknięcie jawnie (ostatni punkt = pierwszy), pomieszczenie ma
+    // je dorozumiane — stąd `slice`.
+    expect(pokoje[0].points).toEqual(petla.points.slice(0, -1));
+  });
+
+  test("propozycja gaśnie sama, gdy pętla dostanie pomieszczenie", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    const box = await boxPlotna(page);
+    await narysujPetleSciany(page, box);
+
+    await page.getByRole("button", { name: "Zrób z niego pomieszczenie" }).click();
+    await page.keyboard.type("Kuchnia");
+    await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+    await expect(page.getByText("Obrys zamknięty")).toBeHidden();
+  });
+
+  test("Nie teraz odrzuca propozycję, ale operacja zostaje w menu kontekstowym", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    const box = await boxPlotna(page);
+    await narysujPetleSciany(page, box);
+
+    await page.getByRole("button", { name: "Odrzuć propozycję pomieszczenia" }).click();
+    await expect(page.getByText("Obrys zamknięty")).toBeHidden();
+
+    // PPM na murze — ta sama operacja, tylko bez pośpiechu.
+    await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+    await page.mouse.click(box.x + 210, box.y + 60, { button: "right" });
+    await expect(page.getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeVisible();
+  });
+
+  test("otwarta ściana nie ma w menu kontekstowym tworzenia pomieszczenia", async ({ page }) => {
+    await otworzPlan(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    const box = await boxPlotna(page);
+
+    await page.mouse.click(box.x + 100, box.y + 100);
+    await page.mouse.click(box.x + 300, box.y + 100);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+
+    await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+    await page.mouse.click(box.x + 200, box.y + 100, { button: "right" });
+    await expect(page.getByRole("button", { name: "Usuń ścianę" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeHidden();
+  });
+});
+
+/**
+ * Znacznik zaczepu ma być widoczny TAKŻE przy pierwszym punkcie figury — a to on
+ * najczęściej startuje „od narożnika tamtej ściany". Wcześniej podgląd był liczony
+ * dopiero po postawieniu pierwszego punktu, więc ten jeden przyciągał się niewidzialnie.
+ *
+ * Sprawdzane przez węzły sceny Konvy, bo znacznik jest rysunkiem na płótnie, nie DOM-em.
+ */
+async function znacznikiZaczepu(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const k = (window as unknown as { Konva?: { stages: { find(sel: string): { stroke(): string }[] }[] } }).Konva;
+    const stage = k?.stages[0];
+    if (!stage) return 0;
+    // Kolor zaczepu — patrz znacznik w DesignCanvas.tsx.
+    return [...stage.find("Rect"), ...stage.find("Circle")].filter((n) => n.stroke() === "#2C6B4A").length;
+  });
+}
+
+test("zaczep widać już przy PIERWSZYM punkcie ściany, zanim cokolwiek postawiono", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await page.mouse.click(box.x + 300, box.y + 100);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+
+  // Kursor daleko od muru — nie ma czego podświetlać.
+  await page.mouse.move(box.x + 200, box.y + 300);
+  expect(await znacznikiZaczepu(page)).toBe(0);
+
+  // Kursor tuż przy narożniku gotowej ściany, ANI JEDNEGO punktu nowej jeszcze nie ma.
+  await page.mouse.move(box.x + 303, box.y + 103);
+  expect(await znacznikiZaczepu(page)).toBeGreaterThan(0);
+});
+
+test("to samo w narzędziu pomieszczenia — przed pierwszym narożnikiem prostokąta", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+  await narysujPetleSciany(page, box);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Prostokąt" }).click();
+  await page.mouse.move(box.x + 83, box.y + 63);
+  expect(await znacznikiZaczepu(page)).toBeGreaterThan(0);
+});
+
+/**
+ * Propozycja „zrób z tego pomieszczenie" musi gasnąć także dla obrysu WKLĘSŁEGO.
+ *
+ * Sprawdzenie „czy pętla ma już pomieszczenie" pytało o średnią wierzchołków, a ta dla
+ * litery U wypada w samym wcięciu — poza figurą. Pętla wyglądała więc na wolną nawet
+ * tuż po zrobieniu z niej pokoju i dawało się utworzyć drugi, nakładający się.
+ */
+test("obrys w kształcie U przestaje prosić o pomieszczenie, gdy już je dostał", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+
+  // Litera U: wcięcie od góry, między lewym a prawym ramieniem.
+  await page.mouse.click(box.x + 80, box.y + 60);
+  await page.mouse.click(box.x + 340, box.y + 60);
+  await page.mouse.click(box.x + 340, box.y + 260);
+  await page.mouse.click(box.x + 260, box.y + 260);
+  await page.mouse.click(box.x + 260, box.y + 140);
+  await page.mouse.click(box.x + 160, box.y + 140);
+  await page.mouse.click(box.x + 160, box.y + 260);
+  await page.mouse.click(box.x + 80, box.y + 260);
+  await page.mouse.click(box.x + 80, box.y + 60); // domknięcie
+
+  await expect(page.getByText("Obrys zamknięty")).toBeVisible();
+  await page.getByRole("button", { name: "Zrób z niego pomieszczenie" }).click();
+  await page.keyboard.type("Salon");
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  // Pętla dostała swój pokój — propozycja gaśnie i menu kontekstowe jej nie wskrzesza.
+  await expect(page.getByText("Obrys zamknięty")).toBeHidden();
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await page.mouse.click(box.x + 210, box.y + 60, { button: "right" });
+  await expect(page.getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeHidden();
+});
