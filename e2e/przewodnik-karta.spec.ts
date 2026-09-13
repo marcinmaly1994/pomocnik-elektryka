@@ -14,7 +14,6 @@ import { otworzKatalogElementow } from "./_flow";
  */
 
 const lista = (page: Page) => page.locator("div.pe-bez-suwaka.overflow-y-auto.pr-1");
-const kolumna = (page: Page) => page.getByTestId("karta-narzedzi").first();
 const karta = (page: Page) => page.getByRole("complementary", { name: /Zacznij w 3 krokach/i });
 
 /** Okno 1280 x 900 — typowy laptop, ustawiane jawnie, zeby wysokosc karty i pozycja
@@ -40,7 +39,7 @@ async function pustyProjekt(page: Page, wysokosc = 900) {
   await page.evaluate(() => window.scrollTo(0, 0));
 }
 
-test("kolumna narzedzi konczy sie nad karta, a nie pod nia", async ({ page }) => {
+test("karta przewodnika nie zaslania niczego, w co sie klika w kolumnie", async ({ page }) => {
   await pustyProjekt(page);
 
   const k = (await karta(page).boundingBox())!;
@@ -53,14 +52,18 @@ test("kolumna narzedzi konczy sie nad karta, a nie pod nia", async ({ page }) =>
   const li = (await lista(page).boundingBox())!;
   expect(li.y + li.height).toBeLessThanOrEqual(k.y);
 
-  // Sama kolumna dostaje 4 px luzu na własny dolny padding. Powód jest konkretny
-  // i sprzed tej zmiany: wysokość listy zależy od położenia karty, położenie karty
-  // od jej wysokości, a ta od szerokości okna — którą zmienia pasek przewijania
-  // strony, pojawiający się i znikający wraz z... wysokością listy. Ta pętla ustala
-  // się na punkcie stałym, w którym padding kolumny bywa o kilka pikseli pod kartą.
-  // Lista wyżej jest nad nią zawsze, więc wybieranie elementów działa.
-  const kol = (await kolumna(page).boundingBox())!;
-  expect(kol.y + kol.height).toBeLessThanOrEqual(k.y + 4);
+  // SAMA KOLUMNA sięga teraz dołu rysunku i to jest zamierzone (krok 85: kolumna ma
+  // wysokość płótna obok, żeby nie rozpychać strony). Karta pływa więc nad jej dolną,
+  // PUSTĄ częścią — i to jest w porządku, dopóki nie zasłania niczego, w co się klika.
+  // Tego właśnie pilnujemy zamiast dawnego pomiaru całej kolumny: pod kartą nie ma
+  // wylądować ani lista wyżej, ani szukajka, ani zakładki panelu.
+  for (const [co, loc] of [
+    ["szukajka", page.getByPlaceholder("Szukaj elementu…")],
+    ["zakładka Elementy", page.getByRole("button", { name: "Elementy", exact: true })],
+  ] as const) {
+    const b = (await loc.boundingBox())!;
+    expect(b.y + b.height, `karta zasłania: ${co}`).toBeLessThanOrEqual(k.y);
+  }
 });
 
 test("zwiniecie karty oddaje liscie odzyskana wysokosc", async ({ page }) => {

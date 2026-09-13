@@ -3907,6 +3907,54 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
     `npx playwright test` **418/418**.
 
+85. **Kolumna narzędzi kończy się tam, gdzie rysunek** — kolumna rosła do wysokości
+    swojej TREŚCI: zmierzone **820 px przy płótnie wysokim na 595**. To ona, a nie
+    rysunek, ustalała wysokość strony, a dotarcie do dołu katalogu wymagało
+    przewinięcia CAŁEJ STRONY — czyli wyniesienia rysunku poza okno dokładnie wtedy,
+    gdy wybierało się element, żeby go na tym rysunku postawić.
+
+    Teraz karta narzędzi dostaje na szerokim oknie `height: wysPlotna`, czyli tyle,
+    ile płótno obok niej (zmierzone po zmianie: **595 = 595**), a panel w widoku
+    zwykłym przewija się sam zamiast rozpychać dokument. Lista pomieszczeń dostała
+    przy okazji własne przewijanie, z przyciskiem „Narysuj pomieszczenie" trzymanym
+    na wierzchu — przy kilkunastu pokojach uciekał poza kolumnę.
+
+    Na TELEFONIE nic się nie zmienia: tam kolumna stoi NAD rysunkiem, a nie obok
+    niego, więc nie ma z czym się równać i wysokość zostaje z treści. Stąd
+    `useSzerokieOkno` (ten sam hook co w pasku edytora, krok 83) zamiast klasy CSS.
+
+    **UWAGA — to NIE kończy przewijania strony i obietnica była tu za mocna.**
+    Dokument przy oknie 1440×900 zszedł z 1233 px na 1187 px, ale nadal przekracza
+    okno. Kolumna nie była głównym powodem: pod edytorem stoją jeszcze zwijane karty
+    „Sprawdzenie rzutu" i „Zestawienie elementów" (~98 px), odstęp `mt-10` i stopka
+    z zastrzeżeniami (109 px) — razem ~250 px, które z kolumną nie mają nic wspólnego.
+    Żeby strona przestała się przewijać, trzeba by ruszyć TE elementy, a to decyzja
+    o zawartości strony, nie o układzie edytora.
+
+    Co realnie się poprawiło: dół katalogu jest teraz osiągalny BEZ wynoszenia rysunku
+    z oczu. Co się pogorszyło: widoczna część listy elementów jest krótsza (~330 px
+    przy pokazanej karcie przewodnika, zamiast do 560 px) — to jest cena, którą ta
+    zmiana świadomie płaci.
+
+    **Dwie ślepe uliczki po drodze, obie wycofane:**
+    - Włączenie `wypelnijWysokosc` (trybu z pełnego ekranu) w widoku zwykłym.
+      Lista wypełniała wtedy kolumnę i przestawała skracać się pod kartę przewodnika
+      — czyli łamała gwarancję, którą `przewodnik-karta.spec.ts` pilnuje od kroku,
+      w którym karta zasłaniała listę z elementami do wybrania. Zostało
+      `wypelnijWysokosc={pelnyEkran}`, a panel zamiast przycinać treść — przewija ją.
+    - Wcześniej (krok 84) ponowny pomiar listy w następnej klatce, jako domniemane
+      lekarstwo na 3 px zachodzenia. Nie pomagał, więc wypadł.
+
+    `przewodnik-karta.spec.ts` pilnuje teraz tego, o co w nim naprawdę chodziło.
+    Dawny pomiar „kolumna kończy się nad kartą" przestał być prawdą Z ZAŁOŻENIA:
+    kolumna sięga dołu rysunku, więc karta pływa nad jej dolną, PUSTĄ częścią. Test
+    sprawdza więc, że karta nie zasłania niczego, w co się klika — listy, szukajki
+    ani zakładek panelu.
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1433/1433**,
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **418/418**.
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +
