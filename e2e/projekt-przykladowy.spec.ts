@@ -115,3 +115,39 @@ test("pusty kosztorys nie wystawia rachunku za dom, którego nie ma", async ({ p
   await page.getByRole("button", { name: "Wróć do Instalacji" }).click();
   await expect(ekranStartowy(page)).toBeVisible();
 });
+
+test("pasek przykładu NIE wchodzi na Kalkulatory i Protokoły", async ({ page }) => {
+  await swiezyProjekt(page);
+  await wczytajPrzyklad(page);
+
+  // Obie zakładki są z założenia NIEZALEŻNE od projektu, więc pasek nie ma tam czego
+  // opisywać — a jego zdanie o zapisie byłoby tam wprost nieprawdziwe: „Zapisz zestaw"
+  // w Protokołach zapisuje do chmury normalnie, bo protokoły nie idą przez autozapis
+  // projektu (to jego blokuje `projektPrzykladowy`).
+  for (const zakladka of ["Kalkulatory", "Protokoły pomiarowe"]) {
+    await page.getByRole("button", { name: zakladka, exact: true }).click();
+    await expect(pasekPrzykladu(page)).toHaveCount(0);
+  }
+
+  // ...a na krokach przepływu stoi dalej.
+  await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
+  await expect(pasekPrzykladu(page)).toBeVisible();
+});
+
+test("kosztorys nie podaje ceny materiału jako ceny instalacji", async ({ page }) => {
+  await swiezyProjekt(page);
+  await wczytajPrzyklad(page);
+  await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
+
+  // Domyślny cennik ma `robocizna: 0`, więc suma jest kwotą za SAM MATERIAŁ — i ma
+  // się tak podpisać. Wcześniej stało pod nią „RAZEM brutto", a laik wynosił z całej
+  // aplikacji liczbę kilkakrotnie zaniżoną względem tego, co zapłaci.
+  const stopka = page.locator("tfoot");
+  await expect(stopka).toContainText("RAZEM brutto — sam materiał");
+  await expect(stopka).toContainText("To jest cena materiału, nie cena instalacji.");
+
+  // Ostrzeżenie MUSI stać nad liczbą, nie pod nią — o to w tej zmianie chodzi.
+  const ostrzezenie = (await stopka.getByText(/To jest cena materiału/).boundingBox())!;
+  const suma = (await stopka.getByText(/RAZEM brutto — sam materiał/).boundingBox())!;
+  expect(ostrzezenie.y).toBeLessThan(suma.y);
+});

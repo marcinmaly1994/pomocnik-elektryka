@@ -242,7 +242,11 @@ test("Kosztorys: rozbija sumę na netto/VAT/brutto i ostrzega o pozycjach bez ce
 
   await expect(page.getByText("Razem netto")).toBeVisible();
   await expect(page.getByText("VAT 23%")).toBeVisible();
-  await expect(page.getByText(/Suma nie obejmuje wszystkiego/)).toBeVisible();
+  // Trzy gniazdka to trzy punkty instalacyjne, a `robocizna` ma w domyślnym cenniku
+  // cenę 0 — więc ostrzeżenie jest tu w MOCNIEJSZYM wariancie („cena materiału, nie
+  // cena instalacji"), zarezerwowanym dla braku samej robocizny. Słabszy wariant
+  // („Suma nie obejmuje wszystkiego") zostaje dla braków w pozostałych pozycjach.
+  await expect(page.getByText(/To jest cena materiału, nie cena instalacji/)).toBeVisible();
 
   const nums = await page.evaluate(() =>
     [...document.querySelectorAll("tfoot td")]

@@ -31,9 +31,13 @@ export function PasekPrzykladu() {
       style={{ background: "#2D5A8C12", color: "#2D5A8C" }}
     >
       <FlaskConical size={15} className="shrink-0" aria-hidden="true" />
+      {/* „Ten projekt", nie „nic z tego": pasek wisi nad czterema krokami przepływu
+          i mówi wyłącznie o PROJEKCIE. Szersza obietnica była nieprawdziwa — protokoły
+          mają własny, ręczny zapis do chmury i on działa normalnie także wtedy, gdy
+          otwarty jest przykład (patrz warunek renderowania paska w App.tsx). */}
       <span>
         <strong>To jest projekt przykładowy</strong> — gotowe mieszkanie 70 m², na którym widać, co aplikacja liczy
-        sama. Poklikaj po zakładkach, zmieniaj co chcesz; nic z tego nie zapisuje się na Twoim koncie.
+        sama. Poklikaj po zakładkach, zmieniaj co chcesz; ten projekt nie zapisuje się na Twoim koncie.
       </span>
       <Dialog>
         <DialogTrigger asChild>
