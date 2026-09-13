@@ -152,3 +152,52 @@ test("monitor: strona NIE drga — tam edytor i tak mieści się w oknie", async
   await page.waitForTimeout(600);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
+
+/**
+ * Pelny ekran na TELEFONIE.
+ *
+ * Zmierzone przed zmiana (okno 375 px): karta narzedzi miala 345 px szerokosci, czyli
+ * po odslonieciu zakrywala CALY rysunek — pasek narzedzi jest ponizej progu `md`
+ * pozimy, a w pelnym ekranie karta stoi przyklejona do lewej krawedzi okna jako
+ * kolumna. Do tego karta chowala sie wylacznie na `mousemove`/`mouseleave`, ktorych
+ * palec nie wysyla: raz otwarta zostawala otwarta na dobre.
+ */
+test("telefon w pelnym ekranie: karta narzedzi jest WASKA i nie zakrywa rysunku", async ({ page }) => {
+  await page.setViewportSize(TELEFON);
+  await otworzEdytor(page);
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+
+  const karta = (await page.getByTestId("karta-narzedzi").boundingBox())!;
+  // Sam pionowy pasek ikon plus uchwyt zwijania — nie pol ekranu.
+  expect(karta.width).toBeLessThan(120);
+  // Zostaje realny kawalek rysunku obok.
+  expect(TELEFON.width - (karta.x + karta.width)).toBeGreaterThan(200);
+});
+
+test("telefon w pelnym ekranie: karte da sie schowac PALCEM, bez najezdzania myszą", async ({ page }) => {
+  await page.setViewportSize(TELEFON);
+  await otworzEdytor(page);
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+
+  const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
+  await uchwyt.click();
+  const zamknij = page.getByRole("button", { name: "Schowaj narzędzia rysowania" });
+  await expect(zamknij).toBeVisible();
+  await zamknij.click();
+
+  // Karta zjechala za krawedz, a uchwyt wrocil — droga w obie strony jest klikalna.
+  await expect(zamknij).toBeHidden();
+  await expect(uchwyt).toBeVisible();
+});
+
+test("monitor w pelnym ekranie: pasek narzedzi bez zmian — i tak byl pionowy", async ({ page }) => {
+  await page.setViewportSize(MONITOR);
+  await otworzEdytor(page);
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+
+  const rail = (await page.locator('nav[aria-label="Narzędzia rysowania"]').boundingBox())!;
+  // Pionowy: wyzszy niz szerszy, tak jak od zawsze powyzej progu `md`.
+  expect(rail.height).toBeGreaterThan(rail.width);
+});

@@ -45,10 +45,22 @@ export function ToolRail({
   value,
   onChange,
   onToolRef,
+  pionowo = false,
 }: {
   value: ToolMode;
   onChange: (t: ToolMode) => void;
   onToolRef?: (id: ToolMode, el: HTMLButtonElement | null) => void;
+  /**
+   * Wymusza układ PIONOWY niezależnie od szerokości okna.
+   *
+   * Domyślnie pasek jest responsywny: pionowy od `md` w górę, poziomy niżej — bo
+   * w zwykłym widoku stoi wtedy nad planem, w poprzek. W pełnym ekranie jest jednak
+   * lewą krawędzią karty przyklejonej do boku okna, więc układ poziomy rozpychał ją
+   * na całą szerokość telefonu: zmierzone 345 px na ekranie 375 px, czyli po
+   * odsłonięciu narzędzi znikał cały rysunek. Tam decyduje MIEJSCE, w którym pasek
+   * stoi, a nie szerokość okna.
+   */
+  pionowo?: boolean;
 }) {
   return (
     <nav
@@ -59,7 +71,11 @@ export function ToolRail({
       // `md:overflow-y-auto` zamiast `md:overflow-visible`: w pełnym ekranie karta
       // narzędzi ma `overflow-hidden`, więc na niskim oknie ostatnie narzędzia
       // zostałyby ucięte bez żadnego sposobu, żeby do nich dotrzeć.
-      className="pe-bez-suwaka flex min-w-0 flex-row gap-1 overflow-x-auto border-r border-border p-1.5 md:shrink-0 md:flex-col md:overflow-x-visible md:overflow-y-auto"
+      className={
+        pionowo
+          ? "pe-bez-suwaka flex min-w-0 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-1.5"
+          : "pe-bez-suwaka flex min-w-0 flex-row gap-1 overflow-x-auto border-r border-border p-1.5 md:shrink-0 md:flex-col md:overflow-x-visible md:overflow-y-auto"
+      }
       style={{ background: "#F7F9FB" }}
     >
       {RAIL_TOOLS.map(({ id, label, icon: Icon, hint, shortcut }) => {
