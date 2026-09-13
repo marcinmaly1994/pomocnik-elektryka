@@ -78,6 +78,7 @@ import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
 import { zakladkaPanelu, type ZakladkaPanelu } from "@/lib/panelBoczny";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { CoachMark } from "@/components/onboarding/CoachMark";
+import { useSzerokieOkno } from "./PasekMenu";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
@@ -585,6 +586,9 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
   const dolnyPasekRef = useRef<HTMLDivElement>(null);
   const kolumnaPlotnaRef = useRef<HTMLDivElement>(null);
   const [wysPlotna, setWysPlotna] = useState(wysokoscPlotna);
+  /** Od 768 px w górę kolumna narzędzi stoi OBOK rysunku i równa się z nim wysokością;
+   *  niżej stoi NAD nim i bierze wysokość z treści (patrz styl `lewaKartaRef`). */
+  const szerokieOkno = useSzerokieOkno();
   const ostatniaSzerRef = useRef(0);
   const [cursor, setCursor] = useState<Point | null>(null);
   /** Nazwa pliku podkładu — sam „wgrany" nie mówi, KTÓRY rzut leży pod spodem. */
@@ -2736,7 +2740,19 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
                   bottom: rozmiaryChrome.dol,
                   transform: widocznaLewa ? "translateX(0)" : "translateX(calc(-100% - 1rem))",
                 }
-              : undefined
+              : /**
+                 * Karta kończy się tam, gdzie płótno obok niej.
+                 *
+                 * Bez tego kolumna rosła do wysokości swojej TREŚCI — zmierzone 820 px
+                 * przy płótnie wysokim na 595 — i to ona, a nie rysunek, decydowała
+                 * o wysokości strony: przy oknie 1440×900 dokument miał 1233 px, więc
+                 * rysowanie odbywało się na stronie, która się przewija, a stopka
+                 * wisiała 240 px pod krawędzią okna.
+                 *
+                 * `md:` w klasach niżej: na telefonie kolumna stoi NAD rysunkiem, a nie
+                 * obok niego, więc nie ma czego równać — tam wysokość zostaje z treści.
+                 */
+                { height: szerokieOkno ? wysPlotna : undefined }
           }
         >
           {/* Pinezka w rogu karty, na tle, żeby nie zlewała się z zawartością panelu. */}
@@ -2795,7 +2811,21 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
               przewijały się oba naraz i pokazywały dwa suwaki obok siebie. */}
           {!panelZwiniety && (
           <div
-            className={pelnyEkran ? "flex min-h-0 flex-col overflow-hidden border-l border-border p-2" : "border-l border-border p-2"}
+            /**
+             * W pełnym ekranie panel NIE przewija się sam — jest kolumną o pełnej
+             * wysokości, a przewijanie oddaje liście elementów w środku (dwa suwaki
+             * obok siebie były pierwszym, co rzucało się w oczy po wysunięciu narzędzi).
+             *
+             * W widoku zwykłym przewija się, bo od tej zmiany kolumna ma wysokość
+             * PŁÓTNA obok (patrz styl karty wyżej). Cokolwiek się w niej nie mieści —
+             * lista pod kartą przewodnika, długi spis pomieszczeń — ma dać się
+             * doscrollować TU, zamiast rozpychać całą stronę i wynosić rysunek z oczu.
+             */
+            className={
+              pelnyEkran
+                ? "flex min-h-0 flex-col overflow-hidden border-l border-border p-2"
+                : "pe-bez-suwaka flex min-h-0 flex-col overflow-y-auto border-l border-border p-2"
+            }
             style={{ width: 268 }}
           >
           {/* Kontrolki kontekstowe bieżącego narzędzia (grubość ściany, kształt
@@ -2857,7 +2887,7 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
               onToggleDedicated={setDedicated}
             />
           ) : (
-            <div className="space-y-2">
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
               {/* Wejście w tę zakładkę było dotąd jedynym sposobem, żeby zobaczyć, że
                   trzeba wrócić do paska narzędzi po ikonę „Narysuj Pomieszczenie" —
                   przycisk tutaj skraca to o jeden krok, niezależnie od tego, czy
@@ -2868,7 +2898,11 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
               >
                 <Layers size={13} /> Narysuj pomieszczenie
               </button>
-              <RoomPanel roomShapes={roomShapes} metersPerUnit={mpu} onCreateWall={createWallFromRoom} />
+              {/* Przycisk zostaje na wierzchu, przewija sie sama LISTA — przy kilkunastu
+                  pomieszczeniach inaczej uciekalby poza kolumne. */}
+              <div className="pe-bez-suwaka min-h-0 flex-1 overflow-y-auto pr-1">
+                <RoomPanel roomShapes={roomShapes} metersPerUnit={mpu} onCreateWall={createWallFromRoom} />
+              </div>
             </div>
           )}
           </div>
