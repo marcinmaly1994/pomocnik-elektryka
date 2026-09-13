@@ -2695,6 +2695,25 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
         >
           {/* Pinezka w rogu karty, na tle, żeby nie zlewała się z zawartością panelu. */}
           {pelnyEkran && <Pinezka klasa="absolute right-1 top-1 z-10 bg-white/90" />}
+
+          {/* Jawne ZAMKNIJ obok pinezki — jedyna droga schowania karty na DOTYKU.
+              Odsłania ją uchwyt przy krawędzi (jest przyciskiem, więc palec go otwiera),
+              ale chowa ją dotąd wyłącznie `mousemove` poza jej obrys albo `mouseleave`
+              kontenera — a palec nie wysyła ani jednego, ani drugiego. Na telefonie
+              karta zostawała więc otwarta na dobre, zasłaniając rysunek.
+
+              Tylko gdy karta jest odsłonięta i NIEPRZYPIĘTA: przypięta ma zostać
+              z definicji, a jej pinezka obok i tak jest sposobem na zmianę zdania. */}
+          {pelnyEkran && widocznaLewa && !przypietyPanel && (
+            <button
+              onClick={() => setChromeLewo(false)}
+              title="Schowaj narzędzia — wrócą uchwytem przy krawędzi"
+              aria-label="Schowaj narzędzia rysowania"
+              className="absolute right-1 top-8 z-10 rounded bg-white/90 p-1 text-slate-300 transition-colors hover:text-slate-500"
+            >
+              <X size={13} />
+            </button>
+          )}
           <ToolRail
           value={toolMode}
           onToolRef={(id, el) => {
@@ -2702,6 +2721,9 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
             if (id === "sciany") wallToolRef.current = el;
           }}
           onChange={selectTool}
+          // W pełnym ekranie karta jest przyklejona do LEWEJ krawędzi okna, więc pasek
+          // narzędzi musi być pionowy niezależnie od szerokości ekranu — patrz `pionowo`.
+          pionowo={pelnyEkran}
           />
 
           {/* Uchwyt zwijania na styku paska narzędzi i panelu. Widoczny ZAWSZE, w obie

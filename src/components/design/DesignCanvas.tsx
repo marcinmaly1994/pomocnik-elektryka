@@ -479,15 +479,6 @@ export function DesignCanvas({
    */
   const [zaczep, setZaczep] = useState<Przyciagniecie | null>(null);
 
-  /** Zaczep POD WARUNKIEM, że to on wygrał — punkt mógł równie dobrze trafić
-   *  w domknięcie figury albo w wyliczony narożnik prostokąta, które mają
-   *  pierwszeństwo (patrz `punktSciany`). Podświetlamy tylko to, co naprawdę
-   *  zadecydowało o położeniu punktu. */
-  function zaczepDlaPunktu(raw: Point, wynik: Point): Przyciagniecie | null {
-    const z = przyciagnijDoGeometrii(raw);
-    return z && z.point.x === wynik.x && z.point.y === wynik.y ? z : null;
-  }
-
   const drawingRoom = toolMode === "pomieszczenie";
 
   // Trasy niezależnie policzone (`buildCableRoutes`) potrafią przebiegać dokładnie
@@ -561,7 +552,14 @@ export function DesignCanvas({
    * szczelinę albo zachodząc na niego.
    */
   function snapPunktuPokoju(p: Point): Point {
-    return przyciagnijDoGeometrii(p)?.point ?? withSnap(p);
+    return punktPokojuZZaczepem(p).punkt;
+  }
+
+  /** To samo, ale razem z zaczepem, który o położeniu punktu zadecydował — patrz
+   *  `punktScianyZZaczepem` niżej, gdzie stoi powód takiej pary. */
+  function punktPokojuZZaczepem(p: Point): { punkt: Point; zaczep: Przyciagniecie | null } {
+    const z = przyciagnijDoGeometrii(p);
+    return { punkt: z?.point ?? withSnap(p), zaczep: z };
   }
 
   /** Przy rysowaniu ortogonalnym zamraża oś BLIŻSZĄ poprzedniemu punktowi na jego
@@ -636,10 +634,27 @@ export function DesignCanvas({
    * NAPRAWDĘ pokazał", a nie „gdzie wylądował po zaokrągleniu do oczka".
    */
   function punktSciany(raw: Point): Point {
+    return punktScianyZZaczepem(raw).punkt;
+  }
+
+  /**
+   * Punkt ściany RAZEM z zaczepem, który o jego położeniu zadecydował (`null`, gdy
+   * punkt stoi wolno albo złapało go domknięcie/narożnik prostokąta — te mają
+   * pierwszeństwo i nie są zaczepem o cudzą geometrię).
+   *
+   * Jedno przejście zamiast dwóch: podgląd potrzebuje i punktu, i zaczepu, a liczenie
+   * ich osobno przeszukiwało WSZYSTKIE ściany i pomieszczenia dwa razy na każdy ruch
+   * myszy — z porównywaniem współrzędnych na koniec, żeby odgadnąć, czy to zaczep
+   * wygrał. Tu wiadomo to wprost, bo obie odpowiedzi powstają w tym samym miejscu.
+   */
+  function punktScianyZZaczepem(raw: Point): { punkt: Point; zaczep: Przyciagniecie | null } {
     const naSiatce = withSnap(raw);
     const ostatni = drawingWall[drawingWall.length - 1];
     const ortho = orthoWalls && ostatni ? orthoSnap(ostatni, naSiatce) : naSiatce;
-    return zPrzyciaganiem(ortho) ?? przyciagnijDoGeometrii(raw)?.point ?? ortho;
+    const wlasne = zPrzyciaganiem(ortho);
+    if (wlasne) return { punkt: wlasne, zaczep: null };
+    const z = przyciagnijDoGeometrii(raw);
+    return { punkt: z?.point ?? ortho, zaczep: z };
   }
 
   /** Długość odcinka w jednostkach planu, sformatowana do etykiety: metry, jeśli
@@ -787,11 +802,11 @@ export function DesignCanvas({
         setZaczep(null);
         return;
       }
-      const punkt = punktSciany(raw);
+      const { punkt, zaczep: nowyZaczep } = punktScianyZZaczepem(raw);
       // Gumowy odcinek dopiero od drugiego punktu — przed pierwszym kliknięciem nie ma
       // od czego go ciągnąć.
       setWallCursor(drawingWall.length > 0 ? punkt : null);
-      setZaczep(zaczepDlaPunktu(raw, punkt));
+      setZaczep(nowyZaczep);
       return;
     }
 
@@ -801,10 +816,14 @@ export function DesignCanvas({
       if (roomMode === "wielobok") {
         // przy kursorze w pobliżu startu pokazujemy punkt startowy, nie pozycję myszy —
         // dzięki temu widać dokładnie, gdzie figura się domknie
-        const domyka = closesPolygon(raw);
-        const punkt = domyka ? drawingRoomPoints[0] : snapPunktuPokoju(raw);
+        if (closesPolygon(raw)) {
+          setRoomCursor(drawingRoomPoints[0]);
+          setZaczep(null);
+          return;
+        }
+        const { punkt, zaczep: nowyZaczep } = punktPokojuZZaczepem(raw);
         setRoomCursor(punkt);
-        setZaczep(domyka ? null : zaczepDlaPunktu(raw, punkt));
+        setZaczep(nowyZaczep);
         return;
       }
       // Kotwica z pierwszego kliknięcia działa tak samo jak wciśnięty przycisk —
@@ -814,8 +833,8 @@ export function DesignCanvas({
       // przyciąga się tak samo jak każdy następny, a przed pierwszym kliknięciem
       // kotwicy jeszcze nie ma. Bez tego najczęstszy start — „obrysuj pokój od rogu
       // muru" — przyciągał się niewidzialnie.
-      const rog = snapPunktuPokoju(raw);
-      setZaczep(zaczepDlaPunktu(raw, rog));
+      const { punkt: rog, zaczep: nowyZaczep } = punktPokojuZZaczepem(raw);
+      setZaczep(nowyZaczep);
       const start = roomRectStartRef.current ?? rectAnchor;
       if (!start) return;
       const rect = rectBetween(start, rog);

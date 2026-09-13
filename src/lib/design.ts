@@ -71,11 +71,13 @@ export const MAX_WYS_PLOTNA = 1100;
  * wraca do dawnego szacunku: to wyłącznie wartość startowa, którą pierwszy pomiar po
  * zamontowaniu zaraz zastąpi.
  *
- * `zapasPod` to miejsce zostawione POD płótnem: pasek stanu razem z wierszem o obszarze
- * planu, plus oddech. Podawany z POMIARU, nie zgadywany — pasek zawija się na węższym
- * oknie, więc jego wysokość nie jest stała. Rezerwujemy go, bo to on niesie
- * powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku: gdyby wypadł pod zgięcie,
- * użytkownik rysowałby bez ani jednej z tych informacji przed oczami.
+ * `zapasPod` to miejsce zostawione POD płótnem: pasek stanu plus oddech. Podawany
+ * z POMIARU, nie zgadywany — pasek zawija się na węższym oknie, więc jego wysokość nie
+ * jest stała. Rezerwujemy go, bo to on niesie powierzchnię, skalę, stan zapisu
+ * i przycisk kolejnego kroku: gdyby wypadł pod zgięcie, użytkownik rysowałby bez ani
+ * jednej z tych informacji przed oczami. Wiersz „Obszar planu… / rzut ≈ … m" spod paska
+ * jest świadomie POZA rezerwacją — to informacja pomocnicza, którą można doczytać po
+ * przewinięciu, a każdy zarezerwowany piksel odbiera się rysunkowi.
  *
  * `okno` wstrzykiwalne, żeby dało się to sprawdzić bez przeglądarki.
  */
