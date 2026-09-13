@@ -429,6 +429,9 @@ export default function App() {
   const projektPusty = useProjectStore(
     (s) => s.draft.elements.length === 0 && s.draft.walls.length === 0 && s.draft.roomShapes.length === 0
   );
+  /** Krok następujący po „Instalacji" — czyta się z kolejności przepływu, a nie
+   *  wpisuje na sztywno, żeby przestawienie kroków nie zostawiło tu martwej nazwy. */
+  const krokPoInstalacji = KOLEJNOSC_KROKOW[KOLEJNOSC_KROKOW.findIndex((k) => k.id === "projekt") + 1];
   const localSaveError = useProjectStore((s) => s.localSaveError);
   const lastLocalSaveAt = useProjectStore((s) => s.lastLocalSaveAt);
   const projectName = useProjectStore((s) => s.projectName);
@@ -741,7 +744,24 @@ export default function App() {
       {tab === "projekt" && (
         <>
           <Suspense fallback={<TabLoading />}>
-            <DesignTab onOpenAuth={() => setAuthOpen(true)} />
+            {/* Przejście do kolejnego kroku wędruje TUTAJ, zamiast pływać pigułką
+                w rogu okna — na tej jednej zakładce, bo na tej jednej pigułka leżała
+                na powierzchni roboczej (patrz `NAWIGACJA_ODSTEP_PX` w lib/design.ts
+                i `nastepnyKrok` w EditorStatusBar). `undefined` na pustym projekcie:
+                ten sam próg co przy pigułce na pozostałych zakładkach, liczony w tym
+                samym miejscu, żeby obie drogi nie mogły się rozjechać. */}
+            <DesignTab
+              onOpenAuth={() => setAuthOpen(true)}
+              nastepnyKrok={
+                projektPusty || !krokPoInstalacji
+                  ? undefined
+                  : {
+                      tytul: krokPoInstalacji.tytul,
+                      przejdz: () => setTab(krokPoInstalacji.id),
+                      pobierz: () => pobierzZawczasu(krokPoInstalacji.id),
+                    }
+              }
+            />
           </Suspense>
         </>
       )}
@@ -787,10 +807,8 @@ export default function App() {
             // u góry dają dokładnie tę samą nawigację, więc chowamy tu tylko wygodny
             // skrót, nie funkcję.
             //
-            // Odstęp od dolnej krawędzi ze WSPÓLNEJ stałej, nie z klasy `bottom-5`:
-            // edytor planu odejmuje to samo pasmo od wysokości płótna, żeby pigułka
-            // nie leżała na rysunku (patrz `PASMO_NAWIGACJI_PX`). Dwie liczby w dwóch
-            // plikach rozjechałyby się przy pierwszej zmianie stylu.
+            // Odstęp od dolnej krawędzi ze wspólnej stałej, nie z klasy `bottom-5` —
+            // patrz `NAWIGACJA_ODSTEP_PX`, gdzie stoi też historia pigułki na płótnie.
             style={{ bottom: NAWIGACJA_ODSTEP_PX }}
             className="fixed left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
           >
@@ -813,6 +831,12 @@ export default function App() {
         // Kafle 01/02/03/04 u góry działają bez zmian, więc to skrót, nie blokada
         // (ten sam argument co przy chowaniu obu pigułek poniżej `md`).
         if (projektPusty) return null;
+        // Na Instalacji tego przycisku tu NIE MA — przenosi się do paska stanu pod
+        // rysunkiem, bo pływając w rogu okna leżał na płótnie i zjadał tam kliknięcia
+        // (patrz `nastepnyKrok` przekazywane do `DesignTab` wyżej). Na pozostałych
+        // krokach nie ma powierzchni roboczej sięgającej dolnego rogu okna, więc
+        // pigułka zostaje tam, gdzie była.
+        if (tab === "projekt") return null;
         return (
           <button
             onClick={() => setTab(nastepny.id)}

@@ -61,32 +61,57 @@ for (const okno of OKNA) {
   });
 }
 
-/**
- * Płótno zostawia u dołu okna wolne pasmo na pływającą pigułkę „Dalej" — o tyle
- * właśnie jest niższe (patrz `ZAPAS_POD_PLOTNEM` w lib/design.ts).
- *
- * Mierzymy SAM ZAPAS, a nie „pigułka nie nachodzi na płótno", i to jest tu ważne
- * rozróżnienie. Rezerwacja pasma trzyma wyłącznie wtedy, gdy nad płótnem nie wisi
- * żaden baner: wysokość liczy się z chrome'u STAŁEGO, z pominięciem banerów (inaczej
- * pojawienie się banera przeskalowywałoby rzut pod kursorem), więc baner spycha
- * rysunek w dół i ten znów sięga pod pigułkę.
- *
- * A baner „ten projekt istnieje tylko w tej przeglądarce" wisi u KAŻDEGO
- * niezalogowanego użytkownika, u którego jest cokolwiek do stracenia — czyli
- * dokładnie wtedy, gdy pigułka w ogóle się pokazuje (na PUSTYM projekcie jej nie ma,
- * patrz `projektPusty` w App.tsx). Innymi słowy: w dostępnym dziś stanie te dwa
- * warunki wykluczają się nawzajem i testu „nie nachodzi" nie da się uczciwie napisać.
- * Konflikt pigułki z banerem czeka na rozstrzygnięcie projektowe — dopóki trwa,
- * pilnujemy tego, co faktycznie zachodzi: pasmo jest zarezerwowane.
- */
-test("płótno zostawia u dołu okna pasmo na nawigację", async ({ page }) => {
+test("pasek stanu mieści się w oknie razem z rysunkiem", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await otworzEdytor(page);
   await page.evaluate(() => window.scrollTo(0, 0));
 
+  // Płótno kończy się NAD paskiem stanu — to on niesie powierzchnię, skalę, stan
+  // zapisu i przycisk kolejnego kroku (patrz `zapasPod` w DesignTab.tsx). Rysowanie
+  // bez ani jednej z tych rzeczy przed oczami było tym samym problemem co rysowanie
+  // po niewidocznej części planu.
+  const pasek = (await page.getByRole("status", { name: "Stan projektu" }).boundingBox())!;
+  expect(pasek.y + pasek.height).toBeLessThanOrEqual(900);
+});
+
+/**
+ * Przycisk kolejnego kroku siedzi W PASKU STANU, a nie pływa nad rysunkiem.
+ *
+ * To jest sedno poprawki. Jako pływająca pigułka w rogu okna leżał na płótnie
+ * i zjadał tam kliknięcia — prostokąt 109×36 px w prawym dolnym rogu obszaru
+ * rysowania przy oknie 1440×900. Rezerwowanie mu pasma pod płótnem nie wystarczało:
+ * wysokość rysunku liczy się z chrome'u STAŁEGO, z pominięciem banerów (inaczej
+ * pojawienie się banera przeskalowywałoby rzut pod kursorem), a baner „ten projekt
+ * istnieje tylko w tej przeglądarce" — stały u KAŻDEGO niezalogowanego użytkownika,
+ * u którego jest cokolwiek do stracenia — spychał rysunek w dół i pigułka wracała
+ * na płótno. Dlatego test rysuje ścianę: sprawdza stan Z BANEREM, czyli ten, w którym
+ * poprzednie podejście zawodziło.
+ */
+test("przycisk kolejnego kroku nie leży na płótnie — także przy widocznym banerze", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await otworzEdytor(page);
+
+  const box = (await oknoRysunku(page).boundingBox())!;
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await page.mouse.click(box.x + 250, box.y + 100);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+  // Ściana w projekcie zapala stały baner o zapisie tylko w przeglądarce.
+  await expect(page.getByText("istnieje tylko w tej przeglądarce")).toBeVisible();
+
+  const dalej = page.getByRole("button", { name: /^Dalej: / });
+  // Jeden przycisk, nie dwa: na tej zakładce pływającej pigułki nie ma wcale.
+  await expect(dalej).toHaveCount(1);
+  // I stoi wewnątrz paska stanu, nie gdziekolwiek nad rysunkiem.
+  await expect(page.getByRole("status", { name: "Stan projektu" }).getByRole("button", { name: /^Dalej: / })).toBeVisible();
+
   const plotno = (await oknoRysunku(page).boundingBox())!;
-  // 56 px pigułki (odstęp + wysokość) plus oddech — patrz `PASMO_NAWIGACJI_PX`.
-  expect(plotno.y + plotno.height).toBeLessThanOrEqual(900 - 56);
+  const przycisk = (await dalej.boundingBox())!;
+  const nachodzi =
+    przycisk.x < plotno.x + plotno.width &&
+    przycisk.x + przycisk.width > plotno.x &&
+    przycisk.y < plotno.y + plotno.height &&
+    przycisk.y + przycisk.height > plotno.y;
+  expect(nachodzi).toBe(false);
 });
 
 test("na ekranie startowym stopka siedzi przy dole okna, bez pasa gołego tła pod nią", async ({ page }) => {

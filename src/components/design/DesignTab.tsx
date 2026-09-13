@@ -60,6 +60,7 @@ import {
   wierzcholkiZamknietejSciany,
   wysokoscPlotna,
   ZAPAS_ETYKIET,
+  ZAPAS_POD_PLOTNEM,
 } from "@/lib/design";
 import {
   autoSymbolScale,
@@ -211,9 +212,16 @@ export interface DesignTabProps {
   /** Otwiera modal logowania — sam DesignTab go nie renderuje (żyje w App.tsx
    *  razem z resztą kont/chmury), więc oddajemy sterowanie do rodzica. */
   onOpenAuth: () => void;
+  /**
+   * Kolejny krok przepływu — ląduje jako przycisk na prawym końcu paska stanu
+   * (patrz `nastepnyKrok` w EditorStatusBar). Na pozostałych zakładkach tę rolę
+   * pełni pływająca pigułka w rogu okna; tutaj nie może, bo leżałaby na rysunku.
+   * `undefined`, gdy nie ma dokąd iść — projekt jest jeszcze pusty.
+   */
+  nastepnyKrok?: { tytul: string; przejdz: () => void; pobierz: () => void };
 }
 
-export function DesignTab({ onOpenAuth }: DesignTabProps) {
+export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
   const session = useProjectStore((s) => s.session);
   const roomsFixedOnLoad = useProjectStore((s) => s.roomsFixedOnLoad);
   const dismissRoomsFixedOnLoad = useProjectStore((s) => s.dismissRoomsFixedOnLoad);
@@ -855,7 +863,26 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
         }
         gora = kolumna.getBoundingClientRect().top + window.scrollY - banery;
       }
-      const nowa = pelnyEkran ? Math.max(320, window.innerHeight - 16 - zajetePionowo) : wysokoscPlotna(gora);
+      // SAM pasek stanu — REZERWUJEMY mu miejsce, żeby nie wypadł pod zgięcie. Niesie
+      // powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku; rysowanie bez ani
+      // jednej z tych rzeczy przed oczami to ten sam problem co rysowanie po niewidocznej
+      // części planu. Mierzony, nie zgadywany: na węższym oknie pasek się zawija i rośnie.
+      //
+      // Świadomie bez wiersza „Obszar planu… / rzut ≈ … m" spod paska: to informacja
+      // pomocnicza, którą można doczytać po przewinięciu, a każdy zarezerwowany piksel
+      // odbiera się rysunkowi.
+      //
+      // Szukany po `aria-label`, bo to część kontraktu `EditorStatusBar` (pilnują go
+      // testy e2e) — bliżej mu do trwałej nazwy niż do szczegółu budowy drzewa.
+      const pasekStanu = dolnyPasekRef.current?.querySelector<HTMLElement>('[aria-label="Stan projektu"]');
+      const zapasPod = pasekStanu
+        ? pasekStanu.getBoundingClientRect().height +
+          parseFloat(getComputedStyle(pasekStanu).marginTop || "0") +
+          ZAPAS_POD_PLOTNEM
+        : ZAPAS_POD_PLOTNEM;
+      const nowa = pelnyEkran
+        ? Math.max(320, window.innerHeight - 16 - zajetePionowo)
+        : wysokoscPlotna(gora, window.innerHeight, zapasPod);
       // Próg 1 px: `getBoundingClientRect` potrafi oddać ułamek piksela, a każda taka
       // różnica jest dla Reacta nowym stanem. Bez progu obserwator niżej budziłby się
       // w kółko na własnym skutku.
@@ -2874,7 +2901,11 @@ export function DesignTab({ onOpenAuth }: DesignTabProps) {
             elementCount={elements.length}
             metersPerUnit={mpu}
             cursor={cursor}
-            zapasNaNawigacje={!pelnyEkran}
+            // W pełnym ekranie NIE: ten tryb jest o skupieniu na rysunku, a pasek stanu
+            // leży wtedy jako wysuwana nakładka — przycisk wyprowadzający z zakładki nie
+            // ma czego tam szukać. Ta sama zasada, według której chowa się w pełnym
+            // ekranie reszta nawigacji (patrz `z-30` pigułek w App.tsx).
+            nastepnyKrok={pelnyEkran ? undefined : nastepnyKrok}
           />
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
             <span className="text-slate-400">Obszar planu: {planSize.w} × {planSize.h} jedn.</span>

@@ -1,4 +1,4 @@
-import { Layers } from "lucide-react";
+import { ArrowRight, Layers } from "lucide-react";
 import type { Point, RoomShape } from "@/types";
 import { polygonAreaM2 } from "@/lib/geometry";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
@@ -19,11 +19,19 @@ export interface EditorStatusBarProps {
   metersPerUnit: number | null;
   /** Pozycja kursora w jednostkach planu; `null`, gdy poza planem. */
   cursor: Point | null;
-  /** Czy nad prawym końcem paska wisi pływająca pigułka „Dalej" z App.tsx — wtedy
-   *  pasek zostawia jej zapas, żeby nie chowała pod sobą wskaźnika zapisu. W pełnym
-   *  ekranie pigułki nie ma (leży pod nakładką edytora), więc zapas byłby wtedy tylko
-   *  pustą dziurą po prawej. */
-  zapasNaNawigacje?: boolean;
+  /**
+   * Przejście do kolejnego kroku przepływu — przycisk na prawym końcu paska.
+   *
+   * Stoi TUTAJ, a nie jako pływająca pigułka w rogu okna (tak działa na pozostałych
+   * zakładkach, patrz App.tsx), bo pigułka leżała na płótnie i zjadała tam kliknięcia.
+   * Pasek stanu jest tuż pod rysunkiem i zawsze w kadrze (płótno kończy się nad nim —
+   * patrz `wysokoscPlotna`), więc przycisk jest równie blisko oka, a rysunku nie
+   * dotyka. Sąsiedztwo jest zresztą sensowne: obok liczby elementów i powierzchni
+   * stoi „a teraz dobierz do tego zabezpieczenia".
+   *
+   * `undefined`, gdy nie ma dokąd iść — projekt jest pusty albo to ostatni krok.
+   */
+  nastepnyKrok?: { tytul: string; przejdz: () => void; pobierz: () => void };
 }
 
 /** Suma powierzchni obrysowanych pomieszczeń [m²]. `null` bez kalibracji skali. */
@@ -47,7 +55,7 @@ export function EditorStatusBar({
   elementCount,
   metersPerUnit,
   cursor,
-  zapasNaNawigacje = false,
+  nastepnyKrok,
 }: EditorStatusBarProps) {
   const area = totalRoomAreaM2(roomShapes, metersPerUnit);
 
@@ -55,14 +63,7 @@ export function EditorStatusBar({
     <div
       role="status"
       aria-label="Stan projektu"
-      // `md:pr-48`: pasek stoi tuż pod płótnem, a płótno kończy się dokładnie nad pasmem
-      // pływającej pigułki „Dalej" (patrz `PASMO_NAWIGACJI_PX`) — czyli pigułka ląduje
-      // nad PRAWYM KOŃCEM tego paska. Bez zapasu chowałaby pod sobą wskaźnik zapisu,
-      // który `ml-auto` wypycha dokładnie tam. Tylko od `md` w górę: poniżej tego progu
-      // pigułki w ogóle nie ma (patrz jej klasa `md:flex` w App.tsx).
-      className={`mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-card border border-border bg-white px-3.5 py-2 text-[11.5px] text-slate-500${
-        zapasNaNawigacje ? " md:pr-48" : ""
-      }`}
+      className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-card border border-border bg-white px-3.5 py-2 text-[11.5px] text-slate-500"
     >
       <span className="flex items-center gap-1.5 font-medium text-slate-600">
         <Layers size={13} className="text-slate-400" /> {floorName}
@@ -97,8 +98,30 @@ export function EditorStatusBar({
             : "X: —   Y: —"}
       </span>
 
-      <span className="ml-auto">
+      {/*
+        Prawy koniec paska: stan zapisu i przejście do kolejnego kroku (patrz
+        `nastepnyKrok` — to działanie, a nie odczyt, więc stoi za informacjami).
+
+        Grupa ma STAŁĄ wysokość, także wtedy, gdy przycisku nie ma, i to nie jest
+        kosmetyka. Przycisk pojawia się przy PIERWSZYM narysowanym obiekcie; gdyby
+        podnosił wtedy pasek o swoje kilka pikseli, zmieniłaby się też wysokość płótna
+        (pasek jest pod nim rezerwowany — patrz `zapasPod` w DesignTab.tsx), rzut
+        przeskalowałby się i uciekł spod kursora dokładnie w chwili, gdy użytkownik coś
+        stawia. Dokładnie ten sam powód, dla którego wysokość płótna pomija banery.
+      */}
+      <span className="ml-auto flex h-[25px] shrink-0 items-center gap-4">
         <SaveIndicator compact />
+        {nastepnyKrok && (
+          <button
+            onClick={nastepnyKrok.przejdz}
+            onPointerEnter={nastepnyKrok.pobierz}
+            onFocus={nastepnyKrok.pobierz}
+            className="flex h-full shrink-0 items-center gap-1.5 rounded-full bg-copper px-3 text-[11.5px] font-semibold text-white transition-colors hover:bg-copper/90"
+          >
+            Dalej: {nastepnyKrok.tytul}
+            <ArrowRight size={13} />
+          </button>
+        )}
       </span>
     </div>
   );

@@ -20,7 +20,7 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   ZAPAS_ETYKIET,
   wysokoscPlotna,
   wierzcholkiZamknietejSciany,
-  PASMO_NAWIGACJI_PX,
+  ZAPAS_POD_PLOTNEM,
   MIN_WYS_PLOTNA,
   MAX_WYS_PLOTNA,
   detectRoomName,
@@ -470,11 +470,14 @@ describe("wysokoscPlotna", () => {
   // narzędzi. To ta wartość, którą kod przez długi czas ZGADYWAŁ jako 260.
   const GORA = 312;
 
-  it("kończy płótno nad pasmem pigułek nawigacji, nie pod dolną krawędzią okna", () => {
-    const h = wysokoscPlotna(GORA, 900);
-    // Dół płótna musi wypaść nad górną krawędzią pigułki „Dalej", inaczej pigułka
-    // leży NA rysunku i zjada tam kliknięcia.
-    expect(GORA + h).toBeLessThanOrEqual(900 - PASMO_NAWIGACJI_PX);
+  /** Zmierzona wysokość paska stanu razem z wierszem o obszarze planu. */
+  const PASEK_STANU = 60;
+
+  it("zostawia miejsce na pasek stanu pod płótnem", () => {
+    const h = wysokoscPlotna(GORA, 900, PASEK_STANU + ZAPAS_POD_PLOTNEM);
+    // Pasek stanu niesie powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku —
+    // musi być widoczny bez przewijania, więc płótno kończy się NAD nim.
+    expect(GORA + h + PASEK_STANU).toBeLessThanOrEqual(900);
   });
 
   it("rośnie razem z oknem", () => {

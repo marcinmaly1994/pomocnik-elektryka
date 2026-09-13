@@ -16,38 +16,35 @@ export const DEFAULT_PLAN_HEIGHT = 700;
 export const GRID = 20;
 
 /**
- * Pasmo u dołu okna zajęte przez pływające pigułki „Cofnij"/„Dalej" (App.tsx):
- * odstęp od krawędzi okna plus wysokość samej pigułki.
+ * Odstęp pływających pigułek nawigacji („Cofnij"/„Dalej" w App.tsx) od dolnej
+ * krawędzi okna.
  *
- * Dlaczego TUTAJ, a nie przy przycisku: potrzebują tej liczby dwa miejsca po dwóch
- * stronach podziału kodu na kawałki — App.tsx rysuje pigułki, a edytor planu musi
- * zostawić im wolne miejsce pod płótnem (patrz `wysokoscPlotna` w DesignCanvas.tsx).
- * Import w drugą stronę, z DesignCanvas do App, wciągnąłby Konvę do kawałka
- * wejściowego, czyli zniweczył cały podział zakładek na `lazy()`.
- *
- * Powód istnienia: pigułka „Dalej: Rozdzielnica" leżała NA płótnie — przy oknie
- * 1440×900 zajmowała prostokąt 109×36 px w prawym dolnym rogu obszaru rysowania
- * i zjadała tam kliknięcia. Płótno jest powierzchnią roboczą; nawigacja nie ma prawa
- * na niej stać.
+ * Na zakładce Instalacja pigułki „Dalej" NIE MA: tam przycisk kolejnego kroku siedzi
+ * w pasku stanu pod rysunkiem (patrz `EditorStatusBar`). Powód: pływająca pigułka
+ * leżała NA płótnie — przy oknie 1440×900 zajmowała prostokąt 109×36 px w prawym
+ * dolnym rogu obszaru rysowania i zjadała tam kliknięcia. Rezerwowanie jej pasma
+ * pod płótnem nie było odpowiedzią: wysokość rysunku liczy się z chrome'u STAŁEGO,
+ * z pominięciem banerów, a baner „ten projekt istnieje tylko w tej przeglądarce"
+ * (stały u każdego niezalogowanego, kto ma cokolwiek do stracenia) spychał rysunek
+ * o swoją wysokość w dół i pigułka wracała na płótno. Płótno jest powierzchnią
+ * roboczą — nawigacja nie ma prawa na niej stać w ŻADNYM stanie, więc zeszła z niej
+ * zupełnie, zamiast negocjować o piksele.
  */
 export const NAWIGACJA_ODSTEP_PX = 20;
-/** Wysokość pigułki nawigacji — stała, bo to jeden rozmiar tekstu i stały padding. */
-export const NAWIGACJA_WYSOKOSC_PX = 36;
-export const PASMO_NAWIGACJI_PX = NAWIGACJA_ODSTEP_PX + NAWIGACJA_WYSOKOSC_PX;
 
 /** Oddech między dolną krawędzią płótna a tym, co pod nim, żeby rysunek nie kończył
  *  się dokładnie na krawędzi. */
 const ODDECH_POD_PLOTNEM = 12;
 
-/** Ile miejsca u dołu okna zostaje nietknięte: pasmo pływających pigułek nawigacji
- *  plus oddech. Płótno jest powierzchnią roboczą i nawigacja nie ma prawa na niej stać. */
-export const ZAPAS_POD_PLOTNEM = PASMO_NAWIGACJI_PX + ODDECH_POD_PLOTNEM;
+/** Domyślny zapas pod płótnem, gdy nie znamy wysokości paska stanu (pierwszy render,
+ *  zanim cokolwiek zmierzymy). Faktyczny zapas podaje `DesignTab` z pomiaru — patrz
+ *  trzeci argument `wysokoscPlotna`. */
+export const ZAPAS_POD_PLOTNEM = ODDECH_POD_PLOTNEM;
 
 /** Najmniejsze sensowne okno rysunku. Wchodzi w grę tam, gdzie nad płótnem stoi tyle
  *  (telefon: nagłówek zawinięty na cztery wiersze, banery, biblioteka elementów), że
- *  z okna nie zostaje już nic. Poniżej tego progu przewijanie do rysunku jest i tak
- *  nieuniknione, więc pigułki nawigacji mogą znów wypaść na płótnie — na oknie tak
- *  niskim nie ma układu, w którym mieści się jedno i drugie. */
+ *  z okna nie zostaje już nic — wtedy przewijanie do rysunku jest nieuniknione i lepiej
+ *  dać mu uczciwe 360 px niż wysokość ujemną. */
 export const MIN_WYS_PLOTNA = 360;
 
 /** Górna granica: powyżej tego rysunek przestaje być czytelny jako całość, a i tak
@@ -74,14 +71,21 @@ export const MAX_WYS_PLOTNA = 1100;
  * wraca do dawnego szacunku: to wyłącznie wartość startowa, którą pierwszy pomiar po
  * zamontowaniu zaraz zastąpi.
  *
+ * `zapasPod` to miejsce zostawione POD płótnem: pasek stanu razem z wierszem o obszarze
+ * planu, plus oddech. Podawany z POMIARU, nie zgadywany — pasek zawija się na węższym
+ * oknie, więc jego wysokość nie jest stała. Rezerwujemy go, bo to on niesie
+ * powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku: gdyby wypadł pod zgięcie,
+ * użytkownik rysowałby bez ani jednej z tych informacji przed oczami.
+ *
  * `okno` wstrzykiwalne, żeby dało się to sprawdzić bez przeglądarki.
  */
 export function wysokoscPlotna(
   goraPlotna: number | null = null,
-  okno: number = typeof window === "undefined" ? 900 : window.innerHeight
+  okno: number = typeof window === "undefined" ? 900 : window.innerHeight,
+  zapasPod: number = ZAPAS_POD_PLOTNEM
 ): number {
   if (goraPlotna === null) return Math.max(640, Math.min(MAX_WYS_PLOTNA, okno - 260));
-  return Math.max(MIN_WYS_PLOTNA, Math.min(MAX_WYS_PLOTNA, okno - goraPlotna - ZAPAS_POD_PLOTNEM));
+  return Math.max(MIN_WYS_PLOTNA, Math.min(MAX_WYS_PLOTNA, okno - goraPlotna - zapasPod));
 }
 
 /**
