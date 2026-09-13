@@ -422,9 +422,14 @@ export default function App() {
   /**
    * Czy w projekcie nie ma JESZCZE NICZEGO — ani osprzętu, ani ścian, ani pomieszczeń.
    *
-   * Steruje widocznością pigułki „Dalej" (patrz niżej). Liczy KAŻDY narysowany obiekt,
-   * nie tylko elementy instalacji: kto postawił same ściany, zaczął już projekt i nie
-   * ma powodu odbierać mu wygodnego skrótu do kolejnego kroku.
+   * Steruje widocznością przycisku „Dalej" NA INSTALACJI (patrz `nastepnyKrok` niżej).
+   * Liczy KAŻDY narysowany obiekt, nie tylko elementy instalacji: kto postawił same
+   * ściany, zaczął już projekt i nie ma powodu odbierać mu skrótu do kolejnego kroku.
+   *
+   * Dotyczy WYŁĄCZNIE tej jednej zakładki, bo tylko o nią chodziło: świecąca zachęta
+   * do przejścia dalej, zanim cokolwiek powstało, wysyłała nowego użytkownika w trzy
+   * puste ekrany zamiast do rysowania. Na dalszych krokach ten sam próg byłby FAŁSZYWY
+   * — rozdzielnicę da się złożyć ręcznie, bez rzutu (patrz pigułka niżej).
    */
   const projektPusty = useProjectStore(
     (s) => s.draft.elements.length === 0 && s.draft.walls.length === 0 && s.draft.roomShapes.length === 0
@@ -822,20 +827,18 @@ export default function App() {
         const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
         const nastepny = idx >= 0 ? KOLEJNOSC_KROKOW[idx + 1] : undefined;
         if (!nastepny) return null;
-        // Na PUSTYM projekcie „Dalej" nie ma dokąd prowadzić: rozdzielnica bez ani
-        // jednego odbiornika nie ma czego dobrać, schemat nie ma czego narysować,
-        // a kosztorys czego policzyć. Świecąca zachęta do przejścia dalej, zanim
-        // cokolwiek powstało, wysyła nowego użytkownika w trzy puste ekrany zamiast
-        // do rysowania — a rysowanie jest tym, po co tu przyszedł.
-        // Tylko ta pigułka, nie „Cofnij": powrót nigdy nie jest przedwczesny.
-        // Kafle 01/02/03/04 u góry działają bez zmian, więc to skrót, nie blokada
-        // (ten sam argument co przy chowaniu obu pigułek poniżej `md`).
-        if (projektPusty) return null;
         // Na Instalacji tego przycisku tu NIE MA — przenosi się do paska stanu pod
         // rysunkiem, bo pływając w rogu okna leżał na płótnie i zjadał tam kliknięcia
-        // (patrz `nastepnyKrok` przekazywane do `DesignTab` wyżej). Na pozostałych
-        // krokach nie ma powierzchni roboczej sięgającej dolnego rogu okna, więc
-        // pigułka zostaje tam, gdzie była.
+        // (patrz `nastepnyKrok` przekazywane do `DesignTab` wyżej). Tam też, i TYLKO
+        // tam, działa próg pustego projektu.
+        //
+        // Świadomie NIE gasimy pigułki na dalszych krokach pustym rzutem, choć
+        // pierwsza wersja tak robiła. Rozdzielnicę da się złożyć RĘCZNIE, bez
+        // rysowania czegokolwiek („Zbuduj rozdzielnicę bez rzutu" — aparaty żyją
+        // w `panelDevices`, nie w `draft`), a schemat powstaje właśnie z niej. Próg
+        // liczony z zawartości rzutu zabierałby wtedy „Dalej: Schemat" komuś, kto ma
+        // pełną rozdzielnicę — czyli gasiłby skrót dokładnie tam, gdzie jest dokąd iść.
+        // Na dalszych krokach użytkownik i tak już świadomie tam wszedł.
         if (tab === "projekt") return null;
         return (
           <button

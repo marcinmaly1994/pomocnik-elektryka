@@ -80,6 +80,25 @@ test("na PUSTYM projekcie nie ma dokąd iść dalej — pigułka się nie pokazu
   await expect(page.getByRole("button", { name: /^Dalej:/ })).toHaveText("Dalej: Rozdzielnica");
 });
 
+/**
+ * Próg pustego projektu dotyczy WYŁĄCZNIE Instalacji.
+ *
+ * Rozdzielnicę da się złożyć ręcznie, bez rysowania czegokolwiek — aparaty żyją wtedy
+ * w `panelDevices`, nie w `draft`, więc rzut zostaje pusty. Gdyby próg liczony
+ * z zawartości RZUTU obowiązywał też tutaj, zabierałby „Dalej: Schemat" komuś, kto ma
+ * pełną rozdzielnicę i schemat MA z czego powstać.
+ */
+test("ręcznie złożona rozdzielnica ma dokąd iść dalej, choć rzut jest pusty", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
+  await expect(page.getByRole("heading", { name: /Aparaty \(\d+\)/ })).toBeVisible();
+
+  await expect(page.getByRole("button", { name: /^Dalej:/ })).toHaveText("Dalej: Schemat");
+});
+
 test("przycisk „Dalej” prowadzi po kolei przez wszystkie kroki", async ({ page }) => {
   await zacznijProjekt(page);
 
