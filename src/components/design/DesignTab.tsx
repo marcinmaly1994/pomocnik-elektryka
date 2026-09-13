@@ -558,6 +558,9 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
    *  etapów, czyli tej części chrome'u, która nigdy się nie zmienia. Potrzebna do
    *  policzenia wysokości płótna z pominięciem banerów (patrz efekt `wysPlotna`). */
   const korzenZakladkiRef = useRef<HTMLDivElement>(null);
+  /** Wiersz z paskiem narzędzi rysowania i płótnem — czyli wszystko, czego potrzeba,
+   *  żeby rysować. Na telefonie przewijamy do niego (patrz efekt `pokazRysunek`). */
+  const wierszEdytoraRef = useRef<HTMLDivElement>(null);
   const pelnyEkranRef = useRef<HTMLDivElement>(null);
   const gornyPasekRef = useRef<HTMLDivElement>(null);
   const lewaKartaRef = useRef<HTMLDivElement>(null);
@@ -907,6 +910,45 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
     // kolumna płótna) w ogóle jest w drzewie — bez tego obserwator dopinałby się do
     // `null` i nigdy nie wracał. Ten sam powód co przy obserwatorze szerokości niżej.
   }, [pelnyEkran, rozmiaryChrome.gora, rozmiaryChrome.dol, showEntryScreen, wgrywanie.stan]);
+
+  /** Czy na wierzchu stoi COKOLWIEK INNEGO niż edytor — ekran wejściowy, wczytywanie
+   *  pliku albo przycinanie podkładu. Trzymane w refie, żeby złapać samo PRZEJŚCIE
+   *  do edytora, a nie każdy render, w którym edytor akurat jest widoczny. */
+  const edytorZaslonietyRef = useRef(showEntryScreen || wgrywanie.stan !== "bezczynny");
+  /**
+   * Na TELEFONIE przewijamy do rysunku, gdy tylko edytor się pojawi.
+   *
+   * Powód jest zmierzony: przy oknie 375×812 płótno zaczyna się 543 px w dół strony —
+   * nad nim stoi nagłówek (210 px), pasek etapów, banery, pasek kondygnacji i pasek
+   * narzędzi. Użytkownik klika „Narysuj dom samodzielnie", dostaje w odpowiedzi ten sam
+   * nagłówek co przed chwilą i nie ma żadnego znaku, że gdzieś niżej czeka kartka do
+   * rysowania. Odpowiedzią na „chcę rysować" ma być rysunek na ekranie.
+   *
+   * Celem jest WIERSZ EDYTORA, nie sama kolumna płótna: wiersz zaczyna się paskiem
+   * narzędzi (na wąskim ekranie zwija się do 58 px i stoi nad płótnem), więc po
+   * przewinięciu widać i czym rysować, i po czym. Samo płótno wypchnęłoby pasek
+   * narzędzi nad górną krawędź.
+   *
+   * Tylko przy PRZEJŚCIU do edytora — czyli gdy schodzi z wierzchu ekran wejściowy,
+   * wczytywanie pliku albo przycinanie podkładu — i tylko poniżej progu wąskiego
+   * ekranu. Użytkownik WRACAJĄCY do gotowego projektu widzi edytor od pierwszej klatki,
+   * więc żadnego przejścia nie ma i strona nie drgnie: szarpanie nią przy każdym
+   * powrocie na zakładkę byłoby walką o to, gdzie ma patrzeć. Na monitorze edytor
+   * i tak mieści się w oknie (patrz `wysokoscPlotna`).
+   */
+  useEffect(() => {
+    const zaslonietyTeraz = showEntryScreen || wgrywanie.stan !== "bezczynny";
+    const bylZasloniety = edytorZaslonietyRef.current;
+    edytorZaslonietyRef.current = zaslonietyTeraz;
+    if (!bylZasloniety || zaslonietyTeraz) return;
+    if (typeof window === "undefined" || window.innerWidth >= PROG_WASKIEGO_EKRANU) return;
+    // Po zamontowaniu kolumny, nie w tej samej klatce co zmiana stanu — inaczej
+    // przewijalibyśmy do elementu, który jeszcze nie ma swojej wysokości.
+    const id = window.requestAnimationFrame(() => {
+      wierszEdytoraRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [showEntryScreen, wgrywanie.stan]);
 
   /**
    * Dopasowanie zoomu działa też wtedy, gdy kolumna płótna DOPIERO CO się
@@ -2598,6 +2640,7 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
           pracy bez możliwości zajrzenia pod spód. Nieprzypięte paski nadal pływają
           nad planem — tam przykrycie trwa chwilę i jest ceną za odsłonięcie. */}
       <div
+        ref={wierszEdytoraRef}
         className={pelnyEkran ? "h-full w-full" : "flex flex-wrap items-start gap-4"}
         style={
           pelnyEkran
