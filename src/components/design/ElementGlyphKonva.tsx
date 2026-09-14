@@ -21,14 +21,12 @@ function SocketArcKonva({
   color,
   herm,
   insideLabel,
-  belowLabel,
   hitW,
   hitH,
 }: {
   color: string;
   herm?: boolean;
   insideLabel?: string;
-  belowLabel?: string;
   hitW: number;
   hitH: number;
 }) {
@@ -51,9 +49,6 @@ function SocketArcKonva({
       )}
       {insideLabel && (
         <Text text={insideLabel} x={-r} y={chordY - 8} width={2 * r} fontSize={10} fontStyle="700" fill={color} align="center" />
-      )}
-      {belowLabel && (
-        <Text text={belowLabel} x={-r - 3} y={chordY + 6} width={2 * r + 6} fontSize={7.5} fontStyle="700" fill={color} align="center" />
       )}
     </>
   );
@@ -98,7 +93,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter, wymiaryM }: G
 
     case "gniazdko400": {
       const { w, h } = glyphBoxSize(type, wymiaryM);
-      return <SocketArcKonva color={color} belowLabel="3F" hitW={w} hitH={h} />;
+      return <SocketArcKonva color={color} insideLabel="3F" hitW={w} hitH={h} />;
     }
 
     case "wypustAGD": {

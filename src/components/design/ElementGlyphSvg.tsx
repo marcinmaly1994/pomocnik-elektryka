@@ -18,11 +18,11 @@ interface GlyphProps {
 
 /** Wspólna geometria łuku gniazda: trzon u góry, pozioma kreska, łuk otwarty w dół —
  *  wg konwencji rysunku instalacyjnego. Używana przez `gniazdko`/`gniazdkoHerm`
- *  (liczba gniazd w łuku), `gniazdko400` (dopisek „3F" pod łukiem) i `wypustAGD`
+ *  (liczba gniazd w łuku), `gniazdko400` (dopisek „3F" w łuku) i `wypustAGD`
  *  (litera odbiornika w łuku, w tym samym miejscu co liczba gniazd) — jeden kształt
  *  bazowy, żeby te trzy symbole nie zaczęły z czasem rozjeżdżać się kształtem.
  */
-function SocketArc({ color, herm, insideLabel, belowLabel }: { color: string; herm?: boolean; insideLabel?: string; belowLabel?: string }) {
+function SocketArc({ color, herm, insideLabel }: { color: string; herm?: boolean; insideLabel?: string }) {
   // Jedno zrodlo wymiarow dla obu rendererow i dla przyciagania do sciany.
   const { r, stemLen, half } = SOCKET_GLYPH;
   const stemTopY = -half;
@@ -39,11 +39,6 @@ function SocketArc({ color, herm, insideLabel, belowLabel }: { color: string; he
       {insideLabel && (
         <text x={0} y={chordY + 2} fontSize={10} fontWeight={700} fill={color} textAnchor="middle">
           {insideLabel}
-        </text>
-      )}
-      {belowLabel && (
-        <text x={0} y={chordY + 12} fontSize={7.5} fontWeight={700} fill={color} textAnchor="middle">
-          {belowLabel}
         </text>
       )}
     </>
@@ -75,9 +70,11 @@ export function ElementGlyphSvg({ type, color, gangs, agdLetter, wymiaryM }: Gly
 
     case "gniazdko400":
       // Ten sam symbol co gniazdko 230V (wg prośby użytkownika: to jest to samo
-      // gniazdo, tylko trójfazowe) — jedyna różnica to dopisek „3F" pod łukiem
-      // zamiast osobnej plakietki z kodem.
-      return <SocketArc color={color} belowLabel="3F" />;
+      // gniazdo, tylko trójfazowe) — jedyna różnica to dopisek „3F" W ŁUKU,
+      // dokładnie tam, gdzie gniazdo podwójne ma swoją „2", a wypust AGD literę
+      // odbiornika. Wcześniej wisiał POD łukiem i odjeżdżał od symbolu; że dwa znaki
+      // mieszczą się w środku, widać po `wypustAGD` — ten bierze ich tyle samo.
+      return <SocketArc color={color} insideLabel="3F" />;
 
     case "wypustAGD":
       // Też ten sam symbol gniazda 230V, z literą KONKRETNEGO odbiornika w łuku

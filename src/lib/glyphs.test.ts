@@ -147,9 +147,13 @@ describe("zasiegPrzyscienny / montazPrzyscienny", () => {
     (["gniazdko", "gniazdkoHerm", "gniazdko400", "wypustAGD"] as const).forEach((t) =>
       expect(zasiegPrzyscienny(t)).toBe(SOCKET_GLYPH.half)
     );
-    // Mimo że gniazdo 400 V ma wyższe pudełko — dopisek „3F" siedzi POD łukiem,
-    // czyli po stronie pomieszczenia, i do ściany nic mu nie jest.
-    expect(glyphBoxSize("gniazdko400").h).toBeGreaterThan(glyphBoxSize("gniazdko").h);
+    // ...i to samo pudełko. Wszystko, co odróżnia te warianty, siedzi WEWNĄTRZ łuku:
+    // liczba gniazd, litera odbiornika albo „3F". Gniazdo 400 V miało kiedyś pudełko
+    // wyższe o osiem jednostek, bo „3F" wisiał POD łukiem — i o tyle właśnie odjeżdżał
+    // od symbolu.
+    (["gniazdkoHerm", "gniazdko400", "wypustAGD"] as const).forEach((t) =>
+      expect(glyphBoxSize(t)).toEqual(glyphBoxSize("gniazdko"))
+    );
   });
 
   it("łącznik dotyka ściany kołem — to ono odpowiada puszce w murze", () => {
