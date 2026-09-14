@@ -1,5 +1,5 @@
 import type { ElementType, InstallationElement } from "@/types";
-import { ELEMENT_TYPES, mechanizmowWElemencie, NO_ROOM } from "@/lib/elements";
+import { ELEMENT_TYPES, etykietaOsprzetu, kluczOsprzetu, mechanizmowWElemencie, NO_ROOM } from "@/lib/elements";
 
 /**
  * Zestawienie ilościowe kondygnacji — „ile czego" i „ile w którym pomieszczeniu".
@@ -14,11 +14,20 @@ import { ELEMENT_TYPES, mechanizmowWElemencie, NO_ROOM } from "@/lib/elements";
  */
 
 export interface WierszZestawienia {
+  /**
+   * Klucz wiersza — typ symbolu PLUS wariant (patrz `kluczOsprzetu`).
+   *
+   * Sam `type` nie wystarcza, odkąd jeden typ daje dwa wiersze: gniazdo pojedyncze
+   * i podwójne. Dwa wiersze o tym samym kluczu React sklejał w jeden.
+   */
+  klucz: string;
+  /** Typ SYMBOLU — wspólny dla obu wariantów gniazda, bo rysują się tak samo. */
   type: ElementType;
   label: string;
-  /** Sztuki osprzętu — gniazdo podwójne liczy się jak dwa. Ta liczba idzie do wyceny. */
+  /** Sztuki osprzętu do kupienia. Gniazdo podwójne to JEDNA sztuka (własnej pozycji
+   *  cennika); dwie robi już tylko stary zapis podwójnego łącznika. */
   sztuk: number;
-  /** Punkty na rysunku (symbole) — gniazdo podwójne to jeden punkt. */
+  /** Punkty na rysunku (symbole). */
   punktow: number;
 }
 
@@ -50,7 +59,7 @@ export interface Zestawienie {
 export function summarizeFloor(elements: InstallationElement[]): Zestawienie {
   const instalacyjne = elements.filter((e) => ELEMENT_TYPES[e.type]?.role !== "sanitary");
 
-  const wgTypu = new Map<ElementType, WierszZestawienia>();
+  const wgTypu = new Map<string, WierszZestawienia>();
   const wgPokoju = new Map<string, WierszPomieszczenia>();
   let sztukRazem = 0;
 
@@ -58,10 +67,13 @@ export function summarizeFloor(elements: InstallationElement[]): Zestawienie {
     const sztuk = mechanizmowWElemencie(e);
     sztukRazem += sztuk;
 
-    const wiersz = wgTypu.get(e.type) ?? { type: e.type, label: ELEMENT_TYPES[e.type]?.label ?? e.type, sztuk: 0, punktow: 0 };
+    // Grupowanie po typie PLUS wariancie: pojedyncze i podwójne to dwa produkty
+    // do zamówienia, więc dwa wiersze — tak samo jak dwie pozycje w kosztorysie.
+    const klucz = kluczOsprzetu(e);
+    const wiersz = wgTypu.get(klucz) ?? { klucz, type: e.type, label: etykietaOsprzetu(e), sztuk: 0, punktow: 0 };
     wiersz.sztuk += sztuk;
     wiersz.punktow += 1;
-    wgTypu.set(e.type, wiersz);
+    wgTypu.set(klucz, wiersz);
 
     const pokoj = wgPokoju.get(e.room) ?? { room: e.room, sztuk: 0, punktow: 0 };
     pokoj.sztuk += sztuk;
@@ -98,7 +110,7 @@ export function pozycjeZestawieniaDoPdf(
   const mapa = new Map<string, { element: string; pomieszczenie: string; ilosc: number }>();
   for (const e of elements) {
     if (ELEMENT_TYPES[e.type]?.role === "sanitary") continue;
-    const element = ELEMENT_TYPES[e.type]?.label ?? e.type;
+    const element = etykietaOsprzetu(e);
     const klucz = `${e.room}|${element}`;
     const poz = mapa.get(klucz) ?? { element, pomieszczenie: e.room, ilosc: 0 };
     poz.ilosc += mechanizmowWElemencie(e);

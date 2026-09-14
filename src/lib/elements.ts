@@ -437,3 +437,26 @@ export function mechanizmowWElemencie(e: Pick<InstallationElement, "type" | "gan
 export function punktowObciazenia(e: Pick<InstallationElement, "type" | "gangs">): number {
   return gniazdoPodwojne(e) ? 2 : mechanizmowWElemencie(e);
 }
+
+/**
+ * Nazwa osprzętu tak, jak ma stanąć na LIŚCIE ZAKUPÓW — z wariantem, jeśli go ma.
+ *
+ * `ELEMENT_TYPES[...].label` nazywa SYMBOL, a jeden symbol bywa dwoma różnymi
+ * produktami: gniazdo pojedyncze i podwójne rysują się tak samo (różni je cyfra
+ * w łuku), ale kupuje się je osobno, po innej cenie. Zestawienie grupowane po samej
+ * nazwie symbolu dawało jeden wiersz „Gniazdo 230 V", z którego nie dało się
+ * zamówić — nie było wiadomo, ile sztuk których.
+ *
+ * Jedno źródło dla panelu w aplikacji i dla tabeli w PDF: dwie kopie tej reguły
+ * rozjechałyby się nazwami, a obie tabele mają mówić to samo co kosztorys.
+ */
+export function etykietaOsprzetu(e: Pick<InstallationElement, "type" | "gangs">): string {
+  const nazwa = ELEMENT_TYPES[e.type]?.label ?? e.type;
+  return gniazdoPodwojne(e) ? `${nazwa} podwójne` : nazwa;
+}
+
+/** Klucz grupowania osprzętu: typ symbolu PLUS wariant, bo jeden typ potrafi dać dwa
+ *  wiersze zestawienia (patrz `etykietaOsprzetu`). */
+export function kluczOsprzetu(e: Pick<InstallationElement, "type" | "gangs">): string {
+  return gniazdoPodwojne(e) ? `${e.type}:podwojne` : e.type;
+}

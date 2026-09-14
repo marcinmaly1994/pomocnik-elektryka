@@ -9,10 +9,11 @@ function el(type: ElementType, room: string, gangs = 1): InstallationElement {
 
 describe("summarizeFloor", () => {
   it("gniazdo podwójne to jedna sztuka, nie dwie — jedno urządzenie, jedna puszka", () => {
-    const z = summarizeFloor([el("gniazdko", "Salon"), el("gniazdko", "Salon", 2)]);
-    const g = z.wiersze.find((w) => w.type === "gniazdko")!;
-    expect(g.punktow).toBe(2);
-    expect(g.sztuk).toBe(2);
+    const z = summarizeFloor([el("gniazdko", "Salon", 2)]);
+    expect(z.wiersze).toHaveLength(1);
+    expect(z.wiersze[0].label).toBe("Gniazdo 230 V podwójne");
+    expect(z.wiersze[0].punktow).toBe(1);
+    expect(z.wiersze[0].sztuk).toBe(1);
   });
 
   it("sztuki różnią się od punktów tylko przy starym zapisie podwójnego łącznika", () => {
@@ -106,5 +107,62 @@ describe("pozycjeZestawieniaDoPdf", () => {
   it("elementy bez pomieszczenia ida na koniec tabeli", () => {
     const p = pozycjeZestawieniaDoPdf([el("gniazdko", NO_ROOM), el("gniazdko", "Salon")]);
     expect(p.map((x) => x.pomieszczenie)).toEqual(["Salon", NO_ROOM]);
+  });
+});
+
+/**
+ * Zestawienie jako LISTA ZAKUPÓW, nie tylko licznik.
+ *
+ * Grupowanie po samym typie symbolu wrzucało gniazda pojedyncze i podwójne do jednego
+ * wiersza „Gniazdo 230 V". Suma zgadzała się z kosztorysem, ale z takiego wiersza nie
+ * dało się zamówić: to dwa różne produkty, o dwóch cenach, a kosztorys wystawia je
+ * w dwóch osobnych pozycjach. Wiersz ma się rozdzielać tak samo jak tam.
+ */
+describe("summarizeFloor — warianty jako osobne wiersze", () => {
+  it("pojedyncze i podwójne to DWA wiersze, nie jeden", () => {
+    const z = summarizeFloor([
+      el("gniazdko", "Salon"),
+      el("gniazdko", "Salon"),
+      el("gniazdko", "Salon", 2),
+    ]);
+    const etykiety = z.wiersze.map((w) => w.label);
+    expect(etykiety).toEqual(["Gniazdo 230 V", "Gniazdo 230 V podwójne"]);
+    expect(z.wiersze.map((w) => w.sztuk)).toEqual([2, 1]);
+  });
+
+  it("wiersze mają rozłączne klucze, choć dzielą typ symbolu", () => {
+    // Bez tego React dostaje dwa wiersze o tym samym kluczu i gubi jeden z nich.
+    const z = summarizeFloor([el("gniazdko", "Salon"), el("gniazdko", "Salon", 2)]);
+    expect(z.wiersze).toHaveLength(2);
+    const klucze = z.wiersze.map((w) => w.klucz);
+    expect(new Set(klucze).size).toBe(klucze.length);
+    for (const w of z.wiersze) expect(w.type).toBe("gniazdko");
+  });
+
+  it("rozdzielenie nie rusza sum całej kondygnacji", () => {
+    const elementy = [el("gniazdko", "Salon"), el("gniazdko", "Salon", 2), el("oswietlenie", "Salon")];
+    const z = summarizeFloor(elementy);
+    expect(z.sztukRazem).toBe(3);
+    expect(z.punktowRazem).toBe(3);
+    expect(z.wiersze.reduce((s, w) => s + w.sztuk, 0)).toBe(z.sztukRazem);
+  });
+
+  it("stary podwójny łącznik zostaje JEDNYM wierszem — to nie jest wariant produktu", () => {
+    const z = summarizeFloor([el("wlacznik", "Salon"), el("wlacznik", "Salon", 2)]);
+    expect(z.wiersze).toHaveLength(1);
+    expect(z.wiersze[0].sztuk).toBe(3);
+    expect(z.wiersze[0].punktow).toBe(2);
+  });
+
+  it("tabela do PDF rozdziela warianty w obrębie pomieszczenia", () => {
+    const p = pozycjeZestawieniaDoPdf([
+      el("gniazdko", "Kuchnia"),
+      el("gniazdko", "Kuchnia", 2),
+      el("gniazdko", "Kuchnia", 2),
+    ]);
+    expect(p).toEqual([
+      { element: "Gniazdo 230 V", pomieszczenie: "Kuchnia", ilosc: 1 },
+      { element: "Gniazdo 230 V podwójne", pomieszczenie: "Kuchnia", ilosc: 2 },
+    ]);
   });
 });

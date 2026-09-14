@@ -57,7 +57,7 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
             <table className="w-full text-[11.5px]">
               <tbody>
                 {wiersze.map((w) => (
-                  <tr key={w.type} className="border-b last:border-0" style={{ borderColor: "#EEF1F4" }}>
+                  <tr key={w.klucz} className="border-b last:border-0" style={{ borderColor: "#EEF1F4" }}>
                     <td className="py-1 pr-2 text-slate-600">{w.label}</td>
                     {/* Liczba punktów w nawiasie TYLKO gdy różni się od sztuk — inaczej
                         „3 szt. (3 pkt.)" przy każdym wierszu to sam szum. */}
