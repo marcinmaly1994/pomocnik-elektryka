@@ -269,3 +269,52 @@ describe("punktWewnatrzWielokata", () => {
     expect(pointInPolygon(punktWewnatrzWielokata(odwrotny)!, odwrotny)).toBe(true);
   });
 });
+
+/**
+ * Powierzchnia a wymiary — dwie miary, które się UZUPEŁNIAJĄ, i to jest powód, dla
+ * którego mają na rzucie osobne przełączniki.
+ *
+ * `rectangleSizeM` odpowiada „a × b" tylko dla prostokąta i milczy dla każdego innego
+ * kształtu, bo „a × b" opisywałoby wtedy prostokąt, którego na rysunku nie ma.
+ * `polygonAreaM2` liczy wzorem geodety z samego obrysu, więc odpowiada ZAWSZE —
+ * dokładnie tam, gdzie tamta milczy.
+ */
+describe("powierzchnia dla kształtów innych niż prostokąt", () => {
+  /** 1 jedn. = 0,5 m, więc pole w m² to pole w jedn.² podzielone przez cztery. */
+  const MPU = 0.5;
+
+  it("trójkąt prostokątny: połowa prostokąta opisanego", () => {
+    const trojkat = [{ x: 0, y: 0 }, { x: 8, y: 0 }, { x: 0, y: 6 }];
+    expect(polygonAreaM2(trojkat, MPU)).toBeCloseTo(6, 10); // 8·6/2 = 24 jedn.² → 6 m²
+    expect(rectangleSizeM(trojkat, MPU)).toBeNull();
+  });
+
+  it("trapez: średnia podstaw razy wysokość", () => {
+    // Podstawy 10 i 6, wysokość 4 → (10+6)/2 · 4 = 32 jedn.² → 8 m²
+    const trapez = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 8, y: 4 }, { x: 2, y: 4 }];
+    expect(polygonAreaM2(trapez, MPU)).toBeCloseTo(8, 10);
+    expect(rectangleSizeM(trapez, MPU)).toBeNull();
+  });
+
+  it("litera L: pole wklęsłego obrysu, nie prostokąta opisanego", () => {
+    // Kwadrat 10×10 z wyciętym narożnikiem 4×4 → 100 − 16 = 84 jedn.² → 21 m².
+    // Prostokąt opisany dałby 25 m², czyli o jedną piątą za dużo.
+    const litera = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 6 },
+      { x: 6, y: 6 },
+      { x: 6, y: 10 },
+      { x: 0, y: 10 },
+    ];
+    expect(polygonAreaM2(litera, MPU)).toBeCloseTo(21, 10);
+    expect(rectangleSizeM(litera, MPU)).toBeNull();
+  });
+
+  it("kolejność wierzchołków nie zmienia pola", () => {
+    // Obrys rysowany „w drugą stronę" to ten sam pokój — wzór geodety daje wtedy
+    // wynik ujemny i dopiero wartość bezwzględna czyni z niego powierzchnię.
+    const trapez = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 8, y: 4 }, { x: 2, y: 4 }];
+    expect(polygonAreaM2([...trapez].reverse(), MPU)).toBeCloseTo(polygonAreaM2(trapez, MPU)!, 10);
+  });
+});

@@ -122,6 +122,14 @@ interface DesignCanvasProps {
   /** Tryb wymiarowania: dlugosci WSZYSTKICH scian i wymiary prostokatnych pomieszczen.
    *  Ustawienie widoku, wlaczane w pasku edytora — patrz komentarze przy obu miejscach. */
   pokazWymiary: boolean;
+  /**
+   * Powierzchnia pomieszczenia jako podpis pod nazwą.
+   *
+   * Osobny przełącznik od wymiarów, bo jest przydatna DOKŁADNIE TAM, gdzie wymiary
+   * zawodzą: „a × b" da się podać tylko dla prostokąta, a pole liczy się z obrysu,
+   * więc jest prawdziwe dla trójkąta, trapezu, wykuszu i litery L tak samo.
+   */
+  pokazPowierzchnie: boolean;
   /** Wysokości montażu przy symbolach osprzętu („+30", „+110" — patrz `mountingLabel`).
    *  Osobny przełącznik od wymiarów ścian: tamte opisują BUDYNEK, te INSTALACJĘ, i na
    *  gotowym rzucie chce się je zwykle widzieć osobno. */
@@ -306,6 +314,7 @@ export function DesignCanvas({
   zones,
   podklad,
   pokazWymiary,
+  pokazPowierzchnie,
   pokazWysokosci,
   cableRoutes,
   routeOverrides,
@@ -1315,33 +1324,47 @@ export function DesignCanvas({
                   }}
                 />
 
-                {/* Wymiary pomieszczenia jako JEDEN podpis „3,45 × 4,20 m" pod nazwą,
-                    a nie etykieta przy każdej krawędzi — tak robią to rysunki budowlane
-                    i tylko tak da się to utrzymać czytelnym: przy czterech pokojach
-                    etykiety krawędziowe dołożyłyby szesnaście napisów do i tak już
-                    wymiarowanych ścian.
-                    Tylko dla obrysów PROSTOKĄTNYCH: dla litery L czy wykusza „a × b"
-                    z obrysu opisywałoby prostokąt, którego na rysunku nie ma. Tam
-                    zostaje sama powierzchnia, która jest prawdziwa niezależnie od
-                    kształtu. */}
-                {pokazWymiary &&
-                  (() => {
-                    const wym = formatWymiaryProstokata(r.points);
-                    if (!wym) return null;
-                    return (
-                      <Text
-                        x={c.x - 50}
-                        y={c.y + 18}
-                        width={100}
-                        align="center"
-                        text={wym}
-                        fontSize={10}
-                        fontStyle="bold"
-                        fill="#8A5526"
-                        listening={false}
-                      />
-                    );
-                  })()}
+                {/* Podpisy pomieszczenia pod jego nazwą, jeden pod drugim — wymiary
+                    i/albo powierzchnia, zależnie od tego, co włączone.
+
+                    Wymiary jako JEDEN podpis „3,45 × 4,20 m", a nie etykieta przy każdej
+                    krawędzi — tak robią to rysunki budowlane i tylko tak da się to
+                    utrzymać czytelnym: przy pięciu pokojach etykiety krawędziowe
+                    dołożyłyby dwadzieścia napisów do i tak już wymiarowanych ścian.
+                    Wyłącznie dla obrysów PROSTOKĄTNYCH: dla litery L czy wykusza „a × b"
+                    opisywałoby prostokąt, którego na rysunku nie ma.
+
+                    I właśnie dlatego powierzchnia jest OSOBNYM przełącznikiem, a nie
+                    dodatkiem do wymiarów: liczy się z obrysu (`polygonArea`, wzór
+                    geodety), więc jest prawdziwa dla trójkąta, trapezu i wykuszu tak
+                    samo jak dla prostokąta. Tam, gdzie wymiary milczą, ona nadal mówi. */}
+                {(() => {
+                  const podpisy = [
+                    pokazWymiary ? formatWymiaryProstokata(r.points) : null,
+                    pokazPowierzchnie ? formatPowierzchnia(r.points) : null,
+                  ].filter((t): t is string => t !== null);
+                  return podpisy.map((tekst, i) => (
+                    <Text
+                      key={i}
+                      x={c.x - 50}
+                      // Blok rośnie W GÓRĘ, nie w dół: OSTATNI wiersz siada zawsze tam,
+                      // gdzie siedziałby jedyny, a kolejne dokładają się nad nim.
+                      //
+                      // Rozpychanie w dół nie miało jak zadziałać w niskim pokoju: przy
+                      // 3 m (60 jedn.) od środka do ściany jest 30 jedn., a dwa wiersze
+                      // zaczynające się 15 jedn. pod środkiem kończyły się na murze —
+                      // dokładnie na etykiecie wymiaru ściany, przecinając oba napisy.
+                      y={c.y + 15 - (podpisy.length - 1 - i) * 11}
+                      width={100}
+                      align="center"
+                      text={tekst}
+                      fontSize={10}
+                      fontStyle="bold"
+                      fill="#8A5526"
+                      listening={false}
+                    />
+                  ));
+                })()}
 
                 <Text
                   x={c.x - 40}

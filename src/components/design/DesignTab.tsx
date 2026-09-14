@@ -544,6 +544,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   /** Tryb wymiarowania — domyslnie WYLACZONY: przy rysowaniu wymiary przeszkadzaja,
    *  a potrzebne sa przy sprawdzaniu i przed wydrukiem. */
   const [showDimensions, setShowDimensions] = useState(false);
+  /** Powierzchnia pomieszczeń — osobno od wymiarów, bo odpowiada na inne pytanie:
+   *  wymiary służą do wytyczenia ścian, powierzchnia do sprawdzenia metrażu. Oba
+   *  domyślnie wyłączone z tego samego powodu — przy rysowaniu podpisy przeszkadzają. */
+  const [showAreas, setShowAreas] = useState(false);
   /** Wysokosci montazu przy osprzecie — domyslnie WYLACZONE z tego samego powodu co
    *  wymiary. Osobno od nich, bo wymiary opisuja BUDYNEK, a te INSTALACJE. */
   const [showHeights, setShowHeights] = useState(false);
@@ -2652,6 +2656,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         onToggleRoutes={() => setShowRoutes((r) => !r)}
         showDimensions={showDimensions}
         onToggleDimensions={() => setShowDimensions((d) => !d)}
+        showAreas={showAreas}
+        onToggleAreas={() => setShowAreas((a) => !a)}
         showHeights={showHeights}
         onToggleHeights={() => setShowHeights((h) => !h)}
         showUnderlay={showUnderlay}
@@ -2996,6 +3002,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             zones={zones}
             podklad={podklad}
             pokazWymiary={showDimensions}
+            pokazPowierzchnie={showAreas}
             pokazWysokosci={showHeights}
             cableRoutes={cableRoutes}
             routeOverrides={routeOverrides}
