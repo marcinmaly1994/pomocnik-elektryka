@@ -315,3 +315,19 @@ test("„Narysuj dom samodzielnie” z trwałego banera (po pominięciu ekranu s
   });
   expect(raw.walls).toBe(1);
 });
+
+test("ekran startowy prowadzi do Pomocy — tam, gdzie pada pytanie „od czego zacząć”", async ({ page }) => {
+  await freshDesign(page);
+  await expect(page.getByRole("heading", { name: "Zaprojektuj instalację elektryczną w swoim domu" })).toBeVisible();
+
+  // Treść Pomocy (sześć kroków od rzutu po kosztorys, skróty, zastrzeżenie o SEP)
+  // istniała od dawna, ale wisiała za małym szarym linkiem w pasku nad przepływem —
+  // czyli tam, gdzie NIE zagląda ktoś, kto właśnie wszedł i nie wie, od czego zacząć.
+  await page.getByRole("button", { name: /Zobacz, jak to działa/ }).click();
+
+  const okno = page.getByRole("dialog");
+  await expect(okno).toBeVisible();
+  await expect(okno.getByText("Jak zacząć — krok po kroku")).toBeVisible();
+  // To ma być DOKŁADNIE to samo okno co „Pomoc" w nagłówku, a nie osobna kopia treści.
+  await expect(okno.getByText(/Wgraj rzut albo narysuj dom/)).toBeVisible();
+});

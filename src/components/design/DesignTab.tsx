@@ -16,6 +16,7 @@ import {
   ChevronUp,
   Copy,
   Eye,
+  HelpCircle,
   Layers,
   Loader2,
   Pencil,
@@ -219,6 +220,9 @@ export interface DesignTabProps {
   /** Otwiera modal logowania — sam DesignTab go nie renderuje (żyje w App.tsx
    *  razem z resztą kont/chmury), więc oddajemy sterowanie do rodzica. */
   onOpenAuth: () => void;
+  /** Otwiera okno „Pomoc" — z tego samego powodu co `onOpenAuth`: modal żyje w App.tsx,
+   *  bo otwiera go też link w nagłówku, widoczny na każdej zakładce. */
+  onOpenPomoc: () => void;
   /**
    * Kolejny krok przepływu — ląduje jako przycisk na prawym końcu paska stanu
    * (patrz `nastepnyKrok` w EditorStatusBar). Na pozostałych zakładkach tę rolę
@@ -228,7 +232,7 @@ export interface DesignTabProps {
   nastepnyKrok?: { tytul: string; przejdz: () => void; pobierz: () => void };
 }
 
-export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
+export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabProps) {
   const session = useProjectStore((s) => s.session);
   const roomsFixedOnLoad = useProjectStore((s) => s.roomsFixedOnLoad);
   const dismissRoomsFixedOnLoad = useProjectStore((s) => s.dismissRoomsFixedOnLoad);
@@ -2405,9 +2409,22 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
             <Eye size={15} /> Zobacz gotowy przykład — mieszkanie 70 m²
           </button>
 
-          <button onClick={onboarding.dismissEntryScreen} className="text-xs text-slate-400 underline hover:text-slate-600">
-            Pomiń — zacznę na pustym planie
-          </button>
+          {/* Dwa drobne wyjścia obok siebie, oba drugorzędne wobec trzech dróg startu
+              wyżej. „Jak to działa" otwiera to samo okno co „Pomoc" w nagłówku — sześć
+              kroków od rzutu po kosztorys, skróty klawiszowe i zastrzeżenie o SEP.
+              Treść jest dobra i istnieje od dawna, tylko wisiała za małym, szarym
+              linkiem w pasku narzędzi nad przepływem, czyli dokładnie tam, gdzie NIE
+              zagląda ktoś, kto właśnie wszedł i nie wie, od czego zacząć. Tu stoi
+              w miejscu, w którym to pytanie realnie pada.
+              Kolejność: najpierw pomoc (odpowiedź), potem pominięcie (rezygnacja). */}
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
+            <button onClick={onOpenPomoc} className="flex items-center gap-1 text-slate-500 underline hover:text-copper">
+              <HelpCircle size={13} /> Nie wiesz, od czego zacząć? Zobacz, jak to działa
+            </button>
+            <button onClick={onboarding.dismissEntryScreen} className="text-slate-400 underline hover:text-slate-600">
+              Pomiń — zacznę na pustym planie
+            </button>
+          </div>
         </div>
       )}
 

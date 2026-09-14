@@ -4147,6 +4147,35 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
     `npx playwright test` **422/422**.
 
+90. **Ekran startowy prowadzi do Pomocy** — ostatnia pozycja z przeglądu z 13.09
+    i najtańsza z całej listy.
+
+    Okno „Pomoc" ma sześć kroków od wgrania rzutu po kosztorys, skróty klawiszowe,
+    zastrzeżenie o uprawnieniach SEP i wyjaśnienie, czym są Kalkulatory i Protokoły.
+    Treść dobra i od dawna gotowa — tylko wisiała za małym, szarym linkiem w pasku
+    nad przepływem, czyli dokładnie tam, gdzie NIE zagląda ktoś, kto właśnie wszedł
+    i nie wie, od czego zacząć.
+
+    Na ekranie startowym, pod trzema drogami startu, stoi teraz drugie drobne wyjście
+    obok „Pomiń": **„Nie wiesz, od czego zacząć? Zobacz, jak to działa"**. Otwiera
+    DOKŁADNIE to samo okno co link w nagłówku — nie kopię treści, tylko ten sam
+    `HelpModal`, więc jest jedno miejsce do utrzymania. Kolejność obu linków celowa:
+    najpierw odpowiedź, potem rezygnacja.
+
+    Modal żyje w `App.tsx` (otwiera go też nagłówek, widoczny na każdej zakładce),
+    więc `DesignTab` dostał `onOpenPomoc` — tą samą drogą, którą już dostaje
+    `onOpenAuth` dla okna logowania.
+
+    Nowy test w `e2e/onboarding.spec.ts`: link z ekranu startowego otwiera okno
+    Pomocy, a w nim widać krok po kroku od wgrania rzutu.
+
+    Tym samym lista z przeglądu z 13.09 jest wyczerpana — kroki 86-90 zamknęły
+    wszystkie sześć pozycji.
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1437/1437**,
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **423/423** (+1).
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +
