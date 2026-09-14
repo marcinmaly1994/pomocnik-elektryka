@@ -10,8 +10,10 @@ import {
   AlignStartVertical,
   AlignVerticalSpaceAround,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Copy,
   Eye,
   Layers,
@@ -2726,7 +2728,20 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
               // z opóźnieniem i na moment go zasłaniała — czyli dokładnie to, co
               // ta zmiana ma naprawić. Odsunięcie ma być natychmiastowe.
               ? "absolute left-0 z-30 flex overflow-hidden rounded-r-card border border-l-0 border-border bg-white shadow-xl transition-transform duration-200"
-              : "flex min-w-0 overflow-hidden rounded-card border border-border bg-white md:shrink-0"
+              : /**
+                 * KOLUMNA na telefonie, RZĄD od 768 px w górę.
+                 *
+                 * Rzędem była zawsze — a poniżej `md` pasek narzędzi jest POZIOMY (patrz
+                 * `pionowo` w ToolRail), więc obie rzeczy biły się o tę samą szerokość:
+                 * zmierzone przy 375 px pasek brał 172 px, a panelowi zostawało 137 px
+                 * z 268 px, których potrzebuje. Nazwy elementów były ucięte w połowie,
+                 * a wybór liczby gniazd i „Dedykowane (AGD)" wychodziły poza kadr — czyli
+                 * treść była NIEOSIĄGALNA, nie tylko brzydka.
+                 *
+                 * Poziomy pasek nad panelem to zresztą to, co opisuje sam ToolRail
+                 * („w zwykłym widoku stoi nad planem, w poprzek") — tylko że stał obok.
+                 */
+                "flex min-w-0 flex-col overflow-hidden rounded-card border border-border bg-white md:flex-row md:shrink-0"
           }
           // Karta USTĘPUJE pasków poziomych, zamiast się na nie kłaść. Wszystkie trzy
           // panele mają ten sam `z-index`, więc o wierzchu decydowała kolejność w DOM
@@ -2800,10 +2815,22 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
             title={panelZwiniety ? "Pokaż panel elementów i pomieszczeń" : "Zwiń panel — więcej miejsca dla planu"}
             aria-label={panelZwiniety ? "Pokaż panel boczny" : "Zwiń panel boczny"}
             aria-expanded={!panelZwiniety}
-            style={{ height: 56 }}
-            className="flex w-4 shrink-0 items-center justify-center self-center rounded-sm border border-border bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-copper"
+            // Uchwyt idzie za układem karty: na telefonie jest poziomą listwą MIĘDZY
+            // paskiem narzędzi a panelem pod nim, na monitorze — pionową kreską obok.
+            // Strzałka obraca się razem z nim, bo „w prawo" nad panelem nic nie znaczy.
+            className="flex h-4 w-full shrink-0 items-center justify-center rounded-sm border border-border bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-copper md:h-14 md:w-4 md:self-center"
           >
-            {panelZwiniety ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+            {panelZwiniety ? (
+              <>
+                <ChevronDown size={13} className="md:hidden" />
+                <ChevronRight size={13} className="hidden md:block" />
+              </>
+            ) : (
+              <>
+                <ChevronUp size={13} className="md:hidden" />
+                <ChevronLeft size={13} className="hidden md:block" />
+              </>
+            )}
           </button>
 
           {/* W pełnym ekranie panel NIE przewija się sam — jest kolumną o pełnej
@@ -2821,12 +2848,24 @@ export function DesignTab({ onOpenAuth, nastepnyKrok }: DesignTabProps) {
              * lista pod kartą przewodnika, długi spis pomieszczeń — ma dać się
              * doscrollować TU, zamiast rozpychać całą stronę i wynosić rysunek z oczu.
              */
+            /**
+             * 268 px dopiero od `md` w górę — na telefonie panel bierze CAŁĄ szerokość
+             * karty, bo stoi wtedy POD paskiem narzędzi, a nie obok niego (patrz układ
+             * karty wyżej). Sztywne 268 px w rzędzie o szerokości 327 px kończyło się
+             * ścięciem treści.
+             *
+             * Ramka też idzie za układem: w kolumnie oddziela GÓRA (`border-t`),
+             * w rzędzie — lewa krawędź.
+             */
             className={
               pelnyEkran
-                ? "flex min-h-0 flex-col overflow-hidden border-l border-border p-2"
-                : "pe-bez-suwaka flex min-h-0 flex-col overflow-y-auto border-l border-border p-2"
+                ? "flex min-h-0 w-[268px] flex-col overflow-hidden border-l border-border p-2"
+                : // `max-h-[55vh]` na telefonie: rozwinięty panel ma być SKRZYNKĄ, a nie
+                  // kolumną bez końca. Po rozłożeniu go na całą szerokość karty urósł do
+                  // 768 px i zepchnął rysunek jeszcze niżej, niż stał przedtem — a to on
+                  // jest tematem tej zakładki. Przewijanie i tak ma w środku.
+                  "pe-bez-suwaka flex max-h-[55vh] min-h-0 w-full flex-col overflow-y-auto border-t border-border p-2 md:max-h-none md:w-[268px] md:border-l md:border-t-0"
             }
-            style={{ width: 268 }}
           >
           {/* Kontrolki kontekstowe bieżącego narzędzia (grubość ściany, kształt
               pomieszczenia, kalibracja skali, „Zakończ"/„Anuluj" rysowania) — w widoku

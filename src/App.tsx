@@ -276,7 +276,12 @@ function FlowCard({
               {plakietka}
             </span>
           </span>
-          <span aria-hidden="true" className="block text-[10.5px] leading-tight text-slate-400">
+          {/* Podtytuł znika poniżej 768 px. Tłumaczy, czego się spodziewać PRZED
+              kliknięciem („Rozdzielnica" samo w sobie nic laikowi nie mówi), więc na
+              monitorze zostaje — ale na telefonie dokłada każdemu z czterech kafli
+              drugą linię, a cały pasek etapów rośnie przez to do 94 px z 812 px
+              ekranu. Stan etapu niesie plakietka obok tytułu i ona zostaje wszędzie. */}
+          <span aria-hidden="true" className="hidden text-[10.5px] leading-tight text-slate-400 md:block">
             {subtitle}
           </span>
         </span>
@@ -578,26 +583,39 @@ export default function App() {
           className="flex min-w-0 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-80"
         >
           <span className="flex min-w-0 items-center gap-3">
-            <LogoIcon className="h-11 w-11 shrink-0" />
+            <LogoIcon className="h-8 w-8 shrink-0 sm:h-11 sm:w-11" />
             <span className="min-w-0">
               {/* Napis wraca jako zwykły, widoczny <h1> — ten sam rozmiar co
                   poprzednie logo (text-[23px] font-bold), tylko obok ikony
                   zamiast bycia częścią jednego złożonego SVG z tekstem. */}
-              <h1 className="font-sans text-[23px] font-bold leading-tight tracking-tight text-ink">
+              <h1 className="font-sans text-[17px] sm:text-[23px] font-bold leading-tight tracking-tight text-ink">
                 pomocnikelektryka<span className="text-copper">.pl</span>
               </h1>
               {/* Hasło zostaje mimo makiety: aplikacja jest adresowana do laików i to
                   jedyne zdanie, które od razu mówi, co ona właściwie robi. Stoi pod
                   napisem, w tej samej kolumnie co on (czyli na prawo od domku), nie
-                  pod całym logo. */}
-              <span className="block max-w-xl text-[12.5px] leading-snug text-slate-500">
+                  pod całym logo.
+                  PONIŻEJ 640 px go jednak nie ma — i tylko tam. Zawijało się na dwie
+                  linie, przez co sam nagłówek brał 210 px z 812 px ekranu telefonu,
+                  spychając rysunek pod krawędź. To samo zdanie pada teraz na ekranie
+                  startowym, w nagłówku karty powitalnej i w większym rozmiarze
+                  (patrz `showEntryScreen` w DesignTab.tsx), więc na wejściu nic nie
+                  ginie — a na telefonie odzyskujemy wysokość tam, gdzie jej brakuje. */}
+              <span className="hidden max-w-xl sm:block max-w-xl text-[12.5px] leading-snug text-slate-500">
                 Zaprojektuj instalację elektryczną w swoim domu!
               </span>
             </span>
           </span>
         </button>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        {/* JEDEN RZĄD na telefonie, zawijanie od 640 px w górę.
+            Przy 375 px ta grupa zawijała się na TRZY rzędy (Kalkulatory + Protokoły,
+            Dokumentacja + Pomoc, Nowy projekt + Zaloguj się) i sama brała 122 px —
+            więcej niż logo, nazwa projektu i pasek etapów razem. Teraz przewija się
+            poziomo, tak samo jak pasek etapów niżej: że jest czym przewijać, widać po
+            przyciętym ostatnim przycisku. Etykiety zostają PEŁNE — skracanie ich
+            zmieniłoby nazwy dostępnościowe, a na nich stoi kilkanaście testów e2e. */}
+        <div className="pe-bez-suwaka flex flex-nowrap items-center gap-1.5 overflow-x-auto [&>*]:shrink-0 sm:flex-wrap sm:overflow-x-visible">
           <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
           <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
           {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów

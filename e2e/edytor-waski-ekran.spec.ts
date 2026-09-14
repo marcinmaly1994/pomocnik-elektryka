@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { otworzMenuPaska, zamknijMenuPaska } from "./_flow";
+import { otworzKatalogElementow, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
 
 /**
  * Edytor planu na ekranie telefonu.
@@ -221,4 +221,51 @@ test("monitor w pelnym ekranie: pasek narzedzi bez zmian — i tak byl pionowy",
   const rail = (await page.locator('nav[aria-label="Narzędzia rysowania"]').boundingBox())!;
   // Pionowy: wyzszy niz szerszy, tak jak od zawsze powyzej progu `md`.
   expect(rail.height).toBeGreaterThan(rail.width);
+});
+
+test("na telefonie panel elementow dostaje CALA szerokosc karty, a nie polowe", async ({ page }) => {
+  await page.setViewportSize(TELEFON);
+  await otworzEdytor(page);
+
+  // Panel na waskim ekranie startuje ZWINIETY (patrz `odczytajPanelZwiniety`) —
+  // rozwijamy go, bo o jego szerokosc tu chodzi.
+  const pokaz = page.getByRole("button", { name: "Pokaż panel boczny" });
+  if (await pokaz.isVisible().catch(() => false)) await pokaz.click();
+  await otworzKatalogElementow(page);
+  await expect(page.getByPlaceholder("Szukaj elementu…")).toBeVisible();
+
+  // Zmierzone PRZED zmiana: pasek narzedzi (poziomy ponizej `md`) stal w tym samym
+  // rzedzie co panel i bral 172 px, a panelowi zostawalo 137 px z 268 px, ktorych
+  // potrzebuje — nazwy elementow byly uciete w polowie, a wybor liczby gniazd
+  // i „Dedykowane (AGD)" wychodzily poza kadr. Teraz pasek stoi NAD panelem.
+  const karta = (await page.getByTestId("karta-narzedzi").first().boundingBox())!;
+  const panel = (await page.getByPlaceholder("Szukaj elementu…").boundingBox())!;
+  expect(panel.width).toBeGreaterThan(karta.width * 0.85);
+
+  // Dowod uzytkowy: pelna nazwa elementu miesci sie w kadrze, a nie jest ucieta.
+  const pozycja = (await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().boundingBox())!;
+  expect(pozycja.x + pozycja.width).toBeLessThanOrEqual(karta.x + karta.width + 1);
+
+  // Na monitorze panel zostaje WASKA kolumna obok paska — tam nic sie nie zmienia.
+  await page.setViewportSize(MONITOR);
+  await otworzEdytor(page);
+  await otworzKatalogElementow(page);
+  const panelDuzy = (await page.getByPlaceholder("Szukaj elementu…").boundingBox())!;
+  const kartaDuza = (await page.getByTestId("karta-narzedzi").first().boundingBox())!;
+  expect(panelDuzy.width).toBeLessThan(kartaDuza.width * 0.85);
+});
+
+test("na telefonie rysunek jest widoczny bez przewijania", async ({ page }) => {
+  await page.setViewportSize(TELEFON);
+  await otworzEdytor(page);
+
+  // Zmierzone PRZED zmiana: sam naglowek bral 210 px z 812 px ekranu (haslo zawijalo
+  // sie na dwie linie, a linki narzedzi na trzy rzedy), pasek etapow kolejne 94 px
+  // przez podtytuly kafli — i plotno zaczynalo sie 684 px od gory. Po zmianie naglowek
+  // ma 95 px, a rysunek miesci sie w pierwszym ekranie.
+  const plotno = (await page.locator("canvas").first().boundingBox())!;
+  expect(plotno.y).toBeLessThan(TELEFON.height);
+  // I nadal NIC nie przewija sie w poziomie — to byl warunek tej przebudowy.
+  const poziomo = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(poziomo).toBe(false);
 });

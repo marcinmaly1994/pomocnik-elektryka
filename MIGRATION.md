@@ -4010,6 +4010,66 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
     `npx playwright test` **420/420** (+2).
 
+87. **Telefon: panel przestał być ścięty, a rysunek wrócił w pierwszy ekran** — dwa
+    najcięższe znaleziska z przeglądu z 13.09. Wszystkie liczby niżej zmierzone przy
+    375×812.
+
+    **Panel elementów dostawał 137 px z 268 px, których potrzebuje.** Karta narzędzi
+    była RZĘDEM na każdej szerokości, a poniżej `md` pasek narzędzi jest POZIOMY
+    (patrz `pionowo` w ToolRail) — więc obie rzeczy biły się o tę samą szerokość:
+    pasek brał 172 px, panelowi zostawało 137. Nazwy elementów były ucięte w połowie,
+    a wybór liczby gniazd i „Dedykowane (AGD)" wychodziły poza kadr — czyli treść była
+    NIEOSIĄGALNA, nie tylko brzydka.
+
+    Karta jest teraz KOLUMNĄ na telefonie i rzędem od 768 px w górę: poziomy pasek
+    stoi NAD panelem, dokładnie tak, jak opisuje sam `ToolRail` („w zwykłym widoku
+    stoi nad planem, w poprzek") — tylko że dotąd stał obok. Za układem poszły trzy
+    rzeczy: uchwyt zwijania (pozioma listwa zamiast pionowej kreski, ze strzałką
+    obróconą o 90°, bo „w prawo" nad panelem nic nie znaczy), ramka panelu (`border-t`
+    zamiast `border-l`) i szerokość — `268 px` oraz `w-64` samej biblioteki
+    (`ElementLibrary`) obowiązują dopiero od `md`. Bez tego drugiego panel owszem
+    dostawał 325 px, ale lista w środku i tak trzymała sztywne 256 px i zostawiała
+    70 px pustego pasa.
+
+    Rozwinięty panel na pełnej szerokości urósł jednak do 768 px i zepchnął rysunek
+    JESZCZE niżej niż przedtem — stąd `max-h-[55vh]` poniżej `md`: rozwinięty panel ma
+    być skrzynką, a nie kolumną bez końca. Przewijanie i tak ma w środku.
+
+    **Rysunek zaczynał się 684 px od góry ekranu mającego 812.** Składały się na to:
+    nagłówek 210 px, pasek etapów 94 px, pasek edytora i kolumna narzędzi. Trzy cięcia,
+    wszystkie WYŁĄCZNIE poniżej progu (`sm`/`md`), więc na monitorze nie zmienia się
+    nic:
+    - hasło „Zaprojektuj instalację elektryczną w swoim domu!" znika poniżej 640 px.
+      Zawijało się na dwie linie, a to samo zdanie pada teraz na ekranie startowym,
+      w nagłówku karty powitalnej i w większym rozmiarze (krok 81), więc na wejściu
+      nic nie ginie. Logo i `<h1>` też schodzą o stopień;
+    - grupa narzędzi w nagłówku (Kalkulatory, Protokoły, Dokumentacja, Pomoc, Nowy
+      projekt, Zaloguj się) zawijała się na TRZY rzędy i sama brała 122 px — więcej
+      niż logo, nazwa projektu i pasek etapów razem. Teraz przewija się poziomo, tak
+      jak pasek etapów niżej. Etykiety zostają PEŁNE: skracanie ich zmieniłoby nazwy
+      dostępnościowe, a na nich stoi kilkanaście testów e2e;
+    - podtytuły kafli etapów („Dobór zabezpieczeń") znikają poniżej 768 px. Na
+      monitorze zostają, bo tłumaczą, czego się spodziewać przed kliknięciem; na
+      telefonie dokładały każdemu z czterech kafli drugą linię. Stan etapu niesie
+      plakietka (krok 82) i ona zostaje wszędzie.
+
+    **Zmierzone przed → po** (375×812): nagłówek **210 → 95 px**, rysunek zaczyna się
+    **684 → 583 px** z wczytanym przykładem i **434 px** na świeżym projekcie (czyli
+    w pierwszym ekranie), dokument **1454 → 1354 px**. Panel po rozwinięciu: **137 →
+    325 px**, bez ucinania treści. Poziomo strona nadal się nie przewija.
+
+    **Monitor bez zmian, sprawdzone osobno:** karta 342×549, płótno 732×549 w tym
+    samym miejscu, szukajka 256 px. Każdy nowy test mierzy obie szerokości.
+
+    Nowe testy w `e2e/edytor-waski-ekran.spec.ts`: panel dostaje całą szerokość karty
+    (z dowodem użytkowym — pełna nazwa elementu mieści się w kadrze) i zostaje wąską
+    kolumną na monitorze; rysunek jest widoczny bez przewijania, a strona nadal nie
+    przewija się w poziomie.
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1437/1437**,
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **422/422** (+2).
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +
