@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny , kluczKabla } from "./costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, podsumowanieKosztorysu, kluczKabla, type CostRow } from "./costs";
 import type { Circuit, InstallationElement, RcdGroup } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -341,5 +341,49 @@ describe("computeCosts — pusty projekt", () => {
   it("element bez przypisanego pomieszczenia nadal liczy się jako jedno", () => {
     const { quantities } = computeCosts([el({ type: "gniazdko", room: "" })], [], []);
     expect(quantities.puszkaRozgalezna).toBe(1);
+  });
+});
+
+describe("podsumowanieKosztorysu — suma mówi, czym jest", () => {
+  const w = (key: string, label: string, qty: number, value: number): CostRow => ({
+    key, label, qty, qtyOverridden: false, price: qty ? value / qty : 0, value, overridden: false,
+  });
+
+  it("bez robocizny podpisuje sumę jako SAM MATERIAŁ", () => {
+    // Domyślny cennik ma `robocizna: 0`, więc to jest przypadek TYPOWY, nie brzegowy:
+    // na mieszkaniu 70 m² pod „RAZEM brutto" stała kwota za sam materiał.
+    const p = podsumowanieKosztorysu([
+      w("gniazdko", "Gniazdko 230V podtynkowe (szt.)", 16, 240),
+      w("robocizna", "Robocizna za punkt instalacyjny (szt., opcjonalnie)", 38, 0),
+    ]);
+    expect(p.brakRobocizny).toBe(true);
+    expect(p.etykietaSumy).toBe("RAZEM brutto — sam materiał");
+    expect(p.niewycenione).toContain("Robocizna za punkt instalacyjny");
+  });
+
+  it("komplet cen to zwykłe RAZEM brutto", () => {
+    const p = podsumowanieKosztorysu([
+      w("gniazdko", "Gniazdko 230V podtynkowe (szt.)", 16, 240),
+      w("robocizna", "Robocizna za punkt instalacyjny (szt., opcjonalnie)", 38, 4560),
+    ]);
+    expect(p.brakRobocizny).toBe(false);
+    expect(p.etykietaSumy).toBe("RAZEM brutto");
+    expect(p.niewycenione).toEqual([]);
+    expect(p.netto).toBe(4800);
+    expect(p.brutto).toBeCloseTo(4800 * 1.23, 2);
+  });
+
+  it("brak INNEJ pozycji to suma niepełna, ale nadal nie «sam materiał»", () => {
+    const p = podsumowanieKosztorysu([
+      w("robocizna", "Robocizna za punkt instalacyjny (szt., opcjonalnie)", 38, 4560),
+      w("oprawa", "Oprawa oświetleniowa (szt., opcjonalnie)", 8, 0),
+    ]);
+    expect(p.etykietaSumy).toBe("RAZEM brutto — niepełny");
+  });
+
+  it("pozycja o ZEROWEJ ILOŚCI nie jest luką — została wykreślona z zakresu", () => {
+    const p = podsumowanieKosztorysu([w("robocizna", "Robocizna za punkt instalacyjny (szt.)", 0, 0)]);
+    expect(p.brakRobocizny).toBe(false);
+    expect(p.etykietaSumy).toBe("RAZEM brutto");
   });
 });

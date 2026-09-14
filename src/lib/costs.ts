@@ -324,7 +324,60 @@ export function kosztorysRows(
  * „uzupełnij cenę” byłaby nie na temat — to pozycja wykreślona z zakresu, nie luka.
  */
 export function pozycjeBezCeny(rows: CostRow[]): string[] {
-  return rows.filter((r) => r.value === 0 && r.qty !== 0).map((r) => r.label.replace(/\s*\(.*?\)\s*$/, ""));
+  return wierszeBezCeny(rows).map((r) => r.label.replace(/\s*\(.*?\)\s*$/, ""));
+}
+
+/** To samo, ale z zachowaniem `key` — potrzebne, żeby odróżnić BRAK ROBOCIZNY od
+ *  braku dowolnej innej pozycji (patrz `podsumowanieKosztorysu`). */
+function wierszeBezCeny(rows: CostRow[]): CostRow[] {
+  return rows.filter((r) => r.value === 0 && r.qty !== 0);
+}
+
+export interface PodsumowanieKosztorysu {
+  netto: number;
+  vat: number;
+  brutto: number;
+  /** Nazwy pozycji, które MAJĄ ilość, ale nie mają wartości — czyli nie weszły do sumy. */
+  niewycenione: string[];
+  /** Czy wśród nich jest ROBOCIZNA. Osobno od reszty, bo to ona decyduje o tym, czym
+   *  ta suma w ogóle jest: bez niej to cena materiału, a nie cena instalacji. */
+  brakRobocizny: boolean;
+  /**
+   * Podpis pod wielką liczbą — MA być prawdziwy.
+   *
+   * Dotąd stało tam zawsze „RAZEM brutto", mimo że `robocizna` ma domyślną cenę 0 i na
+   * typowym projekcie do sumy nie wchodziła. Laik dostawał więc za mieszkanie 70 m²
+   * „RAZEM brutto 2621,74 zł" — kwotę za sam materiał, zaniżoną kilkakrotnie względem
+   * tego, co zapłaci — a zastrzeżenie stało POD nią, drobnym drukiem. Liczba z takim
+   * podpisem trafiała też do PDF-a wysyłanego wykonawcy.
+   *
+   * Świadomie NIE wymyślamy stawki robocizny, żeby suma się „domknęła": zmyślona
+   * liczba jest gorsza od jawnego pytania (ta sama zasada co przy rzadkich przekrojach
+   * w `DEFAULT_PRICES`). Zamiast tego suma mówi, czym jest.
+   */
+  etykietaSumy: string;
+}
+
+/** Klucz robocizny w cenniku — jedno miejsce, żeby nazwa nie rozjechała się z `DEFAULT_PRICES`. */
+const KLUCZ_ROBOCIZNY = "robocizna";
+
+export function podsumowanieKosztorysu(rows: CostRow[]): PodsumowanieKosztorysu {
+  const netto = rows.reduce((a, r) => a + r.value, 0);
+  const vat = netto * (VAT_RATE / 100);
+  const bezCeny = wierszeBezCeny(rows);
+  const brakRobocizny = bezCeny.some((r) => r.key === KLUCZ_ROBOCIZNY);
+  return {
+    netto,
+    vat,
+    brutto: netto + vat,
+    niewycenione: bezCeny.map((r) => r.label.replace(/\s*\(.*?\)\s*$/, "")),
+    brakRobocizny,
+    etykietaSumy: brakRobocizny
+      ? "RAZEM brutto — sam materiał"
+      : bezCeny.length > 0
+        ? "RAZEM brutto — niepełny"
+        : "RAZEM brutto",
+  };
 }
 
 /** Dopasowuje pozycje cennika CSV (nazwa;cena) po słowach kluczowych w nazwie. */

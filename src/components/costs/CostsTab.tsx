@@ -4,7 +4,7 @@ import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, lowVoltageLengths, routeSummaries } from "@/lib/panel/project";
 import { ZAPAS_MONTAZOWY_M } from "@/lib/panel/norms";
-import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, VAT_RATE } from "@/lib/costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, podsumowanieKosztorysu, VAT_RATE } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 import { buildCostsDoc, buildCostsPdf } from "@/lib/pdf/costs";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
@@ -86,13 +86,18 @@ export function CostsTab() {
   /** Zgloszenie kosztorysu do kompletu dokumentacji — patrz lib/pdf/rejestr.ts. */
   useEffect(() => zarejestrujProducenta("kosztorys", async () => buildCostsDoc(rows, docHeader)));
 
-  const grandTotal = rows.reduce((a, r) => a + r.value, 0);
-  const vat = grandTotal * (VAT_RATE / 100);
-  const gross = grandTotal + vat;
+  // Sumy i PODPIS pod nimi z jednego miejsca — patrz `podsumowanieKosztorysu`.
+  // Etykieta jest liczona tam, bo „RAZEM brutto" bywa NIEPRAWDĄ: przy domyślnym
+  // cenniku `robocizna` ma cenę 0 i do sumy w ogóle nie wchodzi, a to ona bywa
+  // większą częścią kosztu niż cały materiał.
+  const podsumowanie = podsumowanieKosztorysu(rows);
+  const grandTotal = podsumowanie.netto;
+  const vat = podsumowanie.vat;
+  const gross = podsumowanie.brutto;
   // Pozycje o zerowej wartości nie wchodzą do sumy, więc „RAZEM" potrafi wyglądać na
   // komplet, choć brakuje w nim np. całej robocizny. Zbieramy je, żeby powiedzieć to
   // wprost — aplikacja jest adresowana głównie do laików, którzy nie wychwycą tego sami.
-  const unpriced = pozycjeBezCeny(rows);
+  const unpriced = podsumowanie.niewycenione;
   /** Czy w kosztorysie w ogóle jest niskoprądówka — bez niej zdanie o niej byłoby
    *  odpowiedzią na pytanie, którego nikt nie zadał. */
   const niskopradoweWKosztorysie = (quantities.kabelLan ?? 0) > 0 || (quantities.kabelKoncentryk ?? 0) > 0;
@@ -159,7 +164,7 @@ export function CostsTab() {
     const summary =
       `\nRazem netto;;;${grandTotal.toFixed(2)};` +
       `\nVAT ${VAT_RATE}%;;;${vat.toFixed(2)};` +
-      `\nRAZEM brutto;;;${gross.toFixed(2)};`;
+      `\n${podsumowanie.etykietaSumy};;;${gross.toFixed(2)};`;
     const blob = new Blob(["﻿" + header + body + summary], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, projectFileName("kosztorys", projectName, "csv"));
   }
@@ -391,26 +396,41 @@ export function CostsTab() {
                 </td>
                 <td className="pe-mono px-3 py-1 text-right text-sm text-slate-500">{vat.toFixed(2)} zł</td>
               </tr>
+              {/* Ostrzeżenie stoi NAD sumą, nie pod nią. Pod spodem gasło: najpierw padała
+                  wielka miedziana liczba z podpisem „RAZEM", a dopiero potem, drobnym
+                  drukiem, zdanie że to nie jest razem. Kolejność była odwrotna do ważności
+                  — a to jedyna liczba, którą laik wynosi z całej aplikacji i pokazuje
+                  wykonawcy. */}
+              {unpriced.length > 0 && (
+                <tr>
+                  <td colSpan={4} className="px-3 pb-2 pt-2">
+                    <div className="flex gap-2.5 rounded-md p-3 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
+                      <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                      <div>
+                        <strong>
+                          {podsumowanie.brakRobocizny
+                            ? "To jest cena materiału, nie cena instalacji."
+                            : "Suma nie obejmuje wszystkiego."}
+                        </strong>{" "}
+                        Pozycje o zerowej wartości nie wchodzą do kosztorysu: {unpriced.join(", ")}. Uzupełnij cenę
+                        jednostkową albo wpisz wartość pozycji
+                        {podsumowanie.brakRobocizny
+                          ? " — robocizna potrafi być większą częścią kosztu niż cały materiał."
+                          : "."}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
               <tr>
                 <td className="pe-display p-3 pt-1 font-bold" colSpan={3}>
-                  RAZEM brutto
+                  {podsumowanie.etykietaSumy}
                 </td>
                 <td className="pe-display p-3 pt-1 text-right text-lg font-bold text-copper">{gross.toFixed(2)} zł</td>
               </tr>
             </tfoot>
           </table>
         </div>
-
-      {unpriced.length > 0 && (
-        <div className="flex gap-2.5 rounded-md p-3 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-          <div>
-            <strong>Suma nie obejmuje wszystkiego.</strong> Pozycje o zerowej wartości nie wchodzą do kosztorysu:{" "}
-            {unpriced.join(", ")}. Uzupełnij cenę jednostkową albo wpisz wartość pozycji — zwłaszcza robocizna potrafi
-            być większą częścią kosztu niż sam materiał.
-          </div>
-        </div>
-      )}
 
       {/* O METRACH KABLA mówi wyłącznie notka nad tabelą, bo tylko ona zna
           `cableLengthSource` — raz jest to ryczałt, raz pomiar z tras po planie.

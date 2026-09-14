@@ -3955,6 +3955,61 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
     `npx playwright test` **418/418**.
 
+86. **Kosztorys przestał podawać ceny materiału jako ceny instalacji; pasek przykładu
+    zszedł z Kalkulatorów i Protokołów** — dwa znaleziska z przeglądu całej aplikacji
+    zrobionego po scaleniu kroków 81-85.
+
+    **Suma mówi teraz, czym jest.** `robocizna` ma w `DEFAULT_PRICES` cenę **0** —
+    tak samo oprawy, napędy rolet i szafka teletechniczna — więc na typowym projekcie
+    do sumy nie wchodzi. Na przykładowym mieszkaniu 70 m² dawało to pod wielką,
+    miedzianą liczbą podpis **„RAZEM brutto — 2621,74 zł"**, czyli kwotę za sam
+    materiał, kilkakrotnie zaniżoną względem tego, co użytkownik faktycznie zapłaci.
+    A to jest JEDYNA liczba, którą laik wynosi z całej aplikacji i pokazuje wykonawcy.
+
+    Zastrzeżenie istniało, ale stało POD sumą, drobnym drukiem — kolejność odwrotna
+    do ważności. Teraz:
+    - `podsumowanieKosztorysu` (nowa czysta funkcja w `lib/costs.ts`) liczy sumy
+      RAZEM z podpisem: „RAZEM brutto" przy komplecie cen, „RAZEM brutto — niepełny"
+      przy braku dowolnej pozycji i **„RAZEM brutto — sam materiał"**, gdy brakuje
+      właśnie robocizny. Ten trzeci przypadek jest wyróżniony, bo to on decyduje,
+      czym ta suma w ogóle jest;
+    - ostrzeżenie przeniosło się z pod tabeli DO STOPKI TABELI, tuż nad wiersz sumy,
+      i w wariancie „brak robocizny" zaczyna się od zdania „To jest cena materiału,
+      nie cena instalacji.";
+    - ten sam podpis idzie do **eksportu CSV** i do **PDF-a**, a PDF dostał dodatkowo
+      jawną notkę o tym, czego suma nie obejmuje. To akurat tam było najgorzej:
+      dokument wysyłany wykonawcy podawał „RAZEM brutto" bez ŻADNEGO śladu po braku
+      robocizny — czyli w jedynym miejscu, gdzie liczba przestaje mieć obok siebie
+      aplikację, która mogłaby ją wytłumaczyć.
+
+    Świadomie NIE wymyślamy stawki robocizny, żeby suma się „domknęła" — zmyślona
+    liczba jest gorsza od jawnego pytania (ta sama zasada, na której stoją rzadkie
+    przekroje w `DEFAULT_PRICES`). Zamiast tego suma przestaje udawać, że jest pełna.
+
+    **Pasek „To jest projekt przykładowy" pokazuje się już tylko na czterech krokach
+    przepływu.** Wisiał nad KAŻDĄ zakładką (krok 81), w tym nad Kalkulatorami
+    i Protokołami — a te są z założenia NIEZALEŻNE od projektu (patrz „Decyzje
+    produktowe"), więc nie miał tam czego opisywać. Gorzej: jego zdanie „nic z tego
+    nie zapisuje się na Twoim koncie" było tam wprost NIEPRAWDZIWE — „Zapisz zestaw"
+    w Protokołach zapisuje do chmury normalnie, bo protokoły mają własny, ręczny zapis
+    i nie idą przez autozapis projektu (a to jego blokuje `projektPrzykladowy`).
+    Zdanie zostało przy okazji zawężone do tego, o czym pasek naprawdę mówi: „ten
+    projekt nie zapisuje się na Twoim koncie".
+
+    Jeden istniejący test e2e zmienił oczekiwany tekst: trzy gniazdka to trzy punkty
+    instalacyjne, więc `protocols-schema-costs.spec.ts` trafia teraz w MOCNIEJSZY
+    wariant ostrzeżenia. Słabszy („Suma nie obejmuje wszystkiego") zostaje dla braków
+    w pozostałych pozycjach.
+
+    Nowe testy: cztery przypadki `podsumowanieKosztorysu` w `costs.test.ts` (brak
+    robocizny, komplet cen, brak innej pozycji, pozycja o zerowej ilości jako NIE-luka)
+    oraz dwa w `e2e/projekt-przykladowy.spec.ts` — pasek poza zakładkami przepływu
+    i kolejność „ostrzeżenie nad sumą" mierzona z układu.
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1437/1437** (+4),
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **420/420** (+2).
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +

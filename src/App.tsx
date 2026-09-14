@@ -805,9 +805,15 @@ export default function App() {
           zostawiać pod sobą pas pustego tła (patrz `showEntryScreen` w DesignTab). */}
       <div className="flex flex-1 flex-col">
       {/* Pasek przykładu stoi PONAD granicą błędu i poza nią: dotyczy projektu, a nie
-          zakładki, więc ma być widoczny na każdej z nich — i ma przeżyć awarię
-          dowolnej z nich, bo to stąd prowadzi wyjście do własnego projektu. */}
-      <PasekPrzykladu />
+          jednej zakładki, i ma przeżyć awarię dowolnej z nich, bo to stąd prowadzi
+          wyjście do własnego projektu.
+          Pokazuje się jednak WYŁĄCZNIE na czterech krokach przepływu. Kalkulatory
+          i Protokoły są z założenia NIEZALEŻNE od projektu (patrz „Decyzje produktowe"
+          w MIGRATION.md), więc pasek nie miałby tam czego opisywać — a jego zdanie
+          o tym, że nic się nie zapisuje na koncie, byłoby tam wprost NIEPRAWDZIWE:
+          „Zapisz zestaw" w Protokołach zapisuje do chmury normalnie, bo protokoły nie
+          idą przez autozapis projektu (to jego blokuje `projektPrzykladowy`). */}
+      {KOLEJNOSC_KROKOW.some((k) => k.id === tab) && <PasekPrzykladu />}
       <ErrorBoundary key={tab} onReset={() => setTab(ZAKLADKA_DOMYSLNA)}>
       {tab === "kalkulatory" && (
         <Suspense fallback={<TabLoading />}>

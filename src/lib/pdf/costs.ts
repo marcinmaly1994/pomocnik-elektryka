@@ -1,6 +1,6 @@
 import type { DocumentHeader } from "@/types";
 import type { CostRow } from "@/lib/costs";
-import { VAT_RATE } from "@/lib/costs";
+import { VAT_RATE, podsumowanieKosztorysu } from "@/lib/costs";
 import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
@@ -54,8 +54,12 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader): PdfDoc {
   const M = doc.margin;
   const W = doc.innerW;
 
-  const netto = rows.reduce((a, r) => a + r.value, 0);
-  const vat = netto * (VAT_RATE / 100);
+  // Sumy i PODPIS pod nimi z tego samego miejsca co w zakladce — patrz
+  // `podsumowanieKosztorysu`. To jest dokument, ktory idzie do wykonawcy, wiec
+  // podpis pod wielka liczba musi byc prawdziwy tak samo jak na ekranie.
+  const podsumowanie = podsumowanieKosztorysu(rows);
+  const netto = podsumowanie.netto;
+  const vat = podsumowanie.vat;
   const ryczaltowe = rows.filter((r) => r.overridden).length;
 
   const naglowekTabeli = (first: boolean) => {
@@ -134,7 +138,24 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader): PdfDoc {
   wiersz(`VAT ${VAT_RATE}%`, vat);
   doc.line(etykietaPrawy - 90, doc.y + 12, M + W, doc.y + 12, 0.8, 0.3);
   doc.y -= 4;
-  wiersz("RAZEM brutto", netto + vat, true);
+  wiersz(podsumowanie.etykietaSumy, netto + vat, true);
+
+  /**
+   * Czego ta suma NIE obejmuje — wprost na kartce, pod nią.
+   *
+   * Bez tego dokument wysyłany wykonawcy podawał „RAZEM brutto" bez śladu po tym, że
+   * `robocizna` ma domyślną cenę 0 i do sumy nie weszła. Na ekranie ostrzeżenie było
+   * (choć pod liczbą), w PDF-ie nie było go wcale — czyli akurat tam, gdzie liczba
+   * przestaje mieć obok siebie aplikację, która mogłaby ją wytłumaczyć.
+   */
+  if (podsumowanie.niewycenione.length > 0) {
+    doc.ensure(24);
+    const wstep = podsumowanie.brakRobocizny
+      ? "UWAGA: to cena materiału, nie cena instalacji. Bez wyceny pozostają: "
+      : "UWAGA: suma nie obejmuje pozycji bez ceny: ";
+    doc.text(pdfFitText(wstep + podsumowanie.niewycenione.join(", ") + ".", W, 7.5, false), M, doc.y, 7.5, false, 0.3);
+    doc.y -= 14;
+  }
 
   if (ryczaltowe > 0) {
     doc.ensure(20);
