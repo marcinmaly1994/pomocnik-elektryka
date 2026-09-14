@@ -26,6 +26,35 @@ import { clampNum } from "@/lib/geometry";
  *  jest jednym rogiem pokoju. */
 const MERGE_TOLERANCE = 10;
 
+/**
+ * Tolerancja dla punktów z RÓŻNYCH źródeł (obrys pomieszczenia kontra ściana) — tak
+ * ciasna, że scala tylko to, co leży praktycznie w tym samym miejscu.
+ *
+ * Po co osobna stała: obrys pomieszczenia wchodzi do grafu WSUNIĘTY o `ODSUNIECIE_TRASY`,
+ * więc jego narożnik leży o `ODSUNIECIE_TRASY`·√2 ≈ 7 jedn. od narożnika ściany, wzdłuż
+ * której biegnie — a to mieści się w `MERGE_TOLERANCE`. Narożnik pokoju wpadał przez to
+ * do węzła ŚCIANY i lądował z powrotem na jej osi, tracąc całe wsunięcie. W planie
+ * narysowanym kompletnie (ściany PLUS obrysy — czyli tak, jak wychodzi z narzędzi
+ * „Ściana” i „Pomieszczenie”, i jak zbudowany jest projekt przykładowy) zapadał się
+ * w ten sposób KAŻDY róg KAŻDEGO pokoju: z warstwy tras odsuniętych od murów zostawał
+ * sam szkielet ścian. Przewód wchodził wtedy na ścianę w punkcie odsuniętym o pięć
+ * jednostek, a schodził z niej narożnikiem leżącym na osi — więc żaden przebieg wzdłuż
+ * ściany nie był do niej równoległy, tylko o te pięć jednostek przechylony na całej
+ * swojej długości. Na rzucie widać to jako przewody idące ukosem przez pokoje.
+ *
+ * To ten sam błąd, przed którym `nodeIndex` broni już parę POKÓJ–POKÓJ — tyle że para
+ * pokój–ściana nie była nim objęta, bo węzeł ściany ma źródło `null`.
+ *
+ * Wartość MUSI zostać mniejsza niż `ODSUNIECIE_TRASY`: przy ścianie idealnie prostej
+ * (kąt półpełny) wsunięty narożnik odsuwa się od pierwowzoru dokładnie o wsunięcie
+ * i to jest najciaśniejszy przypadek, jaki wolno jeszcze rozróżnić. Jedna jednostka
+ * planu zostawia zapas na zaokrąglenia `wsunObrys`, a nadal scala to, co scalone być
+ * ma: róg pokoju leżący na rogu obrysu budynku. Oba wsuwają się o tyle samo, więc
+ * wypadają w jednym punkcie — i tamtędy trasy pomieszczeń łączą się z pierścieniem
+ * ściany zewnętrznej.
+ */
+const TOLERANCJA_POKRYWANIA = 1;
+
 /** Ile najbliższych odcinków sieci dostaje szansę na bycie wejściem trasy — patrz
  *  `connectPoint`. Cztery, bo tyle ścian ma zwykły pokój: oprawa pod stropem ma prawo
  *  zejść do KAŻDEJ z nich i dopiero Dijkstra rozstrzyga, która da krótszą całą trasę. */
@@ -152,7 +181,11 @@ function nodeIndex(graph: Graph, p: Point, pokoj: number | null = null): number 
   for (let i = 0; i < graph.nodes.length; i++) {
     const inny = graph.zrodloWezla[i];
     if (pokoj !== null && inny !== null && inny !== pokoj) continue;
-    if (dist(graph.nodes[i], p) <= MERGE_TOLERANCE) return i;
+    // Pełna tolerancja tylko WEWNĄTRZ jednego źródła: dwa końce osobno rysowanych ścian
+    // (oba `null`) albo dwa punkty tego samego obrysu. Para pokój–ściana dostaje próg
+    // pokrywania się — powód stoi przy `TOLERANCJA_POKRYWANIA`.
+    const prog = inny === pokoj ? MERGE_TOLERANCE : TOLERANCJA_POKRYWANIA;
+    if (dist(graph.nodes[i], p) <= prog) return i;
   }
   graph.nodes.push(p);
   graph.zrodloWezla.push(pokoj);
@@ -466,7 +499,20 @@ function connectPoint(graph: Graph, p: Point, swobodne: boolean): number | null 
    * więc dłuższe podejście do bliższej ściany przegrywa z krótszym do dalszej,
    * dokładnie wtedy, kiedy powinno.
    */
-  const wezelPunktu = nodeIndex(graph, p);
+  /**
+   * Węzeł SAMEGO punktu też zakładany bez scalania — z tego samego powodu co wejścia
+   * o akapit wyżej, tylko widać go dobitniej.
+   *
+   * `nodeIndex` przyciągało tu element do dowolnego węzła ściany w promieniu
+   * `MERGE_TOLERANCE`, a osprzęt przyścienny stoi przy ścianie z definicji: łącznik
+   * postawiony 9 jedn. od rogu pokoju przestawał być własnym węzłem i trasa zaczynała
+   * się w TYM ROGU. Na rysunku wyglądało to jak kolec — przewód wybiegał od gniazda do
+   * narożnika i dopiero stamtąd wracał wzdłuż ściany, dwa razy przecinając sam siebie.
+   *
+   * Nic na tym scalaniu nie stało: łączność punktu z siecią dają WEJŚCIA zakładane
+   * niżej (jest ich zawsze co najmniej jedno), a nie sąsiedztwo cudzego narożnika.
+   */
+  const wezelPunktu = dodajWezel(graph, p);
   for (const c of doPodlaczenia) {
     const entry = dodajWezel(graph, c.point);
     addEdge(graph, entry, c.seg.aIdx, dist(graph.nodes[entry], c.seg.a));

@@ -3,7 +3,9 @@ import { zbudujProjektPrzykladowy } from "./demoProjekt";
 import { polygonAreaM2 } from "./geometry";
 import { computeCosts } from "./costs";
 import { computeCircuits, computeRcdGroups } from "./panel/circuits";
-import { findPanel } from "./panel/loads";
+import { buildCableRoutes, findPanel, spreadOverlappingRoutes } from "./panel/loads";
+import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "./symbolScale";
+import { MANUAL_DRAW_SCALE_MPU } from "./design";
 import { scaleOf } from "./design";
 
 /**
@@ -88,5 +90,83 @@ describe("projekt przykładowy", () => {
     const drugi = zbudujProjektPrzykladowy();
     expect(drugi.draft.elements).not.toBe(elements);
     expect(drugi.draft.elements).toEqual(elements);
+  });
+});
+
+/**
+ * Przewody na rzucie przykładu mają iść WZDŁUŻ ścian albo prostopadle do nich.
+ *
+ * Zgłoszenie brzmiało „przewody do różnych obwodów nie idą prostopadle do ścian
+ * pomieszczeń" i dotyczyło dokładnie tego rysunku. Były wtedy dwa niezależne powody
+ * (oba w kodzie, nie w danych przykładu):
+ *   — `nodeIndex` w panel/routing.ts wciągało wsunięte narożniki pomieszczeń do węzłów
+ *     ścian, więc trasa wchodziła na ścianę odsunięta, a schodziła z niej narożnikiem
+ *     leżącym na osi muru;
+ *   — `spreadOverlappingRoutes` w panel/loads.ts przesuwało WIERZCHOŁKI, a nie odcinki,
+ *     więc odcinek między dwoma różnymi pasami tracił równoległość do ściany.
+ * Skutek obu był ten sam i widoczny: linia biegnąca „prawie wzdłuż" ściany, przez całą
+ * długość pomieszczenia.
+ *
+ * Test stoi na GEOMETRII RYSOWANEJ (`spreadOverlappingRoutes`), bo to ona trafia na
+ * ekran — surowe `points` bywały poprawne wtedy, gdy rysunek już nie był.
+ */
+describe("projekt przykładowy — przebieg przewodów", () => {
+  const payload = zbudujProjektPrzykladowy();
+  const { elements, walls, roomShapes, openings } = payload.draft;
+  const skalaSymboli = elementRenderScale(MANUAL_DRAW_SCALE_MPU, DEFAULT_ELEMENT_SCALE, DEFAULT_ELEMENT_SCALE);
+  const trasy = buildCableRoutes(
+    findPanel(elements),
+    computeCircuits(elements, roomShapes),
+    elements,
+    walls,
+    roomShapes,
+    openings,
+    skalaSymboli
+  );
+  const rysowane = spreadOverlappingRoutes(trasy, roomShapes);
+
+  it("każdy ukos na rzucie jest ODCZEPEM pod 45°, a nie przebiegiem", () => {
+    /**
+     * Reguła rysunku po naprawie: przewód biegnie równolegle albo prostopadle do ściany,
+     * a jedyny dopuszczony ukos to ODCZEP — krótkie dojście do nóżki osprzętu pod 45°
+     * (`zakonczPrzyNozce`), które ma z definicji równe składowe. Do rozdzielnicy przewód
+     * wchodzi prostopadle, więc odczepu tam nie ma w ogóle.
+     *
+     * Odcinki krótsze niż 2 jedn. (10 cm) są poza sprawdzeniem: to resztki przycięcia
+     * łamanej do krawędzi symbolu (`przytnijDoKrawedzi`), na rysunku niewidoczne.
+     *
+     * Przed naprawą ten warunek łamało kilkanaście odcinków, najdłuższy na 81 jedn. —
+     * czyli przewód ciągnący się ukosem przez cały salon.
+     */
+    const zle: string[] = [];
+    for (const [id, pts] of rysowane) {
+      for (let i = 1; i < pts.length; i++) {
+        const dx = Math.abs(pts[i].x - pts[i - 1].x);
+        const dy = Math.abs(pts[i].y - pts[i - 1].y);
+        if (dx <= 0.01 || dy <= 0.01) continue; // pion albo poziom — tak ma być
+        if (Math.hypot(dx, dy) < 2) continue;
+        if (Math.abs(dx - dy) <= 0.1) continue; // odczep pod 45°
+        zle.push(`${id}: (${pts[i - 1].x.toFixed(1)},${pts[i - 1].y.toFixed(1)})→(${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)})`);
+      }
+    }
+    expect(zle).toEqual([]);
+  });
+
+  it("skosy zostają marginesem rysunku, a nie jego treścią", () => {
+    // Miara całościowa, odporna na przestawienie pojedynczego gniazda: ile DŁUGOŚCI
+    // wszystkich przewodów biegnie ukosem. Przed naprawą było to 68% (2116 z 3127
+    // jedn.) — czyli rysunek składał się głównie ze skosów. Po naprawie jest to 5%.
+    let dlugosc = 0;
+    let ukos = 0;
+    for (const [, pts] of rysowane) {
+      for (let i = 1; i < pts.length; i++) {
+        const dx = Math.abs(pts[i].x - pts[i - 1].x);
+        const dy = Math.abs(pts[i].y - pts[i - 1].y);
+        const len = Math.hypot(dx, dy);
+        dlugosc += len;
+        if (dx > 0.01 && dy > 0.01) ukos += len;
+      }
+    }
+    expect(ukos / dlugosc).toBeLessThan(0.1);
   });
 });

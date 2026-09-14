@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ZAPAS_MONTAZOWY_M } from "./norms";
-import type { Circuit, ElementType, Floor, InstallationElement, RoomShape, Point } from "@/types";
+import type { CableRoute, Circuit, ElementType, Floor, InstallationElement, RoomShape, Point } from "@/types";
 import { applyRouteOverrides, buildCableRoutes, circuitDemand, estimateRoutes, estimateRoutesByFloor, findPanel, findPanels, kindForElements, panelDlaKondygnacji, spreadOverlappingRoutes, przytnijDoKrawedzi, zakonczPrzyNozce } from "./loads";
 
 function el(type: ElementType, over: Partial<InstallationElement> = {}): InstallationElement {
@@ -1428,5 +1428,175 @@ describe("estimateRoutesByFloor — punkt sufitowy a wysokosc kondygnacji", () =
     const typowa = estimateRoutesByFloor(panele, gniazdo, skale, undefined, { kondygnacje: pietra() })!;
     const wysoka = estimateRoutesByFloor(panele, gniazdo, skale, undefined, { kondygnacje: pietra(3.6) })!;
     expect(wysoka.worstCaseM - typowa.worstCaseM).toBeCloseTo(2 * (3.6 - 2.8), 5);
+  });
+});
+
+describe("spreadOverlappingRoutes — rozsuniecie nie przekrzywia tras", () => {
+  /**
+   * Sedno zgloszenia „przewody nie ida prostopadle do scian": pas byl doliczany do
+   * WIERZCHOLKA, a wierzcholek bral przesuniecie tego sasiada, ktory lezal w dalszym
+   * pasie. Odcinek miedzy wierzcholkiem odsunietym a nieodsunietym przestawal byc
+   * rownolegly do swojego pierwowzoru — i tym samym do sciany, wzdluz ktorej mial
+   * biec. Przy dlugiej scianie drobna roznica pasow rozciagala sie na kilkadziesiat
+   * jednostek i wychodzil przewod ciety ukosem przez cale pomieszczenie.
+   */
+  const POKOJ: RoomShape = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 300, y: 0 },
+      { x: 300, y: 300 },
+      { x: 0, y: 300 },
+    ],
+  };
+
+  function trasa(id: string, points: Point[], over: Partial<CableRoute> = {}): CableRoute {
+    return {
+      id,
+      circuitId: id,
+      circuitName: "Obwód",
+      color: "#1F6FB2",
+      kind: "zasilanie",
+      type: "gniazdko",
+      cable: "",
+      breaker: "",
+      room: "Salon",
+      floor: "parter",
+      points,
+      lengthUnits: 0,
+      viaWalls: true,
+      ...over,
+    };
+  }
+
+  /** Kierunek odcinka z dokladnoscia do zwrotu — do porownania „rownolegle czy nie". */
+  function kierunek(a: Point, b: Point): string {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-9) return "0";
+    const ux = Math.abs(dx / d);
+    const uy = Math.abs(dy / d);
+    return `${ux.toFixed(3)},${uy.toFixed(3)}`;
+  }
+
+  /** Trasa po literze L: korytarzem przy dolnej scianie, potem w gore przy prawej. */
+  const el = (id: string, over = {}) =>
+    trasa(
+      id,
+      [
+        { x: 20, y: 300 },
+        { x: 20, y: 295 },
+        { x: 295, y: 295 },
+        { x: 295, y: 40 },
+        { x: 300, y: 40 },
+      ],
+      over
+    );
+
+  it("kazdy odcinek narysowany jest ROWNOLEGLY do swojego pierwowzoru", () => {
+    // Dwie trasy tym samym korytarzem — druga musi dostac dalszy pas, wiec jest co
+    // przekrzywic. Rozne obwody, zeby pasy naprawde sie rozjechaly.
+    const a = el("a");
+    const b = el("b");
+    const out = spreadOverlappingRoutes([a, b], [POKOJ]);
+    for (const r of [a, b]) {
+      const rysowane = out.get(r.id)!;
+      expect(rysowane).toHaveLength(r.points.length);
+      for (let i = 1; i < r.points.length; i++) {
+        expect(kierunek(rysowane[i - 1], rysowane[i]), `${r.id} odcinek ${i - 1}`).toBe(
+          kierunek(r.points[i - 1], r.points[i])
+        );
+      }
+    }
+  });
+
+  it("dalsza trasa naprawde dostaje inny pas — inaczej test wyzej nic nie sprawdza", () => {
+    const out = spreadOverlappingRoutes([el("a"), el("b")], [POKOJ]);
+    expect(out.get("a")![2].y).not.toBeCloseTo(out.get("b")![2].y, 5);
+  });
+});
+
+/**
+ * Wejście do rozdzielnicy pod KĄTEM PROSTYM.
+ *
+ * Reszta osprzętu przyściennego dostaje odczep pod 45° do nóżki (`zakonczPrzyNozce`):
+ * gniazdo ma jedną puszkę i kabel wchodzi do niej z boku. Rozdzielnica to inny
+ * przypadek — schodzi się do niej kilkanaście obwodów i wchodzą w ścianę PIONEM nad
+ * (albo pod) obudową, a nie ukosem przez pokój. Ustalenie produktowe: przy rozdzielnicy
+ * przewód wchodzi prostopadle do ściany.
+ *
+ * Skutek uboczny jest tu ważniejszy od samej konwencji: dopóki pierwszy odcinek szedł
+ * pod 45°, rozsuwanie wiązki (`spreadOverlappingRoutes`) wydłużało go proporcjonalnie
+ * do numeru pasa — przy czwartym obwodzie robił się z tego skos na 28 jedn. wchodzący
+ * w głąb pokoju. Odcinek prostopadły przy tym samym rozsunięciu tylko się wydłuża,
+ * zostając prostopadłym.
+ */
+describe("buildCableRoutes — wejście do rozdzielnicy", () => {
+  const POKOJ: RoomShape = {
+    id: "r1",
+    floor: "parter",
+    name: "Salon",
+    color: "#3B8C63",
+    points: [
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 200 },
+      { x: 0, y: 200 },
+    ],
+  };
+  /** Polowa wysokosci pudelka rozdzielnicy (26) — o tyle jej srodek stoi od sciany. */
+  const ZASIEG = 13;
+  // Rozdzielnica przy DOLNEJ scianie: obrot 180 kieruje strone montazowa w +y,
+  // wiec obudowa dotyka y = 200 i przewod ma z niej wychodzic PIONOWO.
+  const rozdzielnica = el("rozdzielnica", { x: 100, y: 200 - ZASIEG, rotation: 180 });
+  const panel = { x: rozdzielnica.x, y: rozdzielnica.y };
+
+  function trasyZ(punkty: InstallationElement[]) {
+    return buildCableRoutes(
+      panel,
+      punkty.map((p, i) => ({
+        id: `obw${i}`,
+        name: `Obwód ${i}`,
+        type: "gniazdko" as ElementType,
+        elements: [p],
+        cable: "YDYp 3x2,5 mm²",
+        breaker: "B16",
+        rcd: true,
+      })),
+      [rozdzielnica, ...punkty],
+      [],
+      [POKOJ]
+    );
+  }
+
+  it("pierwszy odcinek jest PROSTOPADLY do ściany rozdzielnicy, nie pod 45°", () => {
+    const [r] = trasyZ([el("gniazdko", { x: 193, y: 60, rotation: 90 })]);
+    expect(r.viaWalls).toBe(true); // inaczej test nie sprawdza tego, co myśli
+    const [a, b] = r.points;
+    expect(a).toEqual({ x: 100, y: 200 });
+    // Ściana jest pozioma, więc odejście od niej ma nie mieć składowej X.
+    expect(Math.abs(b.x - a.x)).toBeLessThan(0.01);
+    expect(Math.abs(b.y - a.y)).toBeGreaterThan(0.01);
+  });
+
+  it("prostopadłość trzyma się także po rozsunięciu wiązki na pasy", () => {
+    // Cztery obwody tym samym korytarzem — czwarty ląduje w najdalszym pasie, czyli
+    // tam, gdzie skos przy rozdzielnicy był najdłuższy.
+    const trasy = trasyZ([
+      el("gniazdko", { x: 193, y: 60, rotation: 90 }),
+      el("gniazdko", { x: 193, y: 90, rotation: 90 }),
+      el("gniazdko", { x: 193, y: 120, rotation: 90 }),
+      el("gniazdko", { x: 193, y: 150, rotation: 90 }),
+    ]);
+    const rysowane = spreadOverlappingRoutes(trasy, [POKOJ]);
+    for (const r of trasy) {
+      const pts = rysowane.get(r.id)!;
+      expect(pts[0]).toEqual({ x: 100, y: 200 });
+      expect(Math.abs(pts[1].x - pts[0].x), `trasa ${r.id}`).toBeLessThan(0.01);
+    }
   });
 });

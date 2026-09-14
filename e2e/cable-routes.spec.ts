@@ -830,9 +830,10 @@ test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ pa
     return out;
   });
 
-  // Skos WYLACZNIE na obu koncach — przy obudowie rozdzielnicy i przy nozce gniazda.
-  // Wszystko pomiedzy ma byc pionowe albo poziome; skos rozlozony na dlugosc sciany
-  // zlamalby dokladnie ten warunek.
+  // Przebieg wzdluz sciany ma byc pionowy albo poziomy — skos rozlozony na dlugosc
+  // sciany zlamalby dokladnie ten warunek. Skos zostaje tylko przy GNIEZDZIE: odczep
+  // pod 45 stopni do nozki. Przy rozdzielnicy przewod wchodzi PROSTOPADLE do sciany —
+  // schodzi sie tam kilkanascie obwodow i wchodza w mur pionem nad obudowa.
   const odcinki: { dx: number; dy: number }[] = [];
   for (let i = 1; i < punkty.length; i++) {
     const dx = Math.abs(punkty[i].x - punkty[i - 1].x);
@@ -841,8 +842,11 @@ test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ pa
   }
   expect(odcinki.length).toBeGreaterThanOrEqual(4);
   for (const s of odcinki.slice(1, -1)) expect(Math.min(s.dx, s.dy)).toBeLessThan(0.5);
-  // ...a oba skrajne sa skosami o rownych skladowych, czyli pod 45 stopni
-  for (const s of [odcinki[0], odcinki[odcinki.length - 1]]) expect(s.dx).toBeCloseTo(s.dy, 0);
+  // Pierwszy odcinek — od rozdzielnicy — jest prostopadly do jej sciany.
+  expect(Math.min(odcinki[0].dx, odcinki[0].dy)).toBeLessThan(0.5);
+  // Ostatni — przy gniezdzie — jest skosem o rownych skladowych, czyli pod 45 stopni.
+  const odczep = odcinki[odcinki.length - 1];
+  expect(odczep.dx).toBeCloseTo(odczep.dy, 0);
 });
 
 /**
@@ -1008,10 +1012,16 @@ async function rysujPokoj(page: import("@playwright/test").Page, x1: number, y1:
 }
 
 /**
- * Dwa pomieszczenia stykajace sie sciana x = 270 (ekran), rozdzielnica i gniazdo PRZY
- * TEJ SCIANIE po jej dwoch stronach, na roznych wysokosciach. Uklad dobrany tak, zeby
- * przejscie otworem bylo wyraznie krotsze niz obejscie naroznikiem — inaczej test nie
- * odroznialby jednego od drugiego. Parametr decyduje, czy otwor w ogole jest.
+ * Dwa pomieszczenia stykajace sie sciana x = 270 (ekran): rozdzielnica w GLEBI pokoju 1,
+ * gniazdo przy wspolnej scianie w pokoju 2. Uklad dobrany tak, zeby przejscie otworem
+ * bylo wyraznie krotsze niz obejscie naroznikiem — inaczej test nie odroznialby jednego
+ * od drugiego. Parametr decyduje, czy otwor w ogole jest.
+ *
+ * ROZDZIELNICA CELOWO NIE DOTYKA wspolnej sciany. Przyklejona do niej stalaby W TYM
+ * MURZE — jej punkt wyjscia (obudowa, patrz `punktPrzyscienny`) lezy wtedy dokladnie na
+ * linii styku, wiec przewod wchodzi do korytarza pokoju 2 od razu, nie majac czego
+ * przekraczac. To poprawne zachowanie (kabel jest w tej scianie), ale wtedy ten test nie
+ * sprawdzalby juz niczego o otworach.
  */
 async function dwaPokoje(page: import("@playwright/test").Page, zDrzwiami: boolean) {
   await openPlan(page);
@@ -1032,7 +1042,7 @@ async function dwaPokoje(page: import("@playwright/test").Page, zDrzwiami: boole
   await page.getByRole("button", { name: /Rozdział/ }).click();
   await page.getByRole("button", { name: /^Rozdzielnica$/ }).last().click();
   let box = await planBox(page);
-  await page.mouse.click(box.x + 258, box.y + 140); // pokoj 1, przy wspolnej scianie
+  await page.mouse.click(box.x + 200, box.y + 140); // pokoj 1, z dala od kazdej ze scian
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
