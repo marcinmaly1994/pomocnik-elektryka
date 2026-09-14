@@ -104,7 +104,15 @@ export function ElementLibrary({
     : ELEMENT_SECTIONS;
 
   return (
-    <div className={wypelnijWysokosc ? "flex min-h-0 w-64 flex-1 shrink-0 flex-col" : "w-64 shrink-0"}>
+    <div
+      // 256 px (`w-64`) dopiero od `md` w górę. Poniżej lista bierze całą szerokość
+      // panelu, bo ten stoi wtedy POD paskiem narzędzi i ma jej do oddania ~325 px
+      // (patrz układ karty w DesignTab.tsx). Sztywne 256 px zostawiało tam 70 px
+      // pustego pasa z prawej, a nazwy elementów i tak łamały się na dwie linie.
+      className={
+        wypelnijWysokosc ? "flex min-h-0 w-full flex-1 shrink-0 flex-col md:w-64" : "w-full shrink-0 md:w-64"
+      }
+    >
       <div className="relative mb-3">
         <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
