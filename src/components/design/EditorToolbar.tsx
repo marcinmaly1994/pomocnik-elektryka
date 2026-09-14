@@ -42,6 +42,10 @@ export interface EditorToolbarProps {
   /** Tryb wymiarowania — długości wszystkich ścian i wymiary prostokątnych pomieszczeń. */
   showDimensions: boolean;
   onToggleDimensions: () => void;
+  /** Powierzchnia pomieszczeń — OSOBNO od wymiarów, bo odpowiada na inne pytanie:
+   *  wymiary służą do wytyczenia ścian, powierzchnia do sprawdzenia metrażu. */
+  showAreas: boolean;
+  onToggleAreas: () => void;
   showHeights: boolean;
   onToggleHeights: () => void;
   /** Podgląd kondygnacji poniżej. `null` na najniższej — nie ma czego pokazać, więc
@@ -112,6 +116,8 @@ export function EditorToolbar({
   onToggleRoutes,
   showDimensions,
   onToggleDimensions,
+  showAreas,
+  onToggleAreas,
   showHeights,
   onToggleHeights,
   showUnderlay,
@@ -317,19 +323,41 @@ export function EditorToolbar({
         <Cable size={15} className={showRoutes ? "text-copper" : undefined} />
       </Button>
 
-      {/* Wymiary WSZYSTKICH ścian naraz. Domyślnie wyłączone, bo przy rysowaniu
-          przeszkadzają — a włączone są tym, co odróżnia wydrukowany rzut od obrazka:
-          bez ani jednego wymiaru nie da się z niego nic wytyczyć na budowie. */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onToggleDimensions}
-        title={showDimensions ? "Ukryj wymiary ścian i pomieszczeń" : "Pokaż wymiary ścian i pomieszczeń"}
-        aria-label={showDimensions ? "Ukryj wymiary" : "Pokaż wymiary"}
-        aria-pressed={showDimensions}
-      >
-        <Ruler size={15} className={showDimensions ? "text-copper" : undefined} />
-      </Button>
+      {/* Opisy rysunku pod JEDNYM przyciskiem, bo to jedna kategoria pytania („co ma
+          być podpisane") — ale dwie różne odpowiedzi, więc dwa pola wyboru zamiast
+          jednego przełącznika. Wymiary służą do WYTYCZENIA ścian na budowie,
+          powierzchnia do SPRAWDZENIA metrażu; pierwsze bez drugiego jest normą na
+          rysunku wykonawczym, drugie bez pierwszego — przy szacowaniu materiału.
+
+          Menu, a nie druga ikona w rzędzie: przełączników warstw jest już pięć i
+          żaden nie ma podpisu. Szósty byłby kolejnym symbolem do odgadnięcia, a tak
+          obie opcje dostają wreszcie pełne nazwy. */}
+      <PasekMenu etykieta="Opisy" ikona={<Ruler size={14} />} szerokosc={260}>
+        <label className="flex items-center gap-1.5 text-xs text-slate-500">
+          <input
+            type="checkbox"
+            checked={showDimensions}
+            onChange={onToggleDimensions}
+            aria-label="Wymiary ścian i pomieszczeń"
+            className="accent-copper"
+          />
+          Wymiary ścian i pomieszczeń
+        </label>
+
+        <label
+          className="flex items-center gap-1.5 text-xs text-slate-500"
+          title="Pole liczone z obrysu pomieszczenia, więc prawdziwe także dla kształtów innych niż prostokąt — trójkąta, trapezu, litery L. Wymaga znanej skali rzutu."
+        >
+          <input
+            type="checkbox"
+            checked={showAreas}
+            onChange={onToggleAreas}
+            aria-label="Powierzchnia pomieszczeń"
+            className="accent-copper"
+          />
+          Powierzchnia pomieszczeń
+        </label>
+      </PasekMenu>
 
       {/* Wysokości montażu przy osprzęcie. Osobny przełącznik od wymiarów ścian: tamte
           opisują BUDYNEK, te INSTALACJĘ — na jednym wydruku chce się zwykle albo jedno,

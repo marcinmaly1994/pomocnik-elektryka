@@ -122,6 +122,14 @@ interface DesignCanvasProps {
   /** Tryb wymiarowania: dlugosci WSZYSTKICH scian i wymiary prostokatnych pomieszczen.
    *  Ustawienie widoku, wlaczane w pasku edytora — patrz komentarze przy obu miejscach. */
   pokazWymiary: boolean;
+  /**
+   * Powierzchnia pomieszczenia jako podpis pod nazwą.
+   *
+   * Osobny przełącznik od wymiarów, bo jest przydatna DOKŁADNIE TAM, gdzie wymiary
+   * zawodzą: „a × b" da się podać tylko dla prostokąta, a pole liczy się z obrysu,
+   * więc jest prawdziwe dla trójkąta, trapezu, wykuszu i litery L tak samo.
+   */
+  pokazPowierzchnie: boolean;
   /** Wysokości montażu przy symbolach osprzętu („+30", „+110" — patrz `mountingLabel`).
    *  Osobny przełącznik od wymiarów ścian: tamte opisują BUDYNEK, te INSTALACJĘ, i na
    *  gotowym rzucie chce się je zwykle widzieć osobno. */
@@ -306,6 +314,7 @@ export function DesignCanvas({
   zones,
   podklad,
   pokazWymiary,
+  pokazPowierzchnie,
   pokazWysokosci,
   cableRoutes,
   routeOverrides,
@@ -352,6 +361,24 @@ export function DesignCanvas({
   /** Osprzęt idzie za suwakiem „Rozmiar elementów", przybory sanitarne nie — ich obrys
    *  jest strefą 1 i musi zgadzać się z tym, co liczy walidator (patrz `sanitaryRenderScale`). */
   const skalaSymbolu = (type: ElementType) => (SANITARY_FIXTURES[type] ? sanitaryScale : elementScale);
+
+  /**
+   * Obszar TRAFIENIA symbolu — osobny od tego, co widać.
+   *
+   * Część symboli to sama kreska albo okrąg (punkt sufitowy, czujnik), więc klikalne
+   * jest w nich dokładnie to, co narysowane — narożniki i przerwy już nie. Przy małym
+   * powiększeniu albo małym symbolu trafienie zaczyna wymagać celowania w piksel,
+   * a kliknięcie w element to najczęstsza czynność w całym edytorze. Przezroczysty
+   * prostokąt o rozmiarze pudełka glifu robi z całego symbolu jeden cel, niezależnie
+   * od tego, ile w nim narysowanej kreski.
+   *
+   * BEZ minimum liczonego w pikselach ekranu, choć kusi. Taka podłoga musi mieć
+   * ograniczenie górne, bo inaczej przy najmniejszym powiększeniu wyhodowałaby cel
+   * wielkości pokoju i element kradłby kliknięcia sąsiadom oraz narzędziu stawiania.
+   * A to ograniczenie kasuje zarazem cały zysk z podłogi — zmierzone: klik 5 px obok
+   * środka przy maksymalnym oddaleniu chybia tak samo z podłogą, jak i bez niej.
+   * Zostaje sama złożoność. Przy tak oddalonym rzucie i tak się nie celuje: się przybliża.
+   */
 
   /**
    * Wymuszone przerysowanie warstwy tła po przełączeniu siatki.
@@ -1297,33 +1324,47 @@ export function DesignCanvas({
                   }}
                 />
 
-                {/* Wymiary pomieszczenia jako JEDEN podpis „3,45 × 4,20 m" pod nazwą,
-                    a nie etykieta przy każdej krawędzi — tak robią to rysunki budowlane
-                    i tylko tak da się to utrzymać czytelnym: przy czterech pokojach
-                    etykiety krawędziowe dołożyłyby szesnaście napisów do i tak już
-                    wymiarowanych ścian.
-                    Tylko dla obrysów PROSTOKĄTNYCH: dla litery L czy wykusza „a × b"
-                    z obrysu opisywałoby prostokąt, którego na rysunku nie ma. Tam
-                    zostaje sama powierzchnia, która jest prawdziwa niezależnie od
-                    kształtu. */}
-                {pokazWymiary &&
-                  (() => {
-                    const wym = formatWymiaryProstokata(r.points);
-                    if (!wym) return null;
-                    return (
-                      <Text
-                        x={c.x - 50}
-                        y={c.y + 18}
-                        width={100}
-                        align="center"
-                        text={wym}
-                        fontSize={10}
-                        fontStyle="bold"
-                        fill="#8A5526"
-                        listening={false}
-                      />
-                    );
-                  })()}
+                {/* Podpisy pomieszczenia pod jego nazwą, jeden pod drugim — wymiary
+                    i/albo powierzchnia, zależnie od tego, co włączone.
+
+                    Wymiary jako JEDEN podpis „3,45 × 4,20 m", a nie etykieta przy każdej
+                    krawędzi — tak robią to rysunki budowlane i tylko tak da się to
+                    utrzymać czytelnym: przy pięciu pokojach etykiety krawędziowe
+                    dołożyłyby dwadzieścia napisów do i tak już wymiarowanych ścian.
+                    Wyłącznie dla obrysów PROSTOKĄTNYCH: dla litery L czy wykusza „a × b"
+                    opisywałoby prostokąt, którego na rysunku nie ma.
+
+                    I właśnie dlatego powierzchnia jest OSOBNYM przełącznikiem, a nie
+                    dodatkiem do wymiarów: liczy się z obrysu (`polygonArea`, wzór
+                    geodety), więc jest prawdziwa dla trójkąta, trapezu i wykuszu tak
+                    samo jak dla prostokąta. Tam, gdzie wymiary milczą, ona nadal mówi. */}
+                {(() => {
+                  const podpisy = [
+                    pokazWymiary ? formatWymiaryProstokata(r.points) : null,
+                    pokazPowierzchnie ? formatPowierzchnia(r.points) : null,
+                  ].filter((t): t is string => t !== null);
+                  return podpisy.map((tekst, i) => (
+                    <Text
+                      key={i}
+                      x={c.x - 50}
+                      // Blok rośnie W GÓRĘ, nie w dół: OSTATNI wiersz siada zawsze tam,
+                      // gdzie siedziałby jedyny, a kolejne dokładają się nad nim.
+                      //
+                      // Rozpychanie w dół nie miało jak zadziałać w niskim pokoju: przy
+                      // 3 m (60 jedn.) od środka do ściany jest 30 jedn., a dwa wiersze
+                      // zaczynające się 15 jedn. pod środkiem kończyły się na murze —
+                      // dokładnie na etykiecie wymiaru ściany, przecinając oba napisy.
+                      y={c.y + 15 - (podpisy.length - 1 - i) * 11}
+                      width={100}
+                      align="center"
+                      text={tekst}
+                      fontSize={10}
+                      fontStyle="bold"
+                      fill="#8A5526"
+                      listening={false}
+                    />
+                  ));
+                })()}
 
                 <Text
                   x={c.x - 40}
@@ -2220,6 +2261,14 @@ export function DesignCanvas({
                   agdLetter={el.agdLetter}
                   wymiaryM={fixtureSizeM(el) ?? undefined}
                 />
+                {/* Obszar trafienia — patrz komentarz przy `skalaSymbolu`. Rysowany po
+                    glifie, więc leży NA nim w kolejności rysowania, ale będąc
+                    przezroczystym nie zasłania niczego; przechwytuje za to kliknięcia
+                    także tam, gdzie symbol jest samą cienką kreską. */}
+                {(() => {
+                  const t = glyphBoxSize(el.type, fixtureSizeM(el) ?? undefined);
+                  return <Rect x={-t.w / 2} y={-t.h / 2} width={t.w} height={t.h} fill="transparent" />;
+                })()}
                 {/* Wysokość montażu POD symbolem — numery grup sterowania stoją z prawej
                     (`groupLabelAnchors`), więc te dwie adnotacje się nie zderzają.
                     Bez obwódki i w szarości, żeby czytać rysunek, a nie opisy. Obrócona

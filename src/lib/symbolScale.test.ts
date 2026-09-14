@@ -174,3 +174,43 @@ describe("ROZPIETOSC_ODNIESIENIA", () => {
     expect(skalaZRysunku(TYPOWY_DOM_M / MANUAL_DRAW_SCALE_MPU)).toBe(1);
   });
 });
+
+/**
+ * `BASE_ELEMENT_SCALE` reguluje CZYTELNOŚĆ rysunku i wolno je zmieniać — ale są dwie
+ * rzeczy, których zmiana ruszyć nie może, bo obie są wymiarami, a nie konwencją.
+ *
+ * Testy są napisane tak, żeby przeszły dla DOWOLNEJ wartości stałej: mnożą przez nią
+ * i dzielą, zamiast wpisywać wynik. Test na konkretną liczbę psułby się przy każdej
+ * korekcie czytelności i po trzeciej takiej poprawce ktoś by go po prostu usunął.
+ */
+describe("co NIE zależy od rozmiaru symboli", () => {
+  const MPU = [MANUAL_DRAW_SCALE_MPU, 0.01, 0.004, 0.25];
+
+  it.each(MPU)("wanna ma 1,70 × 0,75 m na rzucie, niezależnie od skali symboli (mpu=%s)", (mpu) => {
+    // Obrys przyboru JEST strefą 1 wg PN-HD 60364-7-701 i walidator mierzy odległości
+    // dokładnie od niego. Gdyby jechał za suwakiem czytelności, strefa rosłaby razem
+    // z symbolem — a rysunek pokazywałby inną strefę niż ta, którą aplikacja sprawdza.
+    const skala = sanitaryRenderScale(mpu, BEZ_DOMYSLU);
+    const box = glyphBoxSize("wanna");
+    expect(box.w * skala * mpu).toBeCloseTo(1.7, 10);
+    expect(box.h * skala * mpu).toBeCloseTo(0.75, 10);
+  });
+
+  it.each(MPU)("osprzęt zajmuje tyle samo centymetrów ściany przy każdej skali rzutu (mpu=%s)", (mpu) => {
+    // Sedno `autoSymbolScale`: symbol jest UMOWNY, ale jego rozmiar RZECZYWISTY ma być
+    // stały — inaczej ten sam osprzęt na rzucie skalibrowanym na 1 jedn. = 1 cm byłby
+    // pięć razy mniejszy niż na rysowanym odręcznie.
+    const wMetrach = (m: number) =>
+      glyphBoxSize("gniazdko").h * elementRenderScale(m, DEFAULT_ELEMENT_SCALE, BEZ_DOMYSLU) * m;
+    expect(wMetrach(mpu)).toBeCloseTo(wMetrach(MANUAL_DRAW_SCALE_MPU), 10);
+  });
+
+  it("suwak sięga w OBIE strony od domyślnego rozmiaru", () => {
+    // Domyślna wartość suwaka musi zostać w środku zakresu, a nie na jego krańcu —
+    // inaczej po zmianie rozmiaru bazowego nie dałoby się już wrócić do poprzedniego.
+    const MIN_SUWAKA = 0.6;
+    const MAX_SUWAKA = 2;
+    expect(DEFAULT_ELEMENT_SCALE).toBeGreaterThan(MIN_SUWAKA);
+    expect(DEFAULT_ELEMENT_SCALE).toBeLessThan(MAX_SUWAKA);
+  });
+});

@@ -39,26 +39,30 @@ test("suwak zmienia rozmiar symboli, nie ich położenie", async ({ page }) => {
       return { scale: g.scaleX(), x: g.x(), y: g.y() };
     });
 
-  // suwak domyślnie pokazuje 1.0× (punkt odniesienia „bez zmian"), ale render mnoży to
-  // przez bazowy współczynnik geometrii glifów — stąd realna skala w Konvie to 0.7, nie 1
-  const DISPLAY_DEFAULT = 1;
-  const BASE_ELEMENT_SCALE = 0.7;
+  // Suwak pokazuje 1.0× jako punkt odniesienia („bez zmian"), ale render mnoży to przez
+  // bazowy współczynnik geometrii glifów, więc realna skala w Konvie jest inna niż 1.
+  //
+  // Mierzymy STOSUNEK, nie wartość bezwzględną. Wpisana na sztywno baza robiła z tego
+  // testu hamulec: `BASE_ELEMENT_SCALE` reguluje czytelność rysunku i wolno je zmieniać,
+  // a każda taka korekta wywracała test, który o czytelności nie mówi nic — sprawdza
+  // tylko, czy SUWAK działa. Samą wartość bazową pilnują testy jednostkowe.
   const before = await glyph();
-  expect(before.scale).toBeCloseTo(DISPLAY_DEFAULT * BASE_ELEMENT_SCALE, 5);
+  expect(before.scale).toBeGreaterThan(0);
 
   await otworzMenuPaska(page, "Rysunek");
   await page.getByLabel("Rozmiar elementów").fill("2");
   await expect(page.getByText("2.0×")).toBeVisible();
 
   const after = await glyph();
-  expect(after.scale).toBeCloseTo(2 * BASE_ELEMENT_SCALE, 5);
+  // Suwak 1.0 -> 2.0 ma podwoić symbol, niezależnie od tego, od czego startuje.
+  expect(after.scale / before.scale).toBeCloseTo(2, 5);
   // suwak skaluje SYMBOL, a nie przesuwa elementu — współrzędne muszą zostać te same
   expect(after.x).toBeCloseTo(before.x, 5);
   expect(after.y).toBeCloseTo(before.y, 5);
 
-  // „reset" wraca do wartości DOMYŚLNEJ suwaka (1.0×), czyli tej samej realnej skali co start
+  // „reset" wraca do wartości DOMYŚLNEJ suwaka, czyli do skali sprzed zmiany.
   await page.getByRole("button", { name: "reset" }).click();
-  expect((await glyph()).scale).toBeCloseTo(DISPLAY_DEFAULT * BASE_ELEMENT_SCALE, 5);
+  expect((await glyph()).scale).toBeCloseTo(before.scale, 5);
 });
 
 /**

@@ -20,6 +20,29 @@ async function etykietyWymiarow(page: Page): Promise<string[]> {
   });
 }
 
+/** Etykiety POWIERZCHNI („88,0 m²") — osobno od wymiarów, bo mają jedno miejsce
+ *  po przecinku i nie łapie ich tamten wzorzec. */
+async function etykietyPowierzchni(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { find(sel: string): { text(): string }[] }[] } }).Konva;
+    return k.stages[0].find("Text").map((t) => t.text()).filter((t) => /m²$/.test(t));
+  });
+}
+
+/** Zaznacza albo odznacza pozycję w menu „Opisy" i zamyka je, żeby panel nie
+ *  przykrywał płótna przy odczycie sceny. */
+async function przelaczOpis(page: Page, nazwa: string, wlacz: boolean) {
+  await page.getByRole("button", { name: "Opisy" }).click();
+  const pole = page.getByLabel(nazwa);
+  if (wlacz) await pole.check();
+  else await pole.uncheck();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+}
+
+const WYMIARY = "Wymiary ścian i pomieszczeń";
+const POWIERZCHNIA = "Powierzchnia pomieszczeń";
+
 /** Prostokątny dom 25 × 17 m z dwoma prostokątnymi pokojami — wstrzyknięty wprost
  *  do zapisu, bo test dotyczy WYŚWIETLANIA wymiarów, nie rysowania geometrii
  *  (to ma własne specy w wall-drawing i room-drawing). */
@@ -62,23 +85,57 @@ test("przełącznik odsłania wymiary wszystkich ścian i chowa je z powrotem", 
   // Bez trybu wymiarowania rzut jest czysty — to domyślny stan przy rysowaniu.
   expect(await etykietyWymiarow(page)).toEqual([]);
 
-  await page.getByRole("button", { name: "Pokaż wymiary" }).click();
+  await przelaczOpis(page, WYMIARY, true);
   const wymiary = await etykietyWymiarow(page);
   // Cztery boki obrysu domu 25 × 17 m.
   expect(wymiary.filter((t) => t === "25,00 m")).toHaveLength(2);
   expect(wymiary.filter((t) => t === "17,00 m")).toHaveLength(2);
 
-  await page.getByRole("button", { name: "Ukryj wymiary" }).click();
+  await przelaczOpis(page, WYMIARY, false);
   expect(await etykietyWymiarow(page)).toEqual([]);
 });
 
 test("prostokątne pomieszczenie dostaje podpis „a × b”, a wielobok nie", async ({ page }) => {
   await planZGeometria(page);
-  await page.getByRole("button", { name: "Pokaż wymiary" }).click();
+  await przelaczOpis(page, WYMIARY, true);
 
   const wymiary = await etykietyWymiarow(page);
   // Kuchnia: 220 × 160 jedn. przy 0,05 m/jedn.
   expect(wymiary).toContain("11,00 × 8,00 m");
   // Salon jest literą L — żaden podpis „a × b" go nie opisuje, więc go nie ma.
   expect(wymiary.filter((t) => t.includes("×"))).toHaveLength(1);
+});
+
+/**
+ * Powierzchnia jest OSOBNYM przełącznikiem, bo odpowiada tam, gdzie wymiary milczą:
+ * „a × b" da się podać tylko dla prostokąta, a pole liczy się z obrysu, więc jest
+ * prawdziwe także dla litery L — czyli dla Salonu z tego planu.
+ */
+test("powierzchnia pokazuje się także dla pomieszczenia, które NIE jest prostokątem", async ({ page }) => {
+  await planZGeometria(page);
+  expect(await etykietyPowierzchni(page)).toEqual([]);
+
+  await przelaczOpis(page, POWIERZCHNIA, true);
+  const pola = await etykietyPowierzchni(page);
+  // Kuchnia: 220 × 160 jedn. przy 0,05 m/jedn. = 88 m².
+  expect(pola).toContain("88,0 m²");
+  // Salon (litera L): 220×160 + 120×140 = 52 000 jedn.² = 130 m². Prostokąt opisany
+  // dałby 220×300 jedn. = 165 m², czyli o jedną czwartą za dużo.
+  expect(pola).toContain("130,0 m²");
+  expect(pola).toHaveLength(2);
+
+  await przelaczOpis(page, POWIERZCHNIA, false);
+  expect(await etykietyPowierzchni(page)).toEqual([]);
+});
+
+test("wymiary i powierzchnia są niezależne — można mieć samą powierzchnię", async ({ page }) => {
+  await planZGeometria(page);
+  await przelaczOpis(page, POWIERZCHNIA, true);
+  // Żadnego „a × b" ani długości ścian — włączony jest tylko drugi opis.
+  expect(await etykietyWymiarow(page)).toEqual([]);
+  expect(await etykietyPowierzchni(page)).toHaveLength(2);
+
+  await przelaczOpis(page, WYMIARY, true);
+  expect(await etykietyWymiarow(page)).not.toEqual([]);
+  expect(await etykietyPowierzchni(page)).toHaveLength(2);
 });

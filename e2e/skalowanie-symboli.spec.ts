@@ -83,6 +83,16 @@ async function obrysy(page: Page) {
   });
 }
 
+/**
+ * Rozmiar symbolu przy skali odniesienia, czyli `BASE_ELEMENT_SCALE` z symbolScale.ts.
+ *
+ * Ten plik testuje MATEMATYKĘ skalowania (kalibracja ×5 powiększa symbol ×5), więc
+ * punkt odniesienia musi skądś wziąć. Trzymany w JEDNEJ stałej, a nie wpisany
+ * czterokrotnie: sama wartość bazowa reguluje czytelność rysunku i wolno ją zmieniać,
+ * a wtedy to ma być poprawka w jednej linijce, nie polowanie po pliku.
+ */
+const BAZA = 0.42;
+
 test("bez kalibracji symbole zostaja przy dotychczasowym rozmiarze", async ({ page }) => {
   await pustyProjekt(page);
   await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
@@ -95,7 +105,7 @@ test("bez kalibracji symbole zostaja przy dotychczasowym rozmiarze", async ({ pa
     type P = { getParent(): { scaleX(): number } };
     return (k.stages[0].find("Path") as P[])[0].getParent().scaleX();
   });
-  expect(rect).toBeCloseTo(0.7, 5);
+  expect(rect).toBeCloseTo(BAZA, 5);
 });
 
 test("gestsza kalibracja powieksza symbol dokladnie tyle, ile trzeba, by zajmowal tyle samo metrow", async ({ page }) => {
@@ -108,8 +118,8 @@ test("gestsza kalibracja powieksza symbol dokladnie tyle, ile trzeba, by zajmowa
   await skalibruj(page, 200, 2);
   const po = await skalaSymbolu(page, 9);
 
-  expect(przed).toBeCloseTo(0.7, 5);
-  expect(po).toBeCloseTo(0.7 * 5, 4);
+  expect(przed).toBeCloseTo(BAZA, 5);
+  expect(po).toBeCloseTo(BAZA * 5, 4);
 });
 
 test("obrys wanny pokrywa sie ze strefa 1, ta sama, ktora liczy walidator", async ({ page }) => {
@@ -212,8 +222,8 @@ test("bez skali symbol ROSNIE razem z rysunkiem", async ({ page }) => {
   await klikNaPlanie(page, 300, 70);
 
   const skala = await skalaOsprzetu(page);
-  // 540 / 240 = 2,25 razy rozmiar bazowy (0,7).
-  expect(skala).toBeCloseTo(0.7 * (540 / 240), 1);
+  // 540 / 240 = 2,25 razy rozmiar bazowy.
+  expect(skala).toBeCloseTo(BAZA * (540 / 240), 1);
 });
 
 test("bez skali MALY rysunek zostaje przy dotychczasowym rozmiarze", async ({ page }) => {
@@ -224,5 +234,43 @@ test("bez skali MALY rysunek zostaje przy dotychczasowym rozmiarze", async ({ pa
 
   // Domysl z rysunku tylko POWIEKSZA: rysunek mniejszy od typowego bywa po prostu
   // zaczety, a zmniejszanie symboli na takiej podstawie psuloby czytelnosc.
-  expect(await skalaOsprzetu(page)).toBeCloseTo(0.7, 5);
+  expect(await skalaOsprzetu(page)).toBeCloseTo(BAZA, 5);
+});
+
+/**
+ * Obszar TRAFIENIA nie może maleć razem z symbolem.
+ *
+ * Symbol jest rysowany w skali czytelności i dodatkowo zmniejszany powiększeniem
+ * widoku. Przy oddalonym rzucie punkt sufitowy schodził przez to do kilku pikselów
+ * i przestawał być klikalny — a kliknięcie w element to najczęstsza czynność
+ * w edytorze. Regresja tego rodzaju nie boli w żadnym teście funkcjonalnym: element
+ * ISTNIEJE i rysuje się poprawnie, tylko nie da się w niego trafić.
+ */
+test("w punkt sufitowy da sie kliknac takze przy mocno oddalonym widoku", async ({ page }) => {
+  await pustyProjekt(page);
+  await wybierz(page, "sufit", /Punkt sufitowy/);
+  await klikNaPlanie(page, 400, 300);
+
+  // Oddalamy widok do minimum — tu symbol robi sie najmniejszy.
+  // Przycisk blokuje sie po osiagnieciu minimum, wiec klikamy DOPOKI jest aktywny,
+  // zamiast zgadywac, ile razy da sie go nacisnac.
+  const oddal = page.getByRole("button", { name: "Oddal widok" });
+  for (let i = 0; i < 12 && !(await oddal.isDisabled()); i++) await oddal.click();
+  await page.waitForTimeout(400);
+
+  // Klik liczony w RZECZYWISTY srodek elementu (stawianie przyciaga do siatki).
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  const el = await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
+    return d.draft.elements[0];
+  });
+  const canvas = (await page.locator(".konvajs-content").first().boundingBox())!;
+  const widok = await page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { scaleX(): number; x(): number; y(): number }[] } }).Konva;
+    const st = k.stages[0];
+    return { skala: st.scaleX(), dx: st.x(), dy: st.y() };
+  });
+  await page.mouse.dblclick(canvas.x + el.x * widok.skala + widok.dx, canvas.y + el.y * widok.skala + widok.dy);
+
+  await expect(page.getByText("Edytuj element")).toBeVisible();
 });

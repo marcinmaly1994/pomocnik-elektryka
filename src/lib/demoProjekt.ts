@@ -174,10 +174,11 @@ function elementy(): InstallationElement[] {
     e("szafka", "szafkaTeletech", PRZEDPOKOJ, 2.5, 4.4),
 
     // ODLEGŁOŚCI: symbole są UMOWNE i przy skali „1 kratka = 1 m" jeden zajmuje na
-    // rysunku kilkadziesiąt centymetrów ściany (patrz `BASE_ELEMENT_SCALE` w
-    // symbolScale.ts). Punkty stoją więc nie bliżej niż ~0,8 m od siebie — nie dlatego,
-    // że tak się montuje, tylko żeby przykład nie otwierał się jako kupka nachodzących
-    // na siebie kółek. To jest rysunek poglądowy i ma być czytelny.
+    // rysunku ok. 0,44 m ściany (patrz `BASE_ELEMENT_SCALE` w symbolScale.ts).
+    // Rozstaw ~0,8 m brał się stąd, że symbol miał kiedyś 0,74 m i bez takiego odstępu
+    // przykład otwierał się jako kupka nachodzących na siebie kółek. Po zmniejszeniu
+    // symboli ten odstęp nie jest już obejściem — mieści się w tym, co i tak wychodzi
+    // przy rozsądnym rozmieszczeniu osprzętu, więc zostaje jak jest.
 
     // --- Salon ---
     e("salon-gn1", "gniazdko", SALON, 1, 0.2, { gangs: 2 }),

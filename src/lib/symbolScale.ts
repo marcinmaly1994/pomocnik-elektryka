@@ -22,12 +22,25 @@ import { MANUAL_DRAW_SCALE_MPU } from "@/lib/design";
  */
 
 /**
- * Bazowa geometria glifów okazała się za duża w skali planu (symbole zlewały się przy
- * gęściej rozstawionych punktach), więc RENDER zawsze mnożymy przez ten współczynnik —
- * niezależnie od tego, co pokazuje suwak. Suwak ma pokazywać „1.0×" jako punkt
- * odniesienia (czyli „bez zmian względem domyślnego"), a nie bazową, zbyt dużą geometrię.
+ * Bazowa geometria glifów jest za duża w skali planu, więc RENDER zawsze mnożymy przez
+ * ten współczynnik — niezależnie od tego, co pokazuje suwak. Suwak pokazuje „1.0×" jako
+ * punkt odniesienia („bez zmian względem domyślnego"), a nie bazową geometrię.
+ *
+ * Wartość WYBRANA Z PORÓWNANIA RENDERÓW, nie wyliczona: ten sam rzut przykładowy
+ * wyrenderowany przy 0,70 · 0,56 · 0,42 i oceniony okiem. Przy 0,70 nazwy pomieszczeń
+ * były przecięte symbolami, a podpis strefy prysznica w ogóle nie był widoczny —
+ * zasłaniał go osprzęt. Przy 0,42 każdy symbol stoi osobno i wszystkie podpisy dają
+ * się przeczytać.
+ *
+ * Symbol gniazda ma 21 jedn. wysokości (trzon 12 + łuk 9), więc na rzucie rysowanym
+ * odręcznie (20 jedn. = 1 m) zajmuje teraz ok. 0,44 m ściany zamiast 0,74 m.
+ *
+ * Zmiana tej liczby jest BEZPIECZNA dla wymiarów: przybory sanitarne rysują się
+ * w prawdziwej wielkości, bo `JEDNOSTKI_NA_METR` dzieli przez tę samą stałą, przez
+ * którą render mnoży (skraca się). Pilnują tego testy „co NIE zależy od rozmiaru
+ * symboli" — napisane tak, żeby przeszły dla dowolnej wartości.
  */
-export const BASE_ELEMENT_SCALE = 0.7;
+export const BASE_ELEMENT_SCALE = 0.42;
 
 /** Wartość suwaka, od której użytkownik startuje i do której wraca „reset". To mnożnik
  *  WZGLĘDEM rozmiaru wynikającego ze skali rzutu, nie bezpośredni rozmiar renderu. */

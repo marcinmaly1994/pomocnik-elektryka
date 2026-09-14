@@ -97,6 +97,30 @@ test("odbiornik z wlasnym obwodem z definicji nie da sie przypisac — i menu mo
  * z gniazdami bywa uzasadniona, ale dobor potraktuje taki obwod jako oswietleniowy
  * (1,5 mm², B10) i o tym trzeba powiedziec.
  */
+/**
+ * Prawy klik w element wskazany po TYPIE, w jego RZECZYWISTY środek.
+ *
+ * Nie w punkt, w który się klikało stawiając: stawianie przyciąga element do siatki,
+ * więc symbol ląduje obok kursora — nawet o pół oczka. Dopóki symbole były duże,
+ * ta różnica mieściła się w obrysie i klik w stary punkt i tak trafiał. To była
+ * tolerancja, a nie celowanie, i skończyła się przy pierwszym zmniejszeniu symboli.
+ */
+async function prawyKlikWElement(page: import("@playwright/test").Page, typ: string) {
+  await page.waitForTimeout(900); // debounce autozapisu — stąd bierzemy pozycję
+  const el = await page.evaluate((t) => {
+    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
+    return d.draft.elements.find((e: { type: string }) => e.type === t) ?? null;
+  }, typ);
+  if (!el) throw new Error(`Nie ma elementu typu ${typ}`);
+  const canvas = (await page.locator(".konvajs-content").first().boundingBox())!;
+  const widok = await page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { scaleX(): number; x(): number; y(): number }[] } }).Konva;
+    const st = k.stages[0];
+    return { skala: st.scaleX(), dx: st.x(), dy: st.y() };
+  });
+  await page.mouse.click(canvas.x + el.x * widok.skala + widok.dx, canvas.y + el.y * widok.skala + widok.dy, { button: "right" });
+}
+
 test("obwod mieszajacy oswietlenie z gniazdami jest zglaszany w rozdzielnicy", async ({ page }) => {
   await otworzPlan(page);
   const box = await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
@@ -107,9 +131,9 @@ test("obwod mieszajacy oswietlenie z gniazdami jest zglaszany w rozdzielnicy", a
   await page.mouse.click(box.x + 220, box.y + 150);
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
 
-  await page.mouse.click(box.x + 150, box.y + 150, { button: "right" });
+  await prawyKlikWElement(page, "gniazdko");
   await page.getByRole("button", { name: "+ 1" }).click();
-  await page.mouse.click(box.x + 220, box.y + 150, { button: "right" });
+  await prawyKlikWElement(page, "oswietlenie");
   await page.getByTitle("Dołącz do obwodu 1").click();
   await page.waitForTimeout(900);
 
