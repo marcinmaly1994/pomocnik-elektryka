@@ -874,6 +874,7 @@ export default function App() {
                 samym miejscu, żeby obie drogi nie mogły się rozjechać. */}
             <DesignTab
               onOpenAuth={() => setAuthOpen(true)}
+              onOpenPomoc={() => setHelpOpen(true)}
               nastepnyKrok={
                 projektPusty || !krokPoInstalacji
                   ? undefined
