@@ -84,7 +84,11 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter, wymiaryM }: G
   switch (type) {
     case "gniazdko":
     case "gniazdkoHerm": {
-      const g = Math.max(1, Math.min(6, gangs || 1));
+      // Górna granica to DWA, bo `gangs` opisuje wariant gniazda (pojedyncze /
+      // podwójne), a nie krotność ramki — patrz `gniazdoPodwojne` w elements.ts.
+      // Stary zapis potrafi nieść `3`; ma się narysować jak podwójne, czyli tak samo,
+      // jak się wycenia.
+      const g = Math.max(1, Math.min(2, gangs || 1));
       const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <SocketArcKonva color={color} herm={type === "gniazdkoHerm"} insideLabel={g > 1 ? String(g) : undefined} hitW={w} hitH={h} />

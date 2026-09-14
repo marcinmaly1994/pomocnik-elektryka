@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { zbudujProjektPrzykladowy } from "./demoProjekt";
 import { polygonAreaM2 } from "./geometry";
 import { computeCosts } from "./costs";
+import { gniazdoPodwojne } from "./elements";
 import { computeCircuits, computeRcdGroups } from "./panel/circuits";
 import { buildCableRoutes, findPanel, spreadOverlappingRoutes } from "./panel/loads";
 import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "./symbolScale";
@@ -168,5 +169,31 @@ describe("projekt przykładowy — przebieg przewodów", () => {
       }
     }
     expect(ukos / dlugosc).toBeLessThan(0.1);
+  });
+});
+
+describe("projekt przykładowy — gniazdo podwójne", () => {
+  const payload = zbudujProjektPrzykladowy();
+  const { elements } = payload.draft;
+
+  it("ma gniazdo podwójne i wycenia je jako JEDNĄ sztukę osobnej pozycji", () => {
+    // Przykład jest jedynym miejscem, w którym użytkownik widzi wariant podwójny, zanim
+    // sam go postawi — a `gangs` wpisywane tu w kodzie omija interfejs, więc łatwo
+    // wpisać liczbę, której interfejs nigdy by nie dopuścił (kiedyś było tu `3`).
+    const podwojne = elements.filter((e) => gniazdoPodwojne(e));
+    expect(podwojne.length).toBeGreaterThan(0);
+    for (const e of podwojne) expect(e.gangs).toBe(2);
+
+    const { quantities } = computeCosts(elements, [], []);
+    expect(quantities.gniazdkoPodwojne).toBe(podwojne.length);
+  });
+
+  it("liczba puszek podtynkowych nie zależy od wariantu gniazd", () => {
+    // Podwójne zajmuje jedno miejsce w ścianie, tak samo jak pojedyncze.
+    const { quantities } = computeCosts(elements, [], []);
+    const punkty = elements.filter(
+      (e) => !["rozdzielnica", "puszka", "szafkaTeletech"].includes(e.type) && !["wanna", "prysznic", "umywalka"].includes(e.type)
+    );
+    expect(quantities.puszkaPodtynkowa).toBe(punkty.length);
   });
 });

@@ -161,13 +161,12 @@ export const SEARCH_KEYWORDS: Partial<Record<ElementType, string[]>> = {
 };
 
 export function libSubtitle(key: ElementType, gangs: number): string {
-  const base = LIB_SUBTITLES[key] || "";
-  const variants = VARIANTS_FOR[key];
-  if (variants && gangs > 1) {
-    if (key === "gniazdko" || key === "gniazdkoHerm") return gangs === 2 ? "podwójne" : `${gangs}× w ramce`;
-    return `${gangs}× klawisze`;
-  }
-  return base;
+  // Jedyny typ z wariantem jest dziś jeden — gniazdko, pojedyncze albo podwójne
+  // (patrz `variants` w ELEMENT_SECTIONS). Podpisy „N× w ramce" i „N× klawisze"
+  // opisywały krotność ramki i liczbę klawiszy, czyli pojęcia, których aplikacja
+  // nie modeluje — żaden z nich nie miał jak się pokazać.
+  if (VARIANTS_FOR[key] && gangs > 1) return "podwójne";
+  return LIB_SUBTITLES[key] || "";
 }
 
 /** Element bez przypisanego (rozpoznanego) pomieszczenia na planie. */
@@ -381,21 +380,60 @@ export function mountingLabel(e: Pick<InstallationElement, "type" | "heightM">):
   return `+${Math.round(mountingHeightM(e) * 100)}`;
 }
 
-/** Typy, dla których `gangs` oznacza LICZBĘ MECHANIZMÓW w ramce, a nie wariant symbolu. */
-const TYPY_WIELOKROTNE: ElementType[] = ["gniazdko", "gniazdkoHerm", "wlacznik", "wlacznikSchodowy"];
+/**
+ * Typy, w których `gangs` to POZOSTAŁOŚĆ po dawnym liczniku mechanizmów.
+ *
+ * Łączniki nie mają już wariantów — liczbę biegunów niesie sam typ symbolu
+ * (jednobiegunowy / dwubiegunowy / grupowy). Zostają tu wyłącznie po to, żeby projekty
+ * zapisane PRZED tamtą zmianą, gdzie podwójny łącznik siedział jako `gangs: 2`,
+ * liczyły się i wyceniały dokładnie tak, jak wtedy. Nowych takich zapisów nie powstaje.
+ *
+ * Gniazd tu NIE MA i to jest sedno: dla nich `gangs` opisuje WARIANT produktu
+ * (pojedyncze / podwójne), a nie krotność — patrz `gniazdoPodwojne`.
+ */
+const TYPY_ZE_STARYM_LICZNIKIEM: ElementType[] = ["wlacznik", "wlacznikSchodowy"];
 
 /**
- * Ile SZTUK osprzętu niesie jeden punkt na rysunku.
+ * Czy gniazdo jest PODWÓJNE — jedno urządzenie z dwiema wtyczkami.
  *
- * Gniazdo podwójne to jeden symbol na planie, ale dwa mechanizmy do kupienia
- * i podłączenia. Łączniki nie mają już wariantów (liczbę biegunów niesie typ symbolu),
- * ale zostają na liście, żeby projekty zapisane przed tą zmianą — gdzie podwójny
- * łącznik był zapisany jako `gangs: 2` — liczyły się tak samo jak wtedy.
+ * To WARIANT PRODUKTU, nie liczba sztuk: podwójne zajmuje jedno miejsce w ramce,
+ * jedną puszkę i jeden punkt robocizny, a kosztuje inaczej niż pojedyncze — stąd
+ * osobna pozycja cennika (`gniazdkoPodwojne`), zamiast mnożenia pojedynczego przez dwa.
+ *
+ * Nie mylić z liczbą mechanizmów we wspólnej ramce (ramka 2-, 3-krotna). Tego
+ * aplikacja świadomie nie modeluje — jedna liczba obsługująca oba pojęcia naraz była
+ * dokładnie tym, co psuło zestawienie materiału.
+ *
+ * Próg to `>= 2`, a nie `=== 2`: interfejs nigdy nie pozwalał wybrać więcej,
+ * ale w danych sprzed rozdzielenia pojęć potrafi siedzieć `3` — i ma znaczyć
+ * podwójne, a nie nic.
+ */
+export function gniazdoPodwojne(e: Pick<InstallationElement, "type" | "gangs">): boolean {
+  return e.type === "gniazdko" && (e.gangs || 1) >= 2;
+}
+
+/**
+ * Ile SZTUK osprzętu trzeba kupić na jeden punkt rysunku.
+ *
+ * Dla gniazd zawsze JEDNA — także dla podwójnego, bo to jedno urządzenie, tylko
+ * z innej pozycji cennika (patrz `gniazdoPodwojne`). Dwójka zostaje wyłącznie
+ * dla starych łączników zapisanych jako `gangs: 2`.
  *
  * Wspólne dla kosztorysu i zestawienia ilościowego: dwie kopie tej reguły prędzej czy
  * później rozjechałyby się o jedną sztukę, a wtedy zestawienie i wycena tego samego
  * rzutu podawałyby różne liczby i nie dałoby się rozstrzygnąć, która kłamie.
  */
 export function mechanizmowWElemencie(e: Pick<InstallationElement, "type" | "gangs">): number {
-  return TYPY_WIELOKROTNE.includes(e.type) ? Math.max(1, e.gangs || 1) : 1;
+  return TYPY_ZE_STARYM_LICZNIKIEM.includes(e.type) ? Math.max(1, e.gangs || 1) : 1;
+}
+
+/**
+ * Ile ODBIORNIKÓW można wpiąć w jeden punkt — mnożnik do bilansu mocy obwodu.
+ *
+ * Osobno od `mechanizmowWElemencie`, bo to inne pytanie: gniazdo podwójne kupuje się
+ * raz (jedna sztuka), ale wpiąć w nie można dwa odbiorniki, więc do mocy wchodzi
+ * podwójnie. Zlanie tych dwóch pytań w jedną liczbę było źródłem całego zamieszania.
+ */
+export function punktowObciazenia(e: Pick<InstallationElement, "type" | "gangs">): number {
+  return gniazdoPodwojne(e) ? 2 : mechanizmowWElemencie(e);
 }

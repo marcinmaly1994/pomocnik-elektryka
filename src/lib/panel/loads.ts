@@ -9,7 +9,7 @@
  */
 
 import type { CableRoute, Circuit, ElementType, Floor, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
-import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM } from "@/lib/elements";
+import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM, punktowObciazenia } from "@/lib/elements";
 import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
 import { crossesGeometry, routeAlongWalls } from "./routing";
 import { kolorObwodu, KOLOR_BEZ_OBWODU } from "./circuits";
@@ -86,7 +86,7 @@ export function circuitDemand(
       continue;
     }
     // Gniazdo wielokrotne (ramka 2-/3-krotna) to tyle odbiorników, ile gniazd.
-    installedW += p * Math.max(1, e.gangs || 1);
+    installedW += p * punktowObciazenia(e);
   }
   const diversified = installedW * DIVERSITY[kind];
   const powerW = kind === "gniazda" ? Math.max(diversified, MIN_SOCKET_CIRCUIT_W) : diversified;

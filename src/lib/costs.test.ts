@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, podsumowanieKosztorysu, kluczKabla, type CostRow } from "./costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, podsumowanieKosztorysu, kluczKabla, DEFAULT_PRICES, PRICE_LABELS, type CostRow } from "./costs";
 import type { Circuit, InstallationElement, RcdGroup } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -63,9 +63,13 @@ describe("computeCosts", () => {
     expect(Object.values(quantities).every((v) => v === 0)).toBe(true);
   });
 
-  it("gniazdko wielokrotne liczy się wg liczby gangów", () => {
+  it("stary zapis `gangs: 3` czyta się jako podwójne, nie jako trzy pojedyncze", () => {
+    // Interfejs nigdy nie pozwolił wybrać więcej niż dwa, ale w danych sprzed
+    // rozdzielenia pojęć trójka siedzi (miała znaczyć „3× w ramce") — i ma wyjść
+    // jedno gniazdo podwójne, a nie rachunek za trzy sztuki.
     const { quantities } = computeCosts([el({ type: "gniazdko", gangs: 3 })], [], []);
-    expect(quantities.gniazdko).toBe(3);
+    expect(quantities.gniazdkoPodwojne).toBe(1);
+    expect(quantities.gniazdko).toBe(0);
   });
 
   it("punkt instalacyjny generuje puszkę podtynkową i robociznę, ale pomija rozdzielnicę/puszkę/sanitarne", () => {
@@ -385,5 +389,53 @@ describe("podsumowanieKosztorysu — suma mówi, czym jest", () => {
     const p = podsumowanieKosztorysu([w("robocizna", "Robocizna za punkt instalacyjny (szt.)", 0, 0)]);
     expect(p.brakRobocizny).toBe(false);
     expect(p.etykietaSumy).toBe("RAZEM brutto");
+  });
+});
+
+/**
+ * Gniazdo podwójne to JEDNO urządzenie z dwiema wtyczkami, zajmujące jedno miejsce
+ * w ramce i jedną puszkę — a nie dwa gniazda pojedyncze obok siebie.
+ *
+ * Dotąd `gangs` było jedną liczbą obsługującą dwa różne pojęcia: podpis wariantu mówił
+ * przy dwójce „podwójne" (wariant produktu), a przy trójce „3× w ramce" (krotność ramki).
+ * Kosztorys czytał to drugie i wystawiał rachunek za dwie sztuki gniazdka pojedynczego,
+ * ale tylko jedną puszkę — czyli nie zgadzał się z żadnym z dwóch znaczeń.
+ *
+ * Ustalenie: gniazdo podwójne = jedna sztuka OSOBNEJ pozycji cennika, bo to inny
+ * produkt niż pojedyncze, o innej cenie.
+ */
+describe("computeCosts — gniazdo podwójne", () => {
+  it("jest JEDNĄ sztuką osobnej pozycji, nie dwiema sztukami pojedynczego", () => {
+    const { quantities } = computeCosts([el({ type: "gniazdko", gangs: 2 })], [], []);
+    expect(quantities.gniazdkoPodwojne).toBe(1);
+    expect(quantities.gniazdko).toBe(0);
+  });
+
+  it("zajmuje jedną puszkę i jedną robociznę, tak samo jak pojedyncze", () => {
+    const podwojne = computeCosts([el({ type: "gniazdko", gangs: 2 })], [], []).quantities;
+    const pojedyncze = computeCosts([el({ type: "gniazdko", gangs: 1 })], [], []).quantities;
+    expect(podwojne.puszkaPodtynkowa).toBe(pojedyncze.puszkaPodtynkowa);
+    expect(podwojne.robocizna).toBe(pojedyncze.robocizna);
+  });
+
+  it("ma własną cenę domyślną, wyższą od pojedynczego i niższą od dwóch", () => {
+    // Inny produkt, nie dwa tamte sklejone — inaczej osobna pozycja nie miałaby sensu.
+    expect(DEFAULT_PRICES.gniazdkoPodwojne).toBeGreaterThan(DEFAULT_PRICES.gniazdko);
+    expect(DEFAULT_PRICES.gniazdkoPodwojne).toBeLessThan(2 * DEFAULT_PRICES.gniazdko);
+  });
+
+  it("pozycja ma swoją etykietę w cenniku", () => {
+    expect(PRICE_LABELS.gniazdkoPodwojne).toMatch(/podw/i);
+  });
+
+  /**
+   * Łączniki to OSOBNA sprawa i nie wolno jej przy okazji zepsuć. Podwójny łącznik
+   * przestał być wariantem dawno temu (liczbę biegunów niesie typ symbolu), ale
+   * projekty zapisane wcześniej mają go jako `gangs: 2` i mają się wyceniać tak,
+   * jak wtedy — czyli dalej jako dwa mechanizmy tej samej pozycji.
+   */
+  it("nie rusza starych łączników zapisanych jako gangs: 2", () => {
+    const { quantities } = computeCosts([el({ type: "wlacznik", gangs: 2 })], [], []);
+    expect(quantities.wlacznik).toBe(2);
   });
 });
