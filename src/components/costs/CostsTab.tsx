@@ -180,7 +180,16 @@ export function CostsTab() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => fileRef.current?.click()} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+          {/* Format pliku i to, że ceny NIE pobierają się ze sklepów, siedzą w dymku
+              przycisku, a nie w akapicie nad tabelą. Stały tam jako trwały baner —
+              instrukcja obsługi funkcji, której większość użytkowników nigdy nie użyje,
+              czytana za każdym razem przed pierwszą pozycją kosztorysu. Sam fakt, że
+              cennik da się zaimportować, mówi zdanie wprowadzające obok. */}
+          <button
+            onClick={() => fileRef.current?.click()}
+            title="Wgraj plik CSV w formacie nazwa;cena — aplikacja dopasuje pozycje po słowach kluczowych. Ceny nie pobierają się automatycznie ze stron sklepów."
+            className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs"
+          >
             <Upload size={14} /> Importuj cennik CSV
           </button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvImport} />
@@ -199,91 +208,95 @@ export function CostsTab() {
           </button>
         </div>
       </div>
-
-      <div className="flex items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: "3px solid #C1793F", paddingLeft: 12 }}>
-        <Info size={15} className="mt-0.5 shrink-0 text-blueprint" />
-        Import cen: wgraj plik CSV w formacie <span className="pe-mono">nazwa;cena</span> — aplikacja dopasuje pozycje po
-        słowach kluczowych. Ceny nie pobierają się automatycznie ze stron sklepów.
-      </div>
-
       {/*
-        Niskoprądówka OSOBNO, a nie w zdaniu o zasilaniu: ma wlasny los i wlasny warunek.
-        Liczy sie gwiazda od rozdzielnicy, wiec bywa zmierzona wtedy, gdy zasilanie i tak
-        idzie ryczaltem — i na odwrót. Jedno zdanie na oba przypadki mylilo by, ktore
-        metry sa policzone.
-      */}
-      {niskopradoweWKosztorysie && (
-        <div
-          className="flex items-start gap-2.5 py-1 text-xs"
-          style={{
-            borderLeft: `3px solid ${niskopradowe ? "#3B8C63" : "#C1793F"}`,
-            paddingLeft: 12,
-            color: niskopradowe ? "#2C6B4A" : "#8A5526",
-          }}
-        >
-          {niskopradowe ? <Info size={15} className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0" />}
-          {niskopradowe ? (
-            <span>
-              Przewody niskoprądowe (LAN, koncentryk) policzone z planu — osobnym kablem do
-              każdego punktu, bo to połączenia punkt-punkt, a nie obwód.
-              {/* Od CZEGO mierzone, bo to zmienia wynik przy każdym punkcie naraz:
-                  szafka bywa w zupełnie innym miejscu niż tablica z bezpiecznikami. */}
-              {niskopradowe.odSzafki ? (
-                <> Mierzone od szafki teletechnicznej.</>
-              ) : (
-                <>
-                  {" "}
-                  Mierzone od <strong>rozdzielnicy</strong>, bo na planie nie ma szafki teletechnicznej —
-                  postaw ją tam, gdzie naprawdę stoi router, żeby metraż nie był domysłem.
-                </>
-              )}
-            </span>
-          ) : (
-            <span>
-              Przewody niskoprądowe (LAN, koncentryk) nadal z ryczałtu 15 mb na punkt — nie ma ich
-              od czego mierzyć. Ustaw skalę i postaw rozdzielnicę, żeby policzyć realny metraż.
-            </span>
-          )}
-        </div>
-      )}
+        JEDEN blok „skąd wzięły się metry", zamiast dwóch pełnych akapitów jeden pod
+        drugim — plus trzeci, o imporcie cen, który zszedł do dymka przycisku.
+        Trzy bannery stały między nagłówkiem a pierwszą pozycją tabeli i trzeba je było
+        przeczytać, zanim zobaczyło się cokolwiek policzonego.
 
-      {/* Skąd wzięły się metry kabla — bez tego kosztorys wygląda tak samo policzony
-          niezależnie od tego, czy metraż pochodzi z planu, czy z ryczałtu na punkt. */}
+        Zasilanie i niskoprądówka ZOSTAJĄ osobnymi wierszami, bo mają własny los
+        i własny warunek: niskoprądówka liczy się gwiazdą od szafki, więc bywa
+        zmierzona wtedy, gdy zasilanie idzie ryczałtem — i na odwrót. Jedno zdanie na
+        oba przypadki myliłoby, które metry są policzone. Zmieniło się WYŁĄCZNIE
+        opakowanie: wspólny nagłówek i jedna ramka zamiast dwóch bloków na całą
+        szerokość. Same zdania są co do słowa te same — pilnują ich cztery testy e2e.
+
+        Zasilanie idzie PIERWSZE, bo to ono daje większość metrów.
+      */}
       {rows.length > 0 && (
-        <div
-          className="flex items-start gap-2.5 py-1 text-xs"
-          style={{
-            borderLeft: `3px solid ${cableLengthSource === "plan" ? "#3B8C63" : "#C1793F"}`,
-            paddingLeft: 12,
-            color: cableLengthSource === "plan" ? "#2C6B4A" : "#8A5526",
-          }}
-        >
-          {cableLengthSource === "plan" ? <Info size={15} className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0" />}
-          {cableLengthSource === "plan" ? (
-            <span>
-              Metry kabla policzone z tras po planie (od rozdzielnicy do każdego punktu, wzdłuż ścian,
-              z naddatkiem na zejście i zapas montażowy).
-              {/*
-                Zapas ma NAZWĘ i liczbę, bo to pozycja, którą da się zakwestionować: przy stu
-                punktach robi się z niego kilkaset metrów kabla, a dotąd siedział w sumie
-                nierozróżnialny od zmierzonej trasy. Ustawia się go tam, gdzie resztę założeń
-                o instalacji — w Rozdzielnicy — żeby jedna liczba nie miała dwóch pokręteł.
-              */}
-              {zapasRazemM > 0 && (
-                <>
-                  {" "}
-                  Z tego <strong>{Math.round(zapasRazemM)} m</strong> to zapasy montażowe —
-                  po {String(opcjeDoboru.zapas_na_punkt_m ?? ZAPAS_MONTAZOWY_M).replace(".", ",")} m na punkt
-                  (zejście do puszki i luz na podłączenie). Zmienisz to w Rozdzielnicy, w warunkach doboru.
-                </>
+        <div className="rounded-lg border border-border px-3 py-2 text-xs" style={{ background: "#F7F9FB" }}>
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Skąd wzięły się metry kabla
+          </div>
+          <div className="space-y-1.5">
+            <div
+              className="flex items-start gap-2"
+              style={{ color: cableLengthSource === "plan" ? "#2C6B4A" : "#8A5526" }}
+            >
+              {cableLengthSource === "plan" ? (
+                <Info size={14} className="mt-0.5 shrink-0" />
+              ) : (
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               )}
-            </span>
-          ) : (
-            <span>
-              Metry kabla z ryczałtu (5 mb na punkt + 10 mb na obwód) — plan nie ma skalibrowanej skali
-              albo brakuje na nim rozdzielnicy. Ustaw skalę i postaw rozdzielnicę, żeby policzyć realny metraż.
-            </span>
-          )}
+              {cableLengthSource === "plan" ? (
+                <span>
+                  Metry kabla policzone z tras po planie (od rozdzielnicy do każdego punktu, wzdłuż ścian,
+                  z naddatkiem na zejście i zapas montażowy).
+                  {/*
+                    Zapas ma NAZWĘ i liczbę, bo to pozycja, którą da się zakwestionować: przy stu
+                    punktach robi się z niego kilkaset metrów kabla, a dotąd siedział w sumie
+                    nierozróżnialny od zmierzonej trasy. Ustawia się go tam, gdzie resztę założeń
+                    o instalacji — w Rozdzielnicy — żeby jedna liczba nie miała dwóch pokręteł.
+                  */}
+                  {zapasRazemM > 0 && (
+                    <>
+                      {" "}
+                      Z tego <strong>{Math.round(zapasRazemM)} m</strong> to zapasy montażowe —
+                      po {String(opcjeDoboru.zapas_na_punkt_m ?? ZAPAS_MONTAZOWY_M).replace(".", ",")} m na punkt
+                      (zejście do puszki i luz na podłączenie). Zmienisz to w Rozdzielnicy, w warunkach doboru.
+                    </>
+                  )}
+                </span>
+              ) : (
+                <span>
+                  Metry kabla z ryczałtu (5 mb na punkt + 10 mb na obwód) — plan nie ma skalibrowanej skali
+                  albo brakuje na nim rozdzielnicy. Ustaw skalę i postaw rozdzielnicę, żeby policzyć realny metraż.
+                </span>
+              )}
+            </div>
+
+            {niskopradoweWKosztorysie && (
+              <div className="flex items-start gap-2" style={{ color: niskopradowe ? "#2C6B4A" : "#8A5526" }}>
+                {niskopradowe ? (
+                  <Info size={14} className="mt-0.5 shrink-0" />
+                ) : (
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                )}
+                {niskopradowe ? (
+                  <span>
+                    Przewody niskoprądowe (LAN, koncentryk) policzone z planu — osobnym kablem do
+                    każdego punktu, bo to połączenia punkt-punkt, a nie obwód.
+                    {/* Od CZEGO mierzone, bo to zmienia wynik przy każdym punkcie naraz:
+                        szafka bywa w zupełnie innym miejscu niż tablica z bezpiecznikami. */}
+                    {niskopradowe.odSzafki ? (
+                      <> Mierzone od szafki teletechnicznej.</>
+                    ) : (
+                      <>
+                        {" "}
+                        Mierzone od <strong>rozdzielnicy</strong>, bo na planie nie ma szafki teletechnicznej —
+                        postaw ją tam, gdzie naprawdę stoi router, żeby metraż nie był domysłem.
+                      </>
+                    )}
+                  </span>
+                ) : (
+                  <span>
+                    Przewody niskoprądowe (LAN, koncentryk) nadal z ryczałtu 15 mb na punkt — nie ma ich
+                    od czego mierzyć. Ustaw skalę i postaw rozdzielnicę, żeby policzyć realny metraż.
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

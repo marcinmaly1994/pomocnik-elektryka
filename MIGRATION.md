@@ -4109,6 +4109,44 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
     `npx playwright test` **422/422**.
 
+89. **Kosztorys: trzy bannery przed pierwszą pozycją tabeli zeszły do jednego** —
+    ostatnia pozycja gęstościowa z przeglądu z 13.09. Między nagłówkiem a pierwszym
+    wierszem kosztorysu stały trzy akapity na całą szerokość i trzeba je było
+    przeczytać, zanim zobaczyło się cokolwiek policzonego.
+
+    Nie były jednak tym samym rodzajem tekstu i dlatego rozeszły się w dwie strony:
+
+    **„Import cen" to instrukcja obsługi, nie wynik.** Opisywała format pliku CSV
+    i to, że ceny nie pobierają się ze sklepów — pomoc dla funkcji, której większość
+    użytkowników nigdy nie użyje, czytana za każdym razem przed tabelą. Zeszła do
+    dymka (`title`) przycisku „Importuj cennik CSV", czyli tam, gdzie się jej szuka.
+    Sam fakt, że cennik da się zaimportować, mówi zdanie wprowadzające obok tytułu
+    zakładki — ta informacja nigdzie nie ginie.
+
+    **Dwa pozostałe odpowiadają na JEDNO pytanie: skąd wzięły się metry kabla.**
+    Jeden mówił o zasilaniu (trasy po planie albo ryczałt), drugi o niskoprądówce
+    (gwiazda od szafki albo ryczałt). Z punktu widzenia czytelnika to jedna sprawa,
+    więc dostały wspólną ramkę i nagłówek „Skąd wzięły się metry kabla", a w środku
+    dwa wiersze — każdy z własną ikoną i kolorem stanu.
+
+    Wiersze ZOSTAJĄ osobne, bo mają własny los i własny warunek: niskoprądówka liczy
+    się gwiazdą od szafki, więc bywa zmierzona wtedy, gdy zasilanie idzie ryczałtem —
+    i na odwrót. Jedno zdanie na oba przypadki myliłoby, które metry są policzone
+    (to samo uzasadnienie, dla którego rozdzielono je w kroku 71). Zmieniło się
+    WYŁĄCZNIE opakowanie. Zasilanie idzie pierwsze, bo daje większość metrów.
+
+    Same zdania są co do słowa te same — pilnują ich cztery testy e2e
+    (`projekt-przykladowy`, `zapas-montazowy`, `niskopradowka-metraz`,
+    `szafka-teletech`). Cały pakiet **422/422 przeszedł bez ani jednej poprawki
+    w testach**, co jest tu najlepszym dowodem, że to była zmiana układu, a nie treści.
+
+    Zmierzone przed → po (1440×900, projekt przykładowy): pierwszy wiersz tabeli
+    zaczyna się **491 → 453 px**, odstęp od nagłówka zakładki **241 → 204 px**.
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1437/1437**,
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **422/422**.
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +
