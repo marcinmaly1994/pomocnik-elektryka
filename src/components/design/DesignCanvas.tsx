@@ -354,6 +354,24 @@ export function DesignCanvas({
   const skalaSymbolu = (type: ElementType) => (SANITARY_FIXTURES[type] ? sanitaryScale : elementScale);
 
   /**
+   * Obszar TRAFIENIA symbolu — osobny od tego, co widać.
+   *
+   * Część symboli to sama kreska albo okrąg (punkt sufitowy, czujnik), więc klikalne
+   * jest w nich dokładnie to, co narysowane — narożniki i przerwy już nie. Przy małym
+   * powiększeniu albo małym symbolu trafienie zaczyna wymagać celowania w piksel,
+   * a kliknięcie w element to najczęstsza czynność w całym edytorze. Przezroczysty
+   * prostokąt o rozmiarze pudełka glifu robi z całego symbolu jeden cel, niezależnie
+   * od tego, ile w nim narysowanej kreski.
+   *
+   * BEZ minimum liczonego w pikselach ekranu, choć kusi. Taka podłoga musi mieć
+   * ograniczenie górne, bo inaczej przy najmniejszym powiększeniu wyhodowałaby cel
+   * wielkości pokoju i element kradłby kliknięcia sąsiadom oraz narzędziu stawiania.
+   * A to ograniczenie kasuje zarazem cały zysk z podłogi — zmierzone: klik 5 px obok
+   * środka przy maksymalnym oddaleniu chybia tak samo z podłogą, jak i bez niej.
+   * Zostaje sama złożoność. Przy tak oddalonym rzucie i tak się nie celuje: się przybliża.
+   */
+
+  /**
    * Wymuszone przerysowanie warstwy tła po przełączeniu siatki.
    *
    * react-konva nakłada `visible` na istniejące węzły, ale samo z siebie NIE
@@ -2220,6 +2238,14 @@ export function DesignCanvas({
                   agdLetter={el.agdLetter}
                   wymiaryM={fixtureSizeM(el) ?? undefined}
                 />
+                {/* Obszar trafienia — patrz komentarz przy `skalaSymbolu`. Rysowany po
+                    glifie, więc leży NA nim w kolejności rysowania, ale będąc
+                    przezroczystym nie zasłania niczego; przechwytuje za to kliknięcia
+                    także tam, gdzie symbol jest samą cienką kreską. */}
+                {(() => {
+                  const t = glyphBoxSize(el.type, fixtureSizeM(el) ?? undefined);
+                  return <Rect x={-t.w / 2} y={-t.h / 2} width={t.w} height={t.h} fill="transparent" />;
+                })()}
                 {/* Wysokość montażu POD symbolem — numery grup sterowania stoją z prawej
                     (`groupLabelAnchors`), więc te dwie adnotacje się nie zderzają.
                     Bez obwódki i w szarości, żeby czytać rysunek, a nie opisy. Obrócona
