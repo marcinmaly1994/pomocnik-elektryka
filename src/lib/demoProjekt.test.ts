@@ -3,6 +3,7 @@ import { zbudujProjektPrzykladowy } from "./demoProjekt";
 import { polygonAreaM2 } from "./geometry";
 import { computeCosts } from "./costs";
 import { gniazdoPodwojne } from "./elements";
+import { ODSUNIECIE_TRASY } from "./panel/routing";
 import { computeCircuits, computeRcdGroups } from "./panel/circuits";
 import { buildCableRoutes, findPanel, spreadOverlappingRoutes } from "./panel/loads";
 import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "./symbolScale";
@@ -133,8 +134,12 @@ describe("projekt przykładowy — przebieg przewodów", () => {
      * (`zakonczPrzyNozce`), które ma z definicji równe składowe. Do rozdzielnicy przewód
      * wchodzi prostopadle, więc odczepu tam nie ma w ogóle.
      *
-     * Odcinki krótsze niż 2 jedn. (10 cm) są poza sprawdzeniem: to resztki przycięcia
-     * łamanej do krawędzi symbolu (`przytnijDoKrawedzi`), na rysunku niewidoczne.
+     * Poza sprawdzeniem są odcinki krótsze niż `ODSUNIECIE_TRASY` — i to nie jest
+     * dobrana liczba, tylko granica wynikająca z geometrii. Tyle właśnie wynosi odstęp
+     * między ścianą a pasem, po którym biegnie przewód, więc nic krótszego nie może być
+     * PRZEBIEGIEM wzdłuż ściany: to zawsze detal dojścia do osprzętu (przycięcie do
+     * krawędzi symbolu, przeskok między pasami wiązki). Na rzucie przykładu takie
+     * resztki mają 2,9-3,4 jedn., czyli ok. 15 cm.
      *
      * Przed naprawą ten warunek łamało kilkanaście odcinków, najdłuższy na 81 jedn. —
      * czyli przewód ciągnący się ukosem przez cały salon.
@@ -145,7 +150,7 @@ describe("projekt przykładowy — przebieg przewodów", () => {
         const dx = Math.abs(pts[i].x - pts[i - 1].x);
         const dy = Math.abs(pts[i].y - pts[i - 1].y);
         if (dx <= 0.01 || dy <= 0.01) continue; // pion albo poziom — tak ma być
-        if (Math.hypot(dx, dy) < 2) continue;
+        if (Math.hypot(dx, dy) < ODSUNIECIE_TRASY) continue;
         if (Math.abs(dx - dy) <= 0.1) continue; // odczep pod 45°
         zle.push(`${id}: (${pts[i - 1].x.toFixed(1)},${pts[i - 1].y.toFixed(1)})→(${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)})`);
       }

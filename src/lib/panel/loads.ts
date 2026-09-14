@@ -1498,6 +1498,13 @@ export function przytnijDoKrawedzi(points: Point[], promien: number): Point[] {
  *             ╲             odcinek E→cel ma tyle samo wzdłuż co w poprzek trasy,
  *   ══════════◗cel          więc zawsze wychodzi dokładnie 45°
  *
+ * KIEDY ten ukos w ogóle powstaje: tylko wtedy, gdy symbol sięga w głąb pokoju DALEJ
+ * niż pas przewodów, czyli gdy trasa mija nóżkę i musi do niej zawrócić. Po zmniejszeniu
+ * symboli (`BASE_ELEMENT_SCALE`) gniazdo mieści się między pasem a murem, `cofnij`
+ * wychodzi ujemne i przewód dochodzi do nóżki WPROST — pod kątem prostym do ściany,
+ * czyli tak samo jak do rozdzielnicy. Funkcja obsługuje oba przypadki jednym wzorem
+ * i nie trzeba jej o tym uprzedzać.
+ *
  * Kąt bierze się z geometrii, nie ze stałej: `E` odsuwamy od rzutu celu na trasę
  * o tyle, ile wynosi odległość celu OD tej trasy. Dzięki temu ukos zostaje pod 45°
  * niezależnie od tego, jak daleko od ściany biegnie pas przewodów i czy —

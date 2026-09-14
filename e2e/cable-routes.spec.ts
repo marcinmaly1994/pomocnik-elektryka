@@ -708,9 +708,15 @@ test("gniazdo przy scianie: przewod odbija pod 45 stopni i konczy sie na nozce, 
   const przed = { x: punkty[n - 4], y: punkty[n - 3] };
   const koniec = { x: punkty[n - 2], y: punkty[n - 1] };
 
-  // Ostatni odcinek to SKOS o rownych skladowych — czyli dokladnie 45 stopni.
+  // Ostatni odcinek wchodzi PROSTOPADLE do sciany, przy ktorej stoi gniazdo.
+  //
+  // Byl tu kiedys odczep pod 45 stopni i brał sie z proporcji: symbol siegal dalej
+  // w glab pokoju niz pas, po ktorym biegnie przewod (`ODSUNIECIE_TRASY`), wiec trasa
+  // mijala nozke i musiala do niej zawrocic skosem. Po zmniejszeniu symboli gniazdo
+  // miesci sie miedzy pasem a murem i przewod dochodzi do niego wprost — krotszą drogą
+  // i pod katem prostym, czyli tak samo jak do rozdzielnicy.
   expect(Math.abs(koniec.x - przed.x)).toBeGreaterThan(1);
-  expect(Math.abs(koniec.x - przed.x)).toBeCloseTo(Math.abs(koniec.y - przed.y), 0);
+  expect(Math.abs(koniec.y - przed.y)).toBeLessThan(0.5);
   // I biegnie W STRONE sciany (w prawo), a nie w glab pomieszczenia.
   expect(koniec.x).toBeGreaterThan(przed.x);
 });
@@ -844,9 +850,11 @@ test("trasa wzdluz sciany jest PROSTA, skos dopiero przy elemencie", async ({ pa
   for (const s of odcinki.slice(1, -1)) expect(Math.min(s.dx, s.dy)).toBeLessThan(0.5);
   // Pierwszy odcinek — od rozdzielnicy — jest prostopadly do jej sciany.
   expect(Math.min(odcinki[0].dx, odcinki[0].dy)).toBeLessThan(0.5);
-  // Ostatni — przy gniezdzie — jest skosem o rownych skladowych, czyli pod 45 stopni.
+  // Ostatni — przy gniezdzie — tak samo prostopadly (patrz komentarz przy tescie
+  // „gniazdo przy scianie": po zmniejszeniu symboli odczep pod 45 stopni nie ma sie
+  // gdzie uformowac, bo gniazdo stoi blizej muru niz pas przewodow).
   const odczep = odcinki[odcinki.length - 1];
-  expect(odczep.dx).toBeCloseTo(odczep.dy, 0);
+  expect(Math.min(odczep.dx, odczep.dy)).toBeLessThan(0.5);
 });
 
 /**

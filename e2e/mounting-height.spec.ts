@@ -42,12 +42,17 @@ async function otworzEdycje(page: Page, typ: string) {
   }, typ);
   if (!el) throw new Error(`Nie ma elementu typu ${typ}`);
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
-  const box = await planBox(page);
-  const skala = await page.evaluate(() => {
-    const k = (window as unknown as { Konva: { stages: { scaleX(): number }[] } }).Konva;
-    return k.stages[0].scaleX();
+  // Punkt liczony od SAMEGO PŁÓTNA i z przesunięciem sceny. `planBox` zwraca kontener
+  // z przewijaniem, więc jego róg nie jest rogiem rysunku — dopóki symbole były duże,
+  // błąd mieścił się w ich obrysie i dwuklik i tak trafiał. To była tolerancja,
+  // nie poprawny wzór, i skończyła się przy pierwszym zmniejszeniu symboli.
+  const canvas = (await page.locator(".konvajs-content").first().boundingBox())!;
+  const widok = await page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { scaleX(): number; x(): number; y(): number }[] } }).Konva;
+    const st = k.stages[0];
+    return { skala: st.scaleX(), dx: st.x(), dy: st.y() };
   });
-  await page.mouse.dblclick(box.x + el.x * skala, box.y + el.y * skala);
+  await page.mouse.dblclick(canvas.x + el.x * widok.skala + widok.dx, canvas.y + el.y * widok.skala + widok.dy);
   await expect(page.getByText("Edytuj element")).toBeVisible();
 }
 
