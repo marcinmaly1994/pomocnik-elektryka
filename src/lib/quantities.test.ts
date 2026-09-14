@@ -8,12 +8,20 @@ function el(type: ElementType, room: string, gangs = 1): InstallationElement {
 }
 
 describe("summarizeFloor", () => {
-  it("grupuje po typie i liczy punkty oraz sztuki osobno", () => {
-    // Gniazdo podwójne to JEDEN punkt na rysunku, ale DWA mechanizmy do kupienia.
+  it("gniazdo podwójne to jedna sztuka, nie dwie — jedno urządzenie, jedna puszka", () => {
     const z = summarizeFloor([el("gniazdko", "Salon"), el("gniazdko", "Salon", 2)]);
     const g = z.wiersze.find((w) => w.type === "gniazdko")!;
     expect(g.punktow).toBe(2);
-    expect(g.sztuk).toBe(3);
+    expect(g.sztuk).toBe(2);
+  });
+
+  it("sztuki różnią się od punktów tylko przy starym zapisie podwójnego łącznika", () => {
+    // Jedyne, co zostało z dawnego licznika mechanizmów: projekty sprzed rozdzielenia
+    // pojęć, w których podwójny łącznik siedzi jako `gangs: 2`. Mają liczyć się jak wtedy.
+    const z = summarizeFloor([el("wlacznik", "Salon", 2)]);
+    const w = z.wiersze.find((x) => x.type === "wlacznik")!;
+    expect(w.punktow).toBe(1);
+    expect(w.sztuk).toBe(2);
   });
 
   it("typy bez wariantów nie mnożą się przez gangs", () => {
@@ -53,7 +61,9 @@ describe("summarizeFloor", () => {
   });
 
   it("sumy zgadzają się z rozbiciem", () => {
-    const z = summarizeFloor([el("gniazdko", "Salon", 2), el("wlacznik", "Kuchnia"), el("oswietlenie", "Kuchnia")]);
+    const z = summarizeFloor([el("wlacznik", "Salon", 2), el("gniazdko", "Kuchnia", 2), el("oswietlenie", "Kuchnia")]);
+    // Łącznik ze starego zapisu: dwie sztuki z jednego punktu. Gniazdo podwójne i oprawa:
+    // po jednej sztuce. Razem 4 sztuki w 3 punktach.
     expect(z.sztukRazem).toBe(4);
     expect(z.punktowRazem).toBe(3);
     expect(z.pomieszczenia.reduce((s, p) => s + p.sztuk, 0)).toBe(z.sztukRazem);
@@ -83,9 +93,10 @@ describe("pozycjeZestawieniaDoPdf", () => {
     ]);
   });
 
-  it("liczy mechanizmy tak samo jak panel i kosztorys", () => {
-    const p = pozycjeZestawieniaDoPdf([el("gniazdko", "Salon", 2)]);
-    expect(p[0].ilosc).toBe(2);
+  it("liczy sztuki tak samo jak panel i kosztorys", () => {
+    // Gniazdo podwójne: jedna sztuka. Stary podwójny łącznik: nadal dwie.
+    expect(pozycjeZestawieniaDoPdf([el("gniazdko", "Salon", 2)])[0].ilosc).toBe(1);
+    expect(pozycjeZestawieniaDoPdf([el("wlacznik", "Salon", 2)])[0].ilosc).toBe(2);
   });
 
   it("pomija wyposazenie sanitarne", () => {

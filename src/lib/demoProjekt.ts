@@ -193,7 +193,9 @@ function elementy(): InstallationElement[] {
     e("salon-roleta", "roleta", SALON, 2.2, 0.2),
 
     // --- Kuchnia (mokra: wypusty AGD i obwód zmywarki na osobnym zabezpieczeniu) ---
-    e("kuch-gn1", "gniazdko", KUCHNIA, 6, 0.2, { gangs: 3 }),
+    // Podwójne, nie potrójne: `gangs` to WARIANT gniazda (pojedyncze / podwójne),
+    // a ramek wielokrotnych aplikacja nie modeluje — patrz `gniazdoPodwojne`.
+    e("kuch-gn1", "gniazdko", KUCHNIA, 6, 0.2, { gangs: 2 }),
     e("kuch-gn2", "gniazdko", KUCHNIA, 8, 0.2, { gangs: 2 }),
     e("kuch-agd1", "wypustAGD", KUCHNIA, 6.5, 3.8, { dedicated: true, note: "Zmywarka" }),
     e("kuch-agd2", "wypustAGD", KUCHNIA, 7.5, 3.8, { dedicated: true, note: "Piekarnik" }),

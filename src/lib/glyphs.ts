@@ -155,19 +155,15 @@ export function glyphBoxSize(type: ElementType, wymiaryM?: { widthM: number; dep
   // Wszystkie łączniki mają jedno pudełko: dźwignie odchodzą w różne strony zależnie od
   // typu, więc symetryczny obrys jest jedynym, który obejmuje każdy z nich tak samo.
   if (isSwitchType(type)) return { w: 36, h: 36 };
-  if (type === "gniazdko" || type === "gniazdkoHerm" || type === "wypustAGD") {
+  if (type === "gniazdko" || type === "gniazdkoHerm" || type === "wypustAGD" || type === "gniazdko400") {
     // Gniazdko wielokrotne rysuje się jak pojedyncze, z liczbą gniazd wyśrodkowaną wewnątrz
     // łuku (konwencja rysunku instalacyjnego) — płytka jest więc zawsze tej samej wielkości,
     // niezależnie od liczby gniazd. Rozmiar symbolu (trzon+łuk) dobrany pod obrazek
     // referencyjny — promień łuku 9, trzon 12 (patrz ElementGlyphSvg/Konva).
-    // Wypust AGD to TEN SAM symbol gniazda, z literą odbiornika w miejscu liczby gniazd —
-    // stąd to samo pudełko.
+    // Wypust AGD to TEN SAM symbol gniazda, z literą odbiornika w miejscu liczby gniazd,
+    // a gniazdo 400 V — z dopiskiem „3F" w tym samym miejscu. Wszystkie cztery mają więc
+    // to samo pudełko.
     return { w: 18, h: 22 };
-  }
-  if (type === "gniazdko400") {
-    // Ten sam symbol gniazda co wyżej, plus dopisek „3F" POD łukiem (nie wewnątrz —
-    // przy dwóch znakach się nie mieścił czytelnie) — pudełko wyższe o miejsce na napis.
-    return { w: 20, h: 30 };
   }
   if (type === "roleta") return { w: 24, h: 20 };
   if (type === "tasmaLed") return { w: 28, h: 14 };

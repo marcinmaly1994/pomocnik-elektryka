@@ -21,14 +21,12 @@ function SocketArcKonva({
   color,
   herm,
   insideLabel,
-  belowLabel,
   hitW,
   hitH,
 }: {
   color: string;
   herm?: boolean;
   insideLabel?: string;
-  belowLabel?: string;
   hitW: number;
   hitH: number;
 }) {
@@ -51,9 +49,6 @@ function SocketArcKonva({
       )}
       {insideLabel && (
         <Text text={insideLabel} x={-r} y={chordY - 8} width={2 * r} fontSize={10} fontStyle="700" fill={color} align="center" />
-      )}
-      {belowLabel && (
-        <Text text={belowLabel} x={-r - 3} y={chordY + 6} width={2 * r + 6} fontSize={7.5} fontStyle="700" fill={color} align="center" />
       )}
     </>
   );
@@ -89,7 +84,11 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter, wymiaryM }: G
   switch (type) {
     case "gniazdko":
     case "gniazdkoHerm": {
-      const g = Math.max(1, Math.min(6, gangs || 1));
+      // Górna granica to DWA, bo `gangs` opisuje wariant gniazda (pojedyncze /
+      // podwójne), a nie krotność ramki — patrz `gniazdoPodwojne` w elements.ts.
+      // Stary zapis potrafi nieść `3`; ma się narysować jak podwójne, czyli tak samo,
+      // jak się wycenia.
+      const g = Math.max(1, Math.min(2, gangs || 1));
       const { w, h } = glyphBoxSize(type, wymiaryM);
       return (
         <SocketArcKonva color={color} herm={type === "gniazdkoHerm"} insideLabel={g > 1 ? String(g) : undefined} hitW={w} hitH={h} />
@@ -98,7 +97,7 @@ export function ElementGlyphKonva({ type, color, gangs, agdLetter, wymiaryM }: G
 
     case "gniazdko400": {
       const { w, h } = glyphBoxSize(type, wymiaryM);
-      return <SocketArcKonva color={color} belowLabel="3F" hitW={w} hitH={h} />;
+      return <SocketArcKonva color={color} insideLabel="3F" hitW={w} hitH={h} />;
     }
 
     case "wypustAGD": {

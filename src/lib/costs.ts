@@ -1,8 +1,8 @@
 import type { Circuit, ElementType, InstallationElement, PriceTable, RcdGroup } from "@/types";
-import { ELEMENT_TYPES, mechanizmowWElemencie } from "@/lib/elements";
+import { ELEMENT_TYPES, gniazdoPodwojne, mechanizmowWElemencie } from "@/lib/elements";
 
 export const DEFAULT_PRICES: PriceTable = {
-  gniazdko: 15, gniazdkoHerm: 25, gniazdko400: 45, wypustAGD: 8, ladowarkaEV: 0,
+  gniazdko: 15, gniazdkoPodwojne: 22, gniazdkoHerm: 25, gniazdko400: 45, wypustAGD: 8, ladowarkaEV: 0,
   wlacznik: 15, wlacznikDwubiegunowy: 22, wlacznikGrupowy: 22,
   wlacznikSchodowy: 18, wlacznikKrzyzowy: 28,
   sciemniacz: 60, czujnikRuchu: 45,
@@ -29,6 +29,7 @@ export const VAT_RATE = 23;
 
 export const PRICE_LABELS: Record<string, string> = {
   gniazdko: "Gniazdko 230V podtynkowe (szt.)",
+  gniazdkoPodwojne: "Gniazdko 230V podwójne (szt.)",
   gniazdkoHerm: "Gniazdko hermetyczne IP44 (szt.)",
   gniazdko400: "Gniazdo 400V / siłowe (szt.)",
   wypustAGD: "Wypust zasilający AGD (szt.)",
@@ -171,11 +172,12 @@ export function computeCosts(
   });
 
   elements.forEach((e) => {
-    const key = TYPE_TO_PRICE_KEY[e.type];
-    // Gniazda wielokrotne liczymy wg liczby mechanizmów w ramce. Łączniki nie mają już
-    // wariantów (liczbę biegunów niesie typ symbolu), ale `wlacznik`/`wlacznikSchodowy`
-    // zostają na tej liście, żeby projekty zapisane przed tą zmianą — gdzie podwójny
-    // łącznik był zapisany jako `gangs: 2` — nadal wyceniały się tak samo jak wtedy.
+    // Gniazdo podwójne idzie na WŁASNĄ pozycję cennika, w jednej sztuce: to inny produkt
+    // niż pojedyncze, o innej cenie — a nie dwa pojedyncze sklejone. Puszkę i robociznę
+    // dostaje jedną, bo zajmuje jedno miejsce w ścianie (patrz `pointElements` niżej).
+    const key = gniazdoPodwojne(e) ? "gniazdkoPodwojne" : TYPE_TO_PRICE_KEY[e.type];
+    // Dwie sztuki z jednego punktu zostały już tylko tam, gdzie stary zapis trzyma
+    // podwójny łącznik jako `gangs: 2` — patrz `mechanizmowWElemencie`.
     const count = mechanizmowWElemencie(e);
     if (key) q[key] += count;
   });

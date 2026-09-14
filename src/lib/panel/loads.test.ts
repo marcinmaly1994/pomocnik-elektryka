@@ -26,9 +26,15 @@ describe("circuitDemand", () => {
     expect(d.powerW).toBe(240);
   });
 
-  it("gniazdo wielokrotne liczy się tyle razy, ile ma gniazd", () => {
+  it("gniazdo podwójne wnosi moc DWÓCH odbiorników, choć jest jedną sztuką osprzętu", () => {
+    // Kupuje się je raz, ale wpiąć można w nie dwie wtyczki — i to decyduje o obwodzie.
+    const d = circuitDemand([el("gniazdko", { gangs: 2 })], "gniazda");
+    expect(d.installedW).toBe(600); // 2 × 300 W
+  });
+
+  it("stary zapis `gangs: 3` nie zawyża mocy — czyta się jako podwójne", () => {
     const d = circuitDemand([el("gniazdko", { gangs: 3 })], "gniazda");
-    expect(d.installedW).toBe(900); // 3 × 300 W
+    expect(d.installedW).toBe(600);
   });
 
   it("obwód gniazdowy ma podłogę mocy — jedno gniazdo nie daje 120 W", () => {
