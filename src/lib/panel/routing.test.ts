@@ -426,3 +426,72 @@ describe("routeAlongWalls — wspolna sciana dwoch pomieszczen", () => {
     expect(przez[0]).toBeLessThan(2 * ODSUNIECIE_TRASY + 2);
   });
 });
+
+describe("routeAlongWalls — obrys pokoju obok NARYSOWANEJ sciany", () => {
+  /**
+   * Plan narysowany kompletnie: obrys budynku i sciana dzialowa jako `Wall`, a na nich
+   * obrysy pomieszczen — czyli dokladnie tak, jak wychodzi z narzedzi „Sciana" i
+   * „Pomieszczenie" (i tak jest zbudowany projekt przykladowy).
+   *
+   * Sedno: narozniki obrysu wsunietego o `ODSUNIECIE_TRASY` leza `ODSUNIECIE_TRASY`·√2
+   * od naroznikow SCIANY, czyli ok. 7 jedn. — mniej niz `MERGE_TOLERANCE`. Scalenie ich
+   * ze soba sciagalo caly obrys pomieszczenia na os muru i kazdy przebieg wzdluz sciany
+   * wychodzil lekko skosny (dx=240, dy=5), zamiast rownolegly.
+   */
+  const OBRYS = wall([
+    { x: 0, y: 0 },
+    { x: 300, y: 0 },
+    { x: 300, y: 400 },
+    { x: 0, y: 400 },
+    { x: 0, y: 0 },
+  ]);
+  const DZIALOWA = wall([
+    { x: 0, y: 200 },
+    { x: 300, y: 200 },
+  ]);
+  const GORA = room([
+    { x: 0, y: 0 },
+    { x: 300, y: 0 },
+    { x: 300, y: 200 },
+    { x: 0, y: 200 },
+  ]);
+  const DOL = room([
+    { x: 0, y: 200 },
+    { x: 300, y: 200 },
+    { x: 300, y: 400 },
+    { x: 0, y: 400 },
+  ]);
+
+  /** Kazdy odcinek trasy jest pionowy albo poziomy — przewod idzie wzdluz sciany
+   *  albo prostopadle do niej, a nie „prawie wzdluz". */
+  function skosy(trasa: Point[]): string[] {
+    const out: string[] = [];
+    for (let i = 1; i < trasa.length; i++) {
+      const dx = Math.abs(trasa[i].x - trasa[i - 1].x);
+      const dy = Math.abs(trasa[i].y - trasa[i - 1].y);
+      if (dx > 0.01 && dy > 0.01) out.push(`(${trasa[i - 1].x},${trasa[i - 1].y})->(${trasa[i].x},${trasa[i].y})`);
+    }
+    return out;
+  }
+
+  it("trasa skrecajaca w naroznik pokoju nie ma ani jednego skosu", () => {
+    // Od punktu przy scianie dzialowej do punktu przy scianie prawej — trasa MUSI
+    // przejsc przez naroznik pomieszczenia, wiec widac, gdzie ten naroznik lezy.
+    const trasa = routeAlongWalls({ x: 60, y: 193 }, { x: 293, y: 60 }, [OBRYS, DZIALOWA], [GORA, DOL])!;
+    expect(trasa).not.toBeNull();
+    expect(skosy(trasa)).toEqual([]);
+  });
+
+  it("naroznik trasy lezy na wsunietym obrysie pokoju, a nie na osi sciany", () => {
+    const trasa = routeAlongWalls({ x: 60, y: 193 }, { x: 293, y: 60 }, [OBRYS, DZIALOWA], [GORA, DOL])!;
+    const rogi = trasa.filter((p) => Math.abs(p.x - (300 - ODSUNIECIE_TRASY)) < 0.01 && Math.abs(p.y - (200 - ODSUNIECIE_TRASY)) < 0.01);
+    expect(rogi).toHaveLength(1);
+  });
+
+  it("obecnosc narysowanych scian nie zmienia przebiegu wzdluz wspolnej sciany", () => {
+    const bezScian = routeAlongWalls({ x: 60, y: 207 }, { x: 240, y: 207 }, [], [GORA, DOL])!;
+    const zeScianami = routeAlongWalls({ x: 60, y: 207 }, { x: 240, y: 207 }, [OBRYS, DZIALOWA], [GORA, DOL])!;
+    expect(skosy(zeScianami)).toEqual([]);
+    expect(polylineLength(zeScianami)).toBeCloseTo(polylineLength(bezScian), 5);
+  });
+});

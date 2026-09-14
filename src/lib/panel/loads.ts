@@ -1061,6 +1061,27 @@ export function buildCableRoutes(
       panel,
       targets.map((t) => ({ ...t, x: t.end.x, y: t.end.y }))
     );
+    /**
+     * Pierwszy odcinek startuje z OBUDOWY rozdzielnicy, a nie z jej środka.
+     *
+     * Rysunek kończył się w tym punkcie już wcześniej — `zakonczPrzyElemencie` podmieniał
+     * środek na punkt przyścienny po policzeniu trasy. Różnica jest w tym, CO liczy
+     * routing: startując ze środka, przewód doskakiwał do korytarza spod obudowy i musiał
+     * potem wrócić do niej odczepem pod 45°. Przy rozdzielnicy ten odczep nie ma sensu —
+     * schodzi się tu kilkanaście obwodów i wchodzą w ścianę pionem nad obudową, nie
+     * ukosem przez pokój (ustalenie produktowe: do rozdzielnicy przewód wchodzi
+     * prostopadle). Ze startem na obudowie doskok wypada PROSTOPADLE do ściany, przy
+     * której rozdzielnica stoi, i żaden odczep nie jest już potrzebny.
+     *
+     * Dodatkowo skos przestaje rosnąć z numerem pasa: `spreadOverlappingRoutes` odsuwa
+     * korytarz w głąb pokoju, a odcinek prostopadły tylko się przy tym wydłuża, zamiast
+     * — jak odczep 45° — kłaść się coraz dalej w bok (przy czwartym obwodzie robiło się
+     * z tego 28 jedn. ukosu).
+     *
+     * `panel` zostaje jako start, gdy rozdzielnicy nie ma na liście elementów: wtedy nie
+     * wiadomo, którą stroną stoi do ściany, i nie ma z czego wyliczyć punktu na obudowie.
+     */
+    const wyjscieZObudowy = rozdzielnicaEl ? punktPrzyscienny(rozdzielnicaEl, skalaSymboli) : null;
     let poczatek: Point = panel;
     // Element, z którego wychodzi kolejny odcinek — potrzebny, żeby wiedzieć, gdzie
     // dokładnie przy nim zacząć przewód (nóżka albo krawędź symbolu). Na pierwszym
@@ -1077,10 +1098,19 @@ export function buildCableRoutes(
       // Do oprawy przewód idzie sufitem, więc wolno mu zejść do każdej ściany pokoju
       // i wybrać tę, przy której cała trasa jest najkrótsza. Osprzęt przyścienny —
       // rozdzielnica, gniazdo, łącznik — wchodzi w mur tam, gdzie stoi.
-      const routed = routeAlongWalls(poczatek, t.end, walls, roomShapes, {
+      // Pierwszy odcinek routuje się z OBUDOWY rozdzielnicy (patrz `wyjscieZObudowy`),
+      // kolejne — ze środka poprzedniej puszki, bo ogniwo łańcucha zaczyna się tam, gdzie
+      // skończyło się poprzednie. `poprzedni === rozdzielnica` jest prawdą wyłącznie na
+      // pierwszym obrocie pętli: dalej `poprzedni` to już element z łańcucha.
+      const startRoutingu = (poprzedni === rozdzielnica ? wyjscieZObudowy : null) ?? poczatek;
+      const routed = routeAlongWalls(startRoutingu, t.end, walls, roomShapes, {
         from: poprzedni ? !przyscienny(poprzedni.type) : false,
         to: !przyscienny(t.type),
       }, otwory);
+      // Szacunek zapasowy liczy się od ŚRODKA, nie od obudowy. Manhattan mówi „nie wiem,
+      // którędy" i jest rysowany przerywaną kreską — start dokładnie na obudowie
+      // sugerowałby staranność, której w tej linii nie ma (tak samo jak pomijany tu
+      // odczep przy elemencie, patrz `zKoncem` niżej).
       const surowe = routed ?? manhattanFallback(poczatek, t.end, walls, roomShapes);
       // Skos przy OBU końcach: przewód ma dochodzić do krawędzi symbolu, a nie
       // przebijać go na wylot. Koniec liczony wprost, początek — na odwróconej
@@ -1285,22 +1315,71 @@ export function spreadOverlappingRoutes(routes: CableRoute[], roomShapes: RoomSh
   const out = new Map<string, Point[]>();
   routes.forEach((r) => {
     /**
-     * Przesunięcie liczone na WIERZCHOŁEK, nie na odcinek.
+     * Wierzchołek to PRZECIĘCIE odsuniętych prostych sąsiednich odcinków — tak samo,
+     * jak `wsunObrys` w routing.ts liczy narożniki wsuniętego obrysu.
      *
-     * Wersja „po odcinku" wypisywała każdy punkt dwa razy, z osobnym przesunięciem
-     * dla odcinka przed i po nim — na każdym załamaniu robił się przez to widoczny
-     * uskok. Wierzchołek idzie za tym z sąsiadów, który leży w DALSZYM pasie, więc
-     * linia zostaje ciągła, a zmiana pasa rozkłada się na odcinek dochodzący.
+     * Dwie odrzucone wersje i powód, dla którego obie były złe:
+     *
+     * „Po odcinku" wypisywała każdy punkt dwa razy, z osobnym przesunięciem dla odcinka
+     * przed i po nim — na każdym załamaniu robił się widoczny uskok.
+     *
+     * „Wierzchołek bierze przesunięcie dalszego z sąsiadów" uskok usuwała, ale kosztem
+     * rzeczy gorszej: odcinek między wierzchołkiem odsuniętym a nieodsuniętym przestawał
+     * być RÓWNOLEGŁY do swojego pierwowzoru, czyli do ściany, wzdłuż której miał biec.
+     * Przy ścianie salonu różnica dwóch pasów rozkładała się na 70 jedn. długości i na
+     * rzucie wychodził przewód przecinający pomieszczenie po skosie — mimo że trasa pod
+     * spodem była policzona idealnie po ścianach.
+     *
+     * Przecięcie daje jedno i drugie naraz: linia zostaje ciągła (żadnych uskoków), a
+     * każdy odcinek trzyma kierunek swojego pierwowzoru. Zmiana pasa zjada wtedy kawałek
+     * odcinka DOCHODZĄCEGO, zamiast przekrzywiać ten biegnący wzdłuż muru.
      */
+    const przesun = (p: Point, o: { x: number; y: number } | null): Point => ({ x: p.x + (o?.x ?? 0), y: p.y + (o?.y ?? 0) });
     const points = r.points.map((p, i) => {
       const przed = i > 0 ? przesuniecieOdcinka(r.id, i - 1) : null;
       const po = i < r.points.length - 1 ? przesuniecieOdcinka(r.id, i) : null;
-      const wybrane = !przed ? po : !po ? przed : po.lane > przed.lane ? po : przed;
-      return { x: p.x + (wybrane?.x ?? 0), y: p.y + (wybrane?.y ?? 0) };
+      // Koniec trasy ma tylko jednego sąsiada, a odcinki skrajne i tak nie dostają pasa
+      // (patrz pętla zbierająca), więc oba końce zostają dokładnie na urządzeniu.
+      if (!przed || !po) return przesun(p, przed ?? po);
+      // Ten sam pas po obu stronach — nie ma czego przecinać, wierzchołek jedzie w całości.
+      if (przed.lane === po.lane && przed.x === po.x && przed.y === po.y) return przesun(p, po);
+      const rog = przecieciePrzesunietych(r.points[i - 1], p, r.points[i + 1], przed, po);
+      // Odcinki (prawie) równoległe albo zerowej długości nie dają narożnika — zostaje
+      // dawne zachowanie, czyli pas dalszy z dwóch. Zdarza się to tylko przy nawrocie
+      // trasy w tym samym korytarzu, gdzie skos i tak nie ma jak się rozciągnąć.
+      return rog ?? przesun(p, po.lane > przed.lane ? po : przed);
     });
     out.set(r.id, points);
   });
   return out;
+}
+
+/**
+ * Narożnik dwóch odcinków łamanej po odsunięciu każdego z nich o własny wektor:
+ * przecięcie prostych `a→b + oPrzed` i `b→c + oPo`.
+ *
+ * `null`, gdy przecięcia nie ma albo nie da się mu ufać: odcinek zerowej długości
+ * (brak kierunku), odcinki równoległe (wyznacznik przy zerze) i narożnik odjeżdżający
+ * absurdalnie daleko — przy odcinkach prawie równoległych przecięcie ucieka w
+ * nieskończoność i lepiej narysować dawny uskok niż kreskę przez pół rysunku.
+ */
+function przecieciePrzesunietych(
+  a: Point,
+  b: Point,
+  c: Point,
+  oPrzed: { x: number; y: number },
+  oPo: { x: number; y: number }
+): Point | null {
+  const d1 = { x: b.x - a.x, y: b.y - a.y };
+  const d2 = { x: c.x - b.x, y: c.y - b.y };
+  const det = d1.x * d2.y - d1.y * d2.x;
+  if (Math.abs(det) < 1e-9) return null;
+  const p1 = { x: a.x + oPrzed.x, y: a.y + oPrzed.y };
+  const p2 = { x: b.x + oPo.x, y: b.y + oPo.y };
+  const t = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / det;
+  const rog = { x: p1.x + t * d1.x, y: p1.y + t * d1.y };
+  const zasieg = 4 * (Math.hypot(oPrzed.x, oPrzed.y) + Math.hypot(oPo.x, oPo.y)) + 1;
+  return Math.hypot(rog.x - b.x, rog.y - b.y) > zasieg ? null : rog;
 }
 
 /**
