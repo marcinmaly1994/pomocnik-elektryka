@@ -350,7 +350,7 @@ test("Protokoły: „Pobierz PDF” w podglądzie zapisuje niepusty plik pod wł
 test("Rozdzielnica: podgląd legendy rysuje zadrukowaną kartkę", async ({ page }) => {
   await placeThreeSockets(page);
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
-  await page.getByRole("button", { name: "Podgląd legendy" }).click();
+  await page.getByRole("button", { name: "Legenda do PDF" }).click();
 
   oczekujKartke(await zmierzPodglad(page));
 });
@@ -419,7 +419,7 @@ test("Kosztorys: podgląd PDF rysuje zadrukowaną kartkę i pobiera się pod wł
 test("Rozdzielnica: karta obliczeń zapisuje się jako zadrukowana kartka pod właściwą nazwą", async ({ page }) => {
   await placeThreeSockets(page);
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
-  await page.getByRole("button", { name: "Podgląd obliczeń" }).click();
+  await page.getByRole("button", { name: "Karta obliczeń do PDF" }).click();
 
   oczekujKartke(await zmierzPodglad(page));
 
@@ -445,6 +445,7 @@ test("Rozdzielnica: rozdzielnica bez obwodów nie oferuje karty obliczeń", asyn
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
 
-  await expect(page.getByRole("button", { name: "Podgląd obliczeń" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Karta obliczeń PDF" })).toBeDisabled();
+  // Jeden przycisk zamiast dwoch: podglad i pobranie tego samego dokumentu zlaly sie
+  // w jedno, a pobranie dzieje sie z poziomu podgladu (patrz PanelTab, krok 88).
+  await expect(page.getByRole("button", { name: "Karta obliczeń do PDF" })).toBeDisabled();
 });

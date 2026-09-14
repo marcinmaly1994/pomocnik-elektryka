@@ -174,7 +174,7 @@ test("paski opisowe: podgląd pokazuje zadrukowaną kartkę i pobiera się", asy
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await page.getByRole("button", { name: "Zbuduj rozdzielnicę bez rzutu" }).click();
 
-  await page.getByRole("button", { name: "Podgląd pasków" }).click();
+  await page.getByRole("button", { name: "Paski opisowe do PDF" }).click();
   const canvas = page.locator("[data-podglad-stron] canvas");
   await expect(canvas.first()).toBeVisible({ timeout: 30000 });
 
