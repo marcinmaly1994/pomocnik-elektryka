@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Download, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups, ostrzezeniaObwodow } from "@/lib/panel/circuits";
 import { OPIS_ULOZENIA, ZAPAS_MONTAZOWY_M, type LayingMethod } from "@/lib/panel/norms";
@@ -16,9 +16,9 @@ import {
 } from "@/lib/panel/devices";
 import { assignPhases, computeSizedCircuits, dlugosciDoboru, phaseBalance } from "@/lib/panel/project";
 import { scaleOf } from "@/lib/design";
-import { buildPanelLegendDoc, buildPanelLegendPdf, downloadPanelLegendPdf } from "@/lib/pdf/panelLegend";
-import { buildLabelStripsDoc, buildLabelStripsPdf, downloadLabelStripsPdf } from "@/lib/pdf/labelStrips";
-import { buildCalcSheetDoc, buildCalcSheetPdf, downloadCalcSheetPdf } from "@/lib/pdf/obliczenia";
+import { buildPanelLegendDoc, buildPanelLegendPdf } from "@/lib/pdf/panelLegend";
+import { buildLabelStripsDoc, buildLabelStripsPdf } from "@/lib/pdf/labelStrips";
+import { buildCalcSheetDoc, buildCalcSheetPdf } from "@/lib/pdf/obliczenia";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
 import { PdfPreview } from "@/components/ui/PdfPreview";
@@ -497,29 +497,28 @@ export function PanelTab() {
             <RotateCcw size={13} /> Odbuduj z rzutu
           </Button>
         )}
-        <Button variant="ghost" size="sm" onClick={() => setPodgladLegendy(true)}>
-          <Eye size={13} /> Podgląd legendy
-        </Button>
-        <Button
-          variant="copper"
-          size="sm"
-          onClick={() => downloadPanelLegendPdf(devices, rows.length, usedModules, totalModules, perRow, docHeader)}
-        >
-          <Download size={13} /> Legenda PDF
+        {/* DWA dokumenty, DWA przyciski — a było ich cztery.
+            Każdy z tych dwóch miał osobno „Podgląd…" i osobno „… PDF", czyli podgląd
+            i pobranie tego samego. Pobranie było przy tym DROGĄ NA SKRÓTY obok
+            podglądu — wbrew zasadzie, którą trzymają Kosztorys i Rzut: pobranie dzieje
+            się Z POZIOMU PODGLĄDU, bo nikt nie ma wysyłać dokumentu, na który sam nie
+            spojrzał. `PdfPreview` ma własny przycisk „Pobierz PDF", więc te dwa
+            skróty niczego nie dawały poza dwoma przyciskami w rzędzie więcej.
+            Nazwa idzie za DOKUMENTEM, nie za oknem (tak jak „Kosztorys do PDF"
+            w CostsTab) — użytkownik szuka legendy, nie podglądu. */}
+        <Button variant="copper" size="sm" onClick={() => setPodgladLegendy(true)}>
+          <Eye size={13} /> Legenda do PDF
         </Button>
         {/* Osobny dokument od legendy: legenda to tabela do biurka, to jest wydruk do
             wycięcia i wsunięcia w tabliczki na aparatach — stąd inny przycisk i inna
             ikona (nożyczki), żeby nie sugerować, że to to samo w innym formacie. */}
-        <Button variant="ghost" size="sm" onClick={() => setPodgladPaskow(true)}>
-          <Scissors size={13} /> Podgląd pasków
-        </Button>
         <Button
-          variant="copper"
+          variant="ghost"
           size="sm"
-          onClick={() => downloadLabelStripsPdf(devices, perRow, docHeader)}
+          onClick={() => setPodgladPaskow(true)}
           title="Wydruk do wycięcia i wsunięcia w tabliczki opisowe aparatów — skala 1:1"
         >
-          <Download size={13} /> Paski opisowe PDF
+          <Scissors size={13} /> Paski opisowe do PDF
         </Button>
 
         <EditDeviceModal
@@ -687,15 +686,6 @@ export function PanelTab() {
           <h3 className="pe-display text-[15px]">Dobór obwodów wg PN-HD 60364</h3>
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="ghost"
-              size="sm"
-              disabled={sized.length === 0}
-              title={sized.length === 0 ? "Brak obwodów — narysuj instalację na rzucie" : undefined}
-              onClick={() => setPodgladObliczen(true)}
-            >
-              <Eye size={13} /> Podgląd obliczeń
-            </Button>
-            <Button
               variant="copper"
               size="sm"
               disabled={sized.length === 0}
@@ -704,9 +694,9 @@ export function PanelTab() {
                   ? "Brak obwodów — narysuj instalację na rzucie"
                   : "Tabela doboru z długościami tras — do dokumentacji projektu"
               }
-              onClick={() => downloadCalcSheetPdf(sized, dlugosci, docHeader)}
+              onClick={() => setPodgladObliczen(true)}
             >
-              <Download size={13} /> Karta obliczeń PDF
+              <Eye size={13} /> Karta obliczeń do PDF
             </Button>
           </div>
         </div>

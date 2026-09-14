@@ -4070,6 +4070,45 @@ nieprzetestowaną migrację 5000 linii. Priorytet portowania poniżej.
     `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
     `npx playwright test` **422/422** (+2).
 
+88. **Rozdzielnica: sześć przycisków w rzędzie zeszło do czterech — bo trzy z nich
+    obchodziły podgląd** — z przeglądu z 13.09 wyszło „za dużo przycisków", ale
+    przyczyna okazała się inna niż gęstość.
+
+    Cztery z sześciu były DWIEMA PARAMI: „Podgląd legendy" + „Legenda PDF" oraz
+    „Podgląd pasków" + „Paski opisowe PDF". Ta sama para stała jeszcze niżej, przy
+    tabeli doboru: „Podgląd obliczeń" + „Karta obliczeń PDF". W każdej parze drugi
+    przycisk POBIERAŁ dokument z pominięciem podglądu — wbrew zasadzie, którą trzymają
+    Kosztorys i Rzut i która jest tam zapisana wprost: *pobranie dzieje się z poziomu
+    PODGLĄDU, bo nikt nie ma wysyłać dokumentu, na który sam nie spojrzał*.
+
+    A `PdfPreview` ma własny przycisk „Pobierz PDF" (patrz `downloadPdfBytes` w tym
+    komponencie), więc te trzy skróty nie dawały nic poza trzema przyciskami więcej
+    i jedyną w aplikacji drogą do wysłania klientowi pliku, którego się nie widziało.
+
+    Zostały trzy przyciski, po jednym na dokument, nazwane DOKUMENTEM, nie oknem —
+    tak jak „Kosztorys do PDF" w `CostsTab`, bo użytkownik szuka legendy, a nie
+    podglądu: **„Legenda do PDF"**, **„Paski opisowe do PDF"**, **„Karta obliczeń
+    do PDF"**. Każdy otwiera podgląd, a pobranie jest w nim. Pasek nad rysunkiem
+    rozdzielnicy ma dzięki temu cztery pozycje zamiast sześciu (plus cofnij/ponów)
+    i mieści się w jednym rzędzie z zapasem.
+
+    Wariant przycisku poszedł za rolą: ten, który prowadzi do GŁÓWNEGO dokumentu
+    danej sekcji, jest miedziany (legenda, karta obliczeń), a paski opisowe —
+    drugi dokument tej samej rozdzielnicy — zostają wariantem lekkim.
+
+    Rozważone i ODRZUCONE: schowanie czwórki pod `PasekMenu` (krok 83). Menu byłoby
+    lekarstwem na objaw — sześć przycisków — zamiast na przyczynę, czyli trzy
+    duplikaty. Po ich usunięciu nie ma czego chować.
+
+    Trzy testy e2e celowały w nazwy, które zniknęły (`protocols-schema-costs.spec.ts`
+    ×2, `panel-reczny.spec.ts` ×1) — przestawione na nowe. Jedno sprawdzenie zostało
+    przy okazji uproszczone: „oba przyciski wyłączone przy pustym doborze" dotyczy
+    teraz jednego przycisku, bo jest jeden.
+
+    `npx tsc --noEmit` czysto, `npx vitest run` **1437/1437**,
+    `npx vite build` bez błędów, `eslint` bez nowych ostrzeżeń,
+    `npx playwright test` **422/422**.
+
 ## Czym zastąpić auto-detekcję — rekomendacja (nie zaimplementowane)
 
 Silnik oparty na progach geometrycznych (Otsu + śledzenie biegów tuszu +
