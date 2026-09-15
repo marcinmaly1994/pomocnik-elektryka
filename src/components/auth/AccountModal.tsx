@@ -4,7 +4,14 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/useProjectStore";
-import { supaDeleteProject, supaListProjects, supaUpdateUser, type Session } from "@/lib/supabase";
+import {
+  supaDeleteAccount,
+  supaDeleteProject,
+  supaListProjects,
+  supaSignIn,
+  supaUpdateUser,
+  type Session,
+} from "@/lib/supabase";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 
 export type AccountModalTab = "profil" | "ustawienia";
@@ -146,10 +153,109 @@ function ProfilTab({ session }: { session: Session }) {
   );
 }
 
-function UstawieniaTab({ session }: { session: Session }) {
+/**
+ * Potwierdzenie usunięcia konta. Osobne okno, a nie `confirm()` jak przy kasowaniu
+ * projektów, bo skutek jest nieodwracalny i trzeba go WYPISAĆ — razem z tym, co
+ * zostaje. Hasło jest tu bramką, nie formalnością: sesja bywa otwarta na cudzym
+ * albo wspólnym komputerze, a wtedy samo kliknięcie to za mało.
+ */
+function UsunKontoDialog({ open, session, onClose, onUsuniete }: {
+  open: boolean;
+  session: Session;
+  onClose: () => void;
+  onUsuniete: () => void;
+}) {
+  const [haslo, setHaslo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setHaslo("");
+      setErr("");
+    }
+  }, [open]);
+
+  async function usunKonto() {
+    const email = session.user.email;
+    if (!email) {
+      setErr("Brak adresu e-mail w sesji — zaloguj się ponownie i spróbuj jeszcze raz.");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    try {
+      // Logowanie pełni tu dwie role naraz: sprawdza hasło i daje ŚWIEŻY token.
+      // Token z sesji mógł już wygasnąć, a wtedy kasowanie odbiłoby się o 401
+      // dopiero po potwierdzeniu — w najgorszym możliwym momencie.
+      const swieza = await supaSignIn(email, haslo);
+      await supaDeleteAccount(swieza.access_token);
+      onUsuniete();
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      setErr(
+        status === 400
+          ? "Nieprawidłowe hasło."
+          : e instanceof Error
+            ? e.message
+            : "Nie udało się usunąć konta."
+      );
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent title="Usuń konto na zawsze">
+        <div className="space-y-4">
+          <p className="text-sm font-medium text-red-600">Tej operacji nie da się cofnąć.</p>
+          <div className="text-xs text-slate-600">
+            <p className="mb-1">Bezpowrotnie znikną:</p>
+            <ul className="mb-3 list-disc space-y-0.5 ps-5">
+              <li>konto <span className="font-medium">{session.user.email}</span> — nie zalogujesz się nim ponownie,</li>
+              <li>wszystkie projekty i zestawy protokołów zapisane w chmurze.</li>
+            </ul>
+            <p>
+              Zostaje bieżący projekt w tej przeglądarce (autozapis lokalny). Jeśli chcesz zachować resztę pracy,
+              najpierw zamknij to okno i pobierz kopię danych.
+            </p>
+          </div>
+
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Aktualne hasło</div>
+            <input
+              type="password"
+              value={haslo}
+              onChange={(e) => setHaslo(e.target.value)}
+              className="pe-input w-full text-sm"
+              autoComplete="current-password"
+            />
+          </label>
+
+          {err && <div className="text-xs text-red-600">{err}</div>}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
+              Anuluj
+            </Button>
+            <Button variant="destructive" size="sm" onClick={usunKonto} disabled={busy || !haslo}>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Usuń konto na zawsze
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UstawieniaTab({ session, onClose }: { session: Session; onClose: () => void }) {
   const getProjectPayload = useProjectStore((s) => s.getProjectPayload);
   const projectName = useProjectStore((s) => s.projectName);
+  const setSession = useProjectStore((s) => s.setSession);
+  const setCloudId = useProjectStore((s) => s.setCloudId);
 
+  const [usuwanieOtwarte, setUsuwanieOtwarte] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -213,7 +319,33 @@ function UstawieniaTab({ session }: { session: Session }) {
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
           Usuń wszystkie projekty z chmury
         </Button>
+
+        <div className="mt-4 border-t border-border pt-3">
+          <p className="mb-2 text-xs text-slate-500">
+            Usuwa całe konto razem ze wszystkim, co na nim zapisane. Nie da się tego cofnąć.
+          </p>
+          <Button variant="destructive" size="sm" onClick={() => setUsuwanieOtwarte(true)}>
+            <Trash2 size={14} /> Usuń konto
+          </Button>
+        </div>
       </div>
+
+      <UsunKontoDialog
+        open={usuwanieOtwarte}
+        session={session}
+        onClose={() => setUsuwanieOtwarte(false)}
+        onUsuniete={() => {
+          setUsuwanieOtwarte(false);
+          // `cloudId` MUSI zniknąć razem z sesją: wskazuje wiersz, którego już nie
+          // ma, a zostawiony wskazywałby go dalej po zalogowaniu się na inne konto
+          // w tej samej karcie — autozapis próbowałby nadpisywać cudzy/nieistniejący
+          // zapis. Samo `setSession(null)` tego nie robi (patrz store: wylogowanie
+          // celowo zachowuje `cloudId`).
+          setCloudId(null);
+          setSession(null);
+          onClose();
+        }}
+      />
     </div>
   );
 }
@@ -240,7 +372,7 @@ export function AccountModal({ open, initialTab, session, onClose }: AccountModa
             <ProfilTab session={session} />
           </TabsContent>
           <TabsContent value="ustawienia">
-            <UstawieniaTab session={session} />
+            <UstawieniaTab session={session} onClose={onClose} />
           </TabsContent>
         </Tabs>
       </DialogContent>

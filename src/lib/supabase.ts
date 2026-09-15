@@ -25,6 +25,33 @@
  *      using (auth.uid() = user_id)
  *      with check (auth.uid() = user_id);
  *
+ * 4) Dodaj funkcję kasującą konto (SQL Editor). Usunięcie użytkownika z
+ *    `auth.users` wymaga uprawnień, których klucz „anon” nie ma i mieć nie
+ *    może — dlatego robi to funkcja `security definer`, kasująca WYŁĄCZNIE
+ *    konto wyliczone z `auth.uid()`, czyli właściciela przesłanego tokenu:
+ *
+ *    create or replace function public.usun_moje_konto()
+ *    returns void
+ *    language plpgsql
+ *    security definer
+ *    set search_path = public, auth
+ *    as $$
+ *    declare uid uuid := auth.uid();
+ *    begin
+ *      if uid is null then
+ *        raise exception 'Brak zalogowanego użytkownika';
+ *      end if;
+ *      -- Najpierw projekty: `projects.user_id` nie ma ON DELETE CASCADE, więc
+ *      -- kasowanie użytkownika odbiłoby się o klucz obcy.
+ *      delete from public.projects where user_id = uid;
+ *      delete from auth.users where id = uid;
+ *    end $$;
+ *    revoke all on function public.usun_moje_konto() from public, anon;
+ *    grant execute on function public.usun_moje_konto() to authenticated;
+ *
+ *    Bez tego kroku reszta aplikacji działa normalnie — nie działa jedynie
+ *    przycisk „Usuń konto" w panelu konta.
+ *
  * Bez konfiguracji aplikacja działa w pełni lokalnie — logowanie i zapis
  * w chmurze są po prostu niedostępne (`SUPABASE_CONFIGURED` = false).
  */
@@ -228,4 +255,23 @@ export function supaGetProject(token: string, id: string) {
 
 export function supaDeleteProject(token: string, id: string) {
   return sbFetch<void>(`/rest/v1/projects?id=eq.${id}`, { method: "DELETE", token });
+}
+
+/**
+ * Kasuje konto wołającego — nieodwracalnie, razem ze wszystkimi jego zapisami
+ * w chmurze.
+ *
+ * Idzie przez funkcję SQL, a nie przez admin API, bo usunięcie użytkownika
+ * wymaga klucza `service_role`, którego NIE WOLNO wysłać do przeglądarki.
+ * Funkcja `usun_moje_konto` jest `security definer` (działa z uprawnieniami
+ * właściciela), ale kasuje wyłącznie konto wyliczone z `auth.uid()`, czyli
+ * z przesłanego tokenu — nie da się jej podsunąć cudzego id. Dlatego token
+ * sesji tutaj jest OBOWIĄZKOWY: z samym kluczem `anon` `auth.uid()` jest
+ * puste i funkcja nie skasowałaby nic, nie zgłaszając przy tym błędu.
+ *
+ * Wymaga jednorazowego wklejenia definicji funkcji w SQL Editor — patrz
+ * instrukcja konfiguracji na górze tego pliku.
+ */
+export function supaDeleteAccount(token: string) {
+  return sbFetch<void>("/rest/v1/rpc/usun_moje_konto", { method: "POST", body: {}, token });
 }

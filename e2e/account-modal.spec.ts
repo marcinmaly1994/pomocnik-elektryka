@@ -127,3 +127,48 @@ test("„Usuń wszystkie projekty z chmury” pyta o potwierdzenie przed jakimko
   await page.getByRole("button", { name: "Usuń wszystkie projekty z chmury" }).click();
   await expect.poll(() => dialogText).toContain("Usunąć WSZYSTKIE projekty zapisane w chmurze?");
 });
+
+/**
+ * Usunięcie konta jest nieodwracalne, więc bramka jest dwustopniowa: osobne okno
+ * z wypisanym skutkiem PLUS aktualne hasło. Tu sprawdzamy SAMĄ bramkę — samego
+ * kasowania nie da się przetestować e2e, bo zniszczyłoby konto testowe.
+ */
+test("„Usuń konto” otwiera osobne okno z ostrzeżeniem, co dokładnie zniknie", async ({ page }) => {
+  await wejdzZalogowany(page);
+  await otworzMenuKonta(page);
+  await page.getByRole("menuitem", { name: "Ustawienia" }).click();
+
+  await page.getByRole("button", { name: "Usuń konto", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Usuń konto na zawsze" })).toBeVisible();
+  await expect(page.getByText("Tej operacji nie da się cofnąć.")).toBeVisible();
+  // Musi być jasne, że lokalna praca w tej przeglądarce zostaje — inaczej ludzie
+  // boją się kliknąć albo są zaskoczeni tym, co zostało.
+  await expect(page.getByText(/bieżący projekt w tej przeglądarce/i)).toBeVisible();
+});
+
+test("usunięcia konta nie da się potwierdzić bez podania hasła", async ({ page }) => {
+  await wejdzZalogowany(page);
+  await otworzMenuKonta(page);
+  await page.getByRole("menuitem", { name: "Ustawienia" }).click();
+  await page.getByRole("button", { name: "Usuń konto", exact: true }).click();
+
+  const potwierdz = page.getByRole("button", { name: "Usuń konto na zawsze", exact: true });
+  await expect(potwierdz).toBeDisabled();
+
+  await page.getByLabel("Aktualne hasło").fill("cokolwiek");
+  await expect(potwierdz).toBeEnabled();
+});
+
+test("anulowanie zamyka okno usuwania i zostawia sesję nietkniętą", async ({ page }) => {
+  await wejdzZalogowany(page);
+  await otworzMenuKonta(page);
+  await page.getByRole("menuitem", { name: "Ustawienia" }).click();
+  await page.getByRole("button", { name: "Usuń konto", exact: true }).click();
+
+  await page.getByRole("button", { name: "Anuluj", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Usuń konto na zawsze" })).toBeHidden();
+  const sesja = await page.evaluate(() => localStorage.getItem("pomocnikelektryka_sesja"));
+  expect(sesja).toContain("elektryk@example.com");
+});
