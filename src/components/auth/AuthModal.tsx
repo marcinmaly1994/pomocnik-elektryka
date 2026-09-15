@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { AlertTriangle, LogIn, Loader2, Send } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,10 @@ import type { Session } from "@/lib/supabase";
 
 interface AuthModalProps {
   open: boolean;
+  /** Komunikat do pokazania od razu po otwarciu — np. „hasło zmienione, zaloguj się"
+   *  albo wyjaśnienie, że link z maila wygasł. Okno otwiera wtedy ktoś inny niż
+   *  użytkownik i musi mu powiedzieć, dlaczego. */
+  komunikat?: string;
   onClose: () => void;
   onSignedIn: (session: Session) => void;
 }
@@ -22,7 +26,7 @@ const TITLES: Record<Mode, string> = {
 /** Logowanie / rejestracja / reset hasła przez Supabase (REST, bez SDK). Bez
  *  skonfigurowanego backendu (`.env` z `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`)
  *  pokazuje ostrzeżenie zamiast próbować się łączyć — tak jak w oryginale. */
-export function AuthModal({ open, onClose, onSignedIn }: AuthModalProps) {
+export function AuthModal({ open, komunikat, onClose, onSignedIn }: AuthModalProps) {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +35,10 @@ export function AuthModal({ open, onClose, onSignedIn }: AuthModalProps) {
   /** Komunikat pozytywny (rejestracja/reset) — osobno od błędu, żeby dwa różne
    *  style (czerwony/neutralny) nie zależały od treści tekstu. */
   const [info, setInfo] = useState("");
+
+  useEffect(() => {
+    if (open && komunikat) setInfo(komunikat);
+  }, [open, komunikat]);
 
   function switchMode(next: Mode) {
     setMode(next);

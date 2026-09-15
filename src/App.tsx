@@ -27,6 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { CloudSaveIndicator } from "@/components/ui/CloudSaveIndicator";
 import { komunikatZapisu } from "@/lib/zapisLokalny";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { NoweHasloDialog } from "@/components/auth/NoweHasloDialog";
 import { ProjectsModal } from "@/components/auth/ProjectsModal";
 import { AccountModal, type AccountModalTab } from "@/components/auth/AccountModal";
 import { HelpModal } from "@/components/help/HelpModal";
@@ -37,6 +38,7 @@ import { PdfPreview } from "@/components/ui/PdfPreview";
 import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
+import { odczytajFragmentAuth } from "@/lib/fragmentAuth";
 import { etapy, type Etap, type StanEtapu } from "@/lib/postepKrokow";
 /**
  * ŚWIADOME odstępstwo od podziału na kawałki opisanego niżej: `computeCircuits`
@@ -535,6 +537,39 @@ export default function App() {
    *  ktory przed chwila powstal, a nie zbudowac go po raz drugi. */
   const [kompletBajty, setKompletBajty] = useState<Uint8Array | null>(null);
 
+  /** Token z linku resetującego hasło; `null` = nie przyszliśmy z takiego linku. */
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  /** Treść, którą okno logowania ma pokazać zaraz po otwarciu. */
+  const [authKomunikat, setAuthKomunikat] = useState("");
+
+  /**
+   * Supabase odsyła z maila pod adres aplikacji, a wynik wkleja we fragment
+   * adresu. Bez odczytania go użytkownik lądował na zwykłym ekranie startowym:
+   * przy resecie hasła — z ważnym tokenem w pasku adresu i bez możliwości
+   * dokończenia czegokolwiek, przy zużytym linku — bez słowa wyjaśnienia.
+   *
+   * Raz, przy starcie: fragment jest jednorazową informacją „po co tu jesteś",
+   * a nie stanem, który trzeba śledzić.
+   */
+  useEffect(() => {
+    const zLinku = odczytajFragmentAuth(window.location.hash);
+    if (!zLinku) return;
+    // Fragment zdejmujemy ZANIM pokażemy okno. Token uprawnia do zmiany hasła,
+    // więc nie może zostać w pasku adresu, w historii przeglądarki ani na
+    // zrzucie ekranu — a odświeżenie strony otwierałoby to okno w kółko.
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    if (zLinku.rodzaj === "reset") {
+      setResetToken(zLinku.token);
+      return;
+    }
+    setAuthKomunikat(
+      zLinku.kod === "otp_expired"
+        ? "Link wygasł lub został już użyty. Poproś o nowy."
+        : "Nie udało się dokończyć operacji z linku. Spróbuj jeszcze raz."
+    );
+    setAuthOpen(true);
+  }, []);
+
   function signOut() {
     setSession(null);
   }
@@ -974,12 +1009,32 @@ export default function App() {
         );
       })()}
 
+      {resetToken && (
+        <NoweHasloDialog
+          open
+          token={resetToken}
+          onClose={() => setResetToken(null)}
+          onZmienione={() => {
+            setResetToken(null);
+            // Sesji NIE zapisujemy: świeże hasło ma od razu przejść próbę ognia,
+            // a na wspólnym komputerze nie zostaje otwarte konto.
+            setAuthKomunikat("Hasło zmienione. Zaloguj się nowym hasłem.");
+            setAuthOpen(true);
+          }}
+        />
+      )}
+
       <AuthModal
         open={authOpen}
-        onClose={() => setAuthOpen(false)}
+        komunikat={authKomunikat}
+        onClose={() => {
+          setAuthOpen(false);
+          setAuthKomunikat("");
+        }}
         onSignedIn={(s) => {
           setSession(s);
           setAuthOpen(false);
+          setAuthKomunikat("");
         }}
       />
 
