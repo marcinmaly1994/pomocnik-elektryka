@@ -10,7 +10,7 @@ import {
   FALLBACK_FONT_NAZWY,
   fontOpisuPokoju,
   skalaOpisowRzutu,
-  szerokoscTekstu,
+  szerokoscRamki,
 } from "@/lib/opisPomieszczenia";
 import { promieniePrzyciagania, snapDoGeometrii, type Przyciagniecie } from "@/lib/drawSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
@@ -1374,7 +1374,7 @@ export function DesignCanvas({
                     });
                     // Ramka dokładnie na miarę napisu: stałe 100 jedn. (= 5 m!) łamały
                     // dłuższe podpisy dopiero daleko poza małym pokojem.
-                    const szer = Math.max(szerokoscTekstu(tekst, font), 1);
+                    const szer = szerokoscRamki(tekst, font);
                     return (
                     <Text
                       key={i}
@@ -1405,9 +1405,9 @@ export function DesignCanvas({
                 })()}
 
                 <Text
-                  x={c.x - Math.max(szerokoscTekstu(r.name, fontNazwy), 1) / 2}
+                  x={c.x - szerokoscRamki(r.name, fontNazwy) / 2}
                   y={c.y - odsadzenieNazwy}
-                  width={Math.max(szerokoscTekstu(r.name, fontNazwy), 1)}
+                  width={szerokoscRamki(r.name, fontNazwy)}
                   align="center"
                   text={r.name}
                   fontSize={fontNazwy}

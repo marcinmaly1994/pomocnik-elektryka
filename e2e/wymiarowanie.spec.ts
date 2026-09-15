@@ -175,3 +175,33 @@ test("wymiary i powierzchnia są mniejsze i lżejsze od nazw pomieszczeń", asyn
     expect(a.styl).not.toMatch(/bold|[6-9]00/);
   }
 });
+
+/**
+ * Nazwa pomieszczenia ma stać w JEDNEJ linii.
+ *
+ * Ramka tekstu jest liczona z przybliżonej szerokości napisu, a to przybliżenie bywa
+ * odrobinę za małe — przy ramce równej napisowi Konva uznaje, że tekst się nie mieści,
+ * i łamie go na dwie linie. Objawiało się to tym, że KAŻDA nazwa rozpadała się na
+ * rzucie: „Salon" wychodził jako „Salo" i „n" pod spodem.
+ *
+ * Tego nie widać w teście jednostkowym — łamanie robi Konva przy renderowaniu, a nie
+ * nasza arytmetyka. Stąd sprawdzenie na żywym rzucie.
+ */
+test("nazwy pomieszczeń nie łamią się na dwie linie", async ({ page }) => {
+  await planZGeometria(page);
+
+  const wiersze = await page.evaluate(() => {
+    const k = (window as unknown as {
+      Konva: { stages: { find(s: string): { text(): string; textArr: { text: string }[] }[] }[] };
+    }).Konva;
+    return k.stages[0]
+      .find("Text")
+      .filter((t) => ["Kuchnia", "Salon"].includes(t.text()))
+      .map((t) => ({ tekst: t.text(), wiersze: t.textArr.map((l) => l.text) }));
+  });
+
+  expect(wiersze.length).toBe(2);
+  for (const w of wiersze) {
+    expect(w.wiersze).toEqual([w.tekst]);
+  }
+});

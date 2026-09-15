@@ -96,3 +96,25 @@ export function fontOpisuPokoju(
 
   return Math.max(MIN_FONT_OPISU, zeSkali * (dostepna / potrzebna));
 }
+
+/**
+ * Zapas ramki nad wyliczoną szerokością napisu.
+ *
+ * Ramka RÓWNA szerokości napisu nie wystarcza: Konva uznaje wtedy, że tekst się nie
+ * mieści, i łamie go na dwie linie. Objawiało się to tym, że KAŻDA nazwa pomieszczenia
+ * rozpadała się na rzucie — „Salon" wychodził jako „Salo" i „n" pod spodem.
+ *
+ * Zmierzone na żywo: przy ramce 14,01 jedn. napis „Salon" (font 5,6) nadal się łamał,
+ * przy 15,4 już nie. Przybliżenie `SREDNIA_SZEROKOSC_ZNAKU` jest więc odrobinę za małe
+ * i sam pomiar równy przybliżeniu zawsze trafiał w przypadek graniczny.
+ */
+const ZAPAS_RAMKI = 1.15;
+
+/**
+ * Szerokość ramki tekstu [jedn. planu]. Ramka nie ogranicza napisu — służy wyłącznie
+ * do wyśrodkowania go na pomieszczeniu (`align="center"`), więc lepiej, żeby była
+ * odrobinę za szeroka niż o włos za wąska.
+ */
+export function szerokoscRamki(tekst: string, font: number): number {
+  return Math.max(szerokoscTekstu(tekst, font) * ZAPAS_RAMKI, 1);
+}

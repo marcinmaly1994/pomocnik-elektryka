@@ -7,6 +7,7 @@ import {
   fontOpisuPokoju,
   fontRzutu,
   skalaOpisowRzutu,
+  szerokoscRamki,
   szerokoscTekstu,
 } from "./opisPomieszczenia";
 
@@ -88,5 +89,23 @@ describe("fontRzutu — wspólna skala wszystkich napisów rzutu", () => {
     // Odsunięcie napisu od ściany musi maleć razem z pismem — inaczej opis odkleja
     // się od tego, co opisuje.
     expect(18 * skalaOpisowRzutu(0.05)).toBeCloseTo(fontRzutu(0.05, 18), 10);
+  });
+});
+
+describe("szerokoscRamki", () => {
+  /**
+   * Ramka RÓWNA szerokości napisu nie wystarcza: Konva uznaje wtedy, że tekst się
+   * nie mieści, i łamie go na dwie linie — „Salon" wychodził jako „Salo" + „n"
+   * w KAŻDYM pomieszczeniu. Zmierzone na żywo: przy ramce 14,01 jedn. napis nadal
+   * się łamał, przy 15,4 już nie. Stąd zapas, a nie sama szerokość napisu.
+   */
+  it("jest szersza od samego napisu", () => {
+    expect(szerokoscRamki("Salon", 5.6)).toBeGreaterThan(szerokoscTekstu("Salon", 5.6));
+  });
+
+  it("zapas wystarcza na niedoszacowanie przybliżenia", () => {
+    // Przybliżenie 0,5 znaku na jednostkę fontu jest odrobinę ZA MAŁE — prawdziwa
+    // szerokość „Salon" przy foncie 5,6 leży między 14,01 a 15,4 jedn.
+    expect(szerokoscRamki("Salon", 5.6)).toBeGreaterThan(15.4);
   });
 });
