@@ -1354,12 +1354,17 @@ export function DesignCanvas({
                       // 3 m (60 jedn.) od środka do ściany jest 30 jedn., a dwa wiersze
                       // zaczynające się 15 jedn. pod środkiem kończyły się na murze —
                       // dokładnie na etykiecie wymiaru ściany, przecinając oba napisy.
-                      y={c.y + 15 - (podpisy.length - 1 - i) * 11}
+                      y={c.y + 13 - (podpisy.length - 1 - i) * 10}
                       width={100}
                       align="center"
                       text={tekst}
-                      fontSize={10}
-                      fontStyle="bold"
+                      // Mniejsza i LŻEJSZA niż NAZWA pomieszczenia (11, bez pogrubienia),
+                      // czyli drugiemu opisowi na tym rzucie — to są adnotacje do pokoju,
+                      // a nie jego tytuł, i mają się czytać jako drugi plan. Przy dziesiątce
+                      // i pogrubieniu wymiar ważył na rysunku więcej niż nazwa, czyli
+                      // odwrotnie do tego, co znaczy — a samo zmniejszenie tego nie cofało,
+                      // bo pogrubiona ósemka waży na rysunku tyle samo co zwykła jedenastka.
+                      fontSize={8.5}
                       fill="#8A5526"
                       listening={false}
                     />
@@ -1554,8 +1559,11 @@ export function DesignCanvas({
                         rotation={kat}
                         align="center"
                         text={formatDlugosc(dlugosc)}
-                        fontSize={11}
-                        fontStyle="bold"
+                        // Ta sama wielkość co podpisy pomieszczeń i wysokości montażu —
+                        // wszystkie trzy to ADNOTACJE do rysunku, a nie jego treść.
+                        // Przy jedenastce wymiar ściany ważył tyle samo co nazwa pokoju
+                        // i rzut czytał się jako gąszcz liczb zamiast jako plan.
+                        fontSize={8.5}
                         fill="#8A5526"
                         listening={false}
                       />

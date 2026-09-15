@@ -139,3 +139,39 @@ test("wymiary i powierzchnia są niezależne — można mieć samą powierzchni�
   expect(await etykietyWymiarow(page)).not.toEqual([]);
   expect(await etykietyPowierzchni(page)).toHaveLength(2);
 });
+
+/**
+ * Hierarchia napisów na rzucie: nazwa pomieszczenia to jego TYTUŁ, a wymiary,
+ * powierzchnia i wysokości montażu to ADNOTACJE — mają się czytać jako drugi plan.
+ *
+ * Przy równej wielkości (11 dla wszystkiego) wymiar ściany ważył tyle samo co nazwa
+ * pokoju i rzut czytał się jako gąszcz liczb zamiast jako plan. Regresji tego rodzaju
+ * nie widać w teście funkcjonalnym: napisy SĄ i mają poprawną treść.
+ */
+test("wymiary i powierzchnia są mniejsze i lżejsze od nazw pomieszczeń", async ({ page }) => {
+  await planZGeometria(page);
+  await przelaczOpis(page, WYMIARY, true);
+  await przelaczOpis(page, POWIERZCHNIA, true);
+
+  const rozmiary = await page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { find(s: string): { text(): string; fontSize(): number; fontStyle(): string }[] }[] } }).Konva;
+    const teksty = k.stages[0].find("Text");
+    const wg = (wzor: RegExp) =>
+      teksty.filter((t) => wzor.test(t.text())).map((t) => ({ rozmiar: t.fontSize(), styl: t.fontStyle() }));
+    return {
+      nazwy: wg(/^(Kuchnia|Salon)$/),
+      // Wymiary ścian („25,00 m") i pomieszczeń („11,00 × 8,00 m") oraz powierzchnie.
+      adnotacje: [...wg(/\d,\d{2}( ×|) ?.*m$/), ...wg(/m²$/)],
+    };
+  });
+
+  expect(rozmiary.nazwy.length).toBeGreaterThan(0);
+  expect(rozmiary.adnotacje.length).toBeGreaterThan(0);
+  const najmniejszaNazwa = Math.min(...rozmiary.nazwy.map((n) => n.rozmiar));
+  for (const a of rozmiary.adnotacje) {
+    expect(a.rozmiar).toBeLessThan(najmniejszaNazwa);
+    // Sama mniejsza wielkosc nie wystarcza: pogrubiona osemka wazy na rysunku tyle
+    // samo co zwykla jedenastka, wiec hierarchia i tak by sie nie pojawila.
+    expect(a.styl).not.toMatch(/bold|[6-9]00/);
+  }
+});
