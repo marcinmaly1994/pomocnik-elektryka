@@ -5,6 +5,13 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import { DEFAULT_WALL_THICKNESS, GRID, gruboscObrysuPokoju, PROG_WASKIEGO_EKRANU, type PlanSize } from "@/lib/design";
+import {
+  FALLBACK_FONT_ADNOTACJI,
+  FALLBACK_FONT_NAZWY,
+  fontOpisuPokoju,
+  skalaOpisowRzutu,
+  szerokoscTekstu,
+} from "@/lib/opisPomieszczenia";
 import { promieniePrzyciagania, snapDoGeometrii, type Przyciagniecie } from "@/lib/drawSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
@@ -542,6 +549,13 @@ export function DesignCanvas({
   /** Grubosc obrysu pomieszczen w jednostkach planu — jedna dla calego rysunku,
    *  bo skala jest wspolna. Liczona raz, nie w petli po pomieszczeniach. */
   const grubosciObrysu = gruboscObrysuPokoju(metersPerUnit);
+  /**
+   * Mnożnik WSZYSTKICH napisów rzutu — patrz `skalaOpisowRzutu`. Dotychczasowe stałe
+   * (8,5 / 11 / 12 i ich odsunięcia) zostają w kodzie jako punkt odniesienia i idą
+   * przez ten mnożnik, więc wzajemne proporcje napisów są dokładnie te co przedtem,
+   * a zmienia się tylko ich wspólna wielkość względem rysunku.
+   */
+  const so = skalaOpisowRzutu(metersPerUnit);
 
   function withSnap(p: Point): Point {
     return snapOn ? { x: snap(p.x, GRID), y: snap(p.y, GRID) } : p;
@@ -1224,6 +1238,17 @@ export function DesignCanvas({
           {roomShapes.map((r) => {
             const pts = r.points.flatMap((p) => [p.x, p.y]);
             const c = centroid(r.points);
+            // Szerokość obrysu — do niej docinany jest rozmiar opisów, żeby nazwa
+            // nie wychodziła poza ściany małego pokoju (patrz `fontOpisuPokoju`).
+            const xsPokoju = r.points.map((p) => p.x);
+            const szerokoscPokoju = Math.max(...xsPokoju) - Math.min(...xsPokoju);
+            const fontNazwy = fontOpisuPokoju(metersPerUnit, r.name, szerokoscPokoju);
+            // Odstępy podążają za rozmiarem pisma, a nie za dawnymi stałymi — inaczej
+            // przy mniejszym foncie opisy rozjeżdżałyby się od swojego pomieszczenia.
+            // Proporcje wzięte z poprzednich wartości (6/11 i 13/11), więc bez znanej
+            // skali rysunek wychodzi piksel w piksel taki jak przedtem.
+            const odsadzenieNazwy = (6 / FALLBACK_FONT_NAZWY) * fontNazwy;
+            const odsadzenieAdnotacji = (13 / FALLBACK_FONT_NAZWY) * fontNazwy;
             const isSelRoom = selected?.kind === "room" && selected.id === r.id;
             // Krawędź i nazwa łapią klik TYLKO w trybie zaznaczania, rysowania pomieszczeń
             // i otworów (bo zaraz po narysowaniu pomieszczenia narzędzie zostaje w trybie
@@ -1343,10 +1368,17 @@ export function DesignCanvas({
                     pokazWymiary ? formatWymiaryProstokata(r.points) : null,
                     pokazPowierzchnie ? formatPowierzchnia(r.points) : null,
                   ].filter((t): t is string => t !== null);
-                  return podpisy.map((tekst, i) => (
+                  return podpisy.map((tekst, i) => {
+                    const font = fontOpisuPokoju(metersPerUnit, tekst, szerokoscPokoju, {
+                      fallback: FALLBACK_FONT_ADNOTACJI,
+                    });
+                    // Ramka dokładnie na miarę napisu: stałe 100 jedn. (= 5 m!) łamały
+                    // dłuższe podpisy dopiero daleko poza małym pokojem.
+                    const szer = Math.max(szerokoscTekstu(tekst, font), 1);
+                    return (
                     <Text
                       key={i}
-                      x={c.x - 50}
+                      x={c.x - szer / 2}
                       // Blok rośnie W GÓRĘ, nie w dół: OSTATNI wiersz siada zawsze tam,
                       // gdzie siedziałby jedyny, a kolejne dokładają się nad nim.
                       //
@@ -1354,8 +1386,8 @@ export function DesignCanvas({
                       // 3 m (60 jedn.) od środka do ściany jest 30 jedn., a dwa wiersze
                       // zaczynające się 15 jedn. pod środkiem kończyły się na murze —
                       // dokładnie na etykiecie wymiaru ściany, przecinając oba napisy.
-                      y={c.y + 13 - (podpisy.length - 1 - i) * 10}
-                      width={100}
+                      y={c.y + odsadzenieAdnotacji - (podpisy.length - 1 - i) * (10 / FALLBACK_FONT_ADNOTACJI) * font}
+                      width={szer}
                       align="center"
                       text={tekst}
                       // Mniejsza i LŻEJSZA niż NAZWA pomieszczenia (11, bez pogrubienia),
@@ -1364,20 +1396,21 @@ export function DesignCanvas({
                       // i pogrubieniu wymiar ważył na rysunku więcej niż nazwa, czyli
                       // odwrotnie do tego, co znaczy — a samo zmniejszenie tego nie cofało,
                       // bo pogrubiona ósemka waży na rysunku tyle samo co zwykła jedenastka.
-                      fontSize={8.5}
+                      fontSize={font}
                       fill="#8A5526"
                       listening={false}
                     />
-                  ));
+                    );
+                  });
                 })()}
 
                 <Text
-                  x={c.x - 40}
-                  y={c.y - 6}
-                  width={80}
+                  x={c.x - Math.max(szerokoscTekstu(r.name, fontNazwy), 1) / 2}
+                  y={c.y - odsadzenieNazwy}
+                  width={Math.max(szerokoscTekstu(r.name, fontNazwy), 1)}
                   align="center"
                   text={r.name}
-                  fontSize={11}
+                  fontSize={fontNazwy}
                   fill={r.color}
                   listening={roomInteractive}
                   onClick={(e) => {
@@ -1554,7 +1587,7 @@ export function DesignCanvas({
                         offsetX={dlugosc / 2}
                         // Odsunięcie od osi ściany, żeby napis nie leżał na jej
                         // pociągnięciu (ściana bywa gruba — domyślnie 25 cm).
-                        offsetY={10}
+                        offsetY={10 * so}
                         width={dlugosc}
                         rotation={kat}
                         align="center"
@@ -1563,7 +1596,7 @@ export function DesignCanvas({
                         // wszystkie trzy to ADNOTACJE do rysunku, a nie jego treść.
                         // Przy jedenastce wymiar ściany ważył tyle samo co nazwa pokoju
                         // i rzut czytał się jako gąszcz liczb zamiast jako plan.
-                        fontSize={8.5}
+                        fontSize={8.5 * so}
                         fill="#8A5526"
                         listening={false}
                       />
@@ -1722,12 +1755,12 @@ export function DesignCanvas({
                   />
                 )}
                 <Text
-                  x={z.x - 60}
-                  y={z.y - zasieg - 14}
-                  width={120}
+                  x={z.x - 60 * so}
+                  y={z.y - zasieg - 14 * so}
+                  width={120 * so}
                   align="center"
                   text={`strefy: ${z.label}${!z.calibrated ? " (bez skali)" : ""}`}
-                  fontSize={8}
+                  fontSize={8 * so}
                   fill="#8A5526"
                 />
               </Group>
@@ -1897,12 +1930,12 @@ export function DesignCanvas({
                       <Circle x={wallCursor.x} y={wallCursor.y} radius={4} fill="#fff" stroke="#2D5A8C" strokeWidth={1.5} listening={false} />
                       {dlugosc > 0 && (
                         <Text
-                          x={midX - 40}
-                          y={midY - 18}
-                          width={80}
+                          x={midX - 40 * so}
+                          y={midY - 18 * so}
+                          width={80 * so}
                           align="center"
                           text={formatDlugosc(dlugosc)}
-                          fontSize={11}
+                          fontSize={11 * so}
                           fontStyle="bold"
                           fill="#2D5A8C"
                           listening={false}
@@ -1990,12 +2023,12 @@ export function DesignCanvas({
                   if (!(dlugosc > 0)) return null;
                   return (
                     <Text
-                      x={(ostatni.x + roomCursor.x) / 2 - 40}
-                      y={(ostatni.y + roomCursor.y) / 2 - 18}
-                      width={80}
+                      x={(ostatni.x + roomCursor.x) / 2 - 40 * so}
+                      y={(ostatni.y + roomCursor.y) / 2 - 18 * so}
+                      width={80 * so}
                       align="center"
                       text={formatDlugosc(dlugosc)}
-                      fontSize={11}
+                      fontSize={11 * so}
                       fontStyle="bold"
                       fill="#8A5526"
                       listening={false}
@@ -2016,12 +2049,12 @@ export function DesignCanvas({
                   const cy = figura.reduce((a, p) => a + p.y, 0) / figura.length;
                   return (
                     <Text
-                      x={cx - 40}
-                      y={cy - 6}
-                      width={80}
+                      x={cx - 40 * so}
+                      y={cy - 6 * so}
+                      width={80 * so}
                       align="center"
                       text={opis}
-                      fontSize={12}
+                      fontSize={12 * so}
                       fontStyle="bold"
                       fill="#8A5526"
                       opacity={0.85}
@@ -2073,11 +2106,11 @@ export function DesignCanvas({
                   zderzały się z etykietą powierzchni w środku. */}
               <Text
                 x={roomRect.x}
-                y={roomRect.y - 15}
+                y={roomRect.y - 15 * so}
                 width={roomRect.w}
                 align="center"
                 text={formatDlugosc(roomRect.w)}
-                fontSize={11}
+                fontSize={11 * so}
                 fontStyle="bold"
                 fill="#8A5526"
                 listening={false}
@@ -2089,13 +2122,13 @@ export function DesignCanvas({
                   Konva obraca wokół (x, y), więc kotwica idzie na GÓRĘ krawędzi, a `width`
                   równe wysokości prostokąta wyśrodkowuje napis na jej długości. */}
               <Text
-                x={roomRect.x - 15}
+                x={roomRect.x - 15 * so}
                 y={roomRect.y}
                 width={roomRect.h}
                 rotation={90}
                 align="center"
                 text={formatDlugosc(roomRect.h)}
-                fontSize={11}
+                fontSize={11 * so}
                 fontStyle="bold"
                 fill="#8A5526"
                 listening={false}
@@ -2105,11 +2138,11 @@ export function DesignCanvas({
               {roomRect.w > 0 && roomRect.h > 0 && formatPowierzchnia(rogiProstokata(roomRect)) && (
                 <Text
                   x={roomRect.x}
-                  y={roomRect.y + roomRect.h / 2 - 6}
+                  y={roomRect.y + roomRect.h / 2 - 6 * so}
                   width={roomRect.w}
                   align="center"
                   text={formatPowierzchnia(rogiProstokata(roomRect))!}
-                  fontSize={12}
+                  fontSize={12 * so}
                   fontStyle="bold"
                   fill="#8A5526"
                   listening={false}
