@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { isSupabaseConfigured, sesjaZOdpowiedzi, supaUpdateProject, wymagaOdswiezenia } from "./supabase";
+import { isSupabaseConfigured, sesjaZOdpowiedzi, supaDeleteAccount, supaUpdateProject, wymagaOdswiezenia } from "./supabase";
 
 describe("isSupabaseConfigured", () => {
   it("puste wartości -> nieskonfigurowane", () => {
@@ -89,5 +89,53 @@ describe("supaUpdateProject — warunek na updated_at", () => {
   /** Pusta tablica to sygnal konfliktu — wywolujacy musi ja dostac, a nie wyjatek. */
   it("brak trafionego wiersza wraca jako pusta tablica", async () => {
     await expect(supaUpdateProject("t", "abc", { name: "x", updated_at: ZNACZNIK }, ZNACZNIK)).resolves.toEqual([]);
+  });
+});
+
+describe("supaDeleteAccount", () => {
+  let ostatniUrl = "";
+  let ostatniaMetoda = "";
+  let ostatnieNaglowki: Record<string, string> = {};
+
+  beforeEach(() => {
+    ostatniUrl = "";
+    ostatniaMetoda = "";
+    ostatnieNaglowki = {};
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+      ostatniUrl = String(url);
+      ostatniaMetoda = init.method ?? "GET";
+      ostatnieNaglowki = init.headers as Record<string, string>;
+      // Funkcja SQL zwraca `void` — Supabase odpowiada pustym ciałem.
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("woła funkcję `usun_moje_konto` przez RPC", async () => {
+    await supaDeleteAccount("token-uzytkownika");
+    expect(ostatniUrl).toContain("/rest/v1/rpc/usun_moje_konto");
+    expect(ostatniaMetoda).toBe("POST");
+  });
+
+  /**
+   * Funkcja kasuje konto wyliczone z `auth.uid()`, czyli z TOKENU. Poleciałaby z
+   * kluczem `anon` — wtedy `auth.uid()` jest puste i nie skasowałaby niczego, po
+   * cichu: użytkownik zobaczyłby „konto usunięte", mając je dalej.
+   */
+  it("wysyła token sesji, a nie klucz anon", async () => {
+    await supaDeleteAccount("token-uzytkownika");
+    expect(ostatnieNaglowki.Authorization).toBe("Bearer token-uzytkownika");
+  });
+
+  it("błąd z API wraca jako wyjątek", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ message: "permission denied" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    await expect(supaDeleteAccount("t")).rejects.toThrow("permission denied");
   });
 });
