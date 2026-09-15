@@ -252,7 +252,8 @@ test("Kosztorys: rozbija sumę na netto/VAT/brutto i ostrzega o pozycjach bez ce
     [...document.querySelectorAll("tfoot td")]
       .map((c) => c.textContent!.trim())
       .filter((c) => c.endsWith("zł"))
-      .map((c) => parseFloat(c.replace(" zł", "")))
+      // Kwoty są po polsku (przecinek dziesiętny) — patrz src/lib/liczby.ts.
+      .map((c) => parseFloat(c.replace(" zł", "").replace(",", ".")))
   );
   const [netto, vat, brutto] = nums;
   expect(Math.abs(netto * 0.23 - vat)).toBeLessThan(0.02);

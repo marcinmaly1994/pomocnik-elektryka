@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { formatLiczba } from "@/lib/liczby";
 import {
   AlertTriangle,
   AlignCenterHorizontal,
@@ -3130,7 +3131,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             {/* Szerokość rzutu w metrach — tak laik może sprawdzić, czy skala się zgadza.
                 „1:50" nic mu nie mówi bez formatu arkusza w ręku. */}
             {mpu && (
-              <span className="pe-chip pe-tag-green">rzut ≈ {planWidthMeters(mpu, planSize.w)!.toFixed(1)} m szer.</span>
+              <span className="pe-chip pe-tag-green">rzut ≈ {formatLiczba(planWidthMeters(mpu, planSize.w)!, 1)} m szer.</span>
             )}
             {outsideHint && (
               <span className="font-medium" style={{ color: "#8A5526" }}>

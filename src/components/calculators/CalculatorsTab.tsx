@@ -1336,15 +1336,15 @@ export function CalculatorsTab() {
                     </div>
                     <div className="mt-2 flex gap-2 flex-wrap">
                       <span className="pe-chip pe-tag-copper">{sized.kabel}</span>
-                      <span className="pe-chip pe-tag-blue">Ib {(sized.Ib_A ?? 0).toFixed(2)} A</span>
+                      <span className="pe-chip pe-tag-blue">Ib {formatLiczba((sized.Ib_A ?? 0), 2)} A</span>
                       <span className="pe-chip pe-tag-green">obc. dop. {sized.Iz_A} A</span>
                       {sized.spadek_napiecia_pct !== null && (
                         // Z podanym spadkiem na WLZ pokazujemy SUMĘ — bo to ona jest
                         // porównywana z limitem — i rozbicie, żeby było widać, skąd wyszła.
                         <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
                           {sized.spadek_wlz_pct > 0
-                            ? `ΔU ${sized.spadek_calkowity_pct}% = WLZ ${sized.spadek_wlz_pct}% + obwód ${sized.spadek_napiecia_pct}% (limit ${sized.spadek_napiecia_limit_pct}%)`
-                            : `ΔU ${sized.spadek_napiecia_pct}% (limit ${sized.spadek_napiecia_limit_pct}%)`}
+                            ? `ΔU ${formatLiczba(sized.spadek_calkowity_pct, 2)}% = WLZ ${formatLiczba(sized.spadek_wlz_pct, 2)}% + obwód ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`
+                            : `ΔU ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`}
                         </span>
                       )}
                     </div>
@@ -1384,7 +1384,7 @@ export function CalculatorsTab() {
                           {row.label}
                         </span>
                         <span className="pe-mono shrink-0 text-[11.5px] text-slate-500">
-                          {row.Iz !== null ? `${row.Iz} A` : "—"}
+                          {row.Iz !== null ? `${formatLiczba(row.Iz, row.Iz % 1 === 0 ? 0 : 1)} A` : "—"}
                         </span>
                         <span
                           className="pe-mono w-16 shrink-0 text-right text-[12px] font-semibold"
@@ -1525,7 +1525,7 @@ export function CalculatorsTab() {
                       {sizedBreaker.aparat.In_A} {sizedBreaker.aparat.bieguny}
                     </div>
                     <div className="mt-2 flex gap-2 flex-wrap">
-                      <span className="pe-chip pe-tag-blue">Ib {sizedBreaker.Ib_A.toFixed(2)} A</span>
+                      <span className="pe-chip pe-tag-blue">Ib {formatLiczba(sizedBreaker.Ib_A, 2)} A</span>
                       <span className="pe-chip pe-tag-green">Iz {sizedBreaker.Iz_A} A</span>
                       <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
                         metoda {sizedBreaker.metoda_odniesienia} · k1 {sizedBreaker.wspolczynniki.k1_temperatura} · k2{" "}
@@ -1549,7 +1549,7 @@ export function CalculatorsTab() {
                   <div>
                     Warunek doboru spełniony:{" "}
                     <strong className="pe-mono">
-                      {sizedBreaker.Ib_A.toFixed(2)} A ≤ {sizedBreaker.aparat.In_A} A ≤ {sizedBreaker.Iz_A} A
+                      {formatLiczba(sizedBreaker.Ib_A, 2)} A ≤ {sizedBreaker.aparat.In_A} A ≤ {sizedBreaker.Iz_A} A
                     </strong>{" "}
                     (Ib ≤ In ≤ Iz) — wyłącznik zadziała, zanim przewód się przegrzeje.
                   </div>
@@ -1560,11 +1560,11 @@ export function CalculatorsTab() {
                 <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-xs text-slate-500">Prąd zadziałania Ia</div>
-                    <div className="pe-mono">{sizedBreaker.Ia_A.toFixed(0)} A</div>
+                    <div className="pe-mono">{formatLiczba(sizedBreaker.Ia_A, 0)} A</div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-500">Wymagana Zs max</div>
-                    <div className="pe-mono text-copper">{sizedBreaker.Zs_max_Ohm.toFixed(2)} Ω</div>
+                    <div className="pe-mono text-copper">{formatLiczba(sizedBreaker.Zs_max_Ohm, 2)} Ω</div>
                   </div>
                 </div>
               )}
@@ -3229,19 +3229,19 @@ export function CalculatorsTab() {
               <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-xs text-slate-500">Moc zainstalowana</div>
-                  <div className="pe-mono">{balance.sumPower.toFixed(0)} W</div>
+                  <div className="pe-mono">{formatLiczba(balance.sumPower, 0)} W</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Moc zapotrzebowana</div>
-                  <div className="pe-mono text-copper">{balance.demandPower.toFixed(0)} W</div>
+                  <div className="pe-mono text-copper">{formatLiczba(balance.demandPower, 0)} W</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Prąd — 1-faz.</div>
-                  <div className="pe-mono">{balance.demandCurrent1.toFixed(1)} A</div>
+                  <div className="pe-mono">{formatLiczba(balance.demandCurrent1, 1)} A</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Prąd — 3-faz.</div>
-                  <div className="pe-mono">{balance.demandCurrent3.toFixed(1)} A</div>
+                  <div className="pe-mono">{formatLiczba(balance.demandCurrent3, 1)} A</div>
                 </div>
               </div>
               <HowItWorks
@@ -3470,22 +3470,22 @@ export function CalculatorsTab() {
               <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
                   <div className="text-xs text-slate-500">Prąd zadziałania Ia</div>
-                  <div className="pe-mono">{zCalc.ia.toFixed(0)} A</div>
+                  <div className="pe-mono">{formatLiczba(zCalc.ia, 0)} A</div>
                 </div>
                 {/* Dwa progi obok siebie, nie jeden: pierwszy to granica z normy, drugi —
                     z jakim zapasem powinien wyjść POMIAR, żeby obwód przeszedł odbiór
                     także przy nagrzanych przewodach i niższym napięciu sieci. */}
                 <div>
                   <div className="text-xs text-slate-500">Zs max — limit normy</div>
-                  <div className="pe-mono text-copper">{zCalc.zsMax ? zCalc.zsMax.toFixed(2) : "—"} Ω</div>
+                  <div className="pe-mono text-copper">{zCalc.zsMax ? formatLiczba(zCalc.zsMax, 2) : "—"} Ω</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Zs — limit zalecany (0,8)</div>
-                  <div className="pe-mono text-copper">{zCalc.zsZalecana ? zCalc.zsZalecana.toFixed(2) : "—"} Ω</div>
+                  <div className="pe-mono text-copper">{zCalc.zsZalecana ? formatLiczba(zCalc.zsZalecana, 2) : "—"} Ω</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Prąd zwarcia Ik (c = 0,95)</div>
-                  <div className="pe-mono">{zCalc.ik ? zCalc.ik.toFixed(0) : "—"} A</div>
+                  <div className="pe-mono">{zCalc.ik ? formatLiczba(zCalc.ik, 0) : "—"} A</div>
                 </div>
               </div>
               {zCalc.ok !== null && (
@@ -3508,8 +3508,8 @@ export function CalculatorsTab() {
                     {!zCalc.ok
                       ? "Warunek niespełniony — zmierzona Zs przekracza limit normy. Skróć obwód, zwiększ przekrój lub zmień charakterystykę zabezpieczenia."
                       : zCalc.okZalecany
-                        ? `Warunek spełniony z zapasem ${zCalc.margines!.toFixed(0)}% — zabezpieczenie zadziała w wymaganym czasie.`
-                        : `Mieści się w normie, ale bez zapasu (do limitu ${zCalc.margines!.toFixed(0)}%). Pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję — po obciążeniu obwód może wypaść poza limit.`}
+                        ? `Warunek spełniony z zapasem ${formatLiczba(zCalc.margines!, 0)}% — zabezpieczenie zadziała w wymaganym czasie.`
+                        : `Mieści się w normie, ale bez zapasu (do limitu ${formatLiczba(zCalc.margines!, 0)}%). Pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję — po obciążeniu obwód może wypaść poza limit.`}
                   </span>
                 </div>
               )}
@@ -3557,7 +3557,7 @@ export function CalculatorsTab() {
               </div>
               <div className="mt-2 p-3 pe-result">
                 <div className="text-xs text-slate-500 mb-1">Maksymalna dopuszczalna RA</div>
-                <div className="pe-mono text-lg text-copper">{groundingCheck.raMax.toFixed(0)} Ω</div>
+                <div className="pe-mono text-lg text-copper">{formatLiczba(groundingCheck.raMax, 0)} Ω</div>
               </div>
               {groundingCheck.ok !== null && (
                 <div
@@ -3626,7 +3626,7 @@ export function CalculatorsTab() {
               <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-xs text-slate-500">Wymagany strumień całkowity</div>
-                  <div className="pe-mono">{lightCalc.requiredLumens.toFixed(0)} lm</div>
+                  <div className="pe-mono">{formatLiczba(lightCalc.requiredLumens, 0)} lm</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Liczba opraw</div>

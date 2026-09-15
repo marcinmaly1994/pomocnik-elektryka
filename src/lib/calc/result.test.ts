@@ -114,6 +114,14 @@ describe("formatLiczba", () => {
     expect(formatLiczba(0.5, 3)).toBe("0,500");
   });
 
+  /** Brak wartosci to NIE jest zero — „0,00 V" przy nieobliczonym spadku napiecia
+   *  bylby stwierdzeniem, ze spadku nie ma. */
+  it("brak wartosci pokazuje kreske, a nie zero", () => {
+    expect(formatLiczba(null, 2)).toBe("—");
+    expect(formatLiczba(undefined, 2)).toBe("—");
+    expect(formatLiczba(NaN, 2)).toBe("—");
+  });
+
   it("zaokragla, a nie ucina", () => {
     expect(formatLiczba(2.999, 2)).toBe("3,00");
   });

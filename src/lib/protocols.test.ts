@@ -37,8 +37,9 @@ describe("PROTOCOL_DEFS.petla.evaluate", () => {
     const ia = def.columns!.find((c) => c.key === "ia")!;
     const zsmax = def.columns!.find((c) => c.key === "zsmax")!;
     expect(ia.compute!({ curve: "B", in: 16 })).toBe("80");
+    // Przecinek dziesietny, bo to wartosc drukowana w polskim protokole — patrz lib/liczby.ts.
     // Cmin = 0,95 — protokol musi wymagac DOKLADNIE tego, co dopuscil dobor.
-    expect(zsmax.compute!({ curve: "B", in: 16 })).toBe("2.73");
+    expect(zsmax.compute!({ curve: "B", in: 16 })).toBe("2,73");
   });
 });
 
@@ -99,9 +100,9 @@ describe("PROTOCOL_DEFS.izolacja — próg zależny od napięcia probierczego (p
 
   it("kolumna R wymagana pokazuje próg wynikający z napięcia probierczego", () => {
     const rwym = def.columns!.find((c) => c.key === "rwym")!;
-    expect(rwym.compute!({}, 250)).toBe("0.5");
-    expect(rwym.compute!({}, 500)).toBe("1.0");
-    expect(rwym.compute!({}, 1000)).toBe("1.0");
+    expect(rwym.compute!({}, 250)).toBe("0,5");
+    expect(rwym.compute!({}, 500)).toBe("1,0");
+    expect(rwym.compute!({}, 1000)).toBe("1,0");
   });
 
   it("ocenia komplet zmierzonych par wobec progu z napięcia probierczego", () => {

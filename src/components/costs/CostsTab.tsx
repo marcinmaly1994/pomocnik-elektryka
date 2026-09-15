@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { formatLiczba } from "@/lib/liczby";
 import { AlertTriangle, ArrowLeft, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
@@ -159,12 +160,12 @@ export function CostsTab() {
     // i nie dziwił się, że nie wychodzi mu wartość — pozycja ryczałtowa mówi to wprost.
     const header = "Pozycja;Ilość;Cena jedn. (zł);Wartość (zł);Uwaga\n";
     const body = rows
-      .map((r) => `${r.label};${r.qty};${r.price.toFixed(2)};${r.value.toFixed(2)};${r.overridden ? "wartość wpisana ręcznie (ryczałt)" : ""}`)
+      .map((r) => `${r.label};${r.qty};${formatLiczba(r.price, 2)};${formatLiczba(r.value, 2)};${r.overridden ? "wartość wpisana ręcznie (ryczałt)" : ""}`)
       .join("\n");
     const summary =
-      `\nRazem netto;;;${grandTotal.toFixed(2)};` +
-      `\nVAT ${VAT_RATE}%;;;${vat.toFixed(2)};` +
-      `\n${podsumowanie.etykietaSumy};;;${gross.toFixed(2)};`;
+      `\nRazem netto;;;${formatLiczba(grandTotal, 2)};` +
+      `\nVAT ${VAT_RATE}%;;;${formatLiczba(vat, 2)};` +
+      `\n${podsumowanie.etykietaSumy};;;${formatLiczba(gross, 2)};`;
     const blob = new Blob(["﻿" + header + body + summary], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, projectFileName("kosztorys", projectName, "csv"));
   }
@@ -374,6 +375,10 @@ export function CostsTab() {
                         type="number"
                         value={r.overridden ? r.value : ""}
                         onChange={(e) => setCostOverride(r.key, e.target.value === "" ? null : Number(e.target.value) || 0)}
+                        // kropka-celowo: nie przecinek, MIMO polskiej notacji w reszcie kosztorysu — to podpowiedz
+                        // dla pola `type="number"`, ktore przechowuje wartosc wylacznie z kropka.
+                        // Przecinek w podpowiedzi mowilby uzytkownikowi, zeby wpisal cos,
+                        // czego kontrolka nie przyjmie.
                         placeholder={r.value.toFixed(2)}
                         aria-label={`Wartość pozycji: ${r.label}`}
                         className="pe-input pe-mono w-28 text-right text-sm"
@@ -401,13 +406,13 @@ export function CostsTab() {
                 <td className="p-3 pb-1 text-sm text-slate-500" colSpan={3}>
                   Razem netto
                 </td>
-                <td className="pe-mono p-3 pb-1 text-right text-sm">{grandTotal.toFixed(2)} zł</td>
+                <td className="pe-mono p-3 pb-1 text-right text-sm">{formatLiczba(grandTotal, 2)} zł</td>
               </tr>
               <tr>
                 <td className="px-3 py-1 text-sm text-slate-500" colSpan={3}>
                   VAT {VAT_RATE}%
                 </td>
-                <td className="pe-mono px-3 py-1 text-right text-sm text-slate-500">{vat.toFixed(2)} zł</td>
+                <td className="pe-mono px-3 py-1 text-right text-sm text-slate-500">{formatLiczba(vat, 2)} zł</td>
               </tr>
               {/* Ostrzeżenie stoi NAD sumą, nie pod nią. Pod spodem gasło: najpierw padała
                   wielka miedziana liczba z podpisem „RAZEM", a dopiero potem, drobnym
@@ -439,7 +444,7 @@ export function CostsTab() {
                 <td className="pe-display p-3 pt-1 font-bold" colSpan={3}>
                   {podsumowanie.etykietaSumy}
                 </td>
-                <td className="pe-display p-3 pt-1 text-right text-lg font-bold text-copper">{gross.toFixed(2)} zł</td>
+                <td className="pe-display p-3 pt-1 text-right text-lg font-bold text-copper">{formatLiczba(gross, 2)} zł</td>
               </tr>
             </tfoot>
           </table>

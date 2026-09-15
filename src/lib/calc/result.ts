@@ -1,3 +1,4 @@
+import { formatLiczba } from "@/lib/liczby";
 /**
  * Wspólna koperta wyniku kalkulatorów inżynierskich.
  *
@@ -133,8 +134,7 @@ export function ocenPodLimitem(wartosc: number, limit: number, opis: { co: strin
   };
 }
 
-/** Liczba do prezentacji: przecinek dziesiętny (polska norma zapisu), zadana precyzja. */
-export function formatLiczba(v: number, miejsca: number): string {
-  if (!Number.isFinite(v)) return "—";
-  return v.toFixed(miejsca).replace(".", ",");
-}
+// Przeniesione do `lib/liczby.ts` — formatowanie liczby nie jest częścią silnika
+// obliczeń, a potrzebują go tak samo kosztorys, rozdzielnica i protokoły. Reeksport
+// zostaje, żeby nie ruszać kilkudziesięciu istniejących wywołań w kalkulatorach.
+export { formatLiczba };

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatLiczba } from "@/lib/liczby";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups, ostrzezeniaObwodow } from "@/lib/panel/circuits";
@@ -559,21 +560,21 @@ export function PanelTab() {
                     <div style={{ width: `${(phaseLoad[ph] / maxPhase) * 100}%`, height: "100%", background: PHASE_COLORS[ph], opacity: 0.75 }} />
                   </div>
                   <span className="pe-mono w-20 text-right text-xs text-slate-600">
-                    {phaseLoad[ph]} A · {balance.percent[ph]}%
+                    {formatLiczba(phaseLoad[ph], 1)} A · {formatLiczba(balance.percent[ph], 1)}%
                   </span>
                 </div>
               ))}
             </div>
             <div className="mt-2 text-[11px]" style={{ color: phaseSpread > 32 ? "#A2352C" : "#64748B" }}>
               {phaseSpread > 32
-                ? `Różnica między najbardziej i najmniej obciążoną fazą wynosi ${phaseSpread} A — rozważ przepięcie obwodów lub użyj „Wyrównaj fazy”.`
+                ? `Różnica między najbardziej i najmniej obciążoną fazą wynosi ${formatLiczba(phaseSpread, 1)} A — rozważ przepięcie obwodów lub użyj „Wyrównaj fazy”.`
                 : rozlozoneRowno
-                  ? `Rozrzut między fazami: ${phaseSpread} A (${balance.spreadPct} pkt proc.) — obciążenie rozłożone równomiernie.`
+                  ? `Rozrzut między fazami: ${formatLiczba(phaseSpread, 1)} A (${formatLiczba(balance.spreadPct, 1)} pkt proc.) — obciążenie rozłożone równomiernie.`
                   : // Świadomie BEZ namawiania do przepinania: przy dwóch obwodach na trzy fazy
                     // jedna zostanie pusta niezależnie od tego, jak je poprzekładać, więc rada
                     // „wyrównaj" byłaby nie do wykonania. Przy tak małych prądach asymetria i
                     // tak nie zmienia doboru — liczy się dopiero przy dokładaniu kolejnych obwodów.
-                    `Rozrzut między fazami: ${phaseSpread} A (${balance.spreadPct} pkt proc.) — obciążenie nierówne, ale przy tych prądach bez wpływu na dobór. Kolejne obwody dokładaj od fazy ${najlzejszaFaza}.`}
+                    `Rozrzut między fazami: ${formatLiczba(phaseSpread, 1)} A (${formatLiczba(balance.spreadPct, 1)} pkt proc.) — obciążenie nierówne, ale przy tych prądach bez wpływu na dobór. Kolejne obwody dokładaj od fazy ${najlzejszaFaza}.`}
             </div>
           </div>
         )}
@@ -880,14 +881,14 @@ export function PanelTab() {
                         {s.liczba_faz === "3" ? "3F" : s.faza}
                       </span>
                     </td>
-                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{s.Ib_A ?? "—"} A</td>
+                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{formatLiczba(s.Ib_A, 2)} A</td>
                     <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">
                       {s.przekroj_mm2 ? `${String(s.przekroj_mm2).replace(".", ",")} mm²` : "—"}
                     </td>
                     <td className="pe-mono py-1.5 pr-3">
                       {s.aparat ? `${s.aparat.charakterystyka}${s.aparat.In_A} ${s.aparat.bieguny}` : "—"}
                     </td>
-                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{s.Iz_A ?? "—"} A</td>
+                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{formatLiczba(s.Iz_A, 1)} A</td>
                     <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">
                       {s.spadek_napiecia_pct === null ? "—" : `${s.spadek_napiecia_pct}%`}
                     </td>
