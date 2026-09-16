@@ -1219,7 +1219,11 @@ export default function App() {
         build={async () => kompletBajty!}
       />
 
-      <SiteFooter />
+      {/* Zapas pod pigułki TYLKO tam, gdzie one są: na ekranie startowym i w zakładkach
+          spoza przepływu (Kalkulatory, Protokoły) nie ma ani „Cofnij", ani „Dalej",
+          a pusty pas pod stopką to dokładnie ten pas gołego tła, który już raz
+          z tego ekranu usuwano. Ten sam warunek co przy samych pigułkach wyżej. */}
+      <SiteFooter rezerwaNaNawigacje={KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab) > 0} />
     </div>
   );
 }
@@ -1231,9 +1235,26 @@ export default function App() {
  * uprawnieniami. Aplikacja jest adresowana głównie do laików (krok 20), więc to
  * zastrzeżenie musi być widoczne, a nie schowane w „warunkach użytkowania".
  */
-function SiteFooter() {
+function SiteFooter({ rezerwaNaNawigacje }: { rezerwaNaNawigacje: boolean }) {
+  /*
+   * `md:pb-16` to ZAPAS pod pływające pigułki „Cofnij/Dalej".
+   *
+   * Są `position: fixed` w rogach OKNA, więc po przewinięciu na sam dół leżały na
+   * stopce — akurat na zdaniu o tym, że wyniki nie zastępują odbioru przez osobę
+   * z uprawnieniami SEP/budowlanymi. 64 px to wysokość pigułki (36) plus jej odstęp
+   * od krawędzi (`NAWIGACJA_ODSTEP_PX` = 20) plus luz.
+   *
+   * Świadomie ZAMIAST chowania pigułek przy dojechaniu do stopki: gaszenie skrótu
+   * „Dalej" dokładnie wtedy, gdy ktoś doczytał stronę do końca i chce przejść dalej,
+   * zabierałoby go w jedynym momencie, w którym jest naprawdę potrzebny.
+   *
+   * Dopiero od `md`, bo poniżej pigułek w ogóle nie ma (patrz ich `hidden md:flex`)
+   * i pusty pas byłby marnotrawstwem na najciaśniejszym ekranie.
+   */
   return (
-    <footer className="mt-10 border-t border-border pt-5 text-xs text-slate-500">
+    <footer
+      className={`mt-10 border-t border-border pt-5 text-xs text-slate-500 ${rezerwaNaNawigacje ? "md:pb-16" : ""}`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
           <Logo className="mb-1.5 h-5 w-auto" />
