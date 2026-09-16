@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeLightGroups, isLightControl, isLightPoint } from "./lightGroups";
+import { computeLightGroups, isLightControl, isLightPoint, rozmiescEtykietyGrup } from "./lightGroups";
 import { NO_ROOM } from "./elements";
 import type { ElementType, InstallationElement } from "@/types";
 
@@ -235,5 +235,164 @@ describe("łącznik grupowy — dwa obwody", () => {
     expect(g.get(grupowy.id)).toHaveLength(2);
     expect(g.get(zwykly.id)).toHaveLength(1);
     expect(one(g, l3.id)).toBe(one(g, zwykly.id));
+  });
+});
+
+/**
+ * Etykiety numerów grup stoją domyślnie po PRAWEJ stronie symbolu. Dwa łączniki po
+ * przeciwnych stronach ściany — a tak stawia je każdy, kto montuje je przy tej samej
+ * framudze — wypychały więc cyfry ku sobie. W projekcie przykładowym łącznik kuchenny
+ * stoi 67 cm od salonowego schodowego, a ich etykiety lądowały 6 jedn. od siebie:
+ * cyfra „1" z kuchni wyglądała jak drugi numer salonowego łącznika, który naprawdę
+ * ma „4". Zgłoszone jako „dwa schodowe mają różne numery" — grupowanie było poprawne,
+ * rozjechało się samo rozmieszczenie.
+ */
+describe("rozmiescEtykietyGrup", () => {
+  const PRAWO = { x: 26, y: 0 };
+  const kandydaci = [PRAWO, { x: -26, y: 0 }, { x: 0, y: -26 }, { x: 0, y: 26 }];
+
+  it("etykiety daleko od siebie zostają po prawej", () => {
+    const wynik = rozmiescEtykietyGrup(
+      [
+        { klucz: "a:0", srodek: { x: 0, y: 0 }, rotacja: 0, kandydaci },
+        { klucz: "b:0", srodek: { x: 500, y: 500 }, rotacja: 0, kandydaci },
+      ],
+      20
+    );
+    expect(wynik.get("a:0")!.kotwica).toEqual(PRAWO);
+    expect(wynik.get("b:0")!.kotwica).toEqual(PRAWO);
+  });
+
+  it("kolidujące etykiety trafiają na różne strony symboli", () => {
+    // Odległość elementów mniejsza niż podwojone odsunięcie etykiety — obie cyfry
+    // po prawej wylądowałyby praktycznie w jednym punkcie.
+    const a = { x: 0, y: 0 };
+    const b = { x: 13, y: -12 };
+    const wynik = rozmiescEtykietyGrup(
+      [
+        { klucz: "a:0", srodek: a, rotacja: 0, kandydaci },
+        { klucz: "b:0", srodek: b, rotacja: 0, kandydaci },
+      ],
+      20
+    );
+
+    const pozA = { x: a.x + wynik.get("a:0")!.kotwica.x, y: a.y + wynik.get("a:0")!.kotwica.y };
+    const pozB = { x: b.x + wynik.get("b:0")!.kotwica.x, y: b.y + wynik.get("b:0")!.kotwica.y };
+    expect(Math.hypot(pozA.x - pozB.x, pozA.y - pozB.y)).toBeGreaterThanOrEqual(20);
+  });
+
+  /** Numery użytkownik wpisuje ręcznie, a etykiety czyta wzrokiem — skakanie ich
+   *  po rzucie przy każdym dorysowanym elemencie byłoby gorsze niż kolizja. */
+  it("wynik nie zależy od kolejności wejścia", () => {
+    const wejscie = [
+      { klucz: "a:0", srodek: { x: 0, y: 0 }, rotacja: 0, kandydaci },
+      { klucz: "b:0", srodek: { x: 13, y: -12 }, rotacja: 0, kandydaci },
+      { klucz: "c:0", srodek: { x: 6, y: 14 }, rotacja: 0, kandydaci },
+    ];
+    const w1 = rozmiescEtykietyGrup(wejscie, 20);
+    const w2 = rozmiescEtykietyGrup([...wejscie].reverse(), 20);
+    for (const k of ["a:0", "b:0", "c:0"]) expect(w2.get(k)).toEqual(w1.get(k));
+  });
+
+  /** Łącznik grupowy ma po jednej etykiecie przy KAŻDEJ dźwigni — przeniesienie cyfry
+   *  na inną stronę zerwałoby jej związek z dźwignią, którą opisuje. */
+  it("etykieta z jednym kandydatem zostaje na miejscu", () => {
+    const tylkoJeden = [{ x: 26, y: 0 }];
+    const wynik = rozmiescEtykietyGrup(
+      [
+        { klucz: "a:0", srodek: { x: 0, y: 0 }, rotacja: 0, kandydaci: tylkoJeden },
+        { klucz: "b:0", srodek: { x: 2, y: 0 }, rotacja: 0, kandydaci: tylkoJeden },
+      ],
+      20
+    );
+    expect(wynik.get("a:0")!.kotwica).toEqual(tylkoJeden[0]);
+    expect(wynik.get("b:0")!.kotwica).toEqual(tylkoJeden[0]);
+  });
+});
+
+/**
+ * Etykieta jest rysowana WEWNĄTRZ skalowanej grupy symbolu (`skalaSymbolu`), więc jej
+ * kotwica lokalna jest mnożona przed trafieniem na rysunek. Bez uwzględnienia tej skali
+ * wykrywanie kolizji byłoby fikcją wszędzie poza rysunkiem odręcznym: przy rzucie
+ * skalibrowanym gęściej symbole (a z nimi odsunięcia etykiet) są kilkukrotnie większe.
+ */
+describe("rozmiescEtykietyGrup — skala symbolu", () => {
+  const kandydaci = [
+    { x: 26, y: 0 },
+    { x: -26, y: 0 },
+    { x: 0, y: -26 },
+    { x: 0, y: 26 },
+  ];
+
+  /**
+   * Gdy OBIE etykiety biorą tę samą kotwicę, ich wzajemna odległość nie zależy od skali:
+   * przesuwają się identycznie. Skala wchodzi do gry przy ROZSUWANIU — wtedy etykieta
+   * ląduje po innej stronie symbolu, a jak daleko, decyduje właśnie skala.
+   */
+  it("gwarancja odstępu liczona jest na pozycjach PO przeskalowaniu", () => {
+    const skala = 3;
+    const a = { x: 0, y: 0 };
+    const b = { x: 30, y: 0 };
+    const wynik = rozmiescEtykietyGrup(
+      [
+        { klucz: "a:0", srodek: a, rotacja: 0, kandydaci, skala },
+        { klucz: "b:0", srodek: b, rotacja: 0, kandydaci, skala },
+      ],
+      40
+    );
+
+    const poz = (sr: { x: number; y: number }, kot: { x: number; y: number }) => ({
+      x: sr.x + kot.x * skala,
+      y: sr.y + kot.y * skala,
+    });
+    const pa = poz(a, wynik.get("a:0")!.kotwica);
+    const pb = poz(b, wynik.get("b:0")!.kotwica);
+    expect(Math.hypot(pa.x - pb.x, pa.y - pb.y)).toBeGreaterThanOrEqual(40);
+  });
+});
+
+/**
+ * Kreska odniesienia rysowana jest TYLKO przy etykiecie, która ustąpiła z domyślnej
+ * strony. Przy luźnym rzucie nic się nie zmienia; w ciasnym miejscu przesunięta cyfra
+ * jawnie wskazuje swojego właściciela — bo problemem nie jest sama odległość, tylko to,
+ * że nie wiadomo, do którego symbolu numer należy.
+ */
+describe("rozmiescEtykietyGrup — które etykiety ustąpiły", () => {
+  const kandydaci = [
+    { x: 26, y: 0 },
+    { x: -26, y: 0 },
+    { x: 0, y: -26 },
+    { x: 0, y: 26 },
+  ];
+
+  it("etykieta na domyślnej stronie nie jest oznaczona jako przesunięta", () => {
+    const w = rozmiescEtykietyGrup([{ klucz: "a:0", srodek: { x: 0, y: 0 }, rotacja: 0, kandydaci }], 20);
+    expect(w.get("a:0")!.przesunieta).toBe(false);
+  });
+
+  it("etykieta, która musiała ustąpić, jest tak oznaczona", () => {
+    const w = rozmiescEtykietyGrup(
+      [
+        { klucz: "a:0", srodek: { x: 0, y: 0 }, rotacja: 0, kandydaci },
+        { klucz: "b:0", srodek: { x: 13, y: -12 }, rotacja: 0, kandydaci },
+      ],
+      20
+    );
+    expect(w.get("a:0")!.przesunieta).toBe(false);
+    expect(w.get("b:0")!.przesunieta).toBe(true);
+  });
+
+  /** Etykieta z jedną kotwicą nie ma dokąd ustąpić — nie dostaje więc też kreski,
+   *  bo ta sugerowałaby przesunięcie, którego nie było. */
+  it("etykieta bez alternatyw nigdy nie jest przesunięta", () => {
+    const jeden = [{ x: 26, y: 0 }];
+    const w = rozmiescEtykietyGrup(
+      [
+        { klucz: "a:0", srodek: { x: 0, y: 0 }, rotacja: 0, kandydaci: jeden },
+        { klucz: "b:0", srodek: { x: 2, y: 0 }, rotacja: 0, kandydaci: jeden },
+      ],
+      20
+    );
+    expect(w.get("b:0")!.przesunieta).toBe(false);
   });
 });
