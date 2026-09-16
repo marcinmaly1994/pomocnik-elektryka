@@ -276,7 +276,12 @@ export function ProtocolsTab() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      {/* Siatka o RÓWNYCH kolumnach, nie `flex-wrap`. Przy różnych szerokościach
+          siódmy kafelek („Ochrona odgromowa (LPS)") zostawał sam w drugim rzędzie
+          i czytał się jak coś, co się nie zmieściło. Przy czterech kolumnach siedem
+          protokołów układa się 4 + 3, a równe szerokości sprawiają, że niepełny
+          ostatni rząd wygląda normalnie — także gdyby kiedyś doszedł ósmy protokół. */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {PROTOCOL_ORDER.map((k) => {
           const d = PROTOCOL_DEFS[k];
           const st = protocols[k];
