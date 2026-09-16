@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { zPrzecinkiem } from "@/lib/liczby";
 import {
   bladWyniku,
   formatLiczba,
@@ -131,5 +132,19 @@ describe("formatLiczba", () => {
     expect(formatLiczba(NaN, 2)).toBe("—");
     expect(formatLiczba(Infinity, 2)).toBe("—");
     expect(formatLiczba(-Infinity, 0)).toBe("—");
+  });
+});
+
+describe("zPrzecinkiem", () => {
+  it("zamienia separator i NIE rusza precyzji", () => {
+    // Zaokraglenie zmienia DANE — 2,731 Ω to wartosc z tablic, nie przyblizenie.
+    expect(zPrzecinkiem(2.731)).toBe("2,731");
+    expect(zPrzecinkiem(4.37)).toBe("4,37");
+    expect(zPrzecinkiem(12)).toBe("12");
+  });
+
+  it("brak wartosci daje kreske", () => {
+    expect(zPrzecinkiem(null)).toBe("—");
+    expect(zPrzecinkiem(undefined)).toBe("—");
   });
 });

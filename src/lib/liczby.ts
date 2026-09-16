@@ -25,3 +25,16 @@ export function formatLiczba(v: number | null | undefined, miejsca: number): str
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
   return v.toFixed(miejsca).replace(".", ",");
 }
+
+/**
+ * Ta sama liczba, tylko po polsku — BEZ narzucania precyzji.
+ *
+ * Do miejsc, w których o zaokrągleniu zdecydował już silnik obliczeń i wyświetlamy
+ * jego wynik bez zmian. `formatLiczba` nie nadaje się tam, bo wymaga podania liczby
+ * miejsc: „2,731 Ω" (dokładna wartość Zs max z tablic) zamieniłoby na „2,73 Ω",
+ * czyli po cichu zmieniłoby DANE przy okazji poprawiania interpunkcji.
+ */
+export function zPrzecinkiem(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  return String(v).replace(".", ",");
+}
