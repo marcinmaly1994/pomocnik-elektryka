@@ -9,7 +9,7 @@ interface HelpModalProps {
 /** Kroki odpowiadają 1:1 nazwom narzędzi/zakładek w interfejsie (patrz `ToolRail.tsx`
  *  i `FlowCard` w `App.tsx`) — laik szukający pomocy musi rozpoznać to, co widzi na
  *  ekranie, w tekście, który czyta. */
-const KROKI: { tytul: string; opis: string }[] = [
+export const KROKI: { tytul: string; opis: string }[] = [
   {
     tytul: "Wgraj rzut albo narysuj dom",
     opis: "W zakładce „Instalacja” wgraj zdjęcie lub skan rzutu mieszkania. Nie masz rzutu? Narysuj ściany od zera narzędziem „Narysuj Ścianę”.",
@@ -24,7 +24,7 @@ const KROKI: { tytul: string; opis: string }[] = [
   },
   {
     tytul: "Rozstaw gniazdka, łączniki i oświetlenie",
-    opis: "Narzędziem „Wstaw Element” wybierz element z listy i kliknij na rzucie, żeby go postawić. Drzwi dodasz narzędziem „Drzwi”, klikając w ścianę albo krawędź pomieszczenia, w które mają być wstawione.",
+    opis: "Narzędziem „Wstaw Element” wybierz element z listy i kliknij na rzucie, żeby go postawić. Drzwi dodasz narzędziem „Drzwi i okna”, klikając w ścianę albo krawędź pomieszczenia, w które mają być wstawione.",
   },
   {
     tytul: "Sprawdź rozdzielnicę i schemat",
