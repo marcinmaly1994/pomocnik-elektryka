@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatLiczba } from "@/lib/liczby";
+import { formatLiczba, zPrzecinkiem } from "@/lib/liczby";
+import { Podpowiedz } from "@/components/ui/tooltip";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups, ostrzezeniaObwodow } from "@/lib/panel/circuits";
@@ -815,50 +816,31 @@ export function PanelTab() {
             <thead>
               <tr className="text-slate-400">
                 <th className="py-1 pr-3 font-medium">Obwód</th>
-                <th className="py-1 pr-3 font-medium" title="Do którego przewodu fazowego (L1/L2/L3) podłączony jest obwód — rozkłada obciążenie równomiernie między fazy.">
-                  Faza
+                <th className="py-1 pr-3 font-medium">
+                  <Podpowiedz tresc="Do którego przewodu fazowego (L1/L2/L3) podłączony jest obwód — rozkłada obciążenie równomiernie między fazy.">
+                    Faza
+                  </Podpowiedz>
                 </th>
-                <th
-                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
-                  title="Prąd obliczeniowy — ile prądu faktycznie pobiorą odbiorniki podłączone do tego obwodu."
-                >
-                  Ib
+                <th className="py-1 pr-3 text-right font-medium">
+                  <Podpowiedz tresc="Prąd obliczeniowy — ile prądu faktycznie pobiorą odbiorniki podłączone do tego obwodu.">Ib</Podpowiedz>
                 </th>
-                <th
-                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
-                  title="Przekrój żyły przewodu (mm²) — na tyle duży, żeby bezpiecznie przenieść prąd Ib bez przegrzania."
-                >
-                  Przekrój
+                <th className="py-1 pr-3 text-right font-medium">
+                  <Podpowiedz tresc="Przekrój żyły przewodu (mm²) — na tyle duży, żeby bezpiecznie przenieść prąd Ib bez przegrzania.">Przekrój</Podpowiedz>
                 </th>
-                <th
-                  className="cursor-help py-1 pr-3 font-medium underline decoration-dotted"
-                  title="Dobrany wyłącznik nadprądowy (bezpiecznik) — jego prąd znamionowy chroni przewód przed przeciążeniem."
-                >
-                  Aparat
+                <th className="py-1 pr-3 font-medium">
+                  <Podpowiedz tresc="Dobrany wyłącznik nadprądowy (bezpiecznik) — jego prąd znamionowy chroni przewód przed przeciążeniem.">Aparat</Podpowiedz>
                 </th>
-                <th
-                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
-                  title="Obciążalność prądowa przewodu — maksymalny prąd, jaki może bezpiecznie przenieść przy tym sposobie ułożenia."
-                >
-                  Iz
+                <th className="py-1 pr-3 text-right font-medium">
+                  <Podpowiedz tresc="Obciążalność prądowa przewodu — maksymalny prąd, jaki może bezpiecznie przenieść przy tym sposobie ułożenia.">Iz</Podpowiedz>
                 </th>
-                <th
-                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
-                  title="Spadek napięcia na trasie od rozdzielnicy do najdalszego punktu obwodu — im dłuższy przewód, tym większy; norma ogranicza go do 3–5%."
-                >
-                  ΔU
+                <th className="py-1 pr-3 text-right font-medium">
+                  <Podpowiedz tresc="Spadek napięcia na trasie od rozdzielnicy do najdalszego punktu obwodu — im dłuższy przewód, tym większy; norma ogranicza go do 3–5%.">ΔU</Podpowiedz>
                 </th>
-                <th
-                  className="cursor-help py-1 pr-3 text-right font-medium underline decoration-dotted"
-                  title="Maksymalna impedancja pętli zwarcia, przy której zabezpieczenie zdąży zadziałać wystarczająco szybko przy zwarciu."
-                >
-                  Zs max
+                <th className="py-1 pr-3 text-right font-medium">
+                  <Podpowiedz tresc="Maksymalna impedancja pętli zwarcia, przy której zabezpieczenie zdąży zadziałać wystarczająco szybko przy zwarciu.">Zs max</Podpowiedz>
                 </th>
-                <th
-                  className="cursor-help py-1 pr-3 font-medium underline decoration-dotted"
-                  title="Typ wyłącznika różnicowoprądowego wymagany dla tego obwodu — chroni przed porażeniem prądem w razie uszkodzenia izolacji."
-                >
-                  RCD
+                <th className="py-1 pr-3 font-medium">
+                  <Podpowiedz tresc="Typ wyłącznika różnicowoprądowego wymagany dla tego obwodu — chroni przed porażeniem prądem w razie uszkodzenia izolacji.">RCD</Podpowiedz>
                 </th>
               </tr>
             </thead>
@@ -890,9 +872,9 @@ export function PanelTab() {
                     </td>
                     <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{formatLiczba(s.Iz_A, 1)} A</td>
                     <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">
-                      {s.spadek_napiecia_pct === null ? "—" : `${s.spadek_napiecia_pct}%`}
+                      {s.spadek_napiecia_pct === null ? "—" : `${zPrzecinkiem(s.spadek_napiecia_pct)}%`}
                     </td>
-                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{s.Zs_max_Ohm ?? "—"} Ω</td>
+                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{zPrzecinkiem(s.Zs_max_Ohm)} Ω</td>
                     <td className="pe-mono py-1.5 pr-3">typ {s.rcd_typ}</td>
                   </tr>
                 );
