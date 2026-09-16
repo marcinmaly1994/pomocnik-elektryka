@@ -1,4 +1,5 @@
 import { ArrowRight, Layers } from "lucide-react";
+import { oczkoSiatkiM } from "@/lib/design";
 import type { Point, RoomShape } from "@/types";
 import { polygonAreaM2 } from "@/lib/geometry";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
@@ -58,6 +59,7 @@ export function EditorStatusBar({
   nastepnyKrok,
 }: EditorStatusBarProps) {
   const area = totalRoomAreaM2(roomShapes, metersPerUnit);
+  const oczko = oczkoSiatkiM(metersPerUnit);
 
   return (
     <div
@@ -80,10 +82,13 @@ export function EditorStatusBar({
         Elementy: <span className="pe-mono text-slate-700">{elementCount}</span>
       </span>
 
+      {/* Oczko siatki, a NIE „1 jedn. = 5,00 cm". Jednostka planu to pojecie z kodu —
+          elektryk nie ma jak go uzyc ani z czym zestawic. Oczko widac na ekranie, wiec
+          ten odczyt da sie sprawdzic wzrokiem: „pokoj ma cztery kratki, czyli 4 m". */}
       <span>
-        Skala:{" "}
+        Siatka:{" "}
         <span className="pe-mono text-slate-700">
-          {metersPerUnit === null ? "nieustawiona" : `1 jedn. = ${fmt(metersPerUnit * 100)} cm`}
+          {oczko === null ? "skala nieustawiona" : `oczko ${fmt(oczko)} m`}
         </span>
       </span>
 

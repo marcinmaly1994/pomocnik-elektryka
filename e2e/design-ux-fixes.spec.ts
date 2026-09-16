@@ -178,7 +178,7 @@ test("kalibracja skali pokazuje potwierdzenie na górze, przy planie", async ({ 
 
   // Wcześniej wynik kalibracji był widoczny WYŁĄCZNIE w drobnym pasku stanu pod
   // całym płótnem — kto właśnie podał wymiar, patrzy w górę, nie w dół strony.
-  await expect(page.getByText(/Skala ustawiona: 1 jedn\. = /)).toBeVisible();
+  await expect(page.getByText(/Skala ustawiona: oczko siatki = /)).toBeVisible();
 });
 
 test("nazwa projektu ma czytelną wagę typograficzną", async ({ page }) => {
