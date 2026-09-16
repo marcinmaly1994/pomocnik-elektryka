@@ -1,4 +1,5 @@
 import type { ProtocolKey } from "@/types";
+import { formatLiczba } from "@/lib/liczby";
 import { zsMaxForBreaker } from "@/lib/panel/sizing";
 
 export type ProtocolRow = Record<string, string | number | undefined>;
@@ -95,7 +96,7 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
         label: "R wymagana",
         w: 56,
         type: "computed",
-        compute: (_r, limit) => minRezystancjaIzolacji(Number(limit) || 500).toFixed(1),
+        compute: (_r, limit) => formatLiczba(minRezystancjaIzolacji(Number(limit) || 500), 1),
       },
     ],
     // Napięcie probiercze jest JEDNO dla całego pomiaru (mierzy się nim wszystkie
@@ -130,7 +131,7 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
       { key: "zs", label: "Zs L1 [Ω]", w: 58, type: "number" },
       { key: "zs2", label: "Zs L2 [Ω]", w: 58, type: "number" },
       { key: "zs3", label: "Zs L3 [Ω]", w: 58, type: "number" },
-      { key: "ia", label: "Ia [A]", w: 48, type: "computed", compute: (r) => zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0)).ia.toFixed(0) },
+      { key: "ia", label: "Ia [A]", w: 48, type: "computed", compute: (r) => formatLiczba(zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0)).ia, 0) },
       {
         key: "zsmax",
         label: "Zs max [Ω]",
@@ -138,7 +139,7 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
         type: "computed",
         compute: (r) => {
           const z = zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0)).zsMax;
-          return z ? z.toFixed(2) : "—";
+          return z ? formatLiczba(z, 2) : "—";
         },
       },
     ],

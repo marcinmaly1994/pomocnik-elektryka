@@ -65,7 +65,7 @@ test("dobór przekroju dla domyślnych danych zgadza się z silnikiem Rozdzielni
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("2,5 mm²");
   await expect(result).toContainText("YDYp 3x2,5 mm²");
-  await expect(result).toContainText("Ib 8.70 A");
+  await expect(result).toContainText("Ib 8,70 A");
   await expect(result).toContainText("obc. dop. 23 A");
 });
 
@@ -104,7 +104,7 @@ test("dobór przekroju pokazuje, jak sposób ułożenia zmienia obciążalność
   // ściana ocieplona (A1) = 19,5 A — trzy różne liczby z tablicy B.52.4
   await expect(tabela).toContainText("27 A");
   await expect(tabela).toContainText("23 A");
-  await expect(tabela).toContainText("19.5 A");
+  await expect(tabela).toContainText("19,5 A");
 
   // klik w wiersz przestawia założenie w formularzu wyżej
   await tabela.getByRole("button", { name: /natynkowo/ }).click();
@@ -122,12 +122,12 @@ test("dobór zabezpieczenia do przekroju 2,5 mm² daje B16 i rozpisany warunek I
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("B16 1P");
-  await expect(result).toContainText("Ib 8.70 A");
+  await expect(result).toContainText("Ib 8,70 A");
   await expect(result).toContainText("Iz 23 A");
   await expect(result).toContainText("metoda B2");
 
   await expect(page.getByText(/Warunek doboru spełniony/)).toBeVisible();
-  await expect(page.getByText("8.70 A ≤ 16 A ≤ 23 A")).toBeVisible();
+  await expect(page.getByText("8,70 A ≤ 16 A ≤ 23 A")).toBeVisible();
 });
 
 test("zbyt cienki przewód do danego prądu to BŁĄD doboru zabezpieczenia, nie cichy większy wyłącznik", async ({ page }) => {
@@ -623,9 +623,9 @@ test("impedancja pętli zwarcia liczy się z tych samych stałych co Rozdzielnic
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("80 A");
   // Cmin = 0,95 — ten sam wspolczynnik co w doborze i w protokole pomiarowym.
-  await expect(result).toContainText("2.73 Ω");
+  await expect(result).toContainText("2,73 Ω");
   // Drugi prog: z jakim zapasem powinien wyjsc POMIAR.
-  await expect(result).toContainText("2.19 Ω");
+  await expect(result).toContainText("2,19 Ω");
 });
 
 /**

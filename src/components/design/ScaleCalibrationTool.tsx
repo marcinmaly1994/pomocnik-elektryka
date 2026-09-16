@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatLiczba } from "@/lib/liczby";
 import { Ruler } from "lucide-react";
 import type { Point } from "@/types";
 import {
@@ -149,7 +150,7 @@ export function ScaleCalibrationTool({
             </select>
           </label>
           {presetWidth !== null && (
-            <span className="text-slate-400">rzut ma wtedy ok. {presetWidth.toFixed(1)} m szerokości</span>
+            <span className="text-slate-400">rzut ma wtedy ok. {formatLiczba(presetWidth, 1)} m szerokości</span>
           )}
           <button
             onClick={() => presetMpu && onApply(presetMpu)}

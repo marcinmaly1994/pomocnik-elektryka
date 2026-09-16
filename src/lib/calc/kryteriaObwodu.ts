@@ -1,4 +1,5 @@
 import { K_ZYLA, type Izolacja, type Material } from "@/lib/norms/conductors";
+import { formatLiczba } from "@/lib/liczby";
 import { KRYTERIUM_LABELS, type Kryterium } from "./fullSizing";
 import { OCENA_GRANICZNA_PCT, type Ocena } from "./result";
 
@@ -197,7 +198,7 @@ export function podsumowanieObwodu(oceny: OcenaKryterium[]): Ocena {
     return {
       verdict: "graniczny",
       margines_pct: margines,
-      komunikat: `Wszystkie cztery kryteria spełnione, ale najciaśniejsze ma zapas tylko ${margines.toFixed(0)}%. Przy niepewności danych wejściowych to wynik graniczny.`,
+      komunikat: `Wszystkie cztery kryteria spełnione, ale najciaśniejsze ma zapas tylko ${formatLiczba(margines, 0)}%. Przy niepewności danych wejściowych to wynik graniczny.`,
     };
   }
   return {

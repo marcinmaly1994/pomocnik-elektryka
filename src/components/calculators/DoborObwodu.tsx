@@ -1,4 +1,5 @@
 import { AlertTriangle, Check, HelpCircle } from "lucide-react";
+import { formatLiczba } from "@/lib/liczby";
 import type { TrybObwodu } from "@/store/useCalculatorsStore";
 import type { OcenaKryterium, StanKryterium } from "@/lib/calc/kryteriaObwodu";
 
@@ -81,7 +82,7 @@ export function KryteriaObwodu({ oceny }: { oceny: OcenaKryterium[] }) {
             {o.stan !== "nieoceniono" && typeof o.margines_pct === "number" && (
               <span className="pe-mono shrink-0 text-[11px] tabular-nums opacity-80">
                 {o.margines_pct >= 0 ? "zapas " : "przekroczenie "}
-                {Math.abs(o.margines_pct).toFixed(0)}%
+                {formatLiczba(Math.abs(o.margines_pct), 0)}%
               </span>
             )}
           </div>

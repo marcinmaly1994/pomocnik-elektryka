@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { formatLiczba } from "@/lib/liczby";
 import { ArrowUpFromLine, Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, minZoom } from "./DesignCanvas";
@@ -277,7 +278,7 @@ export function EditorToolbar({
           aria-label="Rozmiar elementów"
           className="w-16 accent-copper"
         />
-        <span className="pe-mono w-8 text-right text-[11px] tabular-nums">{elementScale.toFixed(1)}×</span>
+        <span className="pe-mono w-8 text-right text-[11px] tabular-nums">{formatLiczba(elementScale, 1)}×</span>
         {elementScale !== defaultElementScale && (
           <button onClick={() => onElementScaleChange(defaultElementScale)} className="text-[11px] text-blueprint hover:underline">
             reset

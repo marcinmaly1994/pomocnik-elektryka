@@ -11,6 +11,7 @@
  * i obwody podane wprost z zewnątrz.
  */
 
+import { formatLiczba } from "@/lib/liczby";
 import {
   BREAKER_RATINGS,
   CURVE_MULTIPLIER,
@@ -368,13 +369,13 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
       warnings.push({
         code: "SPADEK_NAPIECIA_NIE_DO_SPELNIENIA",
         level: "error",
-        message: `Nawet przy ${formatSection(biggest)} mm² spadek napięcia wynosi ${drop.toFixed(2)}% przy limicie ${dropLimit}% (trasa ${spec.dlugosc_m} m, Ib ${Ib.toFixed(1)} A). Skróć trasę albo zasil obwód z podrozdzielnicy.`,
+        message: `Nawet przy ${formatSection(biggest)} mm² spadek napięcia wynosi ${formatLiczba(drop, 2)}% przy limicie ${dropLimit}% (trasa ${spec.dlugosc_m} m, Ib ${formatLiczba(Ib, 1)} A). Skróć trasę albo zasil obwód z podrozdzielnicy.`,
       });
     } else {
       warnings.push({
         code: "PRZEKROJ_NIE_DO_DOBRANIA",
         level: "error",
-        message: `Prąd obliczeniowy ${Ib.toFixed(1)} A przekracza obciążalność największego przekroju z tablicy (${formatSection(biggest)} mm², metoda ${method}, k1=${k1.toFixed(2)}, k2=${k2.toFixed(2)}). Podziel odbiory na kilka obwodów.`,
+        message: `Prąd obliczeniowy ${formatLiczba(Ib, 1)} A przekracza obciążalność największego przekroju z tablicy (${formatSection(biggest)} mm², metoda ${method}, k1=${formatLiczba(k1, 2)}, k2=${formatLiczba(k2, 2)}). Podziel odbiory na kilka obwodów.`,
       });
     }
     const failed = base();
@@ -386,7 +387,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
     warnings.push({
       code: "IN_PONIZEJ_TYPOWEGO",
       level: "warn",
-      message: `Dobrano ${curve}${chosen.In} zamiast typowego ${curve}${preferred} dla tego rodzaju obwodu — obciążalność po współczynnikach (${chosen.Iz.toFixed(1)} A) nie pozwala na wyższy prąd znamionowy.`,
+      message: `Dobrano ${curve}${chosen.In} zamiast typowego ${curve}${preferred} dla tego rodzaju obwodu — obciążalność po współczynnikach (${formatLiczba(chosen.Iz, 1)} A) nie pozwala na wyższy prąd znamionowy.`,
     });
   }
 
@@ -408,7 +409,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
     warnings.push({
       code: "DLUGOSC_SZACOWANA",
       level: "warn",
-      message: `Długość trasy obwodu „${spec.nazwa}" to szacunek (odległość prostokątna), bo na kondygnacji nie ma narysowanych ścian ani pomieszczeń, po których dałoby się poprowadzić przewód. Prawdziwa trasa będzie DŁUŻSZA, więc spadek napięcia ${chosen.drop.toFixed(2)}% jest zaniżony. Narysuj ściany albo obrysy pomieszczeń, żeby policzyć go z rzeczywistej drogi.`,
+      message: `Długość trasy obwodu „${spec.nazwa}" to szacunek (odległość prostokątna), bo na kondygnacji nie ma narysowanych ścian ani pomieszczeń, po których dałoby się poprowadzić przewód. Prawdziwa trasa będzie DŁUŻSZA, więc spadek napięcia ${formatLiczba(chosen.drop, 2)}% jest zaniżony. Narysuj ściany albo obrysy pomieszczeń, żeby policzyć go z rzeczywistej drogi.`,
     });
   }
 
@@ -418,7 +419,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
       warnings.push({
         code: "PRZEKROJ_PODNIESIONY_SPADEK",
         level: "warn",
-        message: `Przekrój podniesiono do ${formatSection(chosen.section)} mm² ze względu na spadek napięcia (przy ${formatSection(MIN_SECTION_FOR[spec.typ])} mm² byłoby ${atMin.toFixed(2)}% > ${dropLimit}%).`,
+        message: `Przekrój podniesiono do ${formatSection(chosen.section)} mm² ze względu na spadek napięcia (przy ${formatSection(MIN_SECTION_FOR[spec.typ])} mm² byłoby ${formatLiczba(atMin, 2)}% > ${dropLimit}%).`,
       });
     }
   }
@@ -427,7 +428,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
     warnings.push({
       code: "GRUPOWANIE",
       level: "warn",
-      message: `Uwzględniono współczynnik grupowania k2=${k2.toFixed(2)} (${bundle} obwodów w wiązce) — obciążalność spadła do ${chosen.Iz.toFixed(1)} A. Rozdzielenie tras podniosłoby ją z powrotem.`,
+      message: `Uwzględniono współczynnik grupowania k2=${formatLiczba(k2, 2)} (${bundle} obwodów w wiązce) — obciążalność spadła do ${formatLiczba(chosen.Iz, 1)} A. Rozdzielenie tras podniosłoby ją z powrotem.`,
     });
   }
 
@@ -435,7 +436,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
     warnings.push({
       code: "TEMPERATURA",
       level: "warn",
-      message: `Temperatura otoczenia ${ambientC} °C obniża obciążalność (k1=${k1.toFixed(2)}). Przy trasie przez nieocieploną poddasze/kotłownię sprawdź założenie.`,
+      message: `Temperatura otoczenia ${ambientC} °C obniża obciążalność (k1=${formatLiczba(k1, 2)}). Przy trasie przez nieocieploną poddasze/kotłownię sprawdź założenie.`,
     });
   }
 
@@ -565,7 +566,7 @@ export function sizeBreakerForSection(spec: BreakerSpec): SizedBreaker {
       warnings.push({
         code: "IN_PONIZEJ_TYPOWEGO",
         level: "warn",
-        message: `Dobrano ${curve}${In} zamiast typowego ${curve}${preferred} dla tego rodzaju obwodu — obciążalność przewodu po współczynnikach (${Iz.toFixed(1)} A) nie pozwala na wyższy prąd znamionowy.`,
+        message: `Dobrano ${curve}${In} zamiast typowego ${curve}${preferred} dla tego rodzaju obwodu — obciążalność przewodu po współczynnikach (${formatLiczba(Iz, 1)} A) nie pozwala na wyższy prąd znamionowy.`,
       });
     }
   }
@@ -576,8 +577,8 @@ export function sizeBreakerForSection(spec: BreakerSpec): SizedBreaker {
       level: "error",
       message:
         Ib > Iz
-          ? `Prąd obliczeniowy ${Ib.toFixed(1)} A przekracza obciążalność tego przewodu (${Iz.toFixed(1)} A przy metodzie ${method}, k1=${k1.toFixed(2)}, k2=${k2.toFixed(2)}). Żaden wyłącznik tego nie naprawi — potrzebny grubszy przewód, lepsze warunki ułożenia albo podział na kilka obwodów.`
-          : `Między prądem obliczeniowym ${Ib.toFixed(1)} A a obciążalnością ${Iz.toFixed(1)} A nie mieści się żaden znormalizowany prąd znamionowy z szeregu. Zwiększ przekrój albo popraw warunki ułożenia.`,
+          ? `Prąd obliczeniowy ${formatLiczba(Ib, 1)} A przekracza obciążalność tego przewodu (${formatLiczba(Iz, 1)} A przy metodzie ${method}, k1=${formatLiczba(k1, 2)}, k2=${formatLiczba(k2, 2)}). Żaden wyłącznik tego nie naprawi — potrzebny grubszy przewód, lepsze warunki ułożenia albo podział na kilka obwodów.`
+          : `Między prądem obliczeniowym ${formatLiczba(Ib, 1)} A a obciążalnością ${formatLiczba(Iz, 1)} A nie mieści się żaden znormalizowany prąd znamionowy z szeregu. Zwiększ przekrój albo popraw warunki ułożenia.`,
     });
     return { ...common, aparat: null, Ia_A: null, Zs_max_Ohm: null, status: "error", ostrzezenia: warnings };
   }
@@ -586,14 +587,14 @@ export function sizeBreakerForSection(spec: BreakerSpec): SizedBreaker {
     warnings.push({
       code: "GRUPOWANIE",
       level: "warn",
-      message: `Uwzględniono współczynnik grupowania k2=${k2.toFixed(2)} (${bundle} obwodów w wiązce) — obciążalność spadła z ${IzBase} A do ${Iz.toFixed(1)} A. Rozdzielenie tras podniosłoby ją z powrotem.`,
+      message: `Uwzględniono współczynnik grupowania k2=${formatLiczba(k2, 2)} (${bundle} obwodów w wiązce) — obciążalność spadła z ${IzBase} A do ${formatLiczba(Iz, 1)} A. Rozdzielenie tras podniosłoby ją z powrotem.`,
     });
   }
   if (ambientC > 30) {
     warnings.push({
       code: "TEMPERATURA",
       level: "warn",
-      message: `Temperatura otoczenia ${ambientC} °C obniża obciążalność (k1=${k1.toFixed(2)}). Przy trasie przez nieocieplone poddasze albo kotłownię sprawdź to założenie.`,
+      message: `Temperatura otoczenia ${ambientC} °C obniża obciążalność (k1=${formatLiczba(k1, 2)}). Przy trasie przez nieocieplone poddasze albo kotłownię sprawdź to założenie.`,
     });
   }
 
@@ -751,13 +752,13 @@ export function sizeFeeder(spec: FeederSpec): SizedFeeder {
       warnings.push({
         code: "SPADEK_NAPIECIA_NIE_DO_SPELNIENIA",
         level: "error",
-        message: `Nawet przy ${formatSection(biggest)} mm² spadek napięcia wynosi ${drop.toFixed(2)}% przy limicie ${dropLimit}% (trasa ${spec.dlugosc_m} m, Ib ${Ib.toFixed(1)} A). Skróć trasę albo podnieś limit, jeśli obwód odbiorczy za rozdzielnicą i tak ma spory zapas.`,
+        message: `Nawet przy ${formatSection(biggest)} mm² spadek napięcia wynosi ${formatLiczba(drop, 2)}% przy limicie ${dropLimit}% (trasa ${spec.dlugosc_m} m, Ib ${formatLiczba(Ib, 1)} A). Skróć trasę albo podnieś limit, jeśli obwód odbiorczy za rozdzielnicą i tak ma spory zapas.`,
       });
     } else {
       warnings.push({
         code: "PRZEKROJ_NIE_DO_DOBRANIA",
         level: "error",
-        message: `Prąd obliczeniowy ${Ib.toFixed(1)} A przekracza obciążalność największego przekroju z tablicy (${formatSection(biggest)} mm², metoda ${method}, k1=${k1.toFixed(2)}, k2=${k2.toFixed(2)}). Dla takiego poboru WLZ wymaga doboru indywidualnego przez projektanta.`,
+        message: `Prąd obliczeniowy ${formatLiczba(Ib, 1)} A przekracza obciążalność największego przekroju z tablicy (${formatSection(biggest)} mm², metoda ${method}, k1=${formatLiczba(k1, 2)}, k2=${formatLiczba(k2, 2)}). Dla takiego poboru WLZ wymaga doboru indywidualnego przez projektanta.`,
       });
     }
     return base();
@@ -774,14 +775,14 @@ export function sizeFeeder(spec: FeederSpec): SizedFeeder {
     warnings.push({
       code: "GRUPOWANIE",
       level: "warn",
-      message: `Uwzględniono współczynnik grupowania k2=${k2.toFixed(2)} (${bundle} obwodów w wiązce) — obciążalność spadła do ${chosen.Iz.toFixed(1)} A.`,
+      message: `Uwzględniono współczynnik grupowania k2=${formatLiczba(k2, 2)} (${bundle} obwodów w wiązce) — obciążalność spadła do ${formatLiczba(chosen.Iz, 1)} A.`,
     });
   }
   if (ambientC > 30) {
     warnings.push({
       code: "TEMPERATURA",
       level: "warn",
-      message: `Temperatura otoczenia ${ambientC} °C obniża obciążalność (k1=${k1.toFixed(2)}).`,
+      message: `Temperatura otoczenia ${ambientC} °C obniża obciążalność (k1=${formatLiczba(k1, 2)}).`,
     });
   }
 

@@ -1,4 +1,5 @@
 import { Palette, PenLine, Trash2 } from "lucide-react";
+import { formatLiczba } from "@/lib/liczby";
 import type { RoomShape, RoomType } from "@/types";
 import { ROOM_TYPE_LABELS } from "@/lib/design";
 import { polygonAreaM2 } from "@/lib/geometry";
@@ -60,7 +61,7 @@ export function RoomPanel({ roomShapes, metersPerUnit, onCreateWall }: RoomPanel
             />
             {areaM2 !== null && (
               <span className="pe-mono shrink-0 text-[11px] text-slate-500" title="Powierzchnia pomieszczenia">
-                {areaM2.toFixed(1)} m²
+                {formatLiczba(areaM2, 1)} m²
               </span>
             )}
             <button

@@ -39,7 +39,7 @@ test("suwak zmienia rozmiar symboli, nie ich położenie", async ({ page }) => {
       return { scale: g.scaleX(), x: g.x(), y: g.y() };
     });
 
-  // Suwak pokazuje 1.0× jako punkt odniesienia („bez zmian"), ale render mnoży to przez
+  // Suwak pokazuje 1,0× jako punkt odniesienia („bez zmian"), ale render mnoży to przez
   // bazowy współczynnik geometrii glifów, więc realna skala w Konvie jest inna niż 1.
   //
   // Mierzymy STOSUNEK, nie wartość bezwzględną. Wpisana na sztywno baza robiła z tego
@@ -51,7 +51,7 @@ test("suwak zmienia rozmiar symboli, nie ich położenie", async ({ page }) => {
 
   await otworzMenuPaska(page, "Rysunek");
   await page.getByLabel("Rozmiar elementów").fill("2");
-  await expect(page.getByText("2.0×")).toBeVisible();
+  await expect(page.getByText("2,0×")).toBeVisible();
 
   const after = await glyph();
   // Suwak 1.0 -> 2.0 ma podwoić symbol, niezależnie od tego, od czego startuje.

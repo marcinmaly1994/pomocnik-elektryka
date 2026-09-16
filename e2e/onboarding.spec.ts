@@ -253,7 +253,7 @@ test("szybka ścieżka: rzut w znanej skali ustawia skalę bez mierzenia", async
   await expect(page.getByText(/rzut ma wtedy ok\. 42,?\.?0? m/)).toBeVisible();
 
   await page.getByRole("button", { name: "Zatwierdź skalę" }).click();
-  await expect(page.locator("span.pe-chip", { hasText: "42.0 m szer." })).toBeVisible();
+  await expect(page.locator("span.pe-chip", { hasText: "42,0 m szer." })).toBeVisible();
 });
 
 test("„Narysuj dom samodzielnie” z EKRANU STARTOWEGO ustawia standardową skalę i odhacza krok 1", async ({ page }) => {

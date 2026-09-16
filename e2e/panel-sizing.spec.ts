@@ -109,5 +109,5 @@ test("bilans faz podaje udział procentowy, nie tylko ampery", async ({ page }) 
   await expect(page.getByText(/Bilans obciążenia faz/)).toBeVisible();
   // opis musi mówić, że liczymy prąd obliczeniowy, a nie znamionowy zabezpieczeń
   await expect(page.getByText(/prąd obliczeniowy odbiorników/)).toBeVisible();
-  await expect(page.locator("span", { hasText: /^\d+(\.\d+)? A · \d+(\.\d+)?%$/ }).first()).toBeVisible();
+  await expect(page.locator("span", { hasText: /^\d+(,\d+)? A · \d+(,\d+)?%$/ }).first()).toBeVisible();
 });
