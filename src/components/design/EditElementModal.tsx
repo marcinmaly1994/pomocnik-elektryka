@@ -152,7 +152,15 @@ export function EditElementModal({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent title="Edytuj element" className="max-w-sm">
+      {/* Nazwa elementu w TYTULE, bo przy trzydziestu symbolach na rzucie — i po
+          zmniejszeniu ich o jedna trzecia — po samym oknie nie dalo sie poznac,
+          czy dwuklik trafil w gniazdko, czy w sasiedni lacznik.
+
+          Celowo `element.type`, a NIE `type` ze stanu: siatka nizej ma wlasny podpis
+          „Zmien na", wiec tytul odpowiada na pytanie „co to jest", a siatka na „na co
+          to zmienic". Tytul podazajacy za siatka mowilby to samo co ona i pytanie
+          „w co ja kliknalem" znow zostaloby bez odpowiedzi. */}
+      <DialogContent title={`Edytuj element: ${ELEMENT_TYPES[element.type].label}`} className="max-w-sm">
         <div className="space-y-3">
           <div>
             <div className="mb-1.5 text-xs text-slate-500">Zmień na</div>
