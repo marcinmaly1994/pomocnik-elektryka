@@ -60,6 +60,7 @@ import {
   guessRoomType,
   nextRoomName,
   contentBounds,
+  oczkoSiatkiM,
   planSizeForImage,
   roomNameAfterMove,
   scaleOf,
@@ -2216,7 +2217,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             setCalibPoints([]);
             setToolMode("zaznacz");
             dismissScaleStale();
-            setSkalaPotwierdzenie(`Skala ustawiona: 1 jedn. = ${(metersPerUnit * 100).toFixed(1).replace(".", ",")} cm`);
+            setSkalaPotwierdzenie(`Skala ustawiona: oczko siatki = ${formatLiczba(oczkoSiatkiM(metersPerUnit), 2)} m`);
           }}
           onCancel={() => setCalibPoints([])}
           onClear={() => clearScale(activeFloorId)}

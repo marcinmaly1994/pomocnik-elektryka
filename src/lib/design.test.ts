@@ -16,6 +16,7 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   DEFAULT_DOOR_WIDTH_CM,
   DEFAULT_OPENING_WIDTH_UNITS,
   contentBounds,
+  oczkoSiatkiM,
   MARGINES_KADROWANIA,
   ZAPAS_ETYKIET,
   wysokoscPlotna,
@@ -569,5 +570,24 @@ describe("wierzcholkiZamknietejSciany", () => {
     const obrys = [{ x: 10, y: 10 }, { x: 90, y: 10 }, { x: 90, y: 70 }, { x: 10, y: 70 }];
     const zeSciany = wierzcholkiZamknietejSciany([...obrys, obrys[0]]);
     expect(zeSciany).toEqual(obrys);
+  });
+});
+
+/**
+ * Pasek stanu podawał skalę jako „1 jedn. = 5,00 cm". „Jednostka planu" to pojęcie
+ * z kodu — elektryk nie ma jak go użyć ani z czym zestawić. Oczko siatki widać
+ * na ekranie, więc odczyt da się sprawdzić wzrokiem i od razu zmierzyć nim rysunek.
+ */
+describe("oczkoSiatkiM", () => {
+  it("rysowanie od zera daje oczko równe metrowi", () => {
+    expect(oczkoSiatkiM(MANUAL_DRAW_SCALE_MPU)).toBeCloseTo(1, 10);
+  });
+
+  it("gęstsza kalibracja wgranego rzutu daje mniejsze oczko", () => {
+    expect(oczkoSiatkiM(0.02)).toBeCloseTo(0.4, 10);
+  });
+
+  it("bez skali nie ma czego podać", () => {
+    expect(oczkoSiatkiM(null)).toBeNull();
   });
 });

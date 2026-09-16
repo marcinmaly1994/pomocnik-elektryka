@@ -188,7 +188,7 @@ async function pustyBezSkali(page: Page) {
   const naPustym = page.getByRole("button", { name: "Pomiń — zacznę na pustym planie" });
   await naPustym.waitFor({ state: "visible", timeout: 5000 });
   await naPustym.click();
-  await expect(page.getByText(/Skala:\s*nieustawiona/)).toBeVisible();
+  await expect(page.getByText(/Siatka:\s*skala nieustawiona/)).toBeVisible();
 }
 
 async function narysujPokoj(page: Page, x1: number, y1: number, x2: number, y2: number) {

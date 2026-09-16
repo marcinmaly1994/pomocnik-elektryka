@@ -629,3 +629,16 @@ export function wierzcholkiZamknietejSciany(points: Point[]): Point[] | null {
   if (polygonArea(wierzcholki) <= 0) return null;
   return wierzcholki;
 }
+
+/**
+ * Ile metrów ma jedno oczko siatki [m]. `null`, gdy skala nie jest ustawiona.
+ *
+ * Pasek stanu podawał dotąd skalę jako „1 jedn. = 5,00 cm". „Jednostka planu" to
+ * pojęcie z kodu — elektryk nie ma jak go użyć ani z czym zestawić. Oczko siatki widać
+ * natomiast na ekranie, więc ten odczyt da się sprawdzić wzrokiem i od razu zmierzyć
+ * nim rysunek: „ten pokój to cztery kratki, czyli cztery metry".
+ */
+export function oczkoSiatkiM(metersPerUnit: number | null): number | null {
+  if (metersPerUnit === null || !(metersPerUnit > 0)) return null;
+  return GRID * metersPerUnit;
+}
