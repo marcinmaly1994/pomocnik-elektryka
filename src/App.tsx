@@ -650,7 +650,19 @@ export default function App() {
             poziomo, tak samo jak pasek etapów niżej: że jest czym przewijać, widać po
             przyciętym ostatnim przycisku. Etykiety zostają PEŁNE — skracanie ich
             zmieniłoby nazwy dostępnościowe, a na nich stoi kilkanaście testów e2e. */}
-        <div className="pe-bez-suwaka flex flex-nowrap items-center gap-1.5 overflow-x-auto [&>*]:shrink-0 sm:flex-wrap sm:overflow-x-visible">
+        {/* Od 640 px w górę obie grupy dostają `display: contents` i podział ZNIKA:
+            przyciski wracają do zawijania pojedynczo, dokładnie jak przed rozdzieleniem.
+            Bez tego grupa konta nie mogła dzielić rzędu z zawiniętymi zakładkami
+            i nagłówek rósł na tablecie ze 150 do 184 px — zmierzone przy 640 px. */}
+        <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:flex-wrap sm:[&>*]:shrink-0">
+          {/* Grupa PRZEWIJANA. Konto zostało z niej WYJĘTE (niżej): przy 375 px kończyło
+              się 623 px za prawą krawędzią, a suwak jest celowo ukryty, więc nic nie
+              zdradzało, że tam cokolwiek jest. Aplikacja namawia do założenia konta,
+              żeby nie stracić pracy — a samego przycisku nie dało się znaleźć.
+
+              Etykiety zostają PEŁNE: skracanie ich na telefonie zmieniłoby nazwy
+              dostępnościowe, na których stoi kilkanaście testów e2e i czytniki ekranu. */}
+          <div className="pe-bez-suwaka flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto [&>*]:shrink-0 sm:contents">
           <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
           <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
           {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów
@@ -705,7 +717,12 @@ export default function App() {
               {localSaveError ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tekst : "Zapisano lokalnie"}
             </button>
           )}
-          <NewProjectButton onConfirm={resetProject} elementCount={elementCount} />
+            <NewProjectButton onConfirm={resetProject} elementCount={elementCount} />
+          </div>
+
+          {/* Grupa PRZYPIĘTA: poza przewijaniem, więc widoczna przy każdej szerokości.
+              `shrink-0`, bo to ona ma zabrać miejsce paskowi zakładek, a nie odwrotnie. */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:contents">
           {session ? (
             <>
               <CloudSaveIndicator />
@@ -765,6 +782,7 @@ export default function App() {
               <UserRound size={15} /> Zaloguj się
             </button>
           )}
+          </div>
         </div>
       </header>
 
