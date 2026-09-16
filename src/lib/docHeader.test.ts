@@ -59,3 +59,29 @@ describe("projectFileName", () => {
     expect(projectFileName("protokol-ogledziny", "   ", "pdf")).toBe("protokol-ogledziny.pdf");
   });
 });
+
+/**
+ * Zapisy projektów sprzed dodania danego pola po prostu go NIE MAJĄ — dotyczy to też
+ * projektów leżących w chmurze, wczytywanych na dowolnym urządzeniu. `resolveDocHeader`
+ * woła sześć komponentów, a jedno z nich (`KompletDialog`) jest zamontowane w `App`
+ * na stałe, więc wyjątek tutaj kładł CAŁĄ aplikację: po wczytaniu takiego projektu
+ * zostawał sam ekran „Coś poszło nie tak", a feralny zapis siedział w localStorage,
+ * więc odświeżenie nic nie dawało.
+ */
+describe("resolveDocHeader — nagłówek z niepełnego zapisu", () => {
+  it("brak pola „obiekt” nie wywraca aplikacji", () => {
+    const bezObiektu = { ...base } as Partial<DocumentHeader>;
+    delete bezObiektu.obiekt;
+    expect(() => resolveDocHeader(bezObiektu as DocumentHeader, "Dom Kowalskiego")).not.toThrow();
+  });
+
+  it("brakujący „obiekt” jest uzupełniany nazwą projektu, tak jak pusty", () => {
+    const bezObiektu = { ...base } as Partial<DocumentHeader>;
+    delete bezObiektu.obiekt;
+    expect(resolveDocHeader(bezObiektu as DocumentHeader, "Dom Kowalskiego").obiekt).toBe("Dom Kowalskiego");
+  });
+
+  it("cały pusty nagłówek też przechodzi", () => {
+    expect(() => resolveDocHeader({} as DocumentHeader, "Projekt")).not.toThrow();
+  });
+});

@@ -468,3 +468,35 @@ describe("selektory kondygnacji — stabilna tozsamosc", () => {
     expect(result.current).toHaveLength(przed.length + 1);
   });
 });
+
+/**
+ * Zapisy projektów sprzed dodania danego pola po prostu go NIE MAJĄ — dotyczy to także
+ * projektów leżących w chmurze, wczytywanych na dowolnym urządzeniu. Store uzupełnia
+ * już tak `prices`, `costOverrides` i `panelConfig`; `docHeader` jako jedyny szedł
+ * z zapisu surowy, przez co brak jednego pola kładł całą aplikację.
+ */
+describe("wczytanie projektu z niepełnym nagłówkiem dokumentów", () => {
+  it("brakujące pola nagłówka są uzupełniane wartościami domyślnymi", () => {
+    const { getProjectPayload, loadProjectPayload } = useProjectStore.getState();
+    const payload = getProjectPayload();
+
+    // Tak wygląda zapis sprzed dodania pola „obiekt".
+    const niepelny = { ...payload, docHeader: { wykonawca: "Jan Kowalski" } as never };
+    loadProjectPayload(niepelny);
+
+    const { docHeader } = useProjectStore.getState();
+    expect(docHeader.obiekt).toBe("");
+    expect(docHeader.uklad).toBe("TN-S");
+    // To, co w zapisie BYŁO, musi przetrwać uzupełnianie.
+    expect(docHeader.wykonawca).toBe("Jan Kowalski");
+  });
+
+  it("brak całego nagłówka nie wywraca wczytywania", () => {
+    const { getProjectPayload, loadProjectPayload } = useProjectStore.getState();
+    const payload = getProjectPayload();
+    const bezNaglowka = { ...payload, docHeader: undefined as never };
+
+    expect(() => loadProjectPayload(bezNaglowka)).not.toThrow();
+    expect(useProjectStore.getState().docHeader.uklad).toBe("TN-S");
+  });
+});

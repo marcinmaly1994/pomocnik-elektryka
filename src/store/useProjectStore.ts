@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { domyslnyNaglowek } from "@/lib/docHeader";
 import { WARUNKI_DOBORU_DOMYSLNE, type WarunkiDoboru } from "@/lib/panel/norms";
 import type { ProjectSizingOptions } from "@/lib/panel/project";
 import { useMemo } from "react";
@@ -507,13 +508,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   lastCloudSaveAt: null,
   cloudSaveError: null,
   cloudBusy: false,
-  docHeader: {
-    obiekt: "", adres: "", zleceniodawca: "", wykonawca: "", uprawnienia: "",
-    przyrzad: "", nrFabryczny: "", swiadectwo: "",
-    data: new Date().toISOString().slice(0, 10),
-    temperatura: "20", wilgotnosc: "55", uklad: "TN-S",
-    drawingNo: "E-01", revision: "A",
-  },
+  docHeader: domyslnyNaglowek(),
 
   past: [],
   future: [],
@@ -645,7 +640,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Zapisy sprzed tej zmiany nie maja tego pola — pusta mapa znaczy "wszystko liczone".
       costOverrides: payload.costOverrides ?? {},
       qtyOverrides: payload.qtyOverrides ?? {},
-      docHeader: payload.docHeader,
+      // Uzupełniane jak `prices` i `panelConfig` wyżej: zapis sprzed dodania pola
+      // po prostu go NIE MA, a dotyczy to też projektów z chmury, wczytywanych na
+      // dowolnym urządzeniu. `docHeader` szedł tu dotąd SUROWY i brak jednego pola
+      // kładł całą aplikację — `resolveDocHeader` woła sześć komponentów, a jeden
+      // z nich jest zamontowany w `App` na stałe, więc zostawał sam ekran awarii.
+      docHeader: { ...domyslnyNaglowek(), ...(payload.docHeader ?? {}) },
       protocols: payload.protocols,
       projectName: payload.projectName || "Projekt",
       // `panelConfig` dodane po pierwszych zapisach w chmurze/lokalnie — starsze
