@@ -85,7 +85,12 @@ export function ToolRail({
             key={id}
             ref={(el) => onToolRef?.(id, el)}
             onClick={() => onChange(id)}
-            title={`${hint} (${shortcut})`}
+            // Nazwa NA POCZATKU dymka, bo Pomoc odsyla do narzedzi wlasnie po niej
+            // („narzedziem «Narysuj Sciane»"), a wczesniej byla wylacznie `aria-label` —
+            // czyli widzialna tylko dla czytnikow ekranu. Widzacy uzytkownik czytal
+            // w Pomocy o narzedziu, ktorego nazwy nie znajdowal nigdzie na ekranie:
+            // ikony sa swiadomie bez podpisow, a dymek pokazywal sama wskazowke.
+            title={`${label} — ${hint} (${shortcut})`}
             aria-label={label}
             aria-pressed={active}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors"

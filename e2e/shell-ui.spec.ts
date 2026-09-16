@@ -197,3 +197,22 @@ test("siatkę da się wyłączyć niezależnie od przyciągania", async ({ page 
   await page.waitForTimeout(400);
   expect(await jasnePiksele()).toBe(zSiatka);
 });
+
+/**
+ * Dymek narzędzia podaje jego NAZWĘ — tę samą, którą Pomoc wymienia w tekście
+ * („narzędziem «Narysuj Ścianę»"). Wcześniej nazwa żyła wyłącznie w `aria-label`,
+ * czyli była widoczna tylko dla czytników ekranu: widzący użytkownik czytał w Pomocy
+ * o narzędziu, którego nazwy nie znajdował nigdzie na ekranie, bo ikony są świadomie
+ * bez podpisów, a dymek pokazywał samą wskazówkę.
+ */
+test("dymek narzędzia zaczyna się od jego nazwy", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
+  const rozumiem = page.getByRole("button", { name: "Rozumiem" });
+  if (await rozumiem.count()) await rozumiem.click();
+
+  const sciany = page.getByRole("button", { name: "Narysuj Ścianę" });
+  await expect(sciany).toHaveAttribute("title", /^Narysuj Ścianę — /);
+});
