@@ -16,7 +16,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
   return box;
 }
@@ -251,13 +251,13 @@ test("zaznaczanie obszarem działa, gdy start jest wewnątrz narysowanego pomies
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box2 = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box2 = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box2.x + 150, box2.y + 130);
   await page.waitForTimeout(900);
 
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box3 = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box3 = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   const zoom = await page.evaluate(() => {
     const k = (window as unknown as { Konva?: { stages: { scaleX(): number }[] } }).Konva;
     return k?.stages[0]?.scaleX() ?? 1;
@@ -361,7 +361,7 @@ test("po anulowaniu Escape kolejne kliknięcie normalnie zaczyna nowy prostokąt
  */
 async function wspolrzedneWPlanie(page: import("@playwright/test").Page, x: number, y: number) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   const skala = await page.evaluate(() => {
     const k = (window as unknown as { Konva: { stages: { scaleX(): number }[] } }).Konva;
     return k.stages[0].scaleX();

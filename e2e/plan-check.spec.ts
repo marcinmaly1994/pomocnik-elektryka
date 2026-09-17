@@ -12,7 +12,7 @@ import { skipEntryScreen, otworzMenuPaska } from "./_flow";
 
 async function planBox(page: Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  return (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 }
 
 /** Świeży projekt narysowany od zera — daje STANDARDOWĄ skalę (1 kratka = 1 m), bez

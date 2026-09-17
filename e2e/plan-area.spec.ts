@@ -13,23 +13,26 @@ import { makePng } from "./_png";
 
 const PNG_16x9 = makePng(16, 9);
 
-/** Rozmiar sceny Konvy. Czeka, aż scena w ogóle powstanie: `DesignTab` (razem z Konvą)
- *  jest ładowany leniwie, więc zaraz po wejściu w zakładkę `window.Konva` bywa jeszcze
+/** Obszar roboczy planu odczytany ze SCENY — z obrysu arkusza (`.arkusz`), bo to
+ *  jedyny węzeł niosący ten wymiar. Sama scena ma rozmiar OKNA widoku, więc jej
+ *  `width()` mówi już tylko o tym, ile miejsca płótno dostało na stronie.
+ *
+ *  Czeka, aż scena w ogóle powstanie: `DesignTab` (razem z Konvą) jest ładowany
+ *  leniwie, więc zaraz po wejściu w zakładkę `window.Konva` bywa jeszcze
  *  niezdefiniowane i odczyt wywala się na `undefined`. */
 async function planSize(page: import("@playwright/test").Page) {
   await page.waitForFunction(() => {
-    const konva = (window as unknown as { Konva?: { stages: unknown[] } }).Konva;
-    return !!konva?.stages?.length;
+    const konva = (window as unknown as { Konva?: { stages: { findOne(s: string): unknown }[] } }).Konva;
+    return !!konva?.stages?.length && !!konva.stages[0].findOne(".arkusz");
   });
   return page.evaluate(() => {
     const konva = (window as unknown as {
-      Konva: { stages: { width(): number; height(): number; scaleX(): number; scaleY(): number }[] };
+      Konva: { stages: { findOne(s: string): { width(): number; height(): number } }[] };
     }).Konva;
-    const s = konva.stages[0];
-    // Scena jest skalowana powiększeniem widoku, więc jej wymiary w pikselach to
-    // jednostki planu RAZY zoom. Dzielimy z powrotem, bo test dotyczy obszaru
-    // planu, a nie tego, jak bardzo jest w danej chwili przybliżony.
-    return { w: Math.round(s.width() / s.scaleX()), h: Math.round(s.height() / s.scaleY()) };
+    // Obrys arkusza jest rysowany we WSPÓŁRZĘDNYCH PLANU, więc jego wymiary to wprost
+    // obszar planu — bez odkręcania powiększenia, którym skalowana jest cała scena.
+    const arkusz = konva.stages[0].findOne(".arkusz");
+    return { w: Math.round(arkusz.width()), h: Math.round(arkusz.height()) };
   });
 }
 
@@ -83,7 +86,7 @@ test("kliknięcie poza obszarem planu nic nie stawia i mówi dlaczego", async ({
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 
   // Przy skali 0,5 plan zajmuje lewą górną ćwiartkę sceny. Wychodzimy poza niego w POZIOMIE
   // (700 px ekranu → 1400 jedn. planu, czyli za prawą krawędzią), ale pionowo zostajemy

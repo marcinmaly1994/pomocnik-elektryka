@@ -32,7 +32,7 @@ test.describe("Cofnij w trakcie rysowania", () => {
     await pustyProjekt(page);
     await zacznijRysowacRecznie(page);
 
-    const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+    const wrap = page.locator("[data-testid=plan-okno]").first();
     // `scrollIntoView` przesuwa STRONĘ (nie tylko wewnętrzny scroll płótna) tak, żeby
     // górna krawędź kontenera wypadła na szczycie okna — bez tego banery nad edytorem
     // (np. „Zacznij od wgrania rzutu…", widoczny dopóki nie ma podkładu) potrafią
@@ -73,7 +73,7 @@ test.describe("Cofnij w trakcie rysowania", () => {
     await pustyProjekt(page);
     await zacznijRysowacRecznie(page);
 
-    const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+    const wrap = page.locator("[data-testid=plan-okno]").first();
     // `scrollIntoView` przesuwa STRONĘ (nie tylko wewnętrzny scroll płótna) tak, żeby
     // górna krawędź kontenera wypadła na szczycie okna — bez tego banery nad edytorem
     // (np. „Zacznij od wgrania rzutu…", widoczny dopóki nie ma podkładu) potrafią
@@ -123,7 +123,7 @@ test("element da się przeciągnąć w narzędziu „Wstaw element”, bez prze�
   await page.getByLabel("Przyciągaj ściany do siatki").uncheck();
   await page.getByRole("button", { name: "Wstaw Element" }).click();
 
-  const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const wrap = page.locator("[data-testid=plan-okno]").first();
   await wrap.evaluate((e) => e.scrollTo(0, 0));
   let b = (await wrap.boundingBox())!;
   await page.mouse.click(b.x + 300, b.y + 250);
@@ -167,7 +167,7 @@ test("kalibracja skali pokazuje potwierdzenie na górze, przy planie", async ({ 
   await zacznijRysowacRecznie(page);
   await page.getByRole("button", { name: "Kalibracja skali" }).click();
 
-  const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const wrap = page.locator("[data-testid=plan-okno]").first();
   await wrap.evaluate((e) => e.scrollTo(0, 0));
   const b = (await wrap.boundingBox())!;
   const oy = b.y < 0 ? -b.y + 50 : 300;

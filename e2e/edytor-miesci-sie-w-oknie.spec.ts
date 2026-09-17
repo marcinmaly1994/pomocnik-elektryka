@@ -19,7 +19,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 /** Okno rysunku — ten sam lokator, którego używa `fullscreen.spec.ts`. */
 function oknoRysunku(page: Page) {
-  return page.locator("div.overflow-auto.rounded-card.border").first();
+  return page.locator("[data-testid=plan-okno]").first();
 }
 
 /**

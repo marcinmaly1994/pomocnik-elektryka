@@ -14,7 +14,7 @@ test("stawianie elementów na planie odblokowuje bilans faz i selektywność w r
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
 
-  const canvasWrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const canvasWrap = page.locator("[data-testid=plan-okno]").first();
   await expect(canvasWrap).toBeVisible();
 
   const undoButton = page.getByTitle("Cofnij");

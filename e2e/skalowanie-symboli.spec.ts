@@ -12,7 +12,7 @@ import { otworzMenuPaska } from "./_flow";
 
 async function planBox(page: Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  return (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 }
 
 async function naEkranie(page: Page, x: number, y: number) {

@@ -43,7 +43,7 @@ test("symbole łączników: biblioteka i plan", async ({ page }) => {
     // w tej przeglądarce" pojawia się dopiero po postawieniu PIERWSZEGO elementu,
     // co przesuwa płótno w dół — kliknięcia 2-5 ze starym `box.y` lądowały wtedy
     // ponad płótnem, w banerze, i po cichu nic nie stawiały.
-    const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+    const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
     expect(box.y).toBeGreaterThanOrEqual(0);
     await page.mouse.click(box.x + 80 + i * 70, box.y + 90);
   }

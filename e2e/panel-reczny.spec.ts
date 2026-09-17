@@ -104,7 +104,7 @@ test("długie opisy pod aparatami łamią się na dwie linie, zamiast urywać wi
   await pustyProjekt(page);
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
-  const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const wrap = page.locator("[data-testid=plan-okno]").first();
   await page.getByRole("button", { name: "Wstaw Element" }).click();
   for (let i = 0; i < 4; i++) {
     await wrap.evaluate((e) => e.scrollTo(0, 0));
@@ -264,7 +264,7 @@ test("liczba modulow w rzedzie zostaje po odswiezeniu strony", async ({ page }) 
   await page.getByPlaceholder(/Szukaj elementu/).fill("gniazdo 230");
   await page.locator("button.w-full.items-center.gap-2.rounded-md").filter({ hasText: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box.x + 200, box.y + 90);
 
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();

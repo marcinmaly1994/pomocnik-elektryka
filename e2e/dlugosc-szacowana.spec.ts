@@ -11,7 +11,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function planBox(page: Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const wrap = page.locator("[data-testid=plan-okno]").first();
   await expect(wrap).toBeVisible({ timeout: 15000 });
   return (await wrap.boundingBox())!;
 }

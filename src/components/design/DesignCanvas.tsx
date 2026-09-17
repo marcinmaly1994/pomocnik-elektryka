@@ -160,6 +160,23 @@ interface DesignCanvasProps {
   sanitaryScale: number;
   /** Obszar roboczy planu — dopasowany do proporcji wgranego rzutu (patrz store). */
   planSize: PlanSize;
+  /**
+   * Rozmiar OKNA widoku w pikselach — tyle miejsca zajmuje płótno na stronie.
+   *
+   * Scena ma rozmiar okna, a nie arkusza: treść wypchnięta poza scenę jest przycinana
+   * bezpowrotnie, więc przy przesuwaniu rysunku scena MUSI obejmować całe widoczne
+   * pole. Kadr wyznacza odtąd stan `widok`, nie przewinięcie kontenera.
+   */
+  rozmiarOkna: { w: number; h: number };
+  /**
+   * Uchwyt do przesunięcia kadru o zadaną liczbę PIKSELI EKRANU. Ten sam wzorzec co
+   * `anulujPodgladRef`: zwykły ref w propsie, bo wołającym jest zdarzenie w `DesignTab`
+   * (zmiana szerokości panelu bocznego), a nie zmiana danych.
+   *
+   * Kadr mieszka tutaj, więc przeliczenie pikseli na jednostki planu też musi być
+   * tutaj — `DesignTab` nie ma prawa wiedzieć, jak wygląda ten układ współrzędnych.
+   */
+  przesunWidokRef?: React.MutableRefObject<((dxPx: number, dyPx: number) => void) | null>;
   /** Metrów na jednostkę planu — `null` bez kalibracji. Do etykiety wymiaru
    *  pokazywanej na żywo podczas rysowania ściany (patrz `drawingWall`). */
   metersPerUnit: number | null;
@@ -172,8 +189,6 @@ interface DesignCanvasProps {
    *  skąd wziąć aktualnej wartości do pokazania. */
   zoom: number;
   onZoomChange: (z: number) => void;
-  /** Wysokość okna płótna — liczona w DesignTab, żeby dopasowanie znało ten sam limit. */
-  maxHeight: number;
   onSelectElement: (id: string, shiftKey: boolean) => void;
   onSelectWall: (id: string) => void;
   onEditElement: (id: string) => void;
@@ -329,12 +344,13 @@ export function DesignCanvas({
   elementScale,
   sanitaryScale,
   planSize,
+  rozmiarOkna,
+  przesunWidokRef,
   metersPerUnit,
   onOutsidePlan,
   onPointerMove,
   zoom,
   onZoomChange,
-  maxHeight,
   onSelectElement,
   onSelectWall,
   onEditElement,
@@ -401,13 +417,38 @@ export function DesignCanvas({
   }, [gridOn]);
 
   const bgImage = useBackgroundImage(bgImageUrl);
-  /** Kontener przewijania — to jego `scrollLeft`/`scrollTop` wyznacza kadr planu.
-   *  Wszystkie drogi przesuwania i przybliżania działają wyłącznie na nim. */
+  /** Kontener okna widoku. Nie przewija się już — kadr wyznacza stan `widok`. */
   const kontenerRef = useRef<HTMLDivElement>(null);
-  const przesuwanieRef = useRef<{ x: number; y: number; scrollX: number; scrollY: number } | null>(null);
+  /**
+   * Lewy górny róg OKNA w jednostkach planu. To jedyny nośnik kadru: narzędzie
+   * „Przesuń widok", wciśnięta rolka i Ctrl+kółko ruszają wyłącznie tę wartość.
+   *
+   * Wcześniej kadr wyznaczało przewinięcie kontenera, a scena miała rozmiar arkusza.
+   * Działało, dopóki rysunek nie miał prawa wyjść poza arkusz — ale to właśnie ten
+   * arkusz znika. Scena wielkości okna plus przesunięcie w jednostkach planu daje
+   * płótno bez granic, bez drugiego układu współrzędnych obok pierwszego.
+   */
+  const [widok, setWidok] = useState({ x: 0, y: 0 });
+  const przesuwanieRef = useRef<{ x: number; y: number; widokX: number; widokY: number } | null>(null);
   /** Punkt planu, który ma zostać pod kursorem po zmianie powiększenia Ctrl+kółkiem.
    *  Nakładany dopiero po przerysowaniu płótna — patrz `useLayoutEffect` niżej. */
   const kotwicaZoomRef = useRef<{ planX: number; planY: number; kursorX: number; kursorY: number } | null>(null);
+  /**
+   * Wystawia przesuwanie kadru na zewnątrz. `useLayoutEffect`, bo `DesignTab` woła ten
+   * uchwyt ze SWOJEGO efektu układu — a efekty układu dziecka wchodzą przed
+   * efektami rodzica, więc przy zwykłym `useEffect` uchwyt bywałby jeszcze pusty.
+   */
+  useLayoutEffect(() => {
+    if (!przesunWidokRef) return;
+    przesunWidokRef.current = (dxPx, dyPx) => {
+      if (dxPx === 0 && dyPx === 0) return;
+      setWidok((w) => ({ x: w.x + dxPx / zoom, y: w.y + dyPx / zoom }));
+    };
+    return () => {
+      przesunWidokRef.current = null;
+    };
+  }, [przesunWidokRef, zoom]);
+
   /** Tylko po to, żeby zmienić kursor na „łapkę" — sam gest żyje w refie, bo
    *  przerysowywanie sceny przy każdym pikselu ruchu byłoby marnotrawstwem. */
   const [przesuwa, setPrzesuwa] = useState(false);
@@ -1056,8 +1097,8 @@ export function DesignCanvas({
     const kursorX = e.evt.clientX - ramka.left;
     const kursorY = e.evt.clientY - ramka.top;
     // Punkt planu pod kursorem — to on ma zostać w tym samym miejscu ekranu.
-    const planX = (el.scrollLeft + kursorX) / zoom;
-    const planY = (el.scrollTop + kursorY) / zoom;
+    const planX = widok.x + kursorX / zoom;
+    const planY = widok.y + kursorY / zoom;
     const factor = e.evt.deltaY < 0 ? 1.1 : 0.9;
     const nowaSkala = clampNum(zoom * factor, minZoom(), MAX_ZOOM);
     if (nowaSkala === zoom) return;
@@ -1092,11 +1133,11 @@ export function DesignCanvas({
    *  w której płótno dostało nowy rozmiar — inaczej widać przeskok. */
   useLayoutEffect(() => {
     const k = kotwicaZoomRef.current;
-    const el = kontenerRef.current;
-    if (!k || !el) return;
+    if (!k) return;
     kotwicaZoomRef.current = null;
-    el.scrollLeft = k.planX * zoom - k.kursorX;
-    el.scrollTop = k.planY * zoom - k.kursorY;
+    // Punkt spod kursora ma zostać pod kursorem: przesuwamy okno tak, żeby po nowym
+    // powiększeniu wypadł w tym samym miejscu ekranu.
+    setWidok({ x: k.planX - k.kursorX / zoom, y: k.planY - k.kursorY / zoom });
   }, [zoom]);
 
   function zacznijPrzesuwanie(e: ReactPointerEvent<HTMLDivElement>) {
@@ -1110,19 +1151,21 @@ export function DesignCanvas({
     // `preventDefault` gasi windowsowe autoprzewijanie (kółko z kotwicą), które
     // inaczej przejmuje gest i pokazuje własny kursor.
     if (rolka) e.preventDefault();
-    przesuwanieRef.current = { x: e.clientX, y: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop };
+    przesuwanieRef.current = { x: e.clientX, y: e.clientY, widokX: widok.x, widokY: widok.y };
     el.setPointerCapture(e.pointerId);
     setPrzesuwa(true);
   }
 
   function przesuwajSrodkowym(e: ReactPointerEvent<HTMLDivElement>) {
     const start = przesuwanieRef.current;
-    const el = kontenerRef.current;
-    if (!start || !el) return;
+    if (!start) return;
     // Minus: chwytamy rysunek i ciągniemy go za kursorem, więc widok jedzie
-    // w przeciwną stronę niż mysz.
-    el.scrollLeft = start.scrollX - (e.clientX - start.x);
-    el.scrollTop = start.scrollY - (e.clientY - start.y);
+    // w przeciwną stronę niż mysz. Dzielenie przez powiększenie, bo widok żyje
+    // w jednostkach planu, a ruch myszy przychodzi w pikselach.
+    setWidok({
+      x: start.widokX - (e.clientX - start.x) / zoom,
+      y: start.widokY - (e.clientY - start.y) / zoom,
+    });
   }
 
   function zakonczPrzesuwanieSrodkowym(e: ReactPointerEvent<HTMLDivElement>) {
@@ -1133,16 +1176,29 @@ export function DesignCanvas({
   }
 
   return (
-    // Karta PRZYLEGA do rzutu (`w-fit`) i sama się centruje (`mx-auto`), zamiast
-    // rozciągać się na kolumnę i centrować zawartość w środku. Efekt wizualny jest
-    // ten sam — wolne miejsce rozkłada się po obu stronach — ale obramowanie pokrywa
-    // się z płótnem, więc współrzędne kliknięcia liczone względem karty trafiają
-    // tam, gdzie użytkownik widzi rysunek. `max-w-full` zostawia przewijanie,
-    // gdy rzut jest szerszy od kolumny.
+    // Karta ma rozmiar OKNA widoku i sama się centruje (`mx-auto`), więc obramowanie
+    // pokrywa się z płótnem i współrzędne kliknięcia liczone względem karty trafiają
+    // tam, gdzie użytkownik widzi rysunek.
+    //
+    // `overflow-hidden` zamiast dawnego `overflow-auto`: okno nie przewija się już wcale.
+    // Rysunek wychodzący poza nie nie jest „za paskiem przewijania", tylko po prostu
+    // poza kadrem — a kadr przesuwa się stanem `widok`.
     <div
       ref={kontenerRef}
-      className="pe-bez-suwaka mx-auto w-fit max-w-full overflow-auto rounded-card border border-border"
-      style={{ maxHeight, cursor: przesuwa ? "grabbing" : toolMode === "pan" ? "grab" : undefined }}
+      /* Uchwyt dla testów. Wcześniej celowały w klasę `overflow-auto` — czyli
+         w sposób, w jaki płótno akurat było ostylowane. Gdy przestało się przewijać,
+         68 miejsc w zestawie przestało cokolwiek znajdować. */
+      data-testid="plan-okno"
+      /* Uchwyt dla KODU aplikacji: DesignTab kompensuje nim skok rysunku przy zmianie
+         szerokości panelu. Osobny od testowego, żeby kompensacja nie zależała od
+         czegoś, co wolno usunąć razem z testem. */
+      data-plan-okno=""
+      className="mx-auto overflow-hidden rounded-card border border-border"
+      style={{
+        width: rozmiarOkna.w,
+        height: rozmiarOkna.h,
+        cursor: przesuwa ? "grabbing" : toolMode === "pan" ? "grab" : undefined,
+      }}
       onPointerDown={zacznijPrzesuwanie}
       onPointerMove={przesuwajSrodkowym}
       onPointerUp={zakonczPrzesuwanieSrodkowym}
@@ -1153,13 +1209,16 @@ export function DesignCanvas({
     >
       <Stage
         ref={stageRef}
-        width={planSize.w * zoom}
-        height={planSize.h * zoom}
+        width={rozmiarOkna.w}
+        height={rozmiarOkna.h}
+        x={-widok.x * zoom}
+        y={-widok.y * zoom}
         scaleX={zoom}
         scaleY={zoom}
-        // BEZ `draggable`: przesuwanie widoku obsługuje wyłącznie przewijanie
-        // kontenera (patrz `zacznijPrzesuwanie`). Przeciąganie sceny wypychało
-        // treść poza płótno, gdzie była przycinana bezpowrotnie.
+        // BEZ `draggable`: kadrem rządzi wyłącznie stan `widok` (patrz
+        // `zacznijPrzesuwanie`). Przeciąganie sceny przez Konvę byłoby drugim,
+        // równoległym układem współrzędnych — a od rozjazdu między dwoma układami
+        // zaczęły się kłopoty, które ta przebudowa usuwa.
         onWheel={handleWheel}
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
@@ -1201,7 +1260,10 @@ export function DesignCanvas({
             ))}
           {/* Widoczna granica obszaru roboczego — po oddaleniu widoku wokół planu robi się
               puste tło i bez obwódki nie było wiadomo, dokąd wolno stawiać elementy. */}
-          <Rect name="tylko-ekran" x={0} y={0} width={planSize.w} height={planSize.h} stroke="#C3CDD7" strokeWidth={1.5} />
+          {/* `arkusz` w nazwie: obrys obszaru roboczego to jedyny węzeł, po którym
+              da się odczytać rozmiar planu ze sceny. Scena ma teraz rozmiar OKNA,
+              więc jej własne wymiary nic o obszarze planu nie mówią. */}
+          <Rect name="tylko-ekran arkusz" x={0} y={0} width={planSize.w} height={planSize.h} stroke="#C3CDD7" strokeWidth={1.5} />
         </Layer>
 
         {/* PODGLĄD KONDYGNACJI PONIŻEJ — osobna warstwa POD wszystkim, bez nasłuchu.

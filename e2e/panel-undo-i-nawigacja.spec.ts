@@ -63,7 +63,7 @@ async function zacznijProjekt(page: Page) {
   await skipEntryScreen(page);
   await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box.x + 100, box.y + 100);
   await page.mouse.click(box.x + 250, box.y + 100);
   await page.getByRole("button", { name: "Zakończ" }).click();

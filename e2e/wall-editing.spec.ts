@@ -16,7 +16,7 @@ import { skipEntryScreen } from "./_flow";
 
 async function planBoxAndZoom(page: import("@playwright/test").Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   const zoom = await page.evaluate(() => {
     const k = (window as unknown as { Konva?: { stages: { scaleX(): number }[] } }).Konva;
     return k?.stages[0]?.scaleX() ?? 1;
