@@ -43,6 +43,21 @@ const MIN_ROOM_SIZE = 8;
 
 /** Granice powiększenia widoku planu — wspólne dla Ctrl+scroll i przycisków paska. */
 export const MIN_ZOOM = 0.4;
+/**
+ * Sterowanie kadrem dostępne z zewnątrz płótna.
+ *
+ * `przesunOPiksele` kompensuje skok rysunku, gdy zmiana szerokości panelu przesunie
+ * okno po ekranie; `ustaw` sprowadza kadr pod konkretny punkt planu — bez tego na
+ * płótnie bez granic dało się odjechać dowolnie daleko i nie mieć jak wrócić.
+ */
+export interface WidokSterowanie {
+  przesunOPiksele(dxPx: number, dyPx: number): void;
+  ustaw(x: number, y: number): void;
+}
+
+/** Poniżej tylu pikseli na oczko siatka przestaje być siatką, a staje się szarą płachtą. */
+const MIN_OCZKO_PX = 6;
+
 export const MAX_ZOOM = 4;
 
 /** Dolna granica powiększenia na wąskim ekranie — patrz `minZoom`. */
@@ -169,19 +184,17 @@ interface DesignCanvasProps {
    */
   rozmiarOkna: { w: number; h: number };
   /**
-   * Uchwyt do przesunięcia kadru o zadaną liczbę PIKSELI EKRANU. Ten sam wzorzec co
-   * `anulujPodgladRef`: zwykły ref w propsie, bo wołającym jest zdarzenie w `DesignTab`
-   * (zmiana szerokości panelu bocznego), a nie zmiana danych.
+   * Uchwyt do sterowania kadrem z zewnątrz. Ten sam wzorzec co `anulujPodgladRef`:
+   * zwykły ref w propsie, bo wołającym są zdarzenia w `DesignTab` (zmiana szerokości
+   * panelu bocznego, przycisk „Dopasuj widok"), a nie zmiana danych.
    *
    * Kadr mieszka tutaj, więc przeliczenie pikseli na jednostki planu też musi być
    * tutaj — `DesignTab` nie ma prawa wiedzieć, jak wygląda ten układ współrzędnych.
    */
-  przesunWidokRef?: React.MutableRefObject<((dxPx: number, dyPx: number) => void) | null>;
+  widokRef?: React.MutableRefObject<WidokSterowanie | null>;
   /** Metrów na jednostkę planu — `null` bez kalibracji. Do etykiety wymiaru
    *  pokazywanej na żywo podczas rysowania ściany (patrz `drawingWall`). */
   metersPerUnit: number | null;
-  /** Kliknięcie poza obszarem planu — do pokazania podpowiedzi, czemu nic się nie stało. */
-  onOutsidePlan: () => void;
   /** Pozycja kursora w jednostkach planu (null = poza planem) — do paska stanu. */
   onPointerMove?: (p: Point | null) => void;
   /** Powiększenie widoku. Sterowane z paska narzędzi, więc trzymane w stanie
@@ -260,26 +273,16 @@ interface MarqueeRect {
 }
 
 /**
- * Punkt planu pod kursorem albo `null`, gdy kursor jest POZA obszarem planu.
+ * Punkt planu pod kursorem. `null` znaczy wyłącznie „nie wiadomo, gdzie jest kursor"
+ * (scena bez wskaźnika), a nie „kursor poza czymś".
  *
- * Wcześniej współrzędne były tu po cichu przycinane do krawędzi, więc kliknięcie obok
- * planu (możliwe po oddaleniu widoku) stawiało element przy brzegu zamiast tam, gdzie
- * użytkownik kliknął — bez śladu, że coś poszło nie tak. Teraz takie kliknięcie nie
- * robi nic, a `DesignTab` mówi dlaczego.
+ * Płótno nie ma granic, więc nie ma też punktów spoza planu. Wcześniej stały tu dwie
+ * funkcje: jedna odrzucała kliknięcia poza arkuszem, druga przycinała do niego
+ * trwające przeciąganie. Obie pilnowały granicy, której już nie ma — rysunek nie musi
+ * mieścić się w arkuszu, bo arkusz jest teraz tylko podkładem pod rysunkiem.
  */
-function planPoint(stage: Konva.Stage, size: PlanSize): Point | null {
-  const pos = stage.getRelativePointerPosition();
-  if (!pos) return null;
-  if (pos.x < 0 || pos.y < 0 || pos.x > size.w || pos.y > size.h) return null;
-  return { x: pos.x, y: pos.y };
-}
-
-/** Punkt przycięty do obszaru planu — do TRWAJĄCEGO przeciągania, gdzie kursor bywa
- *  chwilowo poza planem, a rysowana figura i tak ma zostać w jego granicach. */
-function clampedPlanPoint(stage: Konva.Stage, size: PlanSize): Point | null {
-  const pos = stage.getRelativePointerPosition();
-  if (!pos) return null;
-  return { x: clampNum(pos.x, 0, size.w), y: clampNum(pos.y, 0, size.h) };
+function planPoint(stage: Konva.Stage): Point | null {
+  return stage.getRelativePointerPosition();
 }
 
 /** Indeks odcinka [i, i+1] łamanej `points` najbliższego punktowi `p` — do
@@ -345,9 +348,8 @@ export function DesignCanvas({
   sanitaryScale,
   planSize,
   rozmiarOkna,
-  przesunWidokRef,
+  widokRef,
   metersPerUnit,
-  onOutsidePlan,
   onPointerMove,
   zoom,
   onZoomChange,
@@ -434,20 +436,47 @@ export function DesignCanvas({
    *  Nakładany dopiero po przerysowaniu płótna — patrz `useLayoutEffect` niżej. */
   const kotwicaZoomRef = useRef<{ planX: number; planY: number; kursorX: number; kursorY: number } | null>(null);
   /**
-   * Wystawia przesuwanie kadru na zewnątrz. `useLayoutEffect`, bo `DesignTab` woła ten
-   * uchwyt ze SWOJEGO efektu układu — a efekty układu dziecka wchodzą przed
+   * Wystawia sterowanie kadrem na zewnątrz. `useLayoutEffect`, bo `DesignTab` woła
+   * `przesunOPiksele` ze SWOJEGO efektu układu — a efekty układu dziecka wchodzą przed
    * efektami rodzica, więc przy zwykłym `useEffect` uchwyt bywałby jeszcze pusty.
    */
   useLayoutEffect(() => {
-    if (!przesunWidokRef) return;
-    przesunWidokRef.current = (dxPx, dyPx) => {
-      if (dxPx === 0 && dyPx === 0) return;
-      setWidok((w) => ({ x: w.x + dxPx / zoom, y: w.y + dyPx / zoom }));
+    if (!widokRef) return;
+    widokRef.current = {
+      przesunOPiksele: (dxPx, dyPx) => {
+        if (dxPx === 0 && dyPx === 0) return;
+        setWidok((w) => ({ x: w.x + dxPx / zoom, y: w.y + dyPx / zoom }));
+      },
+      ustaw: (x, y) => setWidok({ x, y }),
     };
     return () => {
-      przesunWidokRef.current = null;
+      widokRef.current = null;
     };
-  }, [przesunWidokRef, zoom]);
+  }, [widokRef, zoom]);
+
+  /**
+   * Linie siatki liczone z WIDOCZNEGO prostokąta, nie z arkusza. Dopóki rysunek musiał
+   * mieścić się w arkuszu, siatka mogła kończyć się razem z nim; teraz rysować można
+   * wszędzie, więc kratka ma być wszędzie tam, gdzie widać płótno.
+   *
+   * Przy mocno oddalonym widoku oczko schodzi do kilku pikseli i siatka zlewa się
+   * w jednolitą szarość — wtedy nie rysujemy jej wcale. To prowizorka do czasu, aż
+   * skok siatki stanie się adaptacyjny, bo wtedy oczko nigdy nie zrobi się tak gęste.
+   */
+  const siatka = useMemo(() => {
+    const lewo = widok.x;
+    const gora = widok.y;
+    const prawo = widok.x + rozmiarOkna.w / zoom;
+    const dol = widok.y + rozmiarOkna.h / zoom;
+    const puste = { pionowe: [] as number[], poziome: [] as number[], lewo, prawo, gora, dol };
+    if (GRID * zoom < MIN_OCZKO_PX) return puste;
+    const linie = (od: number, doKad: number) => {
+      const start = Math.floor(od / GRID) * GRID;
+      const ile = Math.floor((doKad - start) / GRID) + 1;
+      return Array.from({ length: Math.max(0, ile) }, (_, i) => start + i * GRID);
+    };
+    return { ...puste, pionowe: linie(lewo, prawo), poziome: linie(gora, dol) };
+  }, [widok.x, widok.y, rozmiarOkna.w, rozmiarOkna.h, zoom]);
 
   /** Tylko po to, żeby zmienić kursor na „łapkę" — sam gest żyje w refie, bo
    *  przerysowywanie sceny przy każdym pikselu ruchu byłoby marnotrawstwem. */
@@ -852,7 +881,7 @@ export function DesignCanvas({
     // (jest tylko podkładem rysunkowym), więc tu — inaczej niż przy zaznaczaniu — nie
     // wymagamy, żeby zdarzenie trafiło prosto w scenę.
     if (drawingRoom && roomMode === "prostokat") {
-      const p = stage && planPoint(stage, planSize);
+      const p = stage && planPoint(stage);
       if (!p) return;
       const start = snapPunktuPokoju(p);
       roomRectStartRef.current = start;
@@ -865,7 +894,7 @@ export function DesignCanvas({
     if (e.target !== stage) return;
     onClearSelection();
     if (toolMode !== "zaznacz") return;
-    const p = stage && planPoint(stage, planSize);
+    const p = stage && planPoint(stage);
     if (!p) return;
     marqueeStartRef.current = p;
     const rect = { x: p.x, y: p.y, w: 0, h: 0 };
@@ -878,7 +907,7 @@ export function DesignCanvas({
 
     // Pozycja kursora w jednostkach planu — pasek stanu przelicza ją na metry.
     // `null` poza obszarem planu, żeby nie pokazywać współrzędnych spoza rysunku.
-    onPointerMove?.(stage ? planPoint(stage, planSize) : null);
+    onPointerMove?.(stage ? planPoint(stage) : null);
 
     // Bez warunku na `drawingWall.length`: zaczep pokazujemy JUŻ PRZED pierwszym
     // kliknięciem, bo pierwszy punkt ściany też się przyciąga (patrz `punktSciany`).
@@ -886,7 +915,7 @@ export function DesignCanvas({
     // „zacznij ściankę działową od narożnika tamtej ściany" — przyciągał się
     // niewidzialnie, czyli dokładnie w stanie, który znacznik miał zlikwidować.
     if (toolMode === "sciany") {
-      const raw = stage && clampedPlanPoint(stage, planSize);
+      const raw = stage && planPoint(stage);
       if (!raw) {
         setWallCursor(null);
         setZaczep(null);
@@ -901,7 +930,7 @@ export function DesignCanvas({
     }
 
     if (drawingRoom) {
-      const raw = stage && clampedPlanPoint(stage, planSize);
+      const raw = stage && planPoint(stage);
       if (!raw) return;
       if (roomMode === "wielobok") {
         // przy kursorze w pobliżu startu pokazujemy punkt startowy, nie pozycję myszy —
@@ -934,7 +963,7 @@ export function DesignCanvas({
     }
 
     if (!marqueeStartRef.current) return;
-    const p = stage && clampedPlanPoint(stage, planSize);
+    const p = stage && planPoint(stage);
     if (!p) return;
     const start = marqueeStartRef.current;
     const rect = {
@@ -1000,13 +1029,8 @@ export function DesignCanvas({
     if (e.evt.button === 2 || e.evt.button === 1) return;
     const stage = e.target.getStage();
     if (!stage) return;
-    const p = planPoint(stage, planSize);
-    if (!p) {
-      // Kliknięcie poza planem: narzędzia rysujące nie mają gdzie nic postawić, więc
-      // zamiast po cichu dokleić element do krawędzi (jak było wcześniej) mówimy o tym.
-      if (toolMode !== "zaznacz" && toolMode !== "pan") onOutsidePlan();
-      return;
-    }
+    const p = planPoint(stage);
+    if (!p) return;
 
     if (toolMode === "sciany") {
       // Ta sama droga co podgląd — patrz `punktSciany`.
@@ -1251,12 +1275,24 @@ export function DesignCanvas({
               linii w obu stanach). Zmiana `visible` na istniejącym węźle wymusza
               odrysowanie, więc przełącznik działa natychmiast. */}
           {gridOn &&
-            Array.from({ length: Math.floor(planSize.w / GRID) + 1 }, (_, i) => i * GRID).map((x) => (
-              <Line name="tylko-ekran" key={`gx${x}`} points={[x, 0, x, planSize.h]} stroke="#E1E7EC" strokeWidth={1} />
+            siatka.pionowe.map((x) => (
+              <Line
+                name="tylko-ekran"
+                key={`gx${x}`}
+                points={[x, siatka.gora, x, siatka.dol]}
+                stroke="#E1E7EC"
+                strokeWidth={1}
+              />
             ))}
           {gridOn &&
-            Array.from({ length: Math.floor(planSize.h / GRID) + 1 }, (_, i) => i * GRID).map((y) => (
-              <Line name="tylko-ekran" key={`gy${y}`} points={[0, y, planSize.w, y]} stroke="#E1E7EC" strokeWidth={1} />
+            siatka.poziome.map((y) => (
+              <Line
+                name="tylko-ekran"
+                key={`gy${y}`}
+                points={[siatka.lewo, y, siatka.prawo, y]}
+                stroke="#E1E7EC"
+                strokeWidth={1}
+              />
             ))}
           {/* Widoczna granica obszaru roboczego — po oddaleniu widoku wokół planu robi się
               puste tło i bez obwódki nie było wiadomo, dokąd wolno stawiać elementy. */}
@@ -1397,7 +1433,7 @@ export function DesignCanvas({
                     // sam nie zna ostatniego, zamykającego segmentu).
                     if (toolMode === "otwory") {
                       const stage = e.target.getStage();
-                      const p = stage && planPoint(stage, planSize);
+                      const p = stage && planPoint(stage);
                       const nearest = p && nearestPointOnPolyline(p, [...r.points, r.points[0]]);
                       if (nearest) onRoomEdgeClickForOpening(r.id, nearest.point, nearest.angle);
                       return;
@@ -1564,7 +1600,7 @@ export function DesignCanvas({
                     if (toolMode === "otwory") {
                       e.cancelBubble = true;
                       const stage = e.target.getStage();
-                      const p = stage && planPoint(stage, planSize);
+                      const p = stage && planPoint(stage);
                       const nearest = p && nearestPointOnPolyline(p, w.points);
                       if (nearest) onWallClickForOpening(w.id, nearest.point, nearest.angle);
                       return;
@@ -1895,7 +1931,7 @@ export function DesignCanvas({
                       return;
                     }
                     const stage = e.target.getStage();
-                    const p = stage && planPoint(stage, planSize);
+                    const p = stage && planPoint(stage);
                     if (!p) return;
                     const segIdx = nearestRouteSegmentIndex(p, r.points);
                     const withInserted = [...r.points.slice(0, segIdx + 1), p, ...r.points.slice(segIdx + 1)];

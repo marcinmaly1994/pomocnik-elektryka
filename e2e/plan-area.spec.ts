@@ -68,47 +68,51 @@ test("wgrany rzut nie jest rozciągany — plan przyjmuje jego proporcje", async
   await expect(page.getByText(new RegExp(`Obszar planu: ${after.w} × ${after.h}`))).toBeVisible();
 });
 
-test("kliknięcie poza obszarem planu nic nie stawia i mówi dlaczego", async ({ page }) => {
+/**
+ * Płótno nie ma granic — arkusz przestał być ogrodzeniem.
+ *
+ * Wcześniej kliknięcie poza obszarem planu nic nie stawiało i pokazywało podpowiedź
+ * dlaczego. To była poprawna odpowiedź na ówczesny układ (rysunek MUSIAŁ mieścić się
+ * w arkuszu), ale sam układ okazał się problemem: dom o powierzchni 140 m² rysowało
+ * się w prostokącie, z którego nie dało się wyjść. Teraz arkusz jest tylko podkładem,
+ * a rysować można wszędzie.
+ */
+test("element da się postawić POZA arkuszem — płótno nie ma granic", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
 
-  // oddalamy widok, żeby wokół planu pojawiło się puste tło do kliknięcia
-  await planSize(page); // czeka na leniwie doładowaną scenę Konvy
-  await page.evaluate(() => {
-    const konva = (window as unknown as { Konva?: { stages: { scale(v: { x: number; y: number }): void; draw(): void }[] } }).Konva;
-    konva!.stages[0].scale({ x: 0.5, y: 0.5 });
-    konva!.stages[0].draw();
-  });
+  const arkusz = await planSize(page);
+
+  // Oddalamy widok, żeby obok arkusza zrobiło się miejsce na kliknięcie. Przyciskiem
+  // paska, a nie grzebaniem w scenie: powiększenie jest stanem aplikacji i ustawione
+  // z boku rozjechałoby się z tym, czym płótno przelicza współrzędne.
+  const oddal = page.getByRole("button", { name: "Oddal widok" });
+  for (let i = 0; i < 4 && !(await oddal.isDisabled()); i++) await oddal.click();
+  await page.waitForTimeout(300);
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
   const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 
-  // Przy skali 0,5 plan zajmuje lewą górną ćwiartkę sceny. Wychodzimy poza niego w POZIOMIE
-  // (700 px ekranu → 1400 jedn. planu, czyli za prawą krawędzią), ale pionowo zostajemy
-  // nisko — inaczej klik wypadłby poza okno przeglądarki i po prostu by nie doszedł.
-  const outside = { x: box.x + 700, y: box.y + 100 };
-  expect(outside.y, "klik musi zmieścić się w oknie").toBeLessThan(page.viewportSize()!.height);
-  await page.mouse.click(outside.x, outside.y);
-  await expect(page.getByText(/Kliknięcie poza obszarem planu/)).toBeVisible();
+  // Punkt na prawo od arkusza, przeliczony przez to samo powiększenie, którym liczy
+  // płótno — żeby test nie zgadywał, gdzie kończy się arkusz.
+  const zoom = await page.evaluate(
+    () => (window as unknown as { Konva: { stages: { scaleX(): number }[] } }).Konva.stages[0].scaleX(),
+  );
+  const zaKrawedzia = (arkusz.w + 200) * zoom;
+  expect(zaKrawedzia, "test ma sens tylko wtedy, gdy obok arkusza jest miejsce").toBeLessThan(box.width);
+  await page.mouse.click(box.x + zaKrawedzia, box.y + 100);
 
   await page.waitForTimeout(900); // debounce autozapisu
-  const placed = await page.evaluate(() => {
+  const postawione = await page.evaluate(() => {
     const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
-    return raw ? JSON.parse(raw).draft.elements.length : 0;
+    return raw ? (JSON.parse(raw).draft.elements as { x: number }[]) : [];
   });
-  expect(placed).toBe(0); // wcześniej element lądował po cichu przy krawędzi planu
-
-  // a kliknięcie W planie nadal działa
-  await page.mouse.click(box.x + 120, box.y + 80);
-  await page.waitForTimeout(900);
-  const after = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
-    return raw ? JSON.parse(raw).draft.elements.length : 0;
-  });
-  expect(after).toBe(1);
+  expect(postawione).toHaveLength(1);
+  expect(postawione[0].x).toBeGreaterThan(arkusz.w);
 });
+

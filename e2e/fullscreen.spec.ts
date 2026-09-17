@@ -320,20 +320,18 @@ test("przypięcie panelu nie przesuwa rysunku — ten sam punkt planu zostaje w 
   const przed = await pozycjaRysunku();
 
   await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  // Panel wysuwa się z animacją. Klikając „Przypnij" w jej trakcie, test mierzyłby
+  // wyścig z animacją, a nie to, co ma w tytule: kompensacja czyta wtedy położenie
+  // okna sprzed ustabilizowania układu (zmierzone: 2 px zamiast 8) i wychodzi o tyle
+  // za duża. Czekamy, aż panel dojedzie.
+  await page.waitForTimeout(400);
   await page.getByRole("button", { name: "Przypnij pasek: lewo" }).click();
   await page.waitForTimeout(400);
 
   // Bez kompensacji plan skakał o szerokość panelu (~370 px) i trzeba go było
-  // szukać od nowa.
-  //
-  // Tolerancja to 8 px, nie 4. Panel wysuwa się z animacją, a kompensacja mierzy
-  // położenie okna W CHWILI KLIKNIĘCIA — czyli w trakcie tego ruchu: zmierzone,
-  // kolumna jest wtedy na -6 px, a docelowo staje na 336. Okno jest w kolumnie
-  // wyśrodkowane, więc niedokładność migawki przekłada się na ~6 px kadru.
-  // Zniknie razem z wyśrodkowaniem, gdy okno przestanie mieć rozmiar arkusza
-  // i zacznie wypełniać kolumnę — wtedy ten próg wraca do 4 px.
+  // szukać od nowa. Tolerancja 4 px na zaokrąglenia układu.
   const po = await pozycjaRysunku();
-  expect(Math.abs(po - przed)).toBeLessThan(8);
+  expect(Math.abs(po - przed)).toBeLessThan(4);
 });
 
 test("przypięty panel po lewej NIE zasłania górnego paska", async ({ page }) => {

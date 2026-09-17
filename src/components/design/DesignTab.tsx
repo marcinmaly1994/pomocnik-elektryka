@@ -87,6 +87,7 @@ import { useSzerokieOkno } from "./PasekMenu";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
+import type { WidokSterowanie } from "./DesignCanvas";
 import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
 import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
@@ -297,8 +298,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  zaznaczania) — patrz `anulujPodgladRef` w DesignCanvas. Escape obsługujemy tutaj,
    *  a tamten stan jest lokalny, więc bez tego kanału nie dało się go dosięgnąć. */
   const anulujPodgladRef = useRef<(() => boolean) | null>(null);
-  /** Przesuwanie kadru z zewnątrz — patrz kompensacja zmian szerokości panelu niżej. */
-  const przesunWidokRef = useRef<((dxPx: number, dyPx: number) => void) | null>(null);
+  /** Sterowanie kadrem płótna z zewnątrz — kompensacja zmian układu i „Dopasuj widok". */
+  const widokRef = useRef<WidokSterowanie | null>(null);
   const glifyRef = useRef<HTMLDivElement>(null);
   const [podgladPdf, setPodgladPdf] = useState(false);
   const docHeader = resolveDocHeader(rawDocHeader, projectName);
@@ -365,7 +366,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       ];
     });
     const rogi = [...elements.flatMap((e) => rogiSymbolu(e, skalaOsprzetu)), ...rogiStref];
-    const kadr = contentBounds(planSize, walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
+    const kadr = contentBounds(walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
       x: 0,
       y: 0,
       w: planSize.w,
@@ -385,7 +386,19 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     try {
       // Pole rysunku obok legendy, przeliczone na piksele druku.
       const docelowaSzer = Math.round(600 * PIKSELI_NA_PUNKT);
-      const kadrPx = { x: kadr.x * zoom, y: kadr.y * zoom, width: kadr.w * zoom, height: kadr.h * zoom };
+      /**
+       * Wycinek liczony we WSPÓŁRZĘDNYCH SCENY, więc musi uwzględnić jej przesunięcie.
+       * Scena stoi przesunięta o kadr ekranu (patrz stan `widok` w DesignCanvas), a
+       * `toCanvas` przerysowuje ją z pełną transformacją — bez tego składnika wydruk
+       * jechał dokładnie o tyle, o ile użytkownik odsunął sobie widok przy rysowaniu.
+       * Co widać na ekranie, nie ma tu nic do rzeczy: kadrujemy do narysowanej treści.
+       */
+      const kadrPx = {
+        x: kadr.x * zoom + stage.x(),
+        y: kadr.y * zoom + stage.y(),
+        width: kadr.w * zoom,
+        height: kadr.h * zoom,
+      };
       const pixelRatio = docelowaSzer / kadrPx.width;
       const plotno = stage.toCanvas({ ...kadrPx, pixelRatio }) as HTMLCanvasElement;
       // Scena Konvy jest przezroczysta — bez podłożenia bieli wychodzi czarna płachta.
@@ -610,8 +623,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [cursor, setCursor] = useState<Point | null>(null);
   /** Nazwa pliku podkładu — sam „wgrany" nie mówi, KTÓRY rzut leży pod spodem. */
   const [bgName, setBgName] = useState<string | null>(null);
-  const [outsideHint, setOutsideHint] = useState(false);
-  const outsideHintTimer = useRef<number | undefined>(undefined);
   const [kontoPromptOdrzucony, setKontoPromptOdrzucony] = useState(odczytajOdrzuconyPrompt);
 
   /**
@@ -790,7 +801,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     lewaPrzedZmiana.current = null;
     const el = kontenerPlotna();
     if (!el) return;
-    przesunWidokRef.current?.(el.getBoundingClientRect().left - przed, 0);
+    widokRef.current?.przesunOPiksele(el.getBoundingClientRect().left - przed, 0);
   }, [przypietyPanel, panelZwiniety, kontenerPlotna]);
 
   // Panel: widoczny pod kursorem albo przypięty. Paski poziome: zawsze.
@@ -1777,13 +1788,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   }
 
 
-  /** Krótka podpowiedź po kliknięciu poza obszarem planu — znika sama. */
-  function flashOutsideHint() {
-    setOutsideHint(true);
-    window.clearTimeout(outsideHintTimer.current);
-    outsideHintTimer.current = window.setTimeout(() => setOutsideHint(false), 2600);
-  }
-
   const roomSuggestions = Array.from(
     new Set([...elements.map((e) => e.room), ...roomShapes.map((r) => r.name), ...DEFAULT_ROOM_SUGGESTIONS])
   );
@@ -2697,6 +2701,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         onDopasuj={() => {
           setZoomReczny(false);
           dopasujZoom();
+          // Dopasowanie to jedyna droga powrotna na płótnie bez granic, więc sprowadza
+          // też KADR, a nie samo powiększenie. Automatyczne dopasowanie przy zmianie
+          // rozmiaru okna kadru nie rusza — tam użytkownik o nic nie prosił i szarpanie
+          // go z powrotem do arkusza byłoby zabraniem mu tego, co sobie ustawił.
+          widokRef.current?.ustaw(0, 0);
         }}
       />
       </div>
@@ -3034,20 +3043,20 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             sanitaryScale={sanitaryRenderScale(mpu, skalaBezKalibracji)}
             planSize={planSize}
             metersPerUnit={mpu}
-            onOutsidePlan={flashOutsideHint}
             onPointerMove={setCursor}
             zoom={zoom}
             onZoomChange={(z) => {
               setZoomReczny(true);
               setZoom(z);
             }}
-            /* Okno widoku: tyle, ile dziś zajmowało dopasowane płótno — czyli rysunek
-               przycięty do dostępnego miejsca. Dzięki temu przebudowa nie rusza ani
-               jednego piksela w położeniu płótna na stronie. */
-            przesunWidokRef={przesunWidokRef}
+            widokRef={widokRef}
+            /* Okno widoku bierze CAŁE dostępne miejsce, zamiast kurczyć się do arkusza.
+               Dopóki miało rozmiar arkusza, poza arkusz nie dało się nawet kliknąć —
+               okno BYŁO rysunkiem. Teraz okno jest wziernikiem: arkusz leży w nim jako
+               podkład, a rysować można wszędzie. */
             rozmiarOkna={{
-              w: Math.max(1, Math.min(planSize.w * zoom, dostepnaSzer || planSize.w * zoom)),
-              h: Math.max(1, Math.min(planSize.h * zoom, wysPlotna)),
+              w: Math.max(1, dostepnaSzer || planSize.w * zoom),
+              h: Math.max(1, wysPlotna),
             }}
             onSelectElement={(id, shiftKey) => {
               if (shiftKey) {
@@ -3161,11 +3170,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 „1:50" nic mu nie mówi bez formatu arkusza w ręku. */}
             {mpu && (
               <span className="pe-chip pe-tag-green">rzut ≈ {formatLiczba(planWidthMeters(mpu, planSize.w)!, 1)} m szer.</span>
-            )}
-            {outsideHint && (
-              <span className="font-medium" style={{ color: "#8A5526" }}>
-                Kliknięcie poza obszarem planu — element trafiłby poza rysunek, więc nic nie postawiono.
-              </span>
             )}
           </div>
           </div>

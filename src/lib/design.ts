@@ -537,7 +537,6 @@ export function rozpietoscRysunku(
  * scenę, a `toCanvas` zwróciłby wtedy pas przezroczystych pikseli.
  */
 export function contentBounds(
-  planSize: PlanSize,
   walls: { points: Point[] }[],
   roomShapes: { points: Point[] }[],
   elements: Point[],
@@ -559,10 +558,16 @@ export function contentBounds(
   ];
   if (punkty.length === 0) return null;
 
-  const minX = Math.max(0, Math.min(...punkty.map((p) => p.x)) - margines);
-  const minY = Math.max(0, Math.min(...punkty.map((p) => p.y)) - margines);
-  const maxX = Math.min(planSize.w, Math.max(...punkty.map((p) => p.x)) + margines);
-  const maxY = Math.min(planSize.h, Math.max(...punkty.map((p) => p.y)) + margines);
+  /**
+   * Bez przycinania do arkusza. Wcześniej wynik był zaciskany do 0…planSize, co przy
+   * płótnie z granicami tylko zbierało margines przy krawędzi — a odkąd rysować można
+   * wszędzie, obcinałoby rysunek na wydruku bez śladu, że czegoś brakuje. Kadr to
+   * treść plus margines, i tyle; „gdzie kończy się arkusz" nie jest już pytaniem.
+   */
+  const minX = Math.min(...punkty.map((p) => p.x)) - margines;
+  const minY = Math.min(...punkty.map((p) => p.y)) - margines;
+  const maxX = Math.max(...punkty.map((p) => p.x)) + margines;
+  const maxY = Math.max(...punkty.map((p) => p.y)) + margines;
   return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
 }
 
