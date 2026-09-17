@@ -636,14 +636,61 @@ export function wierzcholkiZamknietejSciany(points: Point[]): Point[] | null {
 }
 
 /**
- * Ile metrów ma jedno oczko siatki [m]. `null`, gdy skala nie jest ustawiona.
+ * Najmniejsze oczko siatki, które na ekranie jeszcze do czegoś służy [px].
+ *
+ * Próg, nie ideał: dobór bierze pierwszy szczebel drabinki POWYŻEJ tej wartości, więc
+ * oczko wypada zwykle między 14 a 35 px. Dobrany tak, żeby domyślny widok został przy
+ * metrze — przy wyższym progu pierwsze, co widać po otwarciu rysunku, byłaby kratka
+ * co 2 m, czyli rzadsza niż dotąd.
+ */
+export const MIN_OCZKO_PX = 14;
+
+/** Szczeble drabinki w obrębie dekady. Patrz `krokSiatki`. */
+const SZCZEBLE = [1, 2, 5];
+
+/**
+ * Skok siatki [jedn. planu] dobrany do powiększenia — konwencja z programów CAD.
+ *
+ * Stałe oczko ma dwie wady naraz: po przybliżeniu jest za rzadkie, żeby cokolwiek nim
+ * wymierzyć (kratka co metr przy rysowaniu gniazdka jest bezużyteczna), a po oddaleniu
+ * zlewa się w jednolitą szarość. Bierzemy więc najmniejszy „okrągły" krok, którego
+ * oczko ma na ekranie co najmniej `MIN_OCZKO_PX`.
+ *
+ * Drabinka 1-2-5 w METRACH (… 0,1 / 0,2 / 0,5 / 1 / 2 / 5 …), bo to jedyne podziały,
+ * które człowiek czyta bez liczenia: „dwie kratki to pół metra". Krok dobrany wprost
+ * w pikselach trafiałby na 0,37 m i nie dałby się użyć do niczego poza patrzeniem.
+ *
+ * Liczymy w metrach, nie w jednostkach planu, właśnie dlatego, że okrągły ma być
+ * WYMIAR RZECZYWISTY. Przy rzucie skalibrowanym gęściej ten sam krok to inna liczba
+ * jednostek — i dobrze, bo użytkownik mierzy metrami, nie jednostkami.
+ */
+export function krokSiatki(metersPerUnit: number | null, zoom: number): number {
+  const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
+  const pikseliNaMetr = zoom / mpu;
+  if (!Number.isFinite(pikseliNaMetr) || pikseliNaMetr <= 0) return GRID;
+
+  const minMetry = MIN_OCZKO_PX / pikseliNaMetr;
+  const dekada = Math.pow(10, Math.floor(Math.log10(minMetry)));
+  // Pierwszy szczebel nie mniejszy od wymaganego. Kolejna dekada domyka przypadek,
+  // w którym wymagane jest większe niż 5 × dekada (np. 7 m przy mocno oddalonym rzucie).
+  const krokM = SZCZEBLE.map((s) => s * dekada).find((k) => k >= minMetry) ?? 10 * dekada;
+  return krokM / mpu;
+}
+
+/**
+ * Ile metrów ma oczko siatki WIDOCZNE przy danym powiększeniu [m]. `null`, gdy skala
+ * nie jest ustawiona — wtedy nie ma czego podać, choć siatkę i tak rysujemy.
  *
  * Pasek stanu podawał dotąd skalę jako „1 jedn. = 5,00 cm". „Jednostka planu" to
  * pojęcie z kodu — elektryk nie ma jak go użyć ani z czym zestawić. Oczko siatki widać
  * natomiast na ekranie, więc ten odczyt da się sprawdzić wzrokiem i od razu zmierzyć
  * nim rysunek: „ten pokój to cztery kratki, czyli cztery metry".
+ *
+ * Odkąd skok idzie za powiększeniem, odczyt MUSI brać powiększenie pod uwagę. Stała
+ * wartość byłaby tu zwyczajnie nieprawdą: pasek mówiłby „oczko 1 m", a na ekranie
+ * stałaby półmetrowa kratka i policzenie nią pokoju dałoby wynik dwa razy za duży.
  */
-export function oczkoSiatkiM(metersPerUnit: number | null): number | null {
+export function oczkoSiatkiM(metersPerUnit: number | null, zoom: number): number | null {
   if (metersPerUnit === null || !(metersPerUnit > 0)) return null;
-  return GRID * metersPerUnit;
+  return krokSiatki(metersPerUnit, zoom) * metersPerUnit;
 }

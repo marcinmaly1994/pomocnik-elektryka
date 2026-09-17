@@ -17,6 +17,8 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   DEFAULT_OPENING_WIDTH_UNITS,
   contentBounds,
   oczkoSiatkiM,
+  krokSiatki,
+  MIN_OCZKO_PX,
   MARGINES_KADROWANIA,
   ZAPAS_ETYKIET,
   wysokoscPlotna,
@@ -577,15 +579,80 @@ describe("wierzcholkiZamknietejSciany", () => {
  * na ekranie, więc odczyt da się sprawdzić wzrokiem i od razu zmierzyć nim rysunek.
  */
 describe("oczkoSiatkiM", () => {
-  it("rysowanie od zera daje oczko równe metrowi", () => {
-    expect(oczkoSiatkiM(MANUAL_DRAW_SCALE_MPU)).toBeCloseTo(1, 10);
-  });
-
-  it("gęstsza kalibracja wgranego rzutu daje mniejsze oczko", () => {
-    expect(oczkoSiatkiM(0.02)).toBeCloseTo(0.4, 10);
+  it("rysowanie od zera przy domyślnym widoku daje oczko równe metrowi", () => {
+    expect(oczkoSiatkiM(MANUAL_DRAW_SCALE_MPU, 1)).toBeCloseTo(1, 10);
   });
 
   it("bez skali nie ma czego podać", () => {
-    expect(oczkoSiatkiM(null)).toBeNull();
+    expect(oczkoSiatkiM(null, 1)).toBeNull();
+  });
+
+  /**
+   * Odczyt ma opisywać kratkę, którą widać TERAZ. Odkąd skok siatki idzie za
+   * powiększeniem, stała wartość byłaby po prostu nieprawdą: pasek stanu mówiłby
+   * „oczko 1 m", a na ekranie stałaby półmetrowa kratka.
+   */
+  it("po przybliżeniu podaje oczko, które naprawdę widać", () => {
+    expect(oczkoSiatkiM(MANUAL_DRAW_SCALE_MPU, 3)).toBeCloseTo(0.5, 10);
+  });
+});
+
+/**
+ * Skok siatki dobierany do powiększenia — jak w programach CAD.
+ *
+ * Stałe oczko ma dwie wady naraz: po przybliżeniu jest za rzadkie, żeby cokolwiek nim
+ * wymierzyć, a po oddaleniu zlewa się w szarą płachtę. Dobieramy więc najmniejszy
+ * „okrągły" krok, który na ekranie ma jeszcze sens.
+ *
+ * Drabinka 1-2-5 w metrach (0,1 / 0,2 / 0,5 / 1 / 2 / 5 …), bo to jedyne podziały,
+ * które człowiek czyta bez liczenia: „dwie kratki to pół metra". Krok 0,3 albo 0,75 m
+ * trafiałby bliżej idealnego rozmiaru w pikselach i był bezużyteczny do mierzenia
+ * wzrokiem.
+ */
+describe("krokSiatki", () => {
+  /** Ile metrów ma oczko przy danym powiększeniu — wygodniej czytać niż jednostki. */
+  const metry = (zoom: number, mpu = MANUAL_DRAW_SCALE_MPU) => krokSiatki(mpu, zoom) * mpu;
+
+  /**
+   * Próg dobrany tak, żeby domyślny widok ZOSTAŁ przy metrze. Gdyby celować w większe
+   * oczko, pierwsze, co zobaczyłby użytkownik po otwarciu rysunku, to kratka co 2 m —
+   * czyli siatka rzadsza niż dotąd, a prośba brzmiała odwrotnie.
+   */
+  it("przy domyślnym widoku zostaje metr", () => {
+    expect(metry(1)).toBeCloseTo(1, 10);
+    expect(metry(0.87)).toBeCloseTo(1, 10);
+  });
+
+  it("przybliżanie zagęszcza siatkę po drabince", () => {
+    expect(metry(2)).toBeCloseTo(0.5, 10);
+    expect(metry(3)).toBeCloseTo(0.5, 10);
+    expect(metry(4)).toBeCloseTo(0.2, 10);
+  });
+
+  it("oddalanie rozrzedza siatkę, zamiast zlewać ją w szarą płachtę", () => {
+    expect(metry(0.4)).toBeCloseTo(2, 10);
+    expect(metry(0.15)).toBeCloseTo(5, 10);
+  });
+
+  /** Sedno doboru: oczko nigdy nie schodzi poniżej progu czytelności. */
+  it("oczko na ekranie nigdy nie jest mniejsze od progu", () => {
+    for (const zoom of [0.1, 0.25, 0.4, 0.87, 1, 1.5, 2, 3, 4]) {
+      const px = krokSiatki(MANUAL_DRAW_SCALE_MPU, zoom) * zoom;
+      expect(px, `powiększenie ${zoom}`).toBeGreaterThanOrEqual(MIN_OCZKO_PX);
+    }
+  });
+
+  it("idzie za skalą wgranego rzutu, nie za jednostkami planu", () => {
+    // Rzut skalibrowany pięć razy gęściej: krok w METRACH schodzi o tyle samo.
+    expect(metry(1, 0.01)).toBeCloseTo(0.2, 10);
+  });
+
+  it("bez skali liczy jak przy rysowaniu od zera, zamiast się poddać", () => {
+    expect(krokSiatki(null, 1)).toBe(krokSiatki(MANUAL_DRAW_SCALE_MPU, 1));
+  });
+
+  it("bezsensowne powiększenie nie wywraca doboru", () => {
+    expect(krokSiatki(MANUAL_DRAW_SCALE_MPU, 0)).toBe(GRID);
+    expect(krokSiatki(MANUAL_DRAW_SCALE_MPU, Number.NaN)).toBe(GRID);
   });
 });
