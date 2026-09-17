@@ -18,6 +18,12 @@ export interface EditorStatusBarProps {
   roomShapes: RoomShape[];
   elementCount: number;
   metersPerUnit: number | null;
+  /**
+   * Powiększenie widoku — potrzebne do odczytu oczka siatki, bo skok siatki idzie za
+   * powiększeniem (patrz `krokSiatki`). Bez tego pasek podawałby oczko sprzed zmiany
+   * i mierzenie nim rysunku dawałoby zły wynik.
+   */
+  zoom: number;
   /** Pozycja kursora w jednostkach planu; `null`, gdy poza planem. */
   cursor: Point | null;
   /**
@@ -55,11 +61,12 @@ export function EditorStatusBar({
   roomShapes,
   elementCount,
   metersPerUnit,
+  zoom,
   cursor,
   nastepnyKrok,
 }: EditorStatusBarProps) {
   const area = totalRoomAreaM2(roomShapes, metersPerUnit);
-  const oczko = oczkoSiatkiM(metersPerUnit);
+  const oczko = oczkoSiatkiM(metersPerUnit, zoom);
 
   return (
     <div

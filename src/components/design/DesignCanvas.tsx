@@ -4,7 +4,13 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
-import { DEFAULT_WALL_THICKNESS, GRID, gruboscObrysuPokoju, PROG_WASKIEGO_EKRANU, type PlanSize } from "@/lib/design";
+import {
+  DEFAULT_WALL_THICKNESS,
+  gruboscObrysuPokoju,
+  krokSiatki,
+  PROG_WASKIEGO_EKRANU,
+  type PlanSize,
+} from "@/lib/design";
 import {
   FALLBACK_FONT_ADNOTACJI,
   FALLBACK_FONT_NAZWY,
@@ -54,9 +60,6 @@ export interface WidokSterowanie {
   przesunOPiksele(dxPx: number, dyPx: number): void;
   ustaw(x: number, y: number): void;
 }
-
-/** Poniżej tylu pikseli na oczko siatka przestaje być siatką, a staje się szarą płachtą. */
-const MIN_OCZKO_PX = 6;
 
 export const MAX_ZOOM = 4;
 
@@ -455,28 +458,32 @@ export function DesignCanvas({
   }, [widokRef, zoom]);
 
   /**
+   * Skok siatki, jeden dla rysowania kratki i dla przyciągania. Wspólna wartość jest
+   * tu istotna: przyciąganie do innego skoku niż widoczna kratka to najgorszy możliwy
+   * wariant — użytkownik celuje w linię, którą widzi, a punkt siada gdzie indziej.
+   */
+  const krok = useMemo(() => krokSiatki(metersPerUnit, zoom), [metersPerUnit, zoom]);
+
+  /**
    * Linie siatki liczone z WIDOCZNEGO prostokąta, nie z arkusza. Dopóki rysunek musiał
    * mieścić się w arkuszu, siatka mogła kończyć się razem z nim; teraz rysować można
    * wszędzie, więc kratka ma być wszędzie tam, gdzie widać płótno.
    *
-   * Przy mocno oddalonym widoku oczko schodzi do kilku pikseli i siatka zlewa się
-   * w jednolitą szarość — wtedy nie rysujemy jej wcale. To prowizorka do czasu, aż
-   * skok siatki stanie się adaptacyjny, bo wtedy oczko nigdy nie zrobi się tak gęste.
+   * Oczko nie potrzebuje już dolnej blokady: skok idzie za powiększeniem (patrz
+   * `krokSiatki`), więc kratka z definicji nie zejdzie poniżej progu czytelności.
    */
   const siatka = useMemo(() => {
     const lewo = widok.x;
     const gora = widok.y;
     const prawo = widok.x + rozmiarOkna.w / zoom;
     const dol = widok.y + rozmiarOkna.h / zoom;
-    const puste = { pionowe: [] as number[], poziome: [] as number[], lewo, prawo, gora, dol };
-    if (GRID * zoom < MIN_OCZKO_PX) return puste;
     const linie = (od: number, doKad: number) => {
-      const start = Math.floor(od / GRID) * GRID;
-      const ile = Math.floor((doKad - start) / GRID) + 1;
-      return Array.from({ length: Math.max(0, ile) }, (_, i) => start + i * GRID);
+      const start = Math.floor(od / krok) * krok;
+      const ile = Math.floor((doKad - start) / krok) + 1;
+      return Array.from({ length: Math.max(0, ile) }, (_, i) => start + i * krok);
     };
-    return { ...puste, pionowe: linie(lewo, prawo), poziome: linie(gora, dol) };
-  }, [widok.x, widok.y, rozmiarOkna.w, rozmiarOkna.h, zoom]);
+    return { lewo, prawo, gora, dol, pionowe: linie(lewo, prawo), poziome: linie(gora, dol) };
+  }, [widok.x, widok.y, rozmiarOkna.w, rozmiarOkna.h, zoom, krok]);
 
   /** Tylko po to, żeby zmienić kursor na „łapkę" — sam gest żyje w refie, bo
    *  przerysowywanie sceny przy każdym pikselu ruchu byłoby marnotrawstwem. */
@@ -608,13 +615,17 @@ export function DesignCanvas({
    * przez `nearestPointOnPolyline`, bo drzwi mają siedzieć w ścianie, a nie na
    * najbliższym oczku siatki obok niej.
    *
-   * To rozróżnienie jest celowe. Oczko siatki przy rysowaniu od zera to równo 1 metr
-   * (patrz MANUAL_DRAW_SCALE_MPU), co jest właściwą podziałką dla ścian — dom ma
-   * wymiary w pełnych/połówkowych metrach. Dla gniazdka czy łącznika ta sama podziałka
-   * jest absurdalnie zgrubna: punkt kliknięty przy framudze odskakiwałby nawet o pół
-   * metra, na środek ściany. Element ląduje więc dokładnie tam, gdzie kliknięto —
-   * o resztę dba `ROOM_SNAP_TOLERANCE_M` w DesignTab, która przypisuje go do
-   * właściwego pomieszczenia, gdy wypadł tuż obok jego obrysu (nie przesuwa go).
+   * To rozróżnienie jest celowe. Siatka to podziałka w okrągłych metrach (patrz
+   * `krokSiatki`) — właściwa dla ścian, bo dom ma wymiary w pełnych i połówkowych
+   * metrach. Dla gniazdka czy łącznika ta sama podziałka jest za zgrubna: punkt
+   * kliknięty przy framudze odskakiwałby na najbliższe oczko, czyli na środek ściany.
+   * Element ląduje więc dokładnie tam, gdzie kliknięto — o resztę dba
+   * `ROOM_SNAP_TOLERANCE_M` w DesignTab, która przypisuje go do właściwego
+   * pomieszczenia, gdy wypadł tuż obok jego obrysu (nie przesuwa go).
+   *
+   * Odkąd oczko idzie za powiększeniem, ten podział broni się jeszcze lepiej: przy
+   * mocno przybliżonym widoku kratka schodzi do 20 cm, więc przyciąganie ścian jest
+   * dokładniejsze niż dawniej — a element i tak nie ma po co na nią wskakiwać.
    */
   /** Grubosc obrysu pomieszczen w jednostkach planu — jedna dla calego rysunku,
    *  bo skala jest wspolna. Liczona raz, nie w petli po pomieszczeniach. */
@@ -628,7 +639,7 @@ export function DesignCanvas({
   const so = skalaOpisowRzutu(metersPerUnit);
 
   function withSnap(p: Point): Point {
-    return snapOn ? { x: snap(p.x, GRID), y: snap(p.y, GRID) } : p;
+    return snapOn ? { x: snap(p.x, krok), y: snap(p.y, krok) } : p;
   }
 
   /**
@@ -1556,8 +1567,8 @@ export function DesignCanvas({
                         roomHitNodesRef.current.get(r.id)?.points(newPts);
                       }}
                       onDragEnd={(e) => {
-                        const x = snapOn ? snap(e.target.x(), GRID) : e.target.x();
-                        const y = snapOn ? snap(e.target.y(), GRID) : e.target.y();
+                        const x = snapOn ? snap(e.target.x(), krok) : e.target.x();
+                        const y = snapOn ? snap(e.target.y(), krok) : e.target.y();
                         onMoveRoomPoint(r.id, i, { x, y });
                       }}
                       onContextMenu={(e) => {
@@ -1646,8 +1657,8 @@ export function DesignCanvas({
                         wallLineNodesRef.current.get(w.id)?.points(newPts);
                       }}
                       onDragEnd={(e) => {
-                        const x = snapOn ? snap(e.target.x(), GRID) : e.target.x();
-                        const y = snapOn ? snap(e.target.y(), GRID) : e.target.y();
+                        const x = snapOn ? snap(e.target.x(), krok) : e.target.x();
+                        const y = snapOn ? snap(e.target.y(), krok) : e.target.y();
                         onMoveWallPoint(w.id, i, { x, y });
                       }}
                       onContextMenu={(e) => {
@@ -1961,8 +1972,8 @@ export function DesignCanvas({
                         routeLineNodesRef.current.get(r.id)?.points(newPts);
                       }}
                       onDragEnd={(e) => {
-                        const x = snapOn ? snap(e.target.x(), GRID) : e.target.x();
-                        const y = snapOn ? snap(e.target.y(), GRID) : e.target.y();
+                        const x = snapOn ? snap(e.target.x(), krok) : e.target.x();
+                        const y = snapOn ? snap(e.target.y(), krok) : e.target.y();
                         const mid = r.points.slice(1, -1).map((mp, mi) => (mi === i ? { x, y } : mp));
                         onSetRoutePoints(r.id, mid);
                       }}

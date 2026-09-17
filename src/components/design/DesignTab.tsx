@@ -2242,7 +2242,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             setCalibPoints([]);
             setToolMode("zaznacz");
             dismissScaleStale();
-            setSkalaPotwierdzenie(`Skala ustawiona: oczko siatki = ${formatLiczba(oczkoSiatkiM(metersPerUnit), 2)} m`);
+            setSkalaPotwierdzenie(`Skala ustawiona: oczko siatki = ${formatLiczba(oczkoSiatkiM(metersPerUnit, zoom), 2)} m`);
           }}
           onCancel={() => setCalibPoints([])}
           onClear={() => clearScale(activeFloorId)}
@@ -3157,6 +3157,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             roomShapes={roomShapes}
             elementCount={elements.length}
             metersPerUnit={mpu}
+            zoom={zoom}
             cursor={cursor}
             // W pełnym ekranie NIE: ten tryb jest o skupieniu na rysunku, a pasek stanu
             // leży wtedy jako wysuwana nakładka — przycisk wyprowadzający z zakładki nie
