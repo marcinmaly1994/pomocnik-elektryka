@@ -1,6 +1,41 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
+ * Kawałek Konvy, którego ten test naprawdę używa — zamiast `any`.
+ *
+ * Węzły czytamy z ŻYWEJ sceny, bo sprawdzamy rozmieszczenie, którego nie widać
+ * w danych projektu: to wynik układania etykiet, a nie zapisana wartość.
+ */
+interface WezelTekstu {
+  fontSize(): number;
+  text(): string;
+  getAbsolutePosition(): { x: number; y: number };
+  /** Grupa symbolu, w której siedzi etykieta — jej pozycja to punkt elementu na planie. */
+  getParent(): { x(): number; y(): number };
+}
+
+/** Element instalacji z autozapisu — tylko pola, po których tu szukamy. */
+interface ZapisanyElement {
+  x: number;
+  y: number;
+  type: string;
+  room?: string;
+}
+interface WezelLinii {
+  strokeWidth(): number;
+  opacity(): number;
+}
+interface Scena {
+  x(): number;
+  y(): number;
+  scaleX(): number;
+  scaleY(): number;
+  find<T>(selektor: string): T[];
+}
+/** Scena bywa jeszcze niezmontowana (DesignTab ładuje się leniwie), stąd znaki zapytania. */
+type OknoZKonva = { Konva?: { stages?: Scena[] } };
+
+/**
  * Numery grup sterowania przy ciasno postawionych łącznikach.
  *
  * Zgłoszenie brzmiało: „dwa łączniki schodowe w salonie mają różne numery, mimo że
@@ -23,9 +58,8 @@ async function przykladNaRzucie(page: Page) {
   await expect
     .poll(() =>
       page.evaluate(() => {
-        const k = (window as unknown as { Konva: { stages: any[] } }).Konva;
-        const st = k?.stages?.[0];
-        return st ? st.find("Text").filter((t: any) => t.fontSize() === 9).length : 0;
+        const st = (window as unknown as OknoZKonva).Konva?.stages?.[0];
+        return st ? st.find<WezelTekstu>("Text").filter((t) => t.fontSize() === 9).length : 0;
       })
     )
     .toBeGreaterThan(5);
@@ -39,14 +73,13 @@ async function przykladNaRzucie(page: Page) {
 /** Etykiety grup i kreski odniesienia odczytane z żywego rysunku, w jedn. planu. */
 async function rysunek(page: Page) {
   return page.evaluate(() => {
-    const k = (window as unknown as { Konva: { stages: any[] } }).Konva;
-    const st = k.stages[0];
+    const st = (window as unknown as OknoZKonva).Konva!.stages![0];
     const prz = (a: { x: number; y: number }) => ({ x: (a.x - st.x()) / st.scaleX(), y: (a.y - st.y()) / st.scaleY() });
     const cyfry = st
-      .find("Text")
-      .filter((t: any) => t.fontSize() === 9 && /^[0-9]+$/.test(t.text()))
-      .map((t: any) => ({ tekst: t.text(), ...prz(t.getAbsolutePosition()) }));
-    const kreski = st.find("Line").filter((l: any) => l.strokeWidth() === 0.8 && l.opacity() === 0.55).length;
+      .find<WezelTekstu>("Text")
+      .filter((t) => t.fontSize() === 9 && /^[0-9]+$/.test(t.text()))
+      .map((t) => ({ tekst: t.text(), ...prz(t.getAbsolutePosition()) }));
+    const kreski = st.find<WezelLinii>("Line").filter((l) => l.strokeWidth() === 0.8 && l.opacity() === 0.55).length;
     return { cyfry, kreski };
   });
 }
@@ -82,23 +115,24 @@ test("oba łączniki schodowe w salonie mają ten sam numer grupy", async ({ pag
   await przykladNaRzucie(page);
 
   const numery = await page.evaluate(() => {
-    const a = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
-    const k = (window as unknown as { Konva: { stages: any[] } }).Konva;
-    const st = k.stages[0];
+    const a = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!) as {
+      draft: { elements: ZapisanyElement[] };
+    };
+    const st = (window as unknown as OknoZKonva).Konva!.stages![0];
     // Grupa elementu stoi WPROST we współrzędnych planu (x={el.x} y={el.y}), więc
     // czytamy je bez przeliczania transformacji sceny — ta bywa jeszcze nieustalona.
     const znajdz = (x: number, y: number) =>
-      a.draft.elements.find((e: any) => Math.abs(e.x - x) < 0.6 && Math.abs(e.y - y) < 0.6);
+      a.draft.elements.find((e) => Math.abs(e.x - x) < 0.6 && Math.abs(e.y - y) < 0.6);
     return st
-      .find("Text")
-      .filter((t: any) => t.fontSize() === 9 && /^[0-9]+$/.test(t.text()))
-      .map((t: any) => {
+      .find<WezelTekstu>("Text")
+      .filter((t) => t.fontSize() === 9 && /^[0-9]+$/.test(t.text()))
+      .map((t) => {
         const g = t.getParent();
-        const el: any = znajdz(g.x(), g.y());
+        const el = znajdz(g.x(), g.y());
         return { tekst: t.text(), typ: el?.type, pokoj: el?.room };
       })
-      .filter((o: any) => o.typ === "wlacznikSchodowy" && o.pokoj === "Salon")
-      .map((o: any) => o.tekst);
+      .filter((o) => o.typ === "wlacznikSchodowy" && o.pokoj === "Salon")
+      .map((o) => o.tekst);
   });
 
   expect(numery.length).toBe(2);
