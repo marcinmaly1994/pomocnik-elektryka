@@ -60,6 +60,7 @@ import {
   guessRoomType,
   nextRoomName,
   contentBounds,
+  kadrOtwarcia,
   oczkoSiatkiM,
   planSizeForImage,
   roomNameAfterMove,
@@ -620,6 +621,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  niżej stoi NAD nim i bierze wysokość z treści (patrz styl `lewaKartaRef`). */
   const szerokieOkno = useSzerokieOkno();
   const ostatniaSzerRef = useRef(0);
+  /** Kondygnacja, dla której kadr został już ustawiony na rysunku — patrz efekt niżej. */
+  const skadrowanaRef = useRef<string | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null);
   /** Nazwa pliku podkładu — sam „wgrany" nie mówi, KTÓRY rzut leży pod spodem. */
   const [bgName, setBgName] = useState<string | null>(null);
@@ -645,22 +648,104 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   }
 
   /**
-   * Dopasowuje powiększenie tak, żeby rzut wypełnił dostępne miejsce.
+  /**
+   * Rysunek widziany przez dopasowanie kadru.
    *
-   * Bez tego na szerokim monitorze plan zostawał w rozmiarze 1:1 i tonął w szarym
-   * tle — aplikacja wyglądała na pustą, choć miejsce było. Ograniczamy się
-   * SZEROKOŚCIĄ I WYSOKOŚCIĄ naraz: samo dopasowanie do szerokości robiłoby
-   * z niskiego rzutu pasek wymagający przewijania w pionie.
+   * Przez REF, nie przez zależności `useCallback` — i to jest tu sedno. Gdyby
+   * dopasowanie zależało od ścian i pomieszczeń, zmieniałoby tożsamość przy każdej
+   * narysowanej linii, a efekt, który je woła, przeramowywałby widok po każdym
+   * kliknięciu. Dopasowanie ma brać rysunek TAKI, JAKI JEST W CHWILI DOPASOWANIA,
+   * a dziać się tylko wtedy, gdy ktoś o nie poprosi albo gdy zmieni się okno.
+   */
+  const trescRef = useRef({ walls, roomShapes, elements, openings });
+  trescRef.current = { walls, roomShapes, elements, openings };
+
+  /**
+   * Ustawia kadr tak, żeby rysunek wypełnił dostępne miejsce.
+   *
+   * Dopasowujemy do TREŚCI, nie do arkusza. Arkusz to 50 × 35 m przy rysowaniu od
+   * zera, więc dom o 140 m² zajmował z niego jedną ósmą i otwierał się wielkości
+   * znaczka pocztowego w morzu pustej siatki — od tego zaczęła się przebudowa
+   * płótna. Pusta kondygnacja zostaje przy arkuszu: nie ma czego kadrować, a arkusz
+   * w rogu daje przewidywalny punkt, od którego zaczyna się rysowanie.
+   *
+   * Ograniczamy się SZEROKOŚCIĄ I WYSOKOŚCIĄ naraz: samo dopasowanie do szerokości
+   * robiłoby z niskiego rzutu pasek wymagający przewijania w pionie.
+   */
+  /**
+   * Szerokość, do której ostatnio dopasowywaliśmy. Obserwator zmian rozmiaru reaguje
+   * tylko na ODSTĘPSTWO od niej — dzięki temu pierwsze zgłoszenie po podpięciu (to
+   * samo, do czego przed chwilą dopasowaliśmy kadr) nie kasuje tego dopasowania.
+   */
+  const zmierzSzerokosc = useCallback(() => {
+    const el = kolumnaPlotnaRef.current;
+    if (!el) return null;
+    const szer = el.clientWidth - 2;
+    if (szer <= 0) return null;
+    setDostepnaSzer(szer);
+    ostatniaSzerRef.current = szer;
+    return szer;
+  }, []);
+
+  /**
+   * Odpowiedź na zmianę rozmiaru okna: zwinięcie panelu, pojawienie się listy
+   * pomieszczeń, baner nad rysunkiem.
+   *
+   * Dopasowanie do arkusza robimy TYLKO wtedy, gdy nie ma jeszcze rysunku. Wtedy jest
+   * darmowe i pomocne: arkusz wypełnia dostępne miejsce, zamiast tonąć w szarym tle.
+   * Gdy rysunek jest, kadr należy do użytkownika i nie ruszamy go wcale — ani
+   * powiększenia, ani przesunięcia.
+   *
+   * To nie ostrożność, tylko wniosek z pomiaru. Dorysowanie pomieszczenia zmienia
+   * szerokość panelu bocznego, więc obserwator rozmiaru budzi się dokładnie w trakcie
+   * rysowania; przeliczanie wtedy powiększenia wyrywało rysunek spod kursora, a przy
+   * otwartym projekcie kasowało dopiero co ustawiony kadr (zmierzone: powiększenie
+   * wracało z dopasowanego do rysunku 3,0 na dopasowane do arkusza 0,87).
+   *
+   * Sam pomiar szerokości zostaje bezwarunkowo — od niego zależy rozmiar okna widoku.
    */
   const dopasujZoom = useCallback(() => {
-    const el = kolumnaPlotnaRef.current;
-    if (!el) return;
-    const dostepnaSzer = el.clientWidth - 2;
-    if (dostepnaSzer <= 0) return;
-    setDostepnaSzer(dostepnaSzer);
+    const dostepnaSzer = zmierzSzerokosc();
+    if (dostepnaSzer === null) return;
+    const { walls: sc, roomShapes: pom, elements: el, openings: otw } = trescRef.current;
+    if (sc.length || pom.length || el.length || otw.length) return;
     const z = Math.min(dostepnaSzer / planSize.w, wysPlotna / planSize.h);
     setZoom(Math.round(Math.min(MAX_ZOOM, Math.max(minZoom(), z)) * 100) / 100);
-  }, [planSize.w, planSize.h, wysPlotna]);
+  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc]);
+
+  /**
+   * Powiększenie I kadr ustawione na RYSUNKU — dopasowanie, o które ktoś poprosił.
+   *
+   * Arkusz to 50 × 35 m przy rysowaniu od zera, więc dom o 140 m² zajmował z niego
+   * jedną ósmą i otwierał się wielkości znaczka pocztowego w morzu pustej siatki —
+   * od tego zaczęła się przebudowa płótna. Pusta kondygnacja zostaje przy arkuszu:
+   * nie ma czego kadrować, a arkusz w rogu daje przewidywalny punkt, od którego
+   * zaczyna się rysowanie (patrz `kadrOtwarcia`).
+   *
+   * Wołane przy otwarciu rysunku i przyciskiem „Dopasuj widok" — czyli wtedy, gdy
+   * przestawienie kadru jest dokładnie tym, czego użytkownik chce. Na płótnie bez
+   * granic ten przycisk jest zresztą jedyną drogą powrotną, gdy widok odjedzie.
+   */
+  const dopasujKadr = useCallback(() => {
+    const dostepnaSzer = zmierzSzerokosc();
+    // Zwraca, czy kadr FAKTYCZNIE się ustawił. Kolumna płótna nie istnieje, dopóki na
+    // wierzchu stoi ekran startowy albo trwa wgrywanie rzutu — a wołający musi wiedzieć,
+    // że próba przepadła, żeby nie odhaczyć kondygnacji jako skadrowanej.
+    if (dostepnaSzer === null) return false;
+    const { walls: sc, roomShapes: pom, elements: el, openings: otw } = trescRef.current;
+    const kadr = kadrOtwarcia(
+      // Margines ZERO: oddech wokół rysunku dokłada `kadrOtwarcia` ułamkiem jego
+      // rozmiaru. Domyślny margines tej funkcji jest skrojony pod eksport (ma zmieścić
+      // wannę ze strefą ochronną) i przy małym pokoju zabrałby pół kadru.
+      contentBounds(sc, pom, el, otw, 0),
+      { w: planSize.w, h: planSize.h },
+      { w: dostepnaSzer, h: wysPlotna },
+      { min: minZoom(), max: MAX_ZOOM }
+    );
+    setZoom(kadr.zoom);
+    widokRef.current?.ustaw(kadr.widok.x, kadr.widok.y);
+    return true;
+  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc]);
 
   /** Wejście i wyjście z pełnego ekranu zmienia dostępne miejsce skokowo, więc rzut
    *  dopasowujemy na nowo — nawet jeśli użytkownik wcześniej ustawił zoom ręcznie.
@@ -1036,7 +1121,20 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    */
   useEffect(() => {
     if (zoomReczny) return;
-    dopasujZoom();
+    /**
+     * Kadr na rysunku ustawiamy RAZ NA KONDYGNACJĘ — przy jej otwarciu.
+     *
+     * Ten efekt uruchamia się ponownie przy wielu okazjach (zmiana wysokości płótna,
+     * wyjście z ekranu startowego, koniec wgrywania rzutu), a przeramowanie jest
+     * wtedy ostatnią rzeczą, jakiej ktoś chce: dorysowanie ściany zmienia wysokość
+     * panelu bocznego, więc rysunek uciekałby spod kursora w trakcie rysowania.
+     * Poza pierwszym razem zostaje samo powiększenie, dokładnie jak dotąd.
+     */
+    if (skadrowanaRef.current !== activeFloorId) {
+      if (dopasujKadr()) skadrowanaRef.current = activeFloorId;
+    } else {
+      dopasujZoom();
+    }
     const el = kolumnaPlotnaRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     // Obserwujemy WYŁĄCZNIE szerokość. Dopasowanie zmienia wysokość płótna, ta
@@ -1050,7 +1148,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [dopasujZoom, zoomReczny, wgrywanie.stan, showEntryScreen]);
+  }, [dopasujKadr, dopasujZoom, zoomReczny, wgrywanie.stan, showEntryScreen, activeFloorId]);
 
   const scaleToolRef = useRef<HTMLButtonElement | null>(null);
   const wallToolRef = useRef<HTMLButtonElement | null>(null);
@@ -2700,12 +2798,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         }}
         onDopasuj={() => {
           setZoomReczny(false);
-          dopasujZoom();
-          // Dopasowanie to jedyna droga powrotna na płótnie bez granic, więc sprowadza
-          // też KADR, a nie samo powiększenie. Automatyczne dopasowanie przy zmianie
-          // rozmiaru okna kadru nie rusza — tam użytkownik o nic nie prosił i szarpanie
-          // go z powrotem do arkusza byłoby zabraniem mu tego, co sobie ustawił.
-          widokRef.current?.ustaw(0, 0);
+          dopasujKadr();
         }}
       />
       </div>
