@@ -19,6 +19,7 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   oczkoSiatkiM,
   krokSiatki,
   MIN_OCZKO_PX,
+  kadrOtwarcia,
   MARGINES_KADROWANIA,
   ZAPAS_ETYKIET,
   wysokoscPlotna,
@@ -654,5 +655,76 @@ describe("krokSiatki", () => {
   it("bezsensowne powiększenie nie wywraca doboru", () => {
     expect(krokSiatki(MANUAL_DRAW_SCALE_MPU, 0)).toBe(GRID);
     expect(krokSiatki(MANUAL_DRAW_SCALE_MPU, Number.NaN)).toBe(GRID);
+  });
+});
+
+/**
+ * Kadr, w którym otwiera się rysunek.
+ *
+ * Arkusz to 1000 × 700 jedn., czyli 50 × 35 m przy rysowaniu od zera. Dom o 140 m²
+ * zajmuje z tego jedną ósmą, więc dopasowanie do ARKUSZA pokazywało głównie pustkę,
+ * a sam rysunek wychodził wielkości znaczka pocztowego. Dopasowujemy więc do tego,
+ * co narysowane — arkusz służy za kadr tylko wtedy, gdy nie ma jeszcze nic innego.
+ */
+describe("kadrOtwarcia", () => {
+  const ARKUSZ = { w: 1000, h: 700 };
+  const OKNO = { w: 900, h: 600 };
+  const GRANICE = { min: 0.4, max: 4 };
+
+  it("pusta kondygnacja: arkusz w lewym górnym rogu, dokładnie jak dotąd", () => {
+    const k = kadrOtwarcia(null, ARKUSZ, OKNO, GRANICE);
+    expect(k.widok).toEqual({ x: 0, y: 0 });
+    expect(k.zoom).toBeCloseTo(Math.min(OKNO.w / ARKUSZ.w, OKNO.h / ARKUSZ.h), 2);
+  });
+
+  it("narysowany dom wypełnia okno, zamiast tonąć w arkuszu", () => {
+    const dom = { x: 100, y: 100, w: 200, h: 160 };
+    const k = kadrOtwarcia(dom, ARKUSZ, OKNO, GRANICE);
+    // Rysunek ma wypełnić okno w jednej z osi — z dokładnością do zaokrąglenia zoomu.
+    // Nie 1,0: wokół rysunku zostaje ułamek oddechu, żeby nie dotykał krawędzi okna.
+    const wypelnienie = Math.max((dom.w * k.zoom) / OKNO.w, (dom.h * k.zoom) / OKNO.h);
+    expect(wypelnienie).toBeGreaterThan(0.88);
+    expect(wypelnienie).toBeLessThan(1);
+    expect(k.zoom).toBeGreaterThan(kadrOtwarcia(null, ARKUSZ, OKNO, GRANICE).zoom);
+  });
+
+  it("rysunek ląduje na ŚRODKU okna, a nie przy krawędzi", () => {
+    const dom = { x: 100, y: 100, w: 200, h: 160 };
+    const { zoom, widok } = kadrOtwarcia(dom, ARKUSZ, OKNO, GRANICE);
+    const srodekRysunku = { x: dom.x + dom.w / 2, y: dom.y + dom.h / 2 };
+    const srodekOkna = { x: widok.x + OKNO.w / zoom / 2, y: widok.y + OKNO.h / zoom / 2 };
+    expect(srodekOkna.x).toBeCloseTo(srodekRysunku.x, 6);
+    expect(srodekOkna.y).toBeCloseTo(srodekRysunku.y, 6);
+  });
+
+  it("rysunek POZA arkuszem też trafia w kadr — arkusz nie jest już granicą", () => {
+    // Proporcje INNE niz okna, zeby kadr mial zapas w jednej osi — inaczej rysunek
+    // wypelnia obie osie co do piksela i krawedz kadru rowna sie krawedzi rysunku.
+    const daleko = { x: -400, y: 1200, w: 300, h: 100 };
+    const { zoom, widok } = kadrOtwarcia(daleko, ARKUSZ, OKNO, GRANICE);
+    expect(widok.x).toBeLessThanOrEqual(daleko.x);
+    expect(widok.y).toBeLessThan(daleko.y);
+    expect(widok.x + OKNO.w / zoom).toBeGreaterThanOrEqual(daleko.x + daleko.w);
+    expect(widok.y + OKNO.h / zoom).toBeGreaterThan(daleko.y + daleko.h);
+  });
+
+  it("drobny rysunek nie rozdyma się ponad maksymalne powiększenie", () => {
+    const gniazdko = { x: 500, y: 350, w: 4, h: 4 };
+    const k = kadrOtwarcia(gniazdko, ARKUSZ, OKNO, GRANICE);
+    expect(k.zoom).toBe(GRANICE.max);
+    // i mimo ograniczenia nadal jest wyśrodkowany
+    expect(k.widok.x + OKNO.w / k.zoom / 2).toBeCloseTo(502, 6);
+  });
+
+  it("rozległy rysunek nie schodzi poniżej minimalnego powiększenia", () => {
+    const osiedle = { x: 0, y: 0, w: 40000, h: 30000 };
+    expect(kadrOtwarcia(osiedle, ARKUSZ, OKNO, GRANICE).zoom).toBe(GRANICE.min);
+  });
+
+  it("okno o zerowym rozmiarze nie wywraca kadru", () => {
+    const k = kadrOtwarcia({ x: 0, y: 0, w: 100, h: 100 }, ARKUSZ, { w: 0, h: 0 }, GRANICE);
+    expect(Number.isFinite(k.zoom)).toBe(true);
+    expect(Number.isFinite(k.widok.x)).toBe(true);
+    expect(Number.isFinite(k.widok.y)).toBe(true);
   });
 });

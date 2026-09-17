@@ -635,6 +635,73 @@ export function wierzcholkiZamknietejSciany(points: Point[]): Point[] | null {
   return wierzcholki;
 }
 
+/** Kadr płótna: powiększenie plus lewy górny róg okna w jednostkach planu. */
+export interface KadrPlotna {
+  zoom: number;
+  widok: { x: number; y: number };
+}
+
+/**
+ * Kadr, w którym otwiera się rysunek — dopasowany do TREŚCI, nie do arkusza.
+ *
+ * Arkusz to 1000 × 700 jedn., czyli 50 × 35 m przy rysowaniu od zera. Dom o 140 m²
+ * zajmuje z tego jedną ósmą, więc dopasowanie do arkusza pokazywało głównie pustkę,
+ * a sam rysunek wychodził wielkości znaczka pocztowego — od tego zaczęła się cała
+ * przebudowa płótna.
+ *
+ * Pusta kondygnacja zostaje przy STARYM zachowaniu: arkusz dopasowany do okna, kadr
+ * w zerze. To nie wyjątek dla wygody, tylko brak pytania — nie ma czego kadrować,
+ * a arkusz w rogu daje przewidywalny punkt odniesienia, od którego zaczyna się
+ * rysowanie. Gdy treść jest, kadr siada na niej i środkuje ją w oknie.
+ *
+ * Granice powiększenia obowiązują: pojedyncze gniazdko nie rozdmucha się na cały
+ * ekran, a rysunek wielkości osiedla nie zejdzie poniżej czytelności — w obu
+ * przypadkach zostaje przynajmniej wyśrodkowany na tym, co jest.
+ */
+export function kadrOtwarcia(
+  tresc: Obszar | null,
+  planSize: PlanSize,
+  okno: { w: number; h: number },
+  granice: { min: number; max: number }
+): KadrPlotna {
+  /**
+   * Oddech wokół rysunku, liczony UŁAMKIEM jego rozmiaru, nie stałą liczbą jednostek.
+   *
+   * Stały margines (jak `MARGINES_KADROWANIA` przy eksporcie) jest tu zły z zasady:
+   * przy pokoju 6 × 4 m zabiera połowę kadru, a przy całym domu jest niewidoczny.
+   * Ułamek daje ten sam efekt wizualny niezależnie od tego, czy otwieramy garaż,
+   * czy osiedle. Arkusz zapasu nie dostaje — on sam JEST kadrem.
+   */
+  const ZAPAS = 0.05;
+  const rysunek = tresc
+    ? {
+        x: tresc.x - tresc.w * ZAPAS,
+        y: tresc.y - tresc.h * ZAPAS,
+        w: tresc.w * (1 + 2 * ZAPAS),
+        h: tresc.h * (1 + 2 * ZAPAS),
+      }
+    : null;
+  const obszar = rysunek ?? { x: 0, y: 0, w: planSize.w, h: planSize.h };
+  const dopasowanie = Math.min(okno.w / obszar.w, okno.h / obszar.h);
+  // Zaokrąglenie do dwóch miejsc, bo ta sama wartość ląduje w pasku jako „87%".
+  const zoom = Number.isFinite(dopasowanie)
+    ? Math.round(Math.min(granice.max, Math.max(granice.min, dopasowanie)) * 100) / 100
+    : granice.min;
+
+  if (!tresc) return { zoom, widok: { x: 0, y: 0 } };
+
+  // Środek treści na środek okna. Przy powiększeniu uciętym do granicy okno bywa
+  // węższe od rysunku — wtedy wyśrodkowanie i tak pokazuje jego środek, zamiast
+  // zaczynać od rogu i uciąć resztę niewidocznie.
+  return {
+    zoom,
+    widok: {
+      x: obszar.x + obszar.w / 2 - okno.w / zoom / 2,
+      y: obszar.y + obszar.h / 2 - okno.h / zoom / 2,
+    },
+  };
+}
+
 /**
  * Najmniejsze oczko siatki, które na ekranie jeszcze do czegoś służy [px].
  *
