@@ -324,11 +324,10 @@ describe("defaultOpeningWidth — rodzaj otworu", () => {
 });
 
 describe("contentBounds", () => {
-  const PLAN = { w: 1000, h: 700 };
   const sciana = { points: [{ x: 200, y: 200 }, { x: 400, y: 200 }, { x: 400, y: 300 }] };
 
   it("obejmuje całą geometrię z marginesem", () => {
-    const b = contentBounds(PLAN, [sciana], [], [], [])!;
+    const b = contentBounds([sciana], [], [], [])!;
     expect(b.x).toBe(200 - MARGINES_KADROWANIA);
     expect(b.y).toBe(200 - MARGINES_KADROWANIA);
     expect(b.x + b.w).toBe(400 + MARGINES_KADROWANIA);
@@ -336,26 +335,32 @@ describe("contentBounds", () => {
   });
 
   it("bierze pod uwagę wszystkie rodzaje treści, nie tylko ściany", () => {
-    const b = contentBounds(PLAN, [sciana], [], [{ x: 700, y: 500 }], [])!;
+    const b = contentBounds([sciana], [], [{ x: 700, y: 500 }], [])!;
     expect(b.x + b.w).toBe(700 + MARGINES_KADROWANIA);
     expect(b.y + b.h).toBe(500 + MARGINES_KADROWANIA);
   });
 
-  it("nie wychodzi poza obszar planu — inaczej eksport złapałby pas pustki", () => {
-    const przyKrawedzi = { points: [{ x: 5, y: 5 }, { x: 995, y: 695 }] };
-    const b = contentBounds(PLAN, [przyKrawedzi], [], [], [])!;
-    expect(b.x).toBe(0);
-    expect(b.y).toBe(0);
-    expect(b.x + b.w).toBe(PLAN.w);
-    expect(b.y + b.h).toBe(PLAN.h);
+  /**
+   * Płótno nie ma granic, więc kadr też ich nie ma. Wcześniej wynik był przycinany
+   * do arkusza 1000 × 700 — dopóki nie dało się wyjść poza arkusz, przycięcie tylko
+   * zbierało margines przy krawędzi. Odkąd rysować można wszędzie, to samo przycięcie
+   * po cichu OBCINAŁOBY rysunek na wydruku, i to bez śladu, że czegoś brakuje.
+   */
+  it("obejmuje treść narysowaną poza dawnym arkuszem, zamiast ją obciąć", () => {
+    const zaArkuszem = { points: [{ x: -300, y: -200 }, { x: 1600, y: 1100 }] };
+    const b = contentBounds([zaArkuszem], [], [], [])!;
+    expect(b.x).toBe(-300 - MARGINES_KADROWANIA);
+    expect(b.y).toBe(-200 - MARGINES_KADROWANIA);
+    expect(b.x + b.w).toBe(1600 + MARGINES_KADROWANIA);
+    expect(b.y + b.h).toBe(1100 + MARGINES_KADROWANIA);
   });
 
   it("pusta kondygnacja nie ma czego kadrować", () => {
-    expect(contentBounds(PLAN, [], [], [], [])).toBeNull();
+    expect(contentBounds([], [], [], [])).toBeNull();
   });
 
   it("pojedynczy punkt daje kadr o rozmiarze marginesu, nie zerowy", () => {
-    const b = contentBounds(PLAN, [], [], [{ x: 500, y: 350 }], [])!;
+    const b = contentBounds([], [], [{ x: 500, y: 350 }], [])!;
     expect(b.w).toBe(MARGINES_KADROWANIA * 2);
     expect(b.h).toBe(MARGINES_KADROWANIA * 2);
   });
@@ -364,7 +369,7 @@ describe("contentBounds", () => {
    *  `autoSymbolScale`), więc margines musi dać się powiększyć — inaczej wanna
    *  na gęsto skalibrowanym rzucie wychodzi z kadru obcięta w połowie. */
   it("margines da się podać z zewnątrz, żeby zmieścić powiększone symbole", () => {
-    const b = contentBounds(PLAN, [], [], [{ x: 500, y: 350 }], [], 300)!;
+    const b = contentBounds([], [], [{ x: 500, y: 350 }], [], 300)!;
     expect(b.w).toBe(600);
     expect(b.x).toBe(200);
   });
@@ -432,15 +437,8 @@ describe("rogiSymbolu", () => {
   /** Sedno: kadr wokol samych gniazd ma byc CIASNY, a nie liczony jak dla wanny. */
   it("kadr wokol samych gniazd jest ciasniejszy niz stary staly margines", () => {
     const gniazda = [el("gniazdko", { x: 100, y: 100 }), el("gniazdko", { x: 300, y: 100 })];
-    const zRogow = contentBounds(
-      { w: 1000, h: 700 },
-      [],
-      [],
-      gniazda.flatMap((e) => rogiSymbolu(e, 1)),
-      [],
-      ZAPAS_ETYKIET
-    )!;
-    const poStaremu = contentBounds({ w: 1000, h: 700 }, [], [], gniazda, [], MARGINES_KADROWANIA)!;
+    const zRogow = contentBounds([], [], gniazda.flatMap((e) => rogiSymbolu(e, 1)), [], ZAPAS_ETYKIET)!;
+    const poStaremu = contentBounds([], [], gniazda, [], MARGINES_KADROWANIA)!;
     expect(zRogow.w).toBeLessThan(poStaremu.w);
   });
 });
