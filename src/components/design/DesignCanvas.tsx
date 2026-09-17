@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { rozmiescEtykietyGrup, type EtykietaDoRozmieszczenia } from "@/lib/lightGroups";
+
+import { rozmiescEtykietyGrup, type EtykietaDoRozmieszczenia } from "@/lib/lightGroups";
 
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
