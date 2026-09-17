@@ -85,7 +85,7 @@ test("przycisk pomocy otwiera karte z powrotem na ukonczonym projekcie", async (
   // Krok 1 (skala) zalatwia samo rysowanie od zera. Zostaja dwa.
   await karta(page).getByRole("button", { name: "Obrysuj pomieszczenie" }).click();
   await page.getByRole("button", { name: "Prostokąt" }).click();
-  const plan = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const plan = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.move(plan.x + 320, plan.y + 90);
   await page.mouse.down();
   await page.mouse.move(plan.x + 520, plan.y + 230, { steps: 6 });

@@ -36,7 +36,7 @@ test("usuwanie kondygnacji: przycisk dopiero przy drugiej, kasuje jej elementy",
   // momentem staje się nieaktualny dla kolejnych kliknięć w tej samej pętli.
   for (let i = 0; i < 3; i++) {
     await page.evaluate(() => window.scrollTo(0, 0));
-    const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+    const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
     await page.mouse.click(box.x + 80 + i * 50, box.y + 80);
   }
 
@@ -55,7 +55,7 @@ test("usuwanie kondygnacji: przycisk dopiero przy drugiej, kasuje jej elementy",
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (const dx of [120, 180]) {
     await page.evaluate(() => window.scrollTo(0, 0));
-    const box2 = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+    const box2 = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
     await page.mouse.click(box2.x + dx, box2.y + 200);
   }
 

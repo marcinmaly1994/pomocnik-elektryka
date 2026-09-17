@@ -23,7 +23,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (let i = 0; i < 4; i++) {
     await page.evaluate(() => window.scrollTo(0, 0));
-    const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+    const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
     await page.mouse.click(box.x + 80 + i * 50, box.y + 80);
   }
 
@@ -71,7 +71,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box2 = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box2 = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box2.x + 120, box2.y + 120);
   await page.getByRole("button", { name: "Nowy projekt" }).click();
   await page.getByRole("button", { name: "Anuluj" }).click();

@@ -36,7 +36,7 @@ test("baner ryzyka pojawia się po dodaniu pierwszego elementu i otwiera logowan
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box.x + 150, box.y + 130);
 
   await expect(page.getByText(BANER_RYZYKA)).toBeVisible();
@@ -50,7 +50,7 @@ test("prompt „sporo pracy” nie pojawia się poniżej progu elementów", asyn
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box.x + 150, box.y + 130);
   await page.waitForTimeout(900);
 
@@ -69,7 +69,7 @@ test("prompt „sporo pracy” pojawia się po przekroczeniu progu i da się odr
   // próg to >10 — 11 kliknięć w różne miejsca płótna
   for (let i = 0; i < 11; i++) {
     await page.evaluate(() => window.scrollTo(0, 0));
-    const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+    const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
     await page.mouse.click(box.x + 40 + (i % 6) * 50, box.y + 40 + Math.floor(i / 6) * 50);
   }
   await page.waitForTimeout(900);

@@ -53,7 +53,7 @@ async function otworzObwod(page: import("@playwright/test").Page, tryb: keyof ty
 
 async function planBox(page: import("@playwright/test").Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  return (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 }
 
 test("dobór przekroju dla domyślnych danych zgadza się z silnikiem Rozdzielnicy (2,5 mm²)", async ({ page }) => {

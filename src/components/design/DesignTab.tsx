@@ -297,6 +297,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  zaznaczania) — patrz `anulujPodgladRef` w DesignCanvas. Escape obsługujemy tutaj,
    *  a tamten stan jest lokalny, więc bez tego kanału nie dało się go dosięgnąć. */
   const anulujPodgladRef = useRef<(() => boolean) | null>(null);
+  /** Przesuwanie kadru z zewnątrz — patrz kompensacja zmian szerokości panelu niżej. */
+  const przesunWidokRef = useRef<((dxPx: number, dyPx: number) => void) | null>(null);
   const glifyRef = useRef<HTMLDivElement>(null);
   const [podgladPdf, setPodgladPdf] = useState(false);
   const docHeader = resolveDocHeader(rawDocHeader, projectName);
@@ -598,6 +600,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const dolnyPasekRef = useRef<HTMLDivElement>(null);
   const kolumnaPlotnaRef = useRef<HTMLDivElement>(null);
   const [wysPlotna, setWysPlotna] = useState(wysokoscPlotna);
+  /** Szerokość dostępna dla płótna — mierzona razem z dopasowaniem powiększenia.
+   *  Razem z `wysPlotna` wyznacza OKNO widoku, które dostaje płótno. */
+  const [dostepnaSzer, setDostepnaSzer] = useState(0);
   /** Od 768 px w górę kolumna narzędzi stoi OBOK rysunku i równa się z nim wysokością;
    *  niżej stoi NAD nim i bierze wysokość z treści (patrz styl `lewaKartaRef`). */
   const szerokieOkno = useSzerokieOkno();
@@ -641,6 +646,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     if (!el) return;
     const dostepnaSzer = el.clientWidth - 2;
     if (dostepnaSzer <= 0) return;
+    setDostepnaSzer(dostepnaSzer);
     const z = Math.min(dostepnaSzer / planSize.w, wysPlotna / planSize.h);
     setZoom(Math.round(Math.min(MAX_ZOOM, Math.max(minZoom(), z)) * 100) / 100);
   }, [planSize.w, planSize.h, wysPlotna]);
@@ -693,14 +699,23 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     setChromeLewo(false);
   }, []);
 
-  /** Kontener przewijania płótna — DesignCanvas trzyma go u siebie, ale zmiany
-   *  szerokości panelu muszą go przewinąć, więc sięgamy po niego przez kolumnę
-   *  płótna. Jedyny element z `overflow-auto` w tej kolumnie to okno rysunku. */
+  /** Okno rysunku — DesignCanvas trzyma je u siebie, ale zmiany szerokości panelu
+   *  muszą przestawić kadr, więc sięgamy po nie przez kolumnę płótna. Wcześniej
+   *  szukaliśmy tu `div.overflow-auto`: okno przestało się przewijać, selektor
+   *  przestał cokolwiek znajdować i kompensacja po cichu umarła. */
   const kontenerPlotna = useCallback(
-    () => kolumnaPlotnaRef.current?.querySelector<HTMLDivElement>("div.overflow-auto") ?? null,
+    () => kolumnaPlotnaRef.current?.querySelector<HTMLDivElement>("[data-plan-okno]") ?? null,
     [],
   );
-  /** Pozycja lewej krawędzi okna rysunku sprzed zmiany układu — do skompensowania skoku. */
+  /**
+   * Lewa krawędź OKNA rysunku sprzed zmiany układu — do skompensowania skoku.
+   *
+   * Mierzymy okno, a nie kolumnę, bo to okno niesie rysunek: punkt planu leżący przy
+   * jego lewej krawędzi ma tam zostać. Gdy rzut nie mieści się w kolumnie, jedno i
+   * drugie to ta sama liczba; gdy się mieści, okno jest w kolumnie wyśrodkowane
+   * i jedzie o POŁOWĘ tego, co kolumna — kompensacja liczona z kolumny wychodziła
+   * wtedy dwa razy za duża.
+   */
   const lewaPrzedZmiana = useRef<number | null>(null);
 
   /** Wywoływane TUŻ PRZED każdą zmianą, która zwęża albo poszerza obszar rysunku. */
@@ -753,15 +768,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * Każda zmiana szerokości panelu przesuwa obszar rysunku w bok, więc plan skakał
    * i trzeba go było szukać od nowa: o ~370 px przy przypięciu w pełnym ekranie
    * i o ~270 px przy zwijaniu panelu w widoku standardowym. Kompensujemy to
-   * przewinięciem o dokładnie tyle, o ile przesunęła się lewa krawędź okna rysunku —
-   * rysunek zostaje pod tym samym miejscem EKRANU.
+   * przesunięciem kadru o dokładnie tyle, o ile przesunęła się lewa krawędź okna
+   * rysunku — rysunek zostaje pod tym samym miejscem EKRANU.
    *
-   * `useLayoutEffect`, bo przewinięcie musi wejść w tej samej klatce co nowy układ —
+   * Kompensacja wisi na KONKRETNYM GEŚCIE, a nie na obserwatorze układu, i to jest
+   * tu istotne. Obserwator widziałby także zmiany szerokości okna wynikające z samego
+   * powiększenia (okno jest wyśrodkowane, a jego szerokość to arkusz razy zoom, więc
+   * oddalanie samo przesuwa jego krawędź) i „poprawiałby" kadr wbrew użytkownikowi —
+   * symbole uciekały wtedy spod kursora przy oddalonym widoku.
+   *
+   * `useLayoutEffect`, bo przesunięcie musi wejść w tej samej klatce co nowy układ —
    * inaczej widać przeskok, czyli dokładnie to, co naprawiamy.
    *
-   * Gdy cały rzut mieści się w oknie, nie ma czego przewijać i plan przecentruje się
-   * w nowym obszarze (a przy automatycznym dopasowaniu jeszcze przeskaluje). To
-   * poprawne: nic nie znika z widoku, bo widać całość.
+   * Gdy cały rzut mieści się w oknie, krawędź nie drgnie i nie ma czego kompensować:
+   * plan przecentruje się w nowym obszarze (a przy automatycznym dopasowaniu jeszcze
+   * przeskaluje). To poprawne, bo widać całość.
    */
   useLayoutEffect(() => {
     const przed = lewaPrzedZmiana.current;
@@ -769,7 +790,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     lewaPrzedZmiana.current = null;
     const el = kontenerPlotna();
     if (!el) return;
-    el.scrollLeft += el.getBoundingClientRect().left - przed;
+    przesunWidokRef.current?.(el.getBoundingClientRect().left - przed, 0);
   }, [przypietyPanel, panelZwiniety, kontenerPlotna]);
 
   // Panel: widoczny pod kursorem albo przypięty. Paski poziome: zawsze.
@@ -3020,7 +3041,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setZoomReczny(true);
               setZoom(z);
             }}
-            maxHeight={wysPlotna}
+            /* Okno widoku: tyle, ile dziś zajmowało dopasowane płótno — czyli rysunek
+               przycięty do dostępnego miejsca. Dzięki temu przebudowa nie rusza ani
+               jednego piksela w położeniu płótna na stronie. */
+            przesunWidokRef={przesunWidokRef}
+            rozmiarOkna={{
+              w: Math.max(1, Math.min(planSize.w * zoom, dostepnaSzer || planSize.w * zoom)),
+              h: Math.max(1, Math.min(planSize.h * zoom, wysPlotna)),
+            }}
             onSelectElement={(id, shiftKey) => {
               if (shiftKey) {
                 setMultiSelected((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));

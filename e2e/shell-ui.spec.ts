@@ -11,7 +11,7 @@ import { skipEntryScreen, otworzMenuPaska, otworzKatalogElementow } from "./_flo
 
 async function planBox(page: import("@playwright/test").Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  return (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 }
 
 test("suwak zmienia rozmiar symboli, nie ich położenie", async ({ page }) => {
@@ -83,7 +83,7 @@ test("przyciski akcji głównej mają widoczne tło, a nie sam tekst", async ({ 
 
   await page.getByRole("button", { name: "Kalibracja skali" }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box.x + 120, box.y + 100);
   await page.mouse.click(box.x + 320, box.y + 100);
 

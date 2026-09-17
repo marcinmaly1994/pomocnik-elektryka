@@ -25,7 +25,7 @@ async function otworzPlan(page: import("@playwright/test").Page) {
 }
 
 async function planBox(page: import("@playwright/test").Page) {
-  const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const wrap = page.locator("[data-testid=plan-okno]").first();
   await wrap.evaluate((e) => {
     e.scrollIntoView({ block: "start" });
     e.scrollTo(0, 0);
