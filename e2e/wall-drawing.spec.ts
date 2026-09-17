@@ -23,7 +23,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   await skipEntryScreen(page);
   await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   return box;
 }
 
@@ -74,7 +74,7 @@ test("po kalibracji skali etykieta w trakcie rysowania ściany pokazuje metry", 
   // potrafi przewinąć stronę)
   await page.getByRole("button", { name: "Kalibracja skali" }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  let box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  let box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box.x + 100, box.y + 100);
   await page.mouse.click(box.x + 300, box.y + 100);
   await page.getByLabel("Długość odcinka w metrach").fill("4");
@@ -82,7 +82,7 @@ test("po kalibracji skali etykieta w trakcie rysowania ściany pokazuje metry", 
 
   await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box.x + 100, box.y + 200);
   await page.mouse.move(box.x + 300, box.y + 200, { steps: 5 });
 

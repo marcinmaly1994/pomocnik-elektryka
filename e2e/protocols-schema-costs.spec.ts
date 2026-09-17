@@ -9,7 +9,7 @@ async function placeThreeSockets(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
-  const canvasWrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const canvasWrap = page.locator("[data-testid=plan-okno]").first();
   // Box mierzony na nowo PRZED KAŻDYM kliknięciem, ze scrollTo(0,0) tuż przedtem:
   // klik zmieniający narzędzie ORAZ postawienie PIERWSZEGO elementu (odsłania
   // trwały baner ryzyka nad płótnem) potrafią przesunąć płótno w dół, więc box

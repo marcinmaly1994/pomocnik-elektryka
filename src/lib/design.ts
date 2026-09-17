@@ -537,7 +537,6 @@ export function rozpietoscRysunku(
  * scenę, a `toCanvas` zwróciłby wtedy pas przezroczystych pikseli.
  */
 export function contentBounds(
-  planSize: PlanSize,
   walls: { points: Point[] }[],
   roomShapes: { points: Point[] }[],
   elements: Point[],
@@ -559,10 +558,16 @@ export function contentBounds(
   ];
   if (punkty.length === 0) return null;
 
-  const minX = Math.max(0, Math.min(...punkty.map((p) => p.x)) - margines);
-  const minY = Math.max(0, Math.min(...punkty.map((p) => p.y)) - margines);
-  const maxX = Math.min(planSize.w, Math.max(...punkty.map((p) => p.x)) + margines);
-  const maxY = Math.min(planSize.h, Math.max(...punkty.map((p) => p.y)) + margines);
+  /**
+   * Bez przycinania do arkusza. Wcześniej wynik był zaciskany do 0…planSize, co przy
+   * płótnie z granicami tylko zbierało margines przy krawędzi — a odkąd rysować można
+   * wszędzie, obcinałoby rysunek na wydruku bez śladu, że czegoś brakuje. Kadr to
+   * treść plus margines, i tyle; „gdzie kończy się arkusz" nie jest już pytaniem.
+   */
+  const minX = Math.min(...punkty.map((p) => p.x)) - margines;
+  const minY = Math.min(...punkty.map((p) => p.y)) - margines;
+  const maxX = Math.max(...punkty.map((p) => p.x)) + margines;
+  const maxY = Math.max(...punkty.map((p) => p.y)) + margines;
   return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
 }
 
@@ -630,15 +635,129 @@ export function wierzcholkiZamknietejSciany(points: Point[]): Point[] | null {
   return wierzcholki;
 }
 
+/** Kadr płótna: powiększenie plus lewy górny róg okna w jednostkach planu. */
+export interface KadrPlotna {
+  zoom: number;
+  widok: { x: number; y: number };
+}
+
 /**
- * Ile metrów ma jedno oczko siatki [m]. `null`, gdy skala nie jest ustawiona.
+ * Kadr, w którym otwiera się rysunek — dopasowany do TREŚCI, nie do arkusza.
+ *
+ * Arkusz to 1000 × 700 jedn., czyli 50 × 35 m przy rysowaniu od zera. Dom o 140 m²
+ * zajmuje z tego jedną ósmą, więc dopasowanie do arkusza pokazywało głównie pustkę,
+ * a sam rysunek wychodził wielkości znaczka pocztowego — od tego zaczęła się cała
+ * przebudowa płótna.
+ *
+ * Pusta kondygnacja zostaje przy STARYM zachowaniu: arkusz dopasowany do okna, kadr
+ * w zerze. To nie wyjątek dla wygody, tylko brak pytania — nie ma czego kadrować,
+ * a arkusz w rogu daje przewidywalny punkt odniesienia, od którego zaczyna się
+ * rysowanie. Gdy treść jest, kadr siada na niej i środkuje ją w oknie.
+ *
+ * Granice powiększenia obowiązują: pojedyncze gniazdko nie rozdmucha się na cały
+ * ekran, a rysunek wielkości osiedla nie zejdzie poniżej czytelności — w obu
+ * przypadkach zostaje przynajmniej wyśrodkowany na tym, co jest.
+ */
+export function kadrOtwarcia(
+  tresc: Obszar | null,
+  planSize: PlanSize,
+  okno: { w: number; h: number },
+  granice: { min: number; max: number }
+): KadrPlotna {
+  /**
+   * Oddech wokół rysunku, liczony UŁAMKIEM jego rozmiaru, nie stałą liczbą jednostek.
+   *
+   * Stały margines (jak `MARGINES_KADROWANIA` przy eksporcie) jest tu zły z zasady:
+   * przy pokoju 6 × 4 m zabiera połowę kadru, a przy całym domu jest niewidoczny.
+   * Ułamek daje ten sam efekt wizualny niezależnie od tego, czy otwieramy garaż,
+   * czy osiedle. Arkusz zapasu nie dostaje — on sam JEST kadrem.
+   */
+  const ZAPAS = 0.05;
+  const rysunek = tresc
+    ? {
+        x: tresc.x - tresc.w * ZAPAS,
+        y: tresc.y - tresc.h * ZAPAS,
+        w: tresc.w * (1 + 2 * ZAPAS),
+        h: tresc.h * (1 + 2 * ZAPAS),
+      }
+    : null;
+  const obszar = rysunek ?? { x: 0, y: 0, w: planSize.w, h: planSize.h };
+  const dopasowanie = Math.min(okno.w / obszar.w, okno.h / obszar.h);
+  // Zaokrąglenie do dwóch miejsc, bo ta sama wartość ląduje w pasku jako „87%".
+  const zoom = Number.isFinite(dopasowanie)
+    ? Math.round(Math.min(granice.max, Math.max(granice.min, dopasowanie)) * 100) / 100
+    : granice.min;
+
+  if (!tresc) return { zoom, widok: { x: 0, y: 0 } };
+
+  // Środek treści na środek okna. Przy powiększeniu uciętym do granicy okno bywa
+  // węższe od rysunku — wtedy wyśrodkowanie i tak pokazuje jego środek, zamiast
+  // zaczynać od rogu i uciąć resztę niewidocznie.
+  return {
+    zoom,
+    widok: {
+      x: obszar.x + obszar.w / 2 - okno.w / zoom / 2,
+      y: obszar.y + obszar.h / 2 - okno.h / zoom / 2,
+    },
+  };
+}
+
+/**
+ * Najmniejsze oczko siatki, które na ekranie jeszcze do czegoś służy [px].
+ *
+ * Próg, nie ideał: dobór bierze pierwszy szczebel drabinki POWYŻEJ tej wartości, więc
+ * oczko wypada zwykle między 14 a 35 px. Dobrany tak, żeby domyślny widok został przy
+ * metrze — przy wyższym progu pierwsze, co widać po otwarciu rysunku, byłaby kratka
+ * co 2 m, czyli rzadsza niż dotąd.
+ */
+export const MIN_OCZKO_PX = 14;
+
+/** Szczeble drabinki w obrębie dekady. Patrz `krokSiatki`. */
+const SZCZEBLE = [1, 2, 5];
+
+/**
+ * Skok siatki [jedn. planu] dobrany do powiększenia — konwencja z programów CAD.
+ *
+ * Stałe oczko ma dwie wady naraz: po przybliżeniu jest za rzadkie, żeby cokolwiek nim
+ * wymierzyć (kratka co metr przy rysowaniu gniazdka jest bezużyteczna), a po oddaleniu
+ * zlewa się w jednolitą szarość. Bierzemy więc najmniejszy „okrągły" krok, którego
+ * oczko ma na ekranie co najmniej `MIN_OCZKO_PX`.
+ *
+ * Drabinka 1-2-5 w METRACH (… 0,1 / 0,2 / 0,5 / 1 / 2 / 5 …), bo to jedyne podziały,
+ * które człowiek czyta bez liczenia: „dwie kratki to pół metra". Krok dobrany wprost
+ * w pikselach trafiałby na 0,37 m i nie dałby się użyć do niczego poza patrzeniem.
+ *
+ * Liczymy w metrach, nie w jednostkach planu, właśnie dlatego, że okrągły ma być
+ * WYMIAR RZECZYWISTY. Przy rzucie skalibrowanym gęściej ten sam krok to inna liczba
+ * jednostek — i dobrze, bo użytkownik mierzy metrami, nie jednostkami.
+ */
+export function krokSiatki(metersPerUnit: number | null, zoom: number): number {
+  const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
+  const pikseliNaMetr = zoom / mpu;
+  if (!Number.isFinite(pikseliNaMetr) || pikseliNaMetr <= 0) return GRID;
+
+  const minMetry = MIN_OCZKO_PX / pikseliNaMetr;
+  const dekada = Math.pow(10, Math.floor(Math.log10(minMetry)));
+  // Pierwszy szczebel nie mniejszy od wymaganego. Kolejna dekada domyka przypadek,
+  // w którym wymagane jest większe niż 5 × dekada (np. 7 m przy mocno oddalonym rzucie).
+  const krokM = SZCZEBLE.map((s) => s * dekada).find((k) => k >= minMetry) ?? 10 * dekada;
+  return krokM / mpu;
+}
+
+/**
+ * Ile metrów ma oczko siatki WIDOCZNE przy danym powiększeniu [m]. `null`, gdy skala
+ * nie jest ustawiona — wtedy nie ma czego podać, choć siatkę i tak rysujemy.
  *
  * Pasek stanu podawał dotąd skalę jako „1 jedn. = 5,00 cm". „Jednostka planu" to
  * pojęcie z kodu — elektryk nie ma jak go użyć ani z czym zestawić. Oczko siatki widać
  * natomiast na ekranie, więc ten odczyt da się sprawdzić wzrokiem i od razu zmierzyć
  * nim rysunek: „ten pokój to cztery kratki, czyli cztery metry".
+ *
+ * Odkąd skok idzie za powiększeniem, odczyt MUSI brać powiększenie pod uwagę. Stała
+ * wartość byłaby tu zwyczajnie nieprawdą: pasek mówiłby „oczko 1 m", a na ekranie
+ * stałaby półmetrowa kratka i policzenie nią pokoju dałoby wynik dwa razy za duży.
  */
-export function oczkoSiatkiM(metersPerUnit: number | null): number | null {
+export function oczkoSiatkiM(metersPerUnit: number | null, zoom: number): number | null {
   if (metersPerUnit === null || !(metersPerUnit > 0)) return null;
-  return GRID * metersPerUnit;
+  return krokSiatki(metersPerUnit, zoom) * metersPerUnit;
 }

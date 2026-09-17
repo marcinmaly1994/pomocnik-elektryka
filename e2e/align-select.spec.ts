@@ -12,7 +12,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function planBox(page: Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  return (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 }
 
 async function pustyProjekt(page: Page) {

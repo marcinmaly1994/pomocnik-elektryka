@@ -11,18 +11,23 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function planBox(page: Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  return (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 }
 
 /** Punkt PLANU przeliczony na wspolrzedne ekranu — widok sam dopasowuje powiekszenie,
  *  wiec offsety ekranowe liczymy z rzeczywistej skali sceny. */
 async function naEkranie(page: Page, x: number, y: number) {
   const box = await planBox(page);
-  const skala = await page.evaluate(() => {
-    const k = (window as unknown as { Konva: { stages: { scaleX(): number }[] } }).Konva;
-    return k.stages[0].scaleX();
+  // Kadr planu bywa przesunięty (widok startowy siada na rysunku, a użytkownik może
+  // go przesunąć), więc samo powiększenie nie wystarcza: punkt planu ląduje na ekranie
+  // tam, gdzie stoi SCENA. Bez składnika `x()`/`y()` ten przelicznik trafiał dobrze
+  // tylko przy kadrze w zerze.
+  const scena = await page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { scaleX(): number; x(): number; y(): number }[] } }).Konva;
+    const s = k.stages[0];
+    return { skala: s.scaleX(), x: s.x(), y: s.y() };
   });
-  return { x: box.x + x * skala, y: box.y + y * skala };
+  return { x: box.x + x * scena.skala + scena.x, y: box.y + y * scena.skala + scena.y };
 }
 
 /** Rysowanie od zera daje STANDARDOWA skale (1 jedn. = 5 cm), bez ktorej reguly

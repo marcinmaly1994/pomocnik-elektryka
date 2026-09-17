@@ -25,12 +25,24 @@ async function otworzPlan(page: import("@playwright/test").Page) {
 }
 
 async function planBox(page: import("@playwright/test").Page) {
-  const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const wrap = page.locator("[data-testid=plan-okno]").first();
   await wrap.evaluate((e) => {
     e.scrollIntoView({ block: "start" });
     e.scrollTo(0, 0);
   });
   return (await wrap.boundingBox())!;
+}
+
+/** Punkt planu przeliczony na wspolrzedne ekranu — przez zywa transformacje sceny,
+ *  wiec dziala niezaleznie od powiekszenia i przesuniecia kadru. */
+async function naEkranie(page: import("@playwright/test").Page, x: number, y: number) {
+  const box = await planBox(page);
+  const scena = await page.evaluate(() => {
+    const k = (window as unknown as { Konva: { stages: { scaleX(): number; x(): number; y(): number }[] } }).Konva;
+    const s = k.stages[0];
+    return { skala: s.scaleX(), x: s.x(), y: s.y() };
+  });
+  return { x: box.x + x * scena.skala + scena.x, y: box.y + y * scena.skala + scena.y };
 }
 
 /** Stawia element wybranego typu w podanych punktach planu. */
@@ -209,14 +221,13 @@ test("numer obwodu da sie nadac, zmienic i skasowac z okna edycji (dwuklik)", as
   // odwrotu od recznego przypisania inaczej niz przez cofanie.
   await page.getByRole("button", { name: "Instalacja" }).first().click();
   // Zakladka laduje sie dynamicznie — bez czekania na pasek narzedzi mierzylibysmy
-  // plotno, ktorego jeszcze nie ma. Powrot na zakladke wpasowuje tez rzut na nowo
-  // (tu: 87%), wiec powiekszenie trzeba przywrocic do 100% — inaczej klikniecie w te
-  // sama wspolrzedna ekranu trafia obok elementu.
+  // plotno, ktorego jeszcze nie ma. Powrot na zakladke ustawia tez KADR na nowo:
+  // dopasowuje powiekszenie i srodkuje widok na rysunku. Zamiast odkrecac to
+  // przyciskami, przeliczamy punkt planu przez transformacje sceny — czyli pytamy
+  // plotno, gdzie TERAZ jest ten element, zamiast zakladac, ze kadr stoi w zerze.
   await expect(page.getByRole("button", { name: "Zaznacz", exact: true })).toBeVisible();
-  const zoom = page.getByRole("button", { name: /Powiększenie \d+ procent/ });
-  if (!/100/.test((await zoom.innerText()) ?? "")) await zoom.click();
-  const box2 = await planBox(page);
-  await page.mouse.dblclick(box2.x + 220, box2.y + 150);
+  const p = await naEkranie(page, 220, 150);
+  await page.mouse.dblclick(p.x, p.y);
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "auto" }).click();
   await page.getByRole("button", { name: "Zapisz" }).click();

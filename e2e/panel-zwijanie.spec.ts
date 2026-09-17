@@ -1,3 +1,4 @@
+import type Konva from "konva";
 import { test, expect, type Page } from "@playwright/test";
 import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
@@ -117,27 +118,37 @@ test("zwijanie panelu nie przesuwa rysunku w widoku standardowym", async ({ page
   await page.waitForTimeout(300);
   await page.evaluate(() => window.scrollTo(0, 0));
 
-  const plotno = page.locator("div.overflow-auto.rounded-card.border").first();
-  await plotno.evaluate((el) => {
-    el.scrollLeft = 300;
-  });
+  const plotno = page.locator("[data-testid=plan-okno]").first();
 
-  /** Patrz komentarz w fullscreen.spec.ts: niezmiennikiem jest RÓŻNICA, nie suma. */
-  const przesuniecieUkladu = () =>
-    plotno.evaluate((el) => Math.round(el.scrollLeft - el.getBoundingClientRect().left));
+  /**
+   * Gdzie punkt planu (0, 0) wypada NA EKRANIE. Scena Konvy stoi w oknie planu
+   * przesunięta o stan widoku, więc lewa krawędź okna plus przesunięcie sceny to
+   * dokładnie to, co widzi użytkownik.
+   *
+   * Wcześniej liczyliśmy `scrollLeft - rect.left`, bo kadr wyznaczało przewinięcie
+   * kontenera. Okno planu nie przewija się już wcale, a pytanie i tak brzmiało: czy
+   * rysunek został w miejscu — więc pytamy o to wprost.
+   */
+  const pozycjaRysunku = async () => {
+    const box = (await plotno.boundingBox())!;
+    const przesuniecieSceny = await page.evaluate(
+      () => (window as unknown as { Konva: { stages: Konva.Stage[] } }).Konva.stages[0].x(),
+    );
+    return Math.round(box.x + przesuniecieSceny);
+  };
 
-  const przed = await przesuniecieUkladu();
+  const przed = await pozycjaRysunku();
 
   await page.getByRole("button", { name: "Zwiń panel boczny" }).click();
   await page.waitForTimeout(300);
   await page.evaluate(() => window.scrollTo(0, 0));
-  expect(Math.abs((await przesuniecieUkladu()) - przed)).toBeLessThan(4);
+  expect(Math.abs((await pozycjaRysunku()) - przed)).toBeLessThan(4);
 
   // I z powrotem — rozwinięcie też nie może przestawiać kadru.
   await page.getByRole("button", { name: "Pokaż panel boczny" }).click();
   await page.waitForTimeout(300);
   await page.evaluate(() => window.scrollTo(0, 0));
-  expect(Math.abs((await przesuniecieUkladu()) - przed)).toBeLessThan(4);
+  expect(Math.abs((await pozycjaRysunku()) - przed)).toBeLessThan(4);
 });
 
 test("zwinięty panel oddaje miejsce planowi", async ({ page }) => {

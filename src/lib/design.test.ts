@@ -17,6 +17,9 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   DEFAULT_OPENING_WIDTH_UNITS,
   contentBounds,
   oczkoSiatkiM,
+  krokSiatki,
+  MIN_OCZKO_PX,
+  kadrOtwarcia,
   MARGINES_KADROWANIA,
   ZAPAS_ETYKIET,
   wysokoscPlotna,
@@ -324,11 +327,10 @@ describe("defaultOpeningWidth — rodzaj otworu", () => {
 });
 
 describe("contentBounds", () => {
-  const PLAN = { w: 1000, h: 700 };
   const sciana = { points: [{ x: 200, y: 200 }, { x: 400, y: 200 }, { x: 400, y: 300 }] };
 
   it("obejmuje całą geometrię z marginesem", () => {
-    const b = contentBounds(PLAN, [sciana], [], [], [])!;
+    const b = contentBounds([sciana], [], [], [])!;
     expect(b.x).toBe(200 - MARGINES_KADROWANIA);
     expect(b.y).toBe(200 - MARGINES_KADROWANIA);
     expect(b.x + b.w).toBe(400 + MARGINES_KADROWANIA);
@@ -336,26 +338,32 @@ describe("contentBounds", () => {
   });
 
   it("bierze pod uwagę wszystkie rodzaje treści, nie tylko ściany", () => {
-    const b = contentBounds(PLAN, [sciana], [], [{ x: 700, y: 500 }], [])!;
+    const b = contentBounds([sciana], [], [{ x: 700, y: 500 }], [])!;
     expect(b.x + b.w).toBe(700 + MARGINES_KADROWANIA);
     expect(b.y + b.h).toBe(500 + MARGINES_KADROWANIA);
   });
 
-  it("nie wychodzi poza obszar planu — inaczej eksport złapałby pas pustki", () => {
-    const przyKrawedzi = { points: [{ x: 5, y: 5 }, { x: 995, y: 695 }] };
-    const b = contentBounds(PLAN, [przyKrawedzi], [], [], [])!;
-    expect(b.x).toBe(0);
-    expect(b.y).toBe(0);
-    expect(b.x + b.w).toBe(PLAN.w);
-    expect(b.y + b.h).toBe(PLAN.h);
+  /**
+   * Płótno nie ma granic, więc kadr też ich nie ma. Wcześniej wynik był przycinany
+   * do arkusza 1000 × 700 — dopóki nie dało się wyjść poza arkusz, przycięcie tylko
+   * zbierało margines przy krawędzi. Odkąd rysować można wszędzie, to samo przycięcie
+   * po cichu OBCINAŁOBY rysunek na wydruku, i to bez śladu, że czegoś brakuje.
+   */
+  it("obejmuje treść narysowaną poza dawnym arkuszem, zamiast ją obciąć", () => {
+    const zaArkuszem = { points: [{ x: -300, y: -200 }, { x: 1600, y: 1100 }] };
+    const b = contentBounds([zaArkuszem], [], [], [])!;
+    expect(b.x).toBe(-300 - MARGINES_KADROWANIA);
+    expect(b.y).toBe(-200 - MARGINES_KADROWANIA);
+    expect(b.x + b.w).toBe(1600 + MARGINES_KADROWANIA);
+    expect(b.y + b.h).toBe(1100 + MARGINES_KADROWANIA);
   });
 
   it("pusta kondygnacja nie ma czego kadrować", () => {
-    expect(contentBounds(PLAN, [], [], [], [])).toBeNull();
+    expect(contentBounds([], [], [], [])).toBeNull();
   });
 
   it("pojedynczy punkt daje kadr o rozmiarze marginesu, nie zerowy", () => {
-    const b = contentBounds(PLAN, [], [], [{ x: 500, y: 350 }], [])!;
+    const b = contentBounds([], [], [{ x: 500, y: 350 }], [])!;
     expect(b.w).toBe(MARGINES_KADROWANIA * 2);
     expect(b.h).toBe(MARGINES_KADROWANIA * 2);
   });
@@ -364,7 +372,7 @@ describe("contentBounds", () => {
    *  `autoSymbolScale`), więc margines musi dać się powiększyć — inaczej wanna
    *  na gęsto skalibrowanym rzucie wychodzi z kadru obcięta w połowie. */
   it("margines da się podać z zewnątrz, żeby zmieścić powiększone symbole", () => {
-    const b = contentBounds(PLAN, [], [], [{ x: 500, y: 350 }], [], 300)!;
+    const b = contentBounds([], [], [{ x: 500, y: 350 }], [], 300)!;
     expect(b.w).toBe(600);
     expect(b.x).toBe(200);
   });
@@ -432,15 +440,8 @@ describe("rogiSymbolu", () => {
   /** Sedno: kadr wokol samych gniazd ma byc CIASNY, a nie liczony jak dla wanny. */
   it("kadr wokol samych gniazd jest ciasniejszy niz stary staly margines", () => {
     const gniazda = [el("gniazdko", { x: 100, y: 100 }), el("gniazdko", { x: 300, y: 100 })];
-    const zRogow = contentBounds(
-      { w: 1000, h: 700 },
-      [],
-      [],
-      gniazda.flatMap((e) => rogiSymbolu(e, 1)),
-      [],
-      ZAPAS_ETYKIET
-    )!;
-    const poStaremu = contentBounds({ w: 1000, h: 700 }, [], [], gniazda, [], MARGINES_KADROWANIA)!;
+    const zRogow = contentBounds([], [], gniazda.flatMap((e) => rogiSymbolu(e, 1)), [], ZAPAS_ETYKIET)!;
+    const poStaremu = contentBounds([], [], gniazda, [], MARGINES_KADROWANIA)!;
     expect(zRogow.w).toBeLessThan(poStaremu.w);
   });
 });
@@ -579,15 +580,151 @@ describe("wierzcholkiZamknietejSciany", () => {
  * na ekranie, więc odczyt da się sprawdzić wzrokiem i od razu zmierzyć nim rysunek.
  */
 describe("oczkoSiatkiM", () => {
-  it("rysowanie od zera daje oczko równe metrowi", () => {
-    expect(oczkoSiatkiM(MANUAL_DRAW_SCALE_MPU)).toBeCloseTo(1, 10);
-  });
-
-  it("gęstsza kalibracja wgranego rzutu daje mniejsze oczko", () => {
-    expect(oczkoSiatkiM(0.02)).toBeCloseTo(0.4, 10);
+  it("rysowanie od zera przy domyślnym widoku daje oczko równe metrowi", () => {
+    expect(oczkoSiatkiM(MANUAL_DRAW_SCALE_MPU, 1)).toBeCloseTo(1, 10);
   });
 
   it("bez skali nie ma czego podać", () => {
-    expect(oczkoSiatkiM(null)).toBeNull();
+    expect(oczkoSiatkiM(null, 1)).toBeNull();
+  });
+
+  /**
+   * Odczyt ma opisywać kratkę, którą widać TERAZ. Odkąd skok siatki idzie za
+   * powiększeniem, stała wartość byłaby po prostu nieprawdą: pasek stanu mówiłby
+   * „oczko 1 m", a na ekranie stałaby półmetrowa kratka.
+   */
+  it("po przybliżeniu podaje oczko, które naprawdę widać", () => {
+    expect(oczkoSiatkiM(MANUAL_DRAW_SCALE_MPU, 3)).toBeCloseTo(0.5, 10);
+  });
+});
+
+/**
+ * Skok siatki dobierany do powiększenia — jak w programach CAD.
+ *
+ * Stałe oczko ma dwie wady naraz: po przybliżeniu jest za rzadkie, żeby cokolwiek nim
+ * wymierzyć, a po oddaleniu zlewa się w szarą płachtę. Dobieramy więc najmniejszy
+ * „okrągły" krok, który na ekranie ma jeszcze sens.
+ *
+ * Drabinka 1-2-5 w metrach (0,1 / 0,2 / 0,5 / 1 / 2 / 5 …), bo to jedyne podziały,
+ * które człowiek czyta bez liczenia: „dwie kratki to pół metra". Krok 0,3 albo 0,75 m
+ * trafiałby bliżej idealnego rozmiaru w pikselach i był bezużyteczny do mierzenia
+ * wzrokiem.
+ */
+describe("krokSiatki", () => {
+  /** Ile metrów ma oczko przy danym powiększeniu — wygodniej czytać niż jednostki. */
+  const metry = (zoom: number, mpu = MANUAL_DRAW_SCALE_MPU) => krokSiatki(mpu, zoom) * mpu;
+
+  /**
+   * Próg dobrany tak, żeby domyślny widok ZOSTAŁ przy metrze. Gdyby celować w większe
+   * oczko, pierwsze, co zobaczyłby użytkownik po otwarciu rysunku, to kratka co 2 m —
+   * czyli siatka rzadsza niż dotąd, a prośba brzmiała odwrotnie.
+   */
+  it("przy domyślnym widoku zostaje metr", () => {
+    expect(metry(1)).toBeCloseTo(1, 10);
+    expect(metry(0.87)).toBeCloseTo(1, 10);
+  });
+
+  it("przybliżanie zagęszcza siatkę po drabince", () => {
+    expect(metry(2)).toBeCloseTo(0.5, 10);
+    expect(metry(3)).toBeCloseTo(0.5, 10);
+    expect(metry(4)).toBeCloseTo(0.2, 10);
+  });
+
+  it("oddalanie rozrzedza siatkę, zamiast zlewać ją w szarą płachtę", () => {
+    expect(metry(0.4)).toBeCloseTo(2, 10);
+    expect(metry(0.15)).toBeCloseTo(5, 10);
+  });
+
+  /** Sedno doboru: oczko nigdy nie schodzi poniżej progu czytelności. */
+  it("oczko na ekranie nigdy nie jest mniejsze od progu", () => {
+    for (const zoom of [0.1, 0.25, 0.4, 0.87, 1, 1.5, 2, 3, 4]) {
+      const px = krokSiatki(MANUAL_DRAW_SCALE_MPU, zoom) * zoom;
+      expect(px, `powiększenie ${zoom}`).toBeGreaterThanOrEqual(MIN_OCZKO_PX);
+    }
+  });
+
+  it("idzie za skalą wgranego rzutu, nie za jednostkami planu", () => {
+    // Rzut skalibrowany pięć razy gęściej: krok w METRACH schodzi o tyle samo.
+    expect(metry(1, 0.01)).toBeCloseTo(0.2, 10);
+  });
+
+  it("bez skali liczy jak przy rysowaniu od zera, zamiast się poddać", () => {
+    expect(krokSiatki(null, 1)).toBe(krokSiatki(MANUAL_DRAW_SCALE_MPU, 1));
+  });
+
+  it("bezsensowne powiększenie nie wywraca doboru", () => {
+    expect(krokSiatki(MANUAL_DRAW_SCALE_MPU, 0)).toBe(GRID);
+    expect(krokSiatki(MANUAL_DRAW_SCALE_MPU, Number.NaN)).toBe(GRID);
+  });
+});
+
+/**
+ * Kadr, w którym otwiera się rysunek.
+ *
+ * Arkusz to 1000 × 700 jedn., czyli 50 × 35 m przy rysowaniu od zera. Dom o 140 m²
+ * zajmuje z tego jedną ósmą, więc dopasowanie do ARKUSZA pokazywało głównie pustkę,
+ * a sam rysunek wychodził wielkości znaczka pocztowego. Dopasowujemy więc do tego,
+ * co narysowane — arkusz służy za kadr tylko wtedy, gdy nie ma jeszcze nic innego.
+ */
+describe("kadrOtwarcia", () => {
+  const ARKUSZ = { w: 1000, h: 700 };
+  const OKNO = { w: 900, h: 600 };
+  const GRANICE = { min: 0.4, max: 4 };
+
+  it("pusta kondygnacja: arkusz w lewym górnym rogu, dokładnie jak dotąd", () => {
+    const k = kadrOtwarcia(null, ARKUSZ, OKNO, GRANICE);
+    expect(k.widok).toEqual({ x: 0, y: 0 });
+    expect(k.zoom).toBeCloseTo(Math.min(OKNO.w / ARKUSZ.w, OKNO.h / ARKUSZ.h), 2);
+  });
+
+  it("narysowany dom wypełnia okno, zamiast tonąć w arkuszu", () => {
+    const dom = { x: 100, y: 100, w: 200, h: 160 };
+    const k = kadrOtwarcia(dom, ARKUSZ, OKNO, GRANICE);
+    // Rysunek ma wypełnić okno w jednej z osi — z dokładnością do zaokrąglenia zoomu.
+    // Nie 1,0: wokół rysunku zostaje ułamek oddechu, żeby nie dotykał krawędzi okna.
+    const wypelnienie = Math.max((dom.w * k.zoom) / OKNO.w, (dom.h * k.zoom) / OKNO.h);
+    expect(wypelnienie).toBeGreaterThan(0.88);
+    expect(wypelnienie).toBeLessThan(1);
+    expect(k.zoom).toBeGreaterThan(kadrOtwarcia(null, ARKUSZ, OKNO, GRANICE).zoom);
+  });
+
+  it("rysunek ląduje na ŚRODKU okna, a nie przy krawędzi", () => {
+    const dom = { x: 100, y: 100, w: 200, h: 160 };
+    const { zoom, widok } = kadrOtwarcia(dom, ARKUSZ, OKNO, GRANICE);
+    const srodekRysunku = { x: dom.x + dom.w / 2, y: dom.y + dom.h / 2 };
+    const srodekOkna = { x: widok.x + OKNO.w / zoom / 2, y: widok.y + OKNO.h / zoom / 2 };
+    expect(srodekOkna.x).toBeCloseTo(srodekRysunku.x, 6);
+    expect(srodekOkna.y).toBeCloseTo(srodekRysunku.y, 6);
+  });
+
+  it("rysunek POZA arkuszem też trafia w kadr — arkusz nie jest już granicą", () => {
+    // Proporcje INNE niz okna, zeby kadr mial zapas w jednej osi — inaczej rysunek
+    // wypelnia obie osie co do piksela i krawedz kadru rowna sie krawedzi rysunku.
+    const daleko = { x: -400, y: 1200, w: 300, h: 100 };
+    const { zoom, widok } = kadrOtwarcia(daleko, ARKUSZ, OKNO, GRANICE);
+    expect(widok.x).toBeLessThanOrEqual(daleko.x);
+    expect(widok.y).toBeLessThan(daleko.y);
+    expect(widok.x + OKNO.w / zoom).toBeGreaterThanOrEqual(daleko.x + daleko.w);
+    expect(widok.y + OKNO.h / zoom).toBeGreaterThan(daleko.y + daleko.h);
+  });
+
+  it("drobny rysunek nie rozdyma się ponad maksymalne powiększenie", () => {
+    const gniazdko = { x: 500, y: 350, w: 4, h: 4 };
+    const k = kadrOtwarcia(gniazdko, ARKUSZ, OKNO, GRANICE);
+    expect(k.zoom).toBe(GRANICE.max);
+    // i mimo ograniczenia nadal jest wyśrodkowany
+    expect(k.widok.x + OKNO.w / k.zoom / 2).toBeCloseTo(502, 6);
+  });
+
+  it("rozległy rysunek nie schodzi poniżej minimalnego powiększenia", () => {
+    const osiedle = { x: 0, y: 0, w: 40000, h: 30000 };
+    expect(kadrOtwarcia(osiedle, ARKUSZ, OKNO, GRANICE).zoom).toBe(GRANICE.min);
+  });
+
+  it("okno o zerowym rozmiarze nie wywraca kadru", () => {
+    const k = kadrOtwarcia({ x: 0, y: 0, w: 100, h: 100 }, ARKUSZ, { w: 0, h: 0 }, GRANICE);
+    expect(Number.isFinite(k.zoom)).toBe(true);
+    expect(Number.isFinite(k.widok.x)).toBe(true);
+    expect(Number.isFinite(k.widok.y)).toBe(true);
   });
 });

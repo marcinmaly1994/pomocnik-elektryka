@@ -13,7 +13,7 @@ async function openPlan(page: import("@playwright/test").Page) {
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
   return box;
 }
@@ -35,7 +35,7 @@ async function drawRoom(page: import("@playwright/test").Page, box: { x: number;
 
 async function zoomAndBox(page: import("@playwright/test").Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   const zoom = await page.evaluate(() => {
     const k = (window as unknown as { Konva?: { stages: { scaleX(): number }[] } }).Konva;
     return k?.stages[0]?.scaleX() ?? 1;
@@ -175,7 +175,7 @@ test("zaznaczanie obszarem nadal działa po dodaniu krawędzi klikalnej pomieszc
   // narzędzie sam potrafi przesunąć stronę, więc dopiero pomiar PO nim (z jawnym
   // powrotem na górę) jest wiarygodny — patrz `zoomAndBox` niżej, ten sam wzorzec.
   await page.evaluate(() => window.scrollTo(0, 0));
-  const box2 = (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  const box2 = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   await page.mouse.click(box2.x + 150, box2.y + 130);
   await page.waitForTimeout(900);
 

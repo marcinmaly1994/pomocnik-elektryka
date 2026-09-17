@@ -60,6 +60,7 @@ import {
   guessRoomType,
   nextRoomName,
   contentBounds,
+  kadrOtwarcia,
   oczkoSiatkiM,
   planSizeForImage,
   roomNameAfterMove,
@@ -87,6 +88,7 @@ import { useSzerokieOkno } from "./PasekMenu";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
+import type { WidokSterowanie } from "./DesignCanvas";
 import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
 import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
@@ -297,6 +299,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  zaznaczania) — patrz `anulujPodgladRef` w DesignCanvas. Escape obsługujemy tutaj,
    *  a tamten stan jest lokalny, więc bez tego kanału nie dało się go dosięgnąć. */
   const anulujPodgladRef = useRef<(() => boolean) | null>(null);
+  /** Sterowanie kadrem płótna z zewnątrz — kompensacja zmian układu i „Dopasuj widok". */
+  const widokRef = useRef<WidokSterowanie | null>(null);
   const glifyRef = useRef<HTMLDivElement>(null);
   const [podgladPdf, setPodgladPdf] = useState(false);
   const docHeader = resolveDocHeader(rawDocHeader, projectName);
@@ -363,7 +367,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       ];
     });
     const rogi = [...elements.flatMap((e) => rogiSymbolu(e, skalaOsprzetu)), ...rogiStref];
-    const kadr = contentBounds(planSize, walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
+    const kadr = contentBounds(walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
       x: 0,
       y: 0,
       w: planSize.w,
@@ -383,7 +387,19 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     try {
       // Pole rysunku obok legendy, przeliczone na piksele druku.
       const docelowaSzer = Math.round(600 * PIKSELI_NA_PUNKT);
-      const kadrPx = { x: kadr.x * zoom, y: kadr.y * zoom, width: kadr.w * zoom, height: kadr.h * zoom };
+      /**
+       * Wycinek liczony we WSPÓŁRZĘDNYCH SCENY, więc musi uwzględnić jej przesunięcie.
+       * Scena stoi przesunięta o kadr ekranu (patrz stan `widok` w DesignCanvas), a
+       * `toCanvas` przerysowuje ją z pełną transformacją — bez tego składnika wydruk
+       * jechał dokładnie o tyle, o ile użytkownik odsunął sobie widok przy rysowaniu.
+       * Co widać na ekranie, nie ma tu nic do rzeczy: kadrujemy do narysowanej treści.
+       */
+      const kadrPx = {
+        x: kadr.x * zoom + stage.x(),
+        y: kadr.y * zoom + stage.y(),
+        width: kadr.w * zoom,
+        height: kadr.h * zoom,
+      };
       const pixelRatio = docelowaSzer / kadrPx.width;
       const plotno = stage.toCanvas({ ...kadrPx, pixelRatio }) as HTMLCanvasElement;
       // Scena Konvy jest przezroczysta — bez podłożenia bieli wychodzi czarna płachta.
@@ -598,15 +614,18 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const dolnyPasekRef = useRef<HTMLDivElement>(null);
   const kolumnaPlotnaRef = useRef<HTMLDivElement>(null);
   const [wysPlotna, setWysPlotna] = useState(wysokoscPlotna);
+  /** Szerokość dostępna dla płótna — mierzona razem z dopasowaniem powiększenia.
+   *  Razem z `wysPlotna` wyznacza OKNO widoku, które dostaje płótno. */
+  const [dostepnaSzer, setDostepnaSzer] = useState(0);
   /** Od 768 px w górę kolumna narzędzi stoi OBOK rysunku i równa się z nim wysokością;
    *  niżej stoi NAD nim i bierze wysokość z treści (patrz styl `lewaKartaRef`). */
   const szerokieOkno = useSzerokieOkno();
   const ostatniaSzerRef = useRef(0);
+  /** Kondygnacja, dla której kadr został już ustawiony na rysunku — patrz efekt niżej. */
+  const skadrowanaRef = useRef<string | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null);
   /** Nazwa pliku podkładu — sam „wgrany" nie mówi, KTÓRY rzut leży pod spodem. */
   const [bgName, setBgName] = useState<string | null>(null);
-  const [outsideHint, setOutsideHint] = useState(false);
-  const outsideHintTimer = useRef<number | undefined>(undefined);
   const [kontoPromptOdrzucony, setKontoPromptOdrzucony] = useState(odczytajOdrzuconyPrompt);
 
   /**
@@ -629,21 +648,104 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   }
 
   /**
-   * Dopasowuje powiększenie tak, żeby rzut wypełnił dostępne miejsce.
+  /**
+   * Rysunek widziany przez dopasowanie kadru.
    *
-   * Bez tego na szerokim monitorze plan zostawał w rozmiarze 1:1 i tonął w szarym
-   * tle — aplikacja wyglądała na pustą, choć miejsce było. Ograniczamy się
-   * SZEROKOŚCIĄ I WYSOKOŚCIĄ naraz: samo dopasowanie do szerokości robiłoby
-   * z niskiego rzutu pasek wymagający przewijania w pionie.
+   * Przez REF, nie przez zależności `useCallback` — i to jest tu sedno. Gdyby
+   * dopasowanie zależało od ścian i pomieszczeń, zmieniałoby tożsamość przy każdej
+   * narysowanej linii, a efekt, który je woła, przeramowywałby widok po każdym
+   * kliknięciu. Dopasowanie ma brać rysunek TAKI, JAKI JEST W CHWILI DOPASOWANIA,
+   * a dziać się tylko wtedy, gdy ktoś o nie poprosi albo gdy zmieni się okno.
+   */
+  const trescRef = useRef({ walls, roomShapes, elements, openings });
+  trescRef.current = { walls, roomShapes, elements, openings };
+
+  /**
+   * Ustawia kadr tak, żeby rysunek wypełnił dostępne miejsce.
+   *
+   * Dopasowujemy do TREŚCI, nie do arkusza. Arkusz to 50 × 35 m przy rysowaniu od
+   * zera, więc dom o 140 m² zajmował z niego jedną ósmą i otwierał się wielkości
+   * znaczka pocztowego w morzu pustej siatki — od tego zaczęła się przebudowa
+   * płótna. Pusta kondygnacja zostaje przy arkuszu: nie ma czego kadrować, a arkusz
+   * w rogu daje przewidywalny punkt, od którego zaczyna się rysowanie.
+   *
+   * Ograniczamy się SZEROKOŚCIĄ I WYSOKOŚCIĄ naraz: samo dopasowanie do szerokości
+   * robiłoby z niskiego rzutu pasek wymagający przewijania w pionie.
+   */
+  /**
+   * Szerokość, do której ostatnio dopasowywaliśmy. Obserwator zmian rozmiaru reaguje
+   * tylko na ODSTĘPSTWO od niej — dzięki temu pierwsze zgłoszenie po podpięciu (to
+   * samo, do czego przed chwilą dopasowaliśmy kadr) nie kasuje tego dopasowania.
+   */
+  const zmierzSzerokosc = useCallback(() => {
+    const el = kolumnaPlotnaRef.current;
+    if (!el) return null;
+    const szer = el.clientWidth - 2;
+    if (szer <= 0) return null;
+    setDostepnaSzer(szer);
+    ostatniaSzerRef.current = szer;
+    return szer;
+  }, []);
+
+  /**
+   * Odpowiedź na zmianę rozmiaru okna: zwinięcie panelu, pojawienie się listy
+   * pomieszczeń, baner nad rysunkiem.
+   *
+   * Dopasowanie do arkusza robimy TYLKO wtedy, gdy nie ma jeszcze rysunku. Wtedy jest
+   * darmowe i pomocne: arkusz wypełnia dostępne miejsce, zamiast tonąć w szarym tle.
+   * Gdy rysunek jest, kadr należy do użytkownika i nie ruszamy go wcale — ani
+   * powiększenia, ani przesunięcia.
+   *
+   * To nie ostrożność, tylko wniosek z pomiaru. Dorysowanie pomieszczenia zmienia
+   * szerokość panelu bocznego, więc obserwator rozmiaru budzi się dokładnie w trakcie
+   * rysowania; przeliczanie wtedy powiększenia wyrywało rysunek spod kursora, a przy
+   * otwartym projekcie kasowało dopiero co ustawiony kadr (zmierzone: powiększenie
+   * wracało z dopasowanego do rysunku 3,0 na dopasowane do arkusza 0,87).
+   *
+   * Sam pomiar szerokości zostaje bezwarunkowo — od niego zależy rozmiar okna widoku.
    */
   const dopasujZoom = useCallback(() => {
-    const el = kolumnaPlotnaRef.current;
-    if (!el) return;
-    const dostepnaSzer = el.clientWidth - 2;
-    if (dostepnaSzer <= 0) return;
+    const dostepnaSzer = zmierzSzerokosc();
+    if (dostepnaSzer === null) return;
+    const { walls: sc, roomShapes: pom, elements: el, openings: otw } = trescRef.current;
+    if (sc.length || pom.length || el.length || otw.length) return;
     const z = Math.min(dostepnaSzer / planSize.w, wysPlotna / planSize.h);
     setZoom(Math.round(Math.min(MAX_ZOOM, Math.max(minZoom(), z)) * 100) / 100);
-  }, [planSize.w, planSize.h, wysPlotna]);
+  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc]);
+
+  /**
+   * Powiększenie I kadr ustawione na RYSUNKU — dopasowanie, o które ktoś poprosił.
+   *
+   * Arkusz to 50 × 35 m przy rysowaniu od zera, więc dom o 140 m² zajmował z niego
+   * jedną ósmą i otwierał się wielkości znaczka pocztowego w morzu pustej siatki —
+   * od tego zaczęła się przebudowa płótna. Pusta kondygnacja zostaje przy arkuszu:
+   * nie ma czego kadrować, a arkusz w rogu daje przewidywalny punkt, od którego
+   * zaczyna się rysowanie (patrz `kadrOtwarcia`).
+   *
+   * Wołane przy otwarciu rysunku i przyciskiem „Dopasuj widok" — czyli wtedy, gdy
+   * przestawienie kadru jest dokładnie tym, czego użytkownik chce. Na płótnie bez
+   * granic ten przycisk jest zresztą jedyną drogą powrotną, gdy widok odjedzie.
+   */
+  const dopasujKadr = useCallback(() => {
+    const dostepnaSzer = zmierzSzerokosc();
+    // Zwraca, czy kadr FAKTYCZNIE się ustawił. Kolumna płótna nie istnieje, dopóki na
+    // wierzchu stoi ekran startowy albo trwa wgrywanie rzutu — a wołający musi wiedzieć,
+    // że próba przepadła, żeby nie odhaczyć kondygnacji jako skadrowanej.
+    if (dostepnaSzer === null) return false;
+    const { walls: sc, roomShapes: pom, elements: el, openings: otw } = trescRef.current;
+    const kadr = kadrOtwarcia(
+      // Margines ZERO: oddech wokół rysunku dokłada `kadrOtwarcia` ułamkiem jego
+      // rozmiaru. Domyślny margines tej funkcji jest skrojony pod eksport (ma zmieścić
+      // wannę ze strefą ochronną) i przy małym pokoju zabrałby pół kadru.
+      contentBounds(sc, pom, el, otw, 0),
+      { w: planSize.w, h: planSize.h },
+      { w: dostepnaSzer, h: wysPlotna },
+      { min: minZoom(), max: MAX_ZOOM }
+    );
+    setZoom(kadr.zoom);
+    widokRef.current?.ustaw(kadr.widok.x, kadr.widok.y);
+    return true;
+  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc]);
 
   /** Wejście i wyjście z pełnego ekranu zmienia dostępne miejsce skokowo, więc rzut
    *  dopasowujemy na nowo — nawet jeśli użytkownik wcześniej ustawił zoom ręcznie.
@@ -693,14 +795,23 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     setChromeLewo(false);
   }, []);
 
-  /** Kontener przewijania płótna — DesignCanvas trzyma go u siebie, ale zmiany
-   *  szerokości panelu muszą go przewinąć, więc sięgamy po niego przez kolumnę
-   *  płótna. Jedyny element z `overflow-auto` w tej kolumnie to okno rysunku. */
+  /** Okno rysunku — DesignCanvas trzyma je u siebie, ale zmiany szerokości panelu
+   *  muszą przestawić kadr, więc sięgamy po nie przez kolumnę płótna. Wcześniej
+   *  szukaliśmy tu `div.overflow-auto`: okno przestało się przewijać, selektor
+   *  przestał cokolwiek znajdować i kompensacja po cichu umarła. */
   const kontenerPlotna = useCallback(
-    () => kolumnaPlotnaRef.current?.querySelector<HTMLDivElement>("div.overflow-auto") ?? null,
+    () => kolumnaPlotnaRef.current?.querySelector<HTMLDivElement>("[data-plan-okno]") ?? null,
     [],
   );
-  /** Pozycja lewej krawędzi okna rysunku sprzed zmiany układu — do skompensowania skoku. */
+  /**
+   * Lewa krawędź OKNA rysunku sprzed zmiany układu — do skompensowania skoku.
+   *
+   * Mierzymy okno, a nie kolumnę, bo to okno niesie rysunek: punkt planu leżący przy
+   * jego lewej krawędzi ma tam zostać. Gdy rzut nie mieści się w kolumnie, jedno i
+   * drugie to ta sama liczba; gdy się mieści, okno jest w kolumnie wyśrodkowane
+   * i jedzie o POŁOWĘ tego, co kolumna — kompensacja liczona z kolumny wychodziła
+   * wtedy dwa razy za duża.
+   */
   const lewaPrzedZmiana = useRef<number | null>(null);
 
   /** Wywoływane TUŻ PRZED każdą zmianą, która zwęża albo poszerza obszar rysunku. */
@@ -753,15 +864,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * Każda zmiana szerokości panelu przesuwa obszar rysunku w bok, więc plan skakał
    * i trzeba go było szukać od nowa: o ~370 px przy przypięciu w pełnym ekranie
    * i o ~270 px przy zwijaniu panelu w widoku standardowym. Kompensujemy to
-   * przewinięciem o dokładnie tyle, o ile przesunęła się lewa krawędź okna rysunku —
-   * rysunek zostaje pod tym samym miejscem EKRANU.
+   * przesunięciem kadru o dokładnie tyle, o ile przesunęła się lewa krawędź okna
+   * rysunku — rysunek zostaje pod tym samym miejscem EKRANU.
    *
-   * `useLayoutEffect`, bo przewinięcie musi wejść w tej samej klatce co nowy układ —
+   * Kompensacja wisi na KONKRETNYM GEŚCIE, a nie na obserwatorze układu, i to jest
+   * tu istotne. Obserwator widziałby także zmiany szerokości okna wynikające z samego
+   * powiększenia (okno jest wyśrodkowane, a jego szerokość to arkusz razy zoom, więc
+   * oddalanie samo przesuwa jego krawędź) i „poprawiałby" kadr wbrew użytkownikowi —
+   * symbole uciekały wtedy spod kursora przy oddalonym widoku.
+   *
+   * `useLayoutEffect`, bo przesunięcie musi wejść w tej samej klatce co nowy układ —
    * inaczej widać przeskok, czyli dokładnie to, co naprawiamy.
    *
-   * Gdy cały rzut mieści się w oknie, nie ma czego przewijać i plan przecentruje się
-   * w nowym obszarze (a przy automatycznym dopasowaniu jeszcze przeskaluje). To
-   * poprawne: nic nie znika z widoku, bo widać całość.
+   * Gdy cały rzut mieści się w oknie, krawędź nie drgnie i nie ma czego kompensować:
+   * plan przecentruje się w nowym obszarze (a przy automatycznym dopasowaniu jeszcze
+   * przeskaluje). To poprawne, bo widać całość.
    */
   useLayoutEffect(() => {
     const przed = lewaPrzedZmiana.current;
@@ -769,7 +886,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     lewaPrzedZmiana.current = null;
     const el = kontenerPlotna();
     if (!el) return;
-    el.scrollLeft += el.getBoundingClientRect().left - przed;
+    widokRef.current?.przesunOPiksele(el.getBoundingClientRect().left - przed, 0);
   }, [przypietyPanel, panelZwiniety, kontenerPlotna]);
 
   // Panel: widoczny pod kursorem albo przypięty. Paski poziome: zawsze.
@@ -1004,7 +1121,20 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    */
   useEffect(() => {
     if (zoomReczny) return;
-    dopasujZoom();
+    /**
+     * Kadr na rysunku ustawiamy RAZ NA KONDYGNACJĘ — przy jej otwarciu.
+     *
+     * Ten efekt uruchamia się ponownie przy wielu okazjach (zmiana wysokości płótna,
+     * wyjście z ekranu startowego, koniec wgrywania rzutu), a przeramowanie jest
+     * wtedy ostatnią rzeczą, jakiej ktoś chce: dorysowanie ściany zmienia wysokość
+     * panelu bocznego, więc rysunek uciekałby spod kursora w trakcie rysowania.
+     * Poza pierwszym razem zostaje samo powiększenie, dokładnie jak dotąd.
+     */
+    if (skadrowanaRef.current !== activeFloorId) {
+      if (dopasujKadr()) skadrowanaRef.current = activeFloorId;
+    } else {
+      dopasujZoom();
+    }
     const el = kolumnaPlotnaRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     // Obserwujemy WYŁĄCZNIE szerokość. Dopasowanie zmienia wysokość płótna, ta
@@ -1018,7 +1148,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [dopasujZoom, zoomReczny, wgrywanie.stan, showEntryScreen]);
+  }, [dopasujKadr, dopasujZoom, zoomReczny, wgrywanie.stan, showEntryScreen, activeFloorId]);
 
   const scaleToolRef = useRef<HTMLButtonElement | null>(null);
   const wallToolRef = useRef<HTMLButtonElement | null>(null);
@@ -1756,13 +1886,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   }
 
 
-  /** Krótka podpowiedź po kliknięciu poza obszarem planu — znika sama. */
-  function flashOutsideHint() {
-    setOutsideHint(true);
-    window.clearTimeout(outsideHintTimer.current);
-    outsideHintTimer.current = window.setTimeout(() => setOutsideHint(false), 2600);
-  }
-
   const roomSuggestions = Array.from(
     new Set([...elements.map((e) => e.room), ...roomShapes.map((r) => r.name), ...DEFAULT_ROOM_SUGGESTIONS])
   );
@@ -2217,7 +2340,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             setCalibPoints([]);
             setToolMode("zaznacz");
             dismissScaleStale();
-            setSkalaPotwierdzenie(`Skala ustawiona: oczko siatki = ${formatLiczba(oczkoSiatkiM(metersPerUnit), 2)} m`);
+            setSkalaPotwierdzenie(`Skala ustawiona: oczko siatki = ${formatLiczba(oczkoSiatkiM(metersPerUnit, zoom), 2)} m`);
           }}
           onCancel={() => setCalibPoints([])}
           onClear={() => clearScale(activeFloorId)}
@@ -2675,7 +2798,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         }}
         onDopasuj={() => {
           setZoomReczny(false);
-          dopasujZoom();
+          dopasujKadr();
         }}
       />
       </div>
@@ -3013,14 +3136,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             sanitaryScale={sanitaryRenderScale(mpu, skalaBezKalibracji)}
             planSize={planSize}
             metersPerUnit={mpu}
-            onOutsidePlan={flashOutsideHint}
             onPointerMove={setCursor}
             zoom={zoom}
             onZoomChange={(z) => {
               setZoomReczny(true);
               setZoom(z);
             }}
-            maxHeight={wysPlotna}
+            widokRef={widokRef}
+            /* Okno widoku bierze CAŁE dostępne miejsce, zamiast kurczyć się do arkusza.
+               Dopóki miało rozmiar arkusza, poza arkusz nie dało się nawet kliknąć —
+               okno BYŁO rysunkiem. Teraz okno jest wziernikiem: arkusz leży w nim jako
+               podkład, a rysować można wszędzie. */
+            rozmiarOkna={{
+              w: Math.max(1, dostepnaSzer || planSize.w * zoom),
+              h: Math.max(1, wysPlotna),
+            }}
             onSelectElement={(id, shiftKey) => {
               if (shiftKey) {
                 setMultiSelected((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
@@ -3120,6 +3250,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             roomShapes={roomShapes}
             elementCount={elements.length}
             metersPerUnit={mpu}
+            zoom={zoom}
             cursor={cursor}
             // W pełnym ekranie NIE: ten tryb jest o skupieniu na rysunku, a pasek stanu
             // leży wtedy jako wysuwana nakładka — przycisk wyprowadzający z zakładki nie
@@ -3133,11 +3264,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 „1:50" nic mu nie mówi bez formatu arkusza w ręku. */}
             {mpu && (
               <span className="pe-chip pe-tag-green">rzut ≈ {formatLiczba(planWidthMeters(mpu, planSize.w)!, 1)} m szer.</span>
-            )}
-            {outsideHint && (
-              <span className="font-medium" style={{ color: "#8A5526" }}>
-                Kliknięcie poza obszarem planu — element trafiłby poza rysunek, więc nic nie postawiono.
-              </span>
             )}
           </div>
           </div>

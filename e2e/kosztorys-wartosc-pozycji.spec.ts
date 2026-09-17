@@ -29,7 +29,7 @@ async function kosztorysZTrzemaGniazdkami(page: Page) {
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
-  const plotno = page.locator("div.overflow-auto.rounded-card.border").first();
+  const plotno = page.locator("[data-testid=plan-okno]").first();
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   for (const dx of [100, 250, 400]) {

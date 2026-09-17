@@ -15,7 +15,7 @@ async function planBox(page: Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
   // Edytor jest `React.lazy()` — bez czekania na plotno mierzylibysmy element,
   // ktorego jeszcze nie ma (patrz `skipEntryScreen` w _flow.ts).
-  const wrap = page.locator("div.overflow-auto.rounded-card.border").first();
+  const wrap = page.locator("[data-testid=plan-okno]").first();
   await expect(wrap).toBeVisible({ timeout: 15000 });
   return (await wrap.boundingBox())!;
 }

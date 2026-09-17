@@ -10,7 +10,7 @@ import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 async function planBox(page: import("@playwright/test").Page) {
   await page.evaluate(() => window.scrollTo(0, 0));
-  return (await page.locator("div.overflow-auto.rounded-card.border").first().boundingBox())!;
+  return (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
 }
 
 /** Rysuje prostokątne pomieszczenie, żeby elementy dostały nazwę pokoju — potrzebne

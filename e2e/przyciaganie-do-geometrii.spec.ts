@@ -18,7 +18,7 @@ import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
  * naprawdę wylądowało w zapisie — sam `snapDoGeometrii` ma testy jednostkowe.
  */
 
-const PLOTNO = "div.overflow-auto.rounded-card.border";
+const PLOTNO = "[data-testid=plan-okno]";
 
 async function otworzPlan(page: Page) {
   await page.goto("/");
