@@ -378,7 +378,10 @@ test("paski poziome stoją na stałe i nie chowają się przed kursorem", async 
   // dawało znikomy zysk, a wchodziło w drogę przypiętym narzędziom.
   await otworzMenuPaska(page, "Rysunek");
   const pasek = page.getByLabel("Rozmiar elementów");
-  const dane = page.getByText(/Obszar planu:/);
+  // Pasek stanu pod rysunkiem — wcześniej celowaliśmy w wiersz „Obszar planu: … jedn.",
+  // ale on zniknął (mówił jednostkami planu o obszarze, który przestał cokolwiek
+  // znaczyć). Chodzi o to samo: rzeczy pod płótnem nie chowają się przed kursorem.
+  const dane = page.getByRole("status", { name: "Stan projektu" });
   await expect(pasek).toBeVisible();
   await expect(dane).toBeVisible();
 

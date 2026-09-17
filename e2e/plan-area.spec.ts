@@ -13,7 +13,12 @@ import { makePng } from "./_png";
 
 const PNG_16x9 = makePng(16, 9);
 
-/** Obszar roboczy planu odczytany ze SCENY — z obrysu arkusza (`.arkusz`), bo to
+/** DOMYŚLNY obszar planu w jednostkach — stan startowy store'a (DEFAULT_PLAN_SIZE).
+ *  Wpisany wprost, bo bez wgranego rzutu nie ma go już z czego odczytać: obszar
+ *  podkładu rysuje się tylko pod podkładem. */
+const DOMYSLNY_OBSZAR = { w: 1000, h: 700 };
+
+/** Obszar PODKŁADU odczytany ze SCENY — z jego obrysu (`.arkusz`), bo to
  *  jedyny węzeł niosący ten wymiar. Sama scena ma rozmiar OKNA widoku, więc jej
  *  `width()` mówi już tylko o tym, ile miejsca płótno dostało na stronie.
  *
@@ -43,8 +48,7 @@ test("wgrany rzut nie jest rozciągany — plan przyjmuje jego proporcje", async
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
 
-  const before = await planSize(page);
-  expect(before).toEqual({ w: 1000, h: 700 }); // domyślny obszar
+  const before = DOMYSLNY_OBSZAR;
 
   await page.setInputFiles('input[type="file"]', {
     name: "rzut.png",
@@ -65,7 +69,11 @@ test("wgrany rzut nie jest rozciągany — plan przyjmuje jego proporcje", async
   expect(after.w * after.h).toBeGreaterThan(before.w * before.h * 0.9);
   expect(after.w * after.h).toBeLessThan(before.w * before.h * 1.1);
 
-  await expect(page.getByText(new RegExp(`Obszar planu: ${after.w} × ${after.h}`))).toBeVisible();
+  // Bez asercji o wierszu „Obszar planu: … jedn." — ten wiersz zniknął. Mówił
+  // w jednostkach planu (pojęcie z kodu) o obszarze, który przestał być czymkolwiek
+  // dla rysunku. Wymiary wgranego rzutu pokazujemy teraz w METRACH i dopiero po
+  // kalibracji, a ten test celowo kalibracji nie robi. Sedno — że plan przyjął
+  // proporcje rzutu — sprawdzają asercje wyżej, wprost na scenie.
 });
 
 /**
@@ -84,7 +92,7 @@ test("element da się postawić POZA arkuszem — płótno nie ma granic", async
   await page.getByRole("button", { name: "Instalacja" }).click();
   await skipEntryScreen(page);
 
-  const arkusz = await planSize(page);
+  const arkusz = DOMYSLNY_OBSZAR;
 
   // Oddalamy widok, żeby obok arkusza zrobiło się miejsce na kliknięcie. Przyciskiem
   // paska, a nie grzebaniem w scenie: powiększenie jest stanem aplikacji i ustawione
@@ -116,3 +124,43 @@ test("element da się postawić POZA arkuszem — płótno nie ma granic", async
   expect(postawione[0].x).toBeGreaterThan(arkusz.w);
 });
 
+
+/**
+ * Obwódka obszaru to opis PODKŁADU, nie ogrodzenie rysunku.
+ *
+ * Dopóki z arkusza nie dało się wyjść, ramka mówiła prawdę: „dotąd wolno stawiać
+ * elementy". Odkąd rysować można wszędzie, ta sama ramka mówiłaby nieprawdę —
+ * sugerowałaby granicę, której nie ma. Pod wgranym rzutem nadal coś znaczy:
+ * pokazuje, dokąd sięga podkład.
+ */
+test("obwódka obszaru pojawia się dopiero z wgranym rzutem", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+  await skipEntryScreen(page);
+
+  const obwodka = () =>
+    page.evaluate(() => {
+      const st = (window as unknown as { Konva?: { stages?: { findOne(s: string): unknown }[] } }).Konva
+        ?.stages?.[0];
+      return !!st?.findOne(".arkusz");
+    });
+
+  await page.waitForFunction(() => {
+    const konva = (window as unknown as { Konva?: { stages: unknown[] } }).Konva;
+    return !!konva?.stages?.length;
+  });
+  expect(await obwodka(), "bez podkładu nie ma czego obrysowywać").toBe(false);
+
+  await page.setInputFiles('input[type="file"]', {
+    name: "rzut.png",
+    mimeType: "image/png",
+    buffer: PNG_16x9,
+  });
+  await page.getByRole("button", { name: "Pomiń — użyj całego rzutu" }).click();
+  await otworzMenuPaska(page, "Plan");
+  await expect(page.getByText(/Podkład: rzut.png/)).toBeVisible();
+
+  expect(await obwodka(), "pod rzutem obwódka pokazuje, dokąd sięga podkład").toBe(true);
+});
