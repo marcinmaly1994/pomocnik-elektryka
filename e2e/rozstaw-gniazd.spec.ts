@@ -73,6 +73,7 @@ test("dwa gniazda postawione blisko siebie nie nachodzą na siebie", async ({ pa
   // Drugi klik cztery jednostki (20 cm) od pierwszego — czyli w środek symbolu sąsiada.
   const a = await naEkranie(page, 150, 150);
   await page.mouse.click(a.x, a.y);
+  await page.waitForTimeout(400); // patrz komentarz o dwukliku w teście niżej
   const b = await naEkranie(page, 154, 150);
   await page.mouse.click(b.x, b.y);
 
@@ -98,9 +99,15 @@ test("trzecie gniazdo dostawia się do rzędu, zamiast wchodzić na drugie", asy
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
 
-  for (const x of [150, 154, 158]) {
+  // Każdy klik tuż ZA krawędzią symbolu, który już stoi, ale bliżej niż wymagany
+  // odstęp — czyli rozsuwanie ma co robić. Klik w sam symbol go zaznacza, zamiast
+  // stawiać kolejny (zmierzone: gniazdo sięga 3,8 jedn. od środka).
+  for (const x of [150, 156, 164]) {
     const p = await naEkranie(page, x, 150);
     await page.mouse.click(p.x, p.y);
+    // Przerwa, bo dwa kliknięcia obok siebie w krótkim odstępie przeglądarka zlewa
+    // w DWUKLIK — a dwuklik w element otwiera jego edycję, zamiast postawić kolejny.
+    await page.waitForTimeout(700);
   }
 
   const elementy = await zapisaneElementy(page);

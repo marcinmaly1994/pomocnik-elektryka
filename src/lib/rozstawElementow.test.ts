@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { kierunekWzdluzSciany, odsunOdSasiadow } from "./rozstawElementow";
+import { kierunekWzdluzSciany, odsunOdSasiadow, type ZajetySymbol } from "./rozstawElementow";
 
 /**
  * Rozsuwanie osprzętu stawianego blisko siebie.
@@ -31,64 +31,74 @@ describe("kierunekWzdluzSciany", () => {
 });
 
 describe("odsunOdSasiadow", () => {
-  const POZIOMO = { x: 1, y: 0 };
+  /** Gniazdo: pudełko 20 × 16 jedn., stojące prosto. */
+  const gniazdo = (x: number, y: number, obrot = 0): ZajetySymbol => ({
+    x,
+    y,
+    polSzer: 10,
+    polWys: 8,
+    obrot,
+  });
 
   it("bez sąsiadów nie rusza punktu", () => {
-    expect(odsunOdSasiadow({ x: 100, y: 100, r: 10 }, [], POZIOMO)).toEqual({ x: 100, y: 100 });
+    expect(odsunOdSasiadow(gniazdo(100, 100), [], 0)).toEqual({ x: 100, y: 100 });
   });
 
   it("sąsiad poza zasięgiem nie rusza punktu", () => {
-    const wynik = odsunOdSasiadow({ x: 100, y: 100, r: 10 }, [{ x: 140, y: 100, r: 10 }], POZIOMO);
-    expect(wynik).toEqual({ x: 100, y: 100 });
+    expect(odsunOdSasiadow(gniazdo(140, 100), [gniazdo(100, 100)], 0)).toEqual({ x: 140, y: 100 });
   });
 
-  it("zachodzące symbole rozsuwa dokładnie do STYKU, nie dalej", () => {
-    const wynik = odsunOdSasiadow({ x: 105, y: 100, r: 10 }, [{ x: 100, y: 100, r: 10 }], POZIOMO);
+  /**
+   * Sedno zgłoszenia „za daleko od siebie": przesunięcie kończy się na STYKU pudełek,
+   * czyli 20 jedn. dla dwóch symboli o szerokości 20. Wcześniej liczyliśmy połową
+   * PRZEKĄTNEJ i wychodziło ~25,6 — o 28% za dużo, i to było widać.
+   */
+  it("rozsuwa dokładnie do styku pudełek, nie dalej", () => {
+    const wynik = odsunOdSasiadow(gniazdo(105, 100), [gniazdo(100, 100)], 0);
     expect(wynik.x).toBeCloseTo(120, 6);
     expect(wynik.y).toBeCloseTo(100, 6);
   });
 
-  /** Sedno: gniazdo kliknięte po lewej stronie sąsiada ma zostać po lewej. */
   it("odsuwa na TĘ stronę, po której element już jest", () => {
-    const wynik = odsunOdSasiadow({ x: 95, y: 100, r: 10 }, [{ x: 100, y: 100, r: 10 }], POZIOMO);
-    expect(wynik.x).toBeCloseTo(80, 6);
+    expect(odsunOdSasiadow(gniazdo(95, 100), [gniazdo(100, 100)], 0).x).toBeCloseTo(80, 6);
   });
 
   it("rząd gniazd przechodzi wzdłuż, zamiast utknąć na pierwszym", () => {
-    const rzad = [
-      { x: 100, y: 100, r: 10 },
-      { x: 120, y: 100, r: 10 },
-      { x: 140, y: 100, r: 10 },
-    ];
-    const wynik = odsunOdSasiadow({ x: 104, y: 100, r: 10 }, rzad, POZIOMO);
+    const rzad = [gniazdo(100, 100), gniazdo(120, 100), gniazdo(140, 100)];
+    const wynik = odsunOdSasiadow(gniazdo(104, 100), rzad, 0);
     expect(wynik.x).toBeCloseTo(160, 6);
-    for (const s of rzad) expect(Math.hypot(wynik.x - s.x, wynik.y - s.y)).toBeGreaterThanOrEqual(20 - 1e-9);
   });
 
   /**
-   * Sąsiad odsunięty także w poprzek wymaga KRÓTSZEGO przesunięcia niż suma promieni:
-   * część odległości jest już „załatwiona" w drugiej osi. Przesuwanie o pełną sumę
-   * odrzucałoby gniazdo dalej, niż trzeba, i robiło dziury w rzędzie.
+   * Sąsiad na innej wysokości montażu mija się bokiem — nie ma czego rozsuwać.
+   * Model kołowy odpychał go tu niepotrzebnie, bo koło sięga dalej niż pudełko.
    */
-  it("przy sąsiedzie odsuniętym w poprzek przesuwa tylko o brakującą część", () => {
-    const wynik = odsunOdSasiadow({ x: 100, y: 112, r: 10 }, [{ x: 100, y: 100, r: 10 }], POZIOMO);
-    expect(wynik.x).toBeCloseTo(100 + Math.sqrt(400 - 144), 6);
+  it("sąsiad odsunięty w poprzek nie przeszkadza", () => {
+    const wynik = odsunOdSasiadow(gniazdo(100, 118), [gniazdo(100, 100)], 0);
+    expect(wynik).toEqual({ x: 100, y: 118 });
   });
 
-  it("rozsuwa też w pionie, gdy tak biegnie ściana", () => {
-    const wynik = odsunOdSasiadow({ x: 100, y: 105, r: 10 }, [{ x: 100, y: 100, r: 10 }], { x: 0, y: 1 });
+  it("rozsuwa w pionie, gdy tak biegnie ściana", () => {
+    const naPionowej = (x: number, y: number) => gniazdo(x, y, 270);
+    const wynik = odsunOdSasiadow(naPionowej(100, 105), [naPionowej(100, 100)], 270);
     expect(wynik.x).toBeCloseTo(100, 6);
     expect(wynik.y).toBeCloseTo(120, 6);
   });
 
-  it("zerowy kierunek nie wywraca liczenia", () => {
-    const wynik = odsunOdSasiadow({ x: 100, y: 100, r: 10 }, [{ x: 100, y: 100, r: 10 }], { x: 0, y: 0 });
-    expect(wynik).toEqual({ x: 100, y: 100 });
+  /** Sąsiad obrócony inaczej (tuż za rogiem) liczy się SWOIM pudełkiem, nie naszym. */
+  it("sąsiad obrócony o 90° zajmuje wzdłuż tyle, ile ma wysokości", () => {
+    const wynik = odsunOdSasiadow(gniazdo(105, 100), [gniazdo(100, 100, 90)], 0);
+    // nasza połowa szerokości (10) + jego połowa WYSOKOŚCI (8), bo leży bokiem
+    expect(wynik.x).toBeCloseTo(118, 6);
   });
 
-  /** Klik dokładnie w środek sąsiada: żadna strona nie jest bliższa, ale wyjść trzeba. */
   it("klik w sam środek sąsiada też zostaje rozsunięty", () => {
-    const wynik = odsunOdSasiadow({ x: 100, y: 100, r: 10 }, [{ x: 100, y: 100, r: 10 }], POZIOMO);
+    const wynik = odsunOdSasiadow(gniazdo(100, 100), [gniazdo(100, 100)], 0);
     expect(Math.abs(wynik.x - 100)).toBeCloseTo(20, 6);
+  });
+
+  it("zdegenerowane pudełko nie zapętla liczenia", () => {
+    const zero: ZajetySymbol = { x: 100, y: 100, polSzer: 0, polWys: 0, obrot: 0 };
+    expect(odsunOdSasiadow(zero, [zero], 0)).toEqual({ x: 100, y: 100 });
   });
 });

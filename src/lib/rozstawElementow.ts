@@ -12,17 +12,38 @@ import type { Point } from "@/types";
  * Rozsuwamy WZDŁUŻ ŚCIANY, a nie w dowolną stronę. Gniazda montuje się w rzędzie na tej
  * samej wysokości i to jest jedyny kierunek, w którym przesunięcie nie zmienia sensu
  * rysunku: odsunięcie od ściany przeniosłoby gniazdo na środek pokoju.
+ *
+ * Symbol jest tu PUDEŁKIEM, nie kołem. Koło opisane na pudełku (czyli połowa przekątnej,
+ * patrz `rogiSymbolu`) jest właściwą miarą przy kadrowaniu wydruku, gdzie nie wiadomo,
+ * jak element będzie obrócony — ale do rozsuwania daje odstęp o ~40% za duży, bo mierzy
+ * po skosie coś, co stoi w rzędzie. Gniazda mają stać tuż obok siebie, jak w ramce.
  */
 
-/** Element jako KOŁO: środek i promień opisany na symbolu (patrz `rogiSymbolu`). */
-export interface ZajetyObszar {
+/**
+ * Minimalny prześwit między symbolami [m].
+ *
+ * Pudełko glifu nie zna grubości kreski, którą symbol jest narysowany — zmierzone:
+ * gniazdo ma pudełko 7,6 jedn., a rysuje się na 8,3. Bez tego zapasu obrysy dwóch
+ * sąsiadów stykałyby się i zlewały w jedną plamę, czyli wracałby problem, dla którego
+ * cały ten moduł powstał. Pięć centymetrów to tyle, ile widać na rysunku jako szczelinę,
+ * i tyle, ile i tak dzieli dwie ramki osprzętu na ścianie.
+ */
+export const ODSTEP_SYMBOLI_M = 0.05;
+
+/** Symbol jako PUDEŁKO: środek, połowy boków w jego własnych osiach i obrót. */
+export interface ZajetySymbol {
   x: number;
   y: number;
-  r: number;
+  /** Połowa szerokości pudełka [jedn. planu] — wzdłuż własnej osi poziomej symbolu. */
+  polSzer: number;
+  /** Połowa wysokości pudełka [jedn. planu]. */
+  polWys: number;
+  /** Obrót symbolu [stopnie]. */
+  obrot: number;
 }
 
 /**
- * Kierunek rozsuwania dla symbolu obróconego o `rotation` stopni.
+ * Kierunek rozsuwania dla ściany, przy której stoi symbol obrócony o `rotation` stopni.
  *
  * Trzonek symbolu patrzy PROSTOPADLE do ściany (obrót 270° = trzonek w lewo, czyli
  * ściana pionowa), więc sama ściana biegnie prostopadle do trzonka. Element nieprzypięty
@@ -34,52 +55,70 @@ export function kierunekWzdluzSciany(rotation: number): Point {
   return { x: Math.cos(rad), y: Math.sin(rad) };
 }
 
-/** Czy dwa koła zachodzą na siebie. Styk (odległość równa sumie promieni) to już nie. */
-function zachodzi(a: ZajetyObszar, b: ZajetyObszar): boolean {
-  return Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r;
+/**
+ * Zasięg pudełka wzdłuż i w poprzek kierunku rozsuwania.
+ *
+ * Sąsiad bywa obrócony inaczej niż my (gniazdo na ścianie prostopadłej tuż za rogiem),
+ * więc jego pudełko trzeba przeliczyć na NASZE osie — inaczej wyszłoby, że wysoki
+ * symbol jest wąski tylko dlatego, że leży bokiem.
+ */
+function zasiegi(s: ZajetySymbol, obrotKierunku: number): { wzdluz: number; wPoprzek: number } {
+  const d = ((s.obrot - obrotKierunku) * Math.PI) / 180;
+  const c = Math.abs(Math.cos(d));
+  const si = Math.abs(Math.sin(d));
+  return {
+    wzdluz: s.polSzer * c + s.polWys * si,
+    wPoprzek: s.polSzer * si + s.polWys * c,
+  };
 }
 
 /**
- * Przesuwa nowy element wzdłuż `kierunek`, aż przestanie zachodzić na sąsiadów.
+ * Przesuwa nowy element wzdłuż ściany, aż przestanie zachodzić na sąsiadów.
+ *
+ * Odstęp wychodzi MINIMALNY: przesunięcie kończy się na styku pudełek, powiększonym
+ * o `odstep` — tyle, żeby obrysy się nie zlewały (pudełko nie zna grubości kreski, którą
+ * symbol jest narysowany). Sąsiad odsunięty w poprzek (na innej wysokości montażu albo
+ * przy drugiej ścianie) nie przeszkadza wcale: pudełka mijają się bokiem.
  *
  * Przesuwa NA TĘ STRONĘ, po której już jest względem sąsiada — dzięki temu gniazdo
  * kliknięte nieco na prawo od istniejącego ląduje po jego prawej, a nie przeskakuje na
- * drugą stronę. Przy kliknięciu dokładnie w środek sąsiada (odległość zero, żadna strona
- * nie jest bliższa) idzie w prawo/w dół, bo jakąś decyzję podjąć trzeba.
+ * drugą stronę. Przy kliknięciu dokładnie w środek sąsiada idzie w prawo/w dół, bo
+ * jakąś decyzję podjąć trzeba.
  *
  * Pętla ma twardy limit kroków, bo każdy krok odsuwa od JEDNEGO sąsiada i może wejść na
- * kolejnego — przy rzędzie gniazd trzeba przejść wzdłuż całego rzędu. Limit chroni przed
- * zapętleniem, gdyby geometria okazała się zdegenerowana (dwa elementy o zerowym
- * promieniu w tym samym punkcie).
+ * kolejnego — przy rzędzie gniazd trzeba przejść wzdłuż całego rzędu.
  */
 export function odsunOdSasiadow(
-  nowy: ZajetyObszar,
-  sasiedzi: ZajetyObszar[],
-  kierunek: Point,
+  nowy: ZajetySymbol,
+  sasiedzi: ZajetySymbol[],
+  obrotKierunku: number,
+  odstep = 0,
   maksKrokow = 16
 ): Point {
-  const dlugosc = Math.hypot(kierunek.x, kierunek.y);
-  if (!(dlugosc > 0)) return { x: nowy.x, y: nowy.y };
-  const k = { x: kierunek.x / dlugosc, y: kierunek.y / dlugosc };
+  const k = kierunekWzdluzSciany(obrotKierunku);
+  const mojZasieg = zasiegi(nowy, obrotKierunku);
+  const zasiegiSasiadow = sasiedzi.map((s) => ({ s, z: zasiegi(s, obrotKierunku) }));
 
-  let biezacy = { ...nowy };
+  let x = nowy.x;
+  let y = nowy.y;
   for (let krok = 0; krok < maksKrokow; krok++) {
-    const kolizja = sasiedzi.find((s) => zachodzi(biezacy, s));
+    const kolizja = zasiegiSasiadow.find(({ s, z }) => {
+      const dx = x - s.x;
+      const dy = y - s.y;
+      const wzdluz = Math.abs(dx * k.x + dy * k.y);
+      const wPoprzek = Math.abs(dx * -k.y + dy * k.x);
+      return wzdluz < mojZasieg.wzdluz + z.wzdluz + odstep && wPoprzek < mojZasieg.wPoprzek + z.wPoprzek;
+    });
     if (!kolizja) break;
 
-    // Ile brakuje do styku, liczone WZDŁUŻ kierunku: sama różnica promieni nie
-    // wystarcza, bo sąsiad bywa odsunięty także w poprzek i wtedy przesunięcie
-    // wzdłuż ściany musi być krótsze niż suma promieni.
-    const dx = biezacy.x - kolizja.x;
-    const dy = biezacy.y - kolizja.y;
+    const dx = x - kolizja.s.x;
+    const dy = y - kolizja.s.y;
     const wzdluz = dx * k.x + dy * k.y;
-    const wPoprzek = Math.hypot(dx - wzdluz * k.x, dy - wzdluz * k.y);
-    const suma = biezacy.r + kolizja.r;
-    const potrzebneWzdluz = Math.sqrt(Math.max(0, suma * suma - wPoprzek * wPoprzek));
-
+    const potrzebne = mojZasieg.wzdluz + kolizja.z.wzdluz + odstep;
     const strona = wzdluz >= 0 ? 1 : -1;
-    const przesuniecie = strona * potrzebneWzdluz - wzdluz;
-    biezacy = { ...biezacy, x: biezacy.x + k.x * przesuniecie, y: biezacy.y + k.y * przesuniecie };
+    const przesuniecie = strona * potrzebne - wzdluz;
+    x += k.x * przesuniecie;
+    y += k.y * przesuniecie;
   }
-  return { x: biezacy.x, y: biezacy.y };
+  return { x, y };
 }

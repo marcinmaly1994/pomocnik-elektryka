@@ -38,15 +38,15 @@ import {
 } from "@/store/useProjectStore";
 import type { ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
-import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
+import { fixtureSizeM, computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
-import { rogiSymbolu } from "@/lib/glyphs";
-import { kierunekWzdluzSciany, odsunOdSasiadow } from "@/lib/rozstawElementow";
+import { glyphBoxSize, rogiSymbolu } from "@/lib/glyphs";
+import { ODSTEP_SYMBOLI_M, odsunOdSasiadow, type ZajetySymbol } from "@/lib/rozstawElementow";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
@@ -1509,15 +1509,22 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   }
 
   /**
-   * Promień koła opisanego na symbolu [jedn. planu] — patrz `rogiSymbolu`.
+   * Symbol jako PUDEŁKO w jednostkach planu — do rozsuwania stawianego osprzętu.
    *
-   * Symbol traktujemy jako koło, a nie prostokąt, i to celowo: pudełko trzeba by obracać
-   * razem z elementem, a koło zajmuje tyle samo miejsca niezależnie od obrotu. Przy
-   * rozsuwaniu chodzi o „czy się nakładają", nie o dokładny kształt styku.
+   * Nie koło opisane (`rogiSymbolu`): tamto jest właściwą miarą przy kadrowaniu wydruku,
+   * gdzie nie wiadomo, jak element będzie obrócony, ale do rozsuwania mierzy po skosie
+   * coś, co stoi w rzędzie, i daje odstęp o ~28% za duży. Gniazda mają stać tuż obok
+   * siebie, jak w ramce.
    */
-  function promienSymbolu(e: InstallationElement): number {
-    const [a, b] = rogiSymbolu(e, skalaOsprzetu);
-    return (b.x - a.x) / 2;
+  function pudelkoSymbolu(e: InstallationElement): ZajetySymbol {
+    const { w, h } = glyphBoxSize(e.type, fixtureSizeM(e) ?? undefined);
+    return {
+      x: e.x,
+      y: e.y,
+      polSzer: (w / 2) * skalaOsprzetu,
+      polWys: (h / 2) * skalaOsprzetu,
+      obrot: e.rotation ?? 0,
+    };
   }
 
   /**
@@ -1534,12 +1541,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * do siatki (patrz `zPrzyciaganiemDoSciany`).
    */
   function bezNakladaniaNaSasiadow(kandydat: InstallationElement): Point {
-    const r = promienSymbolu(kandydat);
-    const sasiedzi = elements.map((e) => ({ x: e.x, y: e.y, r: promienSymbolu(e) }));
+    // Minimalny prześwit między symbolami. Pudełko glifu nie zna grubości kreski, którą
+    // symbol jest narysowany (zmierzone: gniazdo ma pudełko 7,6 jedn., a rysuje się na
+    // 8,3), więc bez tego obrysy stykałyby się i zlewały w jedną plamę.
+    const odstep = ODSTEP_SYMBOLI_M / (mpu && mpu > 0 ? mpu : MANUAL_DRAW_SCALE_MPU);
     return odsunOdSasiadow(
-      { x: kandydat.x, y: kandydat.y, r },
-      sasiedzi,
-      kierunekWzdluzSciany(kandydat.rotation ?? 0)
+      pudelkoSymbolu(kandydat),
+      elements.map(pudelkoSymbolu),
+      kandydat.rotation ?? 0,
+      odstep
     );
   }
 
