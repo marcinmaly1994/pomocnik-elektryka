@@ -159,10 +159,19 @@ export interface WyrownanieDoOsi {
  *
  * Zwraca też PUNKTY ODNIESIENIA, nie tylko wynik: wołający może chcieć pokazać, skąd
  * wzięło się wyrównanie, a bez tego musiałby zgadywać po współrzędnych.
+ *
+ * Kandydat, na którym już SIEDZIMY (obie osie w tolerancji), jest pomijany. Wyrównanie
+ * mówi „stoisz w jednej linii z czymś ODDALONYM"; przy punkcie tuż pod kursorem obie osie
+ * złapałyby naraz i wynik byłby jego dokładną kopią — czyli odcinek zerowej długości
+ * w rysowanej figurze. Trafienie w konkretny punkt to zadanie przyciągania do geometrii
+ * (`snapDoGeometrii`) albo domknięcia figury, i to one mają o tym decydować.
  */
 export function wyrownajDoOsi(p: Point, kandydaci: Point[], tolerancja: number): WyrownanieDoOsi {
+  const oddalone = kandydaci.filter(
+    (k) => Math.abs(p.x - k.x) > tolerancja || Math.abs(p.y - k.y) > tolerancja
+  );
   const najblizszy = (wspolrzedna: "x" | "y") =>
-    kandydaci.reduce<{ punkt: Point; odleglosc: number } | null>((best, k) => {
+    oddalone.reduce<{ punkt: Point; odleglosc: number } | null>((best, k) => {
       const odleglosc = Math.abs(p[wspolrzedna] - k[wspolrzedna]);
       if (odleglosc > tolerancja) return best;
       return !best || odleglosc < best.odleglosc ? { punkt: k, odleglosc } : best;

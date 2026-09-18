@@ -24,7 +24,9 @@ export interface EditorStatusBarProps {
    * i mierzenie nim rysunku dawałoby zły wynik.
    */
   zoom: number;
-  /** Pozycja kursora w jednostkach planu; `null`, gdy poza planem. */
+  /** Pozycja kursora w jednostkach planu; `null`, gdy kursor jest poza płótnem.
+   *  Nie „poza planem": płótno nie ma granic, więc każdy punkt pod kursorem jest
+   *  punktem planu (patrz `planPoint` w DesignCanvas). */
   cursor: Point | null;
   /**
    * Przejście do kolejnego kroku przepływu — przycisk na prawym końcu paska.

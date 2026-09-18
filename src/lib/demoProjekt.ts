@@ -28,11 +28,13 @@ import type { ProjectPayload } from "@/store/useProjectStore";
  * rysunek wygląda jak zrobiony z przyciąganiem włączonym, a nie „na oko".
  *
  * OBSZAR PLANU jest przycięty do mieszkania (240×180 jedn. = 12×9 m, metr zapasu
- * dookoła) zamiast stać na domyślnych 1000×700. Dopasowanie powiększenia mieści
- * w oknie CAŁY obszar planu, a nie to, co na nim narysowano (patrz `dopasujZoom`
- * w DesignTab.tsx) — na domyślnym arkuszu 50×35 m mieszkanie zajmowałoby piątą część
- * szerokości i przykład otwierałby się jako znaczek pocztowy w rogu szarego tła.
- * `planSize` jest właśnie od tego: to arkusz, na którym leży rysunek.
+ * dookoła) zamiast stać na domyślnych 1000×700. Dawniej decydowało to o kadrze:
+ * dopasowanie mieściło w oknie CAŁY obszar planu, więc na arkuszu 50×35 m przykład
+ * otwierał się jako znaczek pocztowy w rogu szarego tła.
+ *
+ * Dziś kadr siada na TREŚCI (patrz `kadrOtwarcia` w lib/design.ts), a obszar planu bez
+ * wgranego rzutu nie jest nawet rysowany — więc ta wartość niczego już nie zmienia
+ * w wyglądzie przykładu. Zostaje jako opis arkusza, na którym rysunek powstał.
  *
  * Wymiary pokoi (metry, od lewego górnego rogu mieszkania):
  *   Salon 5×4 · Kuchnia 5×4 · Przedpokój 3×3 · Łazienka 3×3 · Sypialnia 4×3

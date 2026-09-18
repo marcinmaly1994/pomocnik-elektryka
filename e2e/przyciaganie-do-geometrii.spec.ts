@@ -72,7 +72,7 @@ test.describe("przyciąganie do istniejącej geometrii", () => {
    */
   async function bezSiatki(page: Page) {
     await otworzMenuPaska(page, "Rysunek");
-    const siatka = page.getByLabel("Przyciągaj ściany do siatki");
+    const siatka = page.getByLabel("Przyciągaj do siatki");
     if (await siatka.isChecked()) await siatka.uncheck();
     // Panel menu lezy NAD kolumna narzedzi i nad plotnem, wiec zostawiony otwarty
     // przechwytywalby kliknięcia rysujące ściane.
@@ -455,4 +455,76 @@ test("znacznik zaczepu nie rośnie razem z powiększeniem", async ({ page }) => 
   await page.waitForTimeout(300);
 
   expect(Math.abs((await zmierz()) - przyStarcie), "rozmiar na ekranie ma zostać ten sam").toBeLessThanOrEqual(1);
+});
+
+/**
+ * Sygnał wyrównania: krótka kreska przy stawianym punkcie.
+ *
+ * Bez niego wyrównanie było niewidzialne — punkt siadał w linii z czymś, a z ekranu nie
+ * dało się odczytać, czy to zasługa pomocy, czy celnej ręki. Linie przez cały rysunek
+ * były pierwszą wersją i okazały się mylące: pokazywały poziom narożnika pod kursorem,
+ * zamiast mówić cokolwiek o punkcie, który się właśnie stawia.
+ */
+async function znacznikiOsi(page: Page): Promise<number[][]> {
+  return page.evaluate(() => {
+    const stage = (
+      window as unknown as { Konva?: { stages: { find(sel: string): { name(): string; points(): number[] }[] }[] } }
+    ).Konva?.stages[0];
+    if (!stage) return [];
+    return stage
+      .find("Line")
+      .filter((l) => l.name().includes("znacznik-osi"))
+      .map((l) => l.points());
+  });
+}
+
+test("wyrównanie do osi daje krótką kreskę przy punkcie, nie linię przez rysunek", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+
+  // Pierwszy punkt ściany.
+  await page.mouse.click(box.x + 120, box.y + 120);
+
+  // Kursor daleko od jego osi — nie ma czego sygnalizować.
+  await page.mouse.move(box.x + 260, box.y + 260);
+  await page.waitForTimeout(150);
+  expect(await znacznikiOsi(page)).toHaveLength(0);
+
+  // Kursor W PIONIE z pierwszym punktem, ale wyraźnie niżej.
+  await page.mouse.move(box.x + 122, box.y + 280);
+  await page.waitForTimeout(150);
+  const znaczniki = await znacznikiOsi(page);
+  expect(znaczniki, "pion złapał, więc jedna kreska").toHaveLength(1);
+
+  // Kreska jest KRÓTKA — kilkanaście pikselów, nie przez całe okno.
+  const [x1, y1, x2, y2] = znaczniki[0];
+  const dlugoscJedn = Math.hypot(x2 - x1, y2 - y1);
+  const skala = await page.evaluate(
+    () => (window as unknown as { Konva: { stages: { scaleX(): number }[] } }).Konva.stages[0].scaleX(),
+  );
+  expect(dlugoscJedn * skala).toBeLessThanOrEqual(20);
+});
+
+test("kąty proste działają też przy rysowaniu pomieszczenia", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Wielobok" }).click();
+
+  const ortho = page.locator("[data-testid=room-ortho-checkbox]");
+  await expect(ortho, "pomieszczenie ma mieć ten sam przełącznik co ściana").toBeVisible();
+  await ortho.check();
+
+  const box = await boxPlotna(page);
+  await page.mouse.click(box.x + 100, box.y + 100);
+  // Drugi punkt wyraźnie skośnie — tryb ortogonalny ma zamrozić oś bliższą poprzedniemu.
+  await page.mouse.click(box.x + 300, box.y + 160);
+  await page.mouse.click(box.x + 300, box.y + 320);
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await expect(page.getByText("Nazwij pomieszczenie")).toBeVisible();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  const punkty = (await pomieszczenia(page))[0].points;
+  // Pierwszy bok wyszedł poziomy, mimo że klik był 60 px niżej.
+  expect(punkty[1].y).toBeCloseTo(punkty[0].y, 6);
 });

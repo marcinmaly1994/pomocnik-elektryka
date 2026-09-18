@@ -196,7 +196,7 @@ test("siatkę da się wyłączyć niezależnie od przyciągania", async ({ page 
 
   // Przyciąganie to OSOBNA kontrolka i wyłączenie kratki nie może jej ruszyć.
   await otworzMenuPaska(page, "Rysunek");
-  await expect(page.getByLabel("Przyciągaj ściany do siatki")).toBeVisible();
+  await expect(page.getByLabel("Przyciągaj do siatki")).toBeVisible();
 
   await page.getByRole("button", { name: "Włącz siatkę" }).click();
   await page.waitForTimeout(400);

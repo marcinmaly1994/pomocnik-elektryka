@@ -487,7 +487,7 @@ test("punkty nowego pomieszczenia przyciągają się do narożników sąsiada", 
 test("wierzchołek dociąga się do pionu poprzedniego punktu", async ({ page }) => {
   await openPlan(page);
   await otworzMenuPaska(page, "Rysunek");
-  await page.getByLabel("Przyciągaj ściany do siatki").uncheck();
+  await page.getByLabel("Przyciągaj do siatki").uncheck();
   await zamknijMenuPaska(page);
 
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
