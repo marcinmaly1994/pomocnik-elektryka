@@ -424,6 +424,6 @@ test("pasek edytora trzyma wszystkie ustawienia planu w JEDNEJ karcie", async ({
   await zamknijMenuPaska(page);
 
   await otworzMenuPaska(page, "Rysunek");
-  await expect(pasek.getByLabel("Przyciągaj ściany do siatki")).toBeVisible();
+  await expect(pasek.getByLabel("Przyciągaj do siatki")).toBeVisible();
   await expect(pasek.getByLabel("Rozmiar elementów")).toBeVisible();
 });

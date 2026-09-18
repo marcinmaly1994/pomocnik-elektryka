@@ -270,6 +270,26 @@ describe("wyrownajDoOsi", () => {
     expect(w.osY).toEqual({ x: 95, y: 100 });
   });
 
+  /**
+   * Punkt tuż pod kursorem nie jest OSIĄ, tylko tym samym punktem. Gdyby liczył się
+   * jak każdy inny, obie osie złapałyby naraz i wynik byłby jego dokładną kopią —
+   * czyli odcinek zerowej długości w rysowanej figurze. Złapane przez test rysowania
+   * ściany: klik 1,5 jedn. od pierwszego punktu robił z trzeciego wierzchołka duplikat
+   * pierwszego, choć wielobok wcale się nie domykał.
+   */
+  it("kandydat, na którym już siedzimy, nie jest osią", () => {
+    const w = wyrownajDoOsi({ x: 101, y: 102 }, [{ x: 100, y: 100 }], TOL);
+    expect(w.punkt).toEqual({ x: 101, y: 102 });
+    expect(w.osX).toBeNull();
+    expect(w.osY).toBeNull();
+  });
+
+  it("ten sam punkt oddalony w JEDNEJ osi nadal wyrównuje w drugiej", () => {
+    const w = wyrownajDoOsi({ x: 101, y: 300 }, [{ x: 100, y: 100 }], TOL);
+    expect(w.punkt).toEqual({ x: 100, y: 300 });
+    expect(w.osX).toEqual({ x: 100, y: 100 });
+  });
+
   it("pusta lista kandydatów niczego nie wywraca", () => {
     expect(wyrownajDoOsi({ x: 7, y: 9 }, [], TOL).punkt).toEqual({ x: 7, y: 9 });
   });

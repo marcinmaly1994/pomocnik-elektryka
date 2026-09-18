@@ -2376,6 +2376,22 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               </button>
             ))}
           </div>
+          {/* Ten sam przełącznik co przy ścianach i ta sama zmienna — kąty proste to
+              cecha RYSUNKU, nie jednego narzędzia. Wcześniej ściany miały wymuszanie
+              kątów, a pomieszczenia nie, choć rysuje się nimi ten sam budynek.
+              Przy prostokącie ukryty: ten tryb i tak daje kąty proste z definicji,
+              więc przełącznik bez skutku tylko kazałby szukać różnicy. */}
+          {roomMode === "wielobok" && (
+            <label className="flex items-center gap-1.5 text-slate-500">
+              <input
+                data-testid="room-ortho-checkbox"
+                type="checkbox"
+                checked={orthoWalls}
+                onChange={(e) => setOrthoWalls(e.target.checked)}
+              />
+              Ortogonalnie (kąty proste)
+            </label>
+          )}
           <span className="min-w-0 basis-full text-slate-500">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
         </div>
       )}
@@ -3193,7 +3209,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             multiSelected={multiSelected}
             drawingWall={drawingWall}
             newWallThickness={wallThickness}
-            orthoWalls={orthoWalls}
+            ortho={orthoWalls}
             drawingRoomPoints={drawingRoomPoints}
             bgImageUrl={bgImageUrl}
             calibPoints={calibPoints}

@@ -65,6 +65,9 @@ const WALL_RECT_SNAP_RADIUS = 6;
  * który miał wskazywać. Programy CAD trzymają takie znaczniki w pikselach ekranu.
  */
 const ZACZEP_PX = 11;
+
+/** Długość kreski sygnalizującej wyrównanie do osi [px ekranu] — patrz `osieKursora`. */
+const OS_ZNACZNIK_PX = 16;
 const ZACZEP_KRESKA_PX = 1.5;
 
 const MIN_ROOM_SIZE = 8;
@@ -78,6 +81,16 @@ export const MIN_ZOOM = 0.4;
  * okno po ekranie; `ustaw` sprowadza kadr pod konkretny punkt planu — bez tego na
  * płótnie bez granic dało się odjechać dowolnie daleko i nie mieć jak wrócić.
  */
+/** Punkt rysowanej figury razem z tym, co o jego położeniu zadecydowało. */
+interface WynikPunktu {
+  punkt: Point;
+  zaczep: Przyciagniecie | null;
+  /** Które osie złapały wyrównanie — do znacznika przy kursorze. */
+  wyrownanie: { x: boolean; y: boolean };
+}
+
+const BEZ_OSI = { x: false, y: false } as const;
+
 export interface WidokSterowanie {
   przesunOPiksele(dxPx: number, dyPx: number): void;
   ustaw(x: number, y: number): void;
@@ -158,7 +171,10 @@ interface DesignCanvasProps {
   newWallThickness: number;
   /** Wymusza kolejny odcinek ściany jako poziomy albo pionowy względem ostatniego
    *  postawionego punktu — patrz `orthoSnap` niżej. */
-  orthoWalls: boolean;
+  /** Wymuszanie kątów prostych — dla ŚCIAN i POMIESZCZEŃ. Nazwa bez „walls", bo
+   *  przełącznik rządzi oboma narzędziami: rysując pokój człowiek chce prostych kątów
+   *  dokładnie tak samo jak rysując mur. */
+  ortho: boolean;
   drawingRoomPoints: Point[];
   bgImageUrl: string | null;
   calibPoints: Point[];
@@ -357,7 +373,7 @@ export function DesignCanvas({
   multiSelected,
   drawingWall,
   newWallThickness,
-  orthoWalls,
+  ortho,
   drawingRoomPoints,
   bgImageUrl,
   calibPoints,
@@ -630,6 +646,7 @@ export function DesignCanvas({
     setRoomRect(null);
     setMarqueeRect(null);
     setZaczep(null);
+    setOsieKursora(null);
     return bylo;
   }
 
@@ -656,6 +673,16 @@ export function DesignCanvas({
    * użytkownik nie wie, czy ściany faktycznie się zeszły, czy tylko tak wyglądają.
    */
   const [zaczep, setZaczep] = useState<Przyciagniecie | null>(null);
+  /**
+   * Gdzie stoi rysowany punkt i które osie go tam ustawiły — do znacznika wyrównania.
+   *
+   * Bez sygnału wyrównanie było niewidzialne: punkt siadał w linii z czymś, a z ekranu
+   * nie dało się odczytać, czy to zasługa pomocy, czy celnej ręki. Znacznik jest
+   * KRÓTKI i stoi przy samym punkcie — linie przez cały rysunek były pierwszą próbą
+   * i okazały się mylące, bo pokazywały poziom narożnika, nad którym akurat wisiał
+   * kursor, zamiast mówić o punkcie, który się właśnie stawia.
+   */
+  const [osieKursora, setOsieKursora] = useState<{ punkt: Point; x: boolean; y: boolean } | null>(null);
 
   const drawingRoom = toolMode === "pomieszczenie";
 
@@ -757,36 +784,55 @@ export function DesignCanvas({
    * kursor lepkim wszędzie. Wyrównanie ma pomagać przy sąsiedzie, przy którym się stoi.
    */
   const ZASIEG_OSI_M = 3;
-  function kandydaciOsi(p: Point): Point[] {
+  function kandydaciOsi(p: Point, punktyFigury: Point[]): Point[] {
     const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
     const zasieg = ZASIEG_OSI_M / mpu;
     const wPoblizu = (q: Point) => Math.hypot(q.x - p.x, q.y - p.y) <= zasieg;
     return [
-      ...drawingRoomPoints,
+      ...punktyFigury,
       ...roomShapes.flatMap((r) => r.points).filter(wPoblizu),
       ...walls.flatMap((w) => w.points).filter(wPoblizu),
     ];
   }
 
-  /** To samo, ale razem z zaczepem, który o położeniu punktu zadecydował — patrz
-   *  `punktScianyZZaczepem` niżej, gdzie stoi powód takiej pary. */
-  function punktPokojuZZaczepem(p: Point): { punkt: Point; zaczep: Przyciagniecie | null } {
-    const z = przyciagnijDoGeometrii(p);
-    // Trafienie w samą geometrię wygrywa: skoro punkt siada na narożniku sąsiada, to
-    // jest już wyrównany do wszystkiego, do czego trzeba.
-    if (z) return { punkt: z.point, zaczep: z };
-
-    // Wyrównanie do osi liczymy z punktu SUROWEGO, nie z przyciągniętego do siatki:
-    // siatka zaokrągla do pół metra, więc najpierw zniosłaby punkt z osi, a potem oś
-    // ściągałaby go z powrotem — przy oczku drobniejszym niż tolerancja osi wychodziły
-    // z tego skoki. Oś ma pierwszeństwo, siatka dopala tę współrzędną, której oś nie
-    // złapała.
-    const naSiatce = withSnap(p);
-    const w = wyrownajDoOsi(p, kandydaciOsi(p), promienOsi(metersPerUnit));
+  /**
+   * Punkt po WYRÓWNANIU DO OSI, z siatką jako uzupełnieniem osi, która nie złapała.
+   *
+   * Wspólne dla ścian i pomieszczeń — bo to ta sama potrzeba: wierzchołek ma stanąć
+   * w linii z tym, co już narysowano. Wcześniej wyrównanie miały tylko pomieszczenia,
+   * a ściany wyłącznie tryb ortogonalny, więc ta sama czynność zachowywała się inaczej
+   * zależnie od tego, którym narzędziem się ją robiło.
+   *
+   * Oś liczona z punktu SUROWEGO, nie z przyciągniętego do siatki: siatka zaokrągla do
+   * oczka, więc najpierw zniosłaby punkt z osi, a potem oś ściągałaby go z powrotem.
+   */
+  function naOsiachLubSiatce(
+    raw: Point,
+    punktyFigury: Point[]
+  ): { punkt: Point; wyrownanie: { x: boolean; y: boolean } } {
+    const naSiatce = withSnap(raw);
+    const w = wyrownajDoOsi(raw, kandydaciOsi(raw, punktyFigury), promienOsi(metersPerUnit));
     return {
       punkt: { x: w.osX ? w.punkt.x : naSiatce.x, y: w.osY ? w.punkt.y : naSiatce.y },
-      zaczep: null,
+      wyrownanie: { x: !!w.osX, y: !!w.osY },
     };
+  }
+
+  /** To samo, ale razem z zaczepem, który o położeniu punktu zadecydował — patrz
+   *  `punktScianyZZaczepem` niżej, gdzie stoi powód takiej pary. */
+  function punktPokojuZZaczepem(p: Point): WynikPunktu {
+    const z = przyciagnijDoGeometrii(p);
+    // Trafienie w samą geometrię wygrywa: skoro punkt siada na narożniku sąsiada, to
+    // jest już wyrównany do wszystkiego, do czego trzeba — i ma własny znacznik.
+    if (z) return { punkt: z.point, zaczep: z, wyrownanie: BEZ_OSI };
+
+    const { punkt, wyrownanie } = naOsiachLubSiatce(p, drawingRoomPoints);
+    // Tryb kątów prostych działa TAK SAMO jak przy ścianach: zamraża oś bliższą
+    // poprzedniemu wierzchołkowi. Bez tego rysowanie pokoju wieloboku miało pomoc
+    // słabszą niż rysowanie muru, choć chodzi o dokładnie to samo.
+    const ostatni = drawingRoomPoints[drawingRoomPoints.length - 1];
+    if (ortho && ostatni) return { punkt: orthoSnap(ostatni, punkt), zaczep: null, wyrownanie: BEZ_OSI };
+    return { punkt, zaczep: null, wyrownanie };
   }
 
   /** Przy rysowaniu ortogonalnym zamraża oś BLIŻSZĄ poprzedniemu punktowi na jego
@@ -828,7 +874,7 @@ export function DesignCanvas({
    */
   function zPrzyciaganiem(p: Point): Point | null {
     if (closesWall(p)) return drawingWall[0];
-    if (orthoWalls && drawingWall.length === 3) {
+    if (ortho && drawingWall.length === 3) {
       const naroznik = sugerowanyNaroznik(drawingWall[0], drawingWall[1], drawingWall[2]);
       if (Math.hypot(p.x - naroznik.x, p.y - naroznik.y) <= WALL_RECT_SNAP_RADIUS) return naroznik;
     }
@@ -882,14 +928,19 @@ export function DesignCanvas({
    * myszy — z porównywaniem współrzędnych na koniec, żeby odgadnąć, czy to zaczep
    * wygrał. Tu wiadomo to wprost, bo obie odpowiedzi powstają w tym samym miejscu.
    */
-  function punktScianyZZaczepem(raw: Point): { punkt: Point; zaczep: Przyciagniecie | null } {
-    const naSiatce = withSnap(raw);
+  function punktScianyZZaczepem(raw: Point): WynikPunktu {
+    const { punkt: naOsiach, wyrownanie } = naOsiachLubSiatce(raw, drawingWall);
     const ostatni = drawingWall[drawingWall.length - 1];
-    const ortho = orthoWalls && ostatni ? orthoSnap(ostatni, naSiatce) : naSiatce;
-    const wlasne = zPrzyciaganiem(ortho);
-    if (wlasne) return { punkt: wlasne, zaczep: null };
+    // Tryb ortogonalny NAD wyrównaniem: jest wyborem użytkownika, a wyrównanie tylko
+    // podpowiedzią. Gdy zamraża oś, znacznik osi już nic nie wnosi — cały odcinek jest
+    // wtedy z definicji poziomy albo pionowy.
+    const poOrtho = ortho && ostatni ? orthoSnap(ostatni, naOsiach) : naOsiach;
+    const osie = ortho && ostatni ? BEZ_OSI : wyrownanie;
+    const wlasne = zPrzyciaganiem(poOrtho);
+    if (wlasne) return { punkt: wlasne, zaczep: null, wyrownanie: BEZ_OSI };
     const z = przyciagnijDoGeometrii(raw);
-    return { punkt: z?.point ?? ortho, zaczep: z };
+    if (z) return { punkt: z.point, zaczep: z, wyrownanie: BEZ_OSI };
+    return { punkt: poOrtho, zaczep: null, wyrownanie: osie };
   }
 
   /** Długość odcinka w jednostkach planu, sformatowana do etykiety: metry, jeśli
@@ -1035,13 +1086,15 @@ export function DesignCanvas({
       if (!raw) {
         setWallCursor(null);
         setZaczep(null);
+        setOsieKursora(null);
         return;
       }
-      const { punkt, zaczep: nowyZaczep } = punktScianyZZaczepem(raw);
+      const { punkt, zaczep: nowyZaczep, wyrownanie } = punktScianyZZaczepem(raw);
       // Gumowy odcinek dopiero od drugiego punktu — przed pierwszym kliknięciem nie ma
       // od czego go ciągnąć.
       setWallCursor(drawingWall.length > 0 ? punkt : null);
       setZaczep(nowyZaczep);
+      setOsieKursora({ punkt, ...wyrownanie });
       return;
     }
 
@@ -1054,11 +1107,13 @@ export function DesignCanvas({
         if (closesPolygon(raw)) {
           setRoomCursor(drawingRoomPoints[0]);
           setZaczep(null);
+          setOsieKursora(null);
           return;
         }
-        const { punkt, zaczep: nowyZaczep } = punktPokojuZZaczepem(raw);
+        const { punkt, zaczep: nowyZaczep, wyrownanie } = punktPokojuZZaczepem(raw);
         setRoomCursor(punkt);
         setZaczep(nowyZaczep);
+        setOsieKursora({ punkt, ...wyrownanie });
         return;
       }
       // Kotwica z pierwszego kliknięcia działa tak samo jak wciśnięty przycisk —
@@ -1068,8 +1123,9 @@ export function DesignCanvas({
       // przyciąga się tak samo jak każdy następny, a przed pierwszym kliknięciem
       // kotwicy jeszcze nie ma. Bez tego najczęstszy start — „obrysuj pokój od rogu
       // muru" — przyciągał się niewidzialnie.
-      const { punkt: rog, zaczep: nowyZaczep } = punktPokojuZZaczepem(raw);
+      const { punkt: rog, zaczep: nowyZaczep, wyrownanie } = punktPokojuZZaczepem(raw);
       setZaczep(nowyZaczep);
+      setOsieKursora({ punkt: rog, ...wyrownanie });
       const start = roomRectStartRef.current ?? rectAnchor;
       if (!start) return;
       const rect = rectBetween(start, rog);
@@ -2201,7 +2257,7 @@ export function DesignCanvas({
                   narożnik, żeby cztery ściany złożyły się w prostokąt — patrz
                   `sugerowanyNaroznik`/`zPrzyciaganiem` wyżej. Przy 4. punkcie
                   kółko narożnika wypełnia się, gdy kursor jest już w nim przyciągnięty. */}
-              {orthoWalls && wallCursor && (drawingWall.length === 2 || drawingWall.length === 3) && (
+              {ortho && wallCursor && (drawingWall.length === 2 || drawingWall.length === 3) && (
                 <>
                   {(() => {
                     const [p0, p1, p2fixed] = drawingWall;
@@ -2423,6 +2479,51 @@ export function DesignCanvas({
               samo jak każdy następny, a to jego właśnie stawia się najczęściej „od rogu
               tamtej ściany". Świeżość zaczepu trzyma sama obsługa ruchu myszy: każdy
               ruch go przelicza, a wyjście poza plan i porzucenie figury zerują. */}
+          {/* ZNACZNIK WYRÓWNANIA: krótka kreska przy samym punkcie, pokazująca oś,
+              która go ustawiła — pionowa, gdy punkt stanął w pionie z czymś, pozioma
+              przy wyrównaniu w poziomie. Obie naraz, gdy trafiło w jedno i drugie.
+
+              Krótka i przy punkcie, a nie przez cały rysunek: linie przez całe okno
+              były pierwszą wersją tej pomocy i okazały się mylące — pokazywały poziom
+              narożnika pod kursorem, zamiast mówić cokolwiek o stawianym punkcie.
+
+              Bledsza od znacznika zaczepu, bo niesie słabszą wiadomość: zaczep mówi
+              „punkt siada DOKŁADNIE tu", wyrównanie tylko „stoi w jednej linii". */}
+          {osieKursora && (osieKursora.x || osieKursora.y) && (toolMode === "sciany" || drawingRoom) && (
+            <>
+              {osieKursora.x && (
+                <Line
+                  name="tylko-ekran znacznik-osi"
+                  points={[
+                    osieKursora.punkt.x,
+                    osieKursora.punkt.y - px(OS_ZNACZNIK_PX) / 2,
+                    osieKursora.punkt.x,
+                    osieKursora.punkt.y + px(OS_ZNACZNIK_PX) / 2,
+                  ]}
+                  stroke="#2C6B4A"
+                  strokeWidth={px(1)}
+                  opacity={0.6}
+                  listening={false}
+                />
+              )}
+              {osieKursora.y && (
+                <Line
+                  name="tylko-ekran znacznik-osi"
+                  points={[
+                    osieKursora.punkt.x - px(OS_ZNACZNIK_PX) / 2,
+                    osieKursora.punkt.y,
+                    osieKursora.punkt.x + px(OS_ZNACZNIK_PX) / 2,
+                    osieKursora.punkt.y,
+                  ]}
+                  stroke="#2C6B4A"
+                  strokeWidth={px(1)}
+                  opacity={0.6}
+                  listening={false}
+                />
+              )}
+            </>
+          )}
+
           {zaczep && (toolMode === "sciany" || drawingRoom) && (
             <>
               {/* Dzielenie przez powiększenie: scena skaluje wszystko, co na niej stoi,

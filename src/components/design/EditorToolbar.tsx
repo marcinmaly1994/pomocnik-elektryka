@@ -235,10 +235,14 @@ export function EditorToolbar({
           type="checkbox"
           checked={snapOn}
           onChange={(e) => onSnapChange(e.target.checked)}
-          aria-label="Przyciągaj ściany do siatki"
+          aria-label="Przyciągaj do siatki"
           className="accent-copper"
         />
-        Przyciągaj ściany do siatki
+        {/* Nie „ściany": ten przełącznik rządzi całą GEOMETRIĄ BUDYNKU — ścianami,
+            obrysami pomieszczeń i przeciąganiem ich narożników (patrz `withSnap`
+            w DesignCanvas). Etykieta mówiąca o samych ścianach kazała szukać osobnego
+            przełącznika dla pomieszczeń, którego nigdy nie było. */}
+        Przyciągaj do siatki
         {/* Ile metrów ma oczko — WIDOCZNIE, nie tylko w tooltipie. Bez tego siatka
             jest wyłącznie ozdobą: przy rysowaniu od zera jedna kratka to równo metr,
             czyli najprostsza dostępna miarka, ale nikt się o tym nie dowiadywał i
