@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { otworzMenuPaska, skipEntryScreen, zamknijMenuPaska } from "./_flow";
 
 /**
  * Rysowanie pomieszczeń: prostokąt przeciągnięciem i wielobok klikaniem z zamknięciem
@@ -472,4 +472,50 @@ test("punkty nowego pomieszczenia przyciągają się do narożników sąsiada", 
   // I to na wysokości narożników sąsiada, a nie gdziekolwiek na jego krawędzi.
   const naroznikiY = pierwszy.points.filter((p) => p.x === prawaPierwszego).map((p) => p.y).sort((m, n) => m - n);
   expect(przyScianie.map((p) => p.y).sort((m, n) => m - n)).toEqual(naroznikiY);
+});
+
+/**
+ * Wyrównanie wierzchołka do PIONU/POZIOMU tego, co już jest na rysunku.
+ *
+ * Rysując drugą albo trzecią ścianę pokoju człowiek chce, żeby wierzchołek stanął
+ * w linii z poprzednim — a nie o dwa stopnie od niego. Przyciąganie do geometrii tego
+ * nie załatwia: łapie dopiero wtedy, gdy trafi się prawie w sam narożnik sąsiada.
+ *
+ * Siatka jest tu WYŁĄCZONA celowo. Przy włączonej oczko (0,5 m) samo zaokrągliłoby
+ * współrzędną i test przechodziłby nie wiadomo z czego — sprawdzamy oś, nie siatkę.
+ */
+test("wierzchołek dociąga się do pionu poprzedniego punktu", async ({ page }) => {
+  await openPlan(page);
+  await otworzMenuPaska(page, "Rysunek");
+  await page.getByLabel("Przyciągaj ściany do siatki").uncheck();
+  await zamknijMenuPaska(page);
+
+  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
+  await page.getByRole("button", { name: "Wielobok" }).click();
+
+  // Trzeci punkt celowany 3 jedn. OBOK pionu drugiego — w zasięgu osi (0,2 m = 4 jedn.).
+  const rogi = [
+    { x: 103, y: 100 },
+    { x: 247, y: 100 },
+    { x: 250, y: 214 },
+    { x: 103, y: 214 },
+  ];
+  for (const r of rogi) {
+    const ekran = await wspolrzedneWPlanie(page, r.x, r.y);
+    await page.mouse.click(ekran.x, ekran.y);
+  }
+  // Domknięcie kliknięciem w pierwszy punkt.
+  const pierwszy = await wspolrzedneWPlanie(page, rogi[0].x, rogi[0].y);
+  await page.mouse.click(pierwszy.x, pierwszy.y);
+  await expect(page.getByText("Nazwij pomieszczenie")).toBeVisible();
+  await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+
+  const punkty = (await zapisanePokoje(page))[0].points;
+  expect(punkty).toHaveLength(4);
+
+  // Trzeci wierzchołek stoi DOKŁADNIE pod drugim, mimo że klik był 3 jedn. obok.
+  expect(punkty[2].x).toBeCloseTo(punkty[1].x, 6);
+  // A czwarty w linii z pierwszym — poziom bierze z trzeciego, pion z pierwszego.
+  expect(punkty[3].x).toBeCloseTo(punkty[0].x, 6);
+  expect(punkty[3].y).toBeCloseTo(punkty[2].y, 6);
 });

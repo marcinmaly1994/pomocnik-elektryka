@@ -36,7 +36,7 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, OpeningKind, Point, RoomType, Wall } from "@/types";
+import type { ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
@@ -46,6 +46,7 @@ import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
 import { rogiSymbolu } from "@/lib/glyphs";
+import { kierunekWzdluzSciany, odsunOdSasiadow } from "@/lib/rozstawElementow";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
@@ -1507,8 +1508,53 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     );
   }
 
+  /**
+   * Promień koła opisanego na symbolu [jedn. planu] — patrz `rogiSymbolu`.
+   *
+   * Symbol traktujemy jako koło, a nie prostokąt, i to celowo: pudełko trzeba by obracać
+   * razem z elementem, a koło zajmuje tyle samo miejsca niezależnie od obrotu. Przy
+   * rozsuwaniu chodzi o „czy się nakładają", nie o dokładny kształt styku.
+   */
+  function promienSymbolu(e: InstallationElement): number {
+    const [a, b] = rogiSymbolu(e, skalaOsprzetu);
+    return (b.x - a.x) / 2;
+  }
+
+  /**
+   * Odsuwa świeżo stawiany element od tych, które już stoją obok.
+   *
+   * Klik decyduje o ŚRODKU symbolu, a symbol ma swoją szerokość — o której klikający nie
+   * myśli. Dwa gniazda postawione blisko siebie lądowały jedno na drugim i spod
+   * wierzchniego nie dało się już wyciągnąć tego pod spodem ani zobaczyć, że tam jest:
+   * na rysunku zostawało jedno gniazdo, a w zestawieniu dwa.
+   *
+   * Tylko przy STAWIANIU, nie przy przeciąganiu. Przeciąganie jest świadomym ustawianiem
+   * pozycji — odpychanie elementu spod kursora w trakcie ruchu byłoby walką z ręką
+   * użytkownika. To ta sama zasada, według której przeciąganie grupy nie przyciąga się
+   * do siatki (patrz `zPrzyciaganiemDoSciany`).
+   */
+  function bezNakladaniaNaSasiadow(kandydat: InstallationElement): Point {
+    const r = promienSymbolu(kandydat);
+    const sasiedzi = elements.map((e) => ({ x: e.x, y: e.y, r: promienSymbolu(e) }));
+    return odsunOdSasiadow(
+      { x: kandydat.x, y: kandydat.y, r },
+      sasiedzi,
+      kierunekWzdluzSciany(kandydat.rotation ?? 0)
+    );
+  }
+
   function handlePlaceElement(p: Point) {
     const m = zPrzyciaganiemDoSciany(p, activeType);
+    // Kandydat potrzebny w całości, bo rozmiar symbolu zależy od typu (i od wymiarów
+    // przyboru sanitarnego), a nie da się go policzyć z samych współrzędnych.
+    const rozstaw = bezNakladaniaNaSasiadow({
+      id: "",
+      type: activeType,
+      x: m.x,
+      y: m.y,
+      rotation: m.rotation,
+      floor: activeFloorId,
+    } as InstallationElement);
     setDraft((d) => ({
       ...d,
       elements: [
@@ -1516,8 +1562,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         {
           id: crypto.randomUUID(),
           type: activeType,
-          x: m.x,
-          y: m.y,
+          ...rozstaw,
           // Pomieszczenie liczone z pozycji PO przyciągnięciu — element ląduje wtedy
           // dokładnie na linii obrysu, gdzie decyduje tolerancja z `detectRoomName`.
           room: detectRoomName(m, roomShapes, mpu),
