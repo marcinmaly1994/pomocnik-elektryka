@@ -3261,14 +3261,23 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             // ekranie reszta nawigacji (patrz `z-30` pigułek w App.tsx).
             nastepnyKrok={pelnyEkran ? undefined : nastepnyKrok}
           />
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-            <span className="text-slate-400">Obszar planu: {planSize.w} × {planSize.h} jedn.</span>
-            {/* Szerokość rzutu w metrach — tak laik może sprawdzić, czy skala się zgadza.
-                „1:50" nic mu nie mówi bez formatu arkusza w ręku. */}
-            {mpu && (
+          {/*
+            * Szerokość rzutu w metrach — tak laik może sprawdzić, czy skala się zgadza.
+            * „1:50" nic mu nie mówi bez formatu arkusza w ręku.
+            *
+            * Stał tu obok odczyt „Obszar planu: 1000 × 700 jedn." i został usunięty.
+            * Mówił w JEDNOSTKACH PLANU, czyli pojęciem z kodu: elektryk nie ma jak go
+            * użyć ani z czym zestawić — z tego samego powodu zniknęło ono wcześniej
+            * z odczytu skali (patrz `oczkoSiatkiM`). Co gorsza opisywał obszar, który
+            * przestał cokolwiek znaczyć dla rysunku: rysować można wszędzie, więc jego
+            * rozmiar mówi już tylko o tym, jak duży jest podkład — a o podkładzie
+            * ten wiersz mówi właśnie w metrach.
+            */}
+          {mpu && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
               <span className="pe-chip pe-tag-green">rzut ≈ {formatLiczba(planWidthMeters(mpu, planSize.w)!, 1)} m szer.</span>
-            )}
-          </div>
+            </div>
+          )}
           </div>
 
           {/* Sprawdzenie rzutu — poza trybem pełnoekranowym. Tam plan ma dostać CAŁE

@@ -148,6 +148,35 @@ export function groupLabelAnchors(type: ElementType): { x: number; y: number }[]
   return [{ x: w / 2 + 8, y: 0 }];
 }
 
+/**
+ * Dopuszczalne strony etykiety numeru grupy, w kolejności preferencji: prawo, lewo,
+ * góra, dół. Pierwsza jest tą dotychczasową — reszta wchodzi w grę dopiero, gdy
+ * domyślna koliduje z sąsiadem (patrz `rozmiescEtykietyGrup`).
+ *
+ * Łącznik grupowy dostaje JEDNEGO kandydata na obwód: jego etykieta stoi przy
+ * konkretnej dźwigni i przeniesienie jej na inną stronę zerwałoby związek cyfry
+ * z dźwignią, którą opisuje.
+ */
+export function groupLabelCandidates(type: ElementType, circuit: number): { x: number; y: number }[] {
+  const kotwice = groupLabelAnchors(type);
+  if (type === "wlacznikGrupowy") return [kotwice[circuit] ?? kotwice[0]];
+
+  const { w, h } = glyphBoxSize(type);
+  // Domyślna strona zostaje tam, gdzie była. Pozostałe są ODSUNIĘTE DALEJ z dwóch
+  // powodów naraz: dalej od cyfry sąsiada, która wymusiła ustąpienie, i z miejscem
+  // na kreskę odniesienia. Przy dotychczasowym odsunięciu (26 jedn.) między obrysem
+  // symbolu (18) a cyfrą (7) zostawała JEDNA jednostka — kreska nie miała się gdzie
+  // zmieścić, a bez niej przesunięta cyfra nie wskazuje swojego właściciela.
+  const bliskie = { x: w / 2 + 8, y: h / 2 + 8 };
+  const dalekie = { x: w / 2 + 20, y: h / 2 + 20 };
+  return [
+    { x: bliskie.x, y: 0 },
+    { x: -dalekie.x, y: 0 },
+    { x: 0, y: -dalekie.y },
+    { x: 0, y: dalekie.y },
+  ];
+}
+
 /** Rozmiar „płytki” danego typu — używany zarówno do rysowania symbolu, jak i obwódki
  *  zaznaczenia. Rozmiar zależy już wyłącznie od typu: gniazda wielokrotne rysują się jak
  *  pojedyncze (liczba w łuku), a łączniki mają jedno pudełko dla wszystkich wariantów. */

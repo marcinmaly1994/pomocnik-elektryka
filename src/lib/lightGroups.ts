@@ -208,3 +208,83 @@ export function computeLightGroups(elements: InstallationElement[]): Map<string,
   });
   return slots;
 }
+
+/** Jedna etykieta numeru grupy czekająca na rozmieszczenie. */
+export interface EtykietaDoRozmieszczenia {
+  /** `${elementId}:${numerObwodu}` — klucz wyniku. */
+  klucz: string;
+  /** Pozycja elementu [jedn. planu]. */
+  srodek: Point;
+  /** Obrót elementu [stopnie] — kotwica jest w układzie LOKALNYM symbolu. */
+  rotacja: number;
+  /** Dopuszczalne kotwice lokalne, pierwsza jest domyślna. Jedna kotwica = etykieta
+   *  przywiązana do konkretnej dźwigni i nie wolno jej przenosić. */
+  kandydaci: Point[];
+  /**
+   * Skala symbolu, w którego grupie siedzi etykieta (`skalaSymbolu` przy rysowaniu).
+   * Kotwica lokalna jest przez nią mnożona, zanim trafi na rysunek — bez tego
+   * wykrywanie kolizji byłoby fikcją wszędzie poza rysunkiem odręcznym, bo przy rzucie
+   * skalibrowanym gęściej symbole i odsunięcia etykiet są kilkukrotnie większe.
+   */
+  skala?: number;
+}
+
+/** Gdzie ostatecznie staje etykieta i czy musiała w tym celu ustąpić z domyślnej strony. */
+export interface RozmieszczonaEtykieta {
+  kotwica: Point;
+  /** `true` = stoi po innej stronie niż domyślna, więc należy jej się kreska odniesienia. */
+  przesunieta: boolean;
+}
+
+function obrocPunkt(p: Point, stopnie: number): Point {
+  if (!stopnie) return p;
+  const a = (stopnie * Math.PI) / 180;
+  return { x: p.x * Math.cos(a) - p.y * Math.sin(a), y: p.x * Math.sin(a) + p.y * Math.cos(a) };
+}
+
+/**
+ * Wybiera dla każdej etykiety stronę symbolu, po której nie zderzy się z sąsiadem.
+ *
+ * Etykiety stały domyślnie zawsze po prawej. Dwa łączniki po przeciwnych stronach
+ * ściany — a tak stawia je każdy, kto montuje je przy tej samej framudze — wypychały
+ * więc cyfry KU SOBIE. W projekcie przykładowym łącznik kuchenny stoi 67 cm od
+ * salonowego schodowego, a ich etykiety lądowały 6 jedn. od siebie: cyfra „1" z kuchni
+ * wyglądała jak drugi numer salonowego łącznika, który naprawdę ma „4".
+ *
+ * Etykieta ZOSTAJE przy swoim symbolu — zmienia się tylko strona. Odsuwanie cyfry
+ * w wolną przestrzeń rozwiązałoby kolizję, ale gorszym kosztem: numer przestałby
+ * jednoznacznie wskazywać, do czego należy, a to jego jedyne zadanie.
+ *
+ * Kolejność wejścia nie wpływa na wynik (sortujemy po kluczu), bo numery użytkownik
+ * wpisuje ręcznie i czyta wzrokiem — skakanie etykiet po rzucie przy każdym dorysowanym
+ * elemencie byłoby gorsze niż sama kolizja.
+ */
+export function rozmiescEtykietyGrup(
+  etykiety: EtykietaDoRozmieszczenia[],
+  minOdleglosc: number
+): Map<string, RozmieszczonaEtykieta> {
+  const wynik = new Map<string, RozmieszczonaEtykieta>();
+  const zajete: Point[] = [];
+
+  for (const e of [...etykiety].sort((a, b) => a.klucz.localeCompare(b.klucz))) {
+    const skala = e.skala ?? 1;
+    const oceny = e.kandydaci.map((kot) => {
+      const abs = obrocPunkt({ x: kot.x * skala, y: kot.y * skala }, e.rotacja);
+      const p = { x: e.srodek.x + abs.x, y: e.srodek.y + abs.y };
+      const dystans = zajete.length ? Math.min(...zajete.map((z) => Math.hypot(z.x - p.x, z.y - p.y))) : Infinity;
+      return { kot, p, dystans };
+    });
+
+    // Pierwszy kandydat, który ma dość miejsca — kolejność kandydatów to preferencja
+    // (domyślna strona idzie pierwsza). Gdy żaden nie ma, bierzemy najluźniejszy:
+    // kolizja jest wtedy nieunikniona, ale niech będzie jak najmniejsza.
+    const wybor = oceny.find((o) => o.dystans >= minOdleglosc) ?? oceny.reduce((a, b) => (b.dystans > a.dystans ? b : a));
+    // „Ustąpiła" znaczy: stoi po innej stronie niż domyślna. Etykieta z jedną kotwicą
+    // nie ma dokąd ustąpić, więc nigdy nie jest tak oznaczona — kreska odniesienia
+    // sugerowałaby wtedy przesunięcie, którego nie było.
+    wynik.set(e.klucz, { kotwica: wybor.kot, przesunieta: wybor.kot !== e.kandydaci[0] });
+    zajete.push(wybor.p);
+  }
+
+  return wynik;
+}

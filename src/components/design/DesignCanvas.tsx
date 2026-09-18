@@ -1,4 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+
+import { rozmiescEtykietyGrup, type EtykietaDoRozmieszczenia } from "@/lib/lightGroups";
+
 import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -22,7 +25,7 @@ import { promieniePrzyciagania, snapDoGeometrii, type Przyciagniecie } from "@/l
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
-import { glyphBoxSize, groupLabelAnchors } from "@/lib/glyphs";
+import { glyphBoxSize, groupLabelAnchors, groupLabelCandidates } from "@/lib/glyphs";
 
 export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "pan" | "skala";
 export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route"; id: string } | null;
@@ -389,6 +392,37 @@ export function DesignCanvas({
   /** Osprzęt idzie za suwakiem „Rozmiar elementów", przybory sanitarne nie — ich obrys
    *  jest strefą 1 i musi zgadzać się z tym, co liczy walidator (patrz `sanitaryRenderScale`). */
   const skalaSymbolu = (type: ElementType) => (SANITARY_FIXTURES[type] ? sanitaryScale : elementScale);
+
+  /**
+   * Strona symbolu, po której staje etykieta numeru grupy — wybierana tak, żeby cyfry
+   * sąsiadów na siebie nie wchodziły.
+   *
+   * Domyślnie etykieta stała ZAWSZE po prawej, więc dwa łączniki po przeciwnych stronach
+   * ściany — a tak stawia je każdy, kto montuje je przy tej samej framudze — wypychały
+   * cyfry ku sobie. W projekcie przykładowym łącznik kuchenny stoi 67 cm od salonowego
+   * schodowego i jego „1" wyglądało jak drugi numer schodowego, który ma „4".
+   *
+   * Liczone TUTAJ, a nie w `DesignTab` razem z samymi numerami, bo wybór zależy od skali
+   * symboli — a ta jest znana dopiero w płótnie (`skalaSymbolu`).
+   */
+  const kotwiceEtykiet = useMemo(() => {
+    const doRozmieszczenia: EtykietaDoRozmieszczenia[] = [];
+    elements.forEach((el) => {
+      (lightGroups.get(el.id) ?? []).forEach((n, i) => {
+        if (n === undefined) return;
+        doRozmieszczenia.push({
+          klucz: `${el.id}:${i}`,
+          srodek: { x: el.x, y: el.y },
+          rotacja: el.rotation ?? 0,
+          kandydaci: groupLabelCandidates(el.type, i),
+          skala: SANITARY_FIXTURES[el.type] ? sanitaryScale : elementScale,
+        });
+      });
+    });
+    // Odstęp mierzony rozmiarem samej cyfry (pudełko 14 jedn.), przeskalowanym tak samo
+    // jak symbol — inaczej próg byłby poprawny wyłącznie przy rysunku odręcznym.
+    return rozmiescEtykietyGrup(doRozmieszczenia, 40 * elementScale);
+  }, [elements, lightGroups, elementScale, sanitaryScale]);
 
   /**
    * Obszar TRAFIENIA symbolu — osobny od tego, co widać.
@@ -1270,12 +1304,21 @@ export function DesignCanvas({
             Koszt jest znikomy: to gest uzytkownika, nie cos, co dzieje sie w petli. */}
         <Layer listening={false} key={gridOn ? "tlo-z-siatka" : "tlo-bez-siatki"} ref={warstwaTlaRef}>
           {/* `name="tylko-ekran"` na rzeczach, które są pomocą PRZY RYSOWANIU, a nie
-              treścią rysunku: szare tło obszaru, siatka i obwódka obszaru roboczego.
-              Eksport do PDF chowa je po nazwie (patrz `zbudujPdfRzutu`) — na rysunku
-              budowlanym nie ma ani kratki, ani ramki „dokąd wolno stawiać elementy".
-              Podkład ZOSTAJE: to wgrany rzut mieszkania, czyli treść. */}
-          <Rect name="tylko-ekran" x={0} y={0} width={planSize.w} height={planSize.h} fill="#F7F9FB" />
-          {bgImage && <KonvaImage image={bgImage} x={0} y={0} width={planSize.w} height={planSize.h} opacity={0.85} />}
+              treścią rysunku: tło obszaru podkładu, siatka i jego obwódka. Eksport do
+              PDF chowa je po nazwie (patrz `zbudujPdfRzutu`) — na rysunku budowlanym nie
+              ma ani kratki, ani ramki obszaru roboczego. Sam podkład ZOSTAJE: to wgrany
+              rzut mieszkania, czyli treść. */}
+          {/* Tło i obwódka obszaru TYLKO pod wgranym rzutem. Dopóki z arkusza nie dało
+              się wyjść, ramka mówiła prawdę: „dotąd wolno stawiać elementy". Odkąd
+              rysować można wszędzie, ta sama ramka mówi nieprawdę — sugeruje granicę,
+              której nie ma. Pod wgranym rzutem nadal coś znaczy: pokazuje, dokąd sięga
+              podkład i gdzie kończy się to, co zmierzono kalibracją. */}
+          {bgImage && (
+            <>
+              <Rect name="tylko-ekran" x={0} y={0} width={planSize.w} height={planSize.h} fill="#F7F9FB" />
+              <KonvaImage image={bgImage} x={0} y={0} width={planSize.w} height={planSize.h} opacity={0.85} />
+            </>
+          )}
           {/* Siatkę da się wyłączyć niezależnie od przyciągania. To dwie różne rzeczy:
               przyciąganie porządkuje RYSOWANIE, a siatka jest tylko widoczna — i przy
               wgranym rzucie potrafi zwyczajnie przeszkadzać, przykrywając cienkie
@@ -1305,12 +1348,20 @@ export function DesignCanvas({
                 strokeWidth={1}
               />
             ))}
-          {/* Widoczna granica obszaru roboczego — po oddaleniu widoku wokół planu robi się
-              puste tło i bez obwódki nie było wiadomo, dokąd wolno stawiać elementy. */}
-          {/* `arkusz` w nazwie: obrys obszaru roboczego to jedyny węzeł, po którym
-              da się odczytać rozmiar planu ze sceny. Scena ma teraz rozmiar OKNA,
-              więc jej własne wymiary nic o obszarze planu nie mówią. */}
-          <Rect name="tylko-ekran arkusz" x={0} y={0} width={planSize.w} height={planSize.h} stroke="#C3CDD7" strokeWidth={1.5} />
+          {/* Obwódka obszaru podkładu — patrz komentarz przy tle wyżej. `arkusz`
+              w nazwie: to jedyny węzeł, po którym da się odczytać ten obszar ze sceny,
+              bo scena ma rozmiar OKNA i o obszarze podkładu nic nie mówi. */}
+          {bgImage && (
+            <Rect
+              name="tylko-ekran arkusz"
+              x={0}
+              y={0}
+              width={planSize.w}
+              height={planSize.h}
+              stroke="#C3CDD7"
+              strokeWidth={1.5}
+            />
+          )}
         </Layer>
 
         {/* PODGLĄD KONDYGNACJI PONIŻEJ — osobna warstwa POD wszystkim, bez nasłuchu.
@@ -2459,10 +2510,43 @@ export function DesignCanvas({
                   // pomijamy zamiast zsuwać — inaczej numer prawej dźwigni wylądowałby
                   // przy lewej.
                   if (n === undefined) return null;
-                  const at = groupLabelAnchors(el.type)[i] ?? groupLabelAnchors(el.type)[0];
+                  const rozm = kotwiceEtykiet.get(`${el.id}:${i}`);
+                  const at = rozm?.kotwica ?? groupLabelAnchors(el.type)[i] ?? groupLabelAnchors(el.type)[0];
+
+                  /* Kreska odniesienia — tylko dla etykiety, która USTĄPIŁA z domyślnej
+                     strony. Problemem nie jest sama odległość cyfr, tylko to, że przy
+                     ciasnym rzucie nie wiadomo, do którego symbolu numer należy: dwa
+                     łączniki po dwóch stronach ściany dzieli 67 cm, a etykieta stoi 45 cm
+                     od swojego symbolu, więc ŻADNE rozmieszczenie ich nie rozdziela
+                     (sprawdzone: maksimum to 13 jedn.). Kreska usuwa dwuznaczność
+                     zamiast z nią walczyć — tak robią to rysunki budowlane.
+
+                     Przy luźnym rzucie nie pojawia się w ogóle, bo tam nic nie ustępuje. */
+                  const dlugosc = Math.hypot(at.x, at.y);
+                  const glif = Math.max(glyphBoxSize(el.type).w, glyphBoxSize(el.type).h) / 2;
+                  const odGlifu = glif + 1;
+                  const doCyfry = dlugosc - 7;
+                  const kreska =
+                    rozm?.przesunieta && doCyfry > odGlifu + 1
+                      ? [
+                          (at.x / dlugosc) * odGlifu,
+                          (at.y / dlugosc) * odGlifu,
+                          (at.x / dlugosc) * doCyfry,
+                          (at.y / dlugosc) * doCyfry,
+                        ]
+                      : null;
                   return (
+                    <Fragment key={i}>
+                      {kreska && (
+                        <Line
+                          points={kreska}
+                          stroke={def.color}
+                          strokeWidth={0.8}
+                          opacity={0.55}
+                          listening={false}
+                        />
+                      )}
                     <Text
-                      key={i}
                       x={at.x}
                       y={at.y}
                       rotation={-(el.rotation ?? 0)}
@@ -2478,6 +2562,7 @@ export function DesignCanvas({
                       verticalAlign="middle"
                       listening={false}
                     />
+                    </Fragment>
                   );
                 })}
               </Group>
