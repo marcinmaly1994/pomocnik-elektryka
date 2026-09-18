@@ -644,6 +644,19 @@ export function wierzcholkiZamknietejSciany(points: Point[]): Point[] | null {
  */
 export const PIKSELI_NA_METR_RYSOWANIA = 40;
 
+/**
+ * Powiększenie odpowiadające STANDARDOWEJ SKALI RYSOWANIA, czyli 1 m = 40 px.
+ *
+ * Punkt odniesienia dla odczytu w pasku: „100%" ma znaczyć tę skalę, a nie wewnętrzne
+ * „1 jednostka planu = 1 piksel". Jednostka planu jest pojęciem z kodu — przy
+ * rysowaniu od zera wychodziło z niej 20 px na metr, czyli DWA RAZY mniej niż widok,
+ * w którym rysunek się otwiera. Przycisk „przywróć 100%" oddalałby wtedy rysunek.
+ */
+export function zoomSkaliRysowania(metersPerUnit: number | null): number {
+  const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
+  return PIKSELI_NA_METR_RYSOWANIA * mpu;
+}
+
 /** Kadr płótna: powiększenie plus lewy górny róg okna w jednostkach planu. */
 export interface KadrPlotna {
   zoom: number;
@@ -705,8 +718,7 @@ export function kadrOtwarcia(
    * ma bok ponad 100 px.
    */
   if (!rysunek && !podklad) {
-    const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
-    const zoomRysowania = Math.min(granice.max, Math.max(granice.min, PIKSELI_NA_METR_RYSOWANIA * mpu));
+    const zoomRysowania = Math.min(granice.max, Math.max(granice.min, zoomSkaliRysowania(metersPerUnit)));
     return { zoom: Math.round(zoomRysowania * 100) / 100, widok: { x: 0, y: 0 } };
   }
 

@@ -365,7 +365,13 @@ test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania d
   // trzy oprawy sterowane jednym łącznikiem = trzy odcinki ŁAŃCUCHA (łącznik->1,
   // 1->2, 2->3), NIE trzy osobne kable z łącznika do każdej z osobna
   expect(controlRoutes).toHaveLength(3);
-  const switchPlan = { x: switchScreen.x - box.x, y: switchScreen.y - box.y };
+  // Pozycja łącznika w JEDNOSTKACH PLANU — przez transformację sceny, bo widok nie
+  // stoi już w powiększeniu 1 i odjęcie samego rogu okna dawałoby dwa razy za dużo.
+  const t = await scena(page);
+  const switchPlan = {
+    x: (switchScreen.x - box.x - t.x) / t.skala,
+    y: (switchScreen.y - box.y - t.y) / t.skala,
+  };
   const touchingSwitch = controlRoutes.filter((pts) => {
     const start = { x: pts[0], y: pts[1] };
     return Math.hypot(start.x - switchPlan.x, start.y - switchPlan.y) < 5;
@@ -447,6 +453,15 @@ async function soleRoute(page: import("@playwright/test").Page) {
  * faktycznie wylądowały (pierwszy/ostatni punkt jedynej trasy = pozycja
  * rozdzielnicy/gniazdka), i liczymy stały offset ekran→plan do użycia dalej.
  */
+/** Transformacja żywej sceny: powiększenie i przesunięcie kadru. */
+async function scena(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const s = (window as unknown as { Konva: { stages: { scaleX(): number; x(): number; y(): number }[] } }).Konva
+      .stages[0];
+    return { skala: s.scaleX(), x: s.x(), y: s.y() };
+  });
+}
+
 async function setupEditableRoute(page: import("@playwright/test").Page) {
   await openPlan(page);
   await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
@@ -472,11 +487,20 @@ async function setupEditableRoute(page: import("@playwright/test").Page) {
   const route = await soleRoute(page);
   if (!route) throw new Error("trasa nie narysowała się");
   const [panelX, panelY, , , sockX, sockY] = route.points;
-  const offsetX = 60 - panelX;
-  const offsetY = 60 - panelY;
 
   box = await planBox(page);
-  const toScreen = (p: { x: number; y: number }) => ({ x: box.x + p.x + offsetX, y: box.y + p.y + offsetY });
+  // Przelicznik plan → ekran przez TRANSFORMACJĘ SCENY, nie „jeden do jednego".
+  // Dawniej wystarczało dodać stały offset, bo widok stał w powiększeniu 1 (czyli
+  // jednostka planu = piksel). Rysowanie od zera otwiera się teraz we własnej skali,
+  // więc bez mnożenia przez powiększenie trafialibyśmy dwa razy za blisko rogu.
+  // Resztkowy offset (obramowanie kontenera, subpiksele) nadal kalibrujemy empirycznie.
+  const t = await scena(page);
+  const offsetX = 60 - (panelX * t.skala + t.x);
+  const offsetY = 60 - (panelY * t.skala + t.y);
+  const toScreen = (p: { x: number; y: number }) => ({
+    x: box.x + p.x * t.skala + t.x + offsetX,
+    y: box.y + p.y * t.skala + t.y + offsetY,
+  });
   return { route, panel: { x: panelX, y: panelY }, socket: { x: sockX, y: sockY }, toScreen };
 }
 

@@ -21,6 +21,9 @@ import { PasekMenu, useSzerokieOkno } from "./PasekMenu";
  */
 
 export interface EditorToolbarProps {
+  /** Powiększenie, przy którym metr rzeczywisty ma 40 px — punkt odniesienia dla
+   *  odczytu procentowego i cel przycisku „przywróć 100%". Patrz `zoomSkaliRysowania`. */
+  zoomStandardowy: number;
   bgImageUrl: string | null;
   bgName: string | null;
   onPickBg: () => void;
@@ -94,6 +97,7 @@ function Separator() {
 }
 
 export function EditorToolbar({
+  zoomStandardowy,
   bgImageUrl,
   bgName,
   onPickBg,
@@ -415,13 +419,21 @@ export function EditorToolbar({
         >
           <Minus size={14} />
         </button>
+        {/*
+          * Procent liczony od SKALI RYSOWANIA, nie od „1 jednostka planu = 1 piksel".
+          *
+          * Jednostka planu to pojęcie z kodu; przy rysowaniu od zera wychodziło z niej
+          * 20 px na metr, czyli dwa razy mniej niż widok, w którym rysunek się otwiera.
+          * „Przywróć 100%" ODDALAŁO więc rysunek zamiast wrócić do stanu wyjściowego.
+          * Teraz 100% znaczy jedno: metr rzeczywisty ma 40 px na ekranie.
+          */}
         <button
-          onClick={() => onZoomChange(1)}
-          title="Przywróć powiększenie 100%"
-          aria-label={`Powiększenie ${Math.round(zoom * 100)} procent — kliknij, aby przywrócić 100%`}
+          onClick={() => onZoomChange(clampZoom(zoomStandardowy))}
+          title="Przywróć standardowe powiększenie"
+          aria-label={`Powiększenie ${Math.round((zoom / zoomStandardowy) * 100)} procent — kliknij, aby przywrócić 100%`}
           className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600"
         >
-          {Math.round(zoom * 100)}%
+          {Math.round((zoom / zoomStandardowy) * 100)}%
         </button>
         <button
           onClick={() => onZoomChange(clampZoom(zoom + ZOOM_STEP))}
