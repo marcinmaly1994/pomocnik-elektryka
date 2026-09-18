@@ -120,3 +120,59 @@ export function snapDoGeometrii(
 
   return (najblizszy("naroznik") ?? najblizszy("krawedz"))?.trafienie ?? null;
 }
+
+/**
+ * Zasięg wyrównywania do osi [m] — CIAŚNIEJSZY niż przyciąganie do narożnika.
+ *
+ * Narożnik to jeden punkt i celuje się w niego świadomie, więc może mieć szeroki próg.
+ * Oś ciągnie się przez cały rysunek, więc szeroki próg robiłby kursor lepkim wszędzie:
+ * przy kilkunastu narożnikach na rzucie prawie każde miejsce leżałoby w zasięgu
+ * którejś osi i punkt przestawałby siadać tam, gdzie się klika.
+ */
+export const PROMIEN_OSI_M = 0.2;
+
+/** Ten sam zasięg w jednostkach planu — patrz `promieniePrzyciagania`. */
+export function promienOsi(metersPerUnit: number | null): number {
+  const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
+  return PROMIEN_OSI_M / mpu;
+}
+
+export interface WyrownanieDoOsi {
+  punkt: Point;
+  /** Punkt, z którego wzięliśmy pion (`osX`) i poziom (`osY`). `null` = oś nie złapała. */
+  osX: Point | null;
+  osY: Point | null;
+}
+
+/**
+ * Wyrównuje punkt do PIONU albo POZIOMU punktów, które już są na rysunku.
+ *
+ * Przyciąganie do geometrii (`snapDoGeometrii`) łapie dopiero wtedy, gdy trafi się
+ * prawie w sam narożnik sąsiada. Rysując drugą albo trzecią ścianę pokoju człowiek
+ * celuje gdzie indziej: chce, żeby wierzchołek stanął W LINII z poprzednim albo
+ * z krawędzią pokoju obok. Bez tego wychodzi ukos o kilka centymetrów — na oko
+ * niewidoczny, a zostaje w obrysie i w metrażu.
+ *
+ * Osie liczą się OSOBNO dla x i y, i to jest tu istotne: punkt bywa w pionie z jednym
+ * narożnikiem, a w poziomie z zupełnie innym. Tak właśnie wygląda dostawianie pokoju
+ * do rogu sąsiada — pion bierze z jego ściany, poziom z własnego poprzedniego punktu.
+ *
+ * Zwraca też PUNKTY ODNIESIENIA, nie tylko wynik: wołający może chcieć pokazać, skąd
+ * wzięło się wyrównanie, a bez tego musiałby zgadywać po współrzędnych.
+ */
+export function wyrownajDoOsi(p: Point, kandydaci: Point[], tolerancja: number): WyrownanieDoOsi {
+  const najblizszy = (wspolrzedna: "x" | "y") =>
+    kandydaci.reduce<{ punkt: Point; odleglosc: number } | null>((best, k) => {
+      const odleglosc = Math.abs(p[wspolrzedna] - k[wspolrzedna]);
+      if (odleglosc > tolerancja) return best;
+      return !best || odleglosc < best.odleglosc ? { punkt: k, odleglosc } : best;
+    }, null);
+
+  const osX = najblizszy("x");
+  const osY = najblizszy("y");
+  return {
+    punkt: { x: osX ? osX.punkt.x : p.x, y: osY ? osY.punkt.y : p.y },
+    osX: osX?.punkt ?? null,
+    osY: osY?.punkt ?? null,
+  };
+}

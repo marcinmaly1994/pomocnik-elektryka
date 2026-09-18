@@ -11,6 +11,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   gruboscObrysuPokoju,
   krokSiatki,
+  MANUAL_DRAW_SCALE_MPU,
   PROG_WASKIEGO_EKRANU,
   type PlanSize,
 } from "@/lib/design";
@@ -21,7 +22,13 @@ import {
   skalaOpisowRzutu,
   szerokoscRamki,
 } from "@/lib/opisPomieszczenia";
-import { promieniePrzyciagania, snapDoGeometrii, type Przyciagniecie } from "@/lib/drawSnap";
+import {
+  promieniePrzyciagania,
+  promienOsi,
+  snapDoGeometrii,
+  wyrownajDoOsi,
+  type Przyciagniecie,
+} from "@/lib/drawSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
@@ -737,11 +744,49 @@ export function DesignCanvas({
     return punktPokojuZZaczepem(p).punkt;
   }
 
+  /**
+   * Punkty, do których PIONU i POZIOMU wyrównuje się rysowany wierzchołek.
+   *
+   * Dwa źródła, oba wynikające z tego, jak się rysuje pokój. Pierwsze to wierzchołki
+   * FIGURY WŁAŚNIE RYSOWANEJ: druga i trzecia ściana mają stanąć prostopadle do
+   * pierwszej, a nie o dwa stopnie od niej. Drugie to narożniki geometrii, KOŁO KTÓREJ
+   * stoi kursor — dostawiając pokój do sąsiada, wyrównuje się do jego ścian.
+   *
+   * Narożniki są filtrowane odległością od kursora, i to nie dla wydajności: oś ciągnie
+   * się przez cały rysunek, więc branie wszystkich narożników mieszkania robiłoby
+   * kursor lepkim wszędzie. Wyrównanie ma pomagać przy sąsiedzie, przy którym się stoi.
+   */
+  const ZASIEG_OSI_M = 3;
+  function kandydaciOsi(p: Point): Point[] {
+    const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
+    const zasieg = ZASIEG_OSI_M / mpu;
+    const wPoblizu = (q: Point) => Math.hypot(q.x - p.x, q.y - p.y) <= zasieg;
+    return [
+      ...drawingRoomPoints,
+      ...roomShapes.flatMap((r) => r.points).filter(wPoblizu),
+      ...walls.flatMap((w) => w.points).filter(wPoblizu),
+    ];
+  }
+
   /** To samo, ale razem z zaczepem, który o położeniu punktu zadecydował — patrz
    *  `punktScianyZZaczepem` niżej, gdzie stoi powód takiej pary. */
   function punktPokojuZZaczepem(p: Point): { punkt: Point; zaczep: Przyciagniecie | null } {
     const z = przyciagnijDoGeometrii(p);
-    return { punkt: z?.point ?? withSnap(p), zaczep: z };
+    // Trafienie w samą geometrię wygrywa: skoro punkt siada na narożniku sąsiada, to
+    // jest już wyrównany do wszystkiego, do czego trzeba.
+    if (z) return { punkt: z.point, zaczep: z };
+
+    // Wyrównanie do osi liczymy z punktu SUROWEGO, nie z przyciągniętego do siatki:
+    // siatka zaokrągla do pół metra, więc najpierw zniosłaby punkt z osi, a potem oś
+    // ściągałaby go z powrotem — przy oczku drobniejszym niż tolerancja osi wychodziły
+    // z tego skoki. Oś ma pierwszeństwo, siatka dopala tę współrzędną, której oś nie
+    // złapała.
+    const naSiatce = withSnap(p);
+    const w = wyrownajDoOsi(p, kandydaciOsi(p), promienOsi(metersPerUnit));
+    return {
+      punkt: { x: w.osX ? w.punkt.x : naSiatce.x, y: w.osY ? w.punkt.y : naSiatce.y },
+      zaczep: null,
+    };
   }
 
   /** Przy rysowaniu ortogonalnym zamraża oś BLIŻSZĄ poprzedniemu punktowi na jego
