@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { rozmiescEtykietyGrup, type EtykietaDoRozmieszczenia } from "@/lib/lightGroups";
 
@@ -518,6 +518,20 @@ export function DesignCanvas({
    * Oczko nie potrzebuje już dolnej blokady: skok idzie za powiększeniem (patrz
    * `krokSiatki`), więc kratka z definicji nie zejdzie poniżej progu czytelności.
    */
+  /**
+   * Rozmiar EKRANOWY przeliczony na jednostki planu.
+   *
+   * Do uchwytów, kropek i znaczników — wszystkiego, co jest przyborem do rysowania,
+   * a nie rysunkiem. Scena skaluje wszystko, co na niej stoi, więc liczba podana
+   * wprost rośnie razem z powiększeniem: przy skali rysowania (40 px/m) kropki
+   * wielokąta miały 16 px średnicy, a uchwyty zaznaczonego pomieszczenia 24 px.
+   *
+   * Podział jest ten sam, co w programach CAD: rysunek mierzy się w metrach, przybory
+   * w pikselach ekranu. Wartości niżej są dobrane tak, żeby wyglądały jak przy
+   * powiększeniu 1 — czyli tak, jak wyglądały, zanim skala rysowania się zmieniła.
+   */
+  const px = useCallback((wPikselach: number) => wPikselach / zoom, [zoom]);
+
   const siatka = useMemo(() => {
     const lewo = widok.x;
     const gora = widok.y;
@@ -1617,10 +1631,10 @@ export function DesignCanvas({
                       key={i}
                       x={p.x}
                       y={p.y}
-                      radius={6}
+                      radius={px(6)}
                       fill="#fff"
                       stroke={r.color}
-                      strokeWidth={2}
+                      strokeWidth={px(2)}
                       draggable
                       onDragMove={(e) => {
                         const newPts = [...pts];
@@ -1708,10 +1722,10 @@ export function DesignCanvas({
                       key={i}
                       x={p.x}
                       y={p.y}
-                      radius={6}
+                      radius={px(6)}
                       fill="#fff"
                       stroke="#C1793F"
-                      strokeWidth={2}
+                      strokeWidth={px(2)}
                       draggable
                       onDragMove={(e) => {
                         const newPts = [...pts];
@@ -2024,10 +2038,10 @@ export function DesignCanvas({
                       key={i}
                       x={p.x}
                       y={p.y}
-                      radius={5}
+                      radius={px(5)}
                       fill="#fff"
                       stroke="#C1793F"
-                      strokeWidth={2}
+                      strokeWidth={px(2)}
                       draggable
                       onDragMove={(e) => {
                         const mid = r.points.slice(1, -1).map((mp, mi) => (mi === i ? { x: e.target.x(), y: e.target.y() } : mp));
@@ -2075,10 +2089,10 @@ export function DesignCanvas({
                     key={i}
                     x={p.x}
                     y={p.y}
-                    radius={zamknie ? 8 : 4}
+                    radius={px(zamknie ? 8 : 4)}
                     fill={zamknie ? "#fff" : "#2D5A8C"}
                     stroke="#2D5A8C"
-                    strokeWidth={zamknie ? 3 : 1.5}
+                    strokeWidth={px(zamknie ? 3 : 1.5)}
                     listening={false}
                   />
                 );
@@ -2099,7 +2113,15 @@ export function DesignCanvas({
                         opacity={0.7}
                         listening={false}
                       />
-                      <Circle x={wallCursor.x} y={wallCursor.y} radius={4} fill="#fff" stroke="#2D5A8C" strokeWidth={1.5} listening={false} />
+                      <Circle
+                        x={wallCursor.x}
+                        y={wallCursor.y}
+                        radius={px(4)}
+                        fill="#fff"
+                        stroke="#2D5A8C"
+                        strokeWidth={px(1.5)}
+                        listening={false}
+                      />
                       {dlugosc > 0 && (
                         <Text
                           x={midX - 40 * so}
@@ -2143,10 +2165,10 @@ export function DesignCanvas({
                           <Circle
                             x={naroznik.x}
                             y={naroznik.y}
-                            radius={przyciagniety ? 5 : 3.5}
+                            radius={px(przyciagniety ? 5 : 3.5)}
                             fill={przyciagniety ? "#2D5A8C" : "#fff"}
                             stroke="#2D5A8C"
-                            strokeWidth={1.2}
+                            strokeWidth={px(1.2)}
                             opacity={0.8}
                             listening={false}
                           />
@@ -2242,10 +2264,10 @@ export function DesignCanvas({
                     key={i}
                     x={p.x}
                     y={p.y}
-                    radius={willClose ? 8 : 4}
+                    radius={px(willClose ? 8 : 4)}
                     fill={willClose ? "#fff" : "#C1793F"}
                     stroke="#C1793F"
-                    strokeWidth={willClose ? 3 : 1.5}
+                    strokeWidth={px(willClose ? 3 : 1.5)}
                     listening={false}
                   />
                 );
@@ -2351,21 +2373,21 @@ export function DesignCanvas({
                   jednostek planu, ile się na te piksele przelicza. */}
               {zaczep.rodzaj === "naroznik" ? (
                 <Rect
-                  x={zaczep.point.x - ZACZEP_PX / zoom / 2}
-                  y={zaczep.point.y - ZACZEP_PX / zoom / 2}
-                  width={ZACZEP_PX / zoom}
-                  height={ZACZEP_PX / zoom}
+                  x={zaczep.point.x - px(ZACZEP_PX) / 2}
+                  y={zaczep.point.y - px(ZACZEP_PX) / 2}
+                  width={px(ZACZEP_PX)}
+                  height={px(ZACZEP_PX)}
                   stroke="#2C6B4A"
-                  strokeWidth={ZACZEP_KRESKA_PX / zoom}
+                  strokeWidth={px(ZACZEP_KRESKA_PX)}
                   listening={false}
                 />
               ) : (
                 <Circle
                   x={zaczep.point.x}
                   y={zaczep.point.y}
-                  radius={ZACZEP_PX / zoom / 2}
+                  radius={px(ZACZEP_PX) / 2}
                   stroke="#2C6B4A"
-                  strokeWidth={ZACZEP_KRESKA_PX / zoom}
+                  strokeWidth={px(ZACZEP_KRESKA_PX)}
                   listening={false}
                 />
               )}
@@ -2376,7 +2398,7 @@ export function DesignCanvas({
             <Line points={calibPoints.flatMap((p) => [p.x, p.y])} stroke="#3B8C63" strokeWidth={2} />
           )}
           {calibPoints.map((p, i) => (
-            <Circle key={i} x={p.x} y={p.y} radius={5} fill="#3B8C63" listening={false} />
+            <Circle key={i} x={p.x} y={p.y} radius={px(5)} fill="#3B8C63" listening={false} />
           ))}
 
           {elements.map((el) => {
