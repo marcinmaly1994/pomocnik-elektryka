@@ -2588,6 +2588,25 @@ export function DesignCanvas({
                   e.cancelBubble = true;
                 }}
                 onClick={(e) => {
+                  /**
+                   * W trybie WSTAWIANIA klik ma postawić kolejny element — także wtedy,
+                   * gdy trafi w już stojący.
+                   *
+                   * Wcześniej taki klik zaznaczał trafiony element i na tym się kończyło,
+                   * więc dostawienie gniazda obok istniejącego wymagało trafienia poza
+                   * jego symbol (ok. 4 jedn.). To zderzało się z rozsuwaniem osprzętu,
+                   * które powstało dokładnie po to, żeby gniazda klikane blisko siebie
+                   * układały się w rząd: pomoc włączała się dopiero wtedy, gdy i tak
+                   * trafiło się w wolne miejsce.
+                   *
+                   * Nie gasimy bąbelkowania, więc zdarzenie dochodzi do sceny i idzie
+                   * zwykłą drogą stawiania (patrz `handleStageClick`), a rozsuwanie
+                   * odsuwa nowy element obok trafionego. Przeciąganie zostaje: poprawka
+                   * pozycji to gest z przytrzymaniem, nie klik, a echo po przeciągnięciu
+                   * gasi `elementDragJustEndedRef`. Do zaznaczenia jest tryb „Zaznacz",
+                   * do edycji dwuklik, do menu PPM — wszystkie trzy działają jak dotąd.
+                   */
+                  if (toolMode === "elementy") return;
                   e.cancelBubble = true;
                   onSelectElement(el.id, e.evt.shiftKey);
                 }}
