@@ -22,6 +22,7 @@ import {
   Loader2,
   Pencil,
   Pin,
+  FlipHorizontal,
   RotateCw,
   ShieldAlert,
   Trash2,
@@ -1892,6 +1893,20 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     }));
   }
 
+  /**
+   * Odbija skrzydło drzwi: zawias przechodzi na drugi koniec otworu, strona otwierania
+   * zostaje ta sama (patrz `lustro` w `Opening`).
+   *
+   * Osobna akcja obok obrotu, bo obrót zamienia OBIE rzeczy naraz i samym obrotem nie
+   * da się ustawić drzwi prawych zamiast lewych przy tym samym kierunku otwierania.
+   */
+  function toggleOpeningLustro(id: string) {
+    setDraft((d) => ({
+      ...d,
+      openings: d.openings.map((o) => (o.id === id ? { ...o, lustro: !o.lustro } : o)),
+    }));
+  }
+
   /** Grubość ściany w polu do wpisania: centymetry, gdy skala jest skalibrowana
    *  (ten sam wybór jednostki co `formatDlugosc` w DesignCanvas), inaczej same
    *  jednostki planu — użytkownik bez skali i tak nie ma punktu odniesienia dla cm. */
@@ -3592,6 +3607,20 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 >
                   <RotateCw size={14} /> Obróć o 180°
                 </button>
+                {/* Tylko dla drzwi: okno nie ma zawiasu, więc lustro byłoby przyciskiem,
+                    po którym nic nie widać — a przycisk bez skutku jest gorszy niż brak
+                    przycisku, bo każe szukać zmiany, której nie ma. */}
+                {openings.find((o) => o.id === contextMenu.id)?.kind === "drzwi" && (
+                  <button
+                    onClick={() => {
+                      toggleOpeningLustro(contextMenu.id);
+                      setContextMenu(null);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
+                  >
+                    <FlipHorizontal size={14} /> Lustro (prawe/lewe)
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setDraft((d) => ({ ...d, openings: d.openings.filter((o) => o.id !== contextMenu.id) }));

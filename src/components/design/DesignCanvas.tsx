@@ -1858,6 +1858,7 @@ export function DesignCanvas({
             const edge1 = { x: o.x - dir.x * halfW, y: o.y - dir.y * halfW };
             const edge2 = { x: o.x + dir.x * halfW, y: o.y + dir.y * halfW };
             const angleDeg = (effAngle * 180) / Math.PI;
+            const zawias = o.lustro ? edge2 : edge1;
             const glyphColor = isSel ? "#C1793F" : o.kind === "drzwi" ? "#16202B" : "#2D5A8C";
             return (
               <Group
@@ -1897,19 +1898,30 @@ export function DesignCanvas({
                 />
                 {o.kind === "drzwi" ? (
                   <>
+                    {/* ZAWIAS na jednym z końców otworu, skrzydło otwiera się w stronę
+                        `perp`. Lustro przenosi zawias na drugi koniec, NIE ruszając strony
+                        otwierania — to jest różnica między drzwiami prawymi a lewymi.
+                        Obrót (`flip`) zamienia obie rzeczy naraz, więc samym obrotem da się
+                        ustawić tylko dwa z czterech wariantów.
+
+                        Łuk zaczyna się w położeniu ZAMKNIĘTYM (wzdłuż ściany, od zawiasu
+                        w stronę drugiego końca) i idzie 90° do położenia otwartego. Przy
+                        lustrze zamknięte skrzydło leży po przeciwnej stronie zawiasu, więc
+                        łuk trzeba zacząć o 90° dalej — inaczej rysowałby się na zewnątrz
+                        otworu, po stronie, w którą drzwi nigdy nie sięgają. */}
                     <Line
-                      points={[edge1.x, edge1.y, edge1.x + perp.x * o.width, edge1.y + perp.y * o.width]}
+                      points={[zawias.x, zawias.y, zawias.x + perp.x * o.width, zawias.y + perp.y * o.width]}
                       stroke={glyphColor}
                       strokeWidth={1.5}
                       listening={false}
                     />
                     <Arc
-                      x={edge1.x}
-                      y={edge1.y}
+                      x={zawias.x}
+                      y={zawias.y}
                       innerRadius={o.width}
                       outerRadius={o.width}
                       angle={90}
-                      rotation={angleDeg}
+                      rotation={o.lustro ? angleDeg + 90 : angleDeg}
                       stroke={glyphColor}
                       strokeWidth={1}
                       dash={[3, 3]}

@@ -141,6 +141,16 @@ export interface Opening {
    *  i kierunek otwierania skrzydła. Opcjonalne: brak = `false`, zapisy sprzed
    *  dodania tego pola mają otwór w pierwotnej orientacji. */
   flip?: boolean;
+  /**
+   * Odbicie lustrzane skrzydła: zawias przechodzi na DRUGI koniec otworu, a strona,
+   * w którą drzwi się otwierają, zostaje ta sama.
+   *
+   * Osobno od `flip`, bo to dwie różne rzeczy. Obrót o 180° zamienia OBIE naraz —
+   * stronę zawiasu i kierunek otwierania — więc samym obrotem da się ustawić tylko
+   * dwa z czterech możliwych wariantów drzwi. Stolarz nazywa je prawymi i lewymi,
+   * i to jest wybór niezależny od tego, czy otwierają się do pokoju, czy z pokoju.
+   */
+  lustro?: boolean;
 }
 
 /** Kuchnia/łazienka/pralnia/kotłownia liczą się jako pomieszczenia „mokre" — patrz
