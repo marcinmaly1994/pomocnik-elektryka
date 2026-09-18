@@ -48,6 +48,18 @@ const POLYGON_CLOSE_RADIUS = 12;
 const WALL_RECT_SNAP_RADIUS = 6;
 /** Poniżej tego rozmiaru (w jednostkach planu) przeciągnięcie traktujemy jak przypadkowe
  *  drgnięcie myszy przy kliknięciu, a nie jak chęć narysowania prostokąta. */
+/**
+ * Bok znacznika zaczepu i grubość jego kreski — w PIKSELACH EKRANU.
+ *
+ * Nie w jednostkach planu, i to jest tu sedno. Znacznik jest ozdobą kursora, nie
+ * elementem rysunku: ma powiedzieć „złapało tu", a nie zajmować konkretne miejsce na
+ * rzucie. Liczony w jednostkach planu rósł razem z powiększeniem — przy skali
+ * rysowania (40 px/m) kwadracik miał 24 px zamiast dziesięciu i zasłaniał narożnik,
+ * który miał wskazywać. Programy CAD trzymają takie znaczniki w pikselach ekranu.
+ */
+const ZACZEP_PX = 11;
+const ZACZEP_KRESKA_PX = 1.5;
+
 const MIN_ROOM_SIZE = 8;
 
 /** Granice powiększenia widoku planu — wspólne dla Ctrl+scroll i przycisków paska. */
@@ -2334,18 +2346,28 @@ export function DesignCanvas({
               ruch go przelicza, a wyjście poza plan i porzucenie figury zerują. */}
           {zaczep && (toolMode === "sciany" || drawingRoom) && (
             <>
+              {/* Dzielenie przez powiększenie: scena skaluje wszystko, co na niej stoi,
+                  więc żeby wyszło stałe `ZACZEP_PX` na ekranie, trzeba podać tyle
+                  jednostek planu, ile się na te piksele przelicza. */}
               {zaczep.rodzaj === "naroznik" ? (
                 <Rect
-                  x={zaczep.point.x - 6}
-                  y={zaczep.point.y - 6}
-                  width={12}
-                  height={12}
+                  x={zaczep.point.x - ZACZEP_PX / zoom / 2}
+                  y={zaczep.point.y - ZACZEP_PX / zoom / 2}
+                  width={ZACZEP_PX / zoom}
+                  height={ZACZEP_PX / zoom}
                   stroke="#2C6B4A"
-                  strokeWidth={2}
+                  strokeWidth={ZACZEP_KRESKA_PX / zoom}
                   listening={false}
                 />
               ) : (
-                <Circle x={zaczep.point.x} y={zaczep.point.y} radius={6} stroke="#2C6B4A" strokeWidth={2} listening={false} />
+                <Circle
+                  x={zaczep.point.x}
+                  y={zaczep.point.y}
+                  radius={ZACZEP_PX / zoom / 2}
+                  stroke="#2C6B4A"
+                  strokeWidth={ZACZEP_KRESKA_PX / zoom}
+                  listening={false}
+                />
               )}
             </>
           )}

@@ -387,3 +387,72 @@ test("przyciąganie do geometrii WYGRYWA z trybem ortogonalnym", async ({ page }
   // I wlasnie dlatego odcinek NIE jest idealnie poziomy. To jest ta zaakceptowana cena.
   expect(koniec.y).not.toBe(start.y);
 });
+
+/**
+ * Znacznik zaczepu ma STAŁY ROZMIAR NA EKRANIE, niezależny od powiększenia.
+ *
+ * Rysowany był w jednostkach planu, więc rósł razem z rzutem: przy powiększeniu 2×
+ * kwadracik miał 24 px zamiast dziesięciu i zasłaniał narożnik, który miał wskazywać.
+ * To ozdoba kursora, a nie element rysunku — w programach CAD takie znaczniki mają
+ * rozmiar podany w pikselach ekranu i nie zmieniają się przy przybliżaniu.
+ */
+async function bokZnacznikaPx(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const stage = (
+      window as unknown as {
+        Konva: {
+          stages: {
+            find(sel: string): { stroke(): string; width(): number; radius?: () => number }[];
+            scaleX(): number;
+          }[];
+        };
+      }
+    ).Konva.stages[0];
+    const znaczniki = [...stage.find("Rect"), ...stage.find("Circle")].filter((n) => n.stroke() === "#2C6B4A");
+    if (!znaczniki.length) return 0;
+    const n = znaczniki[0];
+    const bok = n.radius ? n.radius() * 2 : n.width();
+    return Math.round(bok * stage.scaleX());
+  });
+}
+
+/** Punkt planu na współrzędne ekranu — przez żywą transformację sceny. */
+async function naEkranie(page: Page, x: number, y: number) {
+  const box = await boxPlotna(page);
+  const s = await page.evaluate(() => {
+    const st = (window as unknown as { Konva: { stages: { scaleX(): number; x(): number; y(): number }[] } }).Konva
+      .stages[0];
+    return { skala: st.scaleX(), x: st.x(), y: st.y() };
+  });
+  return { x: box.x + x * s.skala + s.x, y: box.y + y * s.skala + s.y };
+}
+
+test("znacznik zaczepu nie rośnie razem z powiększeniem", async ({ page }) => {
+  await otworzPlan(page);
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  const box = await boxPlotna(page);
+  await page.mouse.click(box.x + 100, box.y + 100);
+  await page.mouse.click(box.x + 250, box.y + 100);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+
+  const rog = (await sciany(page))[0].points[1];
+
+  /** Najeżdża na narożnik gotowej ściany i mierzy bok znacznika w pikselach ekranu. */
+  async function zmierz() {
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    const p = await naEkranie(page, rog.x, rog.y);
+    await page.mouse.move(p.x + 2, p.y + 2);
+    await page.waitForTimeout(150);
+    return bokZnacznikaPx(page);
+  }
+
+  const przyStarcie = await zmierz();
+  expect(przyStarcie, "znacznik ma się w ogóle pojawić").toBeGreaterThan(0);
+  // Ozdoba kursora, nie element rysunku: kilkanaście pikselów, nie kilkadziesiąt.
+  expect(przyStarcie).toBeLessThanOrEqual(14);
+
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Przybliż widok" }).click();
+  await page.waitForTimeout(300);
+
+  expect(Math.abs((await zmierz()) - przyStarcie), "rozmiar na ekranie ma zostać ten sam").toBeLessThanOrEqual(1);
+});
