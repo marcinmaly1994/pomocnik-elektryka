@@ -163,10 +163,15 @@ test("siatkę da się wyłączyć niezależnie od przyciągania", async ({ page 
   await page.waitForSelector(".konvajs-content canvas");
 
   /**
-   * Liczba jasnoszarych pikseli na płótnie. Linie siatki są wygładzane przy
-   * skalowaniu, więc dokładne dopasowanie koloru nic nie da — liczymy cały zakres
-   * odcieni i porównujemy STOSUNEK między stanami. W kadrze są też inne jasne
-   * elementy (obwódka planu), więc po wyłączeniu siatki wynik nie spada do zera.
+   * Liczba jasnoszarych pikseli na płótnie. Liczymy cały ZAKRES odcieni i porównujemy
+   * stosunek między stanami, bo przy niecałkowitym powiększeniu linie są wygładzane
+   * i dokładne dopasowanie koloru nic nie da. W kadrze są też inne jasne elementy
+   * (obwódka planu), więc po wyłączeniu siatki wynik nie spada do zera.
+   *
+   * Zakres DOMKNIĘTY od dołu, i to nie jest szczegół: kolor siatki to dokładnie
+   * #E1E7EC = (225, 231, 236). Przy całkowitym powiększeniu linie wychodzą ostre,
+   * bez ani jednego wygładzonego piksela, więc warunek „ostro większe niż 225"
+   * nie łapał wtedy NICZEGO i test widział puste płótno.
    */
   const jasnePiksele = () =>
     page.evaluate(() => {
@@ -174,7 +179,7 @@ test("siatkę da się wyłączyć niezależnie od przyciągania", async ({ page 
       const d = c.getContext("2d")!.getImageData(0, 0, c.width, Math.min(400, c.height)).data;
       let n = 0;
       for (let i = 0; i < d.length; i += 4) {
-        if (d[i] > 225 && d[i] < 245 && d[i + 1] > 230 && d[i + 1] < 248) n++;
+        if (d[i] >= 225 && d[i] < 245 && d[i + 1] >= 230 && d[i + 1] < 248) n++;
       }
       return n;
     });

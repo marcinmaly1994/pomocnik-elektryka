@@ -146,9 +146,11 @@ test("obrys wanny pokrywa sie ze strefa 1, ta sama, ktora liczy walidator", asyn
 test("suwak rozmiaru rusza osprzetem, ale nie przyborem sanitarnym", async ({ page }) => {
   await pustyProjekt(page);
   await wybierz(page, "wanna", /Wanna/);
-  await klikNaPlanie(page, 300, 300);
+  // Oba w granicach startowego kadru: rysowanie od zera otwiera się w skali 40 px/m
+  // (patrz `PIKSELI_NA_METR_RYSOWANIA`), więc okno pokazuje około 480 × 300 jedn.
+  await klikNaPlanie(page, 150, 150);
   await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
-  await klikNaPlanie(page, 550, 400);
+  await klikNaPlanie(page, 350, 220);
 
   const gniazdoPrzed = await page.evaluate(() => {
     const k = (window as unknown as { Konva: { stages: { find(s: string): unknown[] }[] } }).Konva;
@@ -196,6 +198,26 @@ async function pustyBezSkali(page: Page) {
   await expect(page.getByText(/Siatka:\s*skala nieustawiona/)).toBeVisible();
 }
 
+/**
+ * Oddala widok, aż w oknie zmieści się podana szerokość planu.
+ *
+ * Potrzebne tam, gdzie rysunek MUSI być duży, bo o jego rozmiarze jest sam test
+ * (domyślanie skali symboli z rozpiętości rzutu). Startowy kadr pokazuje około
+ * 480 jedn. wszerz, więc pokój na 540 jedn. nie mieści się w nim z definicji.
+ */
+async function zmiescWKadrze(page: Page, jednostki: number) {
+  const oddal = page.getByRole("button", { name: "Oddal widok" });
+  for (let i = 0; i < 40; i++) {
+    const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
+    const zoom = await page.evaluate(
+      () => (window as unknown as { Konva: { stages: { scaleX(): number }[] } }).Konva.stages[0].scaleX(),
+    );
+    if (jednostki * zoom < box.width && jednostki * zoom < box.height * 2) return;
+    if (await oddal.isDisabled()) return;
+    await oddal.click();
+  }
+}
+
 async function narysujPokoj(page: Page, x1: number, y1: number, x2: number, y2: number) {
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
   await page.getByRole("button", { name: "Prostokąt" }).click();
@@ -221,7 +243,9 @@ async function skalaOsprzetu(page: Page) {
 test("bez skali symbol ROSNIE razem z rysunkiem", async ({ page }) => {
   await pustyBezSkali(page);
   // Pokoj szeroki na 540 jedn. — rysunek ponad dwa razy wiekszy od typowego domu
-  // w skali odniesienia (240 jedn.).
+  // w skali odniesienia (240 jedn.). Takiego z zalozenia nie widac w calosci w kadrze
+  // startowym, wiec najpierw robimy mu miejsce.
+  await zmiescWKadrze(page, 700);
   await narysujPokoj(page, 60, 60, 600, 300);
   await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
   await klikNaPlanie(page, 300, 70);

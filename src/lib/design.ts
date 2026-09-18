@@ -635,6 +635,15 @@ export function wierzcholkiZamknietejSciany(points: Point[]): Point[] | null {
   return wierzcholki;
 }
 
+/**
+ * Ile pikselów ma mieć metr na czystej kartce [px/m].
+ *
+ * Dobrane tak, żeby w oknie mieścił się z zapasem cały dom (około 24 × 15 m), a nie
+ * połowa osiedla: wcześniej kadr brał się z dopasowania ARKUSZA (50 × 35 m), więc
+ * metr miał 17 px i pokój 7 m² otwierał się jako prostokąt 45 × 46 px.
+ */
+export const PIKSELI_NA_METR_RYSOWANIA = 40;
+
 /** Kadr płótna: powiększenie plus lewy górny róg okna w jednostkach planu. */
 export interface KadrPlotna {
   zoom: number;
@@ -660,9 +669,10 @@ export interface KadrPlotna {
  */
 export function kadrOtwarcia(
   tresc: Obszar | null,
-  planSize: PlanSize,
+  podklad: PlanSize | null,
   okno: { w: number; h: number },
-  granice: { min: number; max: number }
+  granice: { min: number; max: number },
+  metersPerUnit: number | null
 ): KadrPlotna {
   /**
    * Oddech wokół rysunku, liczony UŁAMKIEM jego rozmiaru, nie stałą liczbą jednostek.
@@ -681,7 +691,26 @@ export function kadrOtwarcia(
         h: tresc.h * (1 + 2 * ZAPAS),
       }
     : null;
-  const obszar = rysunek ?? { x: 0, y: 0, w: planSize.w, h: planSize.h };
+  /**
+   * Czysta kartka: nie ma ani rysunku, ani podkładu, więc nie ma czego dopasowywać —
+   * i właśnie dlatego trzeba WYBRAĆ skalę, zamiast dziedziczyć ją po arkuszu.
+   *
+   * Dopasowanie do arkusza (50 × 35 m) dawało metr wielkości 17 px, więc pokój 7 m²
+   * otwierał się jako prostokąt 45 × 46 px — nie mieściła się w nim nawet własna
+   * nazwa. To było pierwotne zgłoszenie i dopiero teraz da się je naprawić: dopóki
+   * arkusz był granicą rysunku, jego rozmiar MUSIAŁ się mieścić w oknie.
+   *
+   * Zamiast tego stała liczba pikseli na metr (patrz `PIKSELI_NA_METR_RYSOWANIA`):
+   * okno pokazuje wtedy około 24 × 15 m, czyli z zapasem cały dom, a pokój 7 m²
+   * ma bok ponad 100 px.
+   */
+  if (!rysunek && !podklad) {
+    const mpu = metersPerUnit !== null && metersPerUnit > 0 ? metersPerUnit : MANUAL_DRAW_SCALE_MPU;
+    const zoomRysowania = Math.min(granice.max, Math.max(granice.min, PIKSELI_NA_METR_RYSOWANIA * mpu));
+    return { zoom: Math.round(zoomRysowania * 100) / 100, widok: { x: 0, y: 0 } };
+  }
+
+  const obszar = rysunek ?? { x: 0, y: 0, w: podklad!.w, h: podklad!.h };
   const dopasowanie = Math.min(okno.w / obszar.w, okno.h / obszar.h);
   // Zaokrąglenie do dwóch miejsc, bo ta sama wartość ląduje w pasku jako „87%".
   const zoom = Number.isFinite(dopasowanie)
