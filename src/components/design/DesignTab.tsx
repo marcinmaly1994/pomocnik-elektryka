@@ -39,7 +39,7 @@ import {
 } from "@/store/useProjectStore";
 import type { ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
-import { fixtureSizeM, computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
+import { SANITARY_FIXTURES, fixtureSizeM, computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
@@ -1541,14 +1541,34 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * użytkownika. To ta sama zasada, według której przeciąganie grupy nie przyciąga się
    * do siatki (patrz `zPrzyciaganiemDoSciany`).
    */
-  function bezNakladaniaNaSasiadow(kandydat: InstallationElement): Point {
+  /**
+   * Rozsuwanie dotyczy OSPRZĘTU, nie przyborów sanitarnych.
+   *
+   * Wanna, brodzik czy umywalka to wyposażenie pomieszczenia, a nie urządzenie
+   * instalacji: gniazdo stojące „na" wannie nie jest pomyłką do poprawienia, tylko
+   * sytuacją, o której ma się wypowiedzieć sprawdzenie stref ochronnych. Odpychanie
+   * gniazda od wanny kasowało dokładnie ten przypadek — złapały to testy sprawdzenia
+   * rzutu: gniazdo celowo wsunięte w strefę 1 wyskakiwało z niej samo i zgłoszenie
+   * zmieniało się z błędu na uwagę o strefie 2.
+   *
+   * Przybory nie rozsuwają się też między sobą: ustawienie wanny obok umywalki to
+   * rysunek pomieszczenia, a nie rząd osprzętu na ścianie.
+   */
+  function rozsuwalny(e: { type: ElementType }): boolean {
+    return !SANITARY_FIXTURES[e.type];
+  }
+
+  function bezNakladaniaNaSasiadow(kandydat: InstallationElement, pomijanyId?: string): Point {
+    if (!rozsuwalny(kandydat)) return { x: kandydat.x, y: kandydat.y };
     // Minimalny prześwit między symbolami. Pudełko glifu nie zna grubości kreski, którą
     // symbol jest narysowany (zmierzone: gniazdo ma pudełko 7,6 jedn., a rysuje się na
     // 8,3), więc bez tego obrysy stykałyby się i zlewały w jedną plamę.
     const odstep = ODSTEP_SYMBOLI_M / (mpu && mpu > 0 ? mpu : MANUAL_DRAW_SCALE_MPU);
     return odsunOdSasiadow(
       pudelkoSymbolu(kandydat),
-      elements.map(pudelkoSymbolu),
+      // Przy przeciąganiu trzeba pominąć SAM PRZESUWANY element: liczony jako sąsiad
+      // zderzałby się ze swoją własną nową pozycją i odpychał się w nieskończoność.
+      elements.filter((e) => e.id !== pomijanyId && rozsuwalny(e)).map(pudelkoSymbolu),
       kandydat.rotation ?? 0,
       odstep
     );
@@ -3303,7 +3323,28 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 elements: d.elements.map((e) => {
                   if (e.id !== id) return e;
                   const m = zPrzyciaganiemDoSciany({ x, y }, e.type, e.rotation ?? 0);
-                  return { ...e, x: m.x, y: m.y, rotation: m.rotation, room: roomNameAfterMove(m, e.room, roomShapes, mpu) };
+                  /**
+                   * Rozsuwanie także po PRZECIĄGNIĘCIU, nie tylko przy stawianiu.
+                   *
+                   * Bez tego zakaz nakładania się symboli obowiązywał w jedną stronę:
+                   * postawić jedno na drugim się nie dało, ale nasunąć ręcznie już tak —
+                   * i wracał ten sam problem (spod wierzchniego symbolu nie da się
+                   * wyciągnąć tego pod spodem).
+                   *
+                   * Dopiero po PUSZCZENIU, nie w trakcie ruchu: odpychanie elementu spod
+                   * kursora w trakcie przeciągania byłoby walką z ręką użytkownika.
+                   * Przeciąganie GRUPY zostaje nietknięte (patrz `przesunElementy`) —
+                   * tam chodzi o zachowanie wzajemnych odstępów, które ktoś przed chwilą
+                   * ustawił wyrównaniem.
+                   */
+                  const poz = bezNakladaniaNaSasiadow({ ...e, ...m }, id);
+                  return {
+                    ...e,
+                    x: poz.x,
+                    y: poz.y,
+                    rotation: m.rotation,
+                    room: roomNameAfterMove(poz, e.room, roomShapes, mpu),
+                  };
                 }),
               }))
             }

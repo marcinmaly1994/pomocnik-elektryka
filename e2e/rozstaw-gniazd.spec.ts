@@ -123,3 +123,79 @@ test("trzecie gniazdo dostawia się do rzędu, zamiast wchodzić na drugie", asy
     }
   }
 });
+
+/** Czy dwa prostokąty ekranowe na siebie nachodzą. */
+function nachodza(
+  p: { x: number; y: number; width: number; height: number },
+  q: { x: number; y: number; width: number; height: number },
+) {
+  return p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height;
+}
+
+/**
+ * Klik W ISTNIEJĄCY element w trybie wstawiania stawia KOLEJNY, a nie zaznacza.
+ *
+ * Wcześniej taki klik tylko zaznaczał trafiony element, więc dostawienie gniazda obok
+ * istniejącego wymagało trafienia poza jego symbol (ok. 4 jedn.). To zderzało się
+ * z rozsuwaniem, które powstało po to, żeby gniazda klikane blisko siebie układały się
+ * w rząd: pomoc włączała się dopiero wtedy, gdy i tak trafiło się w wolne miejsce.
+ */
+test("klik w stojące gniazdo dostawia obok kolejne, zamiast je zaznaczyć", async ({ page }) => {
+  await otworzPlan(page);
+  await otworzKatalogElementow(page);
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+
+  const a = await naEkranie(page, 150, 150);
+  await page.mouse.click(a.x, a.y);
+  await page.waitForTimeout(500); // inaczej drugi klik w to samo miejsce to DWUKLIK
+
+  const pierwsze = (await zapisaneElementy(page))[0];
+  const naSymbolu = await naEkranie(page, pierwsze.x, pierwsze.y);
+  await page.mouse.click(naSymbolu.x, naSymbolu.y);
+
+  const elementy = await zapisaneElementy(page);
+  expect(elementy, "klik w symbol ma postawić drugie gniazdo").toHaveLength(2);
+
+  const ramki = (await ramkiSymboli(page, elementy)) as { x: number; y: number; width: number; height: number }[];
+  expect(nachodza(ramki[0], ramki[1]), "i ma stanąć OBOK, nie na wierzchu").toBe(false);
+});
+
+/**
+ * Nasunięcie jednego gniazda na drugie PRZECIĄGNIĘCIEM też je rozsuwa.
+ *
+ * Bez tego zakaz nakładania obowiązywał w jedną stronę: postawić jedno na drugim się
+ * nie dało, ale nasunąć ręcznie już tak — i wracał ten sam problem, bo spod wierzchniego
+ * symbolu nie da się wyciągnąć tego pod spodem.
+ */
+test("przeciągnięcie gniazda na drugie rozsuwa je, zamiast nałożyć", async ({ page }) => {
+  await otworzPlan(page);
+  await otworzKatalogElementow(page);
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+
+  const a = await naEkranie(page, 150, 150);
+  await page.mouse.click(a.x, a.y);
+  await page.waitForTimeout(500);
+  const b = await naEkranie(page, 260, 150);
+  await page.mouse.click(b.x, b.y);
+  await page.waitForTimeout(900);
+
+  const przed = await zapisaneElementy(page);
+  expect(przed).toHaveLength(2);
+
+  // Przeciągamy drugie DOKŁADNIE na pierwsze.
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  const skad = await naEkranie(page, przed[1].x, przed[1].y);
+  const dokad = await naEkranie(page, przed[0].x, przed[0].y);
+  await page.mouse.move(skad.x, skad.y);
+  await page.mouse.down();
+  await page.mouse.move(dokad.x, dokad.y, { steps: 10 });
+  await page.mouse.up();
+
+  const po = await zapisaneElementy(page);
+  expect(po, "przeciąganie nie może gubić ani dublować elementów").toHaveLength(2);
+
+  const ramki = (await ramkiSymboli(page, po)) as { x: number; y: number; width: number; height: number }[];
+  expect(ramki[0], "symbol pierwszego gniazda musi być na scenie").not.toBeNull();
+  expect(ramki[1], "symbol drugiego gniazda musi być na scenie").not.toBeNull();
+  expect(nachodza(ramki[0], ramki[1]), "po puszczeniu symbole mają się rozsunąć").toBe(false);
+});
