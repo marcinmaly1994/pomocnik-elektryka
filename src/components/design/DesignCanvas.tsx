@@ -1304,12 +1304,21 @@ export function DesignCanvas({
             Koszt jest znikomy: to gest uzytkownika, nie cos, co dzieje sie w petli. */}
         <Layer listening={false} key={gridOn ? "tlo-z-siatka" : "tlo-bez-siatki"} ref={warstwaTlaRef}>
           {/* `name="tylko-ekran"` na rzeczach, które są pomocą PRZY RYSOWANIU, a nie
-              treścią rysunku: szare tło obszaru, siatka i obwódka obszaru roboczego.
-              Eksport do PDF chowa je po nazwie (patrz `zbudujPdfRzutu`) — na rysunku
-              budowlanym nie ma ani kratki, ani ramki „dokąd wolno stawiać elementy".
-              Podkład ZOSTAJE: to wgrany rzut mieszkania, czyli treść. */}
-          <Rect name="tylko-ekran" x={0} y={0} width={planSize.w} height={planSize.h} fill="#F7F9FB" />
-          {bgImage && <KonvaImage image={bgImage} x={0} y={0} width={planSize.w} height={planSize.h} opacity={0.85} />}
+              treścią rysunku: tło obszaru podkładu, siatka i jego obwódka. Eksport do
+              PDF chowa je po nazwie (patrz `zbudujPdfRzutu`) — na rysunku budowlanym nie
+              ma ani kratki, ani ramki obszaru roboczego. Sam podkład ZOSTAJE: to wgrany
+              rzut mieszkania, czyli treść. */}
+          {/* Tło i obwódka obszaru TYLKO pod wgranym rzutem. Dopóki z arkusza nie dało
+              się wyjść, ramka mówiła prawdę: „dotąd wolno stawiać elementy". Odkąd
+              rysować można wszędzie, ta sama ramka mówi nieprawdę — sugeruje granicę,
+              której nie ma. Pod wgranym rzutem nadal coś znaczy: pokazuje, dokąd sięga
+              podkład i gdzie kończy się to, co zmierzono kalibracją. */}
+          {bgImage && (
+            <>
+              <Rect name="tylko-ekran" x={0} y={0} width={planSize.w} height={planSize.h} fill="#F7F9FB" />
+              <KonvaImage image={bgImage} x={0} y={0} width={planSize.w} height={planSize.h} opacity={0.85} />
+            </>
+          )}
           {/* Siatkę da się wyłączyć niezależnie od przyciągania. To dwie różne rzeczy:
               przyciąganie porządkuje RYSOWANIE, a siatka jest tylko widoczna — i przy
               wgranym rzucie potrafi zwyczajnie przeszkadzać, przykrywając cienkie
@@ -1339,12 +1348,20 @@ export function DesignCanvas({
                 strokeWidth={1}
               />
             ))}
-          {/* Widoczna granica obszaru roboczego — po oddaleniu widoku wokół planu robi się
-              puste tło i bez obwódki nie było wiadomo, dokąd wolno stawiać elementy. */}
-          {/* `arkusz` w nazwie: obrys obszaru roboczego to jedyny węzeł, po którym
-              da się odczytać rozmiar planu ze sceny. Scena ma teraz rozmiar OKNA,
-              więc jej własne wymiary nic o obszarze planu nie mówią. */}
-          <Rect name="tylko-ekran arkusz" x={0} y={0} width={planSize.w} height={planSize.h} stroke="#C3CDD7" strokeWidth={1.5} />
+          {/* Obwódka obszaru podkładu — patrz komentarz przy tle wyżej. `arkusz`
+              w nazwie: to jedyny węzeł, po którym da się odczytać ten obszar ze sceny,
+              bo scena ma rozmiar OKNA i o obszarze podkładu nic nie mówi. */}
+          {bgImage && (
+            <Rect
+              name="tylko-ekran arkusz"
+              x={0}
+              y={0}
+              width={planSize.w}
+              height={planSize.h}
+              stroke="#C3CDD7"
+              strokeWidth={1.5}
+            />
+          )}
         </Layer>
 
         {/* PODGLĄD KONDYGNACJI PONIŻEJ — osobna warstwa POD wszystkim, bez nasłuchu.
