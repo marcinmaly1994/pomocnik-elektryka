@@ -310,3 +310,78 @@ test("szerokość postawionego otworu da się poprawić", async ({ page }) => {
   const po = (await projectState(page)).openings[0].width;
   expect(po).toBeGreaterThan(przed);
 });
+
+/**
+ * Lustro: drzwi prawe zamiast lewych, przy TYM SAMYM kierunku otwierania.
+ *
+ * Obrót o 180° zamienia obie rzeczy naraz — stronę zawiasu i stronę, w którą skrzydło
+ * się otwiera — więc samym obrotem da się ustawić tylko dwa z czterech wariantów drzwi.
+ * Stolarz nazywa je prawymi i lewymi, i to jest wybór niezależny od tego, czy drzwi
+ * otwierają się do pokoju, czy z pokoju.
+ *
+ * Sprawdzane na GLIFIE, nie na samym zapisie: pole w projekcie może się zmienić, a
+ * rysunek zostać ten sam, i to właśnie rysunek jest tu treścią.
+ */
+async function skrzydlo(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const stage = (
+      window as unknown as { Konva: { stages: { find(sel: string): { strokeWidth(): number; points(): number[] }[] }[] } }
+    ).Konva.stages[0];
+    // Linia skrzydła: jedyna o grubości 1.5 w glifie drzwi (łuk ma 1, ściany więcej).
+    const linia = stage.find("Line").find((l) => Math.abs(l.strokeWidth() - 1.5) < 0.01);
+    if (!linia) return null;
+    const [x1, y1, x2, y2] = linia.points();
+    return { zawias: { x: x1, y: y1 }, kierunek: { x: x2 - x1, y: y2 - y1 } };
+  });
+}
+
+test("„Lustro” przenosi zawias na drugi koniec, nie zmieniając strony otwierania", async ({ page }) => {
+  await openPlan(page);
+  await drawHorizontalWall(page);
+
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
+  const box = await planBox(page);
+  await page.mouse.click(box.x + 200, box.y + 100);
+  await page.waitForTimeout(900);
+
+  const przed = await skrzydlo(page);
+  expect(przed, "drzwi mają się narysować").not.toBeNull();
+
+  const box2 = await planBox(page);
+  await page.mouse.click(box2.x + 200, box2.y + 100, { button: "right" });
+  const lustro = page.getByText("Lustro (prawe/lewe)");
+  await expect(lustro).toBeVisible();
+  await lustro.click();
+  await page.waitForTimeout(900);
+
+  expect((await projectState(page)).openings[0].lustro).toBe(true);
+
+  const po = await skrzydlo(page);
+  expect(po).not.toBeNull();
+
+  // ZAWIAS przeskoczył na drugi koniec otworu.
+  const przesuniecieZawiasu = Math.hypot(po!.zawias.x - przed!.zawias.x, po!.zawias.y - przed!.zawias.y);
+  const szerokosc = (await projectState(page)).openings[0].width;
+  expect(przesuniecieZawiasu, "zawias ma stanąć na drugim końcu otworu").toBeCloseTo(szerokosc, 1);
+
+  // A strona otwierania ZOSTAŁA ta sama — to jest cała różnica wobec obrotu o 180°.
+  expect(po!.kierunek.x).toBeCloseTo(przed!.kierunek.x, 6);
+  expect(po!.kierunek.y).toBeCloseTo(przed!.kierunek.y, 6);
+});
+
+test("okno nie dostaje opcji lustra — nie ma czego odbijać", async ({ page }) => {
+  await openPlan(page);
+  await drawHorizontalWall(page);
+
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
+  await page.getByRole("button", { name: "Okno", exact: true }).click();
+  const box = await planBox(page);
+  await page.mouse.click(box.x + 200, box.y + 100);
+  await page.waitForTimeout(900);
+  expect((await projectState(page)).openings[0].kind).toBe("okno");
+
+  const box2 = await planBox(page);
+  await page.mouse.click(box2.x + 200, box2.y + 100, { button: "right" });
+  await expect(page.getByText("Obróć o 180°")).toBeVisible();
+  await expect(page.getByText("Lustro (prawe/lewe)")).toHaveCount(0);
+});
