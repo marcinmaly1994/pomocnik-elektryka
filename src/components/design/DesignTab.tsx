@@ -36,16 +36,17 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, OpeningKind, Point, RoomType, Wall } from "@/types";
+import type { ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
-import { computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
+import { fixtureSizeM, computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
-import { rogiSymbolu } from "@/lib/glyphs";
+import { glyphBoxSize, rogiSymbolu } from "@/lib/glyphs";
+import { ODSTEP_SYMBOLI_M, odsunOdSasiadow, type ZajetySymbol } from "@/lib/rozstawElementow";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
@@ -1507,8 +1508,63 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     );
   }
 
+  /**
+   * Symbol jako PUDEŁKO w jednostkach planu — do rozsuwania stawianego osprzętu.
+   *
+   * Nie koło opisane (`rogiSymbolu`): tamto jest właściwą miarą przy kadrowaniu wydruku,
+   * gdzie nie wiadomo, jak element będzie obrócony, ale do rozsuwania mierzy po skosie
+   * coś, co stoi w rzędzie, i daje odstęp o ~28% za duży. Gniazda mają stać tuż obok
+   * siebie, jak w ramce.
+   */
+  function pudelkoSymbolu(e: InstallationElement): ZajetySymbol {
+    const { w, h } = glyphBoxSize(e.type, fixtureSizeM(e) ?? undefined);
+    return {
+      x: e.x,
+      y: e.y,
+      polSzer: (w / 2) * skalaOsprzetu,
+      polWys: (h / 2) * skalaOsprzetu,
+      obrot: e.rotation ?? 0,
+    };
+  }
+
+  /**
+   * Odsuwa świeżo stawiany element od tych, które już stoją obok.
+   *
+   * Klik decyduje o ŚRODKU symbolu, a symbol ma swoją szerokość — o której klikający nie
+   * myśli. Dwa gniazda postawione blisko siebie lądowały jedno na drugim i spod
+   * wierzchniego nie dało się już wyciągnąć tego pod spodem ani zobaczyć, że tam jest:
+   * na rysunku zostawało jedno gniazdo, a w zestawieniu dwa.
+   *
+   * Tylko przy STAWIANIU, nie przy przeciąganiu. Przeciąganie jest świadomym ustawianiem
+   * pozycji — odpychanie elementu spod kursora w trakcie ruchu byłoby walką z ręką
+   * użytkownika. To ta sama zasada, według której przeciąganie grupy nie przyciąga się
+   * do siatki (patrz `zPrzyciaganiemDoSciany`).
+   */
+  function bezNakladaniaNaSasiadow(kandydat: InstallationElement): Point {
+    // Minimalny prześwit między symbolami. Pudełko glifu nie zna grubości kreski, którą
+    // symbol jest narysowany (zmierzone: gniazdo ma pudełko 7,6 jedn., a rysuje się na
+    // 8,3), więc bez tego obrysy stykałyby się i zlewały w jedną plamę.
+    const odstep = ODSTEP_SYMBOLI_M / (mpu && mpu > 0 ? mpu : MANUAL_DRAW_SCALE_MPU);
+    return odsunOdSasiadow(
+      pudelkoSymbolu(kandydat),
+      elements.map(pudelkoSymbolu),
+      kandydat.rotation ?? 0,
+      odstep
+    );
+  }
+
   function handlePlaceElement(p: Point) {
     const m = zPrzyciaganiemDoSciany(p, activeType);
+    // Kandydat potrzebny w całości, bo rozmiar symbolu zależy od typu (i od wymiarów
+    // przyboru sanitarnego), a nie da się go policzyć z samych współrzędnych.
+    const rozstaw = bezNakladaniaNaSasiadow({
+      id: "",
+      type: activeType,
+      x: m.x,
+      y: m.y,
+      rotation: m.rotation,
+      floor: activeFloorId,
+    } as InstallationElement);
     setDraft((d) => ({
       ...d,
       elements: [
@@ -1516,8 +1572,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         {
           id: crypto.randomUUID(),
           type: activeType,
-          x: m.x,
-          y: m.y,
+          ...rozstaw,
           // Pomieszczenie liczone z pozycji PO przyciągnięciu — element ląduje wtedy
           // dokładnie na linii obrysu, gdzie decyduje tolerancja z `detectRoomName`.
           room: detectRoomName(m, roomShapes, mpu),

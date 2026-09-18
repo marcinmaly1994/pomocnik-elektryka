@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import type { RoomShape, Wall } from "@/types";
-import { promieniePrzyciagania, PROMIEN_KRAWEDZI_M, PROMIEN_NAROZNIKA_M, snapDoGeometrii } from "./drawSnap";
+import {
+  promieniePrzyciagania,
+  PROMIEN_KRAWEDZI_M,
+  PROMIEN_NAROZNIKA_M,
+  snapDoGeometrii,
+  wyrownajDoOsi,
+} from "./drawSnap";
 
 /** Zasiegi w jednostkach planu przy skali rysunku odrecznego (1 jedn. = 5 cm). */
 const { naroznik: PROMIEN_NAROZNIKA, krawedz: PROMIEN_KRAWEDZI } = promieniePrzyciagania(null);
@@ -201,5 +207,70 @@ describe("promieniePrzyciagania", () => {
       const { naroznik, krawedz } = promieniePrzyciagania(mpu);
       expect(naroznik).toBeGreaterThan(krawedz);
     });
+  });
+});
+
+/**
+ * Wyrównanie wierzchołka do OSI punktów, które już są na rysunku.
+ *
+ * Przyciąganie do geometrii łapie punkt dopiero wtedy, gdy trafi się prawie w narożnik
+ * sąsiada. Rysując trzecią ścianę pokoju człowiek celuje gdzie indziej: chce, żeby
+ * wierzchołek stanął W LINII z poprzednim — pionowo albo poziomo — albo w linii
+ * z krawędzią pokoju obok. Bez tego wychodzi ukos o kilka centymetrów, którego na oko
+ * nie widać, a który zostaje w metrażu i w obrysie.
+ *
+ * Osie działają OSOBNO dla x i y. Punkt bywa w linii z jednym narożnikiem w pionie,
+ * a z zupełnie innym w poziomie — i to jest normalny przypadek przy dostawianiu pokoju
+ * do rogu sąsiada.
+ */
+describe("wyrownajDoOsi", () => {
+  const TOL = 4;
+
+  it("bez kandydatów w zasięgu zwraca punkt bez zmian", () => {
+    const w = wyrownajDoOsi({ x: 100, y: 100 }, [{ x: 200, y: 200 }], TOL);
+    expect(w.punkt).toEqual({ x: 100, y: 100 });
+    expect(w.osX).toBeNull();
+    expect(w.osY).toBeNull();
+  });
+
+  it("dociąga x do osi pionowej wcześniejszego punktu", () => {
+    const wczesniejszy = { x: 100, y: 40 };
+    const w = wyrownajDoOsi({ x: 103, y: 220 }, [wczesniejszy], TOL);
+    expect(w.punkt).toEqual({ x: 100, y: 220 });
+    expect(w.osX).toEqual(wczesniejszy);
+    expect(w.osY).toBeNull();
+  });
+
+  it("dociąga y do osi poziomej, nie ruszając x", () => {
+    const w = wyrownajDoOsi({ x: 500, y: 98 }, [{ x: 10, y: 100 }], TOL);
+    expect(w.punkt).toEqual({ x: 500, y: 100 });
+    expect(w.osY).toEqual({ x: 10, y: 100 });
+  });
+
+  /** Sedno: pion z jednego narożnika, poziom z innego — tak wygląda dostawianie pokoju. */
+  it("bierze pion i poziom z RÓŻNYCH punktów odniesienia", () => {
+    const wPionie = { x: 100, y: 500 };
+    const wPoziomie = { x: 900, y: 200 };
+    const w = wyrownajDoOsi({ x: 102, y: 198 }, [wPionie, wPoziomie], TOL);
+    expect(w.punkt).toEqual({ x: 100, y: 200 });
+    expect(w.osX).toEqual(wPionie);
+    expect(w.osY).toEqual(wPoziomie);
+  });
+
+  it("z kilku kandydatów w zasięgu wybiera NAJBLIŻSZY", () => {
+    const w = wyrownajDoOsi({ x: 100, y: 0 }, [{ x: 97, y: 50 }, { x: 101, y: 50 }], TOL);
+    expect(w.punkt.x).toBe(101);
+  });
+
+  it("poza tolerancją nie rusza współrzędnej", () => {
+    const w = wyrownajDoOsi({ x: 100, y: 100 }, [{ x: 95, y: 100 }], TOL);
+    expect(w.punkt.x).toBe(100);
+    expect(w.osX).toBeNull();
+    // y trafione co do jednostki, więc ta oś łapie
+    expect(w.osY).toEqual({ x: 95, y: 100 });
+  });
+
+  it("pusta lista kandydatów niczego nie wywraca", () => {
+    expect(wyrownajDoOsi({ x: 7, y: 9 }, [], TOL).punkt).toEqual({ x: 7, y: 9 });
   });
 });
