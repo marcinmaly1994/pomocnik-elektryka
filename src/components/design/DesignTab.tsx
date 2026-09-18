@@ -61,6 +61,7 @@ import {
   nextRoomName,
   contentBounds,
   kadrOtwarcia,
+  zoomSkaliRysowania,
   oczkoSiatkiM,
   planSizeForImage,
   roomNameAfterMove,
@@ -2757,6 +2758,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       />
 
       <EditorToolbar
+        zoomStandardowy={zoomSkaliRysowania(mpu)}
         onPdf={() => setPodgladPdf(true)}
         pelnyEkran={pelnyEkran}
         onTogglePelnyEkran={przelaczPelnyEkran}

@@ -45,6 +45,29 @@ async function naEkranie(page: import("@playwright/test").Page, x: number, y: nu
   return { x: box.x + x * scena.skala + scena.x, y: box.y + y * scena.skala + scena.y };
 }
 
+/**
+ * Klik w punkt PLANU, nie w piksel okna — przez żywą transformację sceny.
+ *
+ * Ten plik mieszał dotąd dwie konwencje: stawiał elementy w pikselach liczonych od
+ * rogu okna, a klikał w nie po współrzędnych planu. Wychodziło na to samo tylko
+ * dlatego, że widok stał w powiększeniu 1, czyli jednostka planu = piksel. Odkąd
+ * rysowanie od zera ma własną skalę, te dwie rzeczy się rozjeżdżają.
+ */
+async function klikPlan(
+  page: import("@playwright/test").Page,
+  x: number,
+  y: number,
+  opcje?: { button?: "left" | "right" },
+) {
+  const p = await naEkranie(page, x, y);
+  await page.mouse.click(p.x, p.y, opcje);
+}
+
+async function dwuklikPlan(page: import("@playwright/test").Page, x: number, y: number) {
+  const p = await naEkranie(page, x, y);
+  await page.mouse.dblclick(p.x, p.y);
+}
+
 /** Stawia element wybranego typu w podanych punktach planu. */
 async function postaw(page: import("@playwright/test").Page, przycisk: RegExp, punkty: { x: number; y: number }[]) {
   // Katalog bywa schowany z DWOCH roznych powodow i kazdy ma wlasne lekarstwo: panel
@@ -56,30 +79,28 @@ async function postaw(page: import("@playwright/test").Page, przycisk: RegExp, p
   if (!(await cel.isVisible().catch(() => false))) {
     await page.getByRole("button", { name: /Gniazda i zasilanie/ }).click();
   }
-  const box = await planBox(page);
   for (const p of punkty) {
     await page.getByRole("button", { name: przycisk }).first().click();
-    await page.mouse.click(box.x + p.x, box.y + p.y);
+    await klikPlan(page, p.x, p.y);
   }
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
-  return box;
 }
 
 test("dwa gniazda dostaja ten sam numer obwodu i skladaja sie na JEDEN obwod", async ({ page }) => {
   await otworzPlan(page);
-  const box = await postaw(page, /Gniazdo 230 V/, [
+  await postaw(page, /Gniazdo 230 V/, [
     { x: 150, y: 150 },
     { x: 220, y: 150 },
   ]);
 
   // Pierwsze gniazdo zaklada nowy obwod...
-  await page.mouse.click(box.x + 150, box.y + 150, { button: "right" });
+  await klikPlan(page, 150, 150, { button: "right" });
   await expect(page.getByText("Numer obwodu")).toBeVisible();
   await page.getByRole("button", { name: "+ 1" }).click();
 
   // ...a drugie DOLACZA do istniejacego. Bez listy uzytych numerow trzeba by
   // pamietac, ze obwod 1 w ogole istnieje.
-  await page.mouse.click(box.x + 220, box.y + 150, { button: "right" });
+  await klikPlan(page, 220, 150, { button: "right" });
   await page.getByTitle("Dołącz do obwodu 1").click();
   await page.waitForTimeout(900); // autozapis ma 600 ms debounce'u
 
@@ -94,9 +115,9 @@ test("dwa gniazda dostaja ten sam numer obwodu i skladaja sie na JEDEN obwod", a
 
 test("odbiornik z wlasnym obwodem z definicji nie da sie przypisac — i menu mowi dlaczego", async ({ page }) => {
   await otworzPlan(page);
-  const box = await postaw(page, /Ładowarka EV/, [{ x: 180, y: 150 }]);
+  await postaw(page, /Ładowarka EV/, [{ x: 180, y: 150 }]);
 
-  await page.mouse.click(box.x + 180, box.y + 150, { button: "right" });
+  await klikPlan(page, 180, 150, { button: "right" });
   await expect(page.getByText("Numer obwodu")).toBeVisible();
   await expect(page.getByText(/ma własny obwód z definicji/)).toBeVisible();
   // Zadnego przycisku wyboru — ani „auto", ani numeru.
@@ -135,12 +156,12 @@ async function prawyKlikWElement(page: import("@playwright/test").Page, typ: str
 
 test("obwod mieszajacy oswietlenie z gniazdami jest zglaszany w rozdzielnicy", async ({ page }) => {
   await otworzPlan(page);
-  const box = await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
+  await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
-  await page.mouse.click(box.x + 220, box.y + 150);
+  await klikPlan(page, 220, 150);
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
 
   await prawyKlikWElement(page, "gniazdko");
@@ -162,8 +183,8 @@ test("obwod mieszajacy oswietlenie z gniazdami jest zglaszany w rozdzielnicy", a
  */
 test("numery z innych kondygnacji sa widoczne, a nowy numer ich nie powtarza", async ({ page }) => {
   await otworzPlan(page);
-  const box = await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
-  await page.mouse.click(box.x + 150, box.y + 150, { button: "right" });
+  await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
+  await klikPlan(page, 150, 150, { button: "right" });
   await page.getByRole("button", { name: "+ 1" }).click();
   await page.waitForTimeout(900);
 
@@ -173,8 +194,8 @@ test("numery z innych kondygnacji sa widoczne, a nowy numer ich nie powtarza", a
   await page.getByRole("button", { name: "Dodaj" }).click();
   await expect(page.getByRole("button", { name: "Piętro 1", exact: true })).toBeVisible();
 
-  const box2 = await postaw(page, /Gniazdo 230 V/, [{ x: 200, y: 200 }]);
-  await page.mouse.click(box2.x + 200, box2.y + 200, { button: "right" });
+  await postaw(page, /Gniazdo 230 V/, [{ x: 200, y: 200 }]);
+  await klikPlan(page, 200, 200, { button: "right" });
 
   // Obwod 1 z parteru JEST na liscie — i mowi, ze jest gdzie indziej.
   await expect(page.getByTitle(/Dołącz do obwodu 1 — ten obwód jest na innej kondygnacji/)).toBeVisible();
@@ -193,13 +214,13 @@ test("numery z innych kondygnacji sa widoczne, a nowy numer ich nie powtarza", a
  */
 test("numer obwodu da sie nadac, zmienic i skasowac z okna edycji (dwuklik)", async ({ page }) => {
   await otworzPlan(page);
-  const box = await postaw(page, /Gniazdo 230 V/, [
+  await postaw(page, /Gniazdo 230 V/, [
     { x: 150, y: 150 },
     { x: 220, y: 150 },
   ]);
 
   // Pierwsze gniazdo zaklada obwod 1 BEZ prawego przycisku.
-  await page.mouse.dblclick(box.x + 150, box.y + 150);
+  await dwuklikPlan(page, 150, 150);
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "+ 1" }).click();
   // Wybor od razu widac na chipie — inaczej nie wiadomo, co sie zapisze.
@@ -207,7 +228,7 @@ test("numer obwodu da sie nadac, zmienic i skasowac z okna edycji (dwuklik)", as
   await page.getByRole("button", { name: "Zapisz" }).click();
 
   // Drugie DOLACZA do istniejacego — lista numerow jest ta sama, co w menu.
-  await page.mouse.dblclick(box.x + 220, box.y + 150);
+  await dwuklikPlan(page, 220, 150);
   await page.getByTitle("Dołącz do obwodu 1").click();
   await page.getByRole("button", { name: "Zapisz" }).click();
   await page.waitForTimeout(900);
@@ -245,9 +266,9 @@ test("numer obwodu da sie nadac, zmienic i skasowac z okna edycji (dwuklik)", as
  */
 test("okno edycji odbiera wybor obwodu, gdy typ zmienia sie na taki z wlasnym obwodem", async ({ page }) => {
   await otworzPlan(page);
-  const box = await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
+  await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
 
-  await page.mouse.dblclick(box.x + 150, box.y + 150);
+  await dwuklikPlan(page, 150, 150);
   await expect(page.getByRole("button", { name: "+ 1" })).toBeVisible();
 
   // Zaznaczenie „dedykowane" zabiera wybor natychmiast, bez zapisywania i ponownego
