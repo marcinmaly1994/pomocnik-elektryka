@@ -38,15 +38,23 @@ const METRY_NA_JEDNOSTKE = 0.05; // rysowanie od zera, patrz MANUAL_DRAW_SCALE_M
 test("przybliżanie zagęszcza siatkę, a przyciąganie idzie dokładnie za nią", async ({ page }) => {
   await otworzPlan(page);
 
-  expect(await oczkoZPaska(page)).toBeCloseTo(1, 2);
+  // Wartość startowa BEZ wpisywania jej na sztywno: zależy od skali rysowania, a ten
+  // test jest o tym, co robi z nią przybliżanie, nie o niej samej.
+  const oczkoStart = await oczkoZPaska(page);
+  expect(oczkoStart).toBeGreaterThan(0);
 
   // Przybliżamy, aż pasek stanu zgłosi gęstszą kratkę.
+  // Limit z zapasem: krok powiększenia jest maly, a start zalezy od skali rysowania,
+  // wiec liczba klikniec potrzebnych do zejscia o szczebel drabinki nie jest stala.
   const przybliz = page.getByRole("button", { name: "Przybliż widok" });
-  for (let i = 0; i < 12 && (await oczkoZPaska(page)) >= 1; i++) await przybliz.click();
+  for (let i = 0; i < 40 && (await oczkoZPaska(page)) >= oczkoStart; i++) {
+    if (await przybliz.isDisabled()) break;
+    await przybliz.click();
+  }
   await page.waitForTimeout(300);
 
   const oczko = await oczkoZPaska(page);
-  expect(oczko, "przybliżenie ma dać DROBNIEJSZĄ kratkę").toBeLessThan(1);
+  expect(oczko, "przybliżenie ma dać DROBNIEJSZĄ kratkę").toBeLessThan(oczkoStart);
 
   const krokJedn = Math.round(oczko / METRY_NA_JEDNOSTKE);
   expect(krokJedn).toBeGreaterThan(0);
@@ -99,13 +107,13 @@ test("przybliżanie zagęszcza siatkę, a przyciąganie idzie dokładnie za nią
 
 test("oddalanie rozrzedza siatkę, zamiast zlewać ją w szarą płachtę", async ({ page }) => {
   await otworzPlan(page);
-  expect(await oczkoZPaska(page)).toBeCloseTo(1, 2);
+  const oczkoStart = await oczkoZPaska(page);
 
   const oddal = page.getByRole("button", { name: "Oddal widok" });
   for (let i = 0; i < 12 && !(await oddal.isDisabled()); i++) await oddal.click();
   await page.waitForTimeout(300);
 
-  expect(await oczkoZPaska(page), "oddalenie ma dać RZADSZĄ kratkę").toBeGreaterThan(1);
+  expect(await oczkoZPaska(page), "oddalenie ma dać RZADSZĄ kratkę").toBeGreaterThan(oczkoStart);
 
   // I kratka wciąż jest kratką: linie zostają na scenie, zamiast zniknąć albo
   // zagęścić się w jednolitą szarość.

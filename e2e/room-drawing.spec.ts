@@ -236,12 +236,30 @@ test("zmiana kształtu w trakcie rysowania porzuca zaczętą figurę", async ({ 
  * Efekt: przeciąganie zaczęte w PUSTYM miejscu wewnątrz pomieszczenia w ogóle nie
  * uruchamiało marquee-select, więc nie dało się zaznaczyć elementów w środku.
  */
+/**
+ * Cała geometria tego testu w JEDNOSTKACH PLANU, nie w pikselach okna.
+ *
+ * Kluczowy jest odstęp startu ramki od elementu: ma być „w pustym miejscu, z dala od
+ * symbolu". Liczony w pikselach znaczył co innego przy każdym powiększeniu — przy
+ * skali rysowania 40 px/m dawne 60 px to 30 jedn., czyli mniej więcej tyle, ile sięga
+ * sam symbol gniazdka (~18 jedn. od środka plus trzonek). Przeciągnięcie chwytało
+ * wtedy element i przesuwało go, zamiast zacząć zaznaczanie.
+ */
+const ZAZNACZANIE = {
+  pokoj: { lewa: 40, gora: 40, prawa: 400, dol: 260 },
+  element: { x: 220, y: 150 },
+  /** Odstęp rogu ramki od elementu [jedn. planu] — z zapasem poza symbol. */
+  odstep: 70,
+};
+
 test("zaznaczanie obszarem działa, gdy start jest wewnątrz narysowanego pomieszczenia", async ({ page }) => {
-  const box = await openPlan(page);
+  await openPlan(page);
   await page.getByRole("button", { name: "Prostokąt" }).click();
-  await page.mouse.move(box.x + 60, box.y + 60);
+  const rogA = await wspolrzedneWPlanie(page, ZAZNACZANIE.pokoj.lewa, ZAZNACZANIE.pokoj.gora);
+  const rogB = await wspolrzedneWPlanie(page, ZAZNACZANIE.pokoj.prawa, ZAZNACZANIE.pokoj.dol);
+  await page.mouse.move(rogA.x, rogA.y);
   await page.mouse.down();
-  await page.mouse.move(box.x + 320, box.y + 260, { steps: 8 });
+  await page.mouse.move(rogB.x, rogB.y, { steps: 8 });
   await page.mouse.up();
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
 
@@ -250,29 +268,21 @@ test("zaznaczanie obszarem działa, gdy start jest wewnątrz narysowanego pomies
   await page.getByRole("button", { name: "Wstaw Element" }).click();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
-  await page.evaluate(() => window.scrollTo(0, 0));
-  const box2 = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
-  await page.mouse.click(box2.x + 150, box2.y + 130);
+  const gdzieElement = await wspolrzedneWPlanie(page, ZAZNACZANIE.element.x, ZAZNACZANIE.element.y);
+  await page.mouse.click(gdzieElement.x, gdzieElement.y);
   await page.waitForTimeout(900);
 
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
-  await page.evaluate(() => window.scrollTo(0, 0));
-  const box3 = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
-  const zoom = await page.evaluate(() => {
-    const k = (window as unknown as { Konva?: { stages: { scaleX(): number }[] } }).Konva;
-    return k?.stages[0]?.scaleX() ?? 1;
-  });
-  const pos = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
-    return JSON.parse(raw!).draft.elements[0] as { x: number; y: number };
-  });
-  const elAt = { x: box3.x + pos.x * zoom, y: box3.y + pos.y * zoom };
 
-  // Punkt startowy marquee jest w PUSTYM miejscu pomieszczenia, z dala od elementu —
+  // Punkt startowy ramki jest w PUSTYM miejscu pomieszczenia, z dala od elementu —
   // to jest dokładnie scenariusz, który wcześniej nie startował.
-  await page.mouse.move(elAt.x - 60, elAt.y - 60);
+  const { x, y } = ZAZNACZANIE.element;
+  const o = ZAZNACZANIE.odstep;
+  const start = await wspolrzedneWPlanie(page, x - o, y - o);
+  const koniec = await wspolrzedneWPlanie(page, x + o, y + o);
+  await page.mouse.move(start.x, start.y);
   await page.mouse.down();
-  await page.mouse.move(elAt.x + 60, elAt.y + 60, { steps: 10 });
+  await page.mouse.move(koniec.x, koniec.y, { steps: 10 });
   await page.mouse.up();
 
   // dowód zaznaczenia: skrót „R" obraca element bez klikania weń wprost
@@ -384,25 +394,38 @@ async function zapisanePokoje(page: import("@playwright/test").Page) {
   );
 }
 
+/**
+ * Dwa pokoje obok siebie, w GRANICACH startowego kadru.
+ *
+ * Rysowanie od zera otwiera się w skali 40 px na metr (patrz `PIKSELI_NA_METR_RYSOWANIA`),
+ * więc okno pokazuje około 24 × 15 m. Wcześniejsza para sięgała do 35 m i drugi róg
+ * przeciągnięcia wypadał poza płótno — obrys w ogóle nie powstawał.
+ *
+ * Odsunięcia „obok narożnika" zostają w JEDNOSTKACH PLANU i nieprzeskalowane: to one
+ * sprawdzają zasięg przyciągania, który też jest w jednostkach planu.
+ */
+const PIERWSZY = { lewa: 80, gora: 80, prawa: 200, dol: 160 };
+const DRUGI_PRAWA = PIERWSZY.prawa + 120;
+
 test("drugie pomieszczenie da się narysować wzdłuż ściany pierwszego", async ({ page }) => {
   await openPlan(page);
   await page.getByRole("button", { name: "Prostokąt" }).click();
-  const a = await wspolrzedneWPlanie(page, 200, 200);
-  const b = await wspolrzedneWPlanie(page, 500, 400);
+  const a = await wspolrzedneWPlanie(page, PIERWSZY.lewa, PIERWSZY.gora);
+  const b = await wspolrzedneWPlanie(page, PIERWSZY.prawa, PIERWSZY.dol);
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
   await page.mouse.move(b.x, b.y, { steps: 6 });
   await page.mouse.up();
   await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
 
-  // Drugi pokój wielobokiem, wzdłuż PRAWEJ ściany pierwszego (x = 500).
+  // Drugi pokój wielobokiem, wzdłuż PRAWEJ ściany pierwszego.
   await page.getByRole("button", { name: "Wielobok" }).click();
   for (const [x, y] of [
-    [500, 200],
-    [700, 200],
-    [700, 400],
-    [500, 400],
-    [500, 200], // domknięcie kliknięciem w pierwszy punkt
+    [PIERWSZY.prawa, PIERWSZY.gora],
+    [DRUGI_PRAWA, PIERWSZY.gora],
+    [DRUGI_PRAWA, PIERWSZY.dol],
+    [PIERWSZY.prawa, PIERWSZY.dol],
+    [PIERWSZY.prawa, PIERWSZY.gora], // domknięcie kliknięciem w pierwszy punkt
   ]) {
     const p = await wspolrzedneWPlanie(page, x, y);
     await page.mouse.click(p.x, p.y);
@@ -418,8 +441,8 @@ test("drugie pomieszczenie da się narysować wzdłuż ściany pierwszego", asyn
 test("punkty nowego pomieszczenia przyciągają się do narożników sąsiada", async ({ page }) => {
   await openPlan(page);
   await page.getByRole("button", { name: "Prostokąt" }).click();
-  const a = await wspolrzedneWPlanie(page, 200, 200);
-  const b = await wspolrzedneWPlanie(page, 500, 400);
+  const a = await wspolrzedneWPlanie(page, PIERWSZY.lewa, PIERWSZY.gora);
+  const b = await wspolrzedneWPlanie(page, PIERWSZY.prawa, PIERWSZY.dol);
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
   await page.mouse.move(b.x, b.y, { steps: 6 });
@@ -430,11 +453,11 @@ test("punkty nowego pomieszczenia przyciągają się do narożników sąsiada", 
   // dociągnąć punkty na wspólną ścianę, żeby między pokojami nie została szczelina.
   await page.getByRole("button", { name: "Wielobok" }).click();
   for (const [x, y] of [
-    [505, 196],
-    [700, 200],
-    [700, 400],
-    [497, 404],
-    [505, 196],
+    [PIERWSZY.prawa + 5, PIERWSZY.gora - 4],
+    [DRUGI_PRAWA, PIERWSZY.gora],
+    [DRUGI_PRAWA, PIERWSZY.dol],
+    [PIERWSZY.prawa - 3, PIERWSZY.dol + 4],
+    [PIERWSZY.prawa + 5, PIERWSZY.gora - 4],
   ]) {
     const p = await wspolrzedneWPlanie(page, x, y);
     await page.mouse.click(p.x, p.y);

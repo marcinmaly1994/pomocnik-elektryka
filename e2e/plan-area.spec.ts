@@ -98,7 +98,9 @@ test("element da się postawić POZA arkuszem — płótno nie ma granic", async
   // paska, a nie grzebaniem w scenie: powiększenie jest stanem aplikacji i ustawione
   // z boku rozjechałoby się z tym, czym płótno przelicza współrzędne.
   const oddal = page.getByRole("button", { name: "Oddal widok" });
-  for (let i = 0; i < 4 && !(await oddal.isDisabled()); i++) await oddal.click();
+  // Oddalamy DO KONCA, nie ustalona liczbe razy: ile klikniec potrzeba, zalezy od
+  // powiekszenia startowego, a ono bierze sie ze skali rysowania.
+  for (let i = 0; i < 40 && !(await oddal.isDisabled()); i++) await oddal.click();
   await page.waitForTimeout(300);
 
   await otworzKatalogElementow(page);

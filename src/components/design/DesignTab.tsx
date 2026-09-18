@@ -687,31 +687,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     return szer;
   }, []);
 
-  /**
-   * Odpowiedź na zmianę rozmiaru okna: zwinięcie panelu, pojawienie się listy
-   * pomieszczeń, baner nad rysunkiem.
-   *
-   * Dopasowanie do arkusza robimy TYLKO wtedy, gdy nie ma jeszcze rysunku. Wtedy jest
-   * darmowe i pomocne: arkusz wypełnia dostępne miejsce, zamiast tonąć w szarym tle.
-   * Gdy rysunek jest, kadr należy do użytkownika i nie ruszamy go wcale — ani
-   * powiększenia, ani przesunięcia.
-   *
-   * To nie ostrożność, tylko wniosek z pomiaru. Dorysowanie pomieszczenia zmienia
-   * szerokość panelu bocznego, więc obserwator rozmiaru budzi się dokładnie w trakcie
-   * rysowania; przeliczanie wtedy powiększenia wyrywało rysunek spod kursora, a przy
-   * otwartym projekcie kasowało dopiero co ustawiony kadr (zmierzone: powiększenie
-   * wracało z dopasowanego do rysunku 3,0 na dopasowane do arkusza 0,87).
-   *
-   * Sam pomiar szerokości zostaje bezwarunkowo — od niego zależy rozmiar okna widoku.
-   */
-  const dopasujZoom = useCallback(() => {
-    const dostepnaSzer = zmierzSzerokosc();
-    if (dostepnaSzer === null) return;
-    const { walls: sc, roomShapes: pom, elements: el, openings: otw } = trescRef.current;
-    if (sc.length || pom.length || el.length || otw.length) return;
-    const z = Math.min(dostepnaSzer / planSize.w, wysPlotna / planSize.h);
-    setZoom(Math.round(Math.min(MAX_ZOOM, Math.max(minZoom(), z)) * 100) / 100);
-  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc]);
 
   /**
    * Powiększenie I kadr ustawione na RYSUNKU — dopasowanie, o które ktoś poprosił.
@@ -738,14 +713,40 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // rozmiaru. Domyślny margines tej funkcji jest skrojony pod eksport (ma zmieścić
       // wannę ze strefą ochronną) i przy małym pokoju zabrałby pół kadru.
       contentBounds(sc, pom, el, otw, 0),
-      { w: planSize.w, h: planSize.h },
+      // Podkład, a nie „obszar planu": bez wgranego rzutu nie ma czego dopasowywać
+      // i kadr bierze wtedy skalę rysowania (patrz `kadrOtwarcia`).
+      bgImageUrl ? { w: planSize.w, h: planSize.h } : null,
       { w: dostepnaSzer, h: wysPlotna },
-      { min: minZoom(), max: MAX_ZOOM }
+      { min: minZoom(), max: MAX_ZOOM },
+      mpu
     );
     setZoom(kadr.zoom);
     widokRef.current?.ustaw(kadr.widok.x, kadr.widok.y);
     return true;
-  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc]);
+  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc, bgImageUrl, mpu]);
+
+  /**
+   * Odpowiedź na zmianę rozmiaru okna: zwinięcie panelu, pojawienie się listy
+   * pomieszczeń, baner nad rysunkiem.
+   *
+   * Dopasowanie robimy TYLKO wtedy, gdy nie ma jeszcze rysunku — i tą samą regułą co
+   * przy otwarciu (patrz `dopasujKadr`), żeby czysta kartka nie miała dwóch różnych
+   * powiększeń zależnie od tego, czy ktoś właśnie zwinął panel. Gdy rysunek jest, kadr
+   * należy do użytkownika i nie ruszamy go wcale — ani powiększenia, ani przesunięcia.
+   *
+   * To nie ostrożność, tylko wniosek z pomiaru. Dorysowanie pomieszczenia zmienia
+   * szerokość panelu bocznego, więc obserwator rozmiaru budzi się dokładnie w trakcie
+   * rysowania; przeliczanie wtedy powiększenia wyrywało rysunek spod kursora, a przy
+   * otwartym projekcie kasowało dopiero co ustawiony kadr (zmierzone: powiększenie
+   * wracało z dopasowanego do rysunku 3,0 na dopasowane do arkusza 0,87).
+   *
+   * Sam pomiar szerokości zostaje bezwarunkowo — od niego zależy rozmiar okna widoku.
+   */
+  const dopasujPustaKartke = useCallback(() => {
+    const { walls: sc, roomShapes: pom, elements: el, openings: otw } = trescRef.current;
+    if (sc.length || pom.length || el.length || otw.length) return;
+    dopasujKadr();
+  }, [dopasujKadr]);
 
   /** Wejście i wyjście z pełnego ekranu zmienia dostępne miejsce skokowo, więc rzut
    *  dopasowujemy na nowo — nawet jeśli użytkownik wcześniej ustawił zoom ręcznie.
@@ -1133,7 +1134,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     if (skadrowanaRef.current !== activeFloorId) {
       if (dopasujKadr()) skadrowanaRef.current = activeFloorId;
     } else {
-      dopasujZoom();
+      dopasujPustaKartke();
     }
     const el = kolumnaPlotnaRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -1144,11 +1145,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       const szer = Math.round(wpisy[0]?.contentRect.width ?? 0);
       if (szer === ostatniaSzerRef.current) return;
       ostatniaSzerRef.current = szer;
-      dopasujZoom();
+      dopasujPustaKartke();
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [dopasujKadr, dopasujZoom, zoomReczny, wgrywanie.stan, showEntryScreen, activeFloorId]);
+  }, [dopasujKadr, dopasujPustaKartke, zoomReczny, wgrywanie.stan, showEntryScreen, activeFloorId]);
 
   const scaleToolRef = useRef<HTMLButtonElement | null>(null);
   const wallToolRef = useRef<HTMLButtonElement | null>(null);

@@ -47,12 +47,25 @@ async function pustyProjekt(page: Page) {
   if (await rozumiem.count()) await rozumiem.click();
 }
 
-/** Pomieszczenie o ZNANYCH wspolrzednych planu — jego krawedzie sluza za sciany. */
+/**
+ * Pomieszczenie o ZNANYCH wspolrzednych planu — jego krawedzie sluza za sciany.
+ *
+ * Trzymane w granicach STARTOWEGO KADRU. Rysowanie od zera otwiera sie w skali
+ * 40 px na metr (patrz `PIKSELI_NA_METR_RYSOWANIA`), wiec okno pokazuje okolo
+ * 24 x 15 m. Wczesniejszy pokoj 20 x 12 m zaczynajacy sie na 10 m wychodzil poza
+ * to pole i przeciagniecie konczylo sie poza plotnem — obrys w ogole nie powstawal.
+ */
+const POKOJ = { lewa: 100, gora: 100, prawa: 400, dol: 280 };
+/** Tuz przy lewej scianie, w zasiegu przyciagania (0,35 m = 7 jedn.). */
+const PRZY_SCIANIE = { x: POKOJ.lewa + 4, y: (POKOJ.gora + POKOJ.dol) / 2 };
+/** Srodek pokoju — daleko od kazdej krawedzi, wiec bez przyciagania. */
+const SRODEK = { x: (POKOJ.lewa + POKOJ.prawa) / 2, y: (POKOJ.gora + POKOJ.dol) / 2 };
+
 async function narysujPokoj(page: Page) {
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
   await page.getByRole("button", { name: "Prostokąt" }).click();
-  const a = await naEkranie(page, 200, 200);
-  const b = await naEkranie(page, 600, 440);
+  const a = await naEkranie(page, POKOJ.lewa, POKOJ.gora);
+  const b = await naEkranie(page, POKOJ.prawa, POKOJ.dol);
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
   await page.mouse.move(b.x, b.y, { steps: 6 });
@@ -85,7 +98,7 @@ test("gniazdko postawione przy scianie przykleja sie do niej i obraca prostopadl
   await narysujPokoj(page);
   await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
   // 4 jedn. planu w GLAB pokoju od lewej krawedzi — w zasiegu przyciagania (0,35 m = 7 jedn.).
-  await klikNaPlanie(page, 204, 300);
+  await klikNaPlanie(page, PRZY_SCIANIE.x, PRZY_SCIANIE.y);
 
   const draft = await stan(page);
   const g = draft.elements.find((e: { type: string }) => e.type === "gniazdko");
@@ -106,13 +119,13 @@ test("przeciagniecie do sciany przykleja tak samo jak postawienie", async ({ pag
   await narysujPokoj(page);
   await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
   // Srodek pokoju — daleko od krawedzi, wiec bez przyciagania.
-  await klikNaPlanie(page, 400, 300);
+  await klikNaPlanie(page, SRODEK.x, SRODEK.y);
   const przed = await stan(page);
   expect(przed.elements[0].rotation).toBe(0);
 
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
-  const skad = await naEkranie(page, 400, 300);
-  const dokad = await naEkranie(page, 204, 300);
+  const skad = await naEkranie(page, SRODEK.x, SRODEK.y);
+  const dokad = await naEkranie(page, PRZY_SCIANIE.x, PRZY_SCIANIE.y);
   await page.mouse.move(skad.x, skad.y);
   await page.mouse.down();
   await page.mouse.move(dokad.x, dokad.y, { steps: 8 });
@@ -133,7 +146,7 @@ test("punkt sufitowy NIE przykleja sie do sciany — wisi tam, gdzie go postawio
   await pustyProjekt(page);
   await narysujPokoj(page);
   await wybierz(page, "sufit", /Punkt sufitowy/);
-  await klikNaPlanie(page, 204, 300);
+  await klikNaPlanie(page, PRZY_SCIANIE.x, PRZY_SCIANIE.y);
 
   const draft = await stan(page);
   const lampa = draft.elements.find((e: { type: string }) => e.type === "oswietlenie");
@@ -147,7 +160,7 @@ test("wylaczenie przyciagania zostawia element tam, gdzie klikneto", async ({ pa
   await otworzMenuPaska(page, "Rysunek");
   await page.getByRole("checkbox", { name: "Przyciągaj osprzęt do ścian" }).uncheck();
   await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
-  await klikNaPlanie(page, 204, 300);
+  await klikNaPlanie(page, PRZY_SCIANIE.x, PRZY_SCIANIE.y);
 
   const draft = await stan(page);
   const g = draft.elements.find((e: { type: string }) => e.type === "gniazdko");
@@ -169,7 +182,7 @@ test("powiekszenie symboli odsuwa juz postawione gniazdko, zeby dalej dotykalo s
   await pustyProjekt(page);
   await narysujPokoj(page);
   await wybierz(page, "gniazdo 230", /Gniazdo 230 V/);
-  await klikNaPlanie(page, 204, 300);
+  await klikNaPlanie(page, PRZY_SCIANIE.x, PRZY_SCIANIE.y);
 
   const przed = await stan(page);
   const gPrzed = przed.elements.find((e: { type: string }) => e.type === "gniazdko");

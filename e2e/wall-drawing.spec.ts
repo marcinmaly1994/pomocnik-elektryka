@@ -232,10 +232,17 @@ test("czwarty punkt ściany przyciąga się do narożnika domykającego prostok�
   });
   expect(walls).toHaveLength(1);
   const [p0, , p2, p3] = walls[0].points;
-  // Prostokąt domknięty: 4. narożnik leży dokładnie pod 1. (ta sama x) i na
-  // wysokości 3. (ta sama y) — mimo że klik trafił kilka pikseli obok.
-  expect(p3.x).toBe(p0.x);
-  expect(p3.y).toBe(p2.y);
+  // Prostokąt domknięty: 4. narożnik leży pod 1. (ta sama x) i na wysokości 3.
+  // (ta sama y) — mimo że klik trafił kilka pikseli obok.
+  //
+  // Porównanie z tolerancją, nie na dokładną równość bitową. Przyciągnięty punkt
+  // przechodzi przez przeliczenie ekran → plan, a to dzielenie przez powiększenie:
+  // przy jednym powiększeniu wychodzi ta sama liczba co do bitu, przy innym różnica
+  // w piętnastej cyfrze (zmierzone: 124,140603936371 wobec 124,14060393637101).
+  // 1e-6 jedn. planu to 50 nanometrów na rzucie — o rząd wielkości poniżej czegokolwiek,
+  // co ten test miałby wykryć.
+  expect(p3.x).toBeCloseTo(p0.x, 6);
+  expect(p3.y).toBeCloseTo(p2.y, 6);
 });
 
 test("czwarty punkt ściany NIE przyciąga się, gdy klik jest wyraźnie dalej od narożnika", async ({ page }) => {
