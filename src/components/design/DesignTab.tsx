@@ -91,6 +91,7 @@ import { useSzerokieOkno } from "./PasekMenu";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
 import { PoleWymiarowProstokata } from "@/components/design/PoleWymiarowProstokata";
+import { DlugosciOdcinkowSciany } from "@/components/design/DlugosciOdcinkowSciany";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
@@ -2294,7 +2295,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         if (!w) return null;
         const currentThickness = w.thickness ?? DEFAULT_WALL_THICKNESS;
         return (
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
             <span className="text-slate-500">Grubość zaznaczonej ściany:</span>
             <input
               data-testid="selected-wall-thickness-input"
@@ -2309,6 +2310,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               className="w-16 rounded border border-border px-1.5 py-0.5"
             />
             {mpu !== null ? "cm" : "jedn."}
+            {/* Długości odcinków obok grubości, bo to ta sama sprawa: poprawianie
+                wymiarów ściany JUŻ NARYSOWANEJ, gdy pomyłka wyszła później. */}
+            <DlugosciOdcinkowSciany
+              punkty={w.points}
+              mpu={mpu}
+              onPrzesunPunkt={(index, punkt) => moveWallPoint(w.id, index, punkt)}
+            />
           </div>
         );
       })()}
