@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { zbudujProjektPrzykladowy } from "./demoProjekt";
-import { nearestPointOnPolyline, pointInPolygon, polygonAreaM2 } from "./geometry";
-import { computeCosts } from "./costs";
-import { gniazdoPodwojne } from "./elements";
-import { ODSUNIECIE_TRASY } from "./panel/routing";
-import { computeCircuits, computeRcdGroups } from "./panel/circuits";
-import { buildCableRoutes, findPanel, spreadOverlappingRoutes } from "./panel/loads";
-import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "./symbolScale";
-import { MANUAL_DRAW_SCALE_MPU } from "./design";
-import { scaleOf } from "./design";
+import { zbudujProjektPrzykladowy } from "./mieszkanie";
+import { nearestPointOnPolyline, pointInPolygon, polygonAreaM2 } from "@/lib/geometry";
+import { computeCosts } from "@/lib/costs";
+import { gniazdoPodwojne } from "@/lib/elements";
+import { ODSUNIECIE_TRASY } from "@/lib/panel/routing";
+import { computeCircuits, computeRcdGroups } from "@/lib/panel/circuits";
+import { buildCableRoutes, findPanel, spreadOverlappingRoutes } from "@/lib/panel/loads";
+import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
+import { MANUAL_DRAW_SCALE_MPU } from "@/lib/design";
+import { scaleOf } from "@/lib/design";
 
 /**
  * Projekt przykładowy to DANE wpisane ręcznie, więc łatwo je po cichu popsuć —

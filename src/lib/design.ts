@@ -234,7 +234,7 @@ export const ROOM_SNAP_TOLERANCE_M = 0.4;
  *
  * Mieszkał dotąd jako stała lokalna w `DesignTab` — przeniesiony tutaj, obok
  * bliźniaczej tolerancji pomieszczenia, gdy drugim wołającym stał się generator
- * projektu przykładowego (`przyklejDoScian` w lib/demoProjekt.ts). Przykład MUSI
+ * projektu przykładowego (`przyklejDoScian` w lib/demo/wspolne.ts). Przykład MUSI
  * doklejać osprzęt tą samą miarą co kliknięcie na planie, inaczej wygląda inaczej
  * niż wszystko, co narysuje użytkownik.
  */

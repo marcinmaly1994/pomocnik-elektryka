@@ -4,7 +4,7 @@ import { test, expect, type Page } from "@playwright/test";
  * Projekt przykładowy („Zobacz gotowy przykład" na ekranie startowym) i pusty
  * kosztorys — dwie strony tej samej sprawy: co widzi ktoś, kto dopiero wszedł.
  *
- * Dane przykładu mają test jednostkowy (`src/lib/demoProjekt.test.ts`). Tutaj
+ * Dane przykładu mają test jednostkowy (`src/lib/demo/mieszkanie.test.ts`). Tutaj
  * sprawdzamy to, czego nie widać bez przeglądarki: że jedno kliknięcie naprawdę
  * wypełnia WSZYSTKIE zakładki przepływu, że pasek „to jest przykład" jedzie za
  * użytkownikiem między nimi, że wyjście z przykładu czyści projekt — i że pusty
@@ -55,7 +55,7 @@ test("jedno kliknięcie wypełnia wszystkie cztery zakładki przepływu", async 
   await expect(page.getByText(/Aparaty \(\d+\)/)).toBeVisible();
 
   // 04 Kosztorys: pozycje policzone, a metraż kabla wzięty Z PLANU, nie z ryczałtu —
-  // to dlatego w przykładzie stoi rozdzielnica (patrz `elementy` w lib/demoProjekt.ts).
+  // to dlatego w przykładzie stoi rozdzielnica (patrz `elementy` w lib/demo/mieszkanie.ts).
   await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
   await expect(page.getByText(/Metry kabla policzone z tras po planie/)).toBeVisible();
   await expect(page.getByText("RAZEM brutto")).toBeVisible();
