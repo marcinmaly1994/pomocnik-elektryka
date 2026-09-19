@@ -191,7 +191,7 @@ function otwory(): Opening[] {
   const PIONOWA = Math.PI / 2;
   return [
     // Drzwi wejściowe do mieszkania — w ścianie zewnętrznej, na wprost przedsionka.
-    { id: "demo-o-wejscie", floor: FLOOR, wallId: "demo-w-obrys", ...p(2.5, 7), angle: POZIOMA, width: SZER, kind: "drzwi" },
+    { id: "demo-o-wejscie", floor: FLOOR, wallId: "demo-w-obrys", ...p(2.75, 7), angle: POZIOMA, width: SZER, kind: "drzwi" },
     // Z korytarza w górę: Salon i Kuchnia.
     { id: "demo-o-salon", floor: FLOOR, wallId: "demo-w-dzienna-komunikacja", ...p(3.5, 3.5), angle: POZIOMA, width: SZER, kind: "drzwi" },
     { id: "demo-o-kuchnia", floor: FLOOR, wallId: "demo-w-dzienna-komunikacja", ...p(6, 3.5), angle: POZIOMA, width: SZER, kind: "drzwi" },
@@ -242,29 +242,19 @@ function elementy(): InstallationElement[] {
     // Rozdzielnica i szafka teletechniczna stoją tam, gdzie stoją naprawdę: zaraz za
     // drzwiami wejściowymi, na ścianie przedsionka. Dwie oprawy w korytarzu, bo L-ka nie
     // oświetli się jednym punktem — zza rogu nie widać lampy w przedsionku.
-    //
-    // ŚCIANY, na których wolno tu wieszać osprzęt, nie są dowolne — i nie jest to kwestia
-    // gustu. `snapToWall` odwraca trzonek symbolu od ŚRODKA pomieszczenia, a środek liczy
-    // jako średnią wierzchołków obrysu (`srodek` w wallSnap.ts). Dla obrysu wklęsłego —
-    // a ten jest literą L — ta średnia wypada POZA pomieszczeniem, tutaj mniej więcej
-    // w Pokoju. Ściany leżące po tej samej stronie co ów fałszywy środek (wschodnia
-    // przedsionka, południowa korytarza) wypychają więc symbol na drugą stronę muru:
-    // element ląduje w sąsiednim pokoju, a aplikacja słusznie melduje „przypisany do
-    // innego pomieszczenia". Osprzęt stoi zatem na ścianie zachodniej i południowej
-    // przedsionka oraz północnej i wschodniej korytarza, gdzie kierunek wychodzi dobrze.
-    e("rozdzielnica", "rozdzielnica", PRZEDPOKOJ, 2.2, 6.4),
-    e("szafka", "szafkaTeletech", PRZEDPOKOJ, 2.2, 5.4),
-    e("przed-dzwonek", "dzwonek", PRZEDPOKOJ, 4.3, 3.7),
+    e("rozdzielnica", "rozdzielnica", PRZEDPOKOJ, 2.2, 6.6),
+    e("szafka", "szafkaTeletech", PRZEDPOKOJ, 2.2, 5.3),
+    e("przed-dzwonek", "dzwonek", PRZEDPOKOJ, 3.3, 5.3),
     // Para łączników SCHODOWYCH: jeden przy drzwiach wejściowych, drugi na końcu
     // korytarza. Po to w ogóle istnieje układ schodowy — wchodzi się i gasi z drugiej
     // strony. W mieszkaniu to najbardziej typowe miejsce na taki układ; w salonie
     // (gdzie stał wcześniej) prawie nikt go nie robi.
-    e("przed-sw", "wlacznikSchodowy", PRZEDPOKOJ, 3.25, 6.85),
+    e("przed-sw", "wlacznikSchodowy", PRZEDPOKOJ, 3.3, 6.6),
     e("kor-sw", "wlacznikSchodowy", PRZEDPOKOJ, 6.8, 4.8),
-    e("przed-lampa", "oswietlenie", PRZEDPOKOJ, 2.9, 5.9),
+    e("przed-lampa", "oswietlenie", PRZEDPOKOJ, 2.75, 5.95),
     e("kor-lampa1", "oswietlenie", PRZEDPOKOJ, 3.75, 4.25),
     e("kor-lampa2", "oswietlenie", PRZEDPOKOJ, 5.75, 4.25),
-    e("kor-gn", "gniazdko", PRZEDPOKOJ, 5.2, 3.7),
+    e("kor-gn", "gniazdko", PRZEDPOKOJ, 4.8, 3.7),
     e("przed-dym", "czujnikDymu", PRZEDPOKOJ, 4, 4.6),
 
     // ODLEGŁOŚCI: symbole są UMOWNE i przy skali „1 kratka = 1 m" jeden zajmuje na

@@ -13,8 +13,9 @@ import { montazPrzyscienny, zasiegPrzyscienny } from "@/lib/glyphs";
  * Co jest tu trudne: nie sam obrót o 90°, tylko KTÓRA ze stron. Symbol gniazda ma
  * trzonek (patrz `SocketArcKonva`) — w rysunku instalacyjnym trzonek wchodzi w ścianę,
  * a łuk patrzy w pomieszczenie. Obrót w złą stronę wygląda dokładnie tak samo źle jak
- * brak obrotu, więc strona jest wybierana świadomie: trzonek ma być odwrócony od
- * ŚRODKA pomieszczenia, w którym element stoi.
+ * brak obrotu, więc strona jest wybierana świadomie: pytamy, po której stronie muru —
+ * tuż przy nim — leży wnętrze pomieszczenia, i w przeciwną kierujemy trzonek
+ * (patrz `stronaWnetrza`).
  */
 
 /**
@@ -76,13 +77,57 @@ function zamknietyObrys(r: RoomShape): Point[] {
   return r.points.length > 0 ? [...r.points, r.points[0]] : [];
 }
 
-/** Środek ciężkości obrysu — punkt odniesienia dla „która strona jest wnętrzem". */
+/**
+ * Średnia wierzchołków obrysu — ZGRUBNY punkt odniesienia, używany już tylko wtedy, gdy
+ * lokalny test strony nie rozstrzyga (patrz `stronaWnetrza`).
+ *
+ * Nie jest to „środek pomieszczenia" i nie wolno go tak traktować: dla wieloboku
+ * wklęsłego potrafi wypaść POZA obrysem. Ale nawet punkt policzony tak, żeby na pewno
+ * leżał wewnątrz, nie odpowiedziałby na pytanie o stronę ściany — przy obrysie w kształcie
+ * litery L ściana wklęsła ma wnętrze po tej samej stronie, po której leży reszta
+ * pomieszczenia widziana „zza rogu". Pytanie o stronę jest z natury LOKALNE.
+ */
 function srodek(points: Point[]): Point {
   const n = points.length || 1;
   return {
     x: points.reduce((s, p) => s + p.x, 0) / n,
     y: points.reduce((s, p) => s + p.y, 0) / n,
   };
+}
+
+/**
+ * O ile jednostek planu odsuwamy się od linii ściany, żeby zapytać `pointInPolygon`,
+ * która strona jest wnętrzem. Jedna jednostka to 5 cm przy skali rysowania od zera,
+ * więc to ćwierć centymetra: dość, żeby wyjść z niejednoznaczności „punkt dokładnie na
+ * krawędzi", i o rzędy wielkości za mało, żeby przeskoczyć na drugą stronę czegokolwiek,
+ * co jest pomieszczeniem — najwęższy sensowny korytarz ma tych jednostek dwadzieścia.
+ */
+const PROBKA_WNETRZA = 0.05;
+
+/**
+ * Która z dwóch normalnych ściany wskazuje NA ZEWNĄTRZ pomieszczenia — czyli w którą
+ * stronę ma patrzeć trzonek symbolu.
+ *
+ * Pytanie jest lokalne i tak właśnie jest tu zadane: odsuwamy się od punktu na ścianie
+ * o ułamek jednostki w obie strony i sprawdzamy, który z tych dwóch punktów wpada do
+ * obrysu. To odpowiada wprost na pytanie, które naprawdę stawia rysunek — po której
+ * stronie muru ma wylądować symbol — i dlatego działa też dla obrysów wklęsłych,
+ * w których żaden pojedynczy „środek" nie wystarcza (patrz komentarz przy `srodek`).
+ *
+ * `null`, gdy test nie rozstrzyga, a to znaczy jedną z dwóch rzeczy i obie są prawdziwymi
+ * układami, nie błędami: ŻADEN z punktów nie wpada do obrysu (trafiona ściana leży kawałek
+ * od krawędzi pomieszczenia — ściany i obrysy rysuje się osobno i nie muszą się pokrywać),
+ * albo OBA wpadają (ściana biegnie wewnątrz pomieszczenia, a nie po jego granicy).
+ * W obu przypadkach nie ma lokalnej przesłanki i decyduje dotychczasowa reguła.
+ */
+function stronaWnetrza(punkt: Point, n1: Point, n2: Point, pokoj: RoomShape): Point | null {
+  const wKierunku = (n: Point) =>
+    pointInPolygon({ x: punkt.x + n.x * PROBKA_WNETRZA, y: punkt.y + n.y * PROBKA_WNETRZA }, pokoj.points);
+  const w1 = wKierunku(n1);
+  const w2 = wKierunku(n2);
+  if (w1 === w2) return null;
+  // Trzonek idzie W ŚCIANĘ, czyli w stronę, po której pomieszczenia NIE ma.
+  return w1 ? n2 : n1;
 }
 
 /**
@@ -159,6 +204,18 @@ export function snapToWall(
    * niegroźne.
    */
   const pokoj = roomShapes.find((r) => pointInPolygon(p, r.points)) ?? trafienie.pokoj;
+
+  /**
+   * NAJPIERW test lokalny — jedyny, który działa dla pomieszczeń wklęsłych.
+   *
+   * Reguła niżej („uciekaj od średniej wierzchołków obrysu") zakłada milcząco, że
+   * pomieszczenie jest wypukłe. Dla obrysu w kształcie litery L ta średnia potrafi wypaść
+   * poza obrysem i symbol lądował wtedy po DRUGIEJ stronie muru, w sąsiednim pokoju —
+   * z zachowaną starą nazwą w polu `room`, więc aplikacja meldowała potem „elementy
+   * zostały w starych pokojach". Wyłapane na przedpokoju w projekcie przykładowym.
+   */
+  const lokalnie = pokoj ? stronaWnetrza(trafienie.point, n1, n2, pokoj) : null;
+
   const odWnetrza = pokoj
     ? (() => {
         const c = srodek(pokoj.points);
@@ -168,7 +225,7 @@ export function snapToWall(
   const dot = (n: Point) => n.x * odWnetrza.x + n.y * odWnetrza.y;
   // Remis (klik dokładnie na linii ściany, bez pomieszczenia) rozstrzyga `n1` — tak
   // jak dotąd, bo nie ma wtedy żadnej przesłanki, która strona jest wnętrzem.
-  const wybrana = dot(n1) >= dot(n2) ? n1 : n2;
+  const wybrana = lokalnie ?? (dot(n1) >= dot(n2) ? n1 : n2);
 
   const rotation = obrotDlaKierunku(wybrana.x, wybrana.y);
   return { x: trafienie.point.x, y: trafienie.point.y, rotation: ((rotation % 360) + 360) % 360 };
