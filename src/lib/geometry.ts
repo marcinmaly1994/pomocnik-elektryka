@@ -177,3 +177,33 @@ export function punktWewnatrzWielokata(points: Point[]): Point | null {
   }
   return null;
 }
+
+/**
+ * Przesuwa KONIEC odcinka tak, żeby miał zadaną długość — z zachowaniem kierunku.
+ *
+ * Sedno wpisywania długości w trakcie rysowania: użytkownik klika z grubsza, a potem
+ * podaje liczbę. Zmienia się wyłącznie odległość; kąt odcinka zostaje dokładnie taki,
+ * jaki był, bo to on niesie intencję kliknięcia.
+ *
+ * Dwa wejścia, których interfejsem nie da się wywołać, a które i tak muszą być
+ * obsłużone, bo pochodzą z pola tekstowego i z podwójnego kliknięcia w to samo miejsce:
+ *  - odcinek zerowy — kierunku NIE MA z czego wyznaczyć. Zwracamy punkt bez zmian;
+ *    dzielenie przez zero dałoby `NaN` i rozjechało cały rysunek, a wyjątek wywróciłby
+ *    edytor w środku rysowania.
+ *  - długość niedodatnia albo nieskończona — to nie jest odcinek. Też bez zmian,
+ *    tak samo jak zachowuje się dziś pole grubości ściany przy bzdurnej wartości.
+ *
+ * `dlugosc` jest w JEDNOSTKACH PLANU, nie w metrach. Przeliczenie ze skali należy do
+ * wywołującego — ta funkcja nie ma prawa wiedzieć, czy plan jest skalibrowany.
+ */
+export function przesunNaDlugosc(od: Point, doPunktu: Point, dlugosc: number): Point {
+  if (!Number.isFinite(dlugosc) || dlugosc <= 0) return doPunktu;
+
+  const dx = doPunktu.x - od.x;
+  const dy = doPunktu.y - od.y;
+  const obecna = Math.hypot(dx, dy);
+  if (obecna === 0) return doPunktu;
+
+  const k = dlugosc / obecna;
+  return { x: od.x + dx * k, y: od.y + dy * k };
+}

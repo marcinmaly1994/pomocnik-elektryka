@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata } from "./geometry";
+import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata, przesunNaDlugosc } from "./geometry";
 
 describe("snap", () => {
   it("zaokrągla do siatki 20", () => {
@@ -316,5 +316,52 @@ describe("powierzchnia dla kształtów innych niż prostokąt", () => {
     // wynik ujemny i dopiero wartość bezwzględna czyni z niego powierzchnię.
     const trapez = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 8, y: 4 }, { x: 2, y: 4 }];
     expect(polygonAreaM2([...trapez].reverse(), MPU)).toBeCloseTo(polygonAreaM2(trapez, MPU)!, 10);
+  });
+});
+
+/**
+ * Korekta długości ostatniego rysowanego odcinka.
+ *
+ * Interfejs pozwala klikać z grubsza, a potem wpisać liczbę — i to tutaj siedzi
+ * cała matematyka tej operacji, razem z przypadkami, których interfejsem nie da się
+ * wywołać: dwa punkty w tym samym miejscu (kierunek nieokreślony) albo długość, która
+ * przyszła z pola tekstowego jako `NaN`.
+ */
+describe("przesunNaDlugosc", () => {
+  it("skraca odcinek, zachowując kierunek", () => {
+    // Odcinek poziomy o długości 10 skrócony do 4 — koniec zostaje na tej samej osi.
+    expect(przesunNaDlugosc({ x: 0, y: 0 }, { x: 10, y: 0 }, 4)).toEqual({ x: 4, y: 0 });
+  });
+
+  it("wydłuża odcinek, zachowując kierunek", () => {
+    expect(przesunNaDlugosc({ x: 0, y: 0 }, { x: 0, y: 3 }, 12)).toEqual({ x: 0, y: 12 });
+  });
+
+  it("zachowuje kąt odcinka ukośnego", () => {
+    // 3-4-5: kierunek (0.6, 0.8), więc długość 10 daje (6, 8).
+    const wynik = przesunNaDlugosc({ x: 0, y: 0 }, { x: 3, y: 4 }, 10);
+    expect(wynik.x).toBeCloseTo(6);
+    expect(wynik.y).toBeCloseTo(8);
+  });
+
+  it("liczy od punktu POCZĄTKOWEGO, nie od środka układu", () => {
+    const wynik = przesunNaDlugosc({ x: 100, y: 50 }, { x: 110, y: 50 }, 2);
+    expect(wynik).toEqual({ x: 102, y: 50 });
+  });
+
+  it("odcinek zerowy zostaje bez zmian, zamiast dzielić przez zero", () => {
+    // Kierunku nie ma z czego wyznaczyć. Zwrócenie NaN rozjechałoby cały rysunek,
+    // a wyrzucenie wyjątku wywróciłoby edytor przy podwójnym kliknięciu w to samo miejsce.
+    const p = { x: 7, y: 7 };
+    expect(przesunNaDlugosc(p, { x: 7, y: 7 }, 5)).toEqual(p);
+  });
+
+  it("długość nie-dodatnia albo nieliczbowa zostawia punkt bez zmian", () => {
+    const od = { x: 0, y: 0 };
+    const doP = { x: 10, y: 0 };
+    expect(przesunNaDlugosc(od, doP, 0)).toEqual(doP);
+    expect(przesunNaDlugosc(od, doP, -3)).toEqual(doP);
+    expect(przesunNaDlugosc(od, doP, Number.NaN)).toEqual(doP);
+    expect(przesunNaDlugosc(od, doP, Number.POSITIVE_INFINITY)).toEqual(doP);
   });
 });
