@@ -67,12 +67,23 @@ export function KopiaZapasowa() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
+          {/* `aria-label` NIE jest tu powtórzeniem napisu: poniżej `sm` sam napis
+              znika (`hidden sm:inline`), więc bez tego nazwa dostępnościowa spadłaby
+              do `title`, a przycisk nazywałby się całym zdaniem z podpowiedzi. Tak
+              nazywa się tak samo przy każdej szerokości — również dla czytnika ekranu
+              i dla testów.
+
+              `whitespace-nowrap` pilnuje tego, co widać: przy długiej nazwie projektu
+              obok (np. „Przykład: mieszkanie 70 m²") wiersz robił się ciasny i etykieta
+              łamała się na dwie linie, spychając płótno o 48 px w dół — na telefonie,
+              gdzie rysunku widać i tak tylko ~180 px bez przewijania. */}
           <button
             type="button"
-            className="flex items-center gap-1.5 rounded px-2 py-0.5 text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            aria-label="Kopia zapasowa"
+            className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-2 py-0.5 text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
             title="Zapisz projekt do pliku albo przywróć go z pliku"
           >
-            <Archive size={14} aria-hidden="true" /> Kopia zapasowa
+            <Archive size={14} aria-hidden="true" /> <span className="hidden sm:inline">Kopia zapasowa</span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
