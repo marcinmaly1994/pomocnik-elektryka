@@ -4,7 +4,7 @@ import { DEFAULT_PRICES } from "@/lib/costs";
 import { INITIAL_ONBOARDING } from "@/lib/onboarding";
 import { WARUNKI_DOBORU_DOMYSLNE } from "@/lib/panel/norms";
 import type { ProjectPayload } from "@/store/useProjectStore";
-import { p, przyklejDoScian } from "./wspolne";
+import { p, przyklejDoScian, tworzE } from "./wspolne";
 
 /**
  * Gotowy projekt przykładowy — dom jednorodzinny 136 m² na dwóch kondygnacjach.
@@ -37,8 +37,9 @@ import { p, przyklejDoScian } from "./wspolne";
 export const PARTER = "f1";
 export const PIETRO = "f2";
 
-// eP/eG (z `tworzE`) nie są tu jeszcze potrzebne — ten przykład dostaje osprzęt
-// dopiero w kolejnych zadaniach, a `noUnusedLocals` nie wybacza deklaracji na zapas.
+// eG (piętro) wraca dopiero w zadaniu 7 — zadeklarowany bez użycia teraz znów
+// wywaliłby build, bo `noUnusedLocals` nie wybacza deklaracji na zapas.
+const eP = tworzE(PARTER);
 
 const GARAZ = "Garaż";
 const HOL = "Hol";
@@ -143,7 +144,76 @@ function otwory(): Opening[] {
 }
 
 function elementy(): InstallationElement[] {
-  return [];
+  return [
+    // ===================== PARTER =====================
+
+    // --- Hol (L: pas 1,5 m + przedsionek 2 × 3 m) ---
+    // Rozdzielnica i szafka zaraz za drzwiami, na ścianie przedsionka. Para łączników
+    // SCHODOWYCH: jeden przy wejściu, drugi na końcu korytarza — w domu to najbardziej
+    // typowe miejsce na taki układ.
+    eP("dom-rozdzielnica", "rozdzielnica", HOL, 3.2, 6.6),
+    eP("dom-szafka", "szafkaTeletech", HOL, 3.2, 5.4),
+    eP("dom-hol-gn", "gniazdko", HOL, 3.2, 7.6),
+    eP("dom-hol-sw", "wlacznikSchodowy", HOL, 4.8, 6.6),
+    eP("dom-hol-dzwonek", "dzwonek", HOL, 4.8, 5.4),
+    eP("dom-hol-lampa", "oswietlenie", HOL, 4, 6.2),
+    eP("dom-hol-zewn", "oswietlenieZewn", HOL, 4.7, 7.8, { note: "Nad wejściem" }),
+    eP("dom-kor-lampa", "oswietlenie", HOL, 7, 4.25),
+    eP("dom-kor-sw", "wlacznikSchodowy", HOL, 9.8, 4.25),
+    eP("dom-kor-gn", "gniazdko", HOL, 5.5, 3.7),
+    eP("dom-hol-dym", "czujnikDymu", HOL, 5.5, 4.6),
+
+    // --- Garaż ---
+    eP("dom-ev", "ladowarkaEV", GARAZ, 0.25, 1.5, { dedicated: true, note: "Ładowarka EV" }),
+    eP("dom-garaz-zewn", "oswietlenieZewn", GARAZ, 0.25, 0.6, { note: "Nad bramą" }),
+    eP("dom-garaz-gn1", "gniazdkoHerm", GARAZ, 0.25, 6.5),
+    eP("dom-garaz-gn2", "gniazdkoHerm", GARAZ, 2.75, 6.5),
+    eP("dom-garaz-sw", "wlacznik", GARAZ, 2.75, 3.3),
+    eP("dom-garaz-lampa1", "oswietlenie", GARAZ, 1.5, 2),
+    eP("dom-garaz-lampa2", "oswietlenie", GARAZ, 1.5, 6),
+
+    // --- Kuchnia (mokra) ---
+    eP("dom-kuch-gn1", "gniazdko", KUCHNIA, 3.5, 0.25, { gangs: 2 }),
+    eP("dom-kuch-gn2", "gniazdko", KUCHNIA, 4.5, 0.25, { gangs: 2 }),
+    eP("dom-kuch-led", "tasmaLed", KUCHNIA, 5.25, 0.8, { note: "Podszafkowa" }),
+    eP("dom-kuch-agd1", "wypustAGD", KUCHNIA, 5.25, 1.8, { dedicated: true, note: "Zmywarka" }),
+    eP("dom-kuch-agd2", "wypustAGD", KUCHNIA, 5.25, 2.8, { dedicated: true, note: "Piekarnik" }),
+    eP("dom-kuch-plyta", "gniazdko400", KUCHNIA, 3.25, 1.5, { dedicated: true, note: "Płyta indukcyjna" }),
+    eP("dom-kuch-sw", "wlacznik", KUCHNIA, 3.25, 3.2),
+    eP("dom-kuch-lampa", "oswietlenie", KUCHNIA, 4.3, 1.8),
+
+    // --- Salon ---
+    eP("dom-salon-gn1", "gniazdko", SALON, 6.2, 0.25, { gangs: 2 }),
+    eP("dom-salon-roleta", "roleta", SALON, 7.2, 0.25),
+    eP("dom-salon-gn2", "gniazdko", SALON, 8.2, 0.25),
+    eP("dom-salon-tv", "rtvsat", SALON, 9.2, 0.25),
+    eP("dom-salon-gn3", "gniazdko", SALON, 9.75, 1.5, { gangs: 2 }),
+    eP("dom-salon-lan", "rj45", SALON, 9.75, 2.4),
+    eP("dom-salon-gn4", "gniazdko", SALON, 5.75, 2.4),
+    eP("dom-salon-sw", "sciemniacz", SALON, 7.9, 3.25),
+    eP("dom-salon-lampa1", "oswietlenie", SALON, 7, 1.4),
+    eP("dom-salon-lampa2", "oswietlenie", SALON, 8.6, 2.2),
+
+    // --- Łazienka na parterze (mokra: hermetyczne, łącznik dwubiegunowy, strefy) ---
+    eP("dom-laz-went", "wentylator", LAZIENKA_D, 6.7, 5.25),
+    eP("dom-laz-gn", "gniazdkoHerm", LAZIENKA_D, 6.75, 6.2),
+    eP("dom-laz-sw", "wlacznikDwubiegunowy", LAZIENKA_D, 6.75, 7.1),
+    eP("dom-laz-lampa", "oswietlenie", LAZIENKA_D, 5.9, 6.6),
+    eP("dom-laz-umywalka", "umywalka", LAZIENKA_D, 5.4, 5.6),
+    eP("dom-laz-prysznic", "prysznic", LAZIENKA_D, 5.5, 7.5),
+
+    // --- Pralnia (gospodarcza) ---
+    eP("dom-pralka", "wypustAGD", PRALNIA, 8.25, 6, { dedicated: true, note: "Pralka" }),
+    eP("dom-pralnia-gn", "gniazdkoHerm", PRALNIA, 8.25, 7),
+    eP("dom-pralnia-sw", "wlacznik", PRALNIA, 7.25, 5.6),
+    eP("dom-pralnia-lampa", "oswietlenie", PRALNIA, 7.6, 6.5),
+
+    // --- Kotłownia (gospodarcza) ---
+    eP("dom-kociol", "wypustAGD", KOTLOWNIA, 9.75, 6, { dedicated: true, note: "Kocioł gazowy" }),
+    eP("dom-kotlownia-gn", "gniazdkoHerm", KOTLOWNIA, 9.75, 7),
+    eP("dom-kotlownia-sw", "wlacznik", KOTLOWNIA, 8.75, 5.6),
+    eP("dom-kotlownia-lampa", "oswietlenie", KOTLOWNIA, 9.1, 6.5),
+  ];
 }
 
 export function zbudujProjektDom(): ProjectPayload {

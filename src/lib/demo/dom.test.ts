@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { zbudujProjektDom } from "./dom";
 import { polygonAreaM2 } from "@/lib/geometry";
 import { MANUAL_DRAW_SCALE_MPU } from "@/lib/design";
+import { computeCircuits } from "@/lib/panel/circuits";
 
 describe("dom — szkielet", () => {
   const payload = zbudujProjektDom();
@@ -32,6 +33,37 @@ describe("dom — szkielet", () => {
       const w = payload.draft.walls.find((x) => x.id === o.wallId);
       expect(w, `otwór ${o.id}`).toBeTruthy();
       expect(w!.floor, `otwór ${o.id}`).toBe(o.floor);
+    }
+  });
+});
+
+describe("dom — parter", () => {
+  const payload = zbudujProjektDom();
+  const naParterze = payload.draft.elements.filter((e) => e.floor === "f1");
+
+  it("ma rozdzielnicę główną i pięćdziesiąt elementów", () => {
+    expect(naParterze.length).toBe(50);
+    expect(naParterze.some((e) => e.type === "rozdzielnica")).toBe(true);
+  });
+
+  it("ładowarka EV, kocioł i pralka są dedykowane", () => {
+    for (const id of ["demo-e-dom-ev", "demo-e-dom-kociol", "demo-e-dom-pralka"]) {
+      const el = naParterze.find((e) => e.id === id);
+      expect(el, id).toBeTruthy();
+      expect(el!.dedicated, id).toBe(true);
+    }
+  });
+
+  it("kotłownia i pralnia NIE dzielą obwodu gniazd z pokojami", () => {
+    const rs = payload.draft.roomShapes.filter((r) => r.floor === "f1");
+    const obwody = computeCircuits(naParterze, rs);
+    const gospodarcze = new Set(["Kotłownia", "Pralnia"]);
+    const mieszkalne = new Set(["Salon"]);
+    for (const c of obwody) {
+      const pokoje = new Set(c.elements.map((e) => e.room));
+      const maGosp = [...pokoje].some((x) => gospodarcze.has(x));
+      const maMieszk = [...pokoje].some((x) => mieszkalne.has(x));
+      expect(maGosp && maMieszk, `obwód ${c.name} miesza gospodarcze z pokojami`).toBe(false);
     }
   });
 });
