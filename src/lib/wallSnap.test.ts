@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { InstallationElement, RoomShape, Wall } from "@/types";
 import { przeliczPrzyscienneDoSkali, przyscienny, punktPrzyscienny, snapElementToWall, snapToWall } from "./wallSnap";
 import { montazPrzyscienny, zasiegPrzyscienny } from "./glyphs";
+import { pointInPolygon } from "./geometry";
 
 /** Pokoj 200 x 200 z lewym gornym rogiem w (0,0); srodek w (100,100). */
 const POKOJ: RoomShape = {
@@ -14,6 +15,30 @@ const POKOJ: RoomShape = {
     { x: 200, y: 0 },
     { x: 200, y: 200 },
     { x: 0, y: 200 },
+  ],
+};
+
+/**
+ * Pokoj w ksztalcie LITERY L — przedpokoj z korytarzem, tak jak w projekcie
+ * przykladowym. Gorne ramie to pas y od 70 do 100 na calej szerokosci, lewe ramie
+ * to slup x od 40 do 70 ponizej niego.
+ *
+ * SREDNIA WIERZCHOLKOW wypada tu w (83,3; 103,3) — a ten punkt lezy POZA obrysem,
+ * bo na wysokosci y = 103 pomieszczenie konczy sie na x = 70. Dokladnie o to w tych
+ * testach chodzi.
+ */
+const POKOJ_L: RoomShape = {
+  id: "r2",
+  floor: "f1",
+  name: "Przedpokój",
+  color: "#7C5CBF",
+  points: [
+    { x: 40, y: 70 },
+    { x: 140, y: 70 },
+    { x: 140, y: 100 },
+    { x: 70, y: 100 },
+    { x: 70, y: 140 },
+    { x: 40, y: 140 },
   ],
 };
 
@@ -64,6 +89,45 @@ describe("snapToWall — przyklejanie", () => {
     // Plan narysowany samymi obrysami pokoi jest w tej aplikacji pelnoprawny.
     const w = snapToWall({ x: 50, y: 6 }, [], [POKOJ], 20)!;
     expect(w.y).toBeCloseTo(0, 6);
+  });
+});
+
+describe("snapToWall — pomieszczenie WKLESLE", () => {
+  /**
+   * Zgloszenie: w projekcie przykladowym dwa elementy przedpokoju ladowaly w sasiednim
+   * Pokoju, a aplikacja witala uzytkownika banerem "elementy zostaly w starych pokojach".
+   *
+   * Strona, w ktora ma patrzec trzonek, byla wybierana wzgledem SREDNIEJ WIERZCHOLKOW
+   * obrysu. Dla wieloboku wypuklego ta srednia lezy w srodku i wszystko sie zgadza, ale
+   * dla wkleslego potrafi wypasc poza pomieszczeniem — a wtedy dla scian lezacych po tej
+   * samej stronie co ow falszywy srodek kierunek wychodzi ODWROTNIE i symbol jest
+   * odsuwany na druga strone muru.
+   *
+   * Testy pytaja o rzecz, ktora naprawde ma byc prawda: symbol po przyklejeniu LEZY
+   * w swoim pomieszczeniu. Nie o to, jak dokladnie liczony jest punkt odniesienia.
+   */
+  const gdzieLaduje = (x: number, y: number) => {
+    const w = snapElementToWall({ x, y }, [], [POKOJ_L], 20, "gniazdko", 1)!;
+    expect(w).not.toBeNull();
+    return { x: w.x, y: w.y };
+  };
+
+  it("przy WKLESLEJ scianie pionowej symbol zostaje w pomieszczeniu", () => {
+    // Sciana x = 70 na odcinku y od 100 do 140: wnetrze jest po LEWEJ.
+    // Falszywy srodek (83,3; 103,3) lezy po prawej, wiec symbol jechal na prawo.
+    expect(pointInPolygon(gdzieLaduje(64, 130), POKOJ_L.points)).toBe(true);
+  });
+
+  it("przy WKLESLEJ scianie poziomej symbol zostaje w pomieszczeniu", () => {
+    // Sciana y = 100 na odcinku x od 70 do 140: wnetrze jest POWYZEJ.
+    expect(pointInPolygon(gdzieLaduje(110, 94), POKOJ_L.points)).toBe(true);
+  });
+
+  it("sciany WYPUKLE tego samego pokoju dzialaja jak dotad", () => {
+    expect(pointInPolygon(gdzieLaduje(100, 76), POKOJ_L.points)).toBe(true); // gorna
+    expect(pointInPolygon(gdzieLaduje(46, 120), POKOJ_L.points)).toBe(true); // lewa
+    expect(pointInPolygon(gdzieLaduje(134, 85), POKOJ_L.points)).toBe(true); // prawa
+    expect(pointInPolygon(gdzieLaduje(55, 134), POKOJ_L.points)).toBe(true); // dolna
   });
 });
 

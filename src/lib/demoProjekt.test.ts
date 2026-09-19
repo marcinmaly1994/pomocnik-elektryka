@@ -43,10 +43,11 @@ describe("projekt przykładowy", () => {
     /**
      * Pole `room` to wolny tekst, a pozycję elementom nadaje tu `przyklejDoScian`, czyli
      * to samo przyciąganie co przy kliknięciu na planie. Te dwie rzeczy potrafią się
-     * rozjechać po cichu: `snapToWall` odsuwa symbol od ŚRODKA pomieszczenia liczonego
-     * jako średnia wierzchołków obrysu, a przy obrysie wklęsłym (przedpokój jest literą L)
-     * ten środek wypada poza pomieszczeniem — element bywa więc wypchnięty na drugą stronę
-     * muru, do sąsiedniego pokoju, zachowując starą nazwę w `room`.
+     * rozjechać po cichu i raz już się rozjechały: `snapToWall` wybierał stronę ściany
+     * względem średniej wierzchołków obrysu, a przy obrysie wklęsłym (przedpokój jest
+     * literą L) ta średnia wypada poza pomieszczeniem — dwa elementy przedpokoju lądowały
+     * więc za murem, w Pokoju, zachowując starą nazwę w `room`. Naprawione w `stronaWnetrza`
+     * (wallSnap.ts); ten test stoi tu, żeby rozjazd nie wrócił inną drogą.
      *
      * Skutek nie jest kosmetyczny: od pomieszczenia zależy podział na obwody i strefy
      * ochronne, a aplikacja wita wtedy użytkownika ostrzeżeniem „elementy zostały
