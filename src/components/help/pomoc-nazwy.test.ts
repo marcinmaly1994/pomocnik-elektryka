@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { KROKI } from "./HelpModal";
+import { KROKI, SKROTY } from "./HelpModal";
 import { RAIL_TOOLS } from "@/components/design/ToolRail";
 
 /**
@@ -39,5 +39,34 @@ describe("Pomoc odsyła do nazw, które naprawdę są w interfejsie", () => {
    *  test przechodziłby na pustej liście i nie pilnowałby niczego. */
   it("wyrażenie faktycznie wyłuskuje nazwy", () => {
     expect(nazwyWCudzyslowie('Narzędziem „Wstaw Element” zrób coś')).toEqual(["Wstaw Element"]);
+  });
+});
+
+/**
+ * Spis skrótów w Pomocy ma wymieniać te, które edytor naprawdę obsługuje.
+ *
+ * Cofanie działa od dawna — Ctrl/Cmd+Z, a z Shiftem ponawianie (patrz obsługa
+ * klawiatury w `DesignTab`, pokryta testem e2e w `design-ux-fixes.spec.ts`) — ale
+ * spis w Pomocy go NIE wymieniał. Wychodziło z tego najgorsze połączenie: funkcja
+ * jest, kosztowała pracę, a użytkownik dowiaduje się o niej tylko przypadkiem.
+ * Akurat ten skrót jest pierwszym, którego człowiek szuka po pomyłce.
+ */
+describe("Pomoc wymienia skróty, które edytor obsługuje", () => {
+  it("dokumentuje cofanie i ponawianie", () => {
+    const cofanie = SKROTY.find((s) => /ctrl.*z/i.test(s.klawisz) && !/shift/i.test(s.klawisz));
+    const ponawianie = SKROTY.find((s) => /shift/i.test(s.klawisz));
+
+    expect(cofanie, "brak skrótu cofania w spisie").toBeDefined();
+    expect(cofanie!.opis).toMatch(/cofa/i);
+    expect(ponawianie, "brak skrótu ponawiania w spisie").toBeDefined();
+    expect(ponawianie!.opis).toMatch(/ponaw|przywraca/i);
+  });
+
+  it("każdy skrót ma opis mówiący, co robi", () => {
+    expect(SKROTY.length).toBeGreaterThan(0);
+    for (const s of SKROTY) {
+      expect(s.klawisz.trim(), "pusty klawisz w spisie").not.toBe("");
+      expect(s.opis.trim().length, `skrót „${s.klawisz}” bez opisu`).toBeGreaterThan(3);
+    }
   });
 });

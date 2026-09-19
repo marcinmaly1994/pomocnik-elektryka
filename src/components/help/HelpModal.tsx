@@ -39,6 +39,25 @@ export const KROKI: { tytul: string; opis: string }[] = [
   },
 ];
 
+/**
+ * Skróty klawiszowe edytora — DANE, a nie wpisany ręcznie rząd `<li>`.
+ *
+ * Powód ten sam, co przy `KROKI` obok: spis w Pomocy ma odpowiadać temu, co
+ * aplikacja naprawdę robi, a lista wpisana wprost w JSX nie daje się o to zapytać.
+ * Pilnuje tego `pomoc-nazwy.test.ts`.
+ *
+ * `Ctrl` także na Macu, gdzie działa `Cmd` — pisanie obu wariantów w każdym wierszu
+ * rozdmuchałoby spis, a `Cmd` jest dla użytkownika Maca oczywistym odpowiednikiem.
+ */
+export const SKROTY: { klawisz: string; opis: string }[] = [
+  { klawisz: "Ctrl + Z", opis: "cofa ostatnią zmianę — także pojedynczy punkt w trakcie rysowania ściany" },
+  { klawisz: "Ctrl + Shift + Z", opis: "ponawia cofniętą zmianę" },
+  { klawisz: "R", opis: "obraca zaznaczony element albo otwór (drzwi) o 180°" },
+  { klawisz: "Delete", opis: "usuwa zaznaczenie" },
+  { klawisz: "Enter", opis: "zatwierdza rysowaną ścianę albo zaznaczony obszar" },
+  { klawisz: "Esc", opis: "anuluje bieżącą operację" },
+];
+
 function Key({ children }: { children: string }) {
   return (
     <span className="pe-mono rounded border border-border bg-white px-1.5 py-0.5 text-[11px] text-ink shadow-sm">
@@ -112,18 +131,11 @@ export function HelpModal({ open, onClose, onOtworzPrywatnosc }: HelpModalProps)
           <section>
             <h3 className="pe-display mb-2 text-[15px] text-ink">Przydatne skróty klawiszowe</h3>
             <ul className="space-y-1.5">
-              <li className="flex items-center gap-2">
-                <Key>R</Key> obraca zaznaczony element albo otwór (drzwi) o 180°
-              </li>
-              <li className="flex items-center gap-2">
-                <Key>Delete</Key> usuwa zaznaczenie
-              </li>
-              <li className="flex items-center gap-2">
-                <Key>Enter</Key> zatwierdza rysowaną ścianę albo zaznaczony obszar
-              </li>
-              <li className="flex items-center gap-2">
-                <Key>Esc</Key> anuluje bieżącą operację
-              </li>
+              {SKROTY.map((s) => (
+                <li key={s.klawisz} className="flex items-center gap-2">
+                  <Key>{s.klawisz}</Key> {s.opis}
+                </li>
+              ))}
               <li>Prawy przycisk myszy pokazuje menu z dalszymi opcjami (usuń, edytuj, obróć).</li>
             </ul>
           </section>
