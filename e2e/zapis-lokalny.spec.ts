@@ -111,7 +111,10 @@ test("gdy nie miesci sie tylko podklad, rysunek zostaje zapisany", async ({ page
 
   // Podklad wstawiamy przez zwykla sciezke aplikacji: wgranie pliku.
   const { makePng } = await import("./_png");
-  await page.setInputFiles('input[type="file"]', { name: "rzut.png", mimeType: "image/png", buffer: makePng(1200, 800) });
+  // Selektor musi mowic, KTORE pole na pliki — od czasu „Kopii zapasowej" sa w aplikacji dwa
+  // (rzut/podklad i plik kopii projektu). Samo `input[accept*="image"]` lapalo oba i wywracalo sie
+  // na trybie strict Playwrighta.
+  await page.setInputFiles('input[accept*="image"]', { name: "rzut.png", mimeType: "image/png", buffer: makePng(1200, 800) });
   // Po wgraniu aplikacja proponuje kolejno przyciecie i kalibracje skali — oba
   // pomijamy, bo ten test dotyczy zapisu, nie obrobki rzutu.
   for (const nazwa of ["Pomiń — użyj całego rzutu", "Pomiń — ustawię później"]) {

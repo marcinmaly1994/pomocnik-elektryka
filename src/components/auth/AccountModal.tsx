@@ -12,7 +12,7 @@ import {
   supaUpdateUser,
   type Session,
 } from "@/lib/supabase";
-import { downloadBlob, projectFileName } from "@/lib/pdf/download";
+import { zapiszKopie } from "@/lib/kopiaProjektu";
 
 export type AccountModalTab = "profil" | "ustawienia";
 
@@ -260,10 +260,13 @@ function UstawieniaTab({ session, onClose }: { session: Session; onClose: () => 
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
+  /** Ta sama kopia, co „Kopia zapasowa" w pasku projektu — jedna implementacja
+   *  (`lib/kopiaProjektu.ts`), dwa wejścia. Tutaj zostaje, bo w ustawieniach konta ma
+   *  wymowę RODO-wą („pobierz kopię swoich danych"); tam jest po to, żeby dało się
+   *  zabezpieczyć pracę BEZ konta. Dwie kopie tego samego kodu rozjechałyby się przy
+   *  pierwszej zmianie formatu pliku. */
   function exportData() {
-    const payload = getProjectPayload();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
-    downloadBlob(blob, projectFileName("projekt", projectName, "json"));
+    zapiszKopie(getProjectPayload(), projectName);
   }
 
   async function deleteAllCloudProjects() {

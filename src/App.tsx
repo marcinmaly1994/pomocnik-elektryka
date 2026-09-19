@@ -34,6 +34,7 @@ import { HelpModal } from "@/components/help/HelpModal";
 import { PasekPrzykladu } from "@/components/onboarding/PasekPrzykladu";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { KompletDialog } from "@/components/ui/KompletDialog";
+import { KopiaZapasowa } from "@/components/ui/KopiaZapasowa";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
@@ -796,6 +797,10 @@ export default function App() {
           <Folder size={15} className="text-slate-400" aria-hidden="true" />
           <span className="text-sm text-slate-400">Projekt:</span>
           <ProjectNameField />
+          {/* Operacje plikowe stoją przy NAZWIE projektu, bo dotyczą projektu jako
+              całości — nie zakładki, na której akurat jesteśmy. Poza tym nagłówek jest
+              już ciasny (patrz komentarz o 375 px wyżej), a ten rząd ma miejsce. */}
+          <KopiaZapasowa />
         </div>
         {/* Bez widocznego suwaka: to pasek nawigacji, a nie okno z treścią. Że da
             się przewinąć, widać po przyciętej karcie następnego etapu — tak samo
