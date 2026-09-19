@@ -92,6 +92,8 @@ import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
 import { PoleWymiarowProstokata } from "@/components/design/PoleWymiarowProstokata";
 import { DlugosciOdcinkowSciany } from "@/components/design/DlugosciOdcinkowSciany";
+import { PodpowiedzPelnyEkran } from "@/components/design/PodpowiedzPelnyEkran";
+import { zapamietajOdrzucenie } from "@/lib/podpowiedzPelnyEkran";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
@@ -759,6 +761,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  Zostawienie starego powiększenia dawało rysunek wielkości znaczka w rogu
    *  pustego ekranu, czyli dokładne przeciwieństwo tego, po co się tu wchodzi. */
   const przelaczPelnyEkran = useCallback(() => {
+    // Kto raz użył pełnego ekranu, ten wie, że istnieje — podpowiedź na wąskim
+    // ekranie nie ma po co wracać. Zapis TUTAJ, a nie w samej podpowiedzi, bo
+    // w tryb wchodzi się trzema drogami: ikoną w pasku, skrótem `F` i podpowiedzią.
+    zapamietajOdrzucenie();
     setPelnyEkran((v) => !v);
     setZoomReczny(false);
     setChromeLewo(false);
@@ -3256,6 +3262,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           className={pelnyEkran ? "h-full w-full p-2" : "min-w-0 md:min-w-[320px]"}
           style={pelnyEkran ? undefined : { flex: "1 1 480px" }}
         >
+          {/* Podpowiedź o pełnym ekranie stoi TU, tuż nad płótnem, którego dotyczy —
+              i tylko poza pełnym ekranem, gdzie byłaby zaprzeczeniem samej siebie.
+              O wąskim ekranie decyduje `sm:hidden` w samym komponencie. */}
+          {!pelnyEkran && <PodpowiedzPelnyEkran onPelnyEkran={przelaczPelnyEkran} />}
           <DesignCanvas
             stageRef={stageRef}
             anulujPodgladRef={anulujPodgladRef}
