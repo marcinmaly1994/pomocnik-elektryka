@@ -45,7 +45,7 @@ export function PasekPrzykladu() {
         </DialogTrigger>
         <DialogContent title="Zacząć własny projekt?">
           <p className="mb-4 text-sm text-slate-600">
-            Przykładowe mieszkanie zniknie i wrócisz do pustego planu. Możesz je wczytać ponownie w każdej chwili.
+            Przykład zniknie i wrócisz do pustego planu. Możesz go wczytać ponownie w każdej chwili.
           </p>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>
