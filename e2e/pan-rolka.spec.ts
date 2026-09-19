@@ -96,7 +96,7 @@ test("przesuwanie rolką nie stawia elementu ani nie rysuje", async ({ page }) =
 
   await page.waitForTimeout(900); // debounce autozapisu
   const zapisane = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     if (!raw) return { elementy: 0, sciany: 0, pomieszczenia: 0 };
     const d = JSON.parse(raw);
     return { elementy: d.draft.elements.length, sciany: d.draft.walls.length, pomieszczenia: d.draft.roomShapes.length };
@@ -173,7 +173,7 @@ test("lewy przycisk nadal stawia element — zabezpieczenie rolki nie zablokowa�
 
   await page.waitForTimeout(900);
   const ile = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return raw ? JSON.parse(raw).draft.elements.length : 0;
   });
   expect(ile).toBe(1);

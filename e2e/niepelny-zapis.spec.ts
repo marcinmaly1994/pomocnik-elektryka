@@ -19,14 +19,14 @@ async function przykladZapisany(page: Page) {
   await expect(page.getByRole("button", { name: "Rozdzielnica", exact: true })).toBeVisible();
   // autozapis ma zdążyć zapisać projekt, bo to jego treść zaraz okroimy
   await expect
-    .poll(() => page.evaluate(() => !!localStorage.getItem("pomocnikelektryka_projekt_autosave")))
+    .poll(() => page.evaluate(() => !!localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))))
     .toBe(true);
 }
 
 /** Usuwa jedno pole z zapisanego projektu i wczytuje aplikację od nowa. */
 async function bezPola(page: Page, pole: string) {
   await page.evaluate((k) => {
-    const K = "pomocnikelektryka_projekt_autosave";
+    const K = "pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy");
     const a = JSON.parse(localStorage.getItem(K)!);
     delete a.docHeader[k];
     localStorage.setItem(K, JSON.stringify(a));
@@ -51,7 +51,7 @@ test("zapis bez pola „obiekt” w nagłówku wczytuje się normalnie", async (
 test("zapis bez całego nagłówka dokumentów też się wczytuje", async ({ page }) => {
   await przykladZapisany(page);
   await page.evaluate(() => {
-    const K = "pomocnikelektryka_projekt_autosave";
+    const K = "pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy");
     const a = JSON.parse(localStorage.getItem(K)!);
     delete a.docHeader;
     localStorage.setItem(K, JSON.stringify(a));

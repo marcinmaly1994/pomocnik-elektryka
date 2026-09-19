@@ -26,7 +26,7 @@ async function swiezyProjekt(page: Page) {
 }
 
 async function otworzMenuKopii(page: Page) {
-  await page.getByRole("button", { name: "Kopia zapasowa" }).click();
+  await page.getByRole("button", { name: "Projekty" }).click();
 }
 
 test("kopię można zapisać i przywrócić bez zakładania konta", async ({ page }) => {
@@ -85,7 +85,7 @@ test("wskazanie niewłaściwego pliku mówi o tym wprost i nie rusza projektu", 
 });
 
 /**
- * Na telefonie „Kopia zapasowa" nie może zawijać się na dwie linie.
+ * Na telefonie menu projektów nie może zawijać się na dwie linie.
  *
  * Warunkiem NIE jest sama szerokość ekranu, tylko DŁUGA NAZWA PROJEKTU obok. Przy
  * świeżym projekcie („Mój dom") przycisk mieści się w jednej linii nawet przy 375 px
@@ -101,14 +101,14 @@ test("wskazanie niewłaściwego pliku mówi o tym wprost i nie rusza projektu", 
 test.describe("wąski ekran", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test("„Kopia zapasowa” mieści się w jednej linii mimo długiej nazwy projektu", async ({ page }) => {
+  test("menu projektów mieści się w jednej linii mimo długiej nazwy projektu", async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
     await expect(page.getByText("To jest projekt przykładowy")).toBeVisible();
 
-    const kopia = page.getByRole("button", { name: "Kopia zapasowa" });
+    const kopia = page.getByRole("button", { name: "Projekty" });
     await expect(kopia).toBeVisible();
 
     const box = (await kopia.boundingBox())!;

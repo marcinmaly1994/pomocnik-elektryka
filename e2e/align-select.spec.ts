@@ -54,7 +54,7 @@ async function zaznaczRamka(page: Page) {
 async function gniazdka(page: Page) {
   await page.waitForTimeout(900);
   return page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!).draft;
+    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!).draft;
     return d.elements
       .filter((e: { type: string }) => e.type === "gniazdko")
       .map((e: { x: number; y: number; room: string }) => ({ x: Math.round(e.x), y: Math.round(e.y), room: e.room }));

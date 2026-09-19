@@ -56,7 +56,7 @@ async function drawHorizontalWall(page: import("@playwright/test").Page) {
 
 async function projectState(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft;
   });
 }

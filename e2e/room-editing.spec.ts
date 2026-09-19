@@ -45,7 +45,7 @@ async function zoomAndBox(page: import("@playwright/test").Page) {
 
 async function roomPoints(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.roomShapes[0].points as { x: number; y: number }[];
   });
 }
@@ -97,7 +97,7 @@ test("dwuklik w nazwę pomieszczenia na planie pozwala ją zmienić", async ({ p
   await page.waitForTimeout(900);
 
   const name = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.roomShapes[0].name as string;
   });
   expect(name).toBe("Sypialnia testowa");
@@ -182,7 +182,7 @@ test("zaznaczanie obszarem nadal działa po dodaniu krawędzi klikalnej pomieszc
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
   const { box, zoom } = await zoomAndBox(page);
   const pos = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.elements[0] as { x: number; y: number };
   });
   const elAt = { x: box.x + pos.x * zoom, y: box.y + pos.y * zoom };
@@ -195,7 +195,7 @@ test("zaznaczanie obszarem nadal działa po dodaniu krawędzi klikalnej pomieszc
   await page.keyboard.press("r");
   await page.waitForTimeout(900);
   const rotation = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.elements[0].rotation ?? 0;
   });
   expect(rotation).toBe(90);

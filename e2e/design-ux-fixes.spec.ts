@@ -131,7 +131,7 @@ test("element da się przeciągnąć w narzędziu „Wstaw element”, bez prze�
   // Autozapis (600 ms debounce) — stąd czytamy pozycję postawionego elementu.
   await page.waitForTimeout(900);
   const przed = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return raw ? JSON.parse(raw).draft?.elements ?? [] : [];
   });
   expect(przed).toHaveLength(1);
@@ -147,7 +147,7 @@ test("element da się przeciągnąć w narzędziu „Wstaw element”, bez prze�
   await page.waitForTimeout(1200);
 
   const po = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return raw ? JSON.parse(raw).draft?.elements ?? [] : [];
   });
 

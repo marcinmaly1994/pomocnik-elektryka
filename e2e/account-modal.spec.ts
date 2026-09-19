@@ -77,7 +77,7 @@ test("dane wykonawcy z Profilu zapisują się do projektu (współdzielone z Pro
 
   await page.waitForTimeout(900); // debounce autozapisu
   const wykonawca = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).docHeader;
   });
   expect(wykonawca.wykonawca).toBe("Jan Kowalski");

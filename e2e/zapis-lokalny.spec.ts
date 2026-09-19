@@ -36,7 +36,14 @@ async function odmawiajZapisu(page: Page, odmawiaj: boolean) {
     if (wlacz) {
       w._oryginalnySetItem ??= localStorage.setItem.bind(localStorage);
       localStorage.setItem = (klucz: string, wartosc: string) => {
-        if (klucz.includes("projekt_autosave")) throw new DOMException("pelno", "QuotaExceededError");
+        // Odmawiamy zapisu SLOTU OTWARTEGO PROJEKTU, a nie dowolnego klucza z „projekt"
+        // w nazwie: obok leżą jeszcze indeks listy i wskaźnik bieżącego, a te mają się
+        // zapisywać normalnie — tak jak przy prawdziwym braku miejsca, gdzie nie mieści
+        // się duży projekt, a nie kilkubajtowy wpis listy.
+        const id = localStorage.getItem("pomocnikelektryka_projekt_biezacy");
+        if (id && klucz === `pomocnikelektryka_projekt_${id}`) {
+          throw new DOMException("pelno", "QuotaExceededError");
+        }
         w._oryginalnySetItem!(klucz, wartosc);
       };
     } else if (w._oryginalnySetItem) {
@@ -102,7 +109,8 @@ test("gdy nie miesci sie tylko podklad, rysunek zostaje zapisany", async ({ page
     const w = window as unknown as { _oryginalnySetItem?: Storage["setItem"] };
     w._oryginalnySetItem ??= localStorage.setItem.bind(localStorage);
     localStorage.setItem = (klucz: string, wartosc: string) => {
-      if (klucz.includes("projekt_autosave") && wartosc.includes("data:image")) {
+      const id = localStorage.getItem("pomocnikelektryka_projekt_biezacy");
+      if (id && klucz === `pomocnikelektryka_projekt_${id}` && wartosc.includes("data:image")) {
         throw new DOMException("pelno", "QuotaExceededError");
       }
       w._oryginalnySetItem!(klucz, wartosc);
@@ -111,7 +119,7 @@ test("gdy nie miesci sie tylko podklad, rysunek zostaje zapisany", async ({ page
 
   // Podklad wstawiamy przez zwykla sciezke aplikacji: wgranie pliku.
   const { makePng } = await import("./_png");
-  // Selektor musi mowic, KTORE pole na pliki — od czasu „Kopii zapasowej" sa w aplikacji dwa
+  // Selektor musi mowic, KTORE pole na pliki — od czasu wczytywania kopii projektu sa w aplikacji dwa
   // (rzut/podklad i plik kopii projektu). Samo `input[accept*="image"]` lapalo oba i wywracalo sie
   // na trybie strict Playwrighta.
   await page.setInputFiles('input[accept*="image"]', { name: "rzut.png", mimeType: "image/png", buffer: makePng(1200, 800) });
@@ -135,7 +143,7 @@ test("gdy nie miesci sie tylko podklad, rysunek zostaje zapisany", async ({ page
   await page.waitForTimeout(1200);
 
   const zapisane = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     const p = JSON.parse(raw ?? "{}");
     return { elementow: p.draft?.elements?.length ?? 0, podkladow: Object.keys(p.bgImages ?? {}).length };
   });

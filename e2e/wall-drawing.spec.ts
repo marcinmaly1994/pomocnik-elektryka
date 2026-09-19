@@ -101,7 +101,7 @@ test("ukończona ściana (Zakończ) zapisuje wszystkie postawione punkty", async
   await page.waitForTimeout(900);
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   expect(walls).toHaveLength(1);
@@ -134,7 +134,7 @@ test("Enter zatwierdza rysowaną ścianę tak samo jak przycisk Zakończ", async
 
   await expect(page.getByText(/Rysowanie ściany/)).toBeHidden();
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   expect(walls).toHaveLength(1);
@@ -155,7 +155,7 @@ test("PPM na płótnie w trakcie rysowania pokazuje „Zatwierdź ścianę” i 
 
   await expect(page.getByText(/Rysowanie ściany/)).toBeHidden();
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   expect(walls).toHaveLength(1);
@@ -180,7 +180,7 @@ test("grubość ustawiona przed rysowaniem trafia na zapisaną ścianę", async 
   await page.waitForTimeout(900);
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { thickness?: number }[];
   });
   expect(walls[0].thickness).toBe(20);
@@ -196,7 +196,7 @@ test("rysowanie ortogonalne wymusza kąt prosty względem poprzedniego punktu", 
   await page.waitForTimeout(900);
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   expect(walls).toHaveLength(1);
@@ -227,7 +227,7 @@ test("czwarty punkt ściany przyciąga się do narożnika domykającego prostok�
   await page.waitForTimeout(900);
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   expect(walls).toHaveLength(1);
@@ -256,7 +256,7 @@ test("czwarty punkt ściany NIE przyciąga się, gdy klik jest wyraźnie dalej o
   await page.waitForTimeout(900);
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   const [p0, , , p3] = walls[0].points;
@@ -286,7 +286,7 @@ test("kliknięcie blisko pierwszego punktu ściany przyciąga do niego i od razu
   await expect(page.getByRole("button", { name: "Zakończ" })).toBeHidden();
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   expect(walls).toHaveLength(1);
@@ -305,7 +305,7 @@ test("kliknięcie wyraźnie dalej od pierwszego punktu ściany NIE zamyka wielob
   await page.waitForTimeout(900);
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   const pts = walls[0].points;
@@ -322,7 +322,7 @@ test("zamknięcie wieloboku ściany wymaga co najmniej 3 postawionych punktów �
   await page.waitForTimeout(900);
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { points: { x: number; y: number }[] }[];
   });
   const pts = walls[0].points;

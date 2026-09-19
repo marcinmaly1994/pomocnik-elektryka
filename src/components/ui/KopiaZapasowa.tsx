@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Archive, Download, Upload } from "lucide-react";
+import { Archive, Download, FolderOpen, Upload } from "lucide-react";
 import { useProjectStore, type ProjectPayload } from "@/store/useProjectStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { czytajKopie, zapiszKopie } from "@/lib/kopiaProjektu";
@@ -24,7 +25,7 @@ import { czytajKopie, zapiszKopie } from "@/lib/kopiaProjektu";
  * jak „Nowy projekt" — z tą różnicą, że tu da się jeszcze zawrócić, bo plik leży na
  * dysku.
  */
-export function KopiaZapasowa() {
+export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void }) {
   const getProjectPayload = useProjectStore((s) => s.getProjectPayload);
   const loadProjectPayload = useProjectStore((s) => s.loadProjectPayload);
   const projectName = useProjectStore((s) => s.projectName);
@@ -79,14 +80,22 @@ export function KopiaZapasowa() {
               gdzie rysunku widać i tak tylko ~180 px bez przewijania. */}
           <button
             type="button"
-            aria-label="Kopia zapasowa"
+            aria-label="Projekty"
             className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-2 py-0.5 text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            title="Zapisz projekt do pliku albo przywróć go z pliku"
+            title="Lista projektów, zapis do pliku i odczyt z pliku"
           >
-            <Archive size={14} aria-hidden="true" /> <span className="hidden sm:inline">Kopia zapasowa</span>
+            <Archive size={14} aria-hidden="true" /> <span className="hidden sm:inline">Projekty</span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
+          {onOtworzListe && (
+            <>
+              <DropdownMenuItem onSelect={() => onOtworzListe()}>
+                <FolderOpen size={14} /> Moje projekty…
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem onSelect={() => zapiszKopie(getProjectPayload(), projectName)}>
             <Download size={14} /> Zapisz kopię do pliku
           </DropdownMenuItem>

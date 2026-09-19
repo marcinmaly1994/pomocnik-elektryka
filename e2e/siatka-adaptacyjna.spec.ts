@@ -87,7 +87,7 @@ test("przybliżanie zagęszcza siatkę, a przyciąganie idzie dokładnie za nią
   await page.waitForTimeout(900); // debounce autozapisu
 
   const punkty = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     if (!raw) return [] as { x: number; y: number }[];
     const obrysy = JSON.parse(raw).draft.roomShapes as { points: { x: number; y: number }[] }[];
     return obrysy.flatMap((o) => o.points);

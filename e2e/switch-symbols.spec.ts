@@ -52,7 +52,7 @@ test("symbole łączników: biblioteka i plan", async ({ page }) => {
   // „nie znaleziono komórki" zamiast jasnej informacji, że kliknięcia nie trafiły
   await page.waitForTimeout(900); // debounce autozapisu
   const placed = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return raw ? JSON.parse(raw).draft.elements.map((e: { type: string }) => e.type) : [];
   });
   expect(placed).toEqual([

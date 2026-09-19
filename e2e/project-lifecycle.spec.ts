@@ -35,7 +35,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
   await expect(page.getByRole("button", { name: /Dom Kowalskiego/ })).toBeVisible();
   await page.waitForTimeout(900); // debounce autozapisu
   const before = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave") || "{}")
+    JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy")) || "{}")
   );
   expect(before.draft.elements.length).toBe(4);
   expect(before.projectName).toBe("Dom Kowalskiego");
@@ -48,7 +48,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
   await expect(page.getByRole("button", { name: /Mój dom/ })).toBeVisible();
   await page.waitForTimeout(900);
   const after = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave") || "{}")
+    JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy")) || "{}")
   );
   expect(after.draft.elements.length).toBe(0);
   expect(after.projectName).toBe("Mój dom");
@@ -56,7 +56,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
   // najważniejsze: po odświeżeniu projekt NIE wraca
   await page.reload();
   const afterReload = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave") || "{}")
+    JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy")) || "{}")
   );
   expect(afterReload.draft.elements.length).toBe(0);
   await expect(page.getByRole("button", { name: /Mój dom/ })).toBeVisible();
@@ -77,7 +77,7 @@ test("Nowy projekt czyści plan, nazwę i autozapis; przetrwa odświeżenie", as
   await page.getByRole("button", { name: "Anuluj" }).click();
   await page.waitForTimeout(900);
   const afterCancel = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave") || "{}")
+    JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy")) || "{}")
   );
   expect(afterCancel.draft.elements.length).toBe(1);
 });
