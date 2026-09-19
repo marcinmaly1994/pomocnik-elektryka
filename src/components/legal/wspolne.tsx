@@ -22,11 +22,16 @@ import { AlertTriangle, ShieldCheck } from "lucide-react";
 export const USLUGODAWCA = {
   /** Imię i nazwisko albo nazwa działalności wraz z NIP-em. */
   nazwa: "[imię i nazwisko albo nazwa firmy prowadzącej serwis]",
-  /** Adres, pod który realnie trafi „proszę o usunięcie moich danych" i reklamacja. */
-  email: "[adres e-mail do kontaktu]",
-  /** Region serwerów Supabase: Supabase → Settings → General → Region. Od tego zależy,
-   *  czy dane konta w ogóle opuszczają Europejski Obszar Gospodarczy. */
-  regionDanych: "[region serwerów bazy danych, np. Frankfurt (UE)]",
+  /** Adres, pod który realnie trafi „proszę o usunięcie moich danych" i reklamacja.
+   *  Nie jest to skrzynka, tylko przekierowanie (Cloudflare Email Routing) na prywatny
+   *  adres — z punktu widzenia czytelnika bez różnicy, ale warto wiedzieć, że odpowiedź
+   *  wyjdzie z innego adresu, dopóki nie dojdzie prawdziwa skrzynka. */
+  email: "kontakt@pomocnikelektryka.pl",
+  /** Region serwerów Supabase (Supabase → Settings → General → Region). Irlandia leży
+   *  w Europejskim Obszarze Gospodarczym, więc dane konta i projekty go NIE opuszczają —
+   *  i dokładnie to mówi akapit o przekazywaniu danych w polityce. Zmiana regionu na
+   *  pozaeuropejski wymagałaby przepisania także tamtego akapitu. */
+  regionDanych: "West EU (Irlandia)",
 } as const;
 
 /** Czy dokumenty mają jeszcze nieuzupełnione miejsca. */
@@ -66,6 +71,27 @@ export function Sekcja({
 export function DoUzupelnienia({ children }: { children: string }) {
   if (!children.startsWith("[")) return <>{children}</>;
   return <mark className="rounded bg-[#FDF0E4] px-1 py-0.5 text-[12px] font-semibold text-[#9A5B26]">{children}</mark>;
+}
+
+/**
+ * Adres kontaktowy: dopóki go nie ma — podświetlone miejsce do uzupełnienia, a gdy
+ * jest — odnośnik `mailto:`.
+ *
+ * To nie ozdoba. Oba dokumenty każą pisać pod ten adres w sprawach, które mają
+ * TERMIN: usunięcie danych i reklamacja rozpatrywana w 14 dni. Adres, który trzeba
+ * ręcznie przepisać, zniechęca dokładnie w tym momencie, w którym zależy nam, żeby
+ * wiadomość jednak wyszła.
+ */
+export function AdresKontaktowy() {
+  if (USLUGODAWCA.email.startsWith("[")) return <DoUzupelnienia>{USLUGODAWCA.email}</DoUzupelnienia>;
+  return (
+    <a
+      href={`mailto:${USLUGODAWCA.email}`}
+      className="text-blueprint underline decoration-blueprint/40 underline-offset-2 hover:decoration-blueprint"
+    >
+      {USLUGODAWCA.email}
+    </a>
+  );
 }
 
 /** Ostrzeżenie na górze niedokończonego dokumentu. Treść mówi wprost, czego brakuje

@@ -1,5 +1,5 @@
 import { Cookie, Database, HardDrive, Mail, ShieldCheck, Trash2 } from "lucide-react";
-import { BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja, USLUGODAWCA } from "./wspolne";
+import { AdresKontaktowy, BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja, USLUGODAWCA } from "./wspolne";
 
 /**
  * Polityka prywatności — obowiązek informacyjny z art. 13 RODO.
@@ -117,10 +117,12 @@ export function PolitykaPrywatnosci() {
             </li>
           </ul>
           <p>
-            Cloudflare i Resend są dostawcami spoza Europejskiego Obszaru Gospodarczego, więc dane mogą być
-            przekazywane poza EOG — na podstawie standardowych klauzul umownych zatwierdzonych przez Komisję
-            Europejską. Poza tymi trzema dostawcami nie udostępniamy danych nikomu; nie trafiają do reklamodawców
-            ani do pośredników.
+            <strong className="text-ink">Twoje konto i projekty leżą na serwerach w Irlandii</strong>, czyli
+            w Europejskim Obszarze Gospodarczym — nie opuszczają go. Cloudflare i Resend są natomiast dostawcami
+            spoza EOG, więc obsługiwane przez nich dane (techniczne dane połączenia oraz adres e-mail przy wysyłce
+            wiadomości) mogą być przekazywane poza EOG — na podstawie standardowych klauzul umownych zatwierdzonych
+            przez Komisję Europejską. Poza tymi trzema dostawcami nie udostępniamy danych nikomu; nie trafiają do
+            reklamodawców ani do pośredników.
           </p>
         </Sekcja>
 
@@ -137,7 +139,7 @@ export function PolitykaPrywatnosci() {
         <Sekcja ikona={Mail} tytul="Twoje prawa i kontakt">
           <p>
             Administratorem twoich danych jest <DoUzupelnienia>{USLUGODAWCA.nazwa}</DoUzupelnienia>. W sprawach
-            dotyczących danych pisz na <DoUzupelnienia>{USLUGODAWCA.email}</DoUzupelnienia>.
+            dotyczących danych pisz na <AdresKontaktowy />.
           </p>
           <p>
             Masz prawo dostępu do swoich danych, ich sprostowania, usunięcia i ograniczenia przetwarzania, prawo do
