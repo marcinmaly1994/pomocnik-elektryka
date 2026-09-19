@@ -90,6 +90,7 @@ import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useSzerokieOkno } from "./PasekMenu";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
+import { PoleWymiarowProstokata } from "@/components/design/PoleWymiarowProstokata";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
@@ -2431,7 +2432,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         <div className="flex flex-nowrap items-center gap-2 text-sm">
           <span className="whitespace-nowrap font-medium text-slate-600">
             {roomMode === "prostokat" ? (
-              "Narożnik postawiony — kliknij przeciwległy, aby domknąć prostokąt"
+              "Narożnik postawiony — kliknij przeciwległy"
             ) : (
               <>
                 {drawingRoomPoints.length} pkt.
@@ -2439,8 +2440,24 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               </>
             )}
           </span>
-          {/* Prostokąt świadomie bez tego pola: tam nie ma „ostatniego odcinka",
-              figura powstaje jednym pociągnięciem między dwoma narożnikami. */}
+          {/* Prostokąt dostaje WYMIARY, wielobok — długość ostatniego odcinka.
+              Różnica nie jest kaprysem: prostokąt nie ma „ostatniego odcinka", bo
+              powstaje jednym pociągnięciem między dwoma narożnikami. */}
+          {roomMode === "prostokat" && (
+            <PoleWymiarowProstokata
+              kotwica={drawingRoomPoints[0]}
+              mpu={mpu}
+              planSize={planSize}
+              onUtworz={(punkty) => {
+                const name = nextRoomName(roomShapes.length);
+                setPendingRoom({ points: punkty, name, type: guessRoomType(name), typeTouched: false });
+                // Ta sama tablica trzyma kotwicę prostokąta co punkty wieloboku, więc
+                // domknięcie figury musi ją wyczyścić — inaczej kolejny klik liczyłby
+                // się od nieaktualnej kotwicy poprzedniego pomieszczenia.
+                setDrawingRoomPoints([]);
+              }}
+            />
+          )}
           {roomMode === "wielobok" && (
             <PoleDlugosciOdcinka
               punkty={drawingRoomPoints}

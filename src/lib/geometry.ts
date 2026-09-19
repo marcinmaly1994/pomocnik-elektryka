@@ -207,3 +207,51 @@ export function przesunNaDlugosc(od: Point, doPunktu: Point, dlugosc: number): P
   const k = dlugosc / obecna;
   return { x: od.x + dx * k, y: od.y + dy * k };
 }
+
+/**
+ * Prostokątne pomieszczenie o PODANYCH wymiarach, zaczepione w klikniętym narożniku.
+ *
+ * Kotwicę stawia użytkownik kliknięciem, wymiary wpisuje z klawiatury — a tutaj
+ * rozstrzyga się jedyna rzecz, której nie powiedział wprost: w którą stronę prostokąt
+ * ma się rozwinąć.
+ *
+ * Zasada: w prawo i w dół, bo tak czyta się rysunki i tak leci wzrok. Jeśli w tę
+ * stronę prostokąt wychodzi poza plan, ODBIJA SIĘ — osobno w każdej osi, więc pokój
+ * przy prawej krawędzi rozwija się w lewo, ale nadal w dół.
+ *
+ * Gdy nie mieści się w ŻADNĄ stronę (jest po prostu większy od planu), powstaje mimo
+ * to w prawo i w dół. Użytkownik poprosił o taki wymiar: plan da się powiększyć,
+ * a po cichu przycięty pokój kłamałby o metrażu — czyli o liczbie, dla której cała
+ * ta aplikacja istnieje.
+ *
+ * Wymiary są w JEDNOSTKACH PLANU. Przeliczenie ze skali należy do wywołującego.
+ */
+export function prostokatOdKotwicy(
+  kotwica: Point,
+  szerokosc: number,
+  wysokosc: number,
+  plan: { w: number; h: number },
+): Point[] | null {
+  const poprawny = (v: number) => Number.isFinite(v) && v > 0;
+  if (!poprawny(szerokosc) || !poprawny(wysokosc)) return null;
+
+  // `>` a nie `>=`: prostokąt kończący się dokładnie na krawędzi planu jeszcze się
+  // mieści i nie ma powodu go odbijać.
+  const x1 = kotwica.x + szerokosc > plan.w && kotwica.x - szerokosc >= 0 ? kotwica.x - szerokosc : kotwica.x + szerokosc;
+  const y1 = kotwica.y + wysokosc > plan.h && kotwica.y - wysokosc >= 0 ? kotwica.y - wysokosc : kotwica.y + wysokosc;
+
+  const xMin = Math.min(kotwica.x, x1);
+  const xMax = Math.max(kotwica.x, x1);
+  const yMin = Math.min(kotwica.y, y1);
+  const yMax = Math.max(kotwica.y, y1);
+
+  // Kolejność narożników zgodna z ruchem wskazówek zegara, tak jak przy prostokącie
+  // rysowanym myszą (`rectBetween` w DesignCanvas) — dalsze liczenie pola i obwodu
+  // zakłada spójny obieg.
+  return [
+    { x: xMin, y: yMin },
+    { x: xMax, y: yMin },
+    { x: xMax, y: yMax },
+    { x: xMin, y: yMax },
+  ];
+}
