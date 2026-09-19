@@ -56,6 +56,7 @@ export const SKROTY: { klawisz: string; opis: string }[] = [
   { klawisz: "Delete", opis: "usuwa zaznaczenie" },
   { klawisz: "Enter", opis: "zatwierdza rysowaną ścianę albo zaznaczony obszar" },
   { klawisz: "Esc", opis: "anuluje bieżącą operację" },
+  { klawisz: "F", opis: "przełącza pełny ekran — rysunek dostaje całe okno" },
 ];
 
 function Key({ children }: { children: string }) {

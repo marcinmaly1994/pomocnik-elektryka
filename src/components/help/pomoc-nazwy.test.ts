@@ -70,3 +70,17 @@ describe("Pomoc wymienia skróty, które edytor obsługuje", () => {
     }
   });
 });
+
+/**
+ * Pełny ekran to funkcja, o której użytkownik telefonu dowiadywał się wyłącznie
+ * przypadkiem: nieopisana ikona wśród sześciu w pasku. Na wąskim ekranie daje
+ * płótnu 605 px zamiast 360, więc jest tam najbardziej potrzebna — i dlatego spis
+ * skrótów musi ją wymieniać, tak samo jak cofanie.
+ */
+describe("Pomoc wymienia skrót pełnego ekranu", () => {
+  it("dokumentuje klawisz F", () => {
+    const pelnyEkran = SKROTY.find((s) => s.klawisz.trim().toUpperCase() === "F");
+    expect(pelnyEkran, "brak skrótu pełnego ekranu w spisie").toBeDefined();
+    expect(pelnyEkran!.opis).toMatch(/pełn(y|ego) ekran/i);
+  });
+});
