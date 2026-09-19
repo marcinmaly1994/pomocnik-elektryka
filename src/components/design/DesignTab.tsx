@@ -2688,7 +2688,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               robi", którego dwa przyciski wyżej nie adresują wcale. Kto ma rzut pod
               ręką, ma nad nim kliknąć dalej. */}
           <button
-            onClick={() => void wczytajPrzyklad()}
+            onClick={() => void wczytajPrzyklad("mieszkanie")}
             className="flex items-center gap-1.5 text-sm font-medium text-blueprint underline-offset-2 hover:underline"
           >
             <Eye size={15} /> Zobacz gotowy przykład — mieszkanie 70 m²
