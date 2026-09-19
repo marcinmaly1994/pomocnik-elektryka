@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { wczytajPrzyklad } from "./_flow";
 
 /**
  * Pasek etapów 01→04: plakietki pokazujące STAN każdego etapu.
@@ -39,7 +40,7 @@ test("pusty projekt: 01 woła do siebie, a dalsze etapy przyznają się, że cze
 
 test("projekt z osprzętem zapala wszystkie cztery kafle, z liczbami", async ({ page }) => {
   await swiezyProjekt(page);
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(page.getByText("To jest projekt przykładowy")).toBeVisible();
 
   await expect(kafel(page, "Instalacja")).toContainText(/\d+ el\./);
@@ -54,7 +55,7 @@ test("projekt z osprzętem zapala wszystkie cztery kafle, z liczbami", async ({ 
 
 test("plakietki reagują na zmianę projektu, a nie zastygają przy wczytaniu", async ({ page }) => {
   await swiezyProjekt(page);
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(kafel(page, "Kosztorys")).toContainText("gotowy");
 
   // Wyjście z przykładu czyści projekt — kafle muszą wrócić do „czeka", inaczej

@@ -1,4 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
+// Ten plik ma już WŁASNĄ funkcję `wczytajPrzyklad(page)` (z asercjami ekranu startowego
+// i paska przykładu) — pomocnik z `_flow.ts` importujemy więc pod inną nazwą, żeby obie
+// mogły współistnieć zamiast się przesłaniać.
+import { wczytajPrzyklad as otworzPrzykladZRejestru } from "./_flow";
 
 /**
  * Projekt przykładowy („Zobacz gotowy przykład" na ekranie startowym) i pusty
@@ -24,7 +28,7 @@ const pasekPrzykladu = (page: Page) => page.getByText("To jest projekt przykład
 
 async function wczytajPrzyklad(page: Page) {
   await expect(ekranStartowy(page)).toBeVisible();
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await otworzPrzykladZRejestru(page, "mieszkanie");
   await expect(pasekPrzykladu(page)).toBeVisible();
 }
 
@@ -150,4 +154,25 @@ test("kosztorys nie podaje ceny materiału jako ceny instalacji", async ({ page 
   const ostrzezenie = (await stopka.getByText(/To jest cena materiału/).boundingBox())!;
   const suma = (await stopka.getByText(/RAZEM brutto — sam materiał/).boundingBox())!;
   expect(ostrzezenie.y).toBeLessThan(suma.y);
+});
+
+test("okno wyboru pokazuje kartę dla każdego przykładu z rejestru", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await expect(page.getByRole("button", { name: /Mieszkanie 70 m²/ })).toBeVisible();
+  // Liczba kart ma iść za rejestrem, a nie za tym, ile ich akurat jest w dniu pisania testu.
+  const kart = await page.getByRole("button", { name: /m²/ }).count();
+  expect(kart).toBeGreaterThanOrEqual(1);
+});
+
+test("Escape zamyka okno wyboru bez wczytywania czegokolwiek", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: /Mieszkanie 70 m²/ })).toBeHidden();
+  await expect(page.getByText("To jest projekt przykładowy")).toBeHidden();
 });
