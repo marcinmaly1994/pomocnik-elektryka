@@ -89,6 +89,7 @@ import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useSzerokieOkno } from "./PasekMenu";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
+import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
@@ -2274,6 +2275,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {drawingWall.length > 0 && (
         <div className="flex flex-nowrap items-center gap-2 text-sm">
           <span className="whitespace-nowrap font-medium text-slate-600">Rysowanie ściany: {drawingWall.length} pkt.</span>
+          <PoleDlugosciOdcinka
+            punkty={drawingWall}
+            mpu={mpu}
+            onZmiana={setDrawingWall}
+            testId="wall-segment-length-input"
+          />
           <button onClick={finishWall} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
           <button onClick={() => setDrawingWall([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
         </div>
@@ -2432,6 +2439,16 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               </>
             )}
           </span>
+          {/* Prostokąt świadomie bez tego pola: tam nie ma „ostatniego odcinka",
+              figura powstaje jednym pociągnięciem między dwoma narożnikami. */}
+          {roomMode === "wielobok" && (
+            <PoleDlugosciOdcinka
+              punkty={drawingRoomPoints}
+              mpu={mpu}
+              onZmiana={setDrawingRoomPoints}
+              testId="room-segment-length-input"
+            />
+          )}
           {roomMode === "wielobok" && drawingRoomPoints.length >= 3 && (
             <button onClick={finishRoomDrawing} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
           )}
