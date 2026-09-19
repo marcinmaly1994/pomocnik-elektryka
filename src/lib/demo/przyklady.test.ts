@@ -1,0 +1,229 @@
+import { describe, it, expect, beforeAll } from "vitest";
+import { PRZYKLADY, zbudujPrzyklad } from "./index";
+import { nearestPointOnPolyline, pointInPolygon, polygonAreaM2 } from "@/lib/geometry";
+import { scaleOf, MANUAL_DRAW_SCALE_MPU } from "@/lib/design";
+import { computeCircuits, computeRcdGroups } from "@/lib/panel/circuits";
+import { buildCableRoutes, findPanel, findPanels, spreadOverlappingRoutes } from "@/lib/panel/loads";
+import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
+import { ODSUNIECIE_TRASY } from "@/lib/panel/routing";
+import { computeCosts } from "@/lib/costs";
+import { gniazdoPodwojne } from "@/lib/elements";
+import type { ProjectPayload } from "@/store/useProjectStore";
+
+/**
+ * Projekt przykładowy to DANE wpisane ręcznie, więc łatwo je po cichu popsuć —
+ * przesunięty narożnik albo literówka w nazwie pomieszczenia nie wywalają niczego,
+ * tylko sprawiają, że pierwsze, co widzi nowy użytkownik, jest bez sensu.
+ *
+ * Te testy pilnują tego, co w KAŻDYM przykładzie z rejestru musi być PRAWDĄ, a nie
+ * tego, jak dokładnie jest narysowany — żeby dało się swobodnie przestawiać osprzęt,
+ * nie przepisując przy tym testów. Stąd pętla po `PRZYKLADY`: kolejny przykład dostaje
+ * ten sam komplet reguł za darmo, bez pisania nowego pliku testów.
+ */
+describe.each(PRZYKLADY.map((x) => [x.id] as const))("przykład „%s»", (id) => {
+  let payload: ProjectPayload;
+  beforeAll(async () => {
+    payload = await zbudujPrzyklad(id);
+  });
+
+  it("obiecuje metraż w nazwie i tyle naprawdę ma", () => {
+    // Nazwa projektu jest obietnicą złożoną na ekranie startowym („mieszkanie 70 m²")
+    // — a powierzchnia pokazuje się potem w pasku stanu pod rysunkiem. Rozjazd tych
+    // dwóch liczb to jedyna rzecz, którą użytkownik na tym ekranie może SPRAWDZIĆ.
+    const mpu = scaleOf(payload.scales, payload.activeFloorId)!;
+    const metraz = payload.draft.roomShapes.reduce((a, r) => a + (polygonAreaM2(r.points, mpu) ?? 0), 0);
+    const zNazwy = Number(payload.projectName.replace(/[^\d,]/g, "").replace(",", "."));
+    expect(zNazwy, payload.projectName).toBeCloseTo(metraz, 0);
+  });
+
+  it("element LEŻY w pomieszczeniu, które ma wpisane — nie tylko je nazywa", () => {
+    /**
+     * Pole `room` to wolny tekst, a pozycję elementom nadaje `przyklejDoScian`, czyli
+     * to samo przyciąganie co przy kliknięciu na planie. Te dwie rzeczy potrafią się
+     * rozjechać po cichu i raz już się rozjechały: `snapToWall` wybierał stronę ściany
+     * względem średniej wierzchołków obrysu, a przy obrysie wklęsłym (przedpokój jest
+     * literą L) ta średnia wypada poza pomieszczeniem — dwa elementy przedpokoju lądowały
+     * więc za murem, w Pokoju, zachowując starą nazwę w `room`. Naprawione w `stronaWnetrza`
+     * (wallSnap.ts); ten test stoi tu, żeby rozjazd nie wrócił inną drogą.
+     *
+     * Skutek nie jest kosmetyczny: od pomieszczenia zależy podział na obwody i strefy
+     * ochronne, a aplikacja wita wtedy użytkownika ostrzeżeniem „elementy zostały
+     * w starych pokojach" — na PIERWSZYM ekranie, jaki widzi.
+     *
+     * Test sprawdza od razu i to, że taki element w ogóle istnieje: `wew` to podzbiór
+     * WSZYSTKICH nazw pomieszczeń, więc jeśli zawiera `el.room`, ta nazwa musi być
+     * prawdziwa — osobny test na samo istnienie nazwy byłby więc powtórką słabszą
+     * o dokładnie ten warunek.
+     */
+    for (const el of payload.draft.elements) {
+      const wew = payload.draft.roomShapes
+        .filter((r) => r.floor === el.floor && pointInPolygon({ x: el.x, y: el.y }, r.points))
+        .map((r) => r.name);
+      expect(wew, `element ${el.id} wpisany do „${el.room}"`).toContain(el.room);
+    }
+  });
+
+  it("wszystko siedzi na znanej kondygnacji i w obszarze planu", () => {
+    // `planSize` jest WSPÓLNY dla wszystkich kondygnacji (patrz store), więc granice
+    // sprawdzamy raz dla wszystkich elementów. Kondygnację weryfikujemy przez istnienie
+    // w rejestrze pięter, a nie przez porównanie z jedną, aktywną — dom ma ich więcej.
+    const { w, h } = payload.planSize;
+    const idPieter = new Set(payload.floors.map((f) => f.id));
+    for (const el of payload.draft.elements) {
+      expect(idPieter, `element ${el.id} na nieistniejącej kondygnacji`).toContain(el.floor);
+      expect(el.x, `element ${el.id} w poziomie`).toBeGreaterThanOrEqual(0);
+      expect(el.x).toBeLessThanOrEqual(w);
+      expect(el.y, `element ${el.id} w pionie`).toBeGreaterThanOrEqual(0);
+      expect(el.y).toBeLessThanOrEqual(h);
+    }
+    for (const s of payload.draft.walls) {
+      expect(idPieter, `ściana na nieistniejącej kondygnacji`).toContain(s.floor);
+    }
+    for (const r of payload.draft.roomShapes) {
+      expect(idPieter, `pomieszczenie „${r.name}" na nieistniejącej kondygnacji`).toContain(r.floor);
+    }
+  });
+
+  it("ma rozdzielnicę na planie, więc kosztorys mierzy trasy zamiast zgadywać", () => {
+    // Bez rozdzielnicy metraż kabla spada na ryczałt „5 mb na punkt" i przykład
+    // pokazywałby gorszy wynik, niż aplikacja potrafi — patrz `elementy`.
+    expect(findPanel(payload.draft.elements)).toBeTruthy();
+  });
+
+  it("KAŻDA kondygnacja z elementami ma na sobie rozdzielnicę", () => {
+    /**
+     * To nie jest kosmetyka. `buildCableRoutes` dostaje elementy przefiltrowane po
+     * kondygnacji (patrz `trasyPotrzebne` w DesignTab.tsx), więc `findPanel` szuka
+     * rozdzielnicy TEJ kondygnacji. Piętro bez własnej nie dostaje ŻADNEJ trasy
+     * zasilania — zostają same linie sterowania łącznik→oprawa, a rzut wygląda na pusty.
+     */
+    const zElementami = [...new Set(payload.draft.elements.map((e) => e.floor))];
+    const panele = findPanels(payload.draft.elements);
+    for (const f of zElementami) expect(panele.poKondygnacji.has(f), `kondygnacja ${f}`).toBe(true);
+  });
+
+  it("wypełnia rozdzielnicę i kosztorys — po to w ogóle istnieje", () => {
+    const circuits = computeCircuits(payload.draft.elements, payload.draft.roomShapes);
+    expect(circuits.length).toBeGreaterThan(3);
+    const { quantities } = computeCosts(payload.draft.elements, circuits, computeRcdGroups(circuits));
+    expect(quantities.gniazdko).toBeGreaterThan(0);
+    // Klucz CENNIKA, nie typ elementu: `oswietlenie`/`kinkiet`/`oswietlenieZewn`
+    // wpadają razem do pozycji „oprawa" (patrz `TYPE_TO_PRICE_KEY` w costs.ts).
+    expect(quantities.oprawa).toBeGreaterThan(0);
+  });
+
+  it("każde pomieszczenie ma drzwi do KOMUNIKACJI, a nie do sąsiada", () => {
+    /**
+     * Uogólnienie reguły, która wcześniej wisiała na nazwie „Przedpokój". Komunikacja to
+     * pomieszczenia typu `inne` — w mieszkaniu Przedpokój, w domu Hol i Korytarz.
+     *
+     * Sama spójność grafu drzwi by nie wystarczyła: przepuściłaby sypialnię dostępną
+     * przez kuchnię, czyli dokładnie to, co było nie tak z pierwszą wersją rzutu.
+     */
+    const LUZ = 0.5 / MANUAL_DRAW_SCALE_MPU;
+    const naObrysie = (o: { x: number; y: number }, pts: { x: number; y: number }[]) => {
+      const rzut = nearestPointOnPolyline(o, [...pts, pts[0]]);
+      return rzut !== null && Math.hypot(rzut.point.x - o.x, rzut.point.y - o.y) <= LUZ;
+    };
+    const komunikacja = payload.draft.roomShapes.filter((r) => r.type === "inne");
+    expect(komunikacja.length, "przykład bez pomieszczenia komunikacyjnego").toBeGreaterThan(0);
+
+    for (const r of payload.draft.roomShapes) {
+      if (r.type === "inne") continue;
+      const drzwi = payload.draft.openings.filter(
+        (o) =>
+          o.floor === r.floor &&
+          naObrysie(o, r.points) &&
+          komunikacja.some((k) => k.floor === r.floor && naObrysie(o, k.points))
+      );
+      expect(drzwi.length, `„${r.name}" bez drzwi do komunikacji`).toBeGreaterThan(0);
+    }
+  });
+
+  it("pomieszczenia mokre mają jawny typ, nie zgadywanie po nazwie", () => {
+    // Od typu zależą strefy ochronne i osobne obwody — a `guessRoomType` po nazwie
+    // to droga awaryjna dla starych zapisów, nie coś, na czym przykład ma stać.
+    const kuchnia = payload.draft.roomShapes.find((r) => r.name === "Kuchnia");
+    const lazienka = payload.draft.roomShapes.find((r) => r.name === "Łazienka");
+    expect(kuchnia?.type).toBe("kuchnia");
+    expect(lazienka?.type).toBe("lazienka");
+  });
+
+  it("jest oznaczony jako przykład — to on włącza pasek i blokadę zapisu w chmurze", () => {
+    expect(payload.projektPrzykladowy).toBe(true);
+  });
+
+  it("nie wlecze ze sobą podkładu", () => {
+    // Podkład to data URL — setki kilobajtów base64 w paczce i w każdym autozapisie.
+    expect(payload.bgImages).toEqual({});
+  });
+
+  it("buduje się od nowa przy każdym wywołaniu", async () => {
+    // Store bierze te obiekty WPROST do siebie, więc wspólna stała dałaby się
+    // zmodyfikować pierwszym przeciągnięciem elementu na planie.
+    const drugi = await zbudujPrzyklad(id);
+    expect(drugi.draft.elements).not.toBe(payload.draft.elements);
+    expect(drugi.draft.elements).toEqual(payload.draft.elements);
+  });
+
+  it("przewody biegną wzdłuż ścian — na KAŻDEJ kondygnacji", () => {
+    /**
+     * Reguła rysunku: przewód biegnie równolegle albo prostopadle do ściany, jedyny
+     * dopuszczony ukos to ODCZEP pod 45° do nóżki osprzętu. Sprawdzane OSOBNO dla
+     * każdej kondygnacji (nie dla całego budynku), bo `buildCableRoutes` też liczy
+     * trasy osobno na piętro — błąd na jednym piętrze nie może się uśrednić z dobrym
+     * wynikiem na innym.
+     */
+    const skala = elementRenderScale(MANUAL_DRAW_SCALE_MPU, DEFAULT_ELEMENT_SCALE, DEFAULT_ELEMENT_SCALE);
+    for (const f of payload.floors.map((x) => x.id)) {
+      const el = payload.draft.elements.filter((e) => e.floor === f);
+      if (el.length === 0) continue;
+      const sc = payload.draft.walls.filter((w) => w.floor === f);
+      const rs = payload.draft.roomShapes.filter((r) => r.floor === f);
+      const ot = payload.draft.openings.filter((o) => o.floor === f);
+      const rysowane = spreadOverlappingRoutes(
+        buildCableRoutes(findPanel(el), computeCircuits(el, rs), el, sc, rs, ot, skala),
+        rs
+      );
+      const zle: string[] = [];
+      let dlugosc = 0;
+      let ukos = 0;
+      for (const [rid, pts] of rysowane) {
+        for (let i = 1; i < pts.length; i++) {
+          const dx = Math.abs(pts[i].x - pts[i - 1].x);
+          const dy = Math.abs(pts[i].y - pts[i - 1].y);
+          const len = Math.hypot(dx, dy);
+          dlugosc += len;
+          if (dx > 0.01 && dy > 0.01) ukos += len;
+          if (dx <= 0.01 || dy <= 0.01) continue;
+          if (len < ODSUNIECIE_TRASY) continue;
+          if (Math.abs(dx - dy) <= 0.1) continue;
+          zle.push(`${f}/${rid}: (${pts[i - 1].x.toFixed(1)},${pts[i - 1].y.toFixed(1)})→(${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)})`);
+        }
+      }
+      expect(zle, `kondygnacja ${f}`).toEqual([]);
+      expect(ukos / dlugosc, `kondygnacja ${f}`).toBeLessThan(0.1);
+    }
+  });
+
+  it("ma gniazdo podwójne i wycenia je jako JEDNĄ sztukę osobnej pozycji", () => {
+    // Przykład jest jedynym miejscem, w którym użytkownik widzi wariant podwójny, zanim
+    // sam go postawi — a `gangs` wpisywane tu w kodzie omija interfejs, więc łatwo
+    // wpisać liczbę, której interfejs nigdy by nie dopuścił (kiedyś było tu `3`).
+    const podwojne = payload.draft.elements.filter((e) => gniazdoPodwojne(e));
+    expect(podwojne.length).toBeGreaterThan(0);
+    for (const e of podwojne) expect(e.gangs).toBe(2);
+
+    const { quantities } = computeCosts(payload.draft.elements, [], []);
+    expect(quantities.gniazdkoPodwojne).toBe(podwojne.length);
+  });
+
+  it("liczba puszek podtynkowych nie zależy od wariantu gniazd", () => {
+    // Podwójne zajmuje jedno miejsce w ścianie, tak samo jak pojedyncze.
+    const { quantities } = computeCosts(payload.draft.elements, [], []);
+    const punkty = payload.draft.elements.filter(
+      (e) => !["rozdzielnica", "puszka", "szafkaTeletech"].includes(e.type) && !["wanna", "prysznic", "umywalka"].includes(e.type)
+    );
+    expect(quantities.puszkaPodtynkowa).toBe(punkty.length);
+  });
+});
