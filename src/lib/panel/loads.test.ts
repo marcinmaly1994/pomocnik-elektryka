@@ -536,6 +536,41 @@ describe("spreadOverlappingRoutes", () => {
     expect(out.get("a")).toEqual(out.get("b"));
   });
 
+  /**
+   * Przebieg wzdluz JEDNEJ sciany prawie nigdy nie jest jednym odcinkiem: trasa idzie po
+   * obrysach sasiadujacych pomieszczen i po brzegach przejscia w drzwiach, wiec dzieli sie
+   * na kawalki stykajace sie koncami. Grupy nakladania pekaja dokladnie na stykach (patrz
+   * MIN_NAKLADANIE), wiec jeden kabel dostawal pas 0 na pierwszym kawalku sciany i pas 1 na
+   * drugim — gdy dopiero w polowie jej dlugosci dolaczal do niej inny obwod.
+   *
+   * Odcinki wspolliniowe nie maja przeciecia, wiec wierzchołek na styku spadal na pas dalszy,
+   * a drugi koniec zostawal na swoim — i CALY odcinek miedzy nimi kladl sie ukosem przez pol
+   * pomieszczenia. Na rzucie projektu przykladowego bylo to 2 m skosu wzdluz wspolnej sciany
+   * salonu i kuchni.
+   */
+  it("jeden kabel trzyma JEDEN pas na calej scianie, tez gdy inny obwod dolacza w jej polowie", () => {
+    // Dwa odcinki wspolliniowe stykajace sie w x = 50 — tak, jak trasa przechodzaca
+    // z obrysu jednego pokoju na obrys drugiego.
+    const dlugi = route(
+      "dlugi",
+      [
+        { x: 0, y: 5 },
+        { x: 0, y: 0 },
+        { x: 50, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 5 },
+      ],
+      { circuitId: "obw2" }
+    );
+    // Drugi obwod zajmuje TYLKO druga polowe tej sciany i ma pierwszenstwo do pasa przy murze.
+    const out = spreadOverlappingRoutes([dlugi, korytarz("inny", 50, 100, 0, { circuitId: "obw1" })]);
+    const pts = out.get("dlugi")!;
+    expect(pts[1].y).toBeCloseTo(pts[2].y, 5);
+    expect(pts[2].y).toBeCloseTo(pts[3].y, 5);
+    // ...i rozsuniecie naprawde zaszlo, a nie „zgodzilo sie" przez to, ze nic nikogo nie ruszylo.
+    expect(out.get("inny")![1].y).not.toBeCloseTo(pts[2].y, 5);
+  });
+
   it("obwod GNIAZDOWY zostaje przy scianie, oswietlenie odsuwa sie w glab pokoju", () => {
     const out = spreadOverlappingRoutes(
       [korytarz("g", 20, 180, 195), korytarz("s", 20, 180, 195, { type: "oswietlenie" })],
