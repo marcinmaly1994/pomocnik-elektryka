@@ -77,6 +77,7 @@ const wczytaj = {
   schemat: () => import("@/components/schema/SchemaTab"),
   kosztorys: () => import("@/components/costs/CostsTab"),
   prywatnosc: () => import("@/components/legal/PolitykaPrywatnosci"),
+  regulamin: () => import("@/components/legal/Regulamin"),
 } as const;
 
 const DesignTab = lazy(() => wczytaj.projekt().then((m) => ({ default: m.DesignTab })));
@@ -86,6 +87,7 @@ const ProtocolsTab = lazy(() => wczytaj.protokoly().then((m) => ({ default: m.Pr
 const SchemaTab = lazy(() => wczytaj.schemat().then((m) => ({ default: m.SchemaTab })));
 const CostsTab = lazy(() => wczytaj.kosztorys().then((m) => ({ default: m.CostsTab })));
 const PolitykaPrywatnosci = lazy(() => wczytaj.prywatnosc().then((m) => ({ default: m.PolitykaPrywatnosci })));
+const Regulamin = lazy(() => wczytaj.regulamin().then((m) => ({ default: m.Regulamin })));
 
 /**
  * Pobiera kod zakładki, ZANIM użytkownik w nią kliknie.
@@ -926,6 +928,12 @@ export default function App() {
         </Suspense>
       )}
 
+      {tab === "regulamin" && (
+        <Suspense fallback={<TabLoading />}>
+          <Regulamin />
+        </Suspense>
+      )}
+
       {tab === "projekt" && (
         <>
           <Suspense fallback={<TabLoading />}>
@@ -1239,9 +1247,35 @@ export default function App() {
           z tego ekranu usuwano. Ten sam warunek co przy samych pigułkach wyżej. */}
       <SiteFooter
         rezerwaNaNawigacje={KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab) > 0}
-        onOtworzPrywatnosc={() => setTab("prywatnosc")}
+        onOtworzDokument={setTab}
       />
     </div>
+  );
+}
+
+/** Odnośnik do dokumentu formalnego w stopce. Wydzielony, bo są dwa i mają
+ *  zachowywać się identycznie — patrz komentarz w miejscu użycia. */
+function LinkDokumentu({
+  tab,
+  onOtworz,
+  children,
+}: {
+  tab: "prywatnosc" | "regulamin";
+  onOtworz: (tab: "prywatnosc" | "regulamin") => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={`/${tab}`}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        onOtworz(tab);
+      }}
+      className="text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-ink"
+    >
+      {children}
+    </a>
   );
 }
 
@@ -1254,10 +1288,10 @@ export default function App() {
  */
 function SiteFooter({
   rezerwaNaNawigacje,
-  onOtworzPrywatnosc,
+  onOtworzDokument,
 }: {
   rezerwaNaNawigacje: boolean;
-  onOtworzPrywatnosc: () => void;
+  onOtworzDokument: (tab: "prywatnosc" | "regulamin") => void;
 }) {
   /*
    * `md:pb-16` to ZAPAS pod pływające pigułki „Cofnij/Dalej".
@@ -1291,23 +1325,15 @@ function SiteFooter({
         <div className="text-slate-400">
           <div>Obliczenia wg PN-HD 60364</div>
           <div className="mt-0.5">Projekt zapisywany lokalnie w przeglądarce</div>
-          {/* Prawdziwy <a href>, a nie przycisk: to dokument, który ktoś zechce
-              otworzyć obok, skopiować i wysłać dalej. Zwykłe kliknięcie przechwytujemy,
-              żeby nie przeładowywać całej aplikacji — a kliknięcie z modyfikatorem
-              (Ctrl/Cmd/Shift) zostawiamy przeglądarce, bo to wprost żądanie „otwórz
-              w nowej karcie albo w nowym oknie". Środkowy przycisk w ogóle tu nie
-              dociera: przeglądarka obsługuje go sama, czyli dokładnie tak, jak trzeba. */}
-          <a
-            href="/prywatnosc"
-            onClick={(e) => {
-              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-              e.preventDefault();
-              onOtworzPrywatnosc();
-            }}
-            className="mt-1.5 inline-block text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-ink"
-          >
-            Prywatność i dane
-          </a>
+          <div className="mt-1.5 flex items-center gap-2">
+            <LinkDokumentu tab="prywatnosc" onOtworz={onOtworzDokument}>
+              Prywatność i dane
+            </LinkDokumentu>
+            <span aria-hidden="true">·</span>
+            <LinkDokumentu tab="regulamin" onOtworz={onOtworzDokument}>
+              Regulamin
+            </LinkDokumentu>
+          </div>
           {/* Wersja wdrożenia. Przy zgłoszeniu „u mnie nie działa" nie było czym
               ustalić, co ktoś ma właściwie załadowane: aplikacja jest jednostronicowa,
               więc adres tego nie mówi, a przeglądarka potrafi trzymać starą wersję. */}

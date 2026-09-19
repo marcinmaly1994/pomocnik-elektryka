@@ -164,14 +164,23 @@ export function AuthModal({ open, komunikat, onClose, onSignedIn }: AuthModalPro
               e-mail i hasłem — czyli karze za przeczytanie tego, co się podpisuje. */}
           {mode === "register" && (
             <p className="text-[11px] leading-relaxed text-slate-500">
-              Zakładając konto zgadzasz się na przetwarzanie swoich danych w sposób opisany w{" "}
+              Zakładając konto akceptujesz{" "}
+              <a
+                href="/regulamin"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-slate-300 underline-offset-2 hover:text-ink"
+              >
+                regulamin
+              </a>{" "}
+              i zgadzasz się na przetwarzanie swoich danych zgodnie z{" "}
               <a
                 href="/prywatnosc"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline decoration-slate-300 underline-offset-2 hover:text-ink"
               >
-                polityce prywatności
+                polityką prywatności
               </a>
               .
             </p>

@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { AlertTriangle, Cookie, Database, HardDrive, Mail, ShieldCheck, Trash2 } from "lucide-react";
+import { Cookie, Database, HardDrive, Mail, ShieldCheck, Trash2 } from "lucide-react";
+import { BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja, USLUGODAWCA } from "./wspolne";
 
 /**
  * Polityka prywatności — obowiązek informacyjny z art. 13 RODO.
@@ -16,75 +16,13 @@ import { AlertTriangle, Cookie, Database, HardDrive, Mail, ShieldCheck, Trash2 }
  * w ósmym.
  */
 
-/**
- * Dane, których NIE da się wziąć z kodu — musi je podać osoba prowadząca serwis.
- *
- * Trzymane w jednym miejscu i w jednym kształcie, żeby uzupełnienie polityki było
- * podmianą trzech napisów, a nie wycieczką po akapitach. Dopóki którykolwiek zaczyna
- * się od „[", strona sama oznacza się jako SZKIC (patrz `SZKIC` niżej): dokument
- * z wymyślonym administratorem jest GORSZY niż jego brak, bo wygląda na wiążący.
- */
-const ADMINISTRATOR = {
-  /** Imię i nazwisko albo nazwa działalności wraz z NIP-em. */
-  nazwa: "[imię i nazwisko albo nazwa firmy prowadzącej serwis]",
-  /** Adres, pod który realnie trafi „proszę o usunięcie moich danych". */
-  email: "[adres e-mail do kontaktu w sprawie danych]",
-  /** Region serwerów Supabase: Supabase → Settings → General → Region. Od tego zależy,
-   *  czy dane konta w ogóle opuszczają Europejski Obszar Gospodarczy. */
-  regionDanych: "[region serwerów bazy danych, np. Frankfurt (UE)]",
-} as const;
-
-/**
- * Data ostatniej zmiany treści — do zaktualizowania RĘCZNIE przy każdej poprawce
- * merytorycznej. Świadomie nie `new Date()`: automat pokazywałby dzisiejszą datę przy
- * dokumencie nietkniętym od roku, czyli kłamałby w jedynym polu, które czytelnik bierze
- * za dowód aktualności.
- */
-const OSTATNIA_ZMIANA = "19 września 2026";
-
-/** Czy dokument ma jeszcze nieuzupełnione miejsca. */
-const SZKIC = Object.values(ADMINISTRATOR).some((v) => v.startsWith("["));
-
-function Sekcja({ ikona: Ikona, tytul, children }: { ikona: typeof ShieldCheck; tytul: string; children: ReactNode }) {
-  return (
-    <section>
-      <h3 className="pe-display mb-2 flex items-center gap-2 text-[15px] text-ink">
-        <Ikona size={16} className="shrink-0 text-blueprint" />
-        {tytul}
-      </h3>
-      <div className="space-y-2">{children}</div>
-    </section>
-  );
-}
-
-/** Nieuzupełnione miejsce w szkicu — wyróżnione, żeby nie dało się go przeoczyć ani
- *  wziąć za treść dokumentu. Po wpisaniu prawdziwej wartości znacznik znika sam. */
-function DoUzupelnienia({ children }: { children: string }) {
-  if (!children.startsWith("[")) return <>{children}</>;
-  return <mark className="rounded bg-[#FDF0E4] px-1 py-0.5 text-[12px] font-semibold text-[#9A5B26]">{children}</mark>;
-}
-
 export function PolitykaPrywatnosci() {
   return (
-    <div className="mx-auto max-w-3xl">
+    <article className="mx-auto max-w-3xl">
       <h2 className="pe-display mb-1 text-xl">Prywatność i dane</h2>
-      <p className="mb-6 text-[13px] text-slate-400">
-        Polityka prywatności serwisu pomocnikelektryka.pl · ostatnia zmiana: {OSTATNIA_ZMIANA}
-      </p>
+      <MetryczkaDokumentu nazwa="Polityka prywatności" />
 
-      {SZKIC && (
-        <div
-          className="mb-6 flex gap-2.5 rounded-lg border p-3 text-[13px] leading-relaxed"
-          style={{ borderColor: "#F0D9C8", background: "#FDF6F0" }}
-        >
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warn" />
-          <p className="text-slate-600">
-            <strong className="text-ink">To jest szkic.</strong> Wyróżnione miejsca czekają na dane osoby
-            prowadzącej serwis. Dopóki nie zostaną uzupełnione, dokument opisuje wprawdzie prawdziwe działanie
-            aplikacji, ale nie wskazuje administratora danych — czyli nie spełnia jeszcze obowiązku z art. 13 RODO.
-          </p>
-        </div>
-      )}
+      <BanerSzkicu czego="nie wskazuje administratora danych — czyli nie spełnia jeszcze obowiązku z art. 13 RODO." />
 
       <div className="space-y-7 text-[13px] leading-relaxed text-slate-600">
         <p>
@@ -167,7 +105,7 @@ export function PolitykaPrywatnosci() {
           <ul className="ml-4 list-disc space-y-1">
             <li>
               <strong className="text-ink">Supabase</strong> — baza danych i obsługa kont. Tu leżą twój adres e-mail
-              i zapisane projekty. Serwery: <DoUzupelnienia>{ADMINISTRATOR.regionDanych}</DoUzupelnienia>.
+              i zapisane projekty. Serwery: <DoUzupelnienia>{USLUGODAWCA.regionDanych}</DoUzupelnienia>.
             </li>
             <li>
               <strong className="text-ink">Cloudflare</strong> — hosting strony i jej dostarczanie. Przetwarza
@@ -198,8 +136,8 @@ export function PolitykaPrywatnosci() {
 
         <Sekcja ikona={Mail} tytul="Twoje prawa i kontakt">
           <p>
-            Administratorem twoich danych jest <DoUzupelnienia>{ADMINISTRATOR.nazwa}</DoUzupelnienia>. W sprawach
-            dotyczących danych pisz na <DoUzupelnienia>{ADMINISTRATOR.email}</DoUzupelnienia>.
+            Administratorem twoich danych jest <DoUzupelnienia>{USLUGODAWCA.nazwa}</DoUzupelnienia>. W sprawach
+            dotyczących danych pisz na <DoUzupelnienia>{USLUGODAWCA.email}</DoUzupelnienia>.
           </p>
           <p>
             Masz prawo dostępu do swoich danych, ich sprostowania, usunięcia i ograniczenia przetwarzania, prawo do
@@ -209,6 +147,6 @@ export function PolitykaPrywatnosci() {
           </p>
         </Sekcja>
       </div>
-    </div>
+    </article>
   );
 }

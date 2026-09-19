@@ -73,7 +73,7 @@ test("formularz rejestracji niesie link do polityki, otwierany w NOWEJ karcie", 
   await page.getByRole("button", { name: /Nie masz konta\? Zarejestruj się/ }).click();
 
   const okno = page.getByRole("dialog");
-  const link = okno.getByRole("link", { name: "polityce prywatności" });
+  const link = okno.getByRole("link", { name: "polityką prywatności" });
   await expect(link).toBeVisible();
   await expect(link).toHaveAttribute("href", "/prywatnosc");
   // Nowa karta, bo nawigacja w tej samej zamknęłaby okno razem z wpisanym już
@@ -87,5 +87,5 @@ test("informacja o zgodzie pokazuje się przy zakładaniu konta, a nie przy logo
 
   const okno = page.getByRole("dialog");
   // Logowanie to nie moment zawierania umowy — zdanie o zgodzie byłoby tu szumem.
-  await expect(okno.getByRole("link", { name: "polityce prywatności" })).toBeHidden();
+  await expect(okno.getByRole("link", { name: "polityką prywatności" })).toBeHidden();
 });

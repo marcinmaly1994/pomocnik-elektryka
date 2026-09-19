@@ -51,6 +51,13 @@ describe("parsePath", () => {
     expect(buildPath("prywatnosc")).toBe("/prywatnosc");
   });
 
+  it("rozpoznaje regulamin jako osobny widok", () => {
+    // Drugi dokument formalny, ten sam mechanizm — też musi dać się podlinkować
+    // ze stopki i z formularza rejestracji (tam w nowej karcie).
+    expect(parsePath("/regulamin")).toEqual({ tab: "regulamin", param: null, rozpoznana: true });
+    expect(buildPath("regulamin")).toBe("/regulamin");
+  });
+
   it("dekoduje procenty, a niepoprawna sekwencja nie wywraca parsowania", () => {
     expect(parsePath("/protokoly/ogl%C4%99dziny").param).toBe("oględziny");
     // „%" bez dwóch cyfr za nim wywraca decodeURIComponent — ma przejść jak leci

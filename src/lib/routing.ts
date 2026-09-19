@@ -15,8 +15,8 @@
 /**
  * Widoki najwyższego poziomu. Kolejność bez znaczenia — to zbiór, nie lista.
  *
- * Nie każdy z nich jest ZAKŁADKĄ w sensie interfejsu. „prywatnosc” to strona
- * towarzysząca (polityka prywatności), do której wchodzi się linkiem ze stopki,
+ * Nie każdy z nich jest ZAKŁADKĄ w sensie interfejsu. „prywatnosc” i „regulamin” to strony
+ * towarzyszące, do których wchodzi się linkiem ze stopki,
  * z Pomocy i z formularza rejestracji — nie ma kafla w przepływie ani pozycji
  * w pasku narzędzi. Siedzi tu mimo to, bo dzięki temu dostaje bez ani jednej
  * linijki osobnej maszynerii wszystko, co ma reszta: własny adres do wysłania,
@@ -33,7 +33,8 @@ export type AppTab =
   | "protokoly"
   | "schemat"
   | "kosztorys"
-  | "prywatnosc";
+  | "prywatnosc"
+  | "regulamin";
 
 /**
  * Pierwszy segment ścieżki dla każdej zakładki.
@@ -52,6 +53,7 @@ const SEGMENT_ZAKLADKI: Record<AppTab, string> = {
   kalkulatory: "kalkulatory",
   protokoly: "protokoly",
   prywatnosc: "prywatnosc",
+  regulamin: "regulamin",
 };
 
 /** Zakładka domyślna — i zarazem awaryjna dla adresu, którego nie umiemy rozpoznać. */
