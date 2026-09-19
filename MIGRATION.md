@@ -4221,14 +4221,23 @@ kosztem i jakością:
 
 ## Znane ograniczenia szkieletu
 
-### Znaleziska z audytu (krok 28) jeszcze nienaprawione
+### Znaleziska z audytu (krok 28)
 
 Audyt wykazał 12 rzeczy; naprawionych zostało 5 w kroku 28, 3 w kroku 29
-i sztywny obszar planu w kroku 45. Reszta:
+i sztywny obszar planu w kroku 45. Ostatnie z nich:
 
-- **Opis pod aparatem 1-modułowym i tak się nie mieści** (krok 28b) —
-  34 px to ok. 4 znaki, więc widać „Obwó…". Kolizja zniknęła, ale pełna
-  nazwa jest czytelna wyłącznie w liście obok płótna i w legendzie PDF.
+- ~~**Opis pod aparatem 1-modułowym i tak się nie mieści** (krok 28b) —
+  34 px to ok. 4 znaki, więc widać „Obwó…"~~ — **nieaktualne**. Podpis
+  wąskiego aparatu jest OBRACANY o 90° i zawijany na dwie linie po ok.
+  12 znaków (patrz gałąź `waski` w `PanelRender.tsx`), więc w przykładowym
+  projekcie widać „Obwód gniazd / — Kuchnia", a nie cztery znaki. Końcówkę
+  tracą dopiero nazwy dłuższe niż ~24 znaki („Kuchnia (Zm…") i dla nich
+  nadal obowiązuje to, co niżej: pełna nazwa stoi w tabeli obwodów obok
+  płótna i w legendzie PDF.
+
+  Ten wpis wisiał tu jako „nienaprawiony" długo po naprawie i zdążył
+  wprowadzić w błąd przy przeglądzie aplikacji — stąd skreślenie zamiast
+  cichego usunięcia.
 
 ### Decyzje produktowe (nie do „naprawienia")
 
@@ -4249,10 +4258,16 @@ i sztywny obszar planu w kroku 45. Reszta:
   patrz krok 10 wyżej. Skopiuj `.env.example` do `.env` i uzupełnij
   `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`, żeby włączyć logowanie i
   zapis w chmurze.
-- Zmiana kolejności aparatów w rozdzielnicy nadal działa przyciskami ↑/↓,
-  nie przeciąganiem myszką po płótnie jak w oryginale — świadomie
-  pominięte jako osobna, ryzykowna porcja pracy (interakcja przeciągania
-  na Konvie), skoro przyciski są prostsze i już działają.
+- ~~Zmiana kolejności aparatów w rozdzielnicy nadal działa przyciskami ↑/↓,
+  nie przeciąganiem myszką po płótnie jak w oryginale~~ — **nieaktualne**.
+  Przeciąganie DZIAŁA (patrz `onMove` w `PanelTab` i obsługa wskaźnika
+  w `PanelRender`), ma test e2e z prawdziwym przeciągnięciem myszą
+  (`panel-reczny.spec.ts`) i zdejmuje migawkę do cofania. Przyciski ↑/↓
+  zostały obok — działają na dotyku i z klawiatury.
+
+  Ten wpis, jak ten o opisie pod aparatem 1-modułowym wyżej, wisiał jako
+  „niezrobiony" długo po zrobieniu i wprowadził w błąd przy przeglądzie
+  aplikacji. Stąd skreślenie zamiast usunięcia.
 - Dwadzieścia sześć testów Playwright w 10 plikach (katalog `e2e/`) pokrywa
   5 z 6 zakładek plus autozapis, „Nowy projekt", rysowanie pomieszczeń, grupy
   oświetlenia, obszar planu i powłokę aplikacji. Kalkulatory (bezstanowe, bez

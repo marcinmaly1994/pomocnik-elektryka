@@ -56,8 +56,13 @@ function nextManualUid(existing: PanelDevice[]): string {
 /**
  * Rozdzielnica elektryczna: rzut czołowy budowany automatycznie z obwodów
  * (wyznaczonych heurystyką z elementów na planie, w src/lib/panel/circuits.ts)
- * + ręcznie dodawane aparaty. Bez przeciągania myszką (jak w wersji JS) —
- * kolejność zmienia się przyciskami ↑/↓, co jest prostsze i równie użyteczne.
+ * + ręcznie dodawane aparaty.
+ *
+ * Kolejność zmienia się DWIEMA drogami, obiema równorzędnymi: przeciągnięciem
+ * aparatu po płótnie (patrz `onMove` niżej i obsługa wskaźnika w `PanelRender`)
+ * albo przyciskami ↑/↓ na liście. Przeciąganie jest szybsze przy dużej
+ * rozdzielnicy, przyciski działają tam, gdzie przeciąganie jest niewygodne —
+ * na dotyku i przy obsłudze klawiaturą.
  */
 export function PanelTab() {
   const elements = useProjectStore((s) => s.draft.elements); // cały budynek, nie tylko bieżąca kondygnacja
