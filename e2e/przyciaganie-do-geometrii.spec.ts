@@ -38,7 +38,7 @@ async function boxPlotna(page: Page) {
 async function sciany(page: Page) {
   await page.waitForTimeout(900); // debounce autozapisu (600 ms) + zapas
   return page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as { id: string; points: { x: number; y: number }[] }[];
   });
 }
@@ -46,7 +46,7 @@ async function sciany(page: Page) {
 async function pomieszczenia(page: Page) {
   await page.waitForTimeout(900);
   return page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.roomShapes as { name: string; points: { x: number; y: number }[] }[];
   });
 }

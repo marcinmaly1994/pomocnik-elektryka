@@ -74,7 +74,7 @@ test.describe("konto i chmura", () => {
 
     // Nowa sesja bez powiązania z chmurą, ta sama nazwa — dokładnie sytuacja,
     // w której autozapis potrafiłby po cichu nadpisać gotowy projekt.
-    await page.evaluate(() => localStorage.removeItem("pomocnikelektryka_projekt_autosave"));
+    await page.evaluate(() => localStorage.removeItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy")));
     await page.reload();
     await skipEntryScreen(page);
     await ustawNazweProjektu(page, nazwa);

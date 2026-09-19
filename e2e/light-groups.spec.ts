@@ -69,7 +69,7 @@ async function place(page: import("@playwright/test").Page, name: RegExp, x: num
 async function dwuklikWElement(page: import("@playwright/test").Page, typ: string) {
   await page.waitForTimeout(900); // debounce autozapisu — stąd bierzemy pozycję
   const el = await page.evaluate((t) => {
-    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
+    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!);
     return d.draft.elements.find((e: { type: string }) => e.type === t) ?? null;
   }, typ);
   if (!el) throw new Error(`Nie ma elementu typu ${typ} w projekcie`);
@@ -85,7 +85,7 @@ async function dwuklikWElement(page: import("@playwright/test").Page, typ: strin
 async function groups(page: import("@playwright/test").Page) {
   await page.waitForTimeout(900); // debounce autozapisu
   return page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
+    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!);
     return d.draft.elements.map((e: { type: string; lightGroup?: (number | null)[] }) => ({
       type: e.type,
       manual: e.lightGroup ?? null,

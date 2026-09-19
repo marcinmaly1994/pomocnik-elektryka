@@ -34,7 +34,7 @@ async function postawGniazdko(page: Page, x: number, y: number) {
 async function stan(page: Page) {
   await page.waitForTimeout(900);
   return page.evaluate(() => {
-    const a = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
+    const a = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!);
     return { floors: a.floors.map((f: { name: string }) => f.name), aktywna: a.activeFloorId, draft: a.draft };
   });
 }

@@ -50,7 +50,7 @@ test("wgrany rzut nie jest rozciągany — plan przyjmuje jego proporcje", async
 
   const before = DOMYSLNY_OBSZAR;
 
-  // Selektor musi mowic, KTORE pole na pliki — od czasu „Kopii zapasowej" sa w aplikacji dwa
+  // Selektor musi mowic, KTORE pole na pliki — od czasu wczytywania kopii projektu sa w aplikacji dwa
   // (rzut/podklad i plik kopii projektu). Samo `input[accept*="image"]` lapalo oba i wywracalo sie
   // na trybie strict Playwrighta.
   await page.setInputFiles('input[accept*="image"]', {
@@ -122,7 +122,7 @@ test("element da się postawić POZA arkuszem — płótno nie ma granic", async
 
   await page.waitForTimeout(900); // debounce autozapisu
   const postawione = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return raw ? (JSON.parse(raw).draft.elements as { x: number }[]) : [];
   });
   expect(postawione).toHaveLength(1);

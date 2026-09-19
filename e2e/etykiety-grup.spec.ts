@@ -66,7 +66,7 @@ async function przykladNaRzucie(page: Page) {
 
   // Autozapis jest opóźniony, a to z niego test odczytuje, który symbol jest który.
   await expect
-    .poll(() => page.evaluate(() => !!localStorage.getItem("pomocnikelektryka_projekt_autosave")))
+    .poll(() => page.evaluate(() => !!localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))))
     .toBe(true);
 }
 
@@ -115,7 +115,7 @@ test("oba łączniki schodowe w salonie mają ten sam numer grupy", async ({ pag
   await przykladNaRzucie(page);
 
   const numery = await page.evaluate(() => {
-    const a = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!) as {
+    const a = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!) as {
       draft: { elements: ZapisanyElement[] };
     };
     const st = (window as unknown as OknoZKonva).Konva!.stages![0];

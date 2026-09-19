@@ -37,7 +37,7 @@ async function naEkranie(page: Page, x: number, y: number) {
 async function zapisaneElementy(page: Page) {
   await page.waitForTimeout(900); // debounce autozapisu
   return page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return raw ? (JSON.parse(raw).draft.elements as { x: number; y: number; type: string }[]) : [];
   });
 }

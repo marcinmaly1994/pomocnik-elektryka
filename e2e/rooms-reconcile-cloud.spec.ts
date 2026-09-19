@@ -131,7 +131,7 @@ test.describe("remont przypisań do pomieszczeń — projekt z chmury", () => {
     // --- 3. Wczytujemy go z chmury tak, jak zrobiłby to użytkownik ----------------
     // Lokalny autozapis czyścimy, żeby na pewno patrzeć na dane Z CHMURY, a nie na
     // wersję z tej przeglądarki.
-    await page.evaluate(() => localStorage.removeItem("pomocnikelektryka_projekt_autosave"));
+    await page.evaluate(() => localStorage.removeItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy")));
     await page.reload();
     await skipEntryScreen(page);
     // „Moje projekty" siedzi w menu konta pod avatarem — trafiamy je przez `title`,
@@ -150,7 +150,7 @@ test.describe("remont przypisań do pomieszczeń — projekt z chmury", () => {
       .poll(
         async () =>
           page.evaluate(() => {
-            const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+            const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
             if (!raw) return null;
             const el = JSON.parse(raw).draft.elements as { id: string; room: string }[];
             return el.map((e) => `${e.id}:${e.room}`).sort().join(",");

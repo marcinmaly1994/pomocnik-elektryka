@@ -57,7 +57,7 @@ test("prostokąt powstaje przez przytrzymanie LPM i przeciągnięcie", async ({ 
   expect(await roomCount(page)).toBe(1);
   await page.waitForTimeout(900); // debounce autozapisu (600 ms) + zapas
   const pts = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.roomShapes[0].points as { x: number; y: number }[];
   });
   expect(pts).toHaveLength(4);
@@ -91,7 +91,7 @@ test("prostokąt powstaje też przez dwa kliknięcia: narożnik → przeciwległ
 
   await page.waitForTimeout(900);
   const pts = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.roomShapes[0].points as { x: number; y: number }[];
   });
   expect(pts).toHaveLength(4);
@@ -164,7 +164,7 @@ test("wielobok zamyka się po kliknięciu w POBLIŻU pierwszego punktu", async (
 
   await page.waitForTimeout(900); // debounce autozapisu (600 ms) + zapas
   const pts = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.roomShapes[0].points as { x: number; y: number }[];
   });
   // 4 kliknięcia = 4 wierzchołki; zamykający klik NIE dokłada piątego punktu
@@ -289,7 +289,7 @@ test("zaznaczanie obszarem działa, gdy start jest wewnątrz narysowanego pomies
   await page.keyboard.press("r");
   await page.waitForTimeout(900);
   const rotation = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.elements[0].rotation ?? 0;
   });
   expect(rotation).toBe(90);
@@ -388,7 +388,7 @@ async function zapisanePokoje(page: import("@playwright/test").Page) {
   await page.waitForTimeout(900); // debounce autozapisu
   return page.evaluate(
     () =>
-      JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!).draft.roomShapes as {
+      JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!).draft.roomShapes as {
         points: { x: number; y: number }[];
       }[]
   );

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -18,7 +18,8 @@ import {
   Settings,
   UserRound,
 } from "lucide-react";
-import { useProjectStore } from "@/store/useProjectStore";
+import { useProjectStore, zapiszTerazLokalnie } from "@/store/useProjectStore";
+import { biezacyId, type WpisProjektu } from "@/lib/projektyLokalne";
 import { useRoute } from "@/hooks/useRoute";
 import { ZAKLADKA_DOMYSLNA, type AppTab as AppTabRoute } from "@/lib/routing";
 import { Button } from "@/components/ui/button";
@@ -459,6 +460,31 @@ export default function App() {
   }, [route.rozpoznana, nawiguj]);
 
   const session = useProjectStore((s) => s.session);
+
+  /**
+   * Lista projektów lokalnych trzymana w stanie komponentu, a nie czytana przy każdym
+   * renderze.
+   *
+   * Źródłem jest `localStorage`, którego React nie obserwuje — więc odświeżamy ją
+   * jawnie: przy otwarciu okna i po każdej operacji, która ją zmienia. Czytanie przy
+   * renderze dawałoby nowe tablice bez końca i pętlę aktualizacji.
+   */
+  const otworzProjektLokalny = useProjectStore((s) => s.otworzProjektLokalny);
+  const usunProjektLokalny = useProjectStore((s) => s.usunProjektLokalny);
+  const [lokalne, setLokalne] = useState<WpisProjektu[]>([]);
+  const [biezacyLokalny, setBiezacyLokalny] = useState<string | null>(null);
+  const odswiezLokalne = useCallback(() => {
+    setLokalne(useProjectStore.getState().projektyLokalne());
+    setBiezacyLokalny(biezacyId(localStorage));
+  }, []);
+  const otworzListeProjektow = useCallback(() => {
+    // Autozapis chodzi z opóźnieniem 600 ms, więc bez domknięcia go TERAZ lista
+    // pokazywałaby stan sprzed ostatniej zmiany — np. świeżo przemianowany projekt
+    // pod starą nazwą. Lista ma mówić, co naprawdę leży w pamięci przeglądarki.
+    zapiszTerazLokalnie();
+    odswiezLokalne();
+    setProjectsOpen(true);
+  }, [odswiezLokalne]);
   const setSession = useProjectStore((s) => s.setSession);
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const cloudSaveError = useProjectStore((s) => s.cloudSaveError);
@@ -800,7 +826,7 @@ export default function App() {
           {/* Operacje plikowe stoją przy NAZWIE projektu, bo dotyczą projektu jako
               całości — nie zakładki, na której akurat jesteśmy. Poza tym nagłówek jest
               już ciasny (patrz komentarz o 375 px wyżej), a ten rząd ma miejsce. */}
-          <KopiaZapasowa />
+          <KopiaZapasowa onOtworzListe={otworzListeProjektow} />
         </div>
         {/* Bez widocznego suwaka: to pasek nawigacji, a nie okno z treścią. Że da
             się przewinąć, widać po przyciętej karcie następnego etapu — tak samo
@@ -1079,23 +1105,34 @@ export default function App() {
         }}
       />
 
-      {session && (
-        <ProjectsModal
-          open={projectsOpen || limitBlokada?.rodzaj === "projekt"}
-          session={session}
-          rodzaj="projekt"
-          onClose={() => {
-            setProjectsOpen(false);
-            setLimitBlokada(null);
-          }}
-          onLoad={loadCloudProject}
-          busyMsg={cloudBusy ? "Wczytywanie…" : undefined}
-          loadError={cloudSaveError}
-          // Przy pełnym limicie okno otwiera się SAMO z komunikatem — bo zapis się
-          // nie udał i użytkownik musi tu podjąć decyzję, a nie szukać, gdzie kliknąć.
-          limitMsg={limitBlokada?.rodzaj === "projekt" ? limitBlokada.komunikat : null}
-        />
-      )}
+      {/* Okno projektów NIE wymaga już konta: lista lokalna jest jego połową i to ta
+          połowa dotyczy każdego. Bez sesji sekcja chmury zamienia się w jedno zdanie
+          o tym, co daje konto. */}
+      <ProjectsModal
+        open={projectsOpen || limitBlokada?.rodzaj === "projekt"}
+        session={session}
+        rodzaj="projekt"
+        onClose={() => {
+          setProjectsOpen(false);
+          setLimitBlokada(null);
+        }}
+        onLoad={loadCloudProject}
+        busyMsg={cloudBusy ? "Wczytywanie…" : undefined}
+        loadError={cloudSaveError}
+        // Przy pełnym limicie okno otwiera się SAMO z komunikatem — bo zapis się
+        // nie udał i użytkownik musi tu podjąć decyzję, a nie szukać, gdzie kliknąć.
+        limitMsg={limitBlokada?.rodzaj === "projekt" ? limitBlokada.komunikat : null}
+        projektyLokalne={lokalne}
+        biezacyLokalny={biezacyLokalny}
+        onOtworzLokalny={(id) => {
+          otworzProjektLokalny(id);
+          setProjectsOpen(false);
+        }}
+        onUsunLokalny={(id) => {
+          usunProjektLokalny(id);
+          odswiezLokalne();
+        }}
+      />
 
       {/* Okno zestawów protokołów żyje TUTAJ, a nie w zakładce: otwierają je dwa
           różne miejsca (menu przy profilu i przycisk w zakładce), a dwie kopie tego

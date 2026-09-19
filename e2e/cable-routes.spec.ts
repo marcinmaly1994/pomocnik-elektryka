@@ -1096,7 +1096,7 @@ async function dwaPokoje(page: import("@playwright/test").Page, zDrzwiami: boole
     const pts: { x: number; y: number }[] = [];
     const raw = linia?.points() ?? [];
     for (let i = 0; i < raw.length; i += 2) pts.push({ x: raw[i], y: raw[i + 1] });
-    const draft = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!).draft;
+    const draft = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!).draft;
     return { pts, dashed: (linia?.dash()?.length ?? 0) > 0, otwory: draft.openings, pokoje: draft.roomShapes };
   });
 }

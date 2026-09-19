@@ -45,7 +45,7 @@ test("ekran startowy prowadzi od wgrania rzutu przez skalę do pierwszego elemen
   await expect(card(page)).toHaveCount(0);
 
   const { makePng } = await import("./_png");
-  // Selektor musi mowic, KTORE pole na pliki — od czasu „Kopii zapasowej" sa w aplikacji dwa
+  // Selektor musi mowic, KTORE pole na pliki — od czasu wczytywania kopii projektu sa w aplikacji dwa
   // (rzut/podklad i plik kopii projektu). Samo `input[accept*="image"]` lapalo oba i wywracalo sie
   // na trybie strict Playwrighta.
   await page.setInputFiles('input[accept*="image"]', {
@@ -313,7 +313,7 @@ test("„Narysuj dom samodzielnie” z trwałego banera (po pominięciu ekranu s
   await page.waitForTimeout(900);
 
   const raw = await page.evaluate(() => {
-    const draft = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!).draft;
+    const draft = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!).draft;
     return { walls: draft.walls.length };
   });
   expect(raw.walls).toBe(1);

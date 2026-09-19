@@ -290,7 +290,7 @@ test("w punkt sufitowy da sie kliknac takze przy mocno oddalonym widoku", async 
   // Klik liczony w RZECZYWISTY srodek elementu (stawianie przyciaga do siatki).
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
   const el = await page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
+    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!);
     return d.draft.elements[0];
   });
   const canvas = (await page.locator(".konvajs-content").first().boundingBox())!;

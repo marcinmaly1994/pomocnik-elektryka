@@ -34,7 +34,7 @@ async function postaw(page: Page, nazwa: RegExp, x: number, y: number) {
 async function otworzEdycje(page: Page, typ: string) {
   await page.waitForTimeout(900); // debounce autozapisu — stąd bierzemy pozycję
   const el = await page.evaluate((t) => {
-    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
+    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!);
     return d.draft.elements.find((e: { type: string }) => e.type === t) ?? null;
   }, typ);
   if (!el) throw new Error(`Nie ma elementu typu ${typ}`);

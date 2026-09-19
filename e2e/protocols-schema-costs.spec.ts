@@ -105,7 +105,7 @@ test("Protokoły: wypełnione wiersze trafiają do zapisu projektu", async ({ pa
   // Protokoły są częścią projektu, więc idą tą samą drogą co plan — i tym samym
   // trafiają na konto przy zapisie w chmurze. To podstawa dokończenia pomiarów później.
   const zapis = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return raw ? JSON.parse(raw).protocols?.izolacja?.rows?.[0]?.obwod : null;
   });
   expect(zapis).toBe("Obwód gniazd kuchnia");

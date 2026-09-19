@@ -27,7 +27,7 @@ async function otworzPlan(page: Page) {
 async function kadr(page: Page) {
   const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
   const dane = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     const obrysy = raw ? (JSON.parse(raw).draft.roomShapes as { points: { x: number; y: number }[] }[]) : [];
     const punkty = obrysy.flatMap((o) => o.points);
     const s = (window as unknown as {

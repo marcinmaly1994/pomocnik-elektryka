@@ -42,7 +42,13 @@ test("menu konta pokazuje e-mail i pozwala otworzyć „Moje projekty”", async
   await expect(page.getByRole("menuitem", { name: /Wyloguj/ })).toBeVisible();
 
   await projektyItem.click();
-  await expect(page.getByRole("heading", { name: "Moje projekty w chmurze" })).toBeVisible();
+  // Okno nazywa się „Moje projekty", a nie „…w chmurze", odkąd pokazuje OBIE listy.
+  // Zalogowany widzi jedną i drugą — i dopiero zestawione obok siebie tłumaczą, czym
+  // różni się projekt trzymany w przeglądarce od tego na koncie.
+  const okno = page.getByRole("dialog");
+  await expect(okno.getByRole("heading", { name: "Moje projekty" })).toBeVisible();
+  await expect(okno.getByRole("heading", { name: "W tej przeglądarce" })).toBeVisible();
+  await expect(okno.getByRole("heading", { name: "Na koncie" })).toBeVisible();
 });
 
 test("„Wyloguj” w menu konta wraca do stanu niezalogowanego", async ({ page }) => {

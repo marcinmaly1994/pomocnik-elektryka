@@ -37,7 +37,7 @@ test("wgrywanie planu: ekran startowy widoczny bez scrollowania, zwija się po w
   await expect(page.getByText("Zacznij od wgrania rzutu mieszkania")).toHaveCount(0);
 
   // wgranie działa z ekranu startowego dokładnie tak samo jak dawny baner
-  // Selektor musi mowic, KTORE pole na pliki — od czasu „Kopii zapasowej" sa w aplikacji dwa
+  // Selektor musi mowic, KTORE pole na pliki — od czasu wczytywania kopii projektu sa w aplikacji dwa
   // (rzut/podklad i plik kopii projektu). Samo `input[accept*="image"]` lapalo oba i wywracalo sie
   // na trybie strict Playwrighta.
   await page.setInputFiles('input[accept*="image"]', {

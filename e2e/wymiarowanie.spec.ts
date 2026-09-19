@@ -57,7 +57,7 @@ async function planZGeometria(page: Page) {
   await page.waitForTimeout(900);
 
   await page.evaluate(() => {
-    const K = "pomocnikelektryka_projekt_autosave";
+    const K = "pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy");
     const a = JSON.parse(localStorage.getItem(K)!);
     a.scales = { f1: 0.05 };
     a.draft.walls = [

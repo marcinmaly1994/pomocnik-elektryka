@@ -44,7 +44,7 @@ async function drawWall(page: import("@playwright/test").Page) {
 
 async function wallPoints(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls[0].points as { x: number; y: number }[];
   });
 }
@@ -93,7 +93,7 @@ test("po Zakończ narzędzie Ściana zostaje aktywne — kolejny klik zaczyna NO
   await expect(page.getByText(/Rysowanie ściany: 1 pkt\./)).toBeVisible();
 
   const walls = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls as unknown[];
   });
   expect(walls).toHaveLength(1); // ta pierwsza ściana pozostaje nietknięta, druga jeszcze niedokończona
@@ -116,7 +116,7 @@ test("zmiana grubości zaznaczonej ściany zapisuje się do projektu", async ({ 
   await page.waitForTimeout(900);
 
   const thickness = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).draft.walls[0].thickness as number;
   });
   expect(thickness).toBe(18);

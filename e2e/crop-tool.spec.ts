@@ -32,7 +32,7 @@ async function wejdz(page: Page) {
 const RZUT = makePlanPng(400, 300, [[210, 10, 390, 290]]);
 
 async function wgrajRzut(page: Page) {
-  // Selektor musi mowic, KTORE pole na pliki — od czasu „Kopii zapasowej" sa w aplikacji dwa
+  // Selektor musi mowic, KTORE pole na pliki — od czasu wczytywania kopii projektu sa w aplikacji dwa
   // (rzut/podklad i plik kopii projektu). Samo `input[accept*="image"]` lapalo oba i wywracalo sie
   // na trybie strict Playwrighta.
   await page.setInputFiles('input[accept*="image"]', { name: "rzut.png", mimeType: "image/png", buffer: RZUT });
@@ -69,7 +69,7 @@ test("„Pomiń — użyj całego rzutu” wraca wprost do edytora, w oryginalny
   await page.waitForTimeout(900); // debounce autozapisu
 
   const planSize = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).planSize;
   });
   // proporcja obszaru roboczego dopasowana do PEŁNEGO rzutu (4:3), nie przycięta
@@ -110,7 +110,7 @@ test("przycięty podkład zastępuje pełny rzut w edytorze", async ({ page }) =
   // jest więc zmiana proporcji (z krajobrazowej 400×300 na bardziej pionową
   // po zaznaczeniu ~180×240), nie bezwzględny rozmiar `planSize`.
   const planSize = await page.evaluate(() => {
-    const raw = localStorage.getItem("pomocnikelektryka_projekt_autosave");
+    const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
     return JSON.parse(raw!).planSize;
   });
   expect(planSize.w / planSize.h).toBeLessThan(400 / 300);

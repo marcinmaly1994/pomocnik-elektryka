@@ -68,7 +68,7 @@ test("usuwanie kondygnacji: przycisk dopiero przy drugiej, kasuje jej elementy",
   await expect(page.getByRole("button", { name: /^Usuń kondygnację/ })).toHaveCount(0);
   await page.waitForTimeout(900); // debounce autozapisu
   const left = await page.evaluate(() => {
-    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_autosave")!);
+    const d = JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"))!);
     return { floors: d.floors.length, elements: d.draft.elements.length };
   });
   // elementy skasowanego piętra znikają razem z nim, parter zostaje nietknięty

@@ -26,7 +26,7 @@ async function swiezyProjekt(page: Page) {
 }
 
 async function otworzMenuKopii(page: Page) {
-  await page.getByRole("button", { name: "Kopia zapasowa" }).click();
+  await page.getByRole("button", { name: "Projekty" }).click();
 }
 
 test("kopię można zapisać i przywrócić bez zakładania konta", async ({ page }) => {
@@ -82,4 +82,37 @@ test("wskazanie niewłaściwego pliku mówi o tym wprost i nie rusza projektu", 
   await page.getByRole("button", { name: /Zamknij|OK/ }).first().click();
   // Projekt stoi nietknięty.
   await expect(pasekPrzykladu(page)).toBeVisible();
+});
+
+/**
+ * Na telefonie menu projektów nie może zawijać się na dwie linie.
+ *
+ * Warunkiem NIE jest sama szerokość ekranu, tylko DŁUGA NAZWA PROJEKTU obok. Przy
+ * świeżym projekcie („Mój dom") przycisk mieści się w jednej linii nawet przy 375 px
+ * i pomiar niczego nie pokazuje — dopiero nazwa w rodzaju „Przykład: mieszkanie 70 m²"
+ * zabiera wiersz na tyle, że etykieta łamie się na dwie linie. Kosztowało to wtedy
+ * 48 px wysokości płótna, na ekranie, gdzie rysunku widać i tak tylko ~180 px bez
+ * przewijania.
+ *
+ * Stąd przykład, a nie pusty projekt: test ma odtwarzać sytuację, w której usterka
+ * naprawdę występuje. Mierzona jest WYSOKOŚĆ RENDERU, nie obecność klasy CSS — żeby
+ * złapać także powrót tego zachowania inną drogą.
+ */
+test.describe("wąski ekran", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("menu projektów mieści się w jednej linii mimo długiej nazwy projektu", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+    await expect(page.getByText("To jest projekt przykładowy")).toBeVisible();
+
+    const kopia = page.getByRole("button", { name: "Projekty" });
+    await expect(kopia).toBeVisible();
+
+    const box = (await kopia.boundingBox())!;
+    // Jedna linia tekstu z odstępami to ok. 22–30 px; dwie to 44 px i więcej.
+    expect(box.height, `przycisk ma ${Math.round(box.height)} px wysokości — zawinął się`).toBeLessThan(34);
+  });
 });

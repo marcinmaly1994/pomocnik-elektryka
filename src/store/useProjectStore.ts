@@ -1,5 +1,16 @@
 import { create } from "zustand";
 import { domyslnyNaglowek } from "@/lib/docHeader";
+import {
+  biezacyId,
+  czytajIndeks,
+  kluczProjektu,
+  migrujStaryAutozapis,
+  nowyId,
+  ustawBiezacy,
+  zapiszIndeks,
+  usunProjekt,
+  type WpisProjektu,
+} from "@/lib/projektyLokalne";
 import { WARUNKI_DOBORU_DOMYSLNE, type WarunkiDoboru } from "@/lib/panel/norms";
 import type { ProjectSizingOptions } from "@/lib/panel/project";
 import { useMemo } from "react";
@@ -52,7 +63,7 @@ const SESSION_KEY = "pomocnikelektryka_sesja";
 /** Osobny klucz od sesji logowania — to jest sam PROJEKT (plan, ceny, protokoły…),
  *  zapisywany automatycznie, żeby zamknięcie karty bez konta w chmurze nie kasowało
  *  godziny pracy nad planem. Patrz `initLocalAutosave` na dole pliku. */
-const AUTOSAVE_KEY = "pomocnikelektryka_projekt_autosave";
+
 
 /** Ostatnia migawka projektu, o której WIEMY, że jest w chmurze — ustawiana
  *  zarówno po udanym zapisie, jak i po wczytaniu projektu z chmury. Trzymana
@@ -93,12 +104,92 @@ function loadStoredSession(): Session | null {
   }
 }
 
+/**
+ * Projekt do otwarcia przy starcie — z listy projektów lokalnych.
+ *
+ * Kolejność ma znaczenie i nie jest dowolna:
+ *  1. MIGRACJA. Kto miał projekt pod starym, pojedynczym kluczem, dostaje go jako
+ *     pierwszy wpis listy. Bez tego aktualizacja aplikacji zastałaby pustkę.
+ *  2. Bieżący, a gdy go nie ma — pierwszy z listy. Wskaźnik bieżącego mógł zniknąć
+ *     (czyszczenie danych, druga karta), a lista wtedy i tak wie, co otworzyć.
+ *
+ * Cały odczyt w jednym `try`: zawartość `localStorage` to dane z zewnątrz, a wyjątek
+ * przy starcie zabiłby powłokę aplikacji, zanim cokolwiek się pokaże.
+ */
 function loadAutosavedProject(): ProjectPayload | null {
   try {
-    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    migrujStaryAutozapis(localStorage);
+    const id = biezacyId(localStorage) ?? czytajIndeks(localStorage)[0]?.id ?? null;
+    if (!id) return null;
+    ustawBiezacy(localStorage, id);
+    const raw = localStorage.getItem(kluczProjektu(id));
     return raw ? (JSON.parse(raw) as ProjectPayload) : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Klucz, pod który idzie autozapis — czyli slot PROJEKTU AKTUALNIE OTWARTEGO.
+ *
+ * Zakłada slot, jeśli jeszcze nie istnieje (pierwsze uruchomienie w czystej
+ * przeglądarce). Dzięki temu wywołujący nie musi wiedzieć, czy lista już jest.
+ */
+function kluczAutozapisu(): string {
+  let id = biezacyId(localStorage);
+  if (!id) {
+    id = nowyId();
+    ustawBiezacy(localStorage, id);
+    zapiszIndeks(localStorage, [
+      ...czytajIndeks(localStorage),
+      { id, nazwa: useProjectStore.getState().projectName, zmieniony: Date.now() },
+    ]);
+  }
+  return kluczProjektu(id);
+}
+
+/**
+ * Odświeża wpis na liście po udanym zapisie: nazwę i czas zmiany.
+ *
+ * Bez tego lista pokazywałaby nazwę sprzed zmiany i „nigdy nie zmieniany" — czyli
+ * kłamałaby akurat w dwóch polach, po których użytkownik rozpoznaje, który projekt
+ * jest który. Błędy połykane: to kosmetyka listy, nie zapis pracy, więc nie ma prawa
+ * wywrócić autozapisu, który właśnie się udał.
+ */
+/**
+ * Przestawia wskaźnik bieżącego projektu na NOWY, pusty slot i dokłada go do listy.
+ *
+ * Wywoływana z `resetProject` PO domknięciu zapisu poprzedniego projektu. Zeruje też
+ * `lastAutosavedJson`, bo to ono decyduje, czy autozapis w ogóle coś zrobi: bez
+ * wyzerowania pusty projekt różniłby się od bufora i zapis by przeszedł, ale przy
+ * powrocie do projektu o identycznej treści już nie — a wtedy nowy slot zostałby
+ * pusty na dysku mimo widocznej pracy na ekranie.
+ */
+function przelaczNaNowyProjektLokalny(): void {
+  try {
+    const id = nowyId();
+    ustawBiezacy(localStorage, id);
+    zapiszIndeks(localStorage, [...czytajIndeks(localStorage), { id, nazwa: "Mój dom", zmieniony: Date.now() }]);
+  } catch {
+    // Brak dostępu do pamięci (tryb prywatny) nie może zablokować założenia nowego
+    // projektu — praca w tej karcie ma działać także wtedy, gdy nic się nie zapisuje.
+  }
+  lastAutosavedJson = null;
+}
+
+function odswiezWpisIndeksu(): void {
+  try {
+    const id = biezacyId(localStorage);
+    if (!id) return;
+    const nazwa = useProjectStore.getState().projectName;
+    const wpisy = czytajIndeks(localStorage);
+    const i = wpisy.findIndex((w) => w.id === id);
+    const wpis = { id, nazwa, zmieniony: Date.now() };
+    if (i >= 0) wpisy[i] = wpis;
+    else wpisy.push(wpis);
+    zapiszIndeks(localStorage, wpisy);
+  } catch {
+    // patrz komentarz w opisie
   }
 }
 
@@ -370,6 +461,13 @@ interface ProjectState {
   canRedo: () => boolean;
   resetProject: () => void;
 
+  /** Projekty zapisane W TEJ PRZEGLĄDARCE, najświeższy pierwszy. */
+  projektyLokalne: () => WpisProjektu[];
+  /** Przełącza się na projekt z listy lokalnej, domykając zapis bieżącego. */
+  otworzProjektLokalny: (id: string) => void;
+  /** Kasuje projekt z listy lokalnej razem z jego treścią. Zwraca to, co zostało. */
+  usunProjektLokalny: (id: string) => WpisProjektu[];
+
   /**
    * Osobna, mniejsza historia cofnij/ponów — WYŁĄCZNIE dla ręcznych zmian w
    * rozdzielnicy (kasowanie aparatu, przenoszenie na szynie, edycja, „Wyrównaj fazy",
@@ -560,7 +658,71 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   // uprawnienia, miernik, świadectwo wzorcowania) są takie same dla każdego zlecenia,
   // więc ich kasowanie przy każdym nowym projekcie tylko zmuszałoby do przepisywania
   // ich w kółko. Kasowane są wyłącznie pola opisujące KONKRETNY obiekt.
+  projektyLokalne: () => {
+    try {
+      return [...czytajIndeks(localStorage)].sort((a, b) => b.zmieniony - a.zmieniony);
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Otwarcie projektu z listy lokalnej.
+   *
+   * Ta sama kolejność co w `resetProject` i z tego samego powodu: najpierw domknięcie
+   * zapisu projektu, który właśnie opuszczamy, dopiero potem przestawienie wskaźnika.
+   * Odwrotnie — bufor autozapisu wylądowałby w slocie projektu, który dopiero
+   * otwieramy, i nadpisał go treścią poprzedniego.
+   */
+  otworzProjektLokalny: (id) => {
+    if (biezacyId(localStorage) === id) return;
+    zapiszTerazLokalnie();
+    try {
+      const raw = localStorage.getItem(kluczProjektu(id));
+      if (raw === null) return;
+      ustawBiezacy(localStorage, id);
+      lastAutosavedJson = raw;
+      get().loadProjectPayload(JSON.parse(raw) as ProjectPayload);
+    } catch {
+      // Uszkodzony slot: zostajemy tam, gdzie byliśmy. Lepiej nie otworzyć projektu
+      // niż wyrzucić użytkownika z tego, nad którym pracuje.
+    }
+  },
+
+  usunProjektLokalny: (id) => {
+    try {
+      const zostalo = usunProjekt(localStorage, id);
+      // Skasowanie OTWARTEGO projektu zostawiłoby na ekranie stan bez slotu —
+      // następny autozapis założyłby mu nowy i projekt „wróciłby" na listę.
+      // Dlatego wtedy zaczynamy czysto, tak jak przy „Nowym projekcie".
+      if (biezacyId(localStorage) === null) get().resetProject();
+      return zostalo;
+    } catch {
+      return [];
+    }
+  },
+
   resetProject: () => {
+    /**
+     * „Nowy projekt" ODKŁADA dotychczasowy na listę projektów lokalnych, zamiast go
+     * kasować. To jest sedno listy: bez tego przy drugim mieszkaniu nadal trzeba by
+     * nadpisać pierwsze.
+     *
+     * Kolejność jest tu wszystkim. Najpierw domykamy zapis STAREGO projektu w jego
+     * slocie (autozapis chodzi z opóźnieniem 600 ms, więc ostatnie zmiany mogą jeszcze
+     * wisieć w buforze), a dopiero potem przestawiamy wskaźnik bieżącego. Odwrotnie —
+     * pusty stan wylądowałby w slocie starego projektu i zjadł dokładnie tę pracę,
+     * którą próbujemy ocalić.
+     *
+     * WYJĄTEK: projekt przykładowy. Jest z założenia jednorazowy („Zacznij własny
+     * projekt" jest jedynym wyjściem z niego), więc archiwizowanie go zaśmiecałoby
+     * listę czymś, czego nikt nie tworzył. Wtedy po prostu zostajemy w tym samym
+     * slocie i nadpisujemy go pustym projektem.
+     */
+    if (!get().projektPrzykladowy) {
+      zapiszTerazLokalnie();
+      przelaczNaNowyProjektLokalny();
+    }
     // Nowy projekt zaczyna bez powiązania z jakimkolwiek wierszem w chmurze —
     // bez wyzerowania tego automatyczny zapis w tle nadpisałby STARY projekt
     // pustym draftem zamiast założyć nowy wiersz.
@@ -1432,7 +1594,7 @@ let lastAutosavedJson: string | null = autosavedProject ? JSON.stringify(autosav
 if (autosavedProject && useProjectStore.getState().roomsFixedOnLoad > 0) {
   lastAutosavedJson = JSON.stringify(useProjectStore.getState().getProjectPayload());
   try {
-    localStorage.setItem(AUTOSAVE_KEY, lastAutosavedJson);
+    localStorage.setItem(kluczAutozapisu(), lastAutosavedJson);
   } catch {
     // patrz komentarz w subskrybencie niżej — brak zapisu nie psuje pracy w tej karcie
   }
@@ -1450,8 +1612,10 @@ function wykonajAutozapis(): void {
   const json = JSON.stringify(payload);
   if (json === lastAutosavedJson) return;
   lastAutosavedJson = json;
+  const klucz = kluczAutozapisu();
   try {
-    localStorage.setItem(AUTOSAVE_KEY, json);
+    localStorage.setItem(klucz, json);
+    odswiezWpisIndeksu();
     useProjectStore.setState({ lastLocalSaveAt: Date.now(), localSaveError: null });
   } catch {
       /**
@@ -1467,7 +1631,8 @@ function wykonajAutozapis(): void {
        *    udanego zapisu, nie zmieniając ani koloru, ani treści.
        */
     try {
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ ...payload, bgImages: {} }));
+      localStorage.setItem(klucz, JSON.stringify({ ...payload, bgImages: {} }));
+      odswiezWpisIndeksu();
       useProjectStore.setState({ lastLocalSaveAt: Date.now(), localSaveError: "bezPodkladu" });
     } catch {
       useProjectStore.setState({ localSaveError: "brak" });
