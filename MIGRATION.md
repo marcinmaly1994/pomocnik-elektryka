@@ -4251,13 +4251,39 @@ i sztywny obszar planu w kroku 45. Ostatnie z nich:
 
 ### Pozostałe
 
-- Aktualizacja Vite 5 → 8 i Vitest 2 → 4 wykonana w kroku 45 — `npm audit`
-  zgłasza teraz **0 podatności**. Wymagała czystej instalacji, bo npm nie
-  potrafił przeliczyć istniejącego drzewa zależności.
-- Integracja z Supabase jest gotowa w kodzie, ale nieskonfigurowana —
-  patrz krok 10 wyżej. Skopiuj `.env.example` do `.env` i uzupełnij
-  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`, żeby włączyć logowanie i
-  zapis w chmurze.
+- Aktualizacja Vite 5 → 8 i Vitest 2 → 4 wykonana w kroku 45. Wymagała
+  czystej instalacji, bo npm nie potrafił przeliczyć istniejącego drzewa
+  zależności. ~~`npm audit` zgłasza teraz **0 podatności**~~ — **to się
+  zdezaktualizowało**: podatności pojawiają się w cudzych paczkach po
+  fakcie, więc taka liczba jest prawdziwa wyłącznie w dniu wpisania.
+  Zamiast przepisywać ją tutaj, sprawdzaj na bieżąco:
+
+  ```bash
+  npm audit --omit=dev   # to, co trafia do uzytkownika
+  npm audit              # razem z narzedziami deweloperskimi
+  ```
+
+  Rozróżnienie jest istotne: paczki deweloperskie (ESLint, Playwright,
+  Vitest) nie wchodzą do zbudowanej aplikacji, więc podatność w nich jest
+  sprawą warsztatu, a nie użytkownika.
+- ~~Integracja z Supabase jest gotowa w kodzie, ale nieskonfigurowana~~ —
+  **nieaktualne**. Backend działa, a `.env.example` zawiera już prawdziwy
+  adres projektu i klucz publiczny, więc do uruchomienia wystarczy:
+
+  ```bash
+  cp .env.example .env
+  ```
+
+  Klucz w tym pliku jest kluczem PUBLICZNYM („anon"/„publishable") i tak
+  trafia do paczki wysyłanej do przeglądarki — nie jest sekretem. Dostępu
+  do danych pilnuje RLS po stronie bazy (zasady w komentarzu nagłówkowym
+  `src/lib/supabase.ts`), a nie ukrywanie tego klucza. Sekretem jest
+  wyłącznie klucz `service_role`, którego w tym repozytorium nie ma i mieć
+  nie będzie.
+
+  Testy e2e dotykające prawdziwego konta (`e2e/konto.spec.ts`) wymagają
+  dodatkowo `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` i bez nich są POMIJANE,
+  nie czerwone.
 - ~~Zmiana kolejności aparatów w rozdzielnicy nadal działa przyciskami ↑/↓,
   nie przeciąganiem myszką po płótnie jak w oryginale~~ — **nieaktualne**.
   Przeciąganie DZIAŁA (patrz `onMove` w `PanelTab` i obsługa wskaźnika
@@ -4268,11 +4294,18 @@ i sztywny obszar planu w kroku 45. Ostatnie z nich:
   Ten wpis, jak ten o opisie pod aparatem 1-modułowym wyżej, wisiał jako
   „niezrobiony" długo po zrobieniu i wprowadził w błąd przy przeglądzie
   aplikacji. Stąd skreślenie zamiast usunięcia.
-- Dwadzieścia sześć testów Playwright w 10 plikach (katalog `e2e/`) pokrywa
-  5 z 6 zakładek plus autozapis, „Nowy projekt", rysowanie pomieszczeń, grupy
-  oświetlenia, obszar planu i powłokę aplikacji. Kalkulatory (bezstanowe, bez
-  interakcji z Konvą) i integracja Supabase (wymaga prawdziwego `.env`)
-  zostają bez testów e2e.
+- ~~Dwadzieścia sześć testów Playwright w 10 plikach pokrywa 5 z 6 zakładek.
+  Kalkulatory i integracja Supabase zostają bez testów e2e~~ — **nieaktualne
+  w każdym członie**. Zestaw urósł do **81 plików i 481 testów**, Kalkulatory
+  mają własny (`calculators.spec.ts`, 54 testy), a konto i chmura też
+  (`konto.spec.ts`, 5 testów pomijanych bez `.env`).
+
+  Liczb w tym miejscu nie warto odświeżać — zdezaktualizują się przy
+  następnej zmianie. Aktualny stan daje:
+
+  ```bash
+  npx playwright test --list
+  ```
 - ~~Detekcja pomieszczeń na skomplikowanych realnych rzutach zaniżała liczbę
   pokoi~~ — cały silnik auto-detekcji USUNIĘTY w kroku 66 (zbyt zawodny mimo
   trzech rund napraw); zamiast tego wgraj → przytnij → narysuj ręcznie.
