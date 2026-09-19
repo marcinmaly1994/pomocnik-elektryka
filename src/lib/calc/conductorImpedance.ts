@@ -159,7 +159,7 @@ export function obliczPrzewodyRownolegle(w: RownolegleWejscie): CalcResult<Rowno
 
   const rozneDlugosci = Math.max(...w.dlugosci_m) - Math.min(...w.dlugosci_m) > 1e-9;
   const zalozenia = [
-    "Wszystkie żyły mają ten sam przekój, materiał i sposób ułożenia — bez tego podział prądu liczy się inaczej i warunek dopuszczalności połączenia równoległego nie jest spełniony.",
+    "Wszystkie żyły mają ten sam przekrój, materiał i sposób ułożenia — bez tego podział prądu liczy się inaczej i warunek dopuszczalności połączenia równoległego nie jest spełniony.",
     "Żyły biegną bez odgałęzień na całej długości — odgałęzienie zmienia rozkład prądu i wyklucza traktowanie ich jako jednego przewodu.",
     "Pominięto wpływ wzajemnego oddziaływania (efekt zbliżenia) — przy dużych przekrojach i kablach jednożyłowych podział bywa dodatkowo nierówny.",
   ];
