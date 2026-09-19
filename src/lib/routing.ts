@@ -12,8 +12,28 @@
  * (pushState/popstate) zajmuje się `useRoute` w hooks/useRoute.ts.
  */
 
-/** Zakładki najwyższego poziomu. Kolejność bez znaczenia — to zbiór, nie lista. */
-export type AppTab = "kalkulatory" | "projekt" | "rozdzielnica" | "protokoly" | "schemat" | "kosztorys";
+/**
+ * Widoki najwyższego poziomu. Kolejność bez znaczenia — to zbiór, nie lista.
+ *
+ * Nie każdy z nich jest ZAKŁADKĄ w sensie interfejsu. „prywatnosc” to strona
+ * towarzysząca (polityka prywatności), do której wchodzi się linkiem ze stopki,
+ * z Pomocy i z formularza rejestracji — nie ma kafla w przepływie ani pozycji
+ * w pasku narzędzi. Siedzi tu mimo to, bo dzięki temu dostaje bez ani jednej
+ * linijki osobnej maszynerii wszystko, co ma reszta: własny adres do wysłania,
+ * „wstecz”, przeładowanie pod bezpośrednim linkiem i cofnięcie do strony
+ * startowej przy literówce.
+ *
+ * Kroki przepływu 1→4 to OSOBNA lista (`KOLEJNOSC_KROKOW` w App.tsx) i to ona,
+ * a nie ten typ, decyduje o nawigacji „Dalej/Cofnij” i o pasku przykładu.
+ */
+export type AppTab =
+  | "kalkulatory"
+  | "projekt"
+  | "rozdzielnica"
+  | "protokoly"
+  | "schemat"
+  | "kosztorys"
+  | "prywatnosc";
 
 /**
  * Pierwszy segment ścieżki dla każdej zakładki.
@@ -31,6 +51,7 @@ const SEGMENT_ZAKLADKI: Record<AppTab, string> = {
   kosztorys: "kosztorys",
   kalkulatory: "kalkulatory",
   protokoly: "protokoly",
+  prywatnosc: "prywatnosc",
 };
 
 /** Zakładka domyślna — i zarazem awaryjna dla adresu, którego nie umiemy rozpoznać. */

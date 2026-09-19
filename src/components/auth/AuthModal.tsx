@@ -153,6 +153,29 @@ export function AuthModal({ open, komunikat, onClose, onSignedIn }: AuthModalPro
             )}
             {mode === "login" ? "Zaloguj się" : mode === "register" ? "Załóż konto" : "Wyślij link resetujący"}
           </Button>
+          {/* Informacja, a NIE blokujący checkbox: zaznaczanie kwadracika niczego tu
+              nie dodaje — zgody na przetwarzanie danych potrzebnych do prowadzenia
+              konta się nie zbiera, bo podstawą jest umowa, a nie zgoda. Obowiązek
+              informacyjny (art. 13 RODO) spełnia dostęp do dokumentu w momencie
+              zakładania konta, więc wystarczy, żeby link tu BYŁ i działał.
+
+              `target="_blank"` jest tu konieczny, a nie kosmetyczny: przejście na
+              politykę w tej samej karcie zamyka to okno razem z wpisanym już adresem
+              e-mail i hasłem — czyli karze za przeczytanie tego, co się podpisuje. */}
+          {mode === "register" && (
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              Zakładając konto zgadzasz się na przetwarzanie swoich danych w sposób opisany w{" "}
+              <a
+                href="/prywatnosc"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-slate-300 underline-offset-2 hover:text-ink"
+              >
+                polityce prywatności
+              </a>
+              .
+            </p>
+          )}
         </div>
         {mode === "recover" ? (
           <button onClick={() => switchMode("login")} className="mt-3 text-xs text-slate-500 hover:underline">

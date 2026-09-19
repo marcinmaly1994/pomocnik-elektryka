@@ -76,6 +76,7 @@ const wczytaj = {
   protokoly: () => import("@/components/protocols/ProtocolsTab"),
   schemat: () => import("@/components/schema/SchemaTab"),
   kosztorys: () => import("@/components/costs/CostsTab"),
+  prywatnosc: () => import("@/components/legal/PolitykaPrywatnosci"),
 } as const;
 
 const DesignTab = lazy(() => wczytaj.projekt().then((m) => ({ default: m.DesignTab })));
@@ -84,6 +85,7 @@ const CalculatorsTab = lazy(() => wczytaj.kalkulatory().then((m) => ({ default: 
 const ProtocolsTab = lazy(() => wczytaj.protokoly().then((m) => ({ default: m.ProtocolsTab })));
 const SchemaTab = lazy(() => wczytaj.schemat().then((m) => ({ default: m.SchemaTab })));
 const CostsTab = lazy(() => wczytaj.kosztorys().then((m) => ({ default: m.CostsTab })));
+const PolitykaPrywatnosci = lazy(() => wczytaj.prywatnosc().then((m) => ({ default: m.PolitykaPrywatnosci })));
 
 /**
  * Pobiera kod zakładki, ZANIM użytkownik w nią kliknie.
@@ -916,6 +918,14 @@ export default function App() {
         </Suspense>
       )}
 
+      {/* Strona towarzysząca, nie krok przepływu — stąd brak kafla, paska przykładu
+          i pigułek nawigacji (patrz komentarz przy `AppTab` w lib/routing.ts). */}
+      {tab === "prywatnosc" && (
+        <Suspense fallback={<TabLoading />}>
+          <PolitykaPrywatnosci />
+        </Suspense>
+      )}
+
       {tab === "projekt" && (
         <>
           <Suspense fallback={<TabLoading />}>
@@ -1205,7 +1215,11 @@ export default function App() {
         />
       )}
 
-      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <HelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        onOtworzPrywatnosc={() => setTab("prywatnosc")}
+      />
 
       {/* Okno kompletu i jego podglad mieszkaja TUTAJ, nie w zakladce: skladanie
           przelacza zakladki (patrz KompletDialog), wiec cokolwiek osadzonego
@@ -1223,7 +1237,10 @@ export default function App() {
           spoza przepływu (Kalkulatory, Protokoły) nie ma ani „Cofnij", ani „Dalej",
           a pusty pas pod stopką to dokładnie ten pas gołego tła, który już raz
           z tego ekranu usuwano. Ten sam warunek co przy samych pigułkach wyżej. */}
-      <SiteFooter rezerwaNaNawigacje={KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab) > 0} />
+      <SiteFooter
+        rezerwaNaNawigacje={KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab) > 0}
+        onOtworzPrywatnosc={() => setTab("prywatnosc")}
+      />
     </div>
   );
 }
@@ -1235,7 +1252,13 @@ export default function App() {
  * uprawnieniami. Aplikacja jest adresowana głównie do laików (krok 20), więc to
  * zastrzeżenie musi być widoczne, a nie schowane w „warunkach użytkowania".
  */
-function SiteFooter({ rezerwaNaNawigacje }: { rezerwaNaNawigacje: boolean }) {
+function SiteFooter({
+  rezerwaNaNawigacje,
+  onOtworzPrywatnosc,
+}: {
+  rezerwaNaNawigacje: boolean;
+  onOtworzPrywatnosc: () => void;
+}) {
   /*
    * `md:pb-16` to ZAPAS pod pływające pigułki „Cofnij/Dalej".
    *
@@ -1268,6 +1291,23 @@ function SiteFooter({ rezerwaNaNawigacje }: { rezerwaNaNawigacje: boolean }) {
         <div className="text-slate-400">
           <div>Obliczenia wg PN-HD 60364</div>
           <div className="mt-0.5">Projekt zapisywany lokalnie w przeglądarce</div>
+          {/* Prawdziwy <a href>, a nie przycisk: to dokument, który ktoś zechce
+              otworzyć obok, skopiować i wysłać dalej. Zwykłe kliknięcie przechwytujemy,
+              żeby nie przeładowywać całej aplikacji — a kliknięcie z modyfikatorem
+              (Ctrl/Cmd/Shift) zostawiamy przeglądarce, bo to wprost żądanie „otwórz
+              w nowej karcie albo w nowym oknie". Środkowy przycisk w ogóle tu nie
+              dociera: przeglądarka obsługuje go sama, czyli dokładnie tak, jak trzeba. */}
+          <a
+            href="/prywatnosc"
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+              e.preventDefault();
+              onOtworzPrywatnosc();
+            }}
+            className="mt-1.5 inline-block text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-ink"
+          >
+            Prywatność i dane
+          </a>
           {/* Wersja wdrożenia. Przy zgłoszeniu „u mnie nie działa" nie było czym
               ustalić, co ktoś ma właściwie załadowane: aplikacja jest jednostronicowa,
               więc adres tego nie mówi, a przeglądarka potrafi trzymać starą wersję. */}
