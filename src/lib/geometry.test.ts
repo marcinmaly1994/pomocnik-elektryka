@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata, przesunNaDlugosc } from "./geometry";
+import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata, przesunNaDlugosc, prostokatOdKotwicy } from "./geometry";
 
 describe("snap", () => {
   it("zaokrągla do siatki 20", () => {
@@ -363,5 +363,64 @@ describe("przesunNaDlugosc", () => {
     expect(przesunNaDlugosc(od, doP, -3)).toEqual(doP);
     expect(przesunNaDlugosc(od, doP, Number.NaN)).toEqual(doP);
     expect(przesunNaDlugosc(od, doP, Number.POSITIVE_INFINITY)).toEqual(doP);
+  });
+});
+
+/**
+ * Prostokątne pomieszczenie z podanych wymiarów.
+ *
+ * Kotwicę stawia użytkownik kliknięciem, wymiary wpisuje — a ta funkcja rozstrzyga,
+ * W KTÓRĄ STRONĘ prostokąt się rozwinie, żeby zmieścić się w planie.
+ */
+describe("prostokatOdKotwicy", () => {
+  const plan = { w: 1000, h: 800 };
+
+  it("rozwija się w prawo i w dół, gdy jest miejsce", () => {
+    const pkt = prostokatOdKotwicy({ x: 100, y: 100 }, 200, 150, plan)!;
+    expect(pkt).toEqual([
+      { x: 100, y: 100 },
+      { x: 300, y: 100 },
+      { x: 300, y: 250 },
+      { x: 100, y: 250 },
+    ]);
+  });
+
+  it("odbija się w lewo, gdy przy prawej krawędzi brakuje miejsca", () => {
+    const pkt = prostokatOdKotwicy({ x: 950, y: 100 }, 200, 150, plan)!;
+    const xs = pkt.map((p) => p.x);
+    expect(Math.min(...xs)).toBe(750);
+    expect(Math.max(...xs)).toBe(950);
+    // Oś pionowa nietknięta — odbicie dotyczy KAŻDEJ OSI OSOBNO.
+    expect(Math.min(...pkt.map((p) => p.y))).toBe(100);
+  });
+
+  it("odbija się w górę, gdy przy dolnej krawędzi brakuje miejsca", () => {
+    const pkt = prostokatOdKotwicy({ x: 100, y: 780 }, 200, 150, plan)!;
+    const ys = pkt.map((p) => p.y);
+    expect(Math.min(...ys)).toBe(630);
+    expect(Math.max(...ys)).toBe(780);
+    expect(Math.min(...pkt.map((p) => p.x))).toBe(100);
+  });
+
+  it("odbija się w obu osiach naraz w rogu planu", () => {
+    const pkt = prostokatOdKotwicy({ x: 990, y: 790 }, 200, 150, plan)!;
+    expect(Math.min(...pkt.map((p) => p.x))).toBe(790);
+    expect(Math.min(...pkt.map((p) => p.y))).toBe(640);
+  });
+
+  it("prostokąt większy od planu powstaje mimo to, w prawo i w dół", () => {
+    // Użytkownik poprosił o taki wymiar. To nie jest moment na poprawianie go bez
+    // pytania — plan da się powiększyć, a cicho przycięty pokój kłamałby o metrażu.
+    const pkt = prostokatOdKotwicy({ x: 100, y: 100 }, 5000, 4000, plan)!;
+    expect(Math.max(...pkt.map((p) => p.x))).toBe(5100);
+    expect(Math.max(...pkt.map((p) => p.y))).toBe(4100);
+  });
+
+  it("wymiar niedodatni albo nieliczbowy nie tworzy pomieszczenia", () => {
+    const k = { x: 100, y: 100 };
+    expect(prostokatOdKotwicy(k, 0, 150, plan)).toBeNull();
+    expect(prostokatOdKotwicy(k, 200, -5, plan)).toBeNull();
+    expect(prostokatOdKotwicy(k, Number.NaN, 150, plan)).toBeNull();
+    expect(prostokatOdKotwicy(k, 200, Number.POSITIVE_INFINITY, plan)).toBeNull();
   });
 });
