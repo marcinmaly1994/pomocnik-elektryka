@@ -32,7 +32,10 @@ async function wejdz(page: Page) {
 const RZUT = makePlanPng(400, 300, [[210, 10, 390, 290]]);
 
 async function wgrajRzut(page: Page) {
-  await page.setInputFiles('input[type="file"]', { name: "rzut.png", mimeType: "image/png", buffer: RZUT });
+  // Selektor musi mowic, KTORE pole na pliki — od czasu „Kopii zapasowej" sa w aplikacji dwa
+  // (rzut/podklad i plik kopii projektu). Samo `input[accept*="image"]` lapalo oba i wywracalo sie
+  // na trybie strict Playwrighta.
+  await page.setInputFiles('input[accept*="image"]', { name: "rzut.png", mimeType: "image/png", buffer: RZUT });
   const svg = page.getByRole("img", { name: /zaznaczyć obszar do zachowania/i });
   await expect(svg).toBeVisible({ timeout: 15000 });
   return svg;
@@ -46,7 +49,7 @@ async function klikW(svg: Locator, fx: number, fy: number, opts?: { button?: "le
 
 test("wgranie pliku pokazuje krok przycinania przed edytorem", async ({ page }) => {
   await wejdz(page);
-  await page.setInputFiles('input[type="file"]', { name: "rzut.png", mimeType: "image/png", buffer: RZUT });
+  await page.setInputFiles('input[accept*="image"]', { name: "rzut.png", mimeType: "image/png", buffer: RZUT });
 
   await expect(page.getByRole("heading", { name: "Przytnij rzut" })).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole("img", { name: /zaznaczyć obszar do zachowania/i })).toBeVisible();
@@ -56,7 +59,7 @@ test("wgranie pliku pokazuje krok przycinania przed edytorem", async ({ page }) 
 
 test("„Pomiń — użyj całego rzutu” wraca wprost do edytora, w oryginalnym rozmiarze", async ({ page }) => {
   await wejdz(page);
-  await page.setInputFiles('input[type="file"]', { name: "rzut.png", mimeType: "image/png", buffer: RZUT });
+  await page.setInputFiles('input[accept*="image"]', { name: "rzut.png", mimeType: "image/png", buffer: RZUT });
   await page.getByRole("button", { name: "Pomiń — użyj całego rzutu" }).click();
 
   // wraca zwykły edytor — nie ma już ekranu weryfikacji

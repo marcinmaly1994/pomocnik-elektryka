@@ -50,7 +50,10 @@ test("wgrany rzut nie jest rozciągany — plan przyjmuje jego proporcje", async
 
   const before = DOMYSLNY_OBSZAR;
 
-  await page.setInputFiles('input[type="file"]', {
+  // Selektor musi mowic, KTORE pole na pliki — od czasu „Kopii zapasowej" sa w aplikacji dwa
+  // (rzut/podklad i plik kopii projektu). Samo `input[accept*="image"]` lapalo oba i wywracalo sie
+  // na trybie strict Playwrighta.
+  await page.setInputFiles('input[accept*="image"]', {
     name: "rzut.png",
     mimeType: "image/png",
     buffer: PNG_16x9,
@@ -155,7 +158,7 @@ test("obwódka obszaru pojawia się dopiero z wgranym rzutem", async ({ page }) 
   });
   expect(await obwodka(), "bez podkładu nie ma czego obrysowywać").toBe(false);
 
-  await page.setInputFiles('input[type="file"]', {
+  await page.setInputFiles('input[accept*="image"]', {
     name: "rzut.png",
     mimeType: "image/png",
     buffer: PNG_16x9,
