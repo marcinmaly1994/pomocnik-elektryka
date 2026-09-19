@@ -1,6 +1,6 @@
 import { AlertTriangle, FileText, Laptop, MessageSquare, Scale, UserCog } from "lucide-react";
 import { LIMIT_ZAPISOW } from "@/lib/dokumenty";
-import { BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja, USLUGODAWCA } from "./wspolne";
+import { AdresKontaktowy, BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja, USLUGODAWCA } from "./wspolne";
 
 /**
  * Regulamin świadczenia usługi drogą elektroniczną (art. 8 ustawy o świadczeniu
@@ -23,7 +23,7 @@ export function Regulamin() {
       <h2 className="pe-display mb-1 text-xl">Regulamin</h2>
       <MetryczkaDokumentu nazwa="Regulamin" />
 
-      <BanerSzkicu czego="nie wskazuje usługodawcy ani adresu do reklamacji — czyli nie spełnia jeszcze wymagań art. 8 ustawy o świadczeniu usług drogą elektroniczną." />
+      <BanerSzkicu czego="nie wskazuje usługodawcy — czyli nie spełnia jeszcze wymagań art. 8 ustawy o świadczeniu usług drogą elektroniczną." />
 
       <div className="space-y-7 text-[13px] leading-relaxed text-slate-600">
         <p>
@@ -35,7 +35,7 @@ export function Regulamin() {
         <Sekcja ikona={UserCog} tytul="Kto świadczy usługę">
           <p>
             Usługodawcą jest <DoUzupelnienia>{USLUGODAWCA.nazwa}</DoUzupelnienia>. Kontakt we wszystkich sprawach
-            dotyczących serwisu, w tym reklamacji: <DoUzupelnienia>{USLUGODAWCA.email}</DoUzupelnienia>.
+            dotyczących serwisu, w tym reklamacji: <AdresKontaktowy />.
           </p>
         </Sekcja>
 
@@ -109,7 +109,7 @@ export function Regulamin() {
 
         <Sekcja ikona={MessageSquare} tytul="Reklamacje">
           <p>
-            Reklamację składasz pocztą elektroniczną na <DoUzupelnienia>{USLUGODAWCA.email}</DoUzupelnienia>. Opisz,
+            Reklamację składasz pocztą elektroniczną na <AdresKontaktowy />. Opisz,
             czego dotyczy i czego oczekujesz; jeśli problem dotyczy konta, podaj adres e-mail, na który jest
             założone. Odpowiedź otrzymasz na ten sam adres w terminie 14 dni od otrzymania zgłoszenia.
           </p>
