@@ -28,7 +28,7 @@ export function WyborPrzykladu({ open, onOpenChange }: { open: boolean; onOpenCh
           — osobny <h2> w treści byłby duplikatem tego samego napisu. */}
       <DialogContent className="max-w-2xl" title="Który przykład otworzyć?">
         <p className="text-sm text-slate-600">
-          Oba są gotowe do oglądania — rozdzielnica, schemat i kosztorys wypełniają się z rzutu same.
+          Gotowe do oglądania — rozdzielnica, schemat i kosztorys wypełniają się z rzutu same.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {PRZYKLADY.map((x) => (
