@@ -110,8 +110,13 @@ test("najciaśniejsza para numerów jest dalej od siebie niż przed zmianą", as
 });
 
 /** Oba schodowe sterują tym samym punktem, więc muszą pokazywać TEN SAM numer —
- *  to była treść zgłoszenia i warto, żeby ktoś to złamał świadomie, a nie przypadkiem. */
-test("oba łączniki schodowe w salonie mają ten sam numer grupy", async ({ page }) => {
+ *  to była treść zgłoszenia i warto, żeby ktoś to złamał świadomie, a nie przypadkiem.
+ *
+ *  Para stoi w PRZEDPOKOJU, odkąd rzut przykładowy dostał realny rozkład: układ schodowy
+ *  robi się w mieszkaniu na komunikacji (zapala się przy wejściu, gasi na końcu korytarza),
+ *  a nie w salonie, gdzie stał wcześniej. Pomieszczenie jest tu jedynie sposobem na
+ *  WSKAZANIE tej pary na rysunku — treścią testu jest wspólny numer, nie adres. */
+test("oba łączniki schodowe w przedpokoju mają ten sam numer grupy", async ({ page }) => {
   await przykladNaRzucie(page);
 
   const numery = await page.evaluate(() => {
@@ -131,7 +136,7 @@ test("oba łączniki schodowe w salonie mają ten sam numer grupy", async ({ pag
         const el = znajdz(g.x(), g.y());
         return { tekst: t.text(), typ: el?.type, pokoj: el?.room };
       })
-      .filter((o) => o.typ === "wlacznikSchodowy" && o.pokoj === "Salon")
+      .filter((o) => o.typ === "wlacznikSchodowy" && o.pokoj === "Przedpokój")
       .map((o) => o.tekst);
   });
 

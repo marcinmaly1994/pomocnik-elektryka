@@ -1302,6 +1302,42 @@ export function spreadOverlappingRoutes(routes: CableRoute[], roomShapes: RoomSh
     domknij();
   });
 
+  /**
+   * JEDEN PAS NA PROSTĄ, a nie na grupę nakładania.
+   *
+   * Pasy wychodzą z grup wyżej, a grupa PĘKA tam, gdzie odcinki już tylko się stykają
+   * (patrz `MIN_NAKLADANIE`). Przebieg wzdłuż jednej ściany prawie nigdy nie jest przy
+   * tym jednym odcinkiem: trasa idzie po obrysach dwóch sąsiadujących pomieszczeń i po
+   * brzegach przejścia w drzwiach, więc dzieli się na kawałki stykające się końcami.
+   * Jeden kabel dostawał przez to pas 0 na pierwszym kawałku ściany i pas 1 na drugim,
+   * jeśli dopiero w połowie jej długości dołączał do niej inny obwód.
+   *
+   * Skutek był widoczny, a nie teoretyczny. Dwa współliniowe odcinki nie mają
+   * przecięcia, więc `przecieciePrzesunietych` zwracało `null`, wierzchołek spadał na
+   * pas dalszy, a drugi koniec odcinka zostawał na swoim — i cały przebieg kładł się
+   * ukosem przez pół pomieszczenia. Na rzucie przykładowego mieszkania wychodziły
+   * z tego 2 m skosu wzdłuż wspólnej ściany salonu i kuchni.
+   *
+   * Podnosimy do MAKSIMUM, nie obniżamy do minimum: zejście niżej wepchnęłoby trasę
+   * pod tę, która na swoim kawałku ściany stoi bliżej muru zgodnie z priorytetem
+   * (patrz `priorytetPasa`). Podniesienie odsuwa ją o kilka jednostek dalej od ściany
+   * tam, gdzie i tak nikt obok niej nie biegnie — cena widoczna dopiero pod linijką,
+   * w zamian za linię równoległą do muru na CAŁEJ długości.
+   */
+  linie.forEach((linia) => {
+    const najwyzszy = new Map<string, number>();
+    for (const w of linia.wpisy) {
+      const pas = pasy.get(`${w.routeId}#${w.idx}`);
+      if (pas) najwyzszy.set(w.routeId, Math.max(najwyzszy.get(w.routeId) ?? 0, pas.lane));
+    }
+    for (const w of linia.wpisy) {
+      const id = `${w.routeId}#${w.idx}`;
+      const pas = pasy.get(id);
+      const lane = najwyzszy.get(w.routeId);
+      if (pas && lane !== undefined && lane !== pas.lane) pasy.set(id, { ...pas, lane });
+    }
+  });
+
   /** Przesunięcie odcinka `i` trasy `r`. Pas ZEROWY zostaje dokładnie na policzonej
    *  trasie, a kolejne odsuwają się w głąb pomieszczenia — dzięki temu obwód
    *  o najwyższym priorytecie (gniazdowy) biegnie tak blisko muru, jak pozwala

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { zbudujProjektPrzykladowy } from "./demoProjekt";
-import { polygonAreaM2 } from "./geometry";
+import { nearestPointOnPolyline, pointInPolygon, polygonAreaM2 } from "./geometry";
 import { computeCosts } from "./costs";
 import { gniazdoPodwojne } from "./elements";
 import { ODSUNIECIE_TRASY } from "./panel/routing";
@@ -21,7 +21,7 @@ import { scaleOf } from "./design";
  */
 describe("projekt przykładowy", () => {
   const payload = zbudujProjektPrzykladowy();
-  const { elements, walls, roomShapes } = payload.draft;
+  const { elements, walls, roomShapes, openings } = payload.draft;
   const floor = payload.activeFloorId;
 
   it("obiecuje 70 m² i tyle naprawdę ma", () => {
@@ -37,6 +37,25 @@ describe("projekt przykładowy", () => {
   it("każdy element stoi w pomieszczeniu, które naprawdę istnieje", () => {
     const nazwy = new Set(roomShapes.map((r) => r.name));
     for (const el of elements) expect(nazwy, `element ${el.id}`).toContain(el.room);
+  });
+
+  it("element LEŻY w pomieszczeniu, które ma wpisane — nie tylko je nazywa", () => {
+    /**
+     * Pole `room` to wolny tekst, a pozycję elementom nadaje tu `przyklejDoScian`, czyli
+     * to samo przyciąganie co przy kliknięciu na planie. Te dwie rzeczy potrafią się
+     * rozjechać po cichu: `snapToWall` odsuwa symbol od ŚRODKA pomieszczenia liczonego
+     * jako średnia wierzchołków obrysu, a przy obrysie wklęsłym (przedpokój jest literą L)
+     * ten środek wypada poza pomieszczeniem — element bywa więc wypchnięty na drugą stronę
+     * muru, do sąsiedniego pokoju, zachowując starą nazwę w `room`.
+     *
+     * Skutek nie jest kosmetyczny: od pomieszczenia zależy podział na obwody i strefy
+     * ochronne, a aplikacja wita wtedy użytkownika ostrzeżeniem „elementy zostały
+     * w starych pokojach" — na PIERWSZYM ekranie, jaki widzi.
+     */
+    for (const el of elements) {
+      const wew = roomShapes.filter((r) => pointInPolygon({ x: el.x, y: el.y }, r.points)).map((r) => r.name);
+      expect(wew, `element ${el.id} wpisany do „${el.room}"`).toContain(el.room);
+    }
   });
 
   it("wszystko siedzi na jednej kondygnacji i w obszarze planu", () => {
@@ -66,6 +85,32 @@ describe("projekt przykładowy", () => {
     // Klucz CENNIKA, nie typ elementu: `oswietlenie`/`kinkiet`/`oswietlenieZewn`
     // wpadają razem do pozycji „oprawa" (patrz `TYPE_TO_PRICE_KEY` w costs.ts).
     expect(quantities.oprawa).toBeGreaterThan(0);
+  });
+
+  it("każde pomieszczenie ma drzwi do PRZEDPOKOJU, a nie do sąsiada", () => {
+    /**
+     * Sedno zgłoszenia o poprzednim rzucie: do sypialni wchodziło się przez kuchnię,
+     * a „przedpokój" był kwadratem 3×3 m, czyli szóstym pokojem, nie komunikacją.
+     *
+     * Test pyta o TOPOLOGIĘ, nie o współrzędne: dla każdego pomieszczenia szuka otworu
+     * leżącego jednocześnie na jego obrysie i na obrysie przedpokoju. Dzięki temu wolno
+     * swobodnie przesuwać drzwi wzdłuż ściany i zmieniać wymiary pokoi, dopóki rozkład
+     * pozostaje taki, że z niczego do niczego się nie przechodzi.
+     */
+    const przedpokoj = roomShapes.find((r) => r.name === "Przedpokój")!;
+    expect(przedpokoj).toBeTruthy();
+    // Otwór stoi na OSI ściany, a obrys pomieszczenia biegnie tą samą osią — pół metra
+    // luzu bierze się z grubości muru, nie z niedokładności rysunku.
+    const LUZ = 0.5 / MANUAL_DRAW_SCALE_MPU;
+    const naObrysie = (o: { x: number; y: number }, r: typeof przedpokoj) => {
+      const rzut = nearestPointOnPolyline(o, [...r.points, r.points[0]]);
+      return rzut !== null && Math.hypot(rzut.point.x - o.x, rzut.point.y - o.y) <= LUZ;
+    };
+    for (const r of roomShapes) {
+      if (r.id === przedpokoj.id) continue;
+      const doPrzedpokoju = openings.filter((o) => naObrysie(o, r) && naObrysie(o, przedpokoj));
+      expect(doPrzedpokoju.length, `pomieszczenie „${r.name}" bez drzwi do przedpokoju`).toBeGreaterThan(0);
+    }
   });
 
   it("pomieszczenia mokre mają jawny typ, nie zgadywanie po nazwie", () => {
