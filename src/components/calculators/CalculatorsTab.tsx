@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
-import { obliczImpedancjePrzewodu, obliczPrzewodyRownolegle } from "@/lib/calc/conductorImpedance";
-import { dobierzN, dobierzPE } from "@/lib/calc/protectiveConductor";
-import { KATEGORIE_PRZEPIECIOWE, obliczKoordynacjeSPD, TYP_SPD_LABELS, type TypSPD } from "@/lib/calc/spd";
 import { dobierzPrzewodACFalownika, obliczStringPV } from "@/lib/calc/pv";
 import { obliczObwodEV } from "@/lib/calc/evCharger";
 import { KRYTERIUM_LABELS, pelnyDoborPrzekroju } from "@/lib/calc/fullSizing";
@@ -26,7 +23,6 @@ import {
 import {
   C_NAPIECIOWE,
   MODEL_REZYSTYWNOSCI_LABELS,
-  RODZAJ_LINII_LABELS,
   type Izolacja,
   type Material,
   type ModelRezystywnosci,
@@ -49,11 +45,15 @@ import { useCalculatorsStore, type CalcId, type TrybObwodu } from "@/store/useCa
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { Card } from "./Card";
+import { KalkulatorImpedancji } from "./KalkulatorImpedancji";
+import { KalkulatorPeN } from "./KalkulatorPeN";
+import { KalkulatorSPD } from "./KalkulatorSPD";
+import { SZEREG_PELNY_OPTIONS, MATERIAL_OPTIONS, IZOLACJA_OPTIONS, RODZAJ_LINII_OPTIONS } from "./opcje";
 import { EkranStartowy, ListaKalkulatorow, SzukajkaKalkulatorow, WyborKalkulatoraMobile } from "./NawigacjaKalkulatorow";
 import { filtruj, type GrupaId } from "@/lib/calc/grupy";
 import { KryteriaObwodu, PrzelacznikTrybu } from "./DoborObwodu";
 import { ocenKryteria, podsumowanieObwodu, type OcenaKryterium } from "@/lib/calc/kryteriaObwodu";
-import { Field, HintButton } from "./Field";
+import { Field } from "./Field";
 import { HowItWorks } from "./HowItWorks";
 
 /**
@@ -153,23 +153,6 @@ const PHASE_OPTIONS = [
 
 const SECTION_OPTIONS = SECTIONS.map((s) => ({ value: String(s), label: `${String(s).replace(".", ",")} mm²` }));
 
-/** Szereg handlowy do kalkulatorów inżynierskich — szerszy niż `SECTIONS`
- *  (te obejmują tylko zakres domowego doboru obwodów, do 25 mm²). */
-const SZEREG_PELNY = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300, 400, 500, 630];
-const SZEREG_PELNY_OPTIONS = SZEREG_PELNY.map((s) => ({ value: String(s), label: `${String(s).replace(".", ",")} mm²` }));
-
-const MATERIAL_OPTIONS: { value: Material; label: string }[] = [
-  { value: "Cu", label: "miedź (Cu)" },
-  { value: "Al", label: "aluminium (Al)" },
-];
-const IZOLACJA_OPTIONS: { value: Izolacja; label: string }[] = [
-  { value: "PVC", label: "PVC (70 °C)" },
-  { value: "XLPE", label: "XLPE / EPR (90 °C)" },
-];
-const RODZAJ_LINII_OPTIONS = (Object.entries(RODZAJ_LINII_LABELS) as [RodzajLinii, string][]).map(([value, label]) => ({
-  value,
-  label,
-}));
 const CEL_ZWARCIA_OPTIONS = (Object.entries(CEL_ZWARCIA_LABELS) as [CelZwarcia, string][]).map(([value, label]) => ({
   value,
   label,
@@ -216,21 +199,7 @@ const MODEL_REZ_OPTIONS =(Object.entries(MODEL_REZYSTYWNOSCI_LABELS) as [ModelRe
   value,
   label,
 }));
-const TYP_SPD_OPTIONS = (Object.entries(TYP_SPD_LABELS) as [TypSPD, string][]).map(([value, label]) => ({ value, label }));
 const TYP_WKLADKI_OPTIONS = (Object.entries(TYP_WKLADKI_LABELS) as [TypWkladkiGG, string][]).map(([value, label]) => ({ value, label }));
-const UW_OPTIONS = KATEGORIE_PRZEPIECIOWE.map((k) => ({
-  value: String(k.Uw_V),
-  label: `Kat. ${k.kategoria} — ${k.Uw_V} V (${k.opis})`,
-}));
-
-/** „40, 60" → [40, 60]. Puste i niepoprawne wpisy odpadają, żeby literówka nie
- *  wywracała kalkulatora w trakcie pisania. */
-function parsujDlugosci(tekst: string): number[] {
-  return tekst
-    .split(/[,;]/)
-    .map((s) => Number(s.trim().replace(",", ".")))
-    .filter((n) => Number.isFinite(n) && n > 0);
-}
 
 const LIMIT_SPADKU_OPCJE = [
   { value: "3", label: "3% — oświetlenie (sieć publiczna)" },
@@ -326,25 +295,6 @@ export function CalculatorsTab() {
   const slRozruch = useCalculatorsStore((s) => s.slRozruch);
   const slCzasRozruchu = useCalculatorsStore((s) => s.slCzasRozruchu);
   const slImpedancja = useCalculatorsStore((s) => s.slImpedancja);
-  const imDlugosc = useCalculatorsStore((s) => s.imDlugosc);
-  const imPrzekroj = useCalculatorsStore((s) => s.imPrzekroj);
-  const imMaterial = useCalculatorsStore((s) => s.imMaterial);
-  const imIzolacja = useCalculatorsStore((s) => s.imIzolacja);
-  const imRodzajLinii = useCalculatorsStore((s) => s.imRodzajLinii);
-  const imRownoleglePrad = useCalculatorsStore((s) => s.imRownoleglePrad);
-  const imRownolegleDlugosci = useCalculatorsStore((s) => s.imRownolegleDlugosci);
-  const imRownolegleIz = useCalculatorsStore((s) => s.imRownolegleIz);
-  const peFazowy = useCalculatorsStore((s) => s.peFazowy);
-  const peMaterial = useCalculatorsStore((s) => s.peMaterial);
-  const peIzolacja = useCalculatorsStore((s) => s.peIzolacja);
-  const pePradZwarciowy = useCalculatorsStore((s) => s.pePradZwarciowy);
-  const peCzas = useCalculatorsStore((s) => s.peCzas);
-  const pnPradFazowy = useCalculatorsStore((s) => s.pnPradFazowy);
-  const pnH3Pct = useCalculatorsStore((s) => s.pnH3Pct);
-  const spdTyp = useCalculatorsStore((s) => s.spdTyp);
-  const spdUp = useCalculatorsStore((s) => s.spdUp);
-  const spdUw = useCalculatorsStore((s) => s.spdUw);
-  const spdDlugosc = useCalculatorsStore((s) => s.spdDlugosc);
   const pdIb = useCalculatorsStore((s) => s.pdIb);
   const pdNapiecie = useCalculatorsStore((s) => s.pdNapiecie);
   const pdMaterial = useCalculatorsStore((s) => s.pdMaterial);
@@ -769,49 +719,6 @@ export function CalculatorsTab() {
   );
 
   // --- kalkulatory uzupełniające ---
-  const impedancja = useMemo(
-    () =>
-      obliczImpedancjePrzewodu({
-        dlugosc_m: imDlugosc,
-        przekroj_mm2: imPrzekroj,
-        material: imMaterial,
-        izolacja: imIzolacja,
-        rodzajLinii: imRodzajLinii,
-      }),
-    [imDlugosc, imPrzekroj, imMaterial, imIzolacja, imRodzajLinii]
-  );
-  const rownolegle = useMemo(
-    () =>
-      obliczPrzewodyRownolegle({
-        pradCalkowity_A: imRownoleglePrad,
-        dlugosci_m: parsujDlugosci(imRownolegleDlugosci),
-        przekroj_mm2: imPrzekroj,
-        material: imMaterial,
-        izolacja: imIzolacja,
-        Iz_jednej_A: imRownolegleIz > 0 ? imRownolegleIz : undefined,
-      }),
-    [imRownoleglePrad, imRownolegleDlugosci, imPrzekroj, imMaterial, imIzolacja, imRownolegleIz]
-  );
-  const przewodPE = useMemo(
-    () =>
-      dobierzPE({
-        przekrojFazowy_mm2: peFazowy,
-        material: peMaterial,
-        izolacja: peIzolacja,
-        pradZwarciowy_A: pePradZwarciowy > 0 ? pePradZwarciowy : undefined,
-        czasWylaczenia_s: peCzas > 0 ? peCzas : undefined,
-      }),
-    [peFazowy, peMaterial, peIzolacja, pePradZwarciowy, peCzas]
-  );
-  const przewodN = useMemo(
-    () => dobierzN({ przekrojFazowy_mm2: peFazowy, pradFazowy_A: pnPradFazowy, udzialH3_pct: pnH3Pct }),
-    [peFazowy, pnPradFazowy, pnH3Pct]
-  );
-  const spd = useMemo(
-    () => obliczKoordynacjeSPD({ typ: spdTyp, Up_V: spdUp, Uw_V: spdUw, dlugoscPrzewodow_m: spdDlugosc }),
-    [spdTyp, spdUp, spdUw, spdDlugosc]
-  );
-
   // --- pełny dobór (4 kryteria) ---
   const pelnyDobor = useMemo(
     () =>
@@ -2583,261 +2490,11 @@ export function CalculatorsTab() {
             </Card>
           )}
 
-          {activeCalc === "impedancja" && (
-            <Card title={active.label} tag="R, X, Z">
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Długość przewodu"
-                  value={imDlugosc}
-                  onChange={(v) => patch({ imDlugosc: Number(v) })}
-                  unit="m"
-                />
-                <Field
-                  label="Przekrój żyły"
-                  value={String(imPrzekroj)}
-                  onChange={(v) => patch({ imPrzekroj: Number(v) })}
-                  options={SZEREG_PELNY_OPTIONS}
-                />
-                <Field
-                  label="Materiał"
-                  value={imMaterial}
-                  onChange={(v) => patch({ imMaterial: v as Material })}
-                  options={MATERIAL_OPTIONS}
-                />
-                <Field
-                  label="Izolacja"
-                  value={imIzolacja}
-                  onChange={(v) => patch({ imIzolacja: v as Izolacja })}
-                  options={IZOLACJA_OPTIONS}
-                  hint="Sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE) — decyduje o temperaturze żyły przyjętej do liczenia rezystancji."
-                />
-                <Field
-                  label="Rodzaj linii (X′)"
-                  value={imRodzajLinii}
-                  onChange={(v) => patch({ imRodzajLinii: v as RodzajLinii })}
-                  options={RODZAJ_LINII_OPTIONS}
-                  hint="Jak fizycznie wygląda trasa — kabel wielożyłowy, kable jednożyłowe osobno, czy linia napowietrzna. Wybierz opis najbliższy rzeczywistości."
-                />
-              </div>
+          {activeCalc === "impedancja" && <KalkulatorImpedancji label={active.label} />}
 
-              {impedancja.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Impedancja przewodu</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(impedancja.wartosci.Z_ohm, 4)} Ω</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">R {formatLiczba(impedancja.wartosci.R_ohm, 4)} Ω</span>
-                    <span className="pe-chip pe-tag-blue">X {formatLiczba(impedancja.wartosci.X_ohm, 4)} Ω</span>
-                    {impedancja.wartosci.R_do_X !== null && (
-                      <span className="pe-chip pe-tag-green">R/X {formatLiczba(impedancja.wartosci.R_do_X, 2)}</span>
-                    )}
-                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
-                      γ {formatLiczba(impedancja.wartosci.gamma, 1)} przy {formatLiczba(impedancja.wartosci.tempZyly_C, 0)} °C
-                    </span>
-                  </div>
-                </div>
-              )}
-              <CalcResultView wynik={impedancja} />
+          {activeCalc === "peN" && <KalkulatorPeN label={active.label} />}
 
-              <div className="mb-2 mt-4 text-xs font-semibold text-slate-600">Przewody równoległe — podział prądu</div>
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
-                Prąd dzieli się <strong>odwrotnie proporcjonalnie do impedancji</strong>, więc krótsza żyła bierze go
-                więcej. Zabezpieczenie nadprądowe mierzy prąd CAŁKOWITY, więc przeciążenia pojedynczej żyły nie wykryje —
-                stąd normowy wymóg jednakowej długości i przekroju.
-              </div>
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Prąd całkowity obwodu"
-                  value={imRownoleglePrad}
-                  onChange={(v) => patch({ imRownoleglePrad: Number(v) })}
-                  unit="A"
-                />
-                <Field
-                  label="Obciążalność jednej żyły (0 = bez oceny)"
-                  value={imRownolegleIz}
-                  onChange={(v) => patch({ imRownolegleIz: Number(v) })}
-                  unit="A"
-                  hint="Dopuszczalny prąd długotrwały POJEDYNCZEJ żyły po współczynnikach korekcyjnych — z kalkulatora „Dobór przekroju przewodu” albo z Rozdzielnicy. Zostaw 0, żeby zobaczyć sam podział prądu bez oceny."
-                />
-              </div>
-              {/* Jawne htmlFor/id z tego samego powodu co w `Field` — przycisk „i" jest
-                  elementem etykietowalnym i przy owinięciu obu w <label> przejąłby
-                  powiązanie, zostawiając pole bez nazwy dostępnej. */}
-              <div className="mb-3">
-                <div className="mb-1 flex items-center gap-1 text-xs text-slate-500">
-                  <label htmlFor="im-rownolegle-dlugosci">Długości poszczególnych żył (po przecinku)</label>
-                  <HintButton hint="Wpisz długość KAŻDEJ żyły biegnącej równolegle, oddzieloną przecinkiem — np. dla dwóch żył o różnej długości: 40, 60. Różne długości to właśnie ten problem, który ten kalkulator pokazuje liczbowo." />
-                </div>
-                <input
-                  id="im-rownolegle-dlugosci"
-                  className="pe-input pe-mono w-full text-sm"
-                  value={imRownolegleDlugosci}
-                  onChange={(e) => patch({ imRownolegleDlugosci: e.target.value })}
-                  placeholder="np. 40, 60"
-                />
-              </div>
-
-              {rownolegle.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Najbardziej obciążona żyła</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(rownolegle.wartosci.Imax_A, 1)} A</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">
-                      podział {rownolegle.wartosci.prady_A.map((I) => formatLiczba(I, 1)).join(" / ")} A
-                    </span>
-                    <span className="pe-chip pe-tag-blue">
-                      przy równym podziale {formatLiczba(rownolegle.wartosci.pradRowny_A, 1)} A
-                    </span>
-                    <span className="pe-chip pe-tag-green">odchylenie {formatLiczba(rownolegle.wartosci.odchylenie_pct, 1)}%</span>
-                  </div>
-                </div>
-              )}
-              <CalcResultView wynik={rownolegle} />
-            </Card>
-          )}
-
-          {activeCalc === "peN" && (
-            <Card title={active.label} tag="PE i N">
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Przekrój przewodu fazowego"
-                  value={String(peFazowy)}
-                  onChange={(v) => patch({ peFazowy: Number(v) })}
-                  options={SZEREG_PELNY_OPTIONS}
-                />
-                <Field
-                  label="Materiał"
-                  value={peMaterial}
-                  onChange={(v) => patch({ peMaterial: v as Material })}
-                  options={MATERIAL_OPTIONS}
-                />
-                <Field
-                  label="Izolacja"
-                  value={peIzolacja}
-                  onChange={(v) => patch({ peIzolacja: v as Izolacja })}
-                  options={IZOLACJA_OPTIONS}
-                  hint="Sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE) — decyduje o współczynniku k wytrzymałości zwarciowej."
-                />
-                <Field
-                  label="Prąd zwarcia doziemnego (0 = pomiń warunek cieplny)"
-                  value={pePradZwarciowy}
-                  onChange={(v) => patch({ pePradZwarciowy: Number(v) })}
-                  unit="A"
-                  hint="Prąd zwarcia L-PE w tym miejscu — z pomiaru, z kalkulatora „Prądy zwarciowe” albo z dokumentacji projektowej. Bez niego sprawdzany jest tylko sam warunek tabelaryczny."
-                />
-                <Field
-                  label="Czas wyłączenia"
-                  value={peCzas}
-                  onChange={(v) => patch({ peCzas: Number(v) })}
-                  unit="s"
-                  step="0.1"
-                  hint="Rzeczywisty czas zadziałania zabezpieczenia tego obwodu przy podanym prądzie zwarciowym — z charakterystyki wyzwalania albo maksymalny czas wg normy (0,4 s dla obwodu odbiorczego TN)."
-                />
-              </div>
-
-              {przewodPE.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Wymagany przekrój przewodu PE</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(przewodPE.wartosci.wymagany_mm2, 1)} mm²</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">z reguły {formatLiczba(przewodPE.wartosci.zReguly_mm2, 1)} mm²</span>
-                    {przewodPE.wartosci.zWarunkuCieplnego_mm2 !== null && (
-                      <span className="pe-chip pe-tag-blue">
-                        z warunku cieplnego {formatLiczba(przewodPE.wartosci.zWarunkuCieplnego_mm2, 2)} mm²
-                      </span>
-                    )}
-                    <span className="pe-chip pe-tag-green">decyduje: {przewodPE.wartosci.decyduje}</span>
-                  </div>
-                </div>
-              )}
-              <CalcResultView wynik={przewodPE} />
-
-              <div className="mb-2 mt-4 text-xs font-semibold text-slate-600">Przewód neutralny N</div>
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Prąd fazowy"
-                  value={pnPradFazowy}
-                  onChange={(v) => patch({ pnPradFazowy: Number(v) })}
-                  unit="A"
-                />
-                <Field
-                  label="Udział 3. harmonicznej"
-                  value={pnH3Pct}
-                  onChange={(v) => patch({ pnH3Pct: Number(v) })}
-                  unit="%"
-                  step="5"
-                  hint="0% dla odbiorów liniowych. Dla zasilaczy impulsowych, opraw LED i falowników realnie to często 60–90% — bez tej wartości prąd w N wyjdzie zaniżony."
-                />
-              </div>
-              {przewodN.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Prąd w przewodzie N (obciążenie symetryczne)</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(przewodN.wartosci.IN_A, 1)} A</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">zalecany przekrój N {formatLiczba(przewodN.wartosci.zalecany_mm2, 1)} mm²</span>
-                  </div>
-                </div>
-              )}
-              <CalcResultView wynik={przewodN} />
-            </Card>
-          )}
-
-          {activeCalc === "spd" && (
-            <Card title={active.label} tag="koordynacja ochrony">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
-                Skuteczny poziom ochrony <strong>nie równa się Up z tabliczki</strong> — dochodzi do niego spadek
-                indukcyjny na przewodach przyłączeniowych, rzędu 1 kV na metr przy udarze 8/20 µs. Stąd bierze się reguła
-                „przewody ≤ 0,5 m”: to wynik rachunku, nie zalecenie montażowe.
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Typ ogranicznika"
-                  value={spdTyp}
-                  onChange={(v) => patch({ spdTyp: v as TypSPD })}
-                  options={TYP_SPD_OPTIONS}
-                />
-                <Field
-                  label="Poziom ochrony Up (z tabliczki)"
-                  value={spdUp}
-                  onChange={(v) => patch({ spdUp: Number(v) })}
-                  unit="V"
-                  hint="Napięciowy poziom ochrony ogranicznika — z jego tabliczki znamionowej albo karty katalogowej (oznaczenie „Up”)."
-                />
-                <Field
-                  label="Wytrzymałość udarowa urządzenia U_w"
-                  value={String(spdUw)}
-                  onChange={(v) => patch({ spdUw: Number(v) })}
-                  options={UW_OPTIONS}
-                  hint="Wpisz wartość z karty katalogowej chronionego urządzenia, jeśli ją znasz — w przeciwnym razie wybierz kategorię przepięciową odpowiadającą jego miejscu w instalacji (im dalej od wejścia, tym niższa kategoria i mniejsza wytrzymałość)."
-                />
-                <Field
-                  label="Długość przewodów przyłączeniowych (łącznie)"
-                  value={spdDlugosc}
-                  onChange={(v) => patch({ spdDlugosc: Number(v) })}
-                  unit="m"
-                  step="0.1"
-                  hint="Suma długości przewodu doprowadzającego i odprowadzającego ogranicznik (faza + PE) — nie tylko jednego z nich."
-                />
-              </div>
-
-              {spd.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Skuteczny poziom ochrony na zaciskach urządzenia</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(spd.wartosci.UpSkuteczne_V, 0)} V</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">
-                      przyrost na przewodach {formatLiczba(spd.wartosci.przyrostNaPrzewodach_V, 0)} V
-                    </span>
-                    <span className="pe-chip pe-tag-blue">U_w urządzenia {formatLiczba(spdUw, 0)} V</span>
-                    <span className="pe-chip pe-tag-green">
-                      maks. długość przewodów {formatLiczba(spd.wartosci.maksDlugosc_m, 2)} m
-                    </span>
-                  </div>
-                </div>
-              )}
-              <CalcResultView wynik={spd} />
-            </Card>
-          )}
+          {activeCalc === "spd" && <KalkulatorSPD label={active.label} />}
 
           {activeCalc === "pv" && (
             <Card title={active.label} tag="string DC">
