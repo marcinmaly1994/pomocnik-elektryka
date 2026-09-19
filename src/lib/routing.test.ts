@@ -43,6 +43,21 @@ describe("parsePath", () => {
     expect(parsePath("/Kalkulatory/Spadek").tab).toBe("kalkulatory");
   });
 
+  it("rozpoznaje stronę „Prywatność i dane” jako osobny widok, nie jako literówkę", () => {
+    // Prywatność jest widokiem najwyższego poziomu, ale NIE krokiem przepływu —
+    // musi mieć własny adres do podlinkowania (ze stopki, z Pomocy i z formularza
+    // rejestracji, gdzie link otwiera się w nowej karcie, więc dostaje goły URL).
+    expect(parsePath("/prywatnosc")).toEqual({ tab: "prywatnosc", param: null, rozpoznana: true });
+    expect(buildPath("prywatnosc")).toBe("/prywatnosc");
+  });
+
+  it("rozpoznaje regulamin jako osobny widok", () => {
+    // Drugi dokument formalny, ten sam mechanizm — też musi dać się podlinkować
+    // ze stopki i z formularza rejestracji (tam w nowej karcie).
+    expect(parsePath("/regulamin")).toEqual({ tab: "regulamin", param: null, rozpoznana: true });
+    expect(buildPath("regulamin")).toBe("/regulamin");
+  });
+
   it("dekoduje procenty, a niepoprawna sekwencja nie wywraca parsowania", () => {
     expect(parsePath("/protokoly/ogl%C4%99dziny").param).toBe("oględziny");
     // „%" bez dwóch cyfr za nim wywraca decodeURIComponent — ma przejść jak leci

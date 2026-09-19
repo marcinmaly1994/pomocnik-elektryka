@@ -4,6 +4,9 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 interface HelpModalProps {
   open: boolean;
   onClose: () => void;
+  /** Przejście do polityki prywatności. Okno zamyka się samo — zostawione nad stroną
+   *  zasłaniałoby dokument, po który się kliknęło. */
+  onOtworzPrywatnosc: () => void;
 }
 
 /** Kroki odpowiadają 1:1 nazwom narzędzi/zakładek w interfejsie (patrz `ToolRail.tsx`
@@ -50,7 +53,7 @@ function Key({ children }: { children: string }) {
  * dawny (i martwy — sekcja `#pomoc`, do której przewijał, nigdy nie istniała) link
  * przewijający stronę.
  */
-export function HelpModal({ open, onClose }: HelpModalProps) {
+export function HelpModal({ open, onClose, onOtworzPrywatnosc }: HelpModalProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent title="Pomoc" className="max-h-[85vh] max-w-2xl overflow-y-auto">
@@ -125,14 +128,42 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             </ul>
           </section>
 
-          <section className="flex gap-2.5 rounded-lg border border-border p-3" style={{ background: "#F7F9FB" }}>
-            <ShieldCheck size={16} className="mt-0.5 shrink-0 text-ok" />
-            <p>
-              Bez konta projekt jest zapisywany tylko w tej przeglądarce — wyczyszczenie danych
-              albo otwarcie na innym urządzeniu oznacza jego utratę. Załóż konto („Zabezpiecz
-              kontem” / „Zaloguj się”), żeby zapisywać projekt w chmurze i mieć do niego dostęp
-              z każdego urządzenia.
-            </p>
+          {/* „Twoje dane" zamiast dawnej, bezimiennej ramki o zapisie lokalnym.
+              Ta sama informacja jest w polityce prywatności, ale tam trafia ktoś, kto
+              już ma pytanie — a tu ktoś, kto dopiero zaczyna i właśnie decyduje, czy
+              zakładać konto. Pełny dokument zostaje jeden (link na końcu), żeby nie
+              powstała druga wersja prawdy, która z czasem rozjedzie się z pierwszą. */}
+          <section className="rounded-lg border border-border p-3" style={{ background: "#F7F9FB" }}>
+            <h3 className="pe-display mb-2 flex items-center gap-2 text-[15px] text-ink">
+              <ShieldCheck size={16} className="shrink-0 text-ok" />
+              Twoje dane
+            </h3>
+            <div className="space-y-2">
+              <p>
+                Bez konta projekt jest zapisywany tylko w tej przeglądarce — wyczyszczenie danych
+                albo otwarcie na innym urządzeniu oznacza jego utratę. Załóż konto („Zabezpiecz
+                kontem” / „Zaloguj się”), żeby zapisywać projekt w chmurze i mieć do niego dostęp
+                z każdego urządzenia.
+              </p>
+              <p>
+                Dopiero konto sprawia, że cokolwiek trafia na serwer: adres e-mail i zapisane
+                projekty. Aplikacja <strong className="text-ink">nie używa ciasteczek</strong> ani
+                narzędzi śledzących, a konto razem ze wszystkimi projektami możesz skasować sam
+                w każdej chwili („Ustawienia konta” → „Usuń konto”).
+              </p>
+              <p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOtworzPrywatnosc();
+                  }}
+                  className="text-blueprint underline decoration-blueprint/40 underline-offset-2 hover:decoration-blueprint"
+                >
+                  Przeczytaj politykę prywatności
+                </button>
+              </p>
+            </div>
           </section>
 
           <section
