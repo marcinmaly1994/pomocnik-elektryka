@@ -1,10 +1,7 @@
 import type { InstallationElement, Opening, RoomShape, Wall } from "@/types";
-import { MANUAL_DRAW_SCALE_MPU, ROOM_COLORS } from "@/lib/design";
-import { DEFAULT_PRICES } from "@/lib/costs";
-import { INITIAL_ONBOARDING } from "@/lib/onboarding";
-import { WARUNKI_DOBORU_DOMYSLNE } from "@/lib/panel/norms";
+import { ROOM_COLORS } from "@/lib/design";
 import type { ProjectPayload } from "@/store/useProjectStore";
-import { p, przyklejDoScian, tworzE } from "./wspolne";
+import { bazaPayloadu, p, przyklejDoScian, tworzE } from "./wspolne";
 
 /**
  * Gotowy projekt przykładowy — dom jednorodzinny 136 m² na dwóch kondygnacjach.
@@ -349,36 +346,14 @@ export function zbudujProjektDom(): ProjectPayload {
       roomShapes.filter((r) => r.floor === f)
     )
   );
-  return {
+  return bazaPayloadu({
     draft: { elements, walls, roomShapes, openings: otwory(), routeOverrides: {} },
     floors: [
       { id: PARTER, name: "Parter", heightM: 2.8 },
       { id: PIETRO, name: "Piętro", heightM: 2.6 },
     ],
-    activeFloorId: PARTER,
-    bgImages: {},
-    scales: { [PARTER]: MANUAL_DRAW_SCALE_MPU, [PIETRO]: MANUAL_DRAW_SCALE_MPU },
-    prices: { ...DEFAULT_PRICES },
-    costOverrides: {},
-    qtyOverrides: {},
-    warunkiDoboru: WARUNKI_DOBORU_DOMYSLNE,
-    docHeader: {
-      obiekt: "Dom jednorodzinny przykładowy, 136 m²",
-      adres: "", zleceniodawca: "", wykonawca: "", uprawnienia: "", przyrzad: "",
-      nrFabryczny: "", swiadectwo: "",
-      data: new Date().toISOString().slice(0, 10),
-      temperatura: "20", wilgotnosc: "55", uklad: "TN-S",
-      drawingNo: "E-01", revision: "A",
-    },
-    protocols: {},
     projectName: "Przykład: dom 136 m²",
-    panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
-    panelDevices: [],
-    panelHidden: [],
-    panelTryb: "zRzutu",
-    panelOverrides: {},
+    obiekt: "Dom jednorodzinny przykładowy, 136 m²",
     planSize: { w: 240, h: 200 },
-    onboarding: { ...INITIAL_ONBOARDING, krok1Done: true, krok2Done: true, krok3Done: true, pominiety: true, ostatnioOtwarty: false },
-    projektPrzykladowy: true,
-  };
+  });
 }

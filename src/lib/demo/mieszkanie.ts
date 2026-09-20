@@ -1,10 +1,7 @@
 import type { InstallationElement, Opening, RoomShape, Wall } from "@/types";
-import { MANUAL_DRAW_SCALE_MPU, ROOM_COLORS } from "@/lib/design";
-import { DEFAULT_PRICES } from "@/lib/costs";
-import { INITIAL_ONBOARDING } from "@/lib/onboarding";
-import { WARUNKI_DOBORU_DOMYSLNE } from "@/lib/panel/norms";
+import { ROOM_COLORS } from "@/lib/design";
 import type { ProjectPayload } from "@/store/useProjectStore";
-import { p, przyklejDoScian, tworzE } from "./wspolne";
+import { bazaPayloadu, p, przyklejDoScian, tworzE } from "./wspolne";
 
 /**
  * Gotowy projekt przykładowy — mieszkanie 70 m², sześć pomieszczeń, komplet osprzętu.
@@ -308,7 +305,7 @@ function elementy(): InstallationElement[] {
 export function zbudujProjektPrzykladowy(): ProjectPayload {
   const walls = sciany();
   const roomShapes = pomieszczenia();
-  return {
+  return bazaPayloadu({
     draft: {
       elements: przyklejDoScian(elementy(), walls, roomShapes),
       walls,
@@ -317,45 +314,8 @@ export function zbudujProjektPrzykladowy(): ProjectPayload {
       routeOverrides: {},
     },
     floors: [{ id: FLOOR, name: "Parter" }],
-    activeFloorId: FLOOR,
-    // Bez podkładu — patrz komentarz na górze pliku.
-    bgImages: {},
-    scales: { [FLOOR]: MANUAL_DRAW_SCALE_MPU },
-    prices: { ...DEFAULT_PRICES },
-    costOverrides: {},
-    qtyOverrides: {},
-    warunkiDoboru: WARUNKI_DOBORU_DOMYSLNE,
-    docHeader: {
-      obiekt: "Mieszkanie przykładowe, 70 m²",
-      adres: "",
-      zleceniodawca: "",
-      wykonawca: "",
-      uprawnienia: "",
-      przyrzad: "",
-      nrFabryczny: "",
-      swiadectwo: "",
-      data: new Date().toISOString().slice(0, 10),
-      temperatura: "20",
-      wilgotnosc: "55",
-      uklad: "TN-S",
-      drawingNo: "E-01",
-      revision: "A",
-    },
-    protocols: {},
     projectName: "Przykład: mieszkanie 70 m²",
-    panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
-    // Rozdzielnica ma się ODBUDOWAĆ z obwodów policzonych z tego rzutu — o to w tym
-    // przykładzie chodzi. Stąd tryb „z rzutu" i pusta lista aparatów: gotowa lista
-    // zamrażałaby wynik doboru z dnia, w którym powstał ten plik.
-    panelDevices: [],
-    panelHidden: [],
-    panelTryb: "zRzutu",
-    panelOverrides: {},
+    obiekt: "Mieszkanie przykładowe, 70 m²",
     planSize: { w: 240, h: 180 },
-    // Przewodnik „Zacznij w 3 krokach" jest na gotowym projekcie bezprzedmiotowy —
-    // wszystkie trzy kroki są w nim z definicji wykonane (jest skala, są nazwane
-    // pomieszczenia, stoją elementy), a `reconcile` i tak by je odhaczyło z faktów.
-    onboarding: { ...INITIAL_ONBOARDING, krok1Done: true, krok2Done: true, krok3Done: true, pominiety: true, ostatnioOtwarty: false },
-    projektPrzykladowy: true,
-  };
+  });
 }
