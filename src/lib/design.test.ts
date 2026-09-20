@@ -32,6 +32,10 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   reassignRoomsOnFloor,
   reconcileRoomsOnLoad,
   roomNameAfterMove,
+  guessRoomType,
+  isWetRoomName,
+  zastosowaniePokoju,
+  schodySchemat,
 } from "./design";
 import { rogiSymbolu } from "@/lib/glyphs";
 
@@ -750,5 +754,83 @@ describe("kadrOtwarcia", () => {
     expect(Number.isFinite(k.zoom)).toBe(true);
     expect(Number.isFinite(k.widok.x)).toBe(true);
     expect(Number.isFinite(k.widok.y)).toBe(true);
+  });
+});
+
+describe("klatka schodowa jako typ pomieszczenia", () => {
+  it("jest rozpoznawana po nazwie", () => {
+    expect(guessRoomType("Klatka schodowa")).toBe("klatka");
+    expect(guessRoomType("Klatka schodowa na piętrze")).toBe("klatka");
+    expect(guessRoomType("Schody")).toBe("klatka");
+  });
+
+  it("nie jest pomieszczeniem mokrym", () => {
+    const klatka: RoomShape = { id: "k", floor: "f1", name: "Klatka schodowa", type: "klatka", color: "#000", points: [] };
+    expect(isWetRoomName("Klatka schodowa", [klatka])).toBe(false);
+  });
+
+  it("ma zastosowanie takie jak reszta komunikacji", () => {
+    // Dzięki temu gniazda na klatce nie wpadają na wspólny obwód z pokojami —
+    // dokładnie tak, jak zachowuje się przedpokój i korytarz (typ `inne`).
+    const klatka: RoomShape = { id: "k", floor: "f1", name: "Klatka schodowa", type: "klatka", color: "#000", points: [] };
+    const hol: RoomShape = { id: "h", floor: "f1", name: "Hol", type: "inne", color: "#000", points: [] };
+    expect(zastosowaniePokoju("Klatka schodowa", [klatka])).toBe(zastosowaniePokoju("Hol", [hol]));
+  });
+});
+
+describe("schemat schodów", () => {
+  /** Kwadrat 3 × 2 m w jednostkach planu (20 jedn. = 1 m), zaczepiony w (0,0). */
+  const prostokat = [
+    { x: 0, y: 0 },
+    { x: 60, y: 0 },
+    { x: 60, y: 40 },
+    { x: 0, y: 40 },
+  ];
+
+  it("kreski biegną W POPRZEK dłuższej osi pomieszczenia", () => {
+    const s = schodySchemat(prostokat)!;
+    // Dłuższy bok jest poziomy (60 > 40), więc bieg idzie wzdłuż x, a stopnie są pionowe.
+    for (const [a, b] of s.stopnie) {
+      expect(Math.abs(a.x - b.x)).toBeLessThan(0.01);
+      expect(Math.abs(a.y - b.y)).toBeGreaterThan(1);
+    }
+  });
+
+  it("obraca się razem z pomieszczeniem — przy obrysie wyższym niż szerszym stopnie leżą poziomo", () => {
+    const pionowy = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 60 },
+      { x: 0, y: 60 },
+    ];
+    const s = schodySchemat(pionowy)!;
+    for (const [a, b] of s.stopnie) {
+      expect(Math.abs(a.y - b.y)).toBeLessThan(0.01);
+    }
+  });
+
+  it("jest SCHEMATEM: stała, mała liczba kresek, nie odwzorowanie stopni", () => {
+    // Rysunek ma mówić „tu są schody", a nie twierdzić, ile jest stopni ani czy bieg
+    // jest prosty — tego aplikacja nie wie (patrz komentarz przy `schodySchemat`).
+    const maly = schodySchemat(prostokat)!;
+    const duzy = schodySchemat([
+      { x: 0, y: 0 },
+      { x: 600, y: 0 },
+      { x: 600, y: 400 },
+      { x: 0, y: 400 },
+    ])!;
+    expect(maly.stopnie.length).toBe(duzy.stopnie.length);
+    expect(maly.stopnie.length).toBeLessThanOrEqual(6);
+  });
+
+  it("ma strzałkę kierunku wejścia, w osi biegu", () => {
+    const s = schodySchemat(prostokat)!;
+    expect(Math.abs(s.strzalka.od.y - s.strzalka.do.y)).toBeLessThan(0.01);
+    expect(s.strzalka.do.x).toBeGreaterThan(s.strzalka.od.x);
+  });
+
+  it("obrys bez pola nie daje schematu", () => {
+    expect(schodySchemat([])).toBeNull();
+    expect(schodySchemat([{ x: 0, y: 0 }, { x: 10, y: 0 }])).toBeNull();
   });
 });

@@ -157,7 +157,7 @@ export interface Opening {
  *  `isWetRoomName` w lib/design.ts. Pozostałe (salon/sypialnia/pokój/garaż) służą
  *  tylko czytelności listy — nie wpływają na dobór. */
 export type RoomType =
-  | "inne"
+  | "klatka" | "inne"
   | "kuchnia"
   | "lazienka"
   | "pralnia"
