@@ -37,17 +37,17 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
+import type { ElementType, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
-import { SANITARY_FIXTURES, fixtureSizeM, computeSanitaryZones, VARIANTS_FOR } from "@/lib/elements";
+import { computeSanitaryZones } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
 import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
-import { glyphBoxSize, rogiSymbolu } from "@/lib/glyphs";
-import { ODSTEP_SYMBOLI_M, odsunOdSasiadow, type ZajetySymbol } from "@/lib/rozstawElementow";
+import { rogiSymbolu } from "@/lib/glyphs";
+import { bezNakladaniaNaSasiadow } from "@/lib/rozstawElementow";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
   DEFAULT_WALL_THICKNESS,
@@ -57,7 +57,6 @@ import {
   ROOM_TYPE_LABELS,
   WALL_SNAP_TOLERANCE_M,
   PROG_WASKIEGO_EKRANU,
-  detectRoomName,
   contentBounds,
   kadrOtwarcia,
   zoomSkaliRysowania,
@@ -96,6 +95,7 @@ import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { useRysowanieScian } from "@/hooks/useRysowanieScian";
 import { useRysowaniePomieszczen } from "@/hooks/useRysowaniePomieszczen";
 import { useOtwory } from "@/hooks/useOtwory";
+import { useWstawianieElementu } from "@/hooks/useWstawianieElementu";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
 import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
@@ -505,9 +505,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
 
   const [toolMode, setToolMode] = useState<ToolMode>("zaznacz");
-  const [activeType, setActiveType] = useState<ElementType>("gniazdko");
-  const [dedicated, setDedicated] = useState(false);
-  const [gangsByType, setGangsByType] = useState<Partial<Record<ElementType, number>>>({});
   /** Przyciąganie do siatki. Domyślnie WYŁĄCZONE, bo na wgranym podkładzie ściany
    *  budynku nie leżą na oczkach siatki i przyciąganie tylko odciągałoby od rzutu.
    *  Rysowanie od zera włącza je jawnie — patrz `startManualDrawing`. */
@@ -1503,11 +1500,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   });
 
   // Każdy typ z wariantami ma WŁASNY licznik gangów — zmiana jednego nie wpływa na drugi.
-  function gangsForType(t: ElementType): number {
-    if (!VARIANTS_FOR[t]) return 1;
-    return gangsByType[t] || 1;
-  }
-
   /**
    * Pozycja i obrót elementu po ewentualnym przyklejeniu do ściany.
    *
@@ -1525,107 +1517,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     return (
       snapElementToWall(p, walls, roomShapes, tolerancja, type, skalaOsprzetu) ?? { x: p.x, y: p.y, rotation: obecnyObrot }
     );
-  }
-
-  /**
-   * Symbol jako PUDEŁKO w jednostkach planu — do rozsuwania stawianego osprzętu.
-   *
-   * Nie koło opisane (`rogiSymbolu`): tamto jest właściwą miarą przy kadrowaniu wydruku,
-   * gdzie nie wiadomo, jak element będzie obrócony, ale do rozsuwania mierzy po skosie
-   * coś, co stoi w rzędzie, i daje odstęp o ~28% za duży. Gniazda mają stać tuż obok
-   * siebie, jak w ramce.
-   */
-  function pudelkoSymbolu(e: InstallationElement): ZajetySymbol {
-    const { w, h } = glyphBoxSize(e.type, fixtureSizeM(e) ?? undefined);
-    return {
-      x: e.x,
-      y: e.y,
-      polSzer: (w / 2) * skalaOsprzetu,
-      polWys: (h / 2) * skalaOsprzetu,
-      obrot: e.rotation ?? 0,
-    };
-  }
-
-  /**
-   * Odsuwa świeżo stawiany element od tych, które już stoją obok.
-   *
-   * Klik decyduje o ŚRODKU symbolu, a symbol ma swoją szerokość — o której klikający nie
-   * myśli. Dwa gniazda postawione blisko siebie lądowały jedno na drugim i spod
-   * wierzchniego nie dało się już wyciągnąć tego pod spodem ani zobaczyć, że tam jest:
-   * na rysunku zostawało jedno gniazdo, a w zestawieniu dwa.
-   *
-   * Tylko przy STAWIANIU, nie przy przeciąganiu. Przeciąganie jest świadomym ustawianiem
-   * pozycji — odpychanie elementu spod kursora w trakcie ruchu byłoby walką z ręką
-   * użytkownika. To ta sama zasada, według której przeciąganie grupy nie przyciąga się
-   * do siatki (patrz `zPrzyciaganiemDoSciany`).
-   */
-  /**
-   * Rozsuwanie dotyczy OSPRZĘTU, nie przyborów sanitarnych.
-   *
-   * Wanna, brodzik czy umywalka to wyposażenie pomieszczenia, a nie urządzenie
-   * instalacji: gniazdo stojące „na" wannie nie jest pomyłką do poprawienia, tylko
-   * sytuacją, o której ma się wypowiedzieć sprawdzenie stref ochronnych. Odpychanie
-   * gniazda od wanny kasowało dokładnie ten przypadek — złapały to testy sprawdzenia
-   * rzutu: gniazdo celowo wsunięte w strefę 1 wyskakiwało z niej samo i zgłoszenie
-   * zmieniało się z błędu na uwagę o strefie 2.
-   *
-   * Przybory nie rozsuwają się też między sobą: ustawienie wanny obok umywalki to
-   * rysunek pomieszczenia, a nie rząd osprzętu na ścianie.
-   */
-  function rozsuwalny(e: { type: ElementType }): boolean {
-    return !SANITARY_FIXTURES[e.type];
-  }
-
-  function bezNakladaniaNaSasiadow(kandydat: InstallationElement, pomijanyId?: string): Point {
-    if (!rozsuwalny(kandydat)) return { x: kandydat.x, y: kandydat.y };
-    // Minimalny prześwit między symbolami. Pudełko glifu nie zna grubości kreski, którą
-    // symbol jest narysowany (zmierzone: gniazdo ma pudełko 7,6 jedn., a rysuje się na
-    // 8,3), więc bez tego obrysy stykałyby się i zlewały w jedną plamę.
-    const odstep = ODSTEP_SYMBOLI_M / (mpu && mpu > 0 ? mpu : MANUAL_DRAW_SCALE_MPU);
-    return odsunOdSasiadow(
-      pudelkoSymbolu(kandydat),
-      // Przy przeciąganiu trzeba pominąć SAM PRZESUWANY element: liczony jako sąsiad
-      // zderzałby się ze swoją własną nową pozycją i odpychał się w nieskończoność.
-      elements.filter((e) => e.id !== pomijanyId && rozsuwalny(e)).map(pudelkoSymbolu),
-      kandydat.rotation ?? 0,
-      odstep
-    );
-  }
-
-  function handlePlaceElement(p: Point) {
-    const m = zPrzyciaganiemDoSciany(p, activeType);
-    // Kandydat potrzebny w całości, bo rozmiar symbolu zależy od typu (i od wymiarów
-    // przyboru sanitarnego), a nie da się go policzyć z samych współrzędnych.
-    const rozstaw = bezNakladaniaNaSasiadow({
-      id: "",
-      type: activeType,
-      x: m.x,
-      y: m.y,
-      rotation: m.rotation,
-      floor: activeFloorId,
-    } as InstallationElement);
-    setDraft((d) => ({
-      ...d,
-      elements: [
-        ...d.elements,
-        {
-          id: crypto.randomUUID(),
-          type: activeType,
-          ...rozstaw,
-          // Pomieszczenie liczone z pozycji PO przyciągnięciu — element ląduje wtedy
-          // dokładnie na linii obrysu, gdzie decyduje tolerancja z `detectRoomName`.
-          room: detectRoomName(m, roomShapes, mpu),
-          floor: activeFloorId,
-          dedicated: activeType === "gniazdko" ? dedicated : false,
-          note: activeType === "gniazdko" && dedicated ? "AGD" : "",
-          gangs: gangsForType(activeType),
-          rotation: m.rotation,
-          // Domyślna litera przy stawianiu z biblioteki — użytkownik podmienia ją na
-          // właściwą (L, Z, ...) w edycji elementu, patrz `EditElementModal`.
-          agdLetter: activeType === "wypustAGD" ? "A" : undefined,
-        },
-      ],
-    }));
   }
 
   /**
@@ -1926,6 +1817,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * elementów od ściany. Wydzielona, bo pilnuje jej efekt niżej.
    */
   const skalaOsprzetu = elementRenderScale(mpu, elementScale, skalaBezKalibracji);
+
+  /** Czwarte skupisko — patrz `useWstawianieElementu`. Stoi TUTAJ, a nie przy
+   *  pozostałych hookach, bo potrzebuje `skalaOsprzetu` policzonej wyżej. */
+  const wstawianie = useWstawianieElementu({ skalaSymboli: skalaOsprzetu, przyciagnijDoSciany: zPrzyciaganiemDoSciany });
 
   /**
    * Zmiana skali symboli przesuwa osprzęt PRZYKLEJONY do ścian, żeby dalej ich dotykał.
@@ -3105,15 +3000,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             <ElementLibrary
               wypelnijWysokosc={pelnyEkran}
               goraKarty={goraPrzewodnika}
-              activeType={activeType}
+              activeType={wstawianie.activeType}
               onPick={(type) => {
-                setActiveType(type);
+                wstawianie.setActiveType(type);
                 setToolMode("elementy");
               }}
-              gangs={gangsForType(activeType)}
-              onSetGangs={(type, n) => setGangsByType((g) => ({ ...g, [type]: n }))}
-              dedicated={dedicated}
-              onToggleDedicated={setDedicated}
+              gangs={wstawianie.gangsForType(wstawianie.activeType)}
+              onSetGangs={wstawianie.ustawGangs}
+              dedicated={wstawianie.dedicated}
+              onToggleDedicated={wstawianie.setDedicated}
             />
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -3247,7 +3142,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setMultiSelected(ids);
               setSelected(null);
             }}
-            onPlaceElement={handlePlaceElement}
+            onPlaceElement={wstawianie.wstaw}
             /* Przypisanie do pomieszczenia jedzie RAZEM z elementem — patrz
                `roomNameAfterMove`. Bez tego gniazdko przeciągnięte z salonu do
                łazienki nadal raportowało się jako salonowe i po cichu trafiało do
@@ -3274,7 +3169,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                    * tam chodzi o zachowanie wzajemnych odstępów, które ktoś przed chwilą
                    * ustawił wyrównaniem.
                    */
-                  const poz = bezNakladaniaNaSasiadow({ ...e, ...m }, id);
+                  const poz = bezNakladaniaNaSasiadow({ ...e, ...m }, elements, skalaOsprzetu, mpu, id);
                   return {
                     ...e,
                     x: poz.x,

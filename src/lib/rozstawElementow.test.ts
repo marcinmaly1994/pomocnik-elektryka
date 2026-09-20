@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { kierunekWzdluzSciany, odsunOdSasiadow, type ZajetySymbol } from "./rozstawElementow";
+import { bezNakladaniaNaSasiadow, kierunekWzdluzSciany, odsunOdSasiadow, pudelkoSymbolu, rozsuwalny, type ZajetySymbol } from "./rozstawElementow";
+import type { InstallationElement } from "@/types";
 
 /**
  * Rozsuwanie osprzętu stawianego blisko siebie.
@@ -100,5 +101,75 @@ describe("odsunOdSasiadow", () => {
   it("zdegenerowane pudełko nie zapętla liczenia", () => {
     const zero: ZajetySymbol = { x: 100, y: 100, polSzer: 0, polWys: 0, obrot: 0 };
     expect(odsunOdSasiadow(zero, [zero], 0)).toEqual({ x: 100, y: 100 });
+  });
+});
+
+/**
+ * Trzy funkcje, które dotąd siedziały wewnątrz komponentu `DesignTab` i dało się je
+ * sprawdzić wyłącznie klikając po planie w przeglądarce. Tutaj są tym, czym naprawdę
+ * są: geometrią symbolu, bez ani jednego kawałka stanu.
+ */
+describe("pudełko symbolu i rozsuwanie od sąsiadów", () => {
+  const el = (over: Partial<InstallationElement> = {}): InstallationElement => ({
+    id: Math.random().toString(36).slice(2),
+    type: "gniazdko",
+    x: 0,
+    y: 0,
+    room: "Salon",
+    floor: "parter",
+    dedicated: false,
+    note: "",
+    gangs: 1,
+    ...over,
+  });
+
+  it("pudełko skaluje się razem z symbolem", () => {
+    const male = pudelkoSymbolu(el(), 1);
+    const duze = pudelkoSymbolu(el(), 2);
+    expect(duze.polSzer).toBeCloseTo(male.polSzer * 2, 5);
+    expect(duze.polWys).toBeCloseTo(male.polWys * 2, 5);
+  });
+
+  it("pudełko siedzi w miejscu elementu i niesie jego obrót", () => {
+    const p = pudelkoSymbolu(el({ x: 40, y: 15, rotation: 90 }), 1);
+    expect(p).toMatchObject({ x: 40, y: 15, obrot: 90 });
+  });
+
+  /**
+   * Przybory sanitarne NIE są rozsuwane. Wanna czy umywalka to wyposażenie
+   * pomieszczenia, a nie urządzenie instalacji: gniazdo stojące „na" wannie nie jest
+   * pomyłką do poprawienia, tylko sytuacją, o której ma się wypowiedzieć sprawdzenie
+   * stref ochronnych. Odpychanie gniazda od wanny kasowało dokładnie ten przypadek.
+   */
+  it("przybór sanitarny nie jest rozsuwany", () => {
+    expect(rozsuwalny({ type: "wanna" })).toBe(false);
+    expect(rozsuwalny({ type: "gniazdko" })).toBe(true);
+  });
+
+  it("przybór sanitarny zostaje dokładnie tam, gdzie go postawiono", () => {
+    const wanna = el({ type: "wanna", x: 100, y: 100 });
+    const poz = bezNakladaniaNaSasiadow(wanna, [el({ x: 100, y: 100 })], 1, 0.05);
+    expect(poz).toEqual({ x: 100, y: 100 });
+  });
+
+  it("gniazdo postawione na sąsiedzie odsuwa się od niego", () => {
+    const sasiad = el({ x: 100, y: 100 });
+    const poz = bezNakladaniaNaSasiadow(el({ x: 100, y: 100 }), [sasiad], 1, 0.05);
+    expect(poz.x === 100 && poz.y === 100).toBe(false);
+  });
+
+  it("gniazdo z dala od wszystkiego nie rusza się wcale", () => {
+    const poz = bezNakladaniaNaSasiadow(el({ x: 500, y: 500 }), [el({ x: 0, y: 0 })], 1, 0.05);
+    expect(poz).toEqual({ x: 500, y: 500 });
+  });
+
+  /**
+   * Przy PRZECIĄGANIU trzeba pominąć sam przesuwany element: liczony jako sąsiad
+   * zderzałby się ze swoją własną nową pozycją i odpychał się w nieskończoność.
+   */
+  it("przesuwany element nie odpycha sam siebie", () => {
+    const ten = el({ id: "ten", x: 100, y: 100 });
+    const poz = bezNakladaniaNaSasiadow(ten, [ten], 1, 0.05, "ten");
+    expect(poz).toEqual({ x: 100, y: 100 });
   });
 });
