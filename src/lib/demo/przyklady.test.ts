@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { PRZYKLADY, zbudujPrzyklad } from "./index";
 import { nearestPointOnPolyline, pointInPolygon, polygonAreaM2 } from "@/lib/geometry";
-import { scaleOf, MANUAL_DRAW_SCALE_MPU, guessRoomType } from "@/lib/design";
+import { scaleOf, MANUAL_DRAW_SCALE_MPU, guessRoomType, typPomieszczenia } from "@/lib/design";
 import { computeCircuits, computeRcdGroups } from "@/lib/panel/circuits";
 import { buildCableRoutes, findPanel, findPanels, spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
@@ -140,11 +140,19 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))('przykład „%s"', (id) =>
       const rzut = nearestPointOnPolyline(o, [...pts, pts[0]]);
       return rzut !== null && Math.hypot(rzut.point.x - o.x, rzut.point.y - o.y) <= LUZ;
     };
-    const komunikacja = payload.draft.roomShapes.filter((r) => r.type === "inne");
+    // Komunikacja to `inne` ORAZ `klatka`: klatka schodowa jest przestrzenią
+    // komunikacyjną tak samo jak hol czy korytarz, tylko niesie dodatkowo informację
+    // o schodach. Typ czytany przez `typPomieszczenia`, bo pole `RoomShape.type` jest
+    // OPCJONALNE — zapisy sprzed jego dodania go nie mają i wracają do zgadywania
+    // po nazwie.
+    const KOMUNIKACJA: RoomType[] = ["inne", "klatka"];
+    const jestKomunikacja = (r: (typeof payload.draft.roomShapes)[number]) =>
+      KOMUNIKACJA.includes(typPomieszczenia(r.name, payload.draft.roomShapes));
+    const komunikacja = payload.draft.roomShapes.filter(jestKomunikacja);
     expect(komunikacja.length, "przykład bez pomieszczenia komunikacyjnego").toBeGreaterThan(0);
 
     for (const r of payload.draft.roomShapes) {
-      if (r.type === "inne") continue;
+      if (jestKomunikacja(r)) continue;
       const drzwi = payload.draft.openings.filter(
         (o) =>
           o.floor === r.floor &&
