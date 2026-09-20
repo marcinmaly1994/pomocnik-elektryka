@@ -2,6 +2,10 @@ import type { InstallationElement, ElementType, RoomShape, Wall } from "@/types"
 import { MANUAL_DRAW_SCALE_MPU, WALL_SNAP_TOLERANCE_M } from "@/lib/design";
 import { przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
+import { DEFAULT_PRICES } from "@/lib/costs";
+import { INITIAL_ONBOARDING } from "@/lib/onboarding";
+import { WARUNKI_DOBORU_DOMYSLNE } from "@/lib/panel/norms";
+import type { ProjectPayload } from "@/store/useProjectStore";
 
 /** Lewy górny róg budynku w jednostkach planu. */
 const X0 = 20;
@@ -78,4 +82,77 @@ export function przyklejDoScian(
     const m = snapElementToWall({ x: el.x, y: el.y }, walls, rooms, tolerancja, el.type, skala);
     return m ? { ...el, x: m.x, y: m.y, rotation: m.rotation } : el;
   });
+}
+
+/**
+ * Wszystko, co w KAŻDYM przykładzie jest takie samo — od cennika po znacznik
+ * `projektPrzykladowy`. Plik przykładu podaje tylko to, czym się od innych różni:
+ * rysunek, listę kondygnacji i trzy napisy.
+ *
+ * PO CO: ten ogon payloadu miał dwie kopie, jedna w `mieszkanie.ts`, druga
+ * w `dom.ts`. Obie były już wtedy identyczne co do wartości i różniły się wyłącznie
+ * łamaniem wierszy, a każde nowe pole `ProjectPayload` trzeba było dopisywać w obu —
+ * z tym, że pominięcie jednej kopii NIE jest błędem typu, jeśli pole ma wartość
+ * domyślną albo jest opcjonalne. Przykład po prostu otwierałby się inaczej niż drugi.
+ *
+ * `activeFloorId` bierze się z PIERWSZEJ kondygnacji z listy, bo przykład ma się
+ * otwierać na tej, od której się go czyta — parterze. Skalę dostaje KAŻDA kondygnacja
+ * z listy: bez wpisu w `scales` piętro renderowałoby się w skali domyślnej, czyli
+ * w innym rozmiarze niż parter, a widać to dopiero po przełączeniu zakładki.
+ */
+export function bazaPayloadu(opis: {
+  draft: ProjectPayload["draft"];
+  floors: ProjectPayload["floors"];
+  /** Nazwa projektu — ta z paska u góry i z listy projektów. */
+  projectName: string;
+  /** Pole „obiekt" w nagłówku dokumentów (protokoły, PDF). */
+  obiekt: string;
+  /** Arkusz, na którym rysunek powstał — patrz `planSize` w nagłówkach przykładów. */
+  planSize: ProjectPayload["planSize"];
+}): ProjectPayload {
+  return {
+    draft: opis.draft,
+    floors: opis.floors,
+    activeFloorId: opis.floors[0].id,
+    // Bez podkładu: to data URL, czyli setki kilobajtów base64 w paczce i w każdym
+    // autozapisie. Przykłady stoją na czystej siatce w skali `MANUAL_DRAW_SCALE_MPU`.
+    bgImages: {},
+    scales: Object.fromEntries(opis.floors.map((f) => [f.id, MANUAL_DRAW_SCALE_MPU])),
+    prices: { ...DEFAULT_PRICES },
+    costOverrides: {},
+    qtyOverrides: {},
+    warunkiDoboru: WARUNKI_DOBORU_DOMYSLNE,
+    docHeader: {
+      obiekt: opis.obiekt,
+      adres: "",
+      zleceniodawca: "",
+      wykonawca: "",
+      uprawnienia: "",
+      przyrzad: "",
+      nrFabryczny: "",
+      swiadectwo: "",
+      data: new Date().toISOString().slice(0, 10),
+      temperatura: "20",
+      wilgotnosc: "55",
+      uklad: "TN-S",
+      drawingNo: "E-01",
+      revision: "A",
+    },
+    protocols: {},
+    projectName: opis.projectName,
+    panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
+    // Rozdzielnica ma się ODBUDOWAĆ z obwodów policzonych z rzutu — o to w przykładzie
+    // chodzi. Stąd tryb „z rzutu" i pusta lista aparatów: gotowa lista zamrażałaby
+    // wynik doboru z dnia, w którym powstał plik z danymi.
+    panelDevices: [],
+    panelHidden: [],
+    panelTryb: "zRzutu",
+    panelOverrides: {},
+    planSize: opis.planSize,
+    // Przewodnik „Zacznij w 3 krokach" jest na gotowym projekcie bezprzedmiotowy —
+    // wszystkie trzy kroki są w nim z definicji wykonane (jest skala, są nazwane
+    // pomieszczenia, stoją elementy), a `reconcile` i tak by je odhaczyło z faktów.
+    onboarding: { ...INITIAL_ONBOARDING, krok1Done: true, krok2Done: true, krok3Done: true, pominiety: true, ostatnioOtwarty: false },
+    projektPrzykladowy: true,
+  };
 }

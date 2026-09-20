@@ -179,6 +179,28 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))('przykład „%s"', (id) =>
     expect(payload.projektPrzykladowy).toBe(true);
   });
 
+  it("KAŻDA kondygnacja ma skalę, a otwiera się pierwsza z listy", () => {
+    // Kondygnacja bez wpisu w `scales` renderuje się w skali domyślnej, więc rzut
+    // piętra wychodziłby w innym rozmiarze niż parteru — a widać to dopiero po
+    // przełączeniu zakładki, czyli już u użytkownika.
+    for (const f of payload.floors) expect(scaleOf(payload.scales, f.id)).toBe(MANUAL_DRAW_SCALE_MPU);
+    expect(payload.activeFloorId).toBe(payload.floors[0].id);
+  });
+
+  it("otwiera się na gotowym wyniku, a nie na przewodniku i pustej rozdzielnicy", () => {
+    // Rozdzielnica ma się ODBUDOWAĆ z obwodów policzonych z tego rzutu — o to
+    // w przykładzie chodzi. Gotowa lista aparatów zamrażałaby wynik doboru z dnia,
+    // w którym powstał plik z danymi.
+    expect(payload.panelTryb).toBe("zRzutu");
+    expect(payload.panelDevices).toEqual([]);
+    // Przewodnik „Zacznij w 3 krokach" jest na gotowym projekcie bezprzedmiotowy —
+    // wszystkie trzy kroki są w nim z definicji wykonane.
+    expect(payload.onboarding.krok1Done).toBe(true);
+    expect(payload.onboarding.krok2Done).toBe(true);
+    expect(payload.onboarding.krok3Done).toBe(true);
+    expect(payload.onboarding.pominiety).toBe(true);
+  });
+
   it("nie wlecze ze sobą podkładu", () => {
     // Podkład to data URL — setki kilobajtów base64 w paczce i w każdym autozapisie.
     expect(payload.bgImages).toEqual({});
