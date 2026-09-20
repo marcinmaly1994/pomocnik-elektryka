@@ -233,6 +233,33 @@ describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
     });
   });
 
+  /**
+   * Oprawa sterowana łącznikiem z INNEJ kondygnacji nie dostaje trasy zasilania na
+   * swoim piętrze, bo jej zasilanie przychodzi przez strop — a tego rzut 2D nie umie
+   * narysować. Rysunek pokazuje wtedy MNIEJ, zamiast pokazywać kabel z rozdzielnicy
+   * do oprawy, którego kosztorys od tej pory nie kupuje (patrz
+   * `estimateRoutesByFloor`: zasilanie idzie do łącznika, także przez strop).
+   *
+   * Zgodność rysunku z szacunkiem jest w tym module własnością pierwszej kategorii —
+   * po to `ogniwaSterowania` zostało w ogóle wydzielone.
+   */
+  it("oprawa sterowana z INNEJ kondygnacji nie dostaje trasy zasilania na swoim piętrze", () => {
+    const lampaG = el("oswietlenie", { x: 100, y: 100, floor: "pietro", room: "Klatka g", lightGroup: [7] });
+    const lacznikP = el("wlacznikSchodowy", { x: 40, y: 100, floor: "parter", room: "Klatka", lightGroup: [7] });
+    // Rysunek dostaje elementy JEDNEJ kondygnacji — i o łączniku piętro niżej wie
+    // wyłącznie z listy całego budynku.
+    const routes = buildCableRoutes(panel, [circuit({ elements: [lampaG] })], [lampaG], [], [], [], 1, [lampaG, lacznikP]);
+    expect(routes.filter((r) => r.kind === "zasilanie")).toEqual([]);
+  });
+
+  /** Kontrola założenia: bez wiedzy o całym budynku (czyli tak, jak wołają tę funkcję
+   *  testy wyżej) oprawa dostaje trasę zasilania jak każdy inny punkt obwodu. */
+  it("ta sama oprawa BEZ listy całego budynku rysuje się jak dotąd", () => {
+    const lampaG = el("oswietlenie", { x: 100, y: 100, floor: "pietro", room: "Klatka g", lightGroup: [7] });
+    const routes = buildCableRoutes(panel, [circuit({ elements: [lampaG] })], [lampaG], [], []);
+    expect(routes.filter((r) => r.kind === "zasilanie")).toHaveLength(1);
+  });
+
   it("łącznik steruje kilkoma oprawami: JEDEN przewód pętli łącznik -> najbliższa oprawa -> kolejna, a NIE osobny kabel z łącznika do każdej", () => {
     // control -- (odl. 53,9) --> lightA -- (odl. 14,1) --> lightB
     // ale control -- (odl. 60,8) --> lightB WPROST byłoby dłuższe niż przez lightA —
@@ -837,6 +864,49 @@ describe("estimateRoutesByFloor", () => {
         estimateRoutesByFloor(panel, [lampaDol], skale, 1.5, { wszystkieElementy: [swDol, lampaDol], kondygnacje })!.totalM +
         estimateRoutesByFloor(panel, [lampaGora], skale, 1.5, { wszystkieElementy: [swGora, lampaGora], kondygnacje })!.totalM;
       expect(razem.totalM).toBeCloseTo(osobno, 5);
+    });
+
+    /**
+     * ZASILANIE IDZIE DO LACZNIKA, TAKZE PRZEZ STROP. Dla grupy w obrebie pietra
+     * oprawa nie trafia do lancucha zasilania w ogole — trafia tam LACZNIK, a oprawa
+     * wisi za nim na ogniwie sterowania. Przy grupie przez strop
+     * `findControllingSwitch` nie widzial lacznika pietro nizej, wiec oprawa wpadala
+     * do lancucha jako punkt zasilany wprost i dostawala JESZCZE ogniwo. Do jednej
+     * oprawy dochodzil w modelu drugi kabel, ktorego nikt nie polozy.
+     *
+     * Test jest na tym, ze POZYCJA oprawy rusza juz tylko ogniwem sterowania: przy
+     * wlasnym lancuchu zasilania odsuniecie jej o 200 jedn. (10 m w tej skali)
+     * wydluzyloby OBIE trasy, czyli okolo 20 m zamiast 10.
+     */
+    it("oprawa sterowana z innego pietra nie ma wlasnego lancucha zasilania", () => {
+      const daleko = { ...lampaG, x: 300 };
+      const metry = (lampa: InstallationElement) =>
+        estimateRoutesByFloor(panel, [lampa], skale, 1.5, { wszystkieElementy: [lacznik, lampa], kondygnacje })!.totalM;
+      expect(metry(daleko) - metry(lampaG)).toBeCloseTo(10, 1);
+    });
+
+    /**
+     * Druga polowa tej samej reguly: skoro zasilanie idzie do lacznika, to lacznik
+     * musi byc w lancuchu SWOJEJ kondygnacji. Sprawdzane na dwoch pozycjach o tej
+     * samej dlugosci ogniwa (obie 60 jedn. od oprawy), a roznej odleglosci od
+     * rozdzielnicy — rusza sie wiec wylacznie lancuch zasilania, o 120 jedn. = 6 m.
+     * Gdyby lacznika w lancuchu nie bylo, wynik nie zmienilby sie wcale.
+     */
+    it("lacznik wchodzi do lancucha zasilania SWOJEJ kondygnacji", () => {
+      const blisko = { ...lacznik, x: 40, y: 100 };
+      const dalej = { ...lacznik, x: 160, y: 100 };
+      const metry = (sw: InstallationElement) =>
+        estimateRoutesByFloor(panel, [lampaG], skale, 1.5, { wszystkieElementy: [sw, lampaG], kondygnacje })!.totalM;
+      expect(metry(dalej) - metry(blisko)).toBeCloseTo(6, 1);
+    });
+
+    /** Obwod, z ktorego po wyjeciu oprawy nie zostaje na jej pietrze NIC, nadal ma
+     *  wynik — liczy sie od lacznika na kondygnacji nizej. Wczesniej pusta lista
+     *  elementow konczyla sie `null`, czyli uniewaznieniem calego obwodu. */
+    it("obwod nie znika, gdy jedyna oprawa wypada z lancucha swojego pietra", () => {
+      const r = estimateRoutesByFloor(panel, [lampaG], skale, 1.5, { wszystkieElementy: [lacznik, lampaG], kondygnacje });
+      expect(r).not.toBeNull();
+      expect(r!.totalM).toBeGreaterThan(0);
     });
 
     it("grupa w obrebie JEDNEJ kondygnacji liczy sie tak jak dotad", () => {

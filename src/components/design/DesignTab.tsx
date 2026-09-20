@@ -2098,9 +2098,20 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const rawCableRoutes = useMemo(
     () =>
       trasyPotrzebne
-        ? buildCableRoutes(findPanel(elements), computeCircuits(elements, roomShapes), elements, walls, roomShapes, openings, skalaOsprzetu)
+        ? buildCableRoutes(
+            findPanel(elements),
+            computeCircuits(elements, roomShapes),
+            elements,
+            walls,
+            roomShapes,
+            openings,
+            skalaOsprzetu,
+            // Cały budynek WYŁĄCZNIE po to, żeby rozpoznać oprawę sterowaną łącznikiem
+            // z innej kondygnacji — rysunek nadal powstaje z elementów tego piętra.
+            wszystkieElementy
+          )
         : [],
-    [trasyPotrzebne, elements, walls, roomShapes, openings, mpu, elementScale, skalaBezKalibracji]
+    [trasyPotrzebne, elements, wszystkieElementy, walls, roomShapes, openings, mpu, elementScale, skalaBezKalibracji]
   );
   // Ręczne poprawki (przeciągnięte przez użytkownika załamania, patrz DesignCanvas)
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
