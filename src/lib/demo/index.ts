@@ -33,6 +33,14 @@ export const PRZYKLADY = [
     zaladuj: () => import("./mieszkanie"),
     eksport: "zbudujProjektPrzykladowy",
   },
+  {
+    id: "dom",
+    nazwa: "Dom 136 m², dwie kondygnacje",
+    opis: "Parter z garażem, kotłownią i pralnią, piętro z sypialniami. Podrozdzielnica na piętrze zasila jego obwody.",
+    fakty: ["136 m²", "12 pomieszczeń", "~80 elementów"],
+    zaladuj: () => import("./dom"),
+    eksport: "zbudujProjektDom",
+  },
 ] as const satisfies readonly Przyklad[];
 
 export type PrzykladId = (typeof PRZYKLADY)[number]["id"];

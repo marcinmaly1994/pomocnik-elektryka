@@ -157,10 +157,21 @@ function elementy(): InstallationElement[] {
     eP("dom-hol-dzwonek", "dzwonek", HOL, 4.8, 5.4),
     eP("dom-hol-lampa", "oswietlenie", HOL, 4, 6.2),
     eP("dom-hol-zewn", "oswietlenieZewn", HOL, 4.7, 7.8, { note: "Nad wejściem" }),
-    eP("dom-kor-lampa", "oswietlenie", HOL, 7, 4.25),
+    // x = 5,25 NIE jest dowolne: wklęsły narożnik Holu (5, 5) wchodzi do grafu tras
+    // wsunięty o ODSUNIECIE_TRASY, czyli ląduje w (4,75; 4,75). Z tego punktu do
+    // dowolnej oprawy dalej w korytarzu (oś y = 4,25) Dijkstra ZAWSZE wybierze przekątną
+    // zamiast pasa wzdłuż ściany plus prostopadłego zejścia — przesuwanie oprawy wzdłuż
+    // korytarza tego nie naprawia. Jedyne wyjście bez dokładania elementów: postawić
+    // oprawę TAK, żeby ten odcinek był dozwolonym odczepem pod 45°, czyli dx = dy
+    // względem narożnika: 4,75 + (4,75 − 4,25) = 5,25. Test „przewody biegną wzdłuż
+    // ścian" w przyklady.test.ts pilnuje, żeby to się nie rozjechało.
+    eP("dom-kor-lampa", "oswietlenie", HOL, 5.25, 4.25),
     eP("dom-kor-sw", "wlacznikSchodowy", HOL, 9.8, 4.25),
     eP("dom-kor-gn", "gniazdko", HOL, 5.5, 3.7),
-    eP("dom-hol-dym", "czujnikDymu", HOL, 5.5, 4.6),
+    // x przesunięte z 5,5 na 6,5: przy oprawie w (5,25; 4,25) odległość do czujnika
+    // spadała do 0,43 m — dwa symbole prawie na sobie. 6,5 daje z powrotem > 0,8 m
+    // od wszystkich sąsiadów w Holu.
+    eP("dom-hol-dym", "czujnikDymu", HOL, 6.5, 4.6),
 
     // --- Garaż ---
     eP("dom-ev", "ladowarkaEV", GARAZ, 0.25, 1.5, { dedicated: true, note: "Ładowarka EV" }),
