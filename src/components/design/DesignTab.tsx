@@ -96,6 +96,7 @@ import { DlugosciOdcinkowSciany } from "@/components/design/DlugosciOdcinkowScia
 import { PodpowiedzPelnyEkran } from "@/components/design/PodpowiedzPelnyEkran";
 import { zapamietajOdrzucenie } from "@/lib/podpowiedzPelnyEkran";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
+import { useRysowanieScian } from "@/hooks/useRysowanieScian";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
 import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
@@ -518,14 +519,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [gridOn, setGridOn] = useState(true);
   const [selected, setSelected] = useState<Selection>(null);
   const [multiSelected, setMultiSelected] = useState<string[]>([]);
-  const [drawingWall, setDrawingWall] = useState<Point[]>([]);
-  /** Grubość NOWEJ ściany (jedn. planu) — ustawienie edytora jak `snapOn`, nie
-   *  część zapisywanego projektu. Trafia na ścianę dopiero w `finishWall`. */
-  const [wallThickness, setWallThickness] = useState(DEFAULT_WALL_THICKNESS);
-  /** Wymuszanie kątów prostych przy rysowaniu ściany: każdy kolejny odcinek jest
-   *  albo poziomy, albo pionowy względem poprzedniego punktu — przydatne przy
-   *  ścianach nośnych/działowych, które niemal zawsze są prostopadłe. */
-  const [orthoWalls, setOrthoWalls] = useState(false);
   const [drawingRoomPoints, setDrawingRoomPoints] = useState<Point[]>([]);
   const [roomMode, setRoomMode] = useState<RoomDrawMode>("prostokat");
   /** Rodzaj NOWEGO otworu — ustawienie edytora, jak grubosc sciany, nie czesc projektu. */
@@ -556,6 +549,16 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * a nie każdy obrys jest pomieszczeniem.
    */
   const [petlaDoNazwania, setPetlaDoNazwania] = useState<string | null>(null);
+  /** Rysowanie ścian ma własny hook — pierwsze skupisko stanu wyjęte z tego pliku
+   *  (patrz `useRysowanieScian`). Czytane przez obiekt, nie destrukturyzacją: po
+   *  `sciany.drawingWall` widać, do czego ten stan należy, a po gołej nazwie nie. */
+  const sciany = useRysowanieScian({ onPetlaZamknieta: setPetlaDoNazwania });
+  /** Czyszczenie szkicu ściany wyjęte z `sciany` osobno, bo musi stać w zależnościach
+   *  efektu przełączania kondygnacji (niżej), a cały obiekt hooka dostaje przy każdym
+   *  renderze nową tożsamość — wpisany do zależności odpalałby ten reset bez przerwy
+   *  i kasował rysowaną właśnie ścianę. Sam setter pochodzi z `useState`, więc jest
+   *  stabilny i jako zależność nie zmienia niczego. */
+  const { setDrawingWall: setSzkicSciany } = sciany;
   const [showZones, setShowZones] = useState(true);
   /** Widoczność tras przewodów — domyślnie WYŁĄCZONA: to warstwa poglądowa, nie
    *  zawsze potrzebna, i bez rozdzielnicy postawionej na planie i tak jest pusta
@@ -1226,7 +1229,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // Wyjście z trybu porzuca niedokończoną figurę — inaczej jej punkty
     // wisiałyby na planie i doklejałyby się po powrocie do rysowania.
     if (id !== "pomieszczenie") setDrawingRoomPoints([]);
-    if (id !== "sciany") setDrawingWall([]);
+    if (id !== "sciany") sciany.setDrawingWall([]);
     // Propozycja „zrób z tej pętli pomieszczenie" dotyczy CHWILI zaraz po domknięciu
     // obrysu. Wyjście z narzędzia ściany jest odpowiedzią „nie teraz" — wskrzeszanie
     // jej przy powrocie do rysowania pół godziny później byłoby natręctwem. Sama
@@ -1309,12 +1312,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     setSelected(null);
     setMultiSelected([]);
     setCalibPoints([]);
-    setDrawingWall([]);
+    setSzkicSciany([]);
     setDrawingRoomPoints([]);
     setContextMenu(null);
     setRoomNameEdit(null);
     setEditingId(null);
-  }, [activeFloorId]);
+  }, [activeFloorId, setSzkicSciany]);
 
   function deleteSelection() {
     if (multiSelected.length > 0) {
@@ -1366,11 +1369,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * Cofnięcie ostatniego postawionego punktu ma więc PIERWSZEŃSTWO przed cofnięciem
    * zatwierdzonej zmiany — dokładnie w kolejności, w jakiej użytkownik naciskał klawisze.
    */
-  const wTrakcieRysowania = drawingWall.length > 0 || drawingRoomPoints.length > 0;
+  const wTrakcieRysowania = sciany.drawingWall.length > 0 || drawingRoomPoints.length > 0;
   const canUndo = wTrakcieRysowania || maZatwierdzoneDoCofniecia;
   function undo() {
-    if (drawingWall.length > 0) {
-      setDrawingWall((pts) => pts.slice(0, -1));
+    if (sciany.drawingWall.length > 0) {
+      sciany.setDrawingWall((pts) => pts.slice(0, -1));
       return;
     }
     if (drawingRoomPoints.length > 0) {
@@ -1450,8 +1453,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         const porzuconyPodglad = anulujPodgladRef.current?.() ?? false;
         const bylCosDoPorzucenia =
           porzuconyPodglad ||
-          drawingWall.length > 0 || drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
-        setDrawingWall([]);
+          sciany.drawingWall.length > 0 || drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
+        sciany.setDrawingWall([]);
         setDrawingRoomPoints([]);
         setMultiSelected([]);
         setCalibPoints([]);
@@ -1467,9 +1470,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // Enter zatwierdza rysowaną ścianę — druga (obok PPM na płótnie, patrz
       // `onWallDrawContextMenu`) klawiaturowa alternatywa dla przycisku „Zakończ".
       // Próg 2 punktów jak w samym `finishWall` — z jednego punktu nie ma czego zapisać.
-      if (e.key === "Enter" && drawingWall.length >= 2 && tag !== "INPUT" && tag !== "TEXTAREA") {
+      if (e.key === "Enter" && sciany.drawingWall.length >= 2 && tag !== "INPUT" && tag !== "TEXTAREA") {
         e.preventDefault();
-        finishWall();
+        sciany.finishWall();
       }
       // To samo dla wieloboku pomieszczenia — próg 3 punktów jak w `finishRoomDrawing`
       // (przycisk „Zakończ" pojawia się dopiero od trzech, mniej nie domyka figury).
@@ -1729,62 +1732,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     setDraft((d) => ({
       ...d,
       elements: d.elements.map((e) => (ids.includes(e.id) ? { ...e, rotation: ((e.rotation ?? 0) + 90) % 360 } : e)),
-    }));
-  }
-
-  function finishWall() {
-    if (drawingWall.length >= 2) {
-      setDraft((d) => ({
-        ...d,
-        walls: [...d.walls, { id: crypto.randomUUID(), floor: activeFloorId, points: drawingWall, thickness: wallThickness }],
-      }));
-    }
-    setDrawingWall([]);
-  }
-
-  /**
-   * Klik, który zamyka wielobok ściany (przyciągnięty do jej pierwszego punktu —
-   * `onCloseWall` z DesignCanvas), zatwierdza ścianę OD RAZU, z domykającym punktem
-   * dołożonym na koniec — bez czekania na osobne „Zakończ"/Enter. Nie da się tu użyć
-   * `finishWall`: ten czyta `drawingWall` ze stanu, które w momencie tego kliknięcia
-   * jeszcze NIE zawiera punktu domykającego (`setDrawingWall` jest asynchroniczny),
-   * więc zamknięcie buduje listę punktów jawnie, tak jak `createWallFromRoom`. */
-  function closeWall(p: Point) {
-    const points = [...drawingWall, p];
-    if (points.length >= 2) {
-      const id = crypto.randomUUID();
-      setDraft((d) => ({
-        ...d,
-        walls: [...d.walls, { id, floor: activeFloorId, points, thickness: wallThickness }],
-      }));
-      // Domknięta pętla to obrys pomieszczenia narysowany murem — proponujemy zrobić
-      // z niej pokój OD RAZU, zamiast kazać przejechać po raz drugi tę samą figurę
-      // (patrz `petlaDoNazwania` i `createRoomFromWall`).
-      if (wierzcholkiZamknietejSciany(points)) setPetlaDoNazwania(id);
-    }
-    setDrawingWall([]);
-  }
-
-  /** Tworzy ścianę o kształcie IDENTYCZNYM z obrysem pomieszczenia — dla planów, które
-   *  zaczęły się od samego obrysu pokoju (skrót „obrysuj pomieszczenie", bez osobnego
-   *  rysowania ścian) i teraz mają dociągnąć plan do stanu z prawdziwymi ścianami:
-   *  routowanie przewodów wzdłuż ścian (`buildCableRoutes`), grubość na rzucie do PDF
-   *  itd. Zamknięty wielokąt — ostatni punkt domyka się z powrotem do pierwszego, tak
-   *  samo jak ściana zamknięta ręcznie (patrz `finishWall`).
-   *
-   *  Osobny przycisk, NIE automat przy każdym narysowanym pomieszczeniu: automatyczne
-   *  tworzenie ściany zdublowałoby ją u tych, którzy rysują obrys pomieszczenia
-   *  WEWNĄTRZ już postawionych ścian — a to jest częsty, sprawdzony w testach
-   *  przepływ, nie przypadek brzegowy. */
-  function createWallFromRoom(roomId: string) {
-    const room = roomShapes.find((r) => r.id === roomId);
-    if (!room || room.points.length < 3) return;
-    setDraft((d) => ({
-      ...d,
-      walls: [
-        ...d.walls,
-        { id: crypto.randomUUID(), floor: activeFloorId, points: [...room.points, room.points[0]], thickness: wallThickness },
-      ],
     }));
   }
 
@@ -2195,7 +2142,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       ? petleBezPomieszczenia.find((x) => x.wall.id === petlaDoNazwania) ?? null
       : null;
 
-  const blokujaceKontrolki = drawingWall.length > 0 || drawingRoomPoints.length > 0 || toolMode === "skala";
+  const blokujaceKontrolki = sciany.drawingWall.length > 0 || drawingRoomPoints.length > 0 || toolMode === "skala";
   useEffect(() => {
     if (!pelnyEkran && blokujaceKontrolki && panelZwiniety) rozwinPanel();
   }, [pelnyEkran, blokujaceKontrolki, panelZwiniety, rozwinPanel]);
@@ -2278,10 +2225,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               type="number"
               min={1}
               step={mpu !== null ? 0.5 : 1}
-              value={thicknessToDisplay(wallThickness)}
+              value={thicknessToDisplay(sciany.wallThickness)}
               onChange={(e) => {
                 const v = Number(e.target.value);
-                if (Number.isFinite(v) && v > 0) setWallThickness(thicknessFromDisplay(v));
+                if (Number.isFinite(v) && v > 0) sciany.setWallThickness(thicknessFromDisplay(v));
               }}
               className="w-16 rounded border border-border px-1.5 py-0.5"
             />
@@ -2291,25 +2238,25 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             <input
               data-testid="wall-ortho-checkbox"
               type="checkbox"
-              checked={orthoWalls}
-              onChange={(e) => setOrthoWalls(e.target.checked)}
+              checked={sciany.orthoWalls}
+              onChange={(e) => sciany.setOrthoWalls(e.target.checked)}
             />
             Ortogonalnie (kąty proste)
           </label>
         </div>
       )}
 
-      {drawingWall.length > 0 && (
+      {sciany.drawingWall.length > 0 && (
         <div className="flex flex-nowrap items-center gap-2 text-sm">
-          <span className="whitespace-nowrap font-medium text-slate-600">Rysowanie ściany: {drawingWall.length} pkt.</span>
+          <span className="whitespace-nowrap font-medium text-slate-600">Rysowanie ściany: {sciany.drawingWall.length} pkt.</span>
           <PoleDlugosciOdcinka
-            punkty={drawingWall}
+            punkty={sciany.drawingWall}
             mpu={mpu}
-            onZmiana={setDrawingWall}
+            onZmiana={sciany.setDrawingWall}
             testId="wall-segment-length-input"
           />
-          <button onClick={finishWall} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
-          <button onClick={() => setDrawingWall([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
+          <button onClick={sciany.finishWall} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
+          <button onClick={() => sciany.setDrawingWall([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
         </div>
       )}
 
@@ -2447,8 +2394,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <input
                 data-testid="room-ortho-checkbox"
                 type="checkbox"
-                checked={orthoWalls}
-                onChange={(e) => setOrthoWalls(e.target.checked)}
+                checked={sciany.orthoWalls}
+                onChange={(e) => sciany.setOrthoWalls(e.target.checked)}
               />
               Ortogonalnie (kąty proste)
             </label>
@@ -3270,7 +3217,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               {/* Przycisk zostaje na wierzchu, przewija sie sama LISTA — przy kilkunastu
                   pomieszczeniach inaczej uciekalby poza kolumne. */}
               <div className="pe-bez-suwaka min-h-0 flex-1 overflow-y-auto pr-1">
-                <RoomPanel roomShapes={roomShapes} metersPerUnit={mpu} onCreateWall={createWallFromRoom} />
+                <RoomPanel roomShapes={roomShapes} metersPerUnit={mpu} onCreateWall={sciany.createWallFromRoom} />
               </div>
             </div>
           )}
@@ -3304,9 +3251,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             gridOn={gridOn}
             selected={selected}
             multiSelected={multiSelected}
-            drawingWall={drawingWall}
-            newWallThickness={wallThickness}
-            ortho={orthoWalls}
+            drawingWall={sciany.drawingWall}
+            newWallThickness={sciany.wallThickness}
+            ortho={sciany.orthoWalls}
             drawingRoomPoints={drawingRoomPoints}
             bgImageUrl={bgImageUrl}
             calibPoints={calibPoints}
@@ -3426,8 +3373,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               }))
             }
             onMoveElements={przesunElementy}
-            onAddWallPoint={(p) => setDrawingWall((pts) => [...pts, p])}
-            onCloseWall={closeWall}
+            onAddWallPoint={(p) => sciany.setDrawingWall((pts) => [...pts, p])}
+            onCloseWall={sciany.closeWall}
             onAddRoomPoint={(p) => setDrawingRoomPoints((pts) => [...pts, p])}
             onRoomRectDrawn={(points) => {
               const name = nextRoomName(roomShapes.length);
@@ -3770,7 +3717,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <>
                 <button
                   onClick={() => {
-                    createWallFromRoom(contextMenu.id);
+                    sciany.createWallFromRoom(contextMenu.id);
                     setContextMenu(null);
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
@@ -3791,7 +3738,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             ) : contextMenu.kind === "wallDraw" ? (
               <button
                 onClick={() => {
-                  finishWall();
+                  sciany.finishWall();
                   setContextMenu(null);
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
