@@ -1,11 +1,10 @@
 import type { InstallationElement, Opening, RoomShape, Wall } from "@/types";
-import { MANUAL_DRAW_SCALE_MPU, ROOM_COLORS, WALL_SNAP_TOLERANCE_M } from "@/lib/design";
-import { przyscienny, snapElementToWall } from "@/lib/wallSnap";
-import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
+import { MANUAL_DRAW_SCALE_MPU, ROOM_COLORS } from "@/lib/design";
 import { DEFAULT_PRICES } from "@/lib/costs";
 import { INITIAL_ONBOARDING } from "@/lib/onboarding";
 import { WARUNKI_DOBORU_DOMYSLNE } from "@/lib/panel/norms";
 import type { ProjectPayload } from "@/store/useProjectStore";
+import { p, przyklejDoScian, tworzE } from "./wspolne";
 
 /**
  * Gotowy projekt przykładowy — mieszkanie 70 m², sześć pomieszczeń, komplet osprzętu.
@@ -45,8 +44,10 @@ import type { ProjectPayload } from "@/store/useProjectStore";
  * Dziś przedpokój jest literą L — przedsionek 2×2 m przy drzwiach wejściowych plus
  * korytarz 1×5 m — i KAŻDE pomieszczenie ma drzwi właśnie do niego; z żadnego do
  * żadnego się nie przechodzi (pilnuje tego test „każde pomieszczenie ma drzwi do
- * przedpokoju"). Łazienka jest wewnętrzna, bez okna, jak w bloku. Obrys w kształcie L
- * pokazuje przy okazji, że pomieszczenie nie musi być prostokątem.
+ * KOMUNIKACJI, a nie do sąsiada" w `przyklady.test.ts` — reguła wisi na typie `inne`,
+ * nie na nazwie „Przedpokój", więc obowiązuje też w domu obok). Łazienka jest
+ * wewnętrzna, bez okna, jak w bloku. Obrys w kształcie L pokazuje przy okazji, że
+ * pomieszczenie nie musi być prostokątem.
  *
  * SZEROKOŚĆ KORYTARZA to 1,5 m i nie jest to wartość dobrana pod estetykę. Przy 1,0 m
  * rzut się rysował, ale przewody biegły przez niego ukosem: obrys pomieszczenia wchodzi
@@ -62,17 +63,8 @@ import type { ProjectPayload } from "@/store/useProjectStore";
  *   Pokój 6,5×2 (13 m²) · Łazienka 2×3,5 (7 m²) · Przedpokój L (10,5 m²) — razem 70 m².
  */
 
-/** Lewy górny róg mieszkania w jednostkach planu. */
-const X0 = 20;
-const Y0 = 20;
-/** Jednostki planu na metr — patrz `MANUAL_DRAW_SCALE_MPU` (0,05 m na jednostkę). */
-const M = 20;
-
-/** Punkt z METRÓW liczonych od narożnika mieszkania — cały rysunek niżej jest w nich,
- *  bo „ściana na 5 m" czyta się, a „ściana na 200" trzeba przeliczać w głowie. */
-const p = (mx: number, my: number) => ({ x: X0 + mx * M, y: Y0 + my * M });
-
 const FLOOR = "f1";
+const e = tworzE(FLOOR);
 
 const SALON = "Salon";
 const KUCHNIA = "Kuchnia";
@@ -204,29 +196,6 @@ function otwory(): Opening[] {
   ];
 }
 
-/** Skrót na element — reszta pól to wartości domyślne, identyczne z tymi, które
- *  nadaje `addElement` w store'rze przy stawianiu klikiem. */
-function e(
-  id: string,
-  type: InstallationElement["type"],
-  room: string,
-  mx: number,
-  my: number,
-  extra: Partial<InstallationElement> = {}
-): InstallationElement {
-  return {
-    id: `demo-e-${id}`,
-    type,
-    ...p(mx, my),
-    room,
-    floor: FLOOR,
-    dedicated: false,
-    note: "",
-    gangs: 1,
-    ...extra,
-  };
-}
-
 /**
  * Osprzęt — tyle, żeby rozdzielnica wyszła realistyczna (kilka obwodów gniazd,
  * oświetlenie, kuchnia i łazienka osobno, jeden obwód dedykowany), ale nie tyle,
@@ -315,31 +284,6 @@ function elementy(): InstallationElement[] {
     e("laz-prysznic", "prysznic", LAZIENKA, 0.5, 6.4),
     e("laz-lampa", "oswietlenie", LAZIENKA, 1, 5),
   ];
-}
-
-/**
- * Dokleja osprzęt przyścienny do ścian DOKŁADNIE tak, jak robi to kliknięcie na
- * planie (patrz `zPrzyciaganiemDoSciany` w DesignTab.tsx — te same argumenty,
- * ta sama funkcja).
- *
- * Bez tego kroku dane wyżej są tylko „mniej więcej przy ścianie": gniazdko wpisane
- * 20 cm od jej osi renderuje się okrakiem na murze i połową wychodzi na zewnątrz
- * budynku, bo symbol jest wyższy niż ten odstęp. Ręczne wpisywanie poprawnych
- * odsunięć i obrotów dla czterdziestu punktów byłoby przepisywaniem tej funkcji
- * w stałych — i rozjechałoby się przy pierwszej zmianie geometrii glifów.
- *
- * `skala` to `elementRenderScale(MANUAL_DRAW_SCALE_MPU, DEFAULT_ELEMENT_SCALE, …)`,
- * czyli dokładnie ta, w której przykład się rysuje: przy skali odniesienia
- * `autoSymbolScale` wynosi 1, więc zostaje sam `BASE_ELEMENT_SCALE`.
- */
-function przyklejDoScian(elements: InstallationElement[], walls: Wall[], rooms: RoomShape[]): InstallationElement[] {
-  const skala = elementRenderScale(MANUAL_DRAW_SCALE_MPU, DEFAULT_ELEMENT_SCALE, DEFAULT_ELEMENT_SCALE);
-  const tolerancja = WALL_SNAP_TOLERANCE_M / MANUAL_DRAW_SCALE_MPU;
-  return elements.map((el) => {
-    if (!przyscienny(el.type)) return el;
-    const m = snapElementToWall({ x: el.x, y: el.y }, walls, rooms, tolerancja, el.type, skala);
-    return m ? { ...el, x: m.x, y: m.y, rotation: m.rotation } : el;
-  });
 }
 
 /**

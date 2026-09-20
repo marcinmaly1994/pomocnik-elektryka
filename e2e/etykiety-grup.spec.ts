@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { wczytajPrzyklad } from "./_flow";
 
 /**
  * Kawałek Konvy, którego ten test naprawdę używa — zamiast `any`.
@@ -51,7 +52,7 @@ async function przykladNaRzucie(page: Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(page.getByRole("button", { name: "Rozdzielnica", exact: true })).toBeVisible();
   // Czekamy na SAME ETYKIETY, nie na stały czas: pod obciążeniem pełnego zestawu
   // scena bywała jeszcze nieustalona i test mierzył układ, który za chwilę się zmieni.

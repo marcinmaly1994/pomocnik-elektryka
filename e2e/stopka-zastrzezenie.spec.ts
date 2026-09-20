@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { wczytajPrzyklad } from "./_flow";
 
 /**
  * Zastrzeżenie prawne w stopce nie może być zasłonięte przez nawigację.
@@ -20,7 +21,7 @@ async function wejdzNaPrzyklad(page: Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(page.getByRole("button", { name: "Rozdzielnica", exact: true })).toBeVisible();
 }
 

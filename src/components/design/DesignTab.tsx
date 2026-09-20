@@ -89,6 +89,7 @@ import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useSzerokieOkno } from "./PasekMenu";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
+import { WyborPrzykladu } from "@/components/onboarding/WyborPrzykladu";
 import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
 import { PoleWymiarowProstokata } from "@/components/design/PoleWymiarowProstokata";
 import { DlugosciOdcinkowSciany } from "@/components/design/DlugosciOdcinkowSciany";
@@ -934,9 +935,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   // --- onboarding ------------------------------------------------------------
   const onboarding = useOnboardingProgress();
   const setOnboarding = useProjectStore((s) => s.setOnboarding);
-  /** „Zobacz gotowy przykład" na ekranie startowym — dane dociągane dynamicznie
-   *  przez store (patrz `wczytajPrzyklad` w useProjectStore.ts). */
-  const wczytajPrzyklad = useProjectStore((s) => s.wczytajPrzyklad);
+  /** „Zobacz gotowy przykład" na ekranie startowym otwiera okno wyboru zamiast
+   *  wczytywać jeden zaszyty przykład — samo wczytanie robi `WyborPrzykladu`. */
+  const [wyborPrzykladu, setWyborPrzykladu] = useState(false);
   /** Gasi zachęty do założenia konta — w przykładzie nie ma czego zabezpieczać
    *  (patrz oba banery niżej). */
   const projektPrzykladowy = useProjectStore((s) => s.projektPrzykladowy);
@@ -2553,6 +2554,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           podczas weryfikacji. */}
       <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleBgFile} />
 
+      {/* POZA blokiem `showEntryScreen` niżej, celowo: wybór karty wczytuje projekt,
+          ekran startowy natychmiast znika, więc okno osadzone w jego bloku
+          odmontowałoby się w połowie własnej akcji (patrz komentarz w `WyborPrzykladu`).
+          Stoi tu, obok `fileRef`, z tego samego powodu co on — zamontowane ZAWSZE. */}
+      <WyborPrzykladu open={wyborPrzykladu} onOpenChange={setWyborPrzykladu} />
+
       {/* Jednorazowa informacja o remoncie przypisań przy wczytaniu projektu (patrz
           `reconcileRoomsOnLoad`). Aplikacja poprawiła tu ZAPISANE dane użytkownika i
           zaraz odłoży je autozapisem — o czymś takim trzeba powiedzieć wprost, bo
@@ -2688,10 +2695,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               robi", którego dwa przyciski wyżej nie adresują wcale. Kto ma rzut pod
               ręką, ma nad nim kliknąć dalej. */}
           <button
-            onClick={() => void wczytajPrzyklad()}
+            onClick={() => setWyborPrzykladu(true)}
             className="flex items-center gap-1.5 text-sm font-medium text-blueprint underline-offset-2 hover:underline"
           >
-            <Eye size={15} /> Zobacz gotowy przykład — mieszkanie 70 m²
+            <Eye size={15} /> Zobacz gotowy przykład
           </button>
 
           {/* Dwa drobne wyjścia obok siebie, oba drugorzędne wobec trzech dróg startu

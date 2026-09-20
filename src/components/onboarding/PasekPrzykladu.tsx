@@ -36,8 +36,8 @@ export function PasekPrzykladu() {
           mają własny, ręczny zapis do chmury i on działa normalnie także wtedy, gdy
           otwarty jest przykład (patrz warunek renderowania paska w App.tsx). */}
       <span>
-        <strong>To jest projekt przykładowy</strong> — gotowe mieszkanie 70 m², na którym widać, co aplikacja liczy
-        sama. Poklikaj po zakładkach, zmieniaj co chcesz; ten projekt nie zapisuje się na Twoim koncie.
+        <strong>To jest projekt przykładowy</strong> — gotowy projekt, na którym widać, co aplikacja liczy sama.
+        Poklikaj po zakładkach, zmieniaj co chcesz; ten projekt nie zapisuje się na Twoim koncie.
       </span>
       <Dialog>
         <DialogTrigger asChild>
@@ -45,7 +45,7 @@ export function PasekPrzykladu() {
         </DialogTrigger>
         <DialogContent title="Zacząć własny projekt?">
           <p className="mb-4 text-sm text-slate-600">
-            Przykładowe mieszkanie zniknie i wrócisz do pustego planu. Możesz je wczytać ponownie w każdej chwili.
+            Przykład zniknie i wrócisz do pustego planu. Możesz go wczytać ponownie w każdej chwili.
           </p>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>

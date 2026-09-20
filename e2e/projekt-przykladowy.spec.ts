@@ -1,10 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
+// Ten plik ma już WŁASNĄ funkcję `wczytajPrzyklad(page)` (z asercjami ekranu startowego
+// i paska przykładu) — pomocnik z `_flow.ts` importujemy więc pod inną nazwą, żeby obie
+// mogły współistnieć zamiast się przesłaniać.
+import { wczytajPrzyklad as otworzPrzykladZRejestru } from "./_flow";
 
 /**
  * Projekt przykładowy („Zobacz gotowy przykład" na ekranie startowym) i pusty
  * kosztorys — dwie strony tej samej sprawy: co widzi ktoś, kto dopiero wszedł.
  *
- * Dane przykładu mają test jednostkowy (`src/lib/demoProjekt.test.ts`). Tutaj
+ * Dane przykładu mają test jednostkowy (`src/lib/demo/przyklady.test.ts`). Tutaj
  * sprawdzamy to, czego nie widać bez przeglądarki: że jedno kliknięcie naprawdę
  * wypełnia WSZYSTKIE zakładki przepływu, że pasek „to jest przykład" jedzie za
  * użytkownikiem między nimi, że wyjście z przykładu czyści projekt — i że pusty
@@ -24,7 +28,7 @@ const pasekPrzykladu = (page: Page) => page.getByText("To jest projekt przykład
 
 async function wczytajPrzyklad(page: Page) {
   await expect(ekranStartowy(page)).toBeVisible();
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await otworzPrzykladZRejestru(page, "mieszkanie");
   await expect(pasekPrzykladu(page)).toBeVisible();
 }
 
@@ -55,7 +59,7 @@ test("jedno kliknięcie wypełnia wszystkie cztery zakładki przepływu", async 
   await expect(page.getByText(/Aparaty \(\d+\)/)).toBeVisible();
 
   // 04 Kosztorys: pozycje policzone, a metraż kabla wzięty Z PLANU, nie z ryczałtu —
-  // to dlatego w przykładzie stoi rozdzielnica (patrz `elementy` w lib/demoProjekt.ts).
+  // to dlatego w przykładzie stoi rozdzielnica (patrz `elementy` w lib/demo/mieszkanie.ts).
   await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
   await expect(page.getByText(/Metry kabla policzone z tras po planie/)).toBeVisible();
   await expect(page.getByText("RAZEM brutto")).toBeVisible();
@@ -150,4 +154,32 @@ test("kosztorys nie podaje ceny materiału jako ceny instalacji", async ({ page 
   const ostrzezenie = (await stopka.getByText(/To jest cena materiału/).boundingBox())!;
   const suma = (await stopka.getByText(/RAZEM brutto — sam materiał/).boundingBox())!;
   expect(ostrzezenie.y).toBeLessThan(suma.y);
+});
+
+test("okno wyboru pokazuje kartę dla każdego przykładu z rejestru", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+
+  // e2e nie importuje `PRZYKLADY` (to plik przeglądarkowy, nie modułowy test), więc
+  // "każdy" wymienia się tu jawnie, po nazwie. Poniższa lista musi rosnąć razem
+  // z rejestrem w lib/demo/index.ts — inaczej ostatnia asercja to wyłapie: liczba
+  // kart w oknie przestanie się zgadzać z liczbą nazw, które faktycznie sprawdziliśmy.
+  const znaneKarty = [/Mieszkanie 70 m²/, /Dom 136 m²/];
+  for (const nazwa of znaneKarty) {
+    await expect(page.getByRole("button", { name: nazwa })).toBeVisible();
+  }
+  const kart = await page.getByRole("button", { name: /m²/ }).count();
+  expect(kart).toBe(znaneKarty.length);
+});
+
+test("Escape zamyka okno wyboru bez wczytywania czegokolwiek", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: /Mieszkanie 70 m²/ })).toBeHidden();
+  await expect(page.getByText("To jest projekt przykładowy")).toBeHidden();
 });

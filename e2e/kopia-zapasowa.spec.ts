@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { wczytajPrzyklad } from "./_flow";
 
 /**
  * Kopia zapasowa projektu: zapis do pliku i powrót z pliku.
@@ -32,7 +33,7 @@ async function otworzMenuKopii(page: Page) {
 test("kopię można zapisać i przywrócić bez zakładania konta", async ({ page }) => {
   await swiezyProjekt(page);
   await expect(ekranStartowy(page)).toBeVisible();
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(pasekPrzykladu(page)).toBeVisible();
 
   // 1. zapis do pliku
@@ -62,7 +63,7 @@ test("kopię można zapisać i przywrócić bez zakładania konta", async ({ pag
 
 test("wskazanie niewłaściwego pliku mówi o tym wprost i nie rusza projektu", async ({ page }) => {
   await swiezyProjekt(page);
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(pasekPrzykladu(page)).toBeVisible();
 
   await otworzMenuKopii(page);
@@ -105,7 +106,7 @@ test.describe("wąski ekran", () => {
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+    await wczytajPrzyklad(page, "mieszkanie");
     await expect(page.getByText("To jest projekt przykładowy")).toBeVisible();
 
     const kopia = page.getByRole("button", { name: "Projekty" });

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { domyslnyNaglowek } from "@/lib/docHeader";
+import type { PrzykladId } from "@/lib/demo";
 import {
   biezacyId,
   czytajIndeks,
@@ -258,8 +259,8 @@ export interface ProjectPayload {
   onboarding: OnboardingState;
   /**
    * To jest PROJEKT PRZYKŁADOWY wczytany z „Zobacz gotowy przykład" na ekranie
-   * startowym (patrz `zbudujProjektPrzykladowy` w lib/demoProjekt.ts), a nie praca
-   * użytkownika.
+   * startowym (patrz rejestr `PRZYKLADY` w lib/demo/index.ts — flaga jest ustawiana
+   * przez budowniczego dowolnego wpisu, nie tylko mieszkania), a nie praca użytkownika.
    *
    * Musi żyć w zapisywanym stanie, nie w stanie komponentu: przykład jest normalnym
    * projektem w store'rze, więc przeżywa przełączanie zakładek i odświeżenie strony
@@ -359,10 +360,11 @@ interface ProjectState {
   /** Bieżący projekt to wczytany PRZYKŁAD, a nie praca użytkownika — patrz pole
    *  o tej samej nazwie w `ProjectPayload`. */
   projektPrzykladowy: boolean;
-  /** Wczytuje gotowy projekt przykładowy (lib/demoProjekt.ts). Osobno od
+  /** Wczytuje gotowy projekt przykładowy z rejestru (lib/demo/index.ts). Osobno od
    *  `loadProjectPayload`, bo sam sięga po dane — komponent nie musi ich znać,
-   *  a moduł z przykładem dociąga się dopiero na kliknięcie (dynamiczny `import()`). */
-  wczytajPrzyklad: () => Promise<void>;
+   *  a moduł z wybranym przykładem dociąga się dopiero na kliknięcie (dynamiczny
+   *  `import()` w rejestrze). */
+  wczytajPrzyklad: (id: PrzykladId) => Promise<void>;
 
   /**
    * Ile elementów dostało poprawione przypisanie do pomieszczenia przy ostatnim
@@ -1095,14 +1097,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setOnboarding: (patch) => set((state) => ({ onboarding: { ...state.onboarding, ...patch } })),
 
-  wczytajPrzyklad: async () => {
-    // Dynamiczny `import()`, bo przykład to kilkadziesiąt elementów, ścian i obrysów
-    // wpisanych wprost w kod — nikt, kto przyszedł rysować własny dom, nie musi tego
-    // pobierać. Moduł trafia do osobnego kawałka i dociąga się na kliknięcie.
-    const { zbudujProjektPrzykladowy } = await import("@/lib/demoProjekt");
-    // Przykład wchodzi TĄ SAMĄ drogą co projekt z chmury i z autozapisu — łącznie
-    // z zerowaniem historii cofnij/ponów i remontem przypisań do pomieszczeń.
-    get().loadProjectPayload(zbudujProjektPrzykladowy());
+  wczytajPrzyklad: async (id) => {
+    const { zbudujPrzyklad } = await import("@/lib/demo");
+    get().loadProjectPayload(await zbudujPrzyklad(id));
     // Nowy, świeżo wczytany przykład nie jest ŻADNYM wierszem w chmurze. Bez tego
     // autozapis w tle nadpisałby projekt, który był otwarty wcześniej (patrz ta sama
     // ostrożność w `resetProject`).

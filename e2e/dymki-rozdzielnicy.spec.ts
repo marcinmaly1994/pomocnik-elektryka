@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { wczytajPrzyklad } from "./_flow";
 
 /**
  * Opisy skrótów w tabeli „Dobór obwodów wg PN-HD 60364".
@@ -16,7 +17,7 @@ async function rozdzielnicaPrzykladu(page: Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Dobór obwodów wg PN-HD 60364" })).toBeVisible();
 }

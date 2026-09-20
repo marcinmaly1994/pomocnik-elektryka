@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { wczytajPrzyklad } from "./_flow";
 
 /**
  * Projekt zapisany przez STARSZĄ wersję aplikacji musi się wczytać.
@@ -15,7 +16,7 @@ async function przykladZapisany(page: Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(page.getByRole("button", { name: "Rozdzielnica", exact: true })).toBeVisible();
   // autozapis ma zdążyć zapisać projekt, bo to jego treść zaraz okroimy
   await expect

@@ -75,3 +75,16 @@ export async function otworzKatalogElementow(page: Page): Promise<void> {
     // panel zwinięty albo widok bez panelu — nie ma czego otwierać
   }
 }
+
+/**
+ * Wczytuje gotowy przykład z ekranu startowego: link, a potem karta w oknie wyboru.
+ *
+ * Osobny pomocnik, bo wejść w przykład chce kilkanaście testów, a droga wejścia jest
+ * właściwością UI, nie treścią żadnego z nich — do okna doszło się dopiero wtedy, gdy
+ * przykładów zrobiło się więcej niż jeden, i równie dobrze może się jeszcze zmienić.
+ */
+export async function wczytajPrzyklad(page: Page, id: "mieszkanie" | "dom"): Promise<void> {
+  const nazwa = id === "mieszkanie" ? /Mieszkanie 70 m²/ : /Dom 136 m²/;
+  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await page.getByRole("button", { name: nazwa }).click();
+}

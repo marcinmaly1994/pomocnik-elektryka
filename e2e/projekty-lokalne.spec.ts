@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { wczytajPrzyklad } from "./_flow";
 
 /**
  * Lista projektów w tej przeglądarce.
@@ -44,7 +45,7 @@ async function nowyProjekt(page: Page) {
 
 test("„Nowy projekt” odkłada poprzedni na listę, zamiast go kasować", async ({ page }) => {
   await swiezyProjekt(page);
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(page.getByText("To jest projekt przykładowy")).toBeVisible();
   await page.getByRole("button", { name: /Zacznij własny projekt/ }).click();
   await page.getByRole("button", { name: /Tak, zacznij własny/ }).click();
@@ -78,7 +79,7 @@ test("powrót do odłożonego projektu przywraca jego nazwę", async ({ page }) 
 
 test("projekt przykładowy nie zaśmieca listy", async ({ page }) => {
   await swiezyProjekt(page);
-  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await wczytajPrzyklad(page, "mieszkanie");
   await expect(page.getByText("To jest projekt przykładowy")).toBeVisible();
 
   // Przykład jest z założenia jednorazowy — wyjście z niego ma go nadpisać, a nie
