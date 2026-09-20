@@ -349,7 +349,11 @@ export function estimateRoutes(
       ? ogniwaSterowania(grupySterowania(wszystkie, grupy)).filter((o) => elements.some((e) => e.id === o.light.id))
       : [];
 
-  const punktyZasilania = [...bezposrednie, ...laczniki.values()];
+  /** Po ID, bo ten sam łącznik potrafi tu wejść dwiema drogami: raz jako element
+   *  podany na wejściu (dokłada go `estimateRoutesByFloor` dla grupy przez strop),
+   *  raz jako `findControllingSwitch` oprawy stojącej na tym samym piętrze. W łańcuchu
+   *  ma być jeden punkt, nie dwa odcinki do tej samej puszki. */
+  const punktyZasilania = [...new Map([...bezposrednie, ...laczniki.values()].map((e) => [e.id, e])).values()];
   const lancuch = kolejnoscLancucha(panel, punktyZasilania);
   let total = 0;
   /**
@@ -460,12 +464,41 @@ export function estimateRoutesByFloor(
 ): RouteEstimate | null {
   if (elements.length === 0) return null;
   const { geometria: geo, kondygnacje } = kontekst;
+  /**
+   * Ogniwa sterowania PRZEZ STROP — liczone raz, bo rozstrzygają dwie rzeczy naraz:
+   * którędy idzie ZASILANIE (tutaj) i ile kosztuje sam przewód sterowniczy (niżej).
+   */
+  const przezStrop =
+    kontekst.wszystkieElementy && kondygnacje ? ogniwaPrzezStrop(kontekst.wszystkieElementy, elements) : [];
+  /**
+   * ZASILANIE IDZIE DO ŁĄCZNIKA, TAKŻE PRZEZ STROP.
+   *
+   * Dla grupy w obrębie piętra robi to `estimateRoutes`: oprawa nie trafia do łańcucha
+   * zasilania w ogóle — trafia tam ŁĄCZNIK, a oprawa wisi za nim na ogniwie sterowania.
+   * Przez strop `findControllingSwitch` łącznika nie widziało (dostaje elementy jednego
+   * piętra), więc oprawa wpadała do łańcucha jako punkt zasilany wprost z rozdzielnicy
+   * i dostawała JESZCZE ogniwo sterowania. Do jednej oprawy dochodziły w modelu dwa
+   * kable, a położy się jeden.
+   *
+   * Stąd zamiana ról: oprawa wypada z łańcucha swojego piętra, a jej łącznik do niego
+   * wchodzi — na kondygnacji, na której NAPRAWDĘ stoi, bo tylko tam ma swoją skalę,
+   * swoją geometrię i swoją rozdzielnicę.
+   */
+  const sterowaneZInnegoPietra = new Set(przezStrop.map((o) => o.light.id));
   const poKondygnacjach = new Map<string, InstallationElement[]>();
-  for (const e of elements) {
+  const dopisz = (e: InstallationElement) => {
     const lista = poKondygnacjach.get(e.floor);
     if (lista) lista.push(e);
     else poKondygnacjach.set(e.floor, [e]);
+  };
+  for (const e of elements) {
+    if (sterowaneZInnegoPietra.has(e.id)) continue;
+    dopisz(e);
   }
+  // Ten sam łącznik bywa końcem kilku ogniw (steruje kilkoma oprawami) — do łańcucha
+  // wchodzi RAZ. Podwójne wejście `estimateRoutes` i tak by odsiało (`punktyZasilania`
+  // jest po id), ale nie ma powodu je tam wysyłać.
+  for (const sw of new Map(przezStrop.map((o) => [o.bestFrom.id, o.bestFrom])).values()) dopisz(sw);
 
   let worst = 0;
   let total = 0;
@@ -530,10 +563,10 @@ export function estimateRoutesByFloor(
    * od brakującego pionu.
    */
   let najdluzszePrzezStrop = 0;
-  if (kontekst.wszystkieElementy && kondygnacje) {
+  if (kondygnacje) {
     const zapasNaPunkt =
       kontekst.zapasNaPunktM !== undefined && kontekst.zapasNaPunktM >= 0 ? kontekst.zapasNaPunktM : ZAPAS_MONTAZOWY_M;
-    for (const o of ogniwaPrzezStrop(kontekst.wszystkieElementy, elements)) {
+    for (const o of przezStrop) {
       const skala = scales[o.light.floor];
       if (!(typeof skala === "number" && skala > 0)) continue;
       // Bez geometrii, czyli Manhattan: trasy dwóch różnych pięter nie da się skleić
@@ -1068,9 +1101,25 @@ export function buildCableRoutes(
   /** Skala renderu symboli (`elementRenderScale`) — trasa musi wiedzieć, jak duże
    *  są symbole na rysunku, żeby zatrzymać się na ich krawędzi. Domyślna jedynka
    *  odpowiada skali podstawowej i zachowuje zachowanie wywołań bez tego argumentu. */
-  skalaSymboli = 1
+  skalaSymboli = 1,
+  /** Elementy CAŁEGO budynku — potrzebne wyłącznie po to, żeby rozpoznać oprawę
+   *  sterowaną łącznikiem z INNEJ kondygnacji (patrz pętla zasilania niżej).
+   *  Brak = rysunek jak przed tą poprawką, czyli każdy punkt obwodu z własną trasą. */
+  wszystkieElementy?: InstallationElement[]
 ): CableRoute[] {
   const lightGroups = computeLightGroups(elements);
+  /**
+   * Oprawy, których zasilanie przychodzi PRZEZ STROP — od łącznika stojącego piętro
+   * wyżej albo niżej (patrz `ogniwaPrzezStrop`). Rzut 2D nie umie narysować kabla
+   * przechodzącego przez strop, a narysowanie zamiast niego trasy z rozdzielnicy
+   * wprost do oprawy pokazywałoby kabel, którego kosztorys od tej pory nie kupuje
+   * (`estimateRoutesByFloor` prowadzi zasilanie do łącznika, także przez strop).
+   * Rysunek pokazuje więc MNIEJ — i to jest właściwy wybór, bo zgodność rysunku
+   * z szacunkiem jest w tym module własnością pierwszej kategorii.
+   */
+  const zasilaneZInnegoPietra = new Set(
+    wszystkieElementy ? ogniwaPrzezStrop(wszystkieElementy, elements).map((o) => o.light.id) : []
+  );
   // Kolor po OBWODZIE, nie po pomieszczeniu — patrz `KOLORY_OBWODOW`. Liczony raz,
   // z kolejności obwodów, żeby zasilanie i sterowanie tego samego obwodu wyszły
   // tym samym kolorem (różnią się grubością i kreską, nie barwą).
@@ -1110,7 +1159,7 @@ export function buildCableRoutes(
       const sw = isLightPoint(e) ? findControllingSwitch(e, elements, lightGroups) : null;
       if (sw) {
         if (!bySwitch.has(sw.id)) bySwitch.set(sw.id, { sw, anchor: e });
-      } else {
+      } else if (!zasilaneZInnegoPietra.has(e.id)) {
         direct.push(e);
       }
     }
