@@ -1,4 +1,7 @@
-import type { Point } from "@/types";
+import type { ElementType, InstallationElement, Point } from "@/types";
+import { fixtureSizeM, SANITARY_FIXTURES } from "./elements";
+import { glyphBoxSize } from "./glyphs";
+import { MANUAL_DRAW_SCALE_MPU } from "./design";
 
 /**
  * Rozsuwanie osprzętu stawianego blisko siebie.
@@ -121,4 +124,64 @@ export function odsunOdSasiadow(
     y += k.y * przesuniecie;
   }
   return { x, y };
+}
+
+/**
+ * Symbol elementu jako PUDEŁKO w jednostkach planu.
+ *
+ * Wyjęte z `DesignTab`, bo to geometria, a nie stan komponentu — i dopóki tam siedziało,
+ * dało się je sprawdzić wyłącznie klikając po planie w przeglądarce.
+ */
+export function pudelkoSymbolu(e: InstallationElement, skalaSymboli: number): ZajetySymbol {
+  const { w, h } = glyphBoxSize(e.type, fixtureSizeM(e) ?? undefined);
+  return {
+    x: e.x,
+    y: e.y,
+    polSzer: (w / 2) * skalaSymboli,
+    polWys: (h / 2) * skalaSymboli,
+    obrot: e.rotation ?? 0,
+  };
+}
+
+/**
+ * Rozsuwanie dotyczy OSPRZĘTU, nie przyborów sanitarnych.
+ *
+ * Wanna, brodzik czy umywalka to wyposażenie pomieszczenia, a nie urządzenie instalacji:
+ * gniazdo stojące „na" wannie nie jest pomyłką do poprawienia, tylko sytuacją, o której
+ * ma się wypowiedzieć sprawdzenie stref ochronnych. Odpychanie gniazda od wanny kasowało
+ * dokładnie ten przypadek — złapały to testy sprawdzenia rzutu: gniazdo celowo wsunięte
+ * w strefę 1 wyskakiwało z niej samo i zgłoszenie zmieniało się z błędu na uwagę
+ * o strefie 2.
+ *
+ * Przybory nie rozsuwają się też między sobą: ustawienie wanny obok umywalki to rysunek
+ * pomieszczenia, a nie rząd osprzętu na ścianie.
+ */
+export function rozsuwalny(e: { type: ElementType }): boolean {
+  return !SANITARY_FIXTURES[e.type];
+}
+
+/**
+ * Pozycja elementu po odsunięciu od tych, które już stoją obok.
+ *
+ * Tylko przy STAWIANIU i przeciąganiu POJEDYNCZEGO elementu, nie przy przeciąganiu
+ * grupy — tam odstępy właśnie ustawione wyrównaniem mają zostać nietknięte.
+ *
+ * `pomijanyId` przy przeciąganiu wskazuje SAM przesuwany element: liczony jako sąsiad
+ * zderzałby się ze swoją własną nową pozycją i odpychał się w nieskończoność.
+ */
+export function bezNakladaniaNaSasiadow(
+  kandydat: InstallationElement,
+  wszystkie: InstallationElement[],
+  skalaSymboli: number,
+  metrowNaJednostke: number | null,
+  pomijanyId?: string
+): Point {
+  if (!rozsuwalny(kandydat)) return { x: kandydat.x, y: kandydat.y };
+  const mpu = metrowNaJednostke && metrowNaJednostke > 0 ? metrowNaJednostke : MANUAL_DRAW_SCALE_MPU;
+  return odsunOdSasiadow(
+    pudelkoSymbolu(kandydat, skalaSymboli),
+    wszystkie.filter((e) => e.id !== pomijanyId && rozsuwalny(e)).map((e) => pudelkoSymbolu(e, skalaSymboli)),
+    kandydat.rotation ?? 0,
+    ODSTEP_SYMBOLI_M / mpu
+  );
 }
