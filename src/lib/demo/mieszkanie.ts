@@ -44,8 +44,10 @@ import { p, przyklejDoScian, tworzE } from "./wspolne";
  * Dziś przedpokój jest literą L — przedsionek 2×2 m przy drzwiach wejściowych plus
  * korytarz 1×5 m — i KAŻDE pomieszczenie ma drzwi właśnie do niego; z żadnego do
  * żadnego się nie przechodzi (pilnuje tego test „każde pomieszczenie ma drzwi do
- * przedpokoju"). Łazienka jest wewnętrzna, bez okna, jak w bloku. Obrys w kształcie L
- * pokazuje przy okazji, że pomieszczenie nie musi być prostokątem.
+ * KOMUNIKACJI, a nie do sąsiada" w `przyklady.test.ts` — reguła wisi na typie `inne`,
+ * nie na nazwie „Przedpokój", więc obowiązuje też w domu obok). Łazienka jest
+ * wewnętrzna, bez okna, jak w bloku. Obrys w kształcie L pokazuje przy okazji, że
+ * pomieszczenie nie musi być prostokątem.
  *
  * SZEROKOŚĆ KORYTARZA to 1,5 m i nie jest to wartość dobrana pod estetykę. Przy 1,0 m
  * rzut się rysował, ale przewody biegły przez niego ukosem: obrys pomieszczenia wchodzi

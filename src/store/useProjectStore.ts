@@ -259,8 +259,8 @@ export interface ProjectPayload {
   onboarding: OnboardingState;
   /**
    * To jest PROJEKT PRZYKŁADOWY wczytany z „Zobacz gotowy przykład" na ekranie
-   * startowym (patrz `zbudujProjektPrzykladowy` w lib/demo/mieszkanie.ts), a nie praca
-   * użytkownika.
+   * startowym (patrz rejestr `PRZYKLADY` w lib/demo/index.ts — flaga jest ustawiana
+   * przez budowniczego dowolnego wpisu, nie tylko mieszkania), a nie praca użytkownika.
    *
    * Musi żyć w zapisywanym stanie, nie w stanie komponentu: przykład jest normalnym
    * projektem w store'rze, więc przeżywa przełączanie zakładek i odświeżenie strony

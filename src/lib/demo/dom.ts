@@ -34,8 +34,11 @@ import { p, przyklejDoScian, tworzE } from "./wspolne";
  *   Sypialnia 1 12,25 · Sypialnia 2 12,25 · Korytarz 10,5 · Sypialnia główna 10,5 · Łazienka 10,5
  */
 
-export const PARTER = "f1";
-export const PIETRO = "f2";
+// Nieeksportowane: `dom.test.ts` sprawdza konkretne kondygnacje literałami "f1"/"f2"
+// (tak samo jak inne testy e2e w repo), więc te stałe nie mają importera poza tym
+// plikiem — eksport bez odbiorcy tylko sugerowałby publiczne API, którego nie ma.
+const PARTER = "f1";
+const PIETRO = "f2";
 
 const eP = tworzE(PARTER);
 const eG = tworzE(PIETRO);
@@ -52,6 +55,10 @@ const SYP1 = "Sypialnia 1";
 const SYP2 = "Sypialnia 2";
 const SYP_GL = "Sypialnia główna";
 const KORYTARZ = "Korytarz";
+// NIE „Łazienka" — `computeCircuits` kubełkuje mokre gniazda po samej NAZWIE
+// pomieszczenia (`byRoom[e.room]` w lib/panel/circuits.ts), bez oglądania się na
+// kondygnację. Gdyby ta stała brzmiała tak samo jak `LAZIENKA_D` z parteru, obie
+// łazienki scaliłyby się w jeden obwód przez strop.
 const LAZIENKA_G = "Łazienka na piętrze";
 
 function sciany(): Wall[] {
@@ -183,7 +190,7 @@ function elementy(): InstallationElement[] {
 
     // --- Garaż ---
     eP("dom-ev", "ladowarkaEV", GARAZ, 0.25, 1.5, { dedicated: true, note: "Ładowarka EV" }),
-    eP("dom-garaz-zewn", "oswietlenieZewn", GARAZ, 0.25, 0.6, { note: "Nad bramą" }),
+    eP("dom-garaz-zewn", "oswietlenieZewn", GARAZ, 0.25, 0.6, { note: "Przy wjeździe" }),
     // Zwykłe (niehermetyczne, niededykowane) gniazdo warsztatowe — jedyny punkt w domu,
     // który realnie pokazuje regułę ZASTOSOWANIE: garaż jest suchy, więc jego zwykłe
     // gniazda idą osobnym obwodem od zwykłych gniazd mieszkalnych, mimo że oba

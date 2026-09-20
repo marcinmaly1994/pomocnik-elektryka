@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { PRZYKLADY, zbudujPrzyklad } from "./index";
 import { nearestPointOnPolyline, pointInPolygon, polygonAreaM2 } from "@/lib/geometry";
-import { scaleOf, MANUAL_DRAW_SCALE_MPU } from "@/lib/design";
+import { scaleOf, MANUAL_DRAW_SCALE_MPU, guessRoomType } from "@/lib/design";
 import { computeCircuits, computeRcdGroups } from "@/lib/panel/circuits";
 import { buildCableRoutes, findPanel, findPanels, spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
@@ -9,6 +9,7 @@ import { ODSUNIECIE_TRASY } from "@/lib/panel/routing";
 import { computeCosts } from "@/lib/costs";
 import { gniazdoPodwojne } from "@/lib/elements";
 import type { ProjectPayload } from "@/store/useProjectStore";
+import type { RoomType } from "@/types";
 
 /**
  * Projekt przykładowy to DANE wpisane ręcznie, więc łatwo je po cichu popsuć —
@@ -20,7 +21,7 @@ import type { ProjectPayload } from "@/store/useProjectStore";
  * nie przepisując przy tym testów. Stąd pętla po `PRZYKLADY`: kolejny przykład dostaje
  * ten sam komplet reguł za darmo, bez pisania nowego pliku testów.
  */
-describe.each(PRZYKLADY.map((x) => [x.id] as const))("przykład „%s»", (id) => {
+describe.each(PRZYKLADY.map((x) => [x.id] as const))('przykład „%s"', (id) => {
   let payload: ProjectPayload;
   beforeAll(async () => {
     payload = await zbudujPrzyklad(id);
@@ -84,6 +85,19 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))("przykład „%s»", (id) =
     }
   });
 
+  it("nazwy pomieszczeń są unikalne w obrębie CAŁEGO przykładu, nie tylko kondygnacji", () => {
+    // `computeCircuits` (lib/panel/circuits.ts) kubełkuje mokre gniazda po samej
+    // NAZWIE pomieszczenia (`byRoom[e.room]`), bez oglądania się na kondygnację. Dwa
+    // pomieszczenia o tej samej nazwie na różnych piętrach scaliłyby się więc w jeden
+    // obwód przez strop — dlatego dom nazywa łazienkę piętra „Łazienka na piętrze",
+    // a nie „Łazienka" (patrz `LAZIENKA_G` w dom.ts). Ten test pilnuje, żeby ta
+    // niespodzianka nie wróciła w kolejnym przykładzie z rejestru.
+    const nazwy = payload.draft.roomShapes.map((r) => r.name);
+    expect(nazwy.length, "przykład bez pomieszczeń").toBeGreaterThan(0);
+    const duplikaty = nazwy.filter((n, i) => nazwy.indexOf(n) !== i);
+    expect(duplikaty, "zduplikowane nazwy pomieszczeń między kondygnacjami").toEqual([]);
+  });
+
   it("ma rozdzielnicę na planie, więc kosztorys mierzy trasy zamiast zgadywać", () => {
     // Bez rozdzielnicy metraż kabla spada na ryczałt „5 mb na punkt" i przykład
     // pokazywałby gorszy wynik, niż aplikacja potrafi — patrz `elementy`.
@@ -143,10 +157,22 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))("przykład „%s»", (id) =
   it("pomieszczenia mokre mają jawny typ, nie zgadywanie po nazwie", () => {
     // Od typu zależą strefy ochronne i osobne obwody — a `guessRoomType` po nazwie
     // to droga awaryjna dla starych zapisów, nie coś, na czym przykład ma stać.
-    const kuchnia = payload.draft.roomShapes.find((r) => r.name === "Kuchnia");
-    const lazienka = payload.draft.roomShapes.find((r) => r.name === "Łazienka");
-    expect(kuchnia?.type).toBe("kuchnia");
-    expect(lazienka?.type).toBe("lazienka");
+    //
+    // Uogólnione z literałów "Kuchnia"/"Łazienka" — dokładnie ta wada, z której ta
+    // gałąź wyleczyła regułę drzwi wyżej. Skutek literałów: w domu sprawdzała się
+    // tylko łazienka PARTERU (nazwa piętra to celowo "Łazienka na piętrze", patrz
+    // `LAZIENKA_G` w dom.ts), a trzeci przykład bez kuchni wywaliłby test bez powodu.
+    // Sprawdzamy więc KAŻDY obrys, którego nazwa zgaduje się na typ mokry: jego jawny
+    // `type` musi się z tym zgadywaniem zgadzać. Lista musi odpowiadać `WET_ROOM_TYPES`
+    // w lib/design.ts — nie importujemy stamtąd, bo ta stała nie jest eksportowana.
+    const TYPY_MOKRE: readonly RoomType[] = ["kuchnia", "lazienka", "pralnia", "kotlownia"];
+    const zgadnieteMokre = payload.draft.roomShapes.filter((r) => TYPY_MOKRE.includes(guessRoomType(r.name)));
+    // Test nie może być pusty — inaczej pętla niżej przechodzi bez sprawdzenia niczego.
+    expect(zgadnieteMokre.length, "przykład bez pomieszczenia, którego nazwa zgaduje się na typ mokry").toBeGreaterThan(0);
+    for (const r of zgadnieteMokre) {
+      const zgadniety = guessRoomType(r.name);
+      expect(r.type, `„${r.name}" zgaduje się na „${zgadniety}", ale ma jawny typ „${r.type}"`).toBe(zgadniety);
+    }
   });
 
   it("jest oznaczony jako przykład — to on włącza pasek i blokadę zapisu w chmurze", () => {

@@ -162,7 +162,11 @@ y=0 +----------+-------------+
 | Sypialnia 2 | `sypialnia` | x 6,5–10, y 0–3,5 | 12,25 |
 | Korytarz | `inne` | x 3–10, y 3,5–5 | 10,5 |
 | Sypialnia główna | `sypialnia` | x 3–6,5, y 5–8 | 10,5 |
-| Łazienka | `lazienka` | x 6,5–10, y 5–8 | 10,5 |
+| Łazienka na piętrze | `lazienka` | x 6,5–10, y 5–8 | 10,5 |
+
+Nazwa musi się różnić od łazienki parteru: `computeCircuits` grupuje mokre gniazda
+po samej nazwie pomieszczenia, bez oglądania się na kondygnację, więc dwie „Łazienki"
+na różnych piętrach scaliłyby się w jeden obwód przez strop.
 
 **Razem 136 m².** Nazwa projektu: `Przykład: dom 136 m²`.
 

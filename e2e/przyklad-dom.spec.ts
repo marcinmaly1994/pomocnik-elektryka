@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { wczytajPrzyklad } from "./_flow";
 
-test("dom otwiera się z dwiema kondygnacjami, a piętro ma trasy zasilania", async ({ page }) => {
+test("dom otwiera się z dwiema kondygnacjami, a piętro ma własną podrozdzielnicę", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -12,8 +12,10 @@ test("dom otwiera się z dwiema kondygnacjami, a piętro ma trasy zasilania", as
   await expect(page.getByRole("button", { name: "Piętro", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Piętro", exact: true }).click();
-  // Podrozdzielnica jest na piętrze, więc trasy ZASILANIA mają tam powstać. Czytamy
-  // je z zapisu, a nie ze sceny: scena bywa jeszcze nieustalona zaraz po przełączeniu.
+  // Ta asercja liczy tylko rozdzielnice na f2 w zapisie (nie ze sceny: scena bywa
+  // jeszcze nieustalona zaraz po przełączeniu) — to, że z tej podrozdzielnicy naprawdę
+  // wychodzą trasy ZASILANIA, sprawdza test jednostkowy „piętro dostaje narysowane
+  // trasy ZASILANIA, nie tylko sterowania" w `src/lib/demo/dom.test.ts`.
   await expect
     .poll(async () =>
       page.evaluate(() => {

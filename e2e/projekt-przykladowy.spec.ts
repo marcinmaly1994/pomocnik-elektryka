@@ -8,7 +8,7 @@ import { wczytajPrzyklad as otworzPrzykladZRejestru } from "./_flow";
  * Projekt przykładowy („Zobacz gotowy przykład" na ekranie startowym) i pusty
  * kosztorys — dwie strony tej samej sprawy: co widzi ktoś, kto dopiero wszedł.
  *
- * Dane przykładu mają test jednostkowy (`src/lib/demo/mieszkanie.test.ts`). Tutaj
+ * Dane przykładu mają test jednostkowy (`src/lib/demo/przyklady.test.ts`). Tutaj
  * sprawdzamy to, czego nie widać bez przeglądarki: że jedno kliknięcie naprawdę
  * wypełnia WSZYSTKIE zakładki przepływu, że pasek „to jest przykład" jedzie za
  * użytkownikiem między nimi, że wyjście z przykładu czyści projekt — i że pusty
@@ -161,10 +161,17 @@ test("okno wyboru pokazuje kartę dla każdego przykładu z rejestru", async ({ 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
-  await expect(page.getByRole("button", { name: /Mieszkanie 70 m²/ })).toBeVisible();
-  // Liczba kart ma iść za rejestrem, a nie za tym, ile ich akurat jest w dniu pisania testu.
+
+  // e2e nie importuje `PRZYKLADY` (to plik przeglądarkowy, nie modułowy test), więc
+  // "każdy" wymienia się tu jawnie, po nazwie. Poniższa lista musi rosnąć razem
+  // z rejestrem w lib/demo/index.ts — inaczej ostatnia asercja to wyłapie: liczba
+  // kart w oknie przestanie się zgadzać z liczbą nazw, które faktycznie sprawdziliśmy.
+  const znaneKarty = [/Mieszkanie 70 m²/, /Dom 136 m²/];
+  for (const nazwa of znaneKarty) {
+    await expect(page.getByRole("button", { name: nazwa })).toBeVisible();
+  }
   const kart = await page.getByRole("button", { name: /m²/ }).count();
-  expect(kart).toBeGreaterThanOrEqual(1);
+  expect(kart).toBe(znaneKarty.length);
 });
 
 test("Escape zamyka okno wyboru bez wczytywania czegokolwiek", async ({ page }) => {
