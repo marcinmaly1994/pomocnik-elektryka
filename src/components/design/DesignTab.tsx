@@ -59,8 +59,6 @@ import {
   PROG_WASKIEGO_EKRANU,
   defaultOpeningWidth,
   detectRoomName,
-  guessRoomType,
-  nextRoomName,
   contentBounds,
   kadrOtwarcia,
   zoomSkaliRysowania,
@@ -97,6 +95,7 @@ import { PodpowiedzPelnyEkran } from "@/components/design/PodpowiedzPelnyEkran";
 import { zapamietajOdrzucenie } from "@/lib/podpowiedzPelnyEkran";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { useRysowanieScian } from "@/hooks/useRysowanieScian";
+import { useRysowaniePomieszczen } from "@/hooks/useRysowaniePomieszczen";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
 import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
@@ -254,7 +253,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const activeFloorId = useProjectStore((s) => s.activeFloorId);
   const setDraft = useProjectStore((s) => s.setDraft);
-  const addRoomShape = useProjectStore((s) => s.addRoomShape);
   const renameRoomShape = useProjectStore((s) => s.renameRoomShape);
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
   const moveRoomShapePoint = useProjectStore((s) => s.moveRoomShapePoint);
@@ -519,13 +517,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [gridOn, setGridOn] = useState(true);
   const [selected, setSelected] = useState<Selection>(null);
   const [multiSelected, setMultiSelected] = useState<string[]>([]);
-  const [drawingRoomPoints, setDrawingRoomPoints] = useState<Point[]>([]);
-  const [roomMode, setRoomMode] = useState<RoomDrawMode>("prostokat");
   /** Rodzaj NOWEGO otworu — ustawienie edytora, jak grubosc sciany, nie czesc projektu. */
   const [openingKind, setOpeningKind] = useState<OpeningKind>("drzwi");
-  const [pendingRoom, setPendingRoom] = useState<{ points: Point[]; name: string; type: RoomType; typeTouched: boolean } | null>(
-    null
-  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calibPoints, setCalibPoints] = useState<Point[]>([]);
   /** Potwierdzenie tuż po zatwierdzeniu skali — znika razem z pigułką narzędzia
@@ -553,6 +546,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  (patrz `useRysowanieScian`). Czytane przez obiekt, nie destrukturyzacją: po
    *  `sciany.drawingWall` widać, do czego ten stan należy, a po gołej nazwie nie. */
   const sciany = useRysowanieScian({ onPetlaZamknieta: setPetlaDoNazwania });
+  /** Drugie skupisko z własnym hookiem — patrz `useRysowaniePomieszczen`. */
+  const pokoje = useRysowaniePomieszczen();
+  /** Z tego samego powodu co `setSzkicSciany` wyżej: reset przy zmianie kondygnacji
+   *  potrzebuje w zależnościach czegoś stabilnego, a nie całego obiektu hooka. */
+  const { porzucSzkic: porzucSzkicPokoju } = pokoje;
   /** Czyszczenie szkicu ściany wyjęte z `sciany` osobno, bo musi stać w zależnościach
    *  efektu przełączania kondygnacji (niżej), a cały obiekt hooka dostaje przy każdym
    *  renderze nową tożsamość — wpisany do zależności odpalałby ten reset bez przerwy
@@ -1228,7 +1226,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   function selectTool(id: ToolMode) {
     // Wyjście z trybu porzuca niedokończoną figurę — inaczej jej punkty
     // wisiałyby na planie i doklejałyby się po powrocie do rysowania.
-    if (id !== "pomieszczenie") setDrawingRoomPoints([]);
+    if (id !== "pomieszczenie") pokoje.setDrawingRoomPoints([]);
     if (id !== "sciany") sciany.setDrawingWall([]);
     // Propozycja „zrób z tej pętli pomieszczenie" dotyczy CHWILI zaraz po domknięciu
     // obrysu. Wyjście z narzędzia ściany jest odpowiedzią „nie teraz" — wskrzeszanie
@@ -1313,11 +1311,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     setMultiSelected([]);
     setCalibPoints([]);
     setSzkicSciany([]);
-    setDrawingRoomPoints([]);
+    porzucSzkicPokoju();
     setContextMenu(null);
     setRoomNameEdit(null);
     setEditingId(null);
-  }, [activeFloorId, setSzkicSciany]);
+  }, [activeFloorId, setSzkicSciany, porzucSzkicPokoju]);
 
   function deleteSelection() {
     if (multiSelected.length > 0) {
@@ -1369,15 +1367,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * Cofnięcie ostatniego postawionego punktu ma więc PIERWSZEŃSTWO przed cofnięciem
    * zatwierdzonej zmiany — dokładnie w kolejności, w jakiej użytkownik naciskał klawisze.
    */
-  const wTrakcieRysowania = sciany.drawingWall.length > 0 || drawingRoomPoints.length > 0;
+  const wTrakcieRysowania = sciany.drawingWall.length > 0 || pokoje.drawingRoomPoints.length > 0;
   const canUndo = wTrakcieRysowania || maZatwierdzoneDoCofniecia;
   function undo() {
     if (sciany.drawingWall.length > 0) {
       sciany.setDrawingWall((pts) => pts.slice(0, -1));
       return;
     }
-    if (drawingRoomPoints.length > 0) {
-      setDrawingRoomPoints((pts) => pts.slice(0, -1));
+    if (pokoje.drawingRoomPoints.length > 0) {
+      pokoje.setDrawingRoomPoints((pts) => pts.slice(0, -1));
       return;
     }
     cofnijZatwierdzone();
@@ -1453,9 +1451,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         const porzuconyPodglad = anulujPodgladRef.current?.() ?? false;
         const bylCosDoPorzucenia =
           porzuconyPodglad ||
-          sciany.drawingWall.length > 0 || drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
+          sciany.drawingWall.length > 0 || pokoje.drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
         sciany.setDrawingWall([]);
-        setDrawingRoomPoints([]);
+        pokoje.setDrawingRoomPoints([]);
         setMultiSelected([]);
         setCalibPoints([]);
         setContextMenu(null);
@@ -1478,9 +1476,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // (przycisk „Zakończ" pojawia się dopiero od trzech, mniej nie domyka figury).
       // Prostokąt nie potrzebuje tego skrótu: tam zamknięcie następuje od razu po
       // puszczeniu przycisku myszy, bez oddzielnego kroku zatwierdzenia.
-      if (e.key === "Enter" && drawingRoomPoints.length >= 3 && tag !== "INPUT" && tag !== "TEXTAREA") {
+      if (e.key === "Enter" && pokoje.drawingRoomPoints.length >= 3 && tag !== "INPUT" && tag !== "TEXTAREA") {
         e.preventDefault();
-        finishRoomDrawing();
+        pokoje.zakonczRysowanie();
       }
       // Ctrl/Cmd+Z jak wszędzie indziej — idzie przez ten sam wrapper `undo()` co
       // przycisk „Cofnij”, więc mid-draw usuwa ostatni punkt tak samo jak przycisk.
@@ -1753,8 +1751,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     const wall = walls.find((w) => w.id === wallId);
     const punkty = wall && wierzcholkiZamknietejSciany(wall.points);
     if (!punkty) return;
-    const name = nextRoomName(roomShapes.length);
-    setPendingRoom({ points: punkty, name, type: guessRoomType(name), typeTouched: false });
+    pokoje.zaproponuj(punkty);
   }
 
   /**
@@ -1894,19 +1891,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     return mpu !== null ? display / 100 / mpu : display;
   }
 
-  function finishRoomDrawing() {
-    if (drawingRoomPoints.length >= 3) {
-      const name = nextRoomName(roomShapes.length);
-      setPendingRoom({ points: drawingRoomPoints, name, type: guessRoomType(name), typeTouched: false });
-    }
-    setDrawingRoomPoints([]);
-  }
-
-  function savePendingRoom() {
-    if (!pendingRoom) return;
-    addRoomShape(activeFloorId, pendingRoom.points, pendingRoom.name, pendingRoom.type);
-    setPendingRoom(null);
-  }
 
   /** Podkład ląduje w projekcie OD RAZU po wczytaniu pliku, jeszcze zanim
    *  użytkownik zdąży go przyciąć. Dzięki temu awaria wczytywania, anulowanie
@@ -2142,7 +2126,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       ? petleBezPomieszczenia.find((x) => x.wall.id === petlaDoNazwania) ?? null
       : null;
 
-  const blokujaceKontrolki = sciany.drawingWall.length > 0 || drawingRoomPoints.length > 0 || toolMode === "skala";
+  const blokujaceKontrolki = sciany.drawingWall.length > 0 || pokoje.drawingRoomPoints.length > 0 || toolMode === "skala";
   useEffect(() => {
     if (!pelnyEkran && blokujaceKontrolki && panelZwiniety) rozwinPanel();
   }, [pelnyEkran, blokujaceKontrolki, panelZwiniety, rozwinPanel]);
@@ -2373,12 +2357,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <button
                 key={id}
                 onClick={() => {
-                  setRoomMode(id);
-                  setDrawingRoomPoints([]); // zmiana trybu przerywa figurę zaczętą w poprzednim
+                  pokoje.ustawTryb(id);
                 }}
                 title={hint}
                 className="rounded-md px-2.5 py-1 text-sm"
-                style={roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
+                style={pokoje.roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
               >
                 {label}
               </button>
@@ -2389,7 +2372,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               kątów, a pomieszczenia nie, choć rysuje się nimi ten sam budynek.
               Przy prostokącie ukryty: ten tryb i tak daje kąty proste z definicji,
               więc przełącznik bez skutku tylko kazałby szukać różnicy. */}
-          {roomMode === "wielobok" && (
+          {pokoje.roomMode === "wielobok" && (
             <label className="flex items-center gap-1.5 text-slate-500">
               <input
                 data-testid="room-ortho-checkbox"
@@ -2400,7 +2383,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               Ortogonalnie (kąty proste)
             </label>
           )}
-          <span className="min-w-0 basis-full text-slate-500">{ROOM_MODES.find((m) => m.id === roomMode)!.hint}</span>
+          <span className="min-w-0 basis-full text-slate-500">{ROOM_MODES.find((m) => m.id === pokoje.roomMode)!.hint}</span>
         </div>
       )}
       {/* Prostokąt używa tej samej tablicy punktów na kotwicę pierwszego kliknięcia
@@ -2408,48 +2391,44 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           „1 pkt." i podpowiedź o zamykaniu figury dotyczą wieloboku i przy
           prostokącie tylko wprowadzałyby w błąd. „Anuluj" jest wspólne — kasuje
           kotwicę tak samo jak zaczęty wielobok. */}
-      {drawingRoomPoints.length > 0 && (
+      {pokoje.drawingRoomPoints.length > 0 && (
         <div className="flex flex-nowrap items-center gap-2 text-sm">
           <span className="whitespace-nowrap font-medium text-slate-600">
-            {roomMode === "prostokat" ? (
+            {pokoje.roomMode === "prostokat" ? (
               "Narożnik postawiony — kliknij przeciwległy"
             ) : (
               <>
-                {drawingRoomPoints.length} pkt.
-                {drawingRoomPoints.length >= 3 && " — kliknij w pierwszy punkt, aby zamknąć"}
+                {pokoje.drawingRoomPoints.length} pkt.
+                {pokoje.drawingRoomPoints.length >= 3 && " — kliknij w pierwszy punkt, aby zamknąć"}
               </>
             )}
           </span>
           {/* Prostokąt dostaje WYMIARY, wielobok — długość ostatniego odcinka.
               Różnica nie jest kaprysem: prostokąt nie ma „ostatniego odcinka", bo
               powstaje jednym pociągnięciem między dwoma narożnikami. */}
-          {roomMode === "prostokat" && (
+          {pokoje.roomMode === "prostokat" && (
             <PoleWymiarowProstokata
-              kotwica={drawingRoomPoints[0]}
+              kotwica={pokoje.drawingRoomPoints[0]}
               mpu={mpu}
               planSize={planSize}
               onUtworz={(punkty) => {
-                const name = nextRoomName(roomShapes.length);
-                setPendingRoom({ points: punkty, name, type: guessRoomType(name), typeTouched: false });
-                // Ta sama tablica trzyma kotwicę prostokąta co punkty wieloboku, więc
-                // domknięcie figury musi ją wyczyścić — inaczej kolejny klik liczyłby
-                // się od nieaktualnej kotwicy poprzedniego pomieszczenia.
-                setDrawingRoomPoints([]);
+                pokoje.zaproponuj(punkty);
+                pokoje.porzucSzkic();
               }}
             />
           )}
-          {roomMode === "wielobok" && (
+          {pokoje.roomMode === "wielobok" && (
             <PoleDlugosciOdcinka
-              punkty={drawingRoomPoints}
+              punkty={pokoje.drawingRoomPoints}
               mpu={mpu}
-              onZmiana={setDrawingRoomPoints}
+              onZmiana={pokoje.setDrawingRoomPoints}
               testId="room-segment-length-input"
             />
           )}
-          {roomMode === "wielobok" && drawingRoomPoints.length >= 3 && (
-            <button onClick={finishRoomDrawing} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
+          {pokoje.roomMode === "wielobok" && pokoje.drawingRoomPoints.length >= 3 && (
+            <button onClick={pokoje.zakonczRysowanie} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
           )}
-          <button onClick={() => setDrawingRoomPoints([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
+          <button onClick={() => pokoje.setDrawingRoomPoints([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
         </div>
       )}
       {toolMode === "skala" && (
@@ -3246,7 +3225,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             roomShapes={roomShapes}
             openings={openings}
             toolMode={toolMode}
-            roomMode={roomMode}
+            roomMode={pokoje.roomMode}
             snapOn={snapOn}
             gridOn={gridOn}
             selected={selected}
@@ -3254,7 +3233,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             drawingWall={sciany.drawingWall}
             newWallThickness={sciany.wallThickness}
             ortho={sciany.orthoWalls}
-            drawingRoomPoints={drawingRoomPoints}
+            drawingRoomPoints={pokoje.drawingRoomPoints}
             bgImageUrl={bgImageUrl}
             calibPoints={calibPoints}
             zones={zones}
@@ -3375,17 +3354,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             onMoveElements={przesunElementy}
             onAddWallPoint={(p) => sciany.setDrawingWall((pts) => [...pts, p])}
             onCloseWall={sciany.closeWall}
-            onAddRoomPoint={(p) => setDrawingRoomPoints((pts) => [...pts, p])}
+            onAddRoomPoint={(p) => pokoje.setDrawingRoomPoints((pts) => [...pts, p])}
             onRoomRectDrawn={(points) => {
-              const name = nextRoomName(roomShapes.length);
-              setPendingRoom({ points, name, type: guessRoomType(name), typeTouched: false });
-              // Prostokąt rysowany DWOMA KLIKNIĘCIAMI trzyma narożnik startowy w tej
-              // samej tablicy co wielobok (patrz `rectAnchor` w DesignCanvas), więc
-              // domknięcie figury musi ją wyczyścić — inaczej kolejny klik liczyłby
-              // się od nieaktualnej kotwicy poprzedniego pomieszczenia.
-              setDrawingRoomPoints([]);
+              pokoje.zaproponuj(points);
+              pokoje.porzucSzkic();
             }}
-            onCloseRoomPolygon={finishRoomDrawing}
+            onCloseRoomPolygon={pokoje.zakonczRysowanie}
             onAddCalibPoint={(p) => setCalibPoints((pts) => (pts.length >= 2 ? [p] : [...pts, p]))}
           />
           {/* Pasek stanu razem z linijką danych planu — w pełnym ekranie wysuwany zza
@@ -3466,18 +3440,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         </div>
       )}
 
-      <Dialog open={!!pendingRoom} onOpenChange={(open) => !open && setPendingRoom(null)}>
+      <Dialog open={!!pokoje.pendingRoom} onOpenChange={(open) => !open && pokoje.zamknijPropozycje()}>
         <DialogContent title="Nazwij pomieszczenie">
           <input
             autoFocus
-            value={pendingRoom?.name ?? ""}
-            onChange={(e) => {
-              const name = e.target.value;
-              // Podpowiedź typu śledzi nazwę tylko dopóki użytkownik sam niczego nie
-              // wybrał z listy — inaczej ręczny wybór zostałby cicho nadpisany przy
-              // kolejnej literze wpisywanej w polu nazwy.
-              setPendingRoom((p) => (p ? { ...p, name, type: p.typeTouched ? p.type : guessRoomType(name) } : p));
-            }}
+            value={pokoje.pendingRoom?.name ?? ""}
+            onChange={(e) => pokoje.zmienNazwe(e.target.value)}
             // Nazwa zastępcza („Pomieszczenie 1") jest od razu ZAZNACZONA, więc pierwsza
             // wpisana litera ją kasuje. Bez tego `autoFocus` stawiał kursor na KOŃCU
             // wpisanej wartości i wpisanie „Kuchnia" dawało „Pomieszczenie 1Kuchnia" —
@@ -3489,24 +3457,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                savePendingRoom();
+                pokoje.zapisz();
               }
             }}
             className="mb-3 w-full rounded border border-border px-3 py-1.5 text-sm"
           />
           <label className="mb-1 block text-xs font-medium text-slate-500">Typ pomieszczenia</label>
           <select
-            value={pendingRoom?.type ?? "inne"}
-            onChange={(e) => {
-              const type = e.target.value as RoomType;
-              // Wybór z listy ustawia też nazwę na etykietę tego typu — dla
-              // zdecydowanej większości pomieszczeń to i tak docelowa nazwa („Kuchnia",
-              // „Łazienka"...), więc bez tego trzeba było wpisać to samo słowo DWA razy:
-              // raz w polu nazwy, raz w tej liście. Kto chce inną nazwę (np. „Łazienka
-              // rodziców"), nadal może ją dopisać w polu wyżej PO wybraniu typu — pole
-              // nazwy zostaje zwykłym tekstem, nic mu tego nie zabrania.
-              setPendingRoom((p) => (p ? { ...p, type, typeTouched: true, name: ROOM_TYPE_LABELS[type] } : p));
-            }}
+            value={pokoje.pendingRoom?.type ?? "inne"}
+            onChange={(e) => pokoje.zmienTyp(e.target.value as RoomType)}
             className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
           >
             {(Object.entries(ROOM_TYPE_LABELS) as [RoomType, string][]).map(([value, label]) => (
@@ -3519,7 +3478,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             Kuchnia, łazienka, pralnia i kotłownia rządzą się swoimi zasadami (gniazda hermetyczne, strefa mokra w
             doborze przewodu) — wybierz zgodnie z rzeczywistością, niezależnie od tego, jak nazwiesz pomieszczenie.
           </p>
-          <Button variant="copper" className="w-full" onClick={savePendingRoom}>
+          <Button variant="copper" className="w-full" onClick={pokoje.zapisz}>
             Dodaj pomieszczenie
           </Button>
         </DialogContent>
