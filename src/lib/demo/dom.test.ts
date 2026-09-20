@@ -3,6 +3,7 @@ import { zbudujProjektDom } from "./dom";
 import { polygonAreaM2 } from "@/lib/geometry";
 import { MANUAL_DRAW_SCALE_MPU } from "@/lib/design";
 import { computeCircuits } from "@/lib/panel/circuits";
+import { buildCableRoutes, findPanel, findPanels } from "@/lib/panel/loads";
 
 describe("dom — szkielet", () => {
   const payload = zbudujProjektDom();
@@ -77,5 +78,38 @@ describe("dom — parter", () => {
       const pokoje = new Set(zwykleGniazdka(c.elements).map((e) => e.room));
       expect(pokoje.has("Garaż") && pokoje.has("Salon"), `obwód ${c.name} miesza garaż z salonem`).toBe(false);
     }
+  });
+});
+
+describe("dom — piętro i podrozdzielnica", () => {
+  const payload = zbudujProjektDom();
+  const naPietrze = payload.draft.elements.filter((e) => e.floor === "f2");
+
+  it("ma trzydzieści elementów", () => {
+    expect(naPietrze.length).toBe(30);
+  });
+
+  it("podrozdzielnica jest rozpoznana jako rozdzielnica TEJ kondygnacji", () => {
+    // Nie wystarczy, że na planie stoi drugi symbol: `findPanels` musi zwrócić wpis
+    // dla f2, bo to od niego zależy i rysowanie tras piętra, i pominięcie pionu
+    // przez strop w kosztorysie.
+    const panele = findPanels(payload.draft.elements);
+    expect(panele.poKondygnacji.has("f1")).toBe(true);
+    expect(panele.poKondygnacji.has("f2")).toBe(true);
+    expect(panele.glownaKondygnacja).toBe("f1");
+  });
+
+  it("piętro dostaje narysowane trasy ZASILANIA, nie tylko sterowania", () => {
+    const rs = payload.draft.roomShapes.filter((r) => r.floor === "f2");
+    const trasy = buildCableRoutes(
+      findPanel(naPietrze),
+      computeCircuits(naPietrze, rs),
+      naPietrze,
+      payload.draft.walls.filter((w) => w.floor === "f2"),
+      rs,
+      payload.draft.openings.filter((o) => o.floor === "f2"),
+      1
+    );
+    expect(trasy.some((t) => t.kind === "zasilanie")).toBe(true);
   });
 });

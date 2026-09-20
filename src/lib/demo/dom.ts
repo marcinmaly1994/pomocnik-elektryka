@@ -37,9 +37,8 @@ import { p, przyklejDoScian, tworzE } from "./wspolne";
 export const PARTER = "f1";
 export const PIETRO = "f2";
 
-// eG (piętro) wraca dopiero w zadaniu 7 — zadeklarowany bez użycia teraz znów
-// wywaliłby build, bo `noUnusedLocals` nie wybacza deklaracji na zapas.
 const eP = tworzE(PARTER);
+const eG = tworzE(PIETRO);
 
 const GARAZ = "Garaż";
 const HOL = "Hol";
@@ -219,6 +218,51 @@ function elementy(): InstallationElement[] {
     eP("dom-kotlownia-gn", "gniazdkoHerm", KOTLOWNIA, 9.75, 7),
     eP("dom-kotlownia-sw", "wlacznik", KOTLOWNIA, 8.75, 5.6),
     eP("dom-kotlownia-lampa", "oswietlenie", KOTLOWNIA, 9.1, 6.5),
+
+    // ===================== PIĘTRO =====================
+
+    // --- Korytarz: PODROZDZIELNICA ---
+    // Bez niej piętro nie dostałoby ani jednej trasy zasilania na rzucie
+    // (`buildCableRoutes` szuka rozdzielnicy TEJ kondygnacji), a kosztorys doliczałby
+    // pion przez strop do każdego obwodu.
+    eG("dom-podrozdzielnica", "rozdzielnica", KORYTARZ, 3.25, 4.25),
+    eG("dom-g-kor-lampa1", "oswietlenie", KORYTARZ, 5.5, 4.25),
+    eG("dom-g-kor-lampa2", "oswietlenie", KORYTARZ, 8.5, 4.25),
+    eG("dom-g-kor-sw1", "wlacznikSchodowy", KORYTARZ, 6.2, 3.7),
+    eG("dom-g-kor-sw2", "wlacznikSchodowy", KORYTARZ, 9.75, 4.25),
+    eG("dom-g-kor-gn", "gniazdko", KORYTARZ, 7, 3.7),
+    eG("dom-g-kor-dym", "czujnikDymu", KORYTARZ, 6.6, 4.6),
+
+    // --- Sypialnia 1 ---
+    eG("dom-syp1-gn1", "gniazdko", SYP1, 3.7, 0.25, { gangs: 2 }),
+    eG("dom-syp1-roleta", "roleta", SYP1, 4.7, 0.25),
+    eG("dom-syp1-gn2", "gniazdko", SYP1, 5.7, 0.25, { gangs: 2 }),
+    eG("dom-syp1-lan", "rj45", SYP1, 6.25, 1.5),
+    eG("dom-syp1-sw", "sciemniacz", SYP1, 5.6, 3.25),
+    eG("dom-syp1-lampa", "oswietlenie", SYP1, 4.7, 1.7),
+
+    // --- Sypialnia 2 ---
+    eG("dom-syp2-gn1", "gniazdko", SYP2, 7.2, 0.25, { gangs: 2 }),
+    eG("dom-syp2-roleta", "roleta", SYP2, 8.2, 0.25),
+    eG("dom-syp2-gn2", "gniazdko", SYP2, 9.2, 0.25, { gangs: 2 }),
+    eG("dom-syp2-sw", "wlacznik", SYP2, 9.3, 3.25),
+    eG("dom-syp2-lampa", "oswietlenie", SYP2, 8.2, 1.7),
+
+    // --- Sypialnia główna ---
+    eG("dom-sypgl-gn1", "gniazdko", SYP_GL, 3.7, 7.75, { gangs: 2 }),
+    eG("dom-sypgl-roleta", "roleta", SYP_GL, 4.7, 7.75),
+    eG("dom-sypgl-gn2", "gniazdko", SYP_GL, 5.7, 7.75, { gangs: 2 }),
+    eG("dom-sypgl-lan", "rj45", SYP_GL, 6.25, 6.5),
+    eG("dom-sypgl-sw", "sciemniacz", SYP_GL, 5.6, 5.25),
+    eG("dom-sypgl-lampa", "oswietlenie", SYP_GL, 4.8, 6.4),
+
+    // --- Łazienka na piętrze (mokra, z wanną) ---
+    eG("dom-lazg-went", "wentylator", LAZIENKA_G, 7.1, 5.25),
+    eG("dom-lazg-gn", "gniazdkoHerm", LAZIENKA_G, 9.75, 6.2),
+    eG("dom-lazg-sw", "wlacznikDwubiegunowy", LAZIENKA_G, 9.75, 7.2),
+    eG("dom-lazg-lampa", "oswietlenie", LAZIENKA_G, 8.5, 6.6),
+    eG("dom-lazg-umywalka", "umywalka", LAZIENKA_G, 6.9, 6.3),
+    eG("dom-lazg-wanna", "wanna", LAZIENKA_G, 7.2, 7.4),
   ];
 }
 
