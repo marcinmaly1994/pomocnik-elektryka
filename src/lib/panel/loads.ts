@@ -1117,9 +1117,23 @@ export function buildCableRoutes(
    * Rysunek pokazuje więc MNIEJ — i to jest właściwy wybór, bo zgodność rysunku
    * z szacunkiem jest w tym module własnością pierwszej kategorii.
    */
-  const zasilaneZInnegoPietra = new Set(
-    wszystkieElementy ? ogniwaPrzezStrop(wszystkieElementy, elements).map((o) => o.light.id) : []
-  );
+  const przezStrop = wszystkieElementy ? ogniwaPrzezStrop(wszystkieElementy, wszystkieElementy) : [];
+  const zasilaneZInnegoPietra = new Set(przezStrop.map((o) => o.light.id));
+  /**
+   * Druga strona tego samego ogniwa: oprawa stoi piętro dalej, ale jej ŁĄCZNIK stoi
+   * tutaj — i to do niego idzie zasilanie (patrz `estimateRoutesByFloor`). Rysunek
+   * pokazuje więc tę trasę na kondygnacji łącznika, choć sterowana oprawa jest
+   * gdzie indziej; bez tego kabel, który kosztorys kupuje, nie byłby widoczny nigdzie.
+   */
+  const lacznikNaTejKondygnacji = new Map(przezStrop.map((o) => [o.light.id, o.bestFrom]));
+  /**
+   * Elementy rysowanej kondygnacji — po ID, bo `circuits` opisują CAŁY budynek
+   * (tak samo jak w Rozdzielnicy, Schemacie i Kosztorysie), a rysunek ma z obwodu
+   * brać tożsamość i kolor, ale rysować wyłącznie te jego punkty, które na tym
+   * piętrze naprawdę stoją. Geometria jest zawsze z bieżącej kondygnacji, więc
+   * prowadzenie trasy do punktu z innego piętra byłoby trasą po cudzych ścianach.
+   */
+  const naTejKondygnacji = new Set(elements.map((e) => e.id));
   // Kolor po OBWODZIE, nie po pomieszczeniu — patrz `KOLORY_OBWODOW`. Liczony raz,
   // z kolejności obwodów, żeby zasilanie i sterowanie tego samego obwodu wyszły
   // tym samym kolorem (różnią się grubością i kreską, nie barwą).
@@ -1156,6 +1170,15 @@ export function buildCableRoutes(
     const bySwitch = new Map<string, { sw: InstallationElement; anchor: InstallationElement }>();
     const direct: InstallationElement[] = [];
     for (const e of c.elements) {
+      if (!naTejKondygnacji.has(e.id)) {
+        // Punkt z innej kondygnacji trafia na ten rysunek TYLKO przez łącznik, który
+        // go zasila i stoi tutaj. Sam punkt rysuje się na swoim piętrze.
+        const zTegoPietra = lacznikNaTejKondygnacji.get(e.id);
+        if (zTegoPietra && naTejKondygnacji.has(zTegoPietra.id) && !bySwitch.has(zTegoPietra.id)) {
+          bySwitch.set(zTegoPietra.id, { sw: zTegoPietra, anchor: e });
+        }
+        continue;
+      }
       const sw = isLightPoint(e) ? findControllingSwitch(e, elements, lightGroups) : null;
       if (sw) {
         if (!bySwitch.has(sw.id)) bySwitch.set(sw.id, { sw, anchor: e });
