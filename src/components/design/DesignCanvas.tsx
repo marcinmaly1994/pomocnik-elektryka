@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 
 import { rozmiescEtykietyGrup, type EtykietaDoRozmieszczenia } from "@/lib/lightGroups";
 
-import { Stage, Layer, Rect, Line, Circle, Arc, Text, Group, Image as KonvaImage } from "react-konva";
+import { Stage, Layer, Rect, Line, Circle, Arc, Arrow, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
@@ -14,6 +14,7 @@ import {
   MANUAL_DRAW_SCALE_MPU,
   PROG_WASKIEGO_EKRANU,
   type PlanSize,
+  schodySchemat,
 } from "@/lib/design";
 import {
   FALLBACK_FONT_ADNOTACJI,
@@ -1549,6 +1550,40 @@ export function DesignCanvas({
             const roomInteractive = toolMode === "zaznacz" || toolMode === "pomieszczenie" || toolMode === "otwory";
             return (
               <Group key={r.id}>
+                {/* SCHEMAT SCHODÓW — tylko w pomieszczeniu typu „klatka schodowa".
+                    `listening={false}`, bo to rysunek, a nie cel kliknięcia: zaznaczanie
+                    i edycja kształtu siedzą na krawędzi poniżej, tak samo jak przy
+                    wypełnieniu. Kilka kresek i strzałka kierunku wejścia — celowo NIE
+                    odwzorowanie stopni, patrz `schodySchemat` w lib/design.ts. */}
+                {r.type === "klatka" &&
+                  (() => {
+                    const s = schodySchemat(r.points);
+                    if (!s) return null;
+                    return (
+                      <>
+                        {s.stopnie.map(([a, b], i) => (
+                          <Line
+                            key={`${r.id}-stopien-${i}`}
+                            listening={false}
+                            points={[a.x, a.y, b.x, b.y]}
+                            stroke={r.color}
+                            strokeWidth={1}
+                            opacity={0.75}
+                          />
+                        ))}
+                        <Arrow
+                          listening={false}
+                          points={[s.strzalka.od.x, s.strzalka.od.y, s.strzalka.do.x, s.strzalka.do.y]}
+                          stroke={r.color}
+                          fill={r.color}
+                          strokeWidth={1}
+                          pointerLength={5}
+                          pointerWidth={4}
+                          opacity={0.75}
+                        />
+                      </>
+                    );
+                  })()}
                 {/* Wypełnienie: CZYSTO WIZUALNE, `listening={false}`. To musi zostać
                     non-listening — inaczej wraca regresja z kroku 60 (wypełniony,
                     zamknięty wielokąt przechwytuje każdy hit-test w swoim wnętrzu,

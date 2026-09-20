@@ -118,7 +118,7 @@ function pomieszczenia(): RoomShape[] {
     // (patrz historia `dom-kor-lampa`) — w prostokącie ten problem nie istnieje.
     { id: "dom-r-hol", floor: PARTER, name: HOL, type: "inne", color: ROOM_COLORS[2],
       points: [p(3, 3.5), p(10, 3.5), p(10, 5), p(3, 5)] },
-    { id: "dom-r-klatka", floor: PARTER, name: KLATKA, type: "inne", color: ROOM_COLORS[6],
+    { id: "dom-r-klatka", floor: PARTER, name: KLATKA, type: "klatka", color: ROOM_COLORS[6],
       points: [p(3, 5), p(5, 5), p(5, 8), p(3, 8)] },
     { id: "dom-r-lazienka", floor: PARTER, name: LAZIENKA_D, type: "lazienka", color: ROOM_COLORS[3],
       points: [p(5, 5), p(7, 5), p(7, 8), p(5, 8)] },
@@ -136,7 +136,7 @@ function pomieszczenia(): RoomShape[] {
       points: [p(3, 3.5), p(10, 3.5), p(10, 5), p(3, 5)] },
     // Klatka schodowa zajmuje na piętrze DOKŁADNIE ten sam obrys co na parterze —
     // inaczej schody nie miałyby gdzie wyjść.
-    { id: "dom-r-klatka-g", floor: PIETRO, name: KLATKA_G, type: "inne", color: ROOM_COLORS[6],
+    { id: "dom-r-klatka-g", floor: PIETRO, name: KLATKA_G, type: "klatka", color: ROOM_COLORS[6],
       points: [p(3, 5), p(5, 5), p(5, 8), p(3, 8)] },
     { id: "dom-r-syp3", floor: PIETRO, name: SYP3, type: "sypialnia", color: ROOM_COLORS[0],
       points: [p(5, 5), p(7.5, 5), p(7.5, 8), p(5, 8)] },

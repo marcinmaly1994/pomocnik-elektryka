@@ -383,6 +383,7 @@ export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   pralnia: "Pralnia",
   kotlownia: "Kotłownia",
   garaz: "Garaż",
+  klatka: "Klatka schodowa",
   inne: "Inne",
 };
 
@@ -401,6 +402,7 @@ export function guessRoomType(name: string): RoomType {
   if (/kotłowni/i.test(name)) return "kotlownia";
   if (/salon/i.test(name)) return "salon";
   if (/sypialni/i.test(name)) return "sypialnia";
+  if (/klatk|schod/i.test(name)) return "klatka";
   if (/gara/i.test(name)) return "garaz";
   if (/pok(ó|o)j/i.test(name)) return "pokoj";
   return "inne";
@@ -455,6 +457,8 @@ const ZASTOSOWANIE: Record<RoomType, ZastosowaniePokoju> = {
   pralnia: "gospodarcze",
   kotlownia: "gospodarcze",
   garaz: "gospodarcze",
+  // Komunikacja, tak samo jak `inne` — jej gniazda nie wpadaja na wspolny obwod z pokojami.
+  klatka: "nieznane",
   inne: "nieznane",
 };
 
@@ -801,4 +805,65 @@ export function krokSiatki(metersPerUnit: number | null, zoom: number): number {
 export function oczkoSiatkiM(metersPerUnit: number | null, zoom: number): number | null {
   if (metersPerUnit === null || !(metersPerUnit > 0)) return null;
   return krokSiatki(metersPerUnit, zoom) * metersPerUnit;
+}
+
+/** Ile kresek rysuje schemat schodów. Stała, NIE liczba stopni — patrz `schodySchemat`. */
+const LICZBA_KRESEK_SCHODOW = 5;
+
+/**
+ * Schemat schodów wpisany w obrys pomieszczenia: kilka kresek w poprzek biegu plus
+ * strzałka kierunku wejścia.
+ *
+ * SCHEMAT, A NIE ODWZOROWANIE — i to jest tu decyzja, nie uproszczenie z lenistwa.
+ * Aplikacja nie wie, czy bieg jest prosty, czy dwubiegowy z podestem; sam obrys tego nie
+ * rozstrzyga, bo 2 × 3 m mieści oba układy. Narysowanie stopni w realnym rozstawie na
+ * całej długości stwierdzałoby bieg PROSTY także tam, gdzie go nie ma — ten sam błąd,
+ * dla którego z rzutu domu wypadła brama garażowa rysowana łukiem skrzydła. Stała,
+ * mała liczba kresek mówi „tu są schody" i nic ponadto.
+ *
+ * Bieg idzie wzdłuż DŁUŻSZEJ osi obrysu, więc schemat obraca się razem z pomieszczeniem
+ * bez żadnego pola do ustawienia przez użytkownika.
+ *
+ * `null`, gdy obrys nie ma pola (mniej niż trzy punkty albo zerowa szerokość) — nie ma
+ * wtedy czego wypełnić.
+ */
+export function schodySchemat(
+  points: Point[]
+): { stopnie: [Point, Point][]; strzalka: { od: Point; do: Point } } | null {
+  if (points.length < 3) return null;
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const x0 = Math.min(...xs);
+  const x1 = Math.max(...xs);
+  const y0 = Math.min(...ys);
+  const y1 = Math.max(...ys);
+  const szer = x1 - x0;
+  const wys = y1 - y0;
+  if (szer <= 0 || wys <= 0) return null;
+
+  const wzdluzX = szer >= wys;
+  const dlugoscBiegu = wzdluzX ? szer : wys;
+  const polowaKreski = (wzdluzX ? wys : szer) * 0.35;
+  const wOsi = wzdluzX ? (y0 + y1) / 2 : (x0 + x1) / 2;
+  const start = (wzdluzX ? x0 : y0) + dlugoscBiegu * 0.2;
+  const krok = (dlugoscBiegu * 0.6) / (LICZBA_KRESEK_SCHODOW - 1);
+
+  const stopnie: [Point, Point][] = [];
+  for (let i = 0; i < LICZBA_KRESEK_SCHODOW; i++) {
+    const t = start + i * krok;
+    stopnie.push(
+      wzdluzX
+        ? [{ x: t, y: wOsi - polowaKreski }, { x: t, y: wOsi + polowaKreski }]
+        : [{ x: wOsi - polowaKreski, y: t }, { x: wOsi + polowaKreski, y: t }]
+    );
+  }
+
+  const od = (wzdluzX ? x0 : y0) + dlugoscBiegu * 0.15;
+  const doK = (wzdluzX ? x0 : y0) + dlugoscBiegu * 0.85;
+  return {
+    stopnie,
+    strzalka: wzdluzX
+      ? { od: { x: od, y: wOsi }, do: { x: doK, y: wOsi } }
+      : { od: { x: wOsi, y: od }, do: { x: wOsi, y: doK } },
+  };
 }

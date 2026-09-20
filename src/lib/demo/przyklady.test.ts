@@ -1,15 +1,16 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { PRZYKLADY, zbudujPrzyklad } from "./index";
 import { nearestPointOnPolyline, pointInPolygon, polygonAreaM2 } from "@/lib/geometry";
-import { scaleOf, MANUAL_DRAW_SCALE_MPU, guessRoomType } from "@/lib/design";
+import { scaleOf, MANUAL_DRAW_SCALE_MPU, guessRoomType, typPomieszczenia } from "@/lib/design";
 import { computeCircuits, computeRcdGroups } from "@/lib/panel/circuits";
 import { buildCableRoutes, findPanel, findPanels, spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
 import { ODSUNIECIE_TRASY } from "@/lib/panel/routing";
 import { computeCosts } from "@/lib/costs";
-import { gniazdoPodwojne } from "@/lib/elements";
+import { gniazdoPodwojne, SANITARY_FIXTURES } from "@/lib/elements";
+import { glyphBoxSize } from "@/lib/glyphs";
 import type { ProjectPayload } from "@/store/useProjectStore";
-import type { RoomType } from "@/types";
+import type { InstallationElement, RoomType } from "@/types";
 
 /**
  * Projekt przykładowy to DANE wpisane ręcznie, więc łatwo je po cichu popsuć —
@@ -139,11 +140,19 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))('przykład „%s"', (id) =>
       const rzut = nearestPointOnPolyline(o, [...pts, pts[0]]);
       return rzut !== null && Math.hypot(rzut.point.x - o.x, rzut.point.y - o.y) <= LUZ;
     };
-    const komunikacja = payload.draft.roomShapes.filter((r) => r.type === "inne");
+    // Komunikacja to `inne` ORAZ `klatka`: klatka schodowa jest przestrzenią
+    // komunikacyjną tak samo jak hol czy korytarz, tylko niesie dodatkowo informację
+    // o schodach. Typ czytany przez `typPomieszczenia`, bo pole `RoomShape.type` jest
+    // OPCJONALNE — zapisy sprzed jego dodania go nie mają i wracają do zgadywania
+    // po nazwie.
+    const KOMUNIKACJA: RoomType[] = ["inne", "klatka"];
+    const jestKomunikacja = (r: (typeof payload.draft.roomShapes)[number]) =>
+      KOMUNIKACJA.includes(typPomieszczenia(r.name, payload.draft.roomShapes));
+    const komunikacja = payload.draft.roomShapes.filter(jestKomunikacja);
     expect(komunikacja.length, "przykład bez pomieszczenia komunikacyjnego").toBeGreaterThan(0);
 
     for (const r of payload.draft.roomShapes) {
-      if (r.type === "inne") continue;
+      if (jestKomunikacja(r)) continue;
       const drzwi = payload.draft.openings.filter(
         (o) =>
           o.floor === r.floor &&
@@ -252,6 +261,54 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))('przykład „%s"', (id) =>
       expect(zle, `kondygnacja ${f}`).toEqual([]);
       expect(ukos / dlugosc, `kondygnacja ${f}`).toBeLessThan(0.1);
     }
+  });
+
+  it("żadne dwa symbole w jednym pomieszczeniu nie NACHODZĄ na siebie", () => {
+    /**
+     * Mierzymy NACHODZENIE, a nie odstęp „co najmniej 0,8 m". Ta druga liczba to reguła
+     * kciuka i pliki danych nigdy nie zgadzały się co do jej statusu; test na niej byłby
+     * kruchy — pierwszy przykład z gęstszym osprzętem (blat kuchenny, listwa nad biurkiem)
+     * zapaliłby go bez żadnego defektu. Nachodzenie jest za to wielkością OBIEKTYWNĄ:
+     * bierze się wprost z `glyphBoxSize` i skali renderu, więc próg zmienia się razem
+     * z rozmiarem symboli, zamiast zostawać w tyle jako zapamiętana stała.
+     *
+     * TYLKO W OBRĘBIE JEDNEGO POMIESZCZENIA i jednej kondygnacji — i to jest sedno, a nie
+     * zawężenie na wszelki wypadek. Osprzęt montuje się w murze z obu stron, więc łącznik
+     * w kuchni i łącznik w garażu przy tej samej ścianie mają środki 0,3 m od siebie
+     * i „nachodzą" według każdej miary odległości. Na rysunku dzieli je ściana i nie ma
+     * tam żadnego defektu. Bez tego filtra test zgłosiłby dziesięć takich par w dwóch
+     * przykładach i nie dałoby się go utrzymać.
+     *
+     * PRZYBORY SANITARNE poza testem: wanna, prysznic i umywalka nie są symbolami
+     * umownymi, tylko obrysem rzeczywistego wyposażenia w prawdziwych wymiarach
+     * (`SANITARY_FIXTURES`). Oprawa pod stropem NAD wanną to normalny układ, a nie
+     * kolizja rysunku; o tym, co wolno postawić nad przyborem, rozstrzygają strefy
+     * ochronne, nie czytelność kresek.
+     */
+    const skala = elementRenderScale(MANUAL_DRAW_SCALE_MPU, DEFAULT_ELEMENT_SCALE, DEFAULT_ELEMENT_SCALE);
+    // Promień zastępczy: symbol obraca się razem ze ścianą, więc prostokąt obrysu nie ma
+    // stałej orientacji. Koło o promieniu połowy dłuższego boku jest niezależne od obrotu.
+    const promien = (t: InstallationElement["type"]) => (Math.max(glyphBoxSize(t).w, glyphBoxSize(t).h) / 2) * skala;
+    const osprzet = payload.draft.elements.filter((e) => !SANITARY_FIXTURES[e.type]);
+
+    const nachodzace: string[] = [];
+    for (let i = 0; i < osprzet.length; i++) {
+      for (let j = i + 1; j < osprzet.length; j++) {
+        const a = osprzet[i];
+        const b = osprzet[j];
+        if (a.floor !== b.floor || a.room !== b.room) continue;
+        const odleglosc = Math.hypot(a.x - b.x, a.y - b.y);
+        const styk = promien(a.type) + promien(b.type);
+        if (odleglosc < styk) {
+          nachodzace.push(
+            `${a.id} ↔ ${b.id} w „${a.room}": ${(odleglosc * MANUAL_DRAW_SCALE_MPU).toFixed(2)} m < ${(styk * MANUAL_DRAW_SCALE_MPU).toFixed(2)} m`
+          );
+        }
+      }
+    }
+    expect(nachodzace).toEqual([]);
+    // Test ma na czym pracować: w każdym przykładzie są pomieszczenia z kilkoma symbolami.
+    expect(osprzet.length).toBeGreaterThan(10);
   });
 
   it("ma gniazdo podwójne i wycenia je jako JEDNĄ sztukę osobnej pozycji", () => {

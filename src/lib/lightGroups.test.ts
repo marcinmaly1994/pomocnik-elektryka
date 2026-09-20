@@ -159,7 +159,50 @@ describe("computeLightGroups", () => {
     const light = el("oswietlenie", 50, 0);
     const g = computeLightGroups([sw, light]);
     expect(one(g, sw.id)).toBe(5);
-    expect(g.has(light.id)).toBe(false); // bez łącznika w automacie światło zostaje bez grupy
+    // ZMIANA ZACHOWANIA. Wcześniej stało tu `expect(g.has(light.id)).toBe(false)` z uwagą
+    // „bez łącznika w automacie światło zostaje bez grupy". Nazwa testu mówi jednak
+    // o czymś węższym — że łącznik nie ma dostać DRUGIEGO, automatycznego numeru obok
+    // ręcznego — i to nadal obowiązuje. Osierocanie oprawy było skutkiem ubocznym: bez
+    // numeru grupy `findControllingSwitch` zwracał `null`, więc rysunek przestawał
+    // prowadzić przewód przez łącznik i ciągnął zasilanie wprost do oprawy, pokazując
+    // topologię, której w instalacji nie ma. Ręczny numer ma przejmować kontrolę nad
+    // numerem grupy, nie rozrywać samą grupę.
+    expect(one(g, light.id)).toBe(5);
+  });
+
+  it("ręczny numer na OPRAWIE nie osierocą jej łącznika", () => {
+    // Numer wpisany przy oprawie znaczy „tę lampę biorę na siebie", więc lampa zostaje
+    // przy swoim numerze i NIE przenumerowuje grupy. Łącznik ma jednak dalej istnieć
+    // w numeracji — wcześniej wypadał z niej całkiem, bo seed bez opraw był odsiewany.
+    const sw = el("wlacznik", 0, 0);
+    const light = el("oswietlenie", 50, 0, "Salon", "f1", { lightGroup: [7] });
+    const g = computeLightGroups([sw, light]);
+    expect(one(g, light.id)).toBe(7);
+    expect(one(g, sw.id)).toBeGreaterThan(0);
+  });
+
+  it("ręczny numer na parze SCHODOWEJ nie gubi sterowanej oprawy", () => {
+    const sw1 = el("wlacznikSchodowy", 0, 0, "Salon", "f1", { lightGroup: [7] });
+    const sw2 = el("wlacznikSchodowy", 80, 0, "Salon", "f1", { lightGroup: [7] });
+    const light = el("oswietlenie", 40, 0);
+    const g = computeLightGroups([sw1, sw2, light]);
+    expect([one(g, sw1.id), one(g, sw2.id), one(g, light.id)]).toEqual([7, 7, 7]);
+  });
+
+  it("ręczny numer wiąże łączniki z RÓŻNYCH kondygnacji w jedną grupę", () => {
+    /**
+     * Klatka schodowa: oprawa nad schodami na parterze, łącznik na każdym piętrze.
+     * Automat grupuje po kondygnacji i po pomieszczeniu, więc takiej pary nigdy sam nie
+     * zwiąże — ręczny numer jest jedyną drogą, żeby to wyrazić, i musi działać.
+     *
+     * Łącznik z piętra świadomie NIE dostaje trasy zasilania: w układzie schodowym
+     * zasila go kabel sterowniczy od pierwszego łącznika, a nie rozdzielnica.
+     */
+    const swDol = el("wlacznikSchodowy", 20, 20, "Klatka", "f1", { lightGroup: [7] });
+    const lampa = el("oswietlenie", 60, 20, "Klatka", "f1");
+    const swGora = el("wlacznikSchodowy", 20, 20, "Klatka na piętrze", "f2", { lightGroup: [7] });
+    const g = computeLightGroups([swDol, lampa, swGora]);
+    expect([one(g, swDol.id), one(g, lampa.id), one(g, swGora.id)]).toEqual([7, 7, 7]);
   });
 });
 
@@ -211,12 +254,15 @@ describe("łącznik grupowy — dwa obwody", () => {
     expect(one(g, left.id)).toBe(c0);
   });
 
-  it("ręczne numery na obu dźwigniach całkiem wyłączają łącznik z automatu", () => {
+  it("ręczne numery na obu dźwigniach nie odrywają łącznika od jego lamp", () => {
     const sw = el("wlacznikGrupowy", 300, 300, "Salon", "f1", { lightGroup: [8, 9] });
     const light = el("oswietlenie", 100, 200);
     const g = computeLightGroups([sw, light]);
     expect(g.get(sw.id)).toEqual([8, 9]);
-    expect(g.has(light.id)).toBe(false); // bez obwodu w automacie lampa zostaje bez grupy
+    // ZMIANA ZACHOWANIA: wcześniej lampa zostawała bez grupy, bo ręcznie ponumerowane
+    // dźwignie nie budowały seeda. Teraz lampa przyłącza się do bliższej z nich — łącznik
+    // nadal steruje swoją lampą, a numer grupy pozostaje ten wpisany ręcznie.
+    expect([8, 9]).toContain(one(g, light.id));
   });
 
   it("toleruje zapis sprzed rozbicia na obwody (pojedyncza liczba)", () => {

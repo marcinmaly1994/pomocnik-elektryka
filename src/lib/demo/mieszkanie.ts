@@ -221,14 +221,24 @@ function elementy(): InstallationElement[] {
     e("kor-lampa1", "oswietlenie", PRZEDPOKOJ, 3.75, 4.25),
     e("kor-lampa2", "oswietlenie", PRZEDPOKOJ, 5.75, 4.25),
     e("kor-gn", "gniazdko", PRZEDPOKOJ, 4.8, 3.7),
-    e("przed-dym", "czujnikDymu", PRZEDPOKOJ, 4, 4.6),
+    // x przesunięte z 4 na 4,75: przy oprawie w (3,75; 4,25) środki dzieliło 0,43 m,
+    // a oba symbole mają po 0,55 m — czyli nachodziły na siebie na rysunku. Oprawy
+    // ruszyć nie można, bo stoi dokładnie pod 45° od wsuniętego wklęsłego narożnika
+    // (patrz `kor-lampa1`); czujnik nie przykleja się do ściany, więc to jego pozycja
+    // jest tu swobodna. Pilnuje tego test „żadne dwa symbole nie NACHODZĄ na siebie".
+    e("przed-dym", "czujnikDymu", PRZEDPOKOJ, 4.75, 4.6),
 
-    // ODLEGŁOŚCI: symbole są UMOWNE i przy skali „1 kratka = 1 m" jeden zajmuje na
-    // rysunku ok. 0,44 m ściany (patrz `BASE_ELEMENT_SCALE` w symbolScale.ts).
-    // Rozstaw ~0,8 m brał się stąd, że symbol miał kiedyś 0,74 m i bez takiego odstępu
-    // przykład otwierał się jako kupka nachodzących na siebie kółek. Po zmniejszeniu
-    // symboli ten odstęp nie jest już obejściem — mieści się w tym, co i tak wychodzi
-    // przy rozsądnym rozmieszczeniu osprzętu, więc zostaje jak jest.
+    // ODLEGŁOŚCI: symbole są UMOWNE i każdy typ ma swój rozmiar — przy skali „1 kratka
+    // = 1 m" łącznik zajmuje na rysunku 0,76 m, oprawa i czujnik po 0,55 m, gniazdko
+    // 0,38 × 0,46 m (liczone z `glyphBoxSize` razy `elementRenderScale`). Jedna liczba
+    // dla wszystkich nie istnieje, więc rozstaw „co najmniej 0,8 m", którym kierował się
+    // ten plik, był regułą kciuka dobraną pod największy z symboli.
+    //
+    // Od teraz pilnuje tego TEST, a nie reguła kciuka: „żadne dwa symbole w jednym
+    // pomieszczeniu nie NACHODZĄ na siebie" w `przyklady.test.ts` liczy próg osobno dla
+    // każdej pary, wprost z rozmiaru glifów. Dzięki temu gęstsze rozmieszczenie drobnych
+    // symboli (blat kuchenny, listwa nad biurkiem) jest dozwolone, a nachodzenie dwóch
+    // dużych — nie, choćby dzieliło je „prawie 0,8 m".
 
     // --- Salon (5×3,5 m) ---
     e("salon-gn1", "gniazdko", SALON, 1, 0.2, { gangs: 2 }),
