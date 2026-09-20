@@ -37,7 +37,7 @@ export const PRZYKLADY = [
     id: "dom",
     nazwa: "Dom 136 m², dwie kondygnacje",
     opis: "Parter z garażem, kotłownią i pralnią, piętro z sypialniami. Podrozdzielnica na piętrze zasila jego obwody na rzucie i w kosztorysie.",
-    fakty: ["136 m²", "12 pomieszczeń", "~80 elementów"],
+    fakty: ["136 m²", "14 pomieszczeń", "~85 elementów"],
     zaladuj: () => import("./dom"),
     eksport: "zbudujProjektDom",
   },

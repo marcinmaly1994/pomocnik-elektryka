@@ -43,7 +43,7 @@ describe("dom — parter", () => {
   const naParterze = payload.draft.elements.filter((e) => e.floor === "f1");
 
   it("ma rozdzielnicę główną i pięćdziesiąt jeden elementów", () => {
-    expect(naParterze.length).toBe(51);
+    expect(naParterze.length).toBe(52);
     expect(naParterze.some((e) => e.type === "rozdzielnica")).toBe(true);
   });
 
@@ -86,7 +86,7 @@ describe("dom — piętro i podrozdzielnica", () => {
   const naPietrze = payload.draft.elements.filter((e) => e.floor === "f2");
 
   it("ma trzydzieści elementów", () => {
-    expect(naPietrze.length).toBe(30);
+    expect(naPietrze.length).toBe(32);
   });
 
   it("podrozdzielnica jest rozpoznana jako rozdzielnica TEJ kondygnacji", () => {

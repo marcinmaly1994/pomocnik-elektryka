@@ -29,9 +29,18 @@ import { p, przyklejDoScian, tworzE } from "./wspolne";
  * Powód opisany szerzej w nagłówku `mieszkanie.ts`.
  *
  * Parter 10 × 8 m = 80 m²:
- *   Garaż 24 · Hol 16,5 · Salon 15,75 · Kuchnia 8,75 · Łazienka 6 · Pralnia 4,5 · Kotłownia 4,5
+ *   Garaż 24 · Salon 15,75 · Hol 10,5 · Kuchnia 8,75 · Łazienka 6 · Klatka schodowa 6
+ *   · Pralnia 4,5 · Kotłownia 4,5
  * Piętro 7 × 8 m = 56 m² (nad x 3–10):
- *   Sypialnia 1 12,25 · Sypialnia 2 12,25 · Korytarz 10,5 · Sypialnia główna 10,5 · Łazienka 10,5
+ *   Sypialnia 1 12,25 · Sypialnia 2 12,25 · Korytarz 10,5 · Sypialnia 3 7,5
+ *   · Łazienka 7,5 · Klatka schodowa 6
+ *
+ * KLATKA SCHODOWA ma na obu kondygnacjach ten sam obrys 2 × 3 m i jest to minimum, nie
+ * zaokrąglenie: przy wysokości kondygnacji 2,8 m mieszczą się tam schody dwubiegowe
+ * z podestem — dwa biegi po ok. 0,9 m obok siebie, po siedem stopni, 14 × 20 cm.
+ * Samych stopni rysunek nie pokazuje, bo biblioteka nie ma glifu schodów, a rysowanie
+ * ich ścianami wpuściłoby kilkanaście odcinków do grafu tras i rozsypało przebieg
+ * przewodów. Pomieszczenie mówi więc, GDZIE są schody, nie jak wyglądają.
  */
 
 // Nieeksportowane: `dom.test.ts` sprawdza konkretne kondygnacje literałami "f1"/"f2"
@@ -50,16 +59,23 @@ const KUCHNIA = "Kuchnia";
 const LAZIENKA_D = "Łazienka";
 const PRALNIA = "Pralnia";
 const KOTLOWNIA = "Kotłownia";
+// Przedsionek jest JEDNOCZESNIE klatka schodowa i tak sie go nazywa. 2 x 3 m to dokladnie
+// footprint schodow dwubiegowych z podestem (dwa biegi po ok. 0,9 m obok siebie, po siedem
+// stopni, 14 x 20 cm = 2,8 m wysokosci kondygnacji), a wejscie prosto do holu ze schodami
+// to najpowszechniejszy uklad w domach jednorodzinnych. Typ `inne`, bo to komunikacja.
+const KLATKA = "Klatka schodowa";
 
 const SYP1 = "Sypialnia 1";
 const SYP2 = "Sypialnia 2";
-const SYP_GL = "Sypialnia główna";
+const SYP3 = "Sypialnia 3";
 const KORYTARZ = "Korytarz";
 // NIE „Łazienka" — `computeCircuits` kubełkuje mokre gniazda po samej NAZWIE
 // pomieszczenia (`byRoom[e.room]` w lib/panel/circuits.ts), bez oglądania się na
 // kondygnację. Gdyby ta stała brzmiała tak samo jak `LAZIENKA_D` z parteru, obie
 // łazienki scaliłyby się w jeden obwód przez strop.
 const LAZIENKA_G = "Łazienka na piętrze";
+// Ta sama zasada co przy łazience: nazwa MUSI się różnić od klatki na parterze.
+const KLATKA_G = "Klatka schodowa na piętrze";
 
 function sciany(): Wall[] {
   return [
@@ -68,9 +84,11 @@ function sciany(): Wall[] {
     { id: "dom-w-garaz", floor: PARTER, points: [p(3, 0), p(3, 8)] },
     { id: "dom-w-kuchnia-salon", floor: PARTER, points: [p(5.5, 0), p(5.5, 3.5)] },
     { id: "dom-w-dzienna-hol", floor: PARTER, points: [p(3, 3.5), p(10, 3.5)] },
-    // Łamana zamykająca przedsionek i strefę techniczną: pion x=5 od ściany
-    // zewnętrznej do korytarza, dalej poziom y=5 aż do ściany wschodniej.
-    { id: "dom-w-hol-dol", floor: PARTER, points: [p(5, 8), p(5, 5), p(10, 5)] },
+    // Południowa ściana Holu, na całej jego długości — oddziela korytarz od klatki
+    // schodowej i od strefy technicznej.
+    { id: "dom-w-hol-dol", floor: PARTER, points: [p(3, 5), p(10, 5)] },
+    // Wschodnia ściana klatki schodowej.
+    { id: "dom-w-klatka", floor: PARTER, points: [p(5, 5), p(5, 8)] },
     { id: "dom-w-lazienka-pralnia", floor: PARTER, points: [p(7, 5), p(7, 8)] },
     { id: "dom-w-pralnia-kotlownia", floor: PARTER, points: [p(8.5, 5), p(8.5, 8)] },
 
@@ -79,7 +97,8 @@ function sciany(): Wall[] {
     { id: "dom-w-syp1-syp2", floor: PIETRO, points: [p(6.5, 0), p(6.5, 3.5)] },
     { id: "dom-w-gora-korytarz", floor: PIETRO, points: [p(3, 3.5), p(10, 3.5)] },
     { id: "dom-w-korytarz-dol", floor: PIETRO, points: [p(3, 5), p(10, 5)] },
-    { id: "dom-w-sypgl-lazienka", floor: PIETRO, points: [p(6.5, 5), p(6.5, 8)] },
+    { id: "dom-w-klatka-g", floor: PIETRO, points: [p(5, 5), p(5, 8)] },
+    { id: "dom-w-syp3-lazienka", floor: PIETRO, points: [p(7.5, 5), p(7.5, 8)] },
   ];
 }
 
@@ -96,8 +115,14 @@ function pomieszczenia(): RoomShape[] {
     // przy drzwiach wejściowych. Typ „inne" jest ŚWIADOMY — komunikacja nie jest ani
     // pokojem, ani pomieszczeniem mokrym, a `ZASTOSOWANIE` daje jej kubełek „nieznane",
     // więc jej gniazda nie wpadają na obwód z pokojami.
+    // Hol jest teraz zwykłym PROSTOKĄTEM, a nie literą L: przedsionek wydzielił się
+    // w osobną klatkę schodową. Przy okazji zniknął wklęsły narożnik, przez który
+    // oprawę korytarza trzeba było ustawiać dokładnie pod 45° do wsuniętego rogu
+    // (patrz historia `dom-kor-lampa`) — w prostokącie ten problem nie istnieje.
     { id: "dom-r-hol", floor: PARTER, name: HOL, type: "inne", color: ROOM_COLORS[2],
-      points: [p(3, 3.5), p(10, 3.5), p(10, 5), p(5, 5), p(5, 8), p(3, 8)] },
+      points: [p(3, 3.5), p(10, 3.5), p(10, 5), p(3, 5)] },
+    { id: "dom-r-klatka", floor: PARTER, name: KLATKA, type: "inne", color: ROOM_COLORS[6],
+      points: [p(3, 5), p(5, 5), p(5, 8), p(3, 8)] },
     { id: "dom-r-lazienka", floor: PARTER, name: LAZIENKA_D, type: "lazienka", color: ROOM_COLORS[3],
       points: [p(5, 5), p(7, 5), p(7, 8), p(5, 8)] },
     { id: "dom-r-pralnia", floor: PARTER, name: PRALNIA, type: "pralnia", color: ROOM_COLORS[4],
@@ -112,10 +137,14 @@ function pomieszczenia(): RoomShape[] {
       points: [p(6.5, 0), p(10, 0), p(10, 3.5), p(6.5, 3.5)] },
     { id: "dom-r-korytarz", floor: PIETRO, name: KORYTARZ, type: "inne", color: ROOM_COLORS[2],
       points: [p(3, 3.5), p(10, 3.5), p(10, 5), p(3, 5)] },
-    { id: "dom-r-sypgl", floor: PIETRO, name: SYP_GL, type: "sypialnia", color: ROOM_COLORS[0],
-      points: [p(3, 5), p(6.5, 5), p(6.5, 8), p(3, 8)] },
+    // Klatka schodowa zajmuje na piętrze DOKŁADNIE ten sam obrys co na parterze —
+    // inaczej schody nie miałyby gdzie wyjść.
+    { id: "dom-r-klatka-g", floor: PIETRO, name: KLATKA_G, type: "inne", color: ROOM_COLORS[6],
+      points: [p(3, 5), p(5, 5), p(5, 8), p(3, 8)] },
+    { id: "dom-r-syp3", floor: PIETRO, name: SYP3, type: "sypialnia", color: ROOM_COLORS[0],
+      points: [p(5, 5), p(7.5, 5), p(7.5, 8), p(5, 8)] },
     { id: "dom-r-lazienka-g", floor: PIETRO, name: LAZIENKA_G, type: "lazienka", color: ROOM_COLORS[3],
-      points: [p(6.5, 5), p(10, 5), p(10, 8), p(6.5, 8)] },
+      points: [p(7.5, 5), p(10, 5), p(10, 8), p(7.5, 8)] },
   ];
 }
 
@@ -123,8 +152,9 @@ function pomieszczenia(): RoomShape[] {
  *  `width` w jednostkach planu, czyli 18 jedn. = 90 cm.
  *
  *  Każde pomieszczenie ma drzwi do komunikacji — na parterze do Holu, na piętrze do
- *  Korytarza. Klatka schodowa nie potrzebuje otworu: kondygnacje łączy w modelu
- *  `pionMiedzyKondygnacjami`, a nie drzwi.
+ *  Korytarza. Klatka schodowa nie dostaje otworu MIĘDZY kondygnacjami: te łączy w modelu
+ *  `pionMiedzyKondygnacjami`, a nie drzwi — ma za to zwykłe drzwi do komunikacji na
+ *  swoim piętrze, jak każde inne pomieszczenie.
  *
  *  Garaż CELOWO nie ma narysowanego wjazdu. Aplikacja zna jeden rodzaj otworu —
  *  `drzwi` — i rysuje go jako łuk skrzydła otwieranego na bok; przy szerokości 2,4 m
@@ -142,6 +172,7 @@ function otwory(): Opening[] {
   return [
     // --- Parter ---
     { id: "dom-o-wejscie", floor: PARTER, wallId: "dom-w-obrys-p", ...p(4, 8), angle: POZIOMA, width: SZER, kind: "drzwi" },
+    { id: "dom-o-klatka", floor: PARTER, wallId: "dom-w-hol-dol", ...p(4, 5), angle: POZIOMA, width: SZER, kind: "drzwi" },
     { id: "dom-o-garaz", floor: PARTER, wallId: "dom-w-garaz", ...p(3, 4.25), angle: PIONOWA, width: SZER, kind: "drzwi" },
     { id: "dom-o-kuchnia", floor: PARTER, wallId: "dom-w-dzienna-hol", ...p(4.25, 3.5), angle: POZIOMA, width: SZER, kind: "drzwi" },
     { id: "dom-o-salon", floor: PARTER, wallId: "dom-w-dzienna-hol", ...p(7, 3.5), angle: POZIOMA, width: SZER, kind: "drzwi" },
@@ -152,7 +183,8 @@ function otwory(): Opening[] {
     // --- Piętro ---
     { id: "dom-o-syp1", floor: PIETRO, wallId: "dom-w-gora-korytarz", ...p(4.75, 3.5), angle: POZIOMA, width: SZER, kind: "drzwi" },
     { id: "dom-o-syp2", floor: PIETRO, wallId: "dom-w-gora-korytarz", ...p(8.25, 3.5), angle: POZIOMA, width: SZER, kind: "drzwi" },
-    { id: "dom-o-sypgl", floor: PIETRO, wallId: "dom-w-korytarz-dol", ...p(4.75, 5), angle: POZIOMA, width: SZER, kind: "drzwi" },
+    { id: "dom-o-klatka-g", floor: PIETRO, wallId: "dom-w-korytarz-dol", ...p(4, 5), angle: POZIOMA, width: SZER, kind: "drzwi" },
+    { id: "dom-o-syp3", floor: PIETRO, wallId: "dom-w-korytarz-dol", ...p(6.25, 5), angle: POZIOMA, width: SZER, kind: "drzwi" },
     { id: "dom-o-lazienka-g", floor: PIETRO, wallId: "dom-w-korytarz-dol", ...p(8.25, 5), angle: POZIOMA, width: SZER, kind: "drzwi" },
   ];
 }
@@ -161,32 +193,36 @@ function elementy(): InstallationElement[] {
   return [
     // ===================== PARTER =====================
 
-    // --- Hol (L: pas 1,5 m + przedsionek 2 × 3 m) ---
-    // Rozdzielnica i szafka zaraz za drzwiami, na ścianie przedsionka. Para łączników
-    // SCHODOWYCH: jeden przy wejściu, drugi na końcu korytarza — w domu to najbardziej
-    // typowe miejsce na taki układ.
-    eP("dom-rozdzielnica", "rozdzielnica", HOL, 3.2, 6.6),
-    eP("dom-szafka", "szafkaTeletech", HOL, 3.2, 5.4),
-    eP("dom-hol-gn", "gniazdko", HOL, 3.2, 7.6),
-    eP("dom-hol-sw", "wlacznikSchodowy", HOL, 4.8, 6.6),
-    eP("dom-hol-dzwonek", "dzwonek", HOL, 4.8, 5.4),
-    eP("dom-hol-lampa", "oswietlenie", HOL, 4, 6.2),
-    eP("dom-hol-zewn", "oswietlenieZewn", HOL, 4.7, 7.8, { note: "Nad wejściem" }),
-    // x = 5,25 NIE jest dowolne: wklęsły narożnik Holu (5, 5) wchodzi do grafu tras
-    // wsunięty o ODSUNIECIE_TRASY, czyli ląduje w (4,75; 4,75). Z tego punktu do
-    // dowolnej oprawy dalej w korytarzu (oś y = 4,25) Dijkstra ZAWSZE wybierze przekątną
-    // zamiast pasa wzdłuż ściany plus prostopadłego zejścia — przesuwanie oprawy wzdłuż
-    // korytarza tego nie naprawia. Jedyne wyjście bez dokładania elementów: postawić
-    // oprawę TAK, żeby ten odcinek był dozwolonym odczepem pod 45°, czyli dx = dy
-    // względem narożnika: 4,75 + (4,75 − 4,25) = 5,25. Test „przewody biegną wzdłuż
-    // ścian" w przyklady.test.ts pilnuje, żeby to się nie rozjechało.
-    eP("dom-kor-lampa", "oswietlenie", HOL, 5.25, 4.25),
-    eP("dom-kor-sw", "wlacznikSchodowy", HOL, 9.8, 4.25),
+    // --- Klatka schodowa (2 × 3 m, wejście do domu prosto do niej) ---
+    // Rozdzielnica i szafka zaraz za drzwiami. Pozycje te same co wtedy, gdy ta
+    // powierzchnia była jeszcze przedsionkiem Holu — fizycznie nic się nie przesunęło,
+    // zmieniło się tylko to, czym jest pomieszczenie.
+    //
+    // Łącznik przy wejściu jest ZWYKŁY, nie schodowy. Para schodowa musi stać w JEDNYM
+    // pomieszczeniu, żeby `computeLightGroups` związał ją w grupę (grupuje po kondygnacji,
+    // potem po pomieszczeniu) — para rozdzielona między klatkę a korytarz przestałaby
+    // być parą. Osobna sprawa: para przez strop, czyli kanoniczne zastosowanie łącznika
+    // schodowego, jest w tym modelu niewyrażalna i przykład tego nie udaje.
+    eP("dom-rozdzielnica", "rozdzielnica", KLATKA, 3.2, 6.6),
+    eP("dom-szafka", "szafkaTeletech", KLATKA, 3.2, 5.4),
+    eP("dom-klatka-gn", "gniazdko", KLATKA, 3.2, 7.6),
+    eP("dom-klatka-sw", "wlacznik", KLATKA, 4.8, 6.6),
+    eP("dom-klatka-dzwonek", "dzwonek", KLATKA, 4.8, 5.4),
+    eP("dom-klatka-lampa", "oswietlenie", KLATKA, 4, 6.2),
+    eP("dom-klatka-zewn", "oswietlenieZewn", KLATKA, 4.7, 7.8, { note: "Nad wejściem" }),
+
+    // --- Hol (korytarz 7 × 1,5 m) ---
+    // Para łączników SCHODOWYCH na dwóch końcach korytarza — oba w tym samym
+    // pomieszczeniu, więc automat wiąże je w jedną grupę.
+    //
+    // Oprawa stoi po prostu na środku. Wcześniej musiała stać w (5,25; 4,25), bo Hol
+    // był literą L i jego wklęsły narożnik wymuszał odczep pod 45°; po wydzieleniu
+    // klatki Hol jest prostokątem i ten przymus zniknął.
+    eP("dom-kor-lampa", "oswietlenie", HOL, 6.5, 4.25),
+    eP("dom-hol-sw1", "wlacznikSchodowy", HOL, 3.4, 3.7),
+    eP("dom-hol-sw2", "wlacznikSchodowy", HOL, 9.8, 4.25),
     eP("dom-kor-gn", "gniazdko", HOL, 5.5, 3.7),
-    // x przesunięte z 5,5 na 6,5: przy oprawie w (5,25; 4,25) odległość do czujnika
-    // spadała do 0,43 m — dwa symbole prawie na sobie. 6,5 daje z powrotem > 0,8 m
-    // od wszystkich sąsiadów w Holu.
-    eP("dom-hol-dym", "czujnikDymu", HOL, 6.5, 4.6),
+    eP("dom-hol-dym", "czujnikDymu", HOL, 7.5, 4.6),
 
     // --- Garaż ---
     eP("dom-ev", "ladowarkaEV", GARAZ, 0.25, 1.5, { dedicated: true, note: "Ładowarka EV" }),
@@ -274,22 +310,30 @@ function elementy(): InstallationElement[] {
     eG("dom-syp2-sw", "wlacznik", SYP2, 9.3, 3.25),
     eG("dom-syp2-lampa", "oswietlenie", SYP2, 8.2, 1.7),
 
-    // --- Sypialnia główna ---
-    eG("dom-sypgl-gn1", "gniazdko", SYP_GL, 3.7, 7.75, { gangs: 2 }),
-    eG("dom-sypgl-roleta", "roleta", SYP_GL, 4.7, 7.75),
-    eG("dom-sypgl-gn2", "gniazdko", SYP_GL, 5.7, 7.75, { gangs: 2 }),
-    eG("dom-sypgl-lan", "rj45", SYP_GL, 6.25, 6.5),
-    eG("dom-sypgl-sw", "sciemniacz", SYP_GL, 5.6, 5.25),
-    eG("dom-sypgl-lampa", "oswietlenie", SYP_GL, 4.8, 6.4),
+    // --- Klatka schodowa na piętrze ---
+    // Własna oprawa i własny łącznik na każdej kondygnacji. Sterowanie jedną oprawą
+    // z dołu i z góry — czyli to, do czego łącznik schodowy w ogóle służy — wymagałoby
+    // grupy obejmującej kondygnacje, a `computeLightGroups` takiej nie tworzy.
+    eG("dom-klatka-g-lampa", "oswietlenie", KLATKA_G, 4, 6.5),
+    eG("dom-klatka-g-sw", "wlacznik", KLATKA_G, 4.8, 5.4),
+
+    // --- Sypialnia 3 (2,5 × 3 m) ---
+    eG("dom-syp3-gn1", "gniazdko", SYP3, 5.6, 7.75, { gangs: 2 }),
+    eG("dom-syp3-roleta", "roleta", SYP3, 6.9, 7.75),
+    eG("dom-syp3-gn2", "gniazdko", SYP3, 7.25, 6.5, { gangs: 2 }),
+    eG("dom-syp3-lan", "rj45", SYP3, 5.25, 6.5),
+    eG("dom-syp3-sw", "sciemniacz", SYP3, 7.1, 5.25),
+    eG("dom-syp3-lampa", "oswietlenie", SYP3, 6.25, 6.4),
 
     // --- Łazienka na piętrze (mokra, z wanną) ---
-    eG("dom-lazg-went", "wentylator", LAZIENKA_G, 7.1, 5.25),
-    eG("dom-lazg-gn", "gniazdkoHerm", LAZIENKA_G, 9.75, 6.2),
-    eG("dom-lazg-sw", "wlacznikDwubiegunowy", LAZIENKA_G, 9.75, 7.2),
-    eG("dom-lazg-lampa", "oswietlenie", LAZIENKA_G, 8.5, 6.6),
-    eG("dom-lazg-umywalka", "umywalka", LAZIENKA_G, 6.9, 6.3),
-    eG("dom-lazg-wanna", "wanna", LAZIENKA_G, 7.2, 7.4),
+    eG("dom-lazg-went", "wentylator", LAZIENKA_G, 9.3, 5.25),
+    eG("dom-lazg-gn", "gniazdkoHerm", LAZIENKA_G, 9.75, 6.3),
+    eG("dom-lazg-sw", "wlacznikDwubiegunowy", LAZIENKA_G, 9.75, 7.3),
+    eG("dom-lazg-lampa", "oswietlenie", LAZIENKA_G, 8.7, 6.4),
+    eG("dom-lazg-umywalka", "umywalka", LAZIENKA_G, 7.9, 5.6),
+    eG("dom-lazg-wanna", "wanna", LAZIENKA_G, 8.2, 7.4),
   ];
+
 }
 
 export function zbudujProjektDom(): ProjectPayload {
