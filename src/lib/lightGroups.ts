@@ -68,6 +68,11 @@ interface Seed {
   alwaysNumbered: boolean;
   circuit: number;
   room: string;
+  /**
+   * Numer wpisany RĘCZNIE przy łączniku tego seeda — wtedy cała grupa dostaje ten numer
+   * zamiast kolejnego z automatu. `null`, gdy numeru nie ma i seed numeruje się sam.
+   */
+  reczny: number | null;
 }
 
 function distToAnchors(anchors: Point[], p: Point): number {
@@ -102,7 +107,7 @@ export function computeLightGroups(elements: InstallationElement[]): Map<string,
       if (n != null) put(e, i, n);
     });
   });
-  const isManual = (e: InstallationElement, circuit: number) => manualOf.get(e.id)![circuit] != null;
+  const recznyNr = (e: InstallationElement, circuit: number) => manualOf.get(e.id)![circuit] ?? null;
 
   // Elementy bez rozpoznanego pomieszczenia (NO_ROOM) NIE są tu odsiewane — trafiają do
   // grupowania jako jeden wspólny „pokój" na kondygnację, po prostu z kluczem NO_ROOM.
@@ -134,7 +139,14 @@ export function computeLightGroups(elements: InstallationElement[]): Map<string,
 
       const roomSeeds: Seed[] = [];
 
-      const multiway = controls.filter((c) => MULTIWAY.has(c.type) && !isManual(c, 0));
+      // Łączniki z ręcznym numerem BUDUJĄ seed tak samo jak pozostałe. Wcześniej były
+      // z tego kroku odsiewane i skutek był odwrotny do zamierzonego: łącznik trzymał
+      // swój numer, ale sterowane przez niego oprawy nie miały już do czego się
+      // przyłączyć i zostawały bez grupy. Bez numeru grupy `findControllingSwitch`
+      // zwraca `null`, więc rysunek przestawał prowadzić przewód przez łącznik i ciągnął
+      // zasilanie wprost do oprawy — pokazując topologię, której w instalacji nie ma.
+      // Ręczny numer ma przejmować NUMER grupy, nie rozrywać samą grupę.
+      const multiway = controls.filter((c) => MULTIWAY.has(c.type));
       if (multiway.length) {
         roomSeeds.push({
           targets: multiway.map((el) => ({ el, circuit: 0 })),
@@ -142,6 +154,7 @@ export function computeLightGroups(elements: InstallationElement[]): Map<string,
           alwaysNumbered: false,
           circuit: 0,
           room,
+          reczny: multiway.map((c) => recznyNr(c, 0)).find((n) => n != null) ?? null,
         });
       }
 
@@ -149,19 +162,17 @@ export function computeLightGroups(elements: InstallationElement[]): Map<string,
         .filter((c) => !MULTIWAY.has(c.type))
         .forEach((c) => {
           if (c.type !== "wlacznikGrupowy") {
-            if (!isManual(c, 0)) {
-              roomSeeds.push({
-                targets: [{ el: c, circuit: 0 }],
-                anchors: [{ x: c.x, y: c.y }],
-                alwaysNumbered: false,
-                circuit: 0,
-                room,
-              });
-            }
+            roomSeeds.push({
+              targets: [{ el: c, circuit: 0 }],
+              anchors: [{ x: c.x, y: c.y }],
+              alwaysNumbered: false,
+              circuit: 0,
+              room,
+              reczny: recznyNr(c, 0),
+            });
             return;
           }
           GROUP_SWITCH_ANGLES.forEach((deg, i) => {
-            if (isManual(c, i)) return;
             const a = (deg * Math.PI) / 180;
             roomSeeds.push({
               targets: [{ el: c, circuit: i }],
@@ -169,14 +180,16 @@ export function computeLightGroups(elements: InstallationElement[]): Map<string,
               alwaysNumbered: true,
               circuit: i,
               room,
+              reczny: recznyNr(c, i),
             });
           });
         });
 
       if (roomSeeds.length === 0) return;
 
+      // Oprawy z ręcznym numerem też przyłączają się do seeda: numer zachowują własny,
+      // ale utrzymują grupę przy życiu i narzucają jej swój numer, gdy łącznik go nie ma.
       lights
-        .filter((l) => !isManual(l, 0))
         .forEach((light) => {
           const nearest = roomSeeds.reduce(
             (best, s) => (distToAnchors(s.anchors, light) < distToAnchors(best.anchors, light) ? s : best),
@@ -196,9 +209,20 @@ export function computeLightGroups(elements: InstallationElement[]): Map<string,
         return ar.localeCompare(br, "pl") || ax - bx || ay - by || ac - bc;
       })
       .forEach((seed, i) => {
-        const n = i + 1;
-        seed.targets.forEach((t) => put(t.el, t.circuit, n));
-        (lightsBySeed.get(seed) ?? []).forEach((l) => put(l, 0, n));
+        // Numer grupy bierze się z ręcznego wpisu przy ŁĄCZNIKU, a w jego braku
+        // z automatu. Oprawa z własnym numerem NIE narzuca go grupie — inaczej jedna
+        // ręcznie odpięta lampa przenumerowałaby cały pokój (patrz test „ręczny numer
+        // ma pierwszeństwo przed automatem"). Zachowuje swój numer i tyle.
+        //
+        // Automat numeruje po staremu, od 1 w kolejności seedów, i ŚWIADOMIE nie omija
+        // numerów zajętych ręcznie: wpisanie numeru istniejącej grupy jest w tej
+        // aplikacji sposobem, żeby do niej DOŁĄCZYĆ (patrz test „wpisanie cudzego numeru
+        // scala elementy w jedną grupę"). Omijanie takich numerów odsuwałoby tamtą grupę
+        // na inny numer i dołączenie stawałoby się niemożliwe.
+        const n = seed.reczny ?? i + 1;
+        // Wartości wpisanych ręcznie nie nadpisujemy nigdy.
+        seed.targets.forEach((t) => { if (recznyNr(t.el, t.circuit) == null) put(t.el, t.circuit, n); });
+        (lightsBySeed.get(seed) ?? []).forEach((l) => { if (recznyNr(l, 0) == null) put(l, 0, n); });
       });
   });
 
