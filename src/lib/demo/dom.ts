@@ -117,16 +117,24 @@ function pomieszczenia(): RoomShape[] {
  *
  *  Każde pomieszczenie ma drzwi do komunikacji — na parterze do Holu, na piętrze do
  *  Korytarza. Klatka schodowa nie potrzebuje otworu: kondygnacje łączy w modelu
- *  `pionMiedzyKondygnacjami`, a nie drzwi. */
+ *  `pionMiedzyKondygnacjami`, a nie drzwi.
+ *
+ *  Garaż CELOWO nie ma narysowanego wjazdu. Aplikacja zna jeden rodzaj otworu —
+ *  `drzwi` — i rysuje go jako łuk skrzydła otwieranego na bok; przy szerokości 2,4 m
+ *  taki łuk wychodzi poza obrys budynku i zajmuje trzecią część rzutu. Brama garażowa
+ *  tak nie działa (unosi się albo składa sekcyjnie), więc narysowanie jej jako `drzwi`
+ *  nie byłoby uproszczeniem, tylko stwierdzeniem nieprawdy o konstrukcji — pierwszy
+ *  rzut, jaki widzi elektryk, czytałby się jak błąd rysunkowy. Dopóki w bibliotece
+ *  otworów nie ma glifu bramy, brak wjazdu na rysunku jest uczciwszy niż wjazd
+ *  narysowany źle. Garaż i tak zostaje połączony z resztą domu — ma osobne drzwi
+ *  do Holu (`dom-o-garaz`), które spełniają regułę „drzwi do komunikacji". */
 function otwory(): Opening[] {
   const SZER = 18;
-  const BRAMA = 48; // 2,4 m — brama garażowa
   const POZIOMA = 0;
   const PIONOWA = Math.PI / 2;
   return [
     // --- Parter ---
     { id: "dom-o-wejscie", floor: PARTER, wallId: "dom-w-obrys-p", ...p(4, 8), angle: POZIOMA, width: SZER, kind: "drzwi" },
-    { id: "dom-o-brama", floor: PARTER, wallId: "dom-w-obrys-p", ...p(0, 4), angle: PIONOWA, width: BRAMA, kind: "drzwi" },
     { id: "dom-o-garaz", floor: PARTER, wallId: "dom-w-garaz", ...p(3, 4.25), angle: PIONOWA, width: SZER, kind: "drzwi" },
     { id: "dom-o-kuchnia", floor: PARTER, wallId: "dom-w-dzienna-hol", ...p(4.25, 3.5), angle: POZIOMA, width: SZER, kind: "drzwi" },
     { id: "dom-o-salon", floor: PARTER, wallId: "dom-w-dzienna-hol", ...p(7, 3.5), angle: POZIOMA, width: SZER, kind: "drzwi" },
