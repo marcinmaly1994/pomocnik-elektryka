@@ -736,6 +736,118 @@ describe("estimateRoutesByFloor", () => {
     expect(estimateRoutesByFloor(panel, [naParterze], { parter: 0.05 })).toEqual(jedno);
   });
 
+  /**
+   * STEROWANIE PRZEZ STROP. Grupa rozpieta miedzy kondygnacje rozpadala sie tu na dwa
+   * kawalki — na parterze lacznik bez lampy, na pietrze lampa bez lacznika — wiec
+   * ogniwo miedzy nimi nie istnialo i nie kosztowalo NIC. Zmierzone przed poprawka:
+   * lampa na pietrze zwiazana recznym numerem z lacznikiem na parterze dawala
+   * dokladnie tyle samo metrow, co ta sama lampa BEZ zadnej grupy.
+   *
+   * `pionMiedzyKondygnacjami` tego nie ratowal: dolicza jedno przejscie przez strop
+   * na kondygnacje dla ZASILANIA, a przewod sterowniczy to osobny kabel i osobne
+   * przejscie.
+   */
+  describe("ogniwo sterowania przez strop", () => {
+    const kondygnacje: Floor[] = [
+      { id: "parter", name: "Parter", heightM: 2.8 },
+      { id: "pietro", name: "Pietro", heightM: 2.6 },
+    ];
+    const skale = { parter: 0.05, pietro: 0.05 };
+    /** Lacznik na parterze i lampa na pietrze, zwiazane RECZNYM numerem 7 — jedyny
+     *  sposob, w jaki taka grupa daje sie w tym modelu w ogole wyrazic. */
+    const lacznik = el("wlacznikSchodowy", { id: "sw-dol", x: 40, y: 100, room: "Klatka", floor: "parter", lightGroup: [7] });
+    const lampaG = el("oswietlenie", { id: "lampa-gora", x: 100, y: 100, room: "Klatka g", floor: "pietro", lightGroup: [7] });
+    const bezNumeru = (e: InstallationElement) => ({ ...e, lightGroup: undefined });
+
+    it("kosztuje metry — sama grupa przez strop nie jest darmowa", () => {
+      const zGrupa = estimateRoutesByFloor(panel, [lampaG], skale, 1.5, {
+        wszystkieElementy: [lacznik, lampaG],
+        kondygnacje,
+      })!;
+      const bezGrupy = estimateRoutesByFloor(panel, [bezNumeru(lampaG)], skale, 1.5, {
+        wszystkieElementy: [bezNumeru(lacznik), bezNumeru(lampaG)],
+        kondygnacje,
+      })!;
+      expect(zGrupa.totalM).toBeGreaterThan(bezGrupy.totalM);
+      // Przejscie przez strop to wysokosc DOLNEJ kondygnacji z pary — samo w sobie
+      // wiecej niz 2,5 m, wiec roznica nie moze byc symboliczna.
+      expect(zGrupa.totalM - bezGrupy.totalM).toBeGreaterThan(2.8);
+    });
+
+    it("wydluza trase do spadku napiecia, nie tylko rachunek", () => {
+      const zGrupa = estimateRoutesByFloor(panel, [lampaG], skale, 1.5, {
+        wszystkieElementy: [lacznik, lampaG],
+        kondygnacje,
+      })!;
+      const bezGrupy = estimateRoutesByFloor(panel, [bezNumeru(lampaG)], skale, 1.5, {
+        wszystkieElementy: [bezNumeru(lacznik), bezNumeru(lampaG)],
+        kondygnacje,
+      })!;
+      // Zanizony worstCaseM to za cienki przewod — blad w strone niebezpieczna.
+      expect(zGrupa.worstCaseM).toBeGreaterThan(bezGrupy.worstCaseM);
+    });
+
+    /** Wynik oznaczony jako szacunek nie jest formalnoscia — to informacja, ze trasa
+     *  moze byc dluzsza, niz policzono, czyli ze spadek napiecia jest zanizony.
+     *  Test ma sens tylko z geometria, po ktorej trasy W OBREBIE pieter licza sie
+     *  dokladnie: wtedy widac, ze to ogniwo PRZEZ STROP przestawia flage. */
+    it("liczy sie SZACUNKIEM, bo geometrii dwoch pieter nie da sie skleic w jedna trase", () => {
+      const pokoj = (id: string, floor: string): RoomShape => ({
+        id,
+        floor,
+        name: "Klatka",
+        color: "#3B8C63",
+        points: [
+          { x: 0, y: 0 },
+          { x: 400, y: 0 },
+          { x: 400, y: 300 },
+          { x: 0, y: 300 },
+        ],
+      });
+      const geometria = { walls: [], roomShapes: [pokoj("r-p", "parter"), pokoj("r-g", "pietro")], openings: [] };
+      const bezGrupy = estimateRoutesByFloor(panel, [bezNumeru(lampaG)], skale, 1.5, {
+        wszystkieElementy: [bezNumeru(lacznik), bezNumeru(lampaG)],
+        kondygnacje,
+        geometria,
+      })!;
+      // Kontrola zalozenia: bez ogniwa przez strop ta sama scena NIE jest szacunkiem.
+      expect(bezGrupy.szacunek).toBe(false);
+      const zGrupa = estimateRoutesByFloor(panel, [lampaG], skale, 1.5, {
+        wszystkieElementy: [lacznik, lampaG],
+        kondygnacje,
+        geometria,
+      })!;
+      expect(zGrupa.szacunek).toBe(true);
+    });
+
+    /**
+     * Numery grup nadaje sie w zasiegu kondygnacji, wiec AUTOMATYCZNA grupa 1 na
+     * parterze i automatyczna 1 na pietrze to dwie rozne grupy o tym samym numerze.
+     * Sklejenie ich wyhodowaloby kabel miedzy pokojami, ktorych nic nie laczy — stad
+     * ogniwo przez strop liczy sie TYLKO przy numerze wpisanym recznie po obu stronach.
+     */
+    it("nie skleja dwoch AUTOMATYCZNYCH grup o tym samym numerze z roznych pieter", () => {
+      const swDol = el("wlacznik", { id: "auto-sw", x: 40, y: 100, room: "Pokoj dol", floor: "parter" });
+      const lampaDol = el("oswietlenie", { id: "auto-lampa-dol", x: 60, y: 100, room: "Pokoj dol", floor: "parter" });
+      const swGora = el("wlacznik", { id: "auto-sw-g", x: 40, y: 100, room: "Pokoj gora", floor: "pietro" });
+      const lampaGora = el("oswietlenie", { id: "auto-lampa-g", x: 60, y: 100, room: "Pokoj gora", floor: "pietro" });
+      const wszystkie = [swDol, lampaDol, swGora, lampaGora];
+      const razem = estimateRoutesByFloor(panel, [lampaDol, lampaGora], skale, 1.5, { wszystkieElementy: wszystkie, kondygnacje })!;
+      const osobno =
+        estimateRoutesByFloor(panel, [lampaDol], skale, 1.5, { wszystkieElementy: [swDol, lampaDol], kondygnacje })!.totalM +
+        estimateRoutesByFloor(panel, [lampaGora], skale, 1.5, { wszystkieElementy: [swGora, lampaGora], kondygnacje })!.totalM;
+      expect(razem.totalM).toBeCloseTo(osobno, 5);
+    });
+
+    it("grupa w obrebie JEDNEJ kondygnacji liczy sie tak jak dotad", () => {
+      const sw = el("wlacznik", { id: "sw-1", x: 40, y: 100, room: "Klatka", floor: "parter", lightGroup: [7] });
+      const lampa = el("oswietlenie", { id: "lampa-1", x: 100, y: 100, room: "Klatka", floor: "parter", lightGroup: [7] });
+      const wielopietrowo = estimateRoutesByFloor(panel, [lampa], skale, 1.5, { wszystkieElementy: [sw, lampa], kondygnacje })!;
+      const jednopietrowo = estimateRoutes(panel.glowna, [lampa], 0.05, 1.5, { wszystkieElementy: [sw, lampa], wysokoscKondygnacjiM: 2.8 })!;
+      expect(wielopietrowo.totalM).toBeCloseTo(jednopietrowo.totalM, 5);
+    });
+  });
+
   it("bez rozdzielnicy i bez elementow nie ma czego mierzyc", () => {
     expect(estimateRoutesByFloor({ poKondygnacji: new Map(), glowna: null, glownaKondygnacja: null }, [naParterze], { parter: 0.05 })).toBeNull();
     expect(estimateRoutesByFloor(panel, [], { parter: 0.05 })).toBeNull();
