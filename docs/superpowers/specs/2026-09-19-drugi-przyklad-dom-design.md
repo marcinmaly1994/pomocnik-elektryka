@@ -184,7 +184,8 @@ implementacji; jeśli wygląda źle — brama wypada i jest to powiedziane wpros
 | Rozdzielnica główna + szafka teletechniczna | Hol, przy wejściu | — |
 | **Podrozdzielnica** | Korytarz na piętrze | Bez niej górny rzut nie ma tras zasilania |
 | Ładowarka EV, obwód dedykowany | Garaż | Typ `ladowarkaEV` |
-| Kocioł i pralka na wypustach dedykowanych | Kotłownia, pralnia | Kubełek `gospodarcze` |
+| Kocioł i pralka na wypustach dedykowanych | Kotłownia, pralnia | Pomieszczenia techniczne |
+| Gniazdo warsztatowe | Garaż | Kubełek `gospodarcze` — patrz sprostowanie niżej |
 | Oświetlenie zewnętrzne | Przy wejściu i przy bramie | Typ `oswietlenieZewn` |
 | Dwie łazienki różnej wielkości | Parter i piętro | Strefy ochronne na obu kondygnacjach |
 
@@ -228,7 +229,22 @@ dostępną przez kuchnię; ta reguła nie przepuszcza.
   podrozdzielnica, a nie jako drugi symbol na planie;
 - `heightM` ustawione na obu kondygnacjach;
 - ładowarka EV, kocioł i pralka są `dedicated` i dostają własne obwody;
-- kotłownia i pralnia **nie dzielą** obwodu gniazd z pokojami (reguła `ZASTOSOWANIE`).
+- **Garaż** nie dzieli obwodu gniazd z Salonem (reguła `ZASTOSOWANIE`, kubełek
+  `gospodarcze` kontra `mieszkalne`).
+
+> **Sprostowanie, dopisane przy wykonaniu planu (zadanie 6).** Pierwotnie stało tu
+> „kotłownia i pralnia nie dzielą obwodu gniazd z pokojami (reguła `ZASTOSOWANIE`)"
+> i było to **nieprawdziwe co do mechanizmu**. `sucheWgZastosowania` w
+> `lib/panel/circuits.ts` — funkcja realizująca regułę `ZASTOSOWANIE` — pracuje wyłącznie
+> na gniazdach ZWYKŁYCH i wyłącznie w pomieszczeniach SUCHYCH. Tymczasem `WET_ROOM_TYPES`
+> w `lib/design.ts` zawiera `pralnia` i `kotlownia`, więc oba te pomieszczenia są mokre
+> i odcina je od pokoi wcześniejsza gałąź `byRoom`, a nie `ZASTOSOWANIE`. Test napisany
+> pod pierwotną obietnicę przechodziłby nawet po usunięciu tej reguły z kodu.
+>
+> Z trzech typów o zastosowaniu `gospodarcze` (`pralnia`, `kotlownia`, `garaz`) suchy
+> jest tylko **garaż**. Dlatego przykład dostał w garażu jedno zwykłe gniazdo warsztatowe,
+> a test porównuje parę Garaż–Salon i ma osobną asercję, że obwód z tym gniazdem w ogóle
+> istnieje. Liczba elementów parteru: 50 → 51.
 
 ### Rejestr
 
