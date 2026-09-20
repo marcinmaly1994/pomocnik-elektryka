@@ -96,9 +96,10 @@ import { useRysowanieScian } from "@/hooks/useRysowanieScian";
 import { useRysowaniePomieszczen } from "@/hooks/useRysowaniePomieszczen";
 import { useOtwory } from "@/hooks/useOtwory";
 import { useWstawianieElementu } from "@/hooks/useWstawianieElementu";
+import { useZaznaczenie } from "@/hooks/useZaznaczenie";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
-import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
+import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type ToolMode } from "./DesignCanvas";
 import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
 import { EditorStatusBar } from "./EditorStatusBar";
@@ -512,8 +513,24 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   /** Widoczność siatki — osobno od przyciągania. Domyślnie włączona, bo bez rzutu
    *  pod spodem to jedyny punkt odniesienia przy rysowaniu od zera. */
   const [gridOn, setGridOn] = useState(true);
-  const [selected, setSelected] = useState<Selection>(null);
-  const [multiSelected, setMultiSelected] = useState<string[]>([]);
+  /** Piąte skupisko — patrz `useZaznaczenie`. Stoi tutaj, bo `useOtwory` niżej
+   *  melduje mu świeżo postawiony otwór. */
+  const zaznaczenie = useZaznaczenie();
+  /** Reset przy zmianie kondygnacji potrzebuje w zależnościach czegoś stabilnego,
+   *  a nie całego obiektu hooka — patrz `setSzkicSciany` niżej. */
+  const { wyczysc: wyczyscZaznaczenie } = zaznaczenie;
+  /**
+   * Same ODCZYTY idą destrukturyzacją, a nie przez `zaznaczenie.*` jak w pozostałych
+   * hookach — i jest to wymuszone, nie kwestia gustu. TypeScript zawęża typ po
+   * `selected?.kind === "wall"`, ale gubi to zawężenie na `selected.id`
+   * w tym samym wyrażeniu: każde wywołanie funkcji po drodze (a tam stoi
+   * `walls.some(...)`) unieważnia zawężenie własności obiektu. Akcje zostają przy
+   * obiekcie, bo to one niosą znaczenie; stan i jego settery to zwykły `useState`.
+   *
+   * Settery są tu z drugiego powodu: wchodzą do zależności dwóch efektów, a cały
+   * obiekt hooka dostaje przy każdym renderze nową tożsamość i odpalałby je bez końca.
+   */
+  const { selected, multiSelected, contextMenu, setSelected, setMultiSelected } = zaznaczenie;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calibPoints, setCalibPoints] = useState<Point[]>([]);
   /** Potwierdzenie tuż po zatwierdzeniu skali — znika razem z pigułką narzędzia
@@ -546,11 +563,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   /** Trzecie skupisko — patrz `useOtwory`. Zaznaczenie i menu kontekstowe są osobnymi
    *  skupiskami stanu, więc hook tylko je zawiadamia, zamiast je posiadać. */
   const otwory = useOtwory({
-    onZaznacz: (id) => {
-      setSelected({ kind: "opening", id });
-      setMultiSelected([]);
-    },
-    onMenuKontekstowe: (id, x, y) => setContextMenu({ x, y, kind: "opening", id, multi: false }),
+    onZaznacz: (id) => zaznaczenie.zaznacz("opening", id),
+    onMenuKontekstowe: (id, x, y) => zaznaczenie.menuKontekstowe("opening", id, x, y),
   });
   /** Z tego samego powodu co `setSzkicSciany` wyżej: reset przy zmianie kondygnacji
    *  potrzebuje w zależnościach czegoś stabilnego, a nie całego obiektu hooka. */
@@ -1268,9 +1282,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     s: "skala",
   };
 
-  const [contextMenu, setContextMenu] = useState<
-    { x: number; y: number; kind: "el" | "wall" | "room" | "wallDraw" | "opening"; id: string; multi: boolean } | null
-  >(null);
   /** Edycja nazwy pomieszczenia w miejscu dwukliku na planie (input-nakładka, bo
    *  Konva nie ma natywnego pola tekstowego — ten sam trik co przy contextMenu). */
   const [roomNameEdit, setRoomNameEdit] = useState<{ x: number; y: number; id: string; value: string } | null>(null);
@@ -1294,7 +1305,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     }
     setMultiSelected([]);
     setCalibPoints([]);
-  }, [toolMode]);
+  }, [toolMode, setMultiSelected]);
 
   /**
    * Zmiana kondygnacji zeruje WSZYSTKO, co wskazuje na obiekty z poprzedniego piętra.
@@ -1311,51 +1322,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * w połowie rysowania przeniosłoby narysowane punkty na nowe piętro.
    */
   useEffect(() => {
-    setSelected(null);
-    setMultiSelected([]);
+    wyczyscZaznaczenie();
     setCalibPoints([]);
     setSzkicSciany([]);
     porzucSzkicPokoju();
-    setContextMenu(null);
     setRoomNameEdit(null);
     setEditingId(null);
-  }, [activeFloorId, setSzkicSciany, porzucSzkicPokoju]);
-
-  function deleteSelection() {
-    if (multiSelected.length > 0) {
-      removeElements(multiSelected);
-      setMultiSelected([]);
-      return;
-    }
-    if (selected) {
-      if (selected.kind === "el") removeElements([selected.id]);
-      else if (selected.kind === "wall") {
-        // Usunięcie ściany kasuje też JEJ otwory — inaczej zostałyby osierocone
-        // (wallId wskazujący na nieistniejącą ścianę).
-        setDraft((d) => ({
-          ...d,
-          walls: d.walls.filter((w) => w.id !== selected.id),
-          openings: d.openings.filter((o) => o.wallId !== selected.id),
-        }));
-      } else if (selected.kind === "opening") {
-        setDraft((d) => ({ ...d, openings: d.openings.filter((o) => o.id !== selected.id) }));
-      } else if (selected.kind === "room") {
-        deleteRoomShape(selected.id);
-      } else if (selected.kind === "route") {
-        // Trasy nie da się „usunąć" — to widok policzony z planu. Delete/Backspace
-        // na zaznaczonej trasie kasuje jej ręczną poprawkę (jeśli jakaś jest),
-        // czyli cofa do routingu automatycznego — no-op, gdy nic nie było zmienione.
-        clearRouteOverride(selected.id);
-      }
-      setSelected(null);
-    }
-  }
-
-  function handleRoomContextMenu(id: string, x: number, y: number) {
-    setSelected({ kind: "room", id });
-    setMultiSelected([]);
-    setContextMenu({ x, y, kind: "room", id, multi: false });
-  }
+  }, [activeFloorId, setSzkicSciany, porzucSzkicPokoju, wyczyscZaznaczenie]);
 
   /**
    * „Cofnij” świadomy tego, co się właśnie rysuje.
@@ -1390,7 +1363,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if ((e.key === "Delete" || e.key === "Backspace") && tag !== "INPUT" && tag !== "TEXTAREA") {
         e.preventDefault();
-        deleteSelection();
+        zaznaczenie.usunZaznaczone();
       }
       // Skróty narzędzi (V/E/P/W/D/H/S — patrz TOOL_SHORTCUTS/ToolRail.tsx). Bez
       // modyfikatorów: z Ctrl/Cmd/Alt to byłby skrót PRZEGLĄDARKI (np. Ctrl+P —
@@ -1460,7 +1433,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         pokoje.setDrawingRoomPoints([]);
         setMultiSelected([]);
         setCalibPoints([]);
-        setContextMenu(null);
+        zaznaczenie.zamknijMenu();
         if (!bylCosDoPorzucenia && pelnyEkran) przelaczPelnyEkran();
       }
       // „F" jak fullscreen — skrót dla osób, które raz znajdą przycisk i potem chcą
@@ -1798,7 +1771,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       setSelected(null);
       setMultiSelected(ids);
     },
-    [toolMode]
+    [toolMode, setSelected, setMultiSelected]
   );
   // Trasy przewodów — WYŁĄCZNIE z elementów/ścian/pomieszczeń TEJ kondygnacji
   // (wszystkie trzy już przefiltrowane przez `useActiveFloor*`), więc rozdzielnica,
@@ -1884,28 +1857,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
   // z aktualnej pozycji elementu, więc jego przesunięcie nie gubi ręcznego układu.
   const cableRoutes = useMemo(() => applyRouteOverrides(rawCableRoutes, routeOverrides), [rawCableRoutes, routeOverrides]);
-
-  function handleElementContextMenu(id: string, x: number, y: number) {
-    if (multiSelected.includes(id) && multiSelected.length > 1) {
-      setContextMenu({ x, y, kind: "el", id, multi: true });
-      return;
-    }
-    setSelected({ kind: "el", id });
-    setMultiSelected([]);
-    setContextMenu({ x, y, kind: "el", id, multi: false });
-  }
-
-  function handleWallContextMenu(id: string, x: number, y: number) {
-    setSelected({ kind: "wall", id });
-    setMultiSelected([]);
-    setContextMenu({ x, y, kind: "wall", id, multi: false });
-  }
-
-  /** PPM na płótnie w trakcie rysowania ściany (≥2 punkty) — alternatywa dla
-   *  przycisku „Zakończ" i Entera, patrz `onWallDrawContextMenu` w DesignCanvas. */
-  function handleWallDrawContextMenu(x: number, y: number) {
-    setContextMenu({ x, y, kind: "wallDraw", id: "", multi: false });
-  }
 
   /**
    * Czy pigułka kontrolek kontekstowych ma w tej chwili jakąkolwiek treść — TE SAME
@@ -2018,7 +1969,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             <button onClick={duplikujZaznaczenie} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs">
               <Copy size={13} /> Duplikuj
             </button>
-            <button onClick={deleteSelection} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs text-red-600">
+            <button onClick={zaznaczenie.usunZaznaczone} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs text-red-600">
               <Trash2 size={13} /> Usuń zaznaczone ({multiSelected.length})
             </button>
           </div>
@@ -3105,9 +3056,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setMultiSelected([]);
             }}
             onEditElement={(id) => setEditingId(id)}
-            onElementContextMenu={handleElementContextMenu}
-            onWallContextMenu={handleWallContextMenu}
-            onWallDrawContextMenu={handleWallDrawContextMenu}
+            onElementContextMenu={zaznaczenie.menuElementu}
+            onWallContextMenu={(id, x, y) => zaznaczenie.menuKontekstowe("wall", id, x, y)}
+            onWallDrawContextMenu={zaznaczenie.menuRysowanejSciany}
             onWallClickForOpening={otwory.wstawNaScianie}
             onSelectOpening={(id) => {
               setSelected({ kind: "opening", id });
@@ -3119,7 +3070,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setMultiSelected([]);
             }}
             onRoomEdgeClickForOpening={otwory.wstawNaKrawedziPokoju}
-            onRoomContextMenu={handleRoomContextMenu}
+            onRoomContextMenu={(id, x, y) => zaznaczenie.menuKontekstowe("room", id, x, y)}
             onRoomNameDblClick={(id, clientX, clientY) => {
               const room = roomShapes.find((r) => r.id === id);
               if (!room) return;
@@ -3378,7 +3329,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
 
       {contextMenu && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} onContextMenu={(e) => e.preventDefault()} />
+          <div className="fixed inset-0 z-40" onClick={() => zaznaczenie.zamknijMenu()} onContextMenu={(e) => e.preventDefault()} />
           <div
             className="pe-card fixed z-50 overflow-hidden py-1 text-sm"
             style={{ left: contextMenu.x, top: contextMenu.y, minWidth: 170 }}
@@ -3389,7 +3340,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 <button
                   onClick={() => {
                     rotateElements(multiSelected);
-                    setContextMenu(null);
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
                 >
@@ -3397,8 +3348,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 </button>
                 <button
                   onClick={() => {
-                    deleteSelection();
-                    setContextMenu(null);
+                    zaznaczenie.usunZaznaczone();
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
                 >
@@ -3426,7 +3377,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                       uzyte={uzyteNumeryObwodow}
                       onWybierz={(n) => {
                         przypiszObwod(multiSelected, n);
-                        setContextMenu(null);
+                        zaznaczenie.zamknijMenu();
                       }}
                     />
                   );
@@ -3441,7 +3392,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   <button
                     onClick={() => {
                       createRoomFromWall(contextMenu.id);
-                      setContextMenu(null);
+                      zaznaczenie.zamknijMenu();
                     }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
                   >
@@ -3458,7 +3409,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                     openings: d.openings.filter((o) => o.wallId !== contextMenu.id),
                   }));
                   setSelected(null);
-                  setContextMenu(null);
+                  zaznaczenie.zamknijMenu();
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
               >
@@ -3470,7 +3421,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 <button
                   onClick={() => {
                     otwory.obroc(contextMenu.id);
-                    setContextMenu(null);
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
                 >
@@ -3483,7 +3434,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   <button
                     onClick={() => {
                       otwory.odbij(contextMenu.id);
-                      setContextMenu(null);
+                      zaznaczenie.zamknijMenu();
                     }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
                   >
@@ -3494,7 +3445,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   onClick={() => {
                     setDraft((d) => ({ ...d, openings: d.openings.filter((o) => o.id !== contextMenu.id) }));
                     setSelected(null);
-                    setContextMenu(null);
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
                 >
@@ -3506,7 +3457,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 <button
                   onClick={() => {
                     sciany.createWallFromRoom(contextMenu.id);
-                    setContextMenu(null);
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
                 >
@@ -3516,7 +3467,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   onClick={() => {
                     deleteRoomShape(contextMenu.id);
                     setSelected(null);
-                    setContextMenu(null);
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
                 >
@@ -3527,7 +3478,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <button
                 onClick={() => {
                   sciany.finishWall();
-                  setContextMenu(null);
+                  zaznaczenie.zamknijMenu();
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
               >
@@ -3538,7 +3489,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 <button
                   onClick={() => {
                     setEditingId(contextMenu.id);
-                    setContextMenu(null);
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
                 >
@@ -3547,7 +3498,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 <button
                   onClick={() => {
                     rotateElements([contextMenu.id]);
-                    setContextMenu(null);
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
                 >
@@ -3557,7 +3508,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   onClick={() => {
                     removeElements([contextMenu.id]);
                     setSelected(null);
-                    setContextMenu(null);
+                    zaznaczenie.zamknijMenu();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
                 >
@@ -3572,7 +3523,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                       uzyte={uzyteNumeryObwodow}
                       onWybierz={(n) => {
                         przypiszObwod([contextMenu.id], n);
-                        setContextMenu(null);
+                        zaznaczenie.zamknijMenu();
                       }}
                       zablokowane={
                         maWlasnyObwodZDefinicji(el)
