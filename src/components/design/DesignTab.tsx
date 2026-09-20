@@ -57,7 +57,6 @@ import {
   ROOM_TYPE_LABELS,
   WALL_SNAP_TOLERANCE_M,
   PROG_WASKIEGO_EKRANU,
-  defaultOpeningWidth,
   detectRoomName,
   contentBounds,
   kadrOtwarcia,
@@ -96,6 +95,7 @@ import { zapamietajOdrzucenie } from "@/lib/podpowiedzPelnyEkran";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { useRysowanieScian } from "@/hooks/useRysowanieScian";
 import { useRysowaniePomieszczen } from "@/hooks/useRysowaniePomieszczen";
+import { useOtwory } from "@/hooks/useOtwory";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
 import { DesignCanvas, MAX_ZOOM, minZoom, type RoomDrawMode, type Selection, type ToolMode } from "./DesignCanvas";
@@ -517,8 +517,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [gridOn, setGridOn] = useState(true);
   const [selected, setSelected] = useState<Selection>(null);
   const [multiSelected, setMultiSelected] = useState<string[]>([]);
-  /** Rodzaj NOWEGO otworu — ustawienie edytora, jak grubosc sciany, nie czesc projektu. */
-  const [openingKind, setOpeningKind] = useState<OpeningKind>("drzwi");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calibPoints, setCalibPoints] = useState<Point[]>([]);
   /** Potwierdzenie tuż po zatwierdzeniu skali — znika razem z pigułką narzędzia
@@ -548,6 +546,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const sciany = useRysowanieScian({ onPetlaZamknieta: setPetlaDoNazwania });
   /** Drugie skupisko z własnym hookiem — patrz `useRysowaniePomieszczen`. */
   const pokoje = useRysowaniePomieszczen();
+  /** Trzecie skupisko — patrz `useOtwory`. Zaznaczenie i menu kontekstowe są osobnymi
+   *  skupiskami stanu, więc hook tylko je zawiadamia, zamiast je posiadać. */
+  const otwory = useOtwory({
+    onZaznacz: (id) => {
+      setSelected({ kind: "opening", id });
+      setMultiSelected([]);
+    },
+    onMenuKontekstowe: (id, x, y) => setContextMenu({ x, y, kind: "opening", id, multi: false }),
+  });
   /** Z tego samego powodu co `setSzkicSciany` wyżej: reset przy zmianie kondygnacji
    *  potrzebuje w zależnościach czegoś stabilnego, a nie całego obiektu hooka. */
   const { porzucSzkic: porzucSzkicPokoju } = pokoje;
@@ -1436,7 +1443,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           rotateElements(ids);
         } else if (selected?.kind === "opening") {
           e.preventDefault();
-          toggleOpeningFlip(selected.id);
+          otwory.obroc(selected.id);
         }
       }
       if (e.key === "Escape") {
@@ -1808,79 +1815,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   /** Szerokość JUŻ POSTAWIONEGO otworu — ten sam wzorzec co grubość ściany wyżej.
    *  Drzwi balkonowe, brama garażowa i okno tarasowe różnią się od siebie właśnie
    *  szerokością, a ta była do tej pory zabetonowana na wartości domyślnej. */
-  function setOpeningWidth(id: string, width: number) {
-    setDraft((d) => ({ ...d, openings: d.openings.map((o) => (o.id === id ? { ...o, width } : o)) }));
-  }
-
-  /** Dokłada drzwi w miejscu kliknięcia w ścianę (`point`/`angle` już
-   *  policzone w DesignCanvas — patrz `nearestPointOnPolyline`). Podobnie jak
-   *  ściany, otwory nie mają własnych akcji w store — jeden `setDraft`.
-   *
-   *  Świeżo postawiony otwór od razu staje się ZAZNACZONY — bez tego „R"
-   *  (obrót o 180°) czy PPM tuż po postawieniu nie miały czego dotyczyć
-   *  (`selected` wskazywał jeszcze na cokolwiek było zaznaczone wcześniej,
-   *  często nic), więc próba obrócenia świeżo postawionych drzwi wyglądała,
-   *  jakby w ogóle nie działała. */
-  function handleWallClickForOpening(wallId: string, point: Point, angle: number) {
-    const id = crypto.randomUUID();
-    setDraft((d) => ({
-      ...d,
-      openings: [
-        ...d.openings,
-        { id, floor: activeFloorId, wallId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(mpu, openingKind), kind: openingKind },
-      ],
-    }));
-    setSelected({ kind: "opening", id });
-    setMultiSelected([]);
-  }
-
-  /** Klik w krawędź pomieszczenia w trybie „otwory" — ten sam wzorzec co
-   *  `handleWallClickForOpening`, tylko `roomId` zamiast `wallId`: pomieszczenia
-   *  narysowane bez osobnej ściany inaczej w ogóle nie miałyby jak dostać drzwi. */
-  function handleRoomEdgeClickForOpening(roomId: string, point: Point, angle: number) {
-    const id = crypto.randomUUID();
-    setDraft((d) => ({
-      ...d,
-      openings: [
-        ...d.openings,
-        { id, floor: activeFloorId, roomId, x: point.x, y: point.y, angle, width: defaultOpeningWidth(mpu, openingKind), kind: openingKind },
-      ],
-    }));
-    setSelected({ kind: "opening", id });
-    setMultiSelected([]);
-  }
-
-  function handleOpeningContextMenu(id: string, x: number, y: number) {
-    setSelected({ kind: "opening", id });
-    setMultiSelected([]);
-    setContextMenu({ x, y, kind: "opening", id, multi: false });
-  }
-
-  /** Obraca otwór o 180° — dla drzwi zamienia stronę zawiasu i kierunek
-   *  otwierania skrzydła (patrz `flip` w `Opening` i przeliczenie w
-   *  `DesignCanvas.tsx`). Klawisz „R" jak przy elementach, plus przycisk w menu
-   *  kontekstowym. */
-  function toggleOpeningFlip(id: string) {
-    setDraft((d) => ({
-      ...d,
-      openings: d.openings.map((o) => (o.id === id ? { ...o, flip: !o.flip } : o)),
-    }));
-  }
-
-  /**
-   * Odbija skrzydło drzwi: zawias przechodzi na drugi koniec otworu, strona otwierania
-   * zostaje ta sama (patrz `lustro` w `Opening`).
-   *
-   * Osobna akcja obok obrotu, bo obrót zamienia OBIE rzeczy naraz i samym obrotem nie
-   * da się ustawić drzwi prawych zamiast lewych przy tym samym kierunku otwierania.
-   */
-  function toggleOpeningLustro(id: string) {
-    setDraft((d) => ({
-      ...d,
-      openings: d.openings.map((o) => (o.id === id ? { ...o, lustro: !o.lustro } : o)),
-    }));
-  }
-
   /** Grubość ściany w polu do wpisania: centymetry, gdy skala jest skalibrowana
    *  (ten sam wybór jednostki co `formatDlugosc` w DesignCanvas), inaczej same
    *  jednostki planu — użytkownik bez skali i tak nie ma punktu odniesienia dla cm. */
@@ -2306,16 +2240,16 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             {OPENING_KINDS.map(({ id, label }) => (
               <button
                 key={id}
-                onClick={() => setOpeningKind(id)}
+                onClick={() => otwory.setOpeningKind(id)}
                 className="rounded-md px-2.5 py-1 text-xs"
-                style={openingKind === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
+                style={otwory.openingKind === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
               >
                 {label}
               </button>
             ))}
           </div>
           <span className="min-w-0 basis-full text-slate-500">
-            Kliknij ścianę albo krawędź pomieszczenia, żeby wstawić tam {openingKind === "okno" ? "okno" : "drzwi"}.
+            Kliknij ścianę albo krawędź pomieszczenia, żeby wstawić tam {otwory.openingKind === "okno" ? "okno" : "drzwi"}.
             Szerokość poprawisz po zaznaczeniu otworu.
           </span>
         </div>
@@ -2338,7 +2272,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               value={thicknessToDisplay(o.width)}
               onChange={(e) => {
                 const v = Number(e.target.value);
-                if (Number.isFinite(v) && v > 0) setOpeningWidth(o.id, thicknessFromDisplay(v));
+                if (Number.isFinite(v) && v > 0) otwory.ustawSzerokosc(o.id, thicknessFromDisplay(v));
               }}
               className="w-16 rounded border border-border px-1.5 py-0.5"
             />
@@ -3279,17 +3213,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             onElementContextMenu={handleElementContextMenu}
             onWallContextMenu={handleWallContextMenu}
             onWallDrawContextMenu={handleWallDrawContextMenu}
-            onWallClickForOpening={handleWallClickForOpening}
+            onWallClickForOpening={otwory.wstawNaScianie}
             onSelectOpening={(id) => {
               setSelected({ kind: "opening", id });
               setMultiSelected([]);
             }}
-            onOpeningContextMenu={handleOpeningContextMenu}
+            onOpeningContextMenu={otwory.menuKontekstowe}
             onSelectRoom={(id) => {
               setSelected({ kind: "room", id });
               setMultiSelected([]);
             }}
-            onRoomEdgeClickForOpening={handleRoomEdgeClickForOpening}
+            onRoomEdgeClickForOpening={otwory.wstawNaKrawedziPokoju}
             onRoomContextMenu={handleRoomContextMenu}
             onRoomNameDblClick={(id, clientX, clientY) => {
               const room = roomShapes.find((r) => r.id === id);
@@ -3640,7 +3574,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <>
                 <button
                   onClick={() => {
-                    toggleOpeningFlip(contextMenu.id);
+                    otwory.obroc(contextMenu.id);
                     setContextMenu(null);
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
@@ -3653,7 +3587,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 {openings.find((o) => o.id === contextMenu.id)?.kind === "drzwi" && (
                   <button
                     onClick={() => {
-                      toggleOpeningLustro(contextMenu.id);
+                      otwory.odbij(contextMenu.id);
                       setContextMenu(null);
                     }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
