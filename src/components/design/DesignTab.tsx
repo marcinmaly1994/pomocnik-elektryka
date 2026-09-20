@@ -2100,7 +2100,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       trasyPotrzebne
         ? buildCableRoutes(
             findPanel(elements),
-            computeCircuits(elements, roomShapes),
+            // Obwody CAŁEGO budynku, te same, które liczą Rozdzielnica, Schemat
+            // i Kosztorys. Rzut liczył je sobie wcześniej sam, z elementów jednego
+            // piętra, więc ten sam obwód miał na rysunku inny numer, inną nazwę
+            // i inny kolor niż w reszcie aplikacji — a spis obwodów idzie do PDF-a
+            // rzutu, więc dwa dokumenty w jednym komplecie mówiły co innego.
+            // Rysowane są i tak wyłącznie punkty stojące na tej kondygnacji
+            // (patrz `naTejKondygnacji` w `buildCableRoutes`).
+            computeCircuits(wszystkieElementy, wszystkiePomieszczenia),
             elements,
             walls,
             roomShapes,
@@ -2111,7 +2118,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             wszystkieElementy
           )
         : [],
-    [trasyPotrzebne, elements, wszystkieElementy, walls, roomShapes, openings, mpu, elementScale, skalaBezKalibracji]
+    [trasyPotrzebne, elements, wszystkieElementy, wszystkiePomieszczenia, walls, roomShapes, openings, mpu, elementScale, skalaBezKalibracji]
   );
   // Ręczne poprawki (przeciągnięte przez użytkownika załamania, patrz DesignCanvas)
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się

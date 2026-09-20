@@ -203,6 +203,94 @@ describe("buildCableRoutes", () => {
   });
 });
 
+/**
+ * OBWODY CAŁEGO BUDYNKU NA RZUCIE JEDNEJ KONDYGNACJI.
+ *
+ * Rzut dostaje teraz tę samą listę obwodów, co Rozdzielnica, Schemat i Kosztorys —
+ * liczoną dla całego budynku. Przedtem liczył ją sobie sam, z elementów jednego
+ * piętra, więc ten sam obwód miał na rysunku inny numer, inną nazwę i inny kolor niż
+ * w reszcie aplikacji (kolor to `kolorObwodu(indeks na liście)`). Zmierzone na
+ * przykładowym domu: 16 obwodów w budynku kontra 15 + 5 liczone piętrami, bo cztery
+ * sięgają obu kondygnacji i rzut rozcinał je na pół. Piętrowy `obw4` „Obwód
+ * oświetlenia 1" był w rozdzielnicy `obw15` „Obwód oświetlenia 2" — a spis obwodów
+ * idzie do PDF-a rzutu, więc dwa dokumenty w jednym komplecie mówiły co innego.
+ *
+ * Rysunek bierze więc z obwodu TOŻSAMOŚĆ, a rysuje wyłącznie te jego punkty, które
+ * stoją na rysowanej kondygnacji — geometria jest zawsze z bieżącego piętra.
+ */
+describe("buildCableRoutes — obwody całego budynku", () => {
+  const panel = { x: 0, y: 0 };
+  const circuit = (over: Partial<Circuit> = {}): Circuit => ({
+    id: "obw7",
+    name: "Obwód gniazd ogólnych 2",
+    type: "gniazdko",
+    elements: [],
+    cable: "YDYp 3x2,5 mm²",
+    breaker: "B16",
+    rcd: true,
+    ...over,
+  });
+
+  it("rysuje tylko punkty stojące na TEJ kondygnacji, ale pod tożsamością obwodu budynku", () => {
+    const naParterze = el("gniazdko", { x: 30, y: 40, floor: "parter" });
+    const naPietrze = el("gniazdko", { x: 200, y: 200, floor: "pietro" });
+    // Obwód sięga obu kondygnacji; rysowany jest parter.
+    const routes = buildCableRoutes(panel, [circuit({ elements: [naParterze, naPietrze] })], [naParterze], [], []);
+    expect(routes.map((r) => r.id)).toEqual([naParterze.id]);
+    expect(routes[0]).toMatchObject({ circuitId: "obw7", circuitName: "Obwód gniazd ogólnych 2" });
+  });
+
+  /** Kolor idzie z POZYCJI obwodu na liście, więc lista musi być ta sama co
+   *  w rozdzielnicy — inaczej ten sam obwód ma na rzucie inną barwę niż na schemacie. */
+  it("kolor bierze z pozycji obwodu na PODANEJ liście, nie z kolejności na piętrze", () => {
+    const naPietrze = el("gniazdko", { x: 30, y: 40, floor: "pietro" });
+    const wczesniejsze = circuit({ id: "obw1", name: "Ładowarka EV — Garaż", elements: [el("ladowarkaEV", { floor: "parter" })] });
+    const ten = circuit({ elements: [naPietrze] });
+    const trasaTego = (obwody: Circuit[]) =>
+      buildCableRoutes(panel, obwody, [naPietrze], [], []).find((r) => r.id === naPietrze.id)!;
+    // Ten SAM punkt, ta sama kondygnacja — różni je wyłącznie to, że obwód stoi na
+    // liście raz pierwszy, a raz drugi. Kolor musi za tym pójść.
+    expect(trasaTego([wczesniejsze, ten]).color).not.toBe(trasaTego([ten]).color);
+  });
+
+  it("projekt jednokondygnacyjny rysuje się dokładnie tak jak dotąd", () => {
+    const a = el("gniazdko", { x: 30, y: 40 });
+    const b = el("oswietlenie", { x: 80, y: 10 });
+    const obwody = [circuit({ elements: [a, b] })];
+    expect(buildCableRoutes(panel, obwody, [a, b], [], [], [], 1, [a, b])).toEqual(
+      buildCableRoutes(panel, obwody, [a, b], [], [])
+    );
+  });
+
+  /**
+   * Domknięcie pary z `estimateRoutesByFloor`: zasilanie idzie do łącznika, także
+   * przez strop. Oprawa na piętrze nie ma na swoim rzucie żadnej kreski (jej kabel
+   * przechodzi przez strop), ale na kondygnacji ŁĄCZNIKA widać trasę zasilania do
+   * niego — i to jest ta sama trasa, którą liczy kosztorys.
+   */
+  it("łącznik sterujący oprawą z innego piętra dostaje trasę zasilania na SWOIM", () => {
+    const lampaG = el("oswietlenie", { x: 100, y: 100, floor: "pietro", room: "Klatka g", lightGroup: [7] });
+    const lacznikP = el("wlacznikSchodowy", { x: 40, y: 60, floor: "parter", room: "Klatka", lightGroup: [7] });
+    const routes = buildCableRoutes(
+      panel,
+      [circuit({ type: "oswietlenie", elements: [lampaG] })],
+      [lacznikP],
+      [],
+      [],
+      [],
+      1,
+      [lampaG, lacznikP]
+    );
+    const zasilanie = routes.filter((r) => r.kind === "zasilanie");
+    expect(zasilanie).toHaveLength(1);
+    // Trasa kończy się na ŁĄCZNIKU, nie na oprawie z innego piętra.
+    expect(zasilanie[0].points[zasilanie[0].points.length - 1]).toMatchObject({ x: 40, y: 60 });
+    // Id trasy musi być id PRAWDZIWEGO elementu — inaczej `pruneRouteOverrides`
+    // w store'ie skasowałby ręczne poprawki tej trasy przy pierwszej edycji rysunku.
+    expect(zasilanie[0].id).toBe(lampaG.id);
+  });
+});
+
 describe("buildCableRoutes — sterowanie (łącznik -> oprawa)", () => {
   const panel = { x: 0, y: 0 };
   function circuit(over: Partial<Circuit> = {}): Circuit {
