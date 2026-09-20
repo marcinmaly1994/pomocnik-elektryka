@@ -166,6 +166,12 @@ function elementy(): InstallationElement[] {
     // --- Garaż ---
     eP("dom-ev", "ladowarkaEV", GARAZ, 0.25, 1.5, { dedicated: true, note: "Ładowarka EV" }),
     eP("dom-garaz-zewn", "oswietlenieZewn", GARAZ, 0.25, 0.6, { note: "Nad bramą" }),
+    // Zwykłe (niehermetyczne, niededykowane) gniazdo warsztatowe — jedyny punkt w domu,
+    // który realnie pokazuje regułę ZASTOSOWANIE: garaż jest suchy, więc jego zwykłe
+    // gniazda idą osobnym obwodem od zwykłych gniazd mieszkalnych, mimo że oba
+    // pomieszczenia są suche. Kotłownia i pralnia tego NIE pokazują — są mokre
+    // (patrz `WET_ROOM_TYPES`), więc ich gniazda separuje wcześniejsza reguła `byRoom`.
+    eP("dom-garaz-gn3", "gniazdko", GARAZ, 2.75, 1.5, { note: "Warsztatowe" }),
     eP("dom-garaz-gn1", "gniazdkoHerm", GARAZ, 0.25, 6.5),
     eP("dom-garaz-gn2", "gniazdkoHerm", GARAZ, 2.75, 6.5),
     eP("dom-garaz-sw", "wlacznik", GARAZ, 2.75, 3.3),

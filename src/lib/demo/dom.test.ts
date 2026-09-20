@@ -41,8 +41,8 @@ describe("dom — parter", () => {
   const payload = zbudujProjektDom();
   const naParterze = payload.draft.elements.filter((e) => e.floor === "f1");
 
-  it("ma rozdzielnicę główną i pięćdziesiąt elementów", () => {
-    expect(naParterze.length).toBe(50);
+  it("ma rozdzielnicę główną i pięćdziesiąt jeden elementów", () => {
+    expect(naParterze.length).toBe(51);
     expect(naParterze.some((e) => e.type === "rozdzielnica")).toBe(true);
   });
 
@@ -54,16 +54,28 @@ describe("dom — parter", () => {
     }
   });
 
-  it("kotłownia i pralnia NIE dzielą obwodu gniazd z pokojami", () => {
+  // Kotłownia i pralnia są MOKRE (patrz `WET_ROOM_TYPES` w lib/design.ts), więc ich
+  // gniazda separuje wcześniejsza reguła `byRoom` w `computeCircuits` — osobny obwód
+  // na pomieszczenie, niezależnie od zastosowania. Reguła ZASTOSOWANIE (`sucheWgZastosowania`)
+  // działa dopiero NIŻEJ i tylko na zwykłych gniazdach w pomieszczeniach SUCHYCH — z
+  // pomieszczeń gospodarczych na parterze jedynym suchym jest garaż. Dlatego to on,
+  // a nie kotłownia/pralnia, jest jedynym miejscem, które tę regułę realnie pokazuje:
+  // zwykłe gniazdko warsztatowe w garażu nie może wylądować na jednym obwodzie ze
+  // zwykłymi gniazdkami salonu, mimo że oba pomieszczenia są suche.
+  it("zwykłe gniazdko w garażu NIE dzieli obwodu ze zwykłymi gniazdkami salonu", () => {
     const rs = payload.draft.roomShapes.filter((r) => r.floor === "f1");
     const obwody = computeCircuits(naParterze, rs);
-    const gospodarcze = new Set(["Kotłownia", "Pralnia"]);
-    const mieszkalne = new Set(["Salon"]);
+    const zwykleGniazdka = (elements: typeof naParterze) =>
+      elements.filter((e) => e.type === "gniazdko" && !e.dedicated);
+
+    // Test nie może być pusty: musi istnieć obwód, który faktycznie niesie zwykłe
+    // gniazdko z garażu — inaczej poniższa pętla przechodzi bez sprawdzenia niczego.
+    const zGarazem = obwody.filter((c) => zwykleGniazdka(c.elements).some((e) => e.room === "Garaż"));
+    expect(zGarazem.length, "żaden obwód nie zawiera zwykłego gniazdka z garażu").toBeGreaterThan(0);
+
     for (const c of obwody) {
-      const pokoje = new Set(c.elements.map((e) => e.room));
-      const maGosp = [...pokoje].some((x) => gospodarcze.has(x));
-      const maMieszk = [...pokoje].some((x) => mieszkalne.has(x));
-      expect(maGosp && maMieszk, `obwód ${c.name} miesza gospodarcze z pokojami`).toBe(false);
+      const pokoje = new Set(zwykleGniazdka(c.elements).map((e) => e.room));
+      expect(pokoje.has("Garaż") && pokoje.has("Salon"), `obwód ${c.name} miesza garaż z salonem`).toBe(false);
     }
   });
 });
