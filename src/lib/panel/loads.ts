@@ -10,7 +10,7 @@
 
 import type { CableRoute, Circuit, ElementType, Floor, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, MOUNTING_HEIGHTS_M, mountingHeightM, punktowObciazenia } from "@/lib/elements";
-import { computeLightGroups, isLightControl, isLightPoint } from "@/lib/lightGroups";
+import { computeLightGroups, isLightControl, isLightPoint, manualGroups } from "@/lib/lightGroups";
 import { crossesGeometry, routeAlongWalls } from "./routing";
 import { kolorObwodu, KOLOR_BEZ_OBWODU } from "./circuits";
 import { kolejnoscLancucha } from "./lancuch";
@@ -501,6 +501,60 @@ export function estimateRoutesByFloor(
     total += r.totalM + pion;
     if (r.worstCaseM + pion > worst) worst = r.worstCaseM + pion;
   }
+  /**
+   * OGNIWA STEROWANIA PRZEZ STROP — te, których pętla wyżej nie ma jak zobaczyć.
+   *
+   * Grupa rozpięta między kondygnacje rozpadała się tam na dwa kawałki (na dole łącznik
+   * bez oprawy, na górze oprawa bez łącznika), bo każdy obrót pętli dostaje elementy
+   * JEDNEGO piętra i z nich liczy grupy. Żaden z kawałków nie tworzył ogniwa, więc
+   * przewód sterowniczy przez strop nie kosztował NIC. Zmierzone przed tą poprawką:
+   * oprawa na piętrze związana ręcznym numerem z łącznikiem na parterze dawała dokładnie
+   * tyle samo metrów, co ta sama oprawa BEZ żadnej grupy.
+   *
+   * `pionMiedzyKondygnacjami` tego nie ratował: dolicza jedno przejście przez strop na
+   * kondygnację dla ZASILANIA, a sterowanie to osobny kabel i osobne przejście.
+   *
+   * Przebieg jest dokładką, nie zamiennikiem, i nie może liczyć niczego dwa razy:
+   * pętla wyżej widzi tylko jedno piętro naraz, więc KAŻDE jej ogniwo ma oba końce na
+   * tej samej kondygnacji — a tu biorą się wyłącznie te, które kondygnacje przekraczają.
+   *
+   * Pion to suma dwóch rzeczy i obie są potrzebne: przejście przez strop
+   * (`pionMiedzyKondygnacjami`) plus różnica wysokości montażu obu końców. Łącznik na
+   * 1,1 m i oprawa pod stropem piętra wyżej to naprawdę 4,3 m pionu przy kondygnacji
+   * 2,8 m, a nie 2,8.
+   *
+   * Czego to NIE liczy: ogniw W OBRĘBIE piętra, na którym grupa nie ma własnego
+   * łącznika. Oprawa na piętrze sterowana z dołu jest zasilana wprost z rozdzielnicy
+   * (patrz `estimateRoutes`), więc jej sąsiadka z tej samej grupy dostaje własną trasę
+   * zamiast pętli od poprzedniej. To starsze uproszczenie modelu obwodu i osobna sprawa
+   * od brakującego pionu.
+   */
+  let najdluzszePrzezStrop = 0;
+  if (kontekst.wszystkieElementy && kondygnacje) {
+    const zapasNaPunkt =
+      kontekst.zapasNaPunktM !== undefined && kontekst.zapasNaPunktM >= 0 ? kontekst.zapasNaPunktM : ZAPAS_MONTAZOWY_M;
+    for (const o of ogniwaPrzezStrop(kontekst.wszystkieElementy, elements)) {
+      const skala = scales[o.light.floor];
+      if (!(typeof skala === "number" && skala > 0)) continue;
+      // Bez geometrii, czyli Manhattan: trasy dwóch różnych pięter nie da się skleić
+      // w jedną drogę po ścianach, a wynik ma o tym mówić wprost.
+      const bieg = biegPoziomyJedn(o.bestFrom, o.light, o.bestFrom.type, o.light.type);
+      szacunek = true;
+      const wysokoscOd = wysokoscKondygnacji(kondygnacje.find((f) => f.id === o.bestFrom.floor));
+      const wysokoscDo = wysokoscKondygnacji(kondygnacje.find((f) => f.id === o.light.floor));
+      const pion =
+        pionMiedzyKondygnacjami(o.bestFrom.floor, o.light.floor, kondygnacje) +
+        pionMiedzyPunktami(mountingHeightM(o.bestFrom, wysokoscOd), mountingHeightM(o.light, wysokoscDo));
+      const dlugosc = bieg.jedn * skala + pion + zapasNaPunkt;
+      total += dlugosc;
+      zapas += zapasNaPunkt;
+      if (dlugosc > najdluzszePrzezStrop) najdluzszePrzezStrop = dlugosc;
+    }
+  }
+  // Do spadku napięcia to ogniwo DOKŁADA się do najdłuższej trasy, tak samo jak
+  // `najdluzszeSterowanie` w `estimateRoutes`: przybliżenie świadomie w stronę dłuższą.
+  worst += najdluzszePrzezStrop;
+
   return { worstCaseM: round1(worst), totalM: round1(total), zapasM: round1(zapas), szacunek };
 }
 
@@ -807,6 +861,41 @@ function grupySterowania(elements: InstallationElement[], groups: Map<string, (n
   return byGroup;
 }
 
+
+/**
+ * Ogniwa sterowania, których końce siedzą na RÓŻNYCH kondygnacjach — dokładka dla
+ * `estimateRoutesByFloor`, patrz akapit przy jej wywołaniu.
+ *
+ * Liczy grupy dla CAŁEGO budynku, a nie piętro po piętrze, bo inaczej grupa rozpięta
+ * między kondygnacje w ogóle się nie pojawia. To jednak wymaga jednego zawężenia,
+ * i jest ono konieczne, nie ostrożnościowe: numery grup nadaje się w zasięgu
+ * KONDYGNACJI, więc automatyczna grupa 1 na parterze i automatyczna 1 na piętrze to
+ * dwa różne obwody o tym samym numerze. Sklejone, wyhodowałyby przewód między pokojami,
+ * których nic nie łączy. Dlatego liczy się wyłącznie numer WPISANY RĘCZNIE po obu
+ * stronach — a to zarazem jedyny sposób, w jaki grupę przez strop da się w tym modelu
+ * wyrazić (automat jej nigdy nie utworzy).
+ */
+function ogniwaPrzezStrop(
+  wszystkie: InstallationElement[],
+  elements: InstallationElement[]
+): { bestFrom: InstallationElement; light: InstallationElement }[] {
+  const byGroup = grupySterowania(wszystkie, computeLightGroups(wszystkie));
+  const out: { bestFrom: InstallationElement; light: InstallationElement }[] = [];
+  byGroup.forEach((bucket, numer) => {
+    const reczne = {
+      controls: bucket.controls.filter((e) => manualGroups(e).includes(numer)),
+      lights: bucket.lights.filter((e) => manualGroups(e).includes(numer)),
+    };
+    if (reczne.controls.length === 0 || reczne.lights.length === 0) return;
+    if (new Set([...reczne.controls, ...reczne.lights].map((e) => e.floor)).size < 2) return;
+    for (const o of ogniwaSterowania(new Map([[numer, reczne]]))) {
+      // Ogniwa w obrębie jednego piętra policzyła już pętla po kondygnacjach.
+      if (o.bestFrom.floor === o.light.floor) continue;
+      if (elements.some((e) => e.id === o.light.id)) out.push(o);
+    }
+  });
+  return out;
+}
 
 /**
  * Trasy STEROWANIA: łącznik → oprawa (i, gdy jeden łącznik steruje kilkoma
