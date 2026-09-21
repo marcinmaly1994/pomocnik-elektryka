@@ -93,6 +93,7 @@ import { DlugosciOdcinkowSciany } from "@/components/design/DlugosciOdcinkowScia
 import { PodpowiedzPelnyEkran } from "@/components/design/PodpowiedzPelnyEkran";
 import { PodpowiedzKolka } from "@/components/design/PodpowiedzKolka";
 import {
+  czyOdnotowacKolko,
   czyPokazacPodpowiedzKolka,
   czyPokazacPowitanie,
   odczytajStanNawigacji,
@@ -1225,6 +1226,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * żeby kolejne kręcenie przedłużało komunikat, zamiast nie robić nic.
    */
   const [sygnalKolka, setSygnalKolka] = useState(0);
+  /** Kiedy ostatnio odnotowaliśmy kręcenie kółkiem — patrz `czyOdnotowacKolko`. */
+  const ostatnieKolkoRef = useRef(0);
   const [seenBefore] = useState(hasSeenOnboarding);
 
   /**
@@ -1277,9 +1280,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    */
   const zglosKolkoBezCtrl = useCallback(() => {
     if (!czyPokazacPodpowiedzKolka(stanNawigacji, coachMark === "nawigacja")) return;
+    // Jedno kręcenie kółkiem to kilkadziesiąt zdarzeń, a każde szło dotąd prosto
+    // w stan, czyli w pełne przerysowanie tej zakładki razem z płótnem. Dymek i tak
+    // wyglądał identycznie — patrz `ODSTEP_ZGLOSZEN_KOLKA`.
+    const teraz = Date.now();
+    if (!czyOdnotowacKolko(ostatnieKolkoRef.current, teraz)) return;
+    ostatnieKolkoRef.current = teraz;
     setSygnalKolka((n) => n + 1);
   }, [stanNawigacji, coachMark]);
-
 
   /**
    * Koniec wgrywania podkładu — przycięciem albo z jego pominięciem.

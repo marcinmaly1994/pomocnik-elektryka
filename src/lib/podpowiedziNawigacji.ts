@@ -79,3 +79,32 @@ export function czyPokazacPowitanie(stan: StanNawigacji): boolean {
 export function czyPokazacPodpowiedzKolka(stan: StanNawigacji, powitanieOtwarte: boolean): boolean {
   return !stan.umieNawigowac && !powitanieOtwarte;
 }
+
+/**
+ * Najkrótszy odstęp między zgłoszeniami „kółko bez `Ctrl`" [ms].
+ *
+ * Kręcenie kółkiem to nie jedno zdarzenie, tylko kilkadziesiąt — przeglądarka wysyła
+ * je gęsto przez cały gest. Każde szło dotąd prosto w stan Reacta, czyli w pełne
+ * przerysowanie zakładki rysunku razem z płótnem.
+ *
+ * Zmierzone: 100 tików kosztowało 61 ms więcej niż te same 100 tików u kogoś, kto
+ * podpowiedź ma już wyłączoną. To ~0,6 ms na tik — realne, ale niewielkie, i warto
+ * o tym wiedzieć, zanim ktoś uzna ten próg za lekarstwo na zacinanie. Jest lekarstwem
+ * na PRACĘ BEZ CELU: dymek i tak wygląda identycznie.
+ *
+ * 400 ms, bo komunikat żyje 2600 ms (`CZAS_POKAZU` w `PodpowiedzKolka`). Odstęp
+ * kilkakrotnie od niego krótszy zachowuje sens licznika — dalsze kręcenie nadal
+ * przedłuża komunikat, tylko sześć razy na gest zamiast pięćdziesięciu.
+ */
+export const ODSTEP_ZGLOSZEN_KOLKA = 400;
+
+/**
+ * Czy to kręcenie kółkiem warto jeszcze odnotować.
+ *
+ * Osobno i bez zegara w środku, żeby dało się sprawdzić testem: `teraz` przychodzi
+ * z zewnątrz, tak samo jak w pozostałych funkcjach tego pliku stan przychodzi
+ * z `odczytajStanNawigacji`.
+ */
+export function czyOdnotowacKolko(ostatnieZgloszenie: number, teraz: number): boolean {
+  return teraz - ostatnieZgloszenie >= ODSTEP_ZGLOSZEN_KOLKA;
+}
