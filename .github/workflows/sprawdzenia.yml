@@ -1,0 +1,113 @@
+# Cztery bramki, które do tej pory istniały wyłącznie na maszynie autora.
+#
+# Praca idzie przez pull requesty, a jedyne, co pilnowało, żeby gałąź nie weszła
+# na `main` czerwona, to pamięć o ręcznym uruchomieniu `npm run typecheck`,
+# `npm run lint`, `npm test` i `npx playwright test`. Zestaw e2e trwa ponad cztery
+# minuty, więc akurat jego pomija się najchętniej — a to on sprawdza rzeczy, których
+# testy jednostkowe nie dosięgają: prawdziwe kliknięcia w płótno Konvy, dotyk przez
+# CDP i tryb offline na ZBUDOWANEJ paczce.
+name: Sprawdzenia
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Zestaw kontowy loguje się na WSPÓLNE konto testowe i kasuje z niego zapisy
+# o nazwach zaczynających się od „E2E-TEST” (patrz e2e/_konto.ts). Dwa przebiegi
+# naraz kasowałyby sobie dane nawzajem, więc ustawiają się w kolejce. Bez
+# `cancel-in-progress`: przerwany w połowie test zostawiłby po sobie śmieci na koncie.
+concurrency:
+  group: sprawdzenia-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Szybkie bramki osobno od e2e, żeby literówka w typach wracała po minucie,
+  # a nie po sześciu.
+  bramki:
+    name: Typy, lint, testy jednostkowe
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  e2e:
+    name: Testy end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # Tylko Chromium: `playwright.config.ts` nie ustawia `browserName` w żadnym
+      # projekcie, więc oba (`dev` i `offline`) jadą po domyślnej przeglądarce.
+      # `--with-deps` dokłada biblioteki systemowe, których obraz GitHuba nie ma.
+      - name: Zainstaluj przeglądarkę
+        run: npx playwright install --with-deps chromium
+
+      # Konfiguracja Supabase — w DWÓCH kawałkach, bo mają różną wagę.
+      #
+      # Adres i klucz „anon" tylko konfigurują aplikację; gdy ich brak, `SUPABASE_CONFIGURED`
+      # jest fałszem i część interfejsu wygląda inaczej niż na maszynie autora. Dlatego
+      # bierzemy je z sekretów, a gdy ich nie ma — z `.env.example`, czyli z tego, co
+      # dostaje nowa osoba po sklonowaniu repozytorium.
+      #
+      # Dane konta testowego WYŁĄCZNIE z sekretów, nigdy z `.env.example`. Te w przykładzie
+      # mogą być nieaktualne, a `KONTO_DOSTEPNE` (e2e/_konto.ts) sprawdza tylko, czy pola
+      # są niepuste — podstawienie starego hasła zamieniłoby czyste POMINIĘCIE dwóch
+      # plików w dwa fałszywe błędy logowania. Bez sekretów zestaw przechodzi w całości,
+      # po prostu bez testów chmury.
+      - name: Przygotuj .env
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+        run: |
+          if [ -n "$VITE_SUPABASE_URL" ]; then
+            {
+              echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL"
+              echo "VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY"
+            } > .env
+            echo "Adres i klucz Supabase: z sekretów repozytorium."
+          else
+            grep -E '^VITE_SUPABASE_' .env.example > .env
+            echo "Adres i klucz Supabase: z .env.example."
+          fi
+          if [ -n "$E2E_TEST_EMAIL" ] && [ -n "$E2E_TEST_PASSWORD" ]; then
+            {
+              echo "E2E_TEST_EMAIL=$E2E_TEST_EMAIL"
+              echo "E2E_TEST_PASSWORD=$E2E_TEST_PASSWORD"
+            } >> .env
+            echo "Konto testowe: ustawione, testy chmury wejdą do zestawu."
+          else
+            echo "Konto testowe: brak sekretów, e2e/konto.spec.ts i rooms-reconcile-cloud.spec.ts zostaną POMINIĘTE."
+          fi
+
+      # `playwright.config.ts` sam podnosi oba serwery: deweloperski na 5173 i
+      # `vite preview` na 5190 (ten drugi buduje paczkę, bo tryb offline da się
+      # sprawdzić WYŁĄCZNIE na zbudowanej wersji). `CI` ustawia GitHub z automatu,
+      # więc `reuseExistingServer` jest tu wyłączone.
+      - run: npx playwright test
+
+      - name: Ślady z nieudanych testów
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-slady
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
