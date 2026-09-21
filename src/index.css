@@ -133,6 +133,26 @@ body {
   .pe-coach {
     animation: pe-fade-in 180ms ease-out both;
   }
+  /* Kontrolka, na którą właśnie pokazuje dymek. Puls GAŚNIE sam po trzech taktach:
+     ma raz przyciągnąć wzrok, a nie migać dopóty, dopóki ktoś czyta. Miedziany obrys
+     zostaje potem nieruchomo, czyli tak długo, jak dymek. */
+  .pe-wskazane {
+    /* OBRYS, nie `border-color`: obwódkę kontrolki maluje klasa Tailwinda z warstwy
+       utilities, która stoi w arkuszu za tą regułą i wygrywa przy równej wadze.
+       Obrys nie ma z czym kolidować i sam układa się wzdłuż zaokrąglenia rogów. */
+    outline: 2px solid #c1793f;
+    outline-offset: 1px;
+    animation: pe-puls 1.5s ease-in-out 3;
+  }
+  @keyframes pe-puls {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(193 121 63 / 0);
+    }
+    50% {
+      box-shadow: 0 0 0 5px rgb(193 121 63 / 0.22);
+    }
+  }
   @keyframes pe-slide-up {
     from {
       opacity: 0;
@@ -161,6 +181,11 @@ body {
     .pe-onboarding-enter,
     .pe-onboarding-leave,
     .pe-coach {
+      animation: none;
+    }
+    /* Bez ruchu, ale WSKAZANIE zostaje: sama obwódka nadal mówi, o którą kontrolkę
+       chodzi — a o to w tym podświetleniu chodzi, nie o animację. */
+    .pe-wskazane {
       animation: none;
     }
     .pe-onboarding-bar {

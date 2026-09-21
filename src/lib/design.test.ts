@@ -676,10 +676,28 @@ describe("kadrOtwarcia", () => {
   const OKNO = { w: 900, h: 600 };
   const GRANICE = { min: 0.4, max: 4 };
 
-  it("wgrany rzut bez rysunku: podkład dopasowany do okna, kadr w zerze", () => {
+  /**
+   * Rzut wgrany i nic jeszcze nie narysowane to STAN POCZĄTKOWY całej aplikacji —
+   * dokładnie ten, w którym rzut siadał w lewym górnym rogu i przy oknie szerszym
+   * niż on sam wyglądał na zepchnięty w bok, z pustą siatką po prawej.
+   */
+  it("wgrany rzut bez rysunku: dopasowany do okna i WYŚRODKOWANY", () => {
     const k = kadrOtwarcia(null, ARKUSZ, OKNO, GRANICE, MANUAL_DRAW_SCALE_MPU);
-    expect(k.widok).toEqual({ x: 0, y: 0 });
-    expect(k.zoom).toBeCloseTo(Math.min(OKNO.w / ARKUSZ.w, OKNO.h / ARKUSZ.h), 2);
+    const dopasowanie = Math.min(OKNO.w / ARKUSZ.w, OKNO.h / ARKUSZ.h);
+    // Nie WIĘKSZE niż dopasowanie, bo rzut ma się zmieścić w całości (patrz test niżej).
+    expect(k.zoom).toBeLessThanOrEqual(dopasowanie);
+    expect(k.zoom).toBeGreaterThan(dopasowanie - 0.01);
+    const srodekOkna = { x: k.widok.x + OKNO.w / k.zoom / 2, y: k.widok.y + OKNO.h / k.zoom / 2 };
+    expect(srodekOkna.x).toBeCloseTo(ARKUSZ.w / 2, 6);
+    expect(srodekOkna.y).toBeCloseTo(ARKUSZ.h / 2, 6);
+  });
+
+  it("wyśrodkowany rzut mieści się w oknie w CAŁOŚCI", () => {
+    const k = kadrOtwarcia(null, ARKUSZ, OKNO, GRANICE, MANUAL_DRAW_SCALE_MPU);
+    expect(k.widok.x).toBeLessThanOrEqual(0);
+    expect(k.widok.y).toBeLessThanOrEqual(0);
+    expect(k.widok.x + OKNO.w / k.zoom).toBeGreaterThanOrEqual(ARKUSZ.w);
+    expect(k.widok.y + OKNO.h / k.zoom).toBeGreaterThanOrEqual(ARKUSZ.h);
   });
 
   /**

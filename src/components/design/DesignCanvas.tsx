@@ -31,6 +31,8 @@ import {
   type Przyciagniecie,
 } from "@/lib/drawSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
+import { dystansPalcow, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from "@/lib/gestDotyku";
+import { useDlugiePrzytrzymanie } from "@/hooks/useDlugiePrzytrzymanie";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { glyphBoxSize, groupLabelAnchors, groupLabelCandidates } from "@/lib/glyphs";
@@ -117,6 +119,25 @@ export function minZoom(): number {
   return okno < PROG_WASKIEGO_EKRANU ? MIN_ZOOM_WASKI : MIN_ZOOM;
 }
 
+/** Jak długo po dotknięciu ignorujemy dorobiony klik [ms]. Patrz `klikAlboDotyk`. */
+const ECHO_TAPU_MS = 400;
+
+/**
+ * Punkt EKRANU zdarzenia — działa i dla myszy, i dla dotyku.
+ *
+ * Menu kontekstowe i okienka pozycjonują się współrzędnymi okna, a `TouchEvent` nie
+ * ma `clientX`: niesie je dopiero pojedynczy palec w `changedTouches`.
+ */
+function pozycjaEkranu(e: KonvaEventObject<MouseEvent | TouchEvent>): { x: number; y: number } {
+  const evt = e.evt as MouseEvent & { changedTouches?: TouchList };
+  const palec = evt.changedTouches?.[0];
+  return palec ? { x: palec.clientX, y: palec.clientY } : { x: evt.clientX, y: evt.clientY };
+}
+
+/** Numer przycisku myszy albo `0` dla dotyku, który żadnego nie ma. */
+function przyciskMyszy(e: KonvaEventObject<MouseEvent | TouchEvent>): number {
+  return "button" in e.evt ? e.evt.button : 0;
+}
 /** Ładuje obraz podkładu z data URL. Zwraca `null`, dopóki się nie wczyta. */
 function useBackgroundImage(src: string | null): HTMLImageElement | null {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -244,6 +265,13 @@ interface DesignCanvasProps {
    *  skąd wziąć aktualnej wartości do pokazania. */
   zoom: number;
   onZoomChange: (z: number) => void;
+  /**
+   * Ktoś kręcił kółkiem nad rzutem BEZ `Ctrl`, czyli przewinął stronę zamiast
+   * przybliżyć plan. Płótno samo nie wie, czy to pomyłka, czy świadome przewijanie —
+   * zgłasza więc tylko fakt, a `DesignTab` decyduje, czy warto coś podpowiedzieć
+   * (patrz `podpowiedziNawigacji.ts`).
+   */
+  onKolkoBezCtrl?: () => void;
   onSelectElement: (id: string, shiftKey: boolean) => void;
   onSelectWall: (id: string) => void;
   onEditElement: (id: string) => void;
@@ -253,6 +281,14 @@ interface DesignCanvasProps {
    *  alternatywa dla przycisku „Zakończ" i klawisza Enter, ten sam wzorzec menu
    *  kontekstowego co przy elementach/ścianach/pomieszczeniach. */
   onWallDrawContextMenu: (clientX: number, clientY: number) => void;
+  /**
+   * „Dopasuj widok" wywołane z PŁÓTNA — patrz `handleStageDblClick`.
+   *
+   * Ta sama czynność, co ikona w pasku: kadr wraca na rysunek. Na dotyku ikona bywa
+   * daleko od kciuka, a po kilku szczypnięciach droga powrotna jest tym, czego szuka
+   * się najpierw.
+   */
+  onDopasujWidok?: () => void;
   /** Klik w ścianę W TRYBIE „otwory" — zamiast zaznaczać ścianę, dokłada na niej
    *  drzwi w najbliższym do kliknięcia miejscu (`point`/`angle` już policzone
    *  przez `nearestPointOnPolyline`, DesignTab tylko zapisuje). */
@@ -395,12 +431,14 @@ export function DesignCanvas({
   onPointerMove,
   zoom,
   onZoomChange,
+  onKolkoBezCtrl,
   onSelectElement,
   onSelectWall,
   onEditElement,
   onElementContextMenu,
   onWallContextMenu,
   onWallDrawContextMenu,
+  onDopasujWidok,
   onWallClickForOpening,
   onSelectOpening,
   onOpeningContextMenu,
@@ -508,6 +546,98 @@ export function DesignCanvas({
   /** Punkt planu, który ma zostać pod kursorem po zmianie powiększenia Ctrl+kółkiem.
    *  Nakładany dopiero po przerysowaniu płótna — patrz `useLayoutEffect` niżej. */
   const kotwicaZoomRef = useRef<{ planX: number; planY: number; kursorX: number; kursorY: number } | null>(null);
+  /**
+   * Długie przytrzymanie palcem = to samo menu, co prawy przycisk myszy.
+   *
+   * JEDNA instancja na całe płótno, a nie po jednej na węzeł: naraz trzyma się
+   * palcem jedno miejsce, a wspólny licznik sam gasi gest zaczęty gdzie indziej.
+   */
+  const przytrzymanie = useDlugiePrzytrzymanie();
+
+  /** Ostatnie dotknięcie obsłużone przez `onTap`/`onDblTap` — patrz `klikAlboDotyk`. */
+  const echoTapuRef = useRef(0);
+
+  /**
+   * TA SAMA czynność pod kliknięciem myszy i pod dotknięciem palca.
+   *
+   * Konva gasi domyślne zachowanie dotknięcia, gdy palec trafi w KSZTAŁT — dosłownie
+   * `if (shape.preventDefault() && evt.cancelable && isTouch) evt.preventDefault()`
+   * w jej `Stage`. Przeglądarka nie dorabia wtedy ani `mousedown`, ani `click`, a na
+   * nich stoi cała obsługa myszy w tym pliku.
+   *
+   * Stąd dziura, która przez długi czas wyglądała na działającą aplikację: dotknięcie
+   * PUSTEGO płótna dorabia klik i idzie zwykłą drogą (dlatego rysowanie dotykiem
+   * działa), ale dotknięcie czegokolwiek NARYSOWANEGO było ślepe. Zmierzone: dotknięcie
+   * ściany dawało wyłącznie `touchstart`/`touchend`, a mysz w tym samym punkcie —
+   * `mousedown`/`mouseup`/`click` z trafieniem w `Line`.
+   *
+   * `echoTapuRef` to zabezpieczenie na przeglądarki, które oddają `touchstart` jako
+   * nieodwoływalny: wtedy dorobiony klik JEDNAK przyjdzie, a bez straży wstawiłby
+   * drugie drzwi w to samo miejsce albo skasował drugi punkt trasy.
+   */
+  function klikAlboDotyk(akcja: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void) {
+    return {
+      onClick: (e: KonvaEventObject<MouseEvent>) => {
+        if (Date.now() - echoTapuRef.current < ECHO_TAPU_MS) return;
+        akcja(e);
+      },
+      onTap: (e: KonvaEventObject<TouchEvent>) => {
+        echoTapuRef.current = Date.now();
+        akcja(e);
+      },
+    };
+  }
+
+  /** To samo co `klikAlboDotyk`, dla dwukliku i podwójnego dotknięcia. */
+  function dwuklikAlboDotyk(akcja: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void) {
+    return {
+      onDblClick: (e: KonvaEventObject<MouseEvent>) => {
+        if (Date.now() - echoTapuRef.current < ECHO_TAPU_MS) return;
+        akcja(e);
+      },
+      onDblTap: (e: KonvaEventObject<TouchEvent>) => {
+        echoTapuRef.current = Date.now();
+        akcja(e);
+      },
+    };
+  }
+
+  /** Rozstaw palców i powiększenie z chwili ROZPOCZĘCIA szczypania — patrz `zoomZeSzczypania`. */
+  const szczypanieRef = useRef<{ dystans: number; zoom: number } | null>(null);
+  /**
+   * Trwa szczypanie — na ten czas NIC na płótnie nie jest przeciągalne.
+   *
+   * Konva prowadzi własne przeciąganie na PIERWSZYM wskaźniku i nie obchodzi jej, ilu
+   * palców dotyczy gest. Szczypanie zaczyna się tak samo jak przeciągnięcie — jednym
+   * palcem postawionym na czymś narysowanym — więc gdy palce się rozjeżdżają, Konva
+   * czyta ruch tego pierwszego jako przeciągnięcie i przesuwa element pod nim.
+   * Zmierzone: gniazdko w (100, 99) jedn. po jednym szczypnięciu lądowało w (90, 100),
+   * z wpisem do projektu i do historii cofania.
+   *
+   * `preventDefault` w `prowadz` tego NIE zatrzymuje — gasi domyślne zachowanie
+   * przeglądarki (przewijanie strony), a przeciąganie Konvy to zwykły JavaScript.
+   *
+   * Dlatego zdejmujemy `draggable`, i to działa z powodu, który warto znać: Konva
+   * zakłada „zalążek" przeciągnięcia już przy `touchstart`, ale w stanie `ready` —
+   * właściwy `dragstart` odpala dopiero pierwszy ruch. Zdjęte `draggable` kasuje taki
+   * zalążek po cichu, BEZ `dragstart` i `dragend`, więc do store'a nie idzie nic
+   * (gdyby przeciąganie zdążyło się zacząć, Konva wywołałaby `dragend` i zapisała
+   * przesunięcie — stąd przełącznik przy DRUGIM palcu, a nie przy pierwszym ruchu).
+   *
+   * Stan, nie ref, bo `draggable` jest propsem węzłów i musi przejść przez render.
+   * Jedno dodatkowe przerysowanie na gest — koszt bez znaczenia wobec cichej zmiany
+   * w projekcie.
+   */
+  const [szczypie, setSzczypie] = useState(false);
+  /**
+   * Bieżący kadr i sposób zmiany powiększenia — dla nasłuchu dotyku.
+   *
+   * Nasłuch montuje się RAZ (patrz efekt niżej: musi być nie-pasywny, żeby wolno mu
+   * było zatrzymać przewijanie strony), a kadr zmienia się co klatkę gestu. Bez refa
+   * trzeba by go przepinać po każdym przesunięciu — w środku szczypania.
+   */
+  const kadrRef = useRef({ zoom, widok, onZoomChange });
+  kadrRef.current = { zoom, widok, onZoomChange };
   /**
    * Wystawia sterowanie kadrem na zewnątrz. `useLayoutEffect`, bo `DesignTab` woła
    * `przesunOPiksele` ze SWOJEGO efektu układu — a efekty układu dziecka wchodzą przed
@@ -1182,7 +1312,7 @@ export function DesignCanvas({
     onMarqueeSelect(ids);
   }
 
-  function handleStageClick(e: KonvaEventObject<MouseEvent>) {
+  function handleStageClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
     // Patrz komentarz przy `elementDragJustEndedRef`: to zdarzenie „click” jest
     // ECHEM zakończonego przeciągnięcia elementu, nie nowym kliknięciem — gasimy
     // flagę i kończymy, zanim narzędzie „elementy” zdąży postawić drugi element
@@ -1199,7 +1329,11 @@ export function DesignCanvas({
     // Środkowy przycisk (1) przesuwa widok — patrz `zacznijPrzesuwanieSrodkowym`.
     // Bez tej straży puszczenie rolki po przesunięciu planu stawiałoby element
     // albo czyściło zaznaczenie w miejscu, w którym akurat skończył się gest.
-    if (e.evt.button === 2 || e.evt.button === 1) return;
+    if (przyciskMyszy(e) === 2 || przyciskMyszy(e) === 1) return;
+    // Klik DOROBIONY przez przeglądarkę po przytrzymaniu palca, w miejscu, w którym
+    // właśnie otworzyło się menu kontekstowe. Bez tego menu wstawałoby i natychmiast
+    // stawiało pod sobą element albo dokładało punkt ściany (patrz `pochlonEchoKliku`).
+    if (przytrzymanie.pochlonEchoKliku()) return;
     const stage = e.target.getStage();
     if (!stage) return;
     const p = planPoint(stage);
@@ -1266,6 +1400,22 @@ export function DesignCanvas({
    *  zawsze dociera tutaj niezależnie od tego, gdzie dokładnie kliknięto. Poza
    *  rysowaniem ściany (albo z mniej niż dwoma punktami — `finishWall` i tak nic
    *  by nie zapisał) domyślne menu przeglądarki zostaje nietknięte. */
+  /**
+   * Dwuklik (albo podwójne dotknięcie) w PUSTE miejsce planu dopasowuje widok.
+   *
+   * Tylko w „Zaznacz" i „Przesuń widok" — czyli tam, gdzie dwuklik i tak nic nie robił.
+   * W narzędziach rysujących każde kliknięcie coś stawia, więc dwa pod rząd to dwa
+   * punkty ściany albo dwa gniazdka, a nie prośba o przeramowanie.
+   *
+   * `e.target === stage` znaczy „poza wszystkim, co narysowane": podkład i siatka leżą
+   * na warstwie z `listening={false}`, więc wgrany rzut nie zasłania tego gestu.
+   */
+  function handleStageDblClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
+    if (toolMode !== "zaznacz" && toolMode !== "pan") return;
+    if (e.target !== e.target.getStage()) return;
+    onDopasujWidok?.();
+  }
+
   function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
     if (toolMode !== "sciany" || drawingWall.length < 2) return;
     e.evt.preventDefault();
@@ -1286,7 +1436,13 @@ export function DesignCanvas({
    * jeszcze stary rozmiar i większe wartości zostałyby przycięte.
    */
   function handleWheel(e: KonvaEventObject<WheelEvent>) {
-    if (!e.evt.ctrlKey && !e.evt.metaKey) return; // bez Ctrl — zwykłe przewijanie strony
+    if (!e.evt.ctrlKey && !e.evt.metaKey) {
+      // Strona przewija się dalej — o to chodzi, bo płótno zajmuje pół ekranu i bez
+      // tego nie dałoby się jej przewinąć znad rzutu. Meldujemy tylko, że ktoś
+      // właśnie mógł chcieć czegoś innego.
+      onKolkoBezCtrl?.();
+      return;
+    }
     e.evt.preventDefault();
     const el = kontenerRef.current;
     if (!el) return;
@@ -1336,6 +1492,113 @@ export function DesignCanvas({
     // powiększeniu wypadł w tym samym miejscu ekranu.
     setWidok({ x: k.planX - k.kursorX / zoom, y: k.planY - k.kursorY / zoom });
   }, [zoom]);
+
+  /**
+   * Przybliżenie z rozstawu palców — kotwiczone w punkcie MIĘDZY nimi.
+   *
+   * Ta sama droga, co przy `Ctrl` + kółku: nowe powiększenie idzie do rodzica, a
+   * `kotwicaZoomRef` pilnuje, żeby punkt planu spod środka gestu został pod nim
+   * (patrz `useLayoutEffect` wyżej). Dzięki temu szczypanie i przesuwanie dwoma
+   * palcami dzieją się naraz, bez osobnej obsługi: kotwica liczona jest za każdym
+   * razem z BIEŻĄCEGO położenia palców.
+   */
+
+  /**
+   * Szczypanie dwoma palcami — jedyne przybliżanie rzutu, jakie ma sens na dotyku.
+   *
+   * `Ctrl` + kółko, czyli sposób na myszy, na telefonie nie istnieje; zostawały
+   * przyciski `−` i `+` w pasku, a szczypanie — po które sięga tam odruchowo każdy —
+   * powiększało CAŁĄ STRONĘ razem z paskami.
+   *
+   * NATYWNY nasłuch, a nie `onTouchMove` Reacta, i to jest tu sedno: React podpina
+   * `touchmove` jako PASYWNY, czyli taki, któremu nie wolno zatrzymać przewijania.
+   * Bez `preventDefault` przeglądarka przewijałaby stronę w trakcie gestu (płótno ma
+   * `touch-action: pan-x pan-y`, żeby JEDEN palec nadal przewijał), a my zmienialibyśmy
+   * przy tym powiększenie — dwie rzeczy naraz i żadna do końca.
+   *
+   * Montowany RAZ. Wszystko, co zmienne, idzie przez `kadrRef`: przepinanie nasłuchu
+   * po każdej klatce gestu gubiłoby zdarzenia w jego trakcie.
+   */
+  useEffect(() => {
+    const el = kontenerRef.current;
+    if (!el) return;
+
+    /** Dwa pierwsze palce jako punkty ekranu. Trzeci i dalsze gest ignoruje. */
+    function palce(e: TouchEvent): [PunktEkranu, PunktEkranu] | null {
+      if (e.touches.length < 2) return null;
+      const a = e.touches[0];
+      const b = e.touches[1];
+      return [
+        { x: a.clientX, y: a.clientY },
+        { x: b.clientX, y: b.clientY },
+      ];
+    }
+
+    function zacznij(e: TouchEvent) {
+      const para = palce(e);
+      if (!para) return;
+      szczypanieRef.current = { dystans: dystansPalcow(para[0], para[1]), zoom: kadrRef.current.zoom };
+      // Drugi palec wylądował — zdejmujemy przeciąganie, ZANIM przyjdzie pierwszy ruch
+      // (patrz `szczypie`). React zbiera tę zmianę w mikrozadaniu, czyli przed kolejnym
+      // zdarzeniem dotyku, więc węzły są już nieprzeciągalne, gdy Konva zaczyna czytać
+      // ruch palców.
+      setSzczypie(true);
+    }
+
+    function prowadz(e: TouchEvent) {
+      const start = szczypanieRef.current;
+      const para = palce(e);
+      if (!start || !para || !el) return;
+      // Gest należy do nas — strona nie ma się przy okazji przewijać.
+      e.preventDefault();
+      const { zoom: zoomTeraz, widok: widokTeraz, onZoomChange: zmienZoom } = kadrRef.current;
+      const nowaSkala = zoomZeSzczypania(start.zoom, start.dystans, dystansPalcow(para[0], para[1]), {
+        min: minZoom(),
+        max: MAX_ZOOM,
+      });
+      if (nowaSkala === zoomTeraz) return;
+      /**
+       * Kotwicą jest punkt MIĘDZY palcami — dokładnie tak, jak kursor przy `Ctrl` +
+       * kółku (patrz `handleWheel` i `useLayoutEffect` wyżej). Liczona za każdym razem
+       * z BIEŻĄCEGO położenia palców, więc przesuwanie dwoma palcami dzieje się przy
+       * okazji, bez osobnej obsługi.
+       */
+      const ramka = el.getBoundingClientRect();
+      const srodek = srodekPalcow(para[0], para[1]);
+      const kursorX = srodek.x - ramka.left;
+      const kursorY = srodek.y - ramka.top;
+      kotwicaZoomRef.current = {
+        planX: widokTeraz.x + kursorX / zoomTeraz,
+        planY: widokTeraz.y + kursorY / zoomTeraz,
+        kursorX,
+        kursorY,
+      };
+      zmienZoom(nowaSkala);
+    }
+
+    /** Jeden palec to już nie szczypanie. Kolejne rozsunięcie zaczyna gest OD NOWA,
+     *  od bieżącego powiększenia — inaczej po puszczeniu i ponownym złapaniu rzut
+     *  skakałby do rozstawu sprzed przerwy. */
+    function zakoncz(e: TouchEvent) {
+      if (e.touches.length >= 2) return;
+      szczypanieRef.current = null;
+      // Przeciąganie wraca dopiero, gdy z ekranu zejdzie DRUGI palec. Palec, który
+      // został, ma już swój zalążek przeciągnięcia skasowany, więc nie zacznie
+      // przesuwać elementu w środku gestu — ruszy dopiero następne dotknięcie.
+      setSzczypie(false);
+    }
+
+    el.addEventListener("touchstart", zacznij, { passive: false });
+    el.addEventListener("touchmove", prowadz, { passive: false });
+    el.addEventListener("touchend", zakoncz);
+    el.addEventListener("touchcancel", zakoncz);
+    return () => {
+      el.removeEventListener("touchstart", zacznij);
+      el.removeEventListener("touchmove", prowadz);
+      el.removeEventListener("touchend", zakoncz);
+      el.removeEventListener("touchcancel", zakoncz);
+    };
+  }, []);
 
   function zacznijPrzesuwanie(e: ReactPointerEvent<HTMLDivElement>) {
     // Środkowy przycisk działa ZAWSZE, lewy tylko w trybie „Przesuń widok" —
@@ -1395,6 +1658,16 @@ export function DesignCanvas({
         width: rozmiarOkna.w,
         height: rozmiarOkna.h,
         cursor: przesuwa ? "grabbing" : toolMode === "pan" ? "grab" : undefined,
+        /**
+         * Jeden palec zostaje PRZEGLĄDARCE (przewijanie strony nad płótnem, stawianie
+         * elementów dotknięciem), dwa palce bierzemy my.
+         *
+         * `pan-x pan-y` znaczy dokładnie tyle: przewijaj, ale nie powiększaj. Bez tego
+         * szczypanie powiększało CAŁĄ STRONĘ razem z paskami, zamiast rzutu. `none`
+         * dałoby nam wszystko, ale odebrałoby telefonowi przewijanie akurat nad tym,
+         * co zajmuje pół ekranu.
+         */
+        touchAction: "pan-x pan-y",
       }}
       onPointerDown={zacznijPrzesuwanie}
       onPointerMove={przesuwajSrodkowym}
@@ -1420,8 +1693,20 @@ export function DesignCanvas({
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
-        onClick={handleStageClick}
+        // Scena też musi słuchać dotknięcia: kształt, który wypuszcza zdarzenie dalej
+        // (np. krawędź pomieszczenia w trybie rysowania), dobąbelkuje tu jako `tap`,
+        // a nie jako klik — patrz `klikAlboDotyk`.
+        {...klikAlboDotyk(handleStageClick)}
+        {...dwuklikAlboDotyk(handleStageDblClick)}
         onContextMenu={handleStageContextMenu}
+        // Przytrzymanie na SAMEJ scenie zatwierdza rysowaną ścianę — jedyna droga do
+        // tego menu poza prawym przyciskiem i Enterem, czyli dwiema rzeczami, których
+        // telefon nie ma. Węzły pod spodem gaszą bąbelkowanie same (patrz `cancelBubble`
+        // w `useDlugiePrzytrzymanie`), więc menu elementu nie zamienia się w menu ściany.
+        {...przytrzymanie.propsy((x, y) => {
+          if (toolMode !== "sciany" || drawingWall.length < 2) return;
+          onWallDrawContextMenu(x, y);
+        })}
         style={{ background: "#F7F9FB", cursor: toolMode === "pan" ? "grab" : toolMode === "zaznacz" ? "default" : "crosshair" }}
       >
         {/* `key` zalezny od siatki PRZEMONTOWUJE warstwe przy przelaczeniu. Zwykla
@@ -1633,7 +1918,7 @@ export function DesignCanvas({
                   stroke="transparent"
                   strokeWidth={1}
                   hitStrokeWidth={14}
-                  onClick={(e) => {
+                  {...klikAlboDotyk((e) => {
                     /**
                      * W trybie „pomieszczenie" LEWY klik należy do rysunku, nie do
                      * sąsiada. `hitStrokeWidth` (14 jedn.) ciągnie się wzdłuż całego
@@ -1663,12 +1948,13 @@ export function DesignCanvas({
                       return;
                     }
                     onSelectRoom(r.id);
-                  }}
+                  })}
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     e.cancelBubble = true;
                     onRoomContextMenu(r.id, e.evt.clientX, e.evt.clientY);
                   }}
+                  {...przytrzymanie.propsy((x, y) => onRoomContextMenu(r.id, x, y))}
                 />
 
                 {/* Podpisy pomieszczenia pod jego nazwą, jeden pod drugim — wymiary
@@ -1735,19 +2021,21 @@ export function DesignCanvas({
                   fontSize={fontNazwy}
                   fill={r.color}
                   listening={roomInteractive}
-                  onClick={(e) => {
+                  {...klikAlboDotyk((e) => {
                     e.cancelBubble = true;
                     onSelectRoom(r.id);
-                  }}
-                  onDblClick={(e) => {
+                  })}
+                  {...dwuklikAlboDotyk((e) => {
                     e.cancelBubble = true;
-                    onRoomNameDblClick(r.id, e.evt.clientX, e.evt.clientY);
-                  }}
+                    const poz = pozycjaEkranu(e);
+                    onRoomNameDblClick(r.id, poz.x, poz.y);
+                  })}
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     e.cancelBubble = true;
                     onRoomContextMenu(r.id, e.evt.clientX, e.evt.clientY);
                   }}
+                  {...przytrzymanie.propsy((x, y) => onRoomContextMenu(r.id, x, y))}
                 />
 
                 {/* Uchwyty narożników — tylko przy zaznaczonym pomieszczeniu. Podgląd
@@ -1771,7 +2059,8 @@ export function DesignCanvas({
                       fill="#fff"
                       stroke={r.color}
                       strokeWidth={px(2)}
-                      draggable
+                      // Nieprzeciągalny na czas szczypania — patrz `szczypie`.
+                      draggable={!szczypie}
                       onDragMove={(e) => {
                         const newPts = [...pts];
                         newPts[i * 2] = e.target.x();
@@ -1789,6 +2078,7 @@ export function DesignCanvas({
                         e.cancelBubble = true;
                         onRoomContextMenu(r.id, e.evt.clientX, e.evt.clientY);
                       }}
+                      {...przytrzymanie.propsy((x, y) => onRoomContextMenu(r.id, x, y))}
                     />
                   ))}
               </Group>
@@ -1818,7 +2108,7 @@ export function DesignCanvas({
                   hitStrokeWidth={20}
                   lineCap="round"
                   lineJoin="round"
-                  onClick={(e) => {
+                  {...klikAlboDotyk((e) => {
                     // W trybie „otwory" klik w ścianę dokłada na niej drzwi
                     // zamiast ją zaznaczać — patrz `onWallClickForOpening`.
                     if (toolMode === "otwory") {
@@ -1838,12 +2128,13 @@ export function DesignCanvas({
                     if (toolMode !== "zaznacz") return;
                     e.cancelBubble = true;
                     onSelectWall(w.id);
-                  }}
+                  })}
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     e.cancelBubble = true;
                     onWallContextMenu(w.id, e.evt.clientX, e.evt.clientY);
                   }}
+                  {...przytrzymanie.propsy((x, y) => onWallContextMenu(w.id, x, y))}
                 />
                 {/* Uchwyty narożników — edycja ściany PO zapisie, ten sam wzorzec co
                     przeciąganie narożników pomieszczenia: podgląd imperatywny podczas
@@ -1862,7 +2153,8 @@ export function DesignCanvas({
                       fill="#fff"
                       stroke="#C1793F"
                       strokeWidth={px(2)}
-                      draggable
+                      // Nieprzeciągalny na czas szczypania — patrz `szczypie`.
+                      draggable={!szczypie}
                       onDragMove={(e) => {
                         const newPts = [...pts];
                         newPts[i * 2] = e.target.x();
@@ -1879,6 +2171,7 @@ export function DesignCanvas({
                         e.cancelBubble = true;
                         onWallContextMenu(w.id, e.evt.clientX, e.evt.clientY);
                       }}
+                      {...przytrzymanie.propsy((x, y) => onWallContextMenu(w.id, x, y))}
                     />
                   ))}
                 {/* Długości odcinków ściany. Podczas rysowania wymiar było widać (patrz
@@ -1954,15 +2247,16 @@ export function DesignCanvas({
             return (
               <Group
                 key={o.id}
-                onClick={(e) => {
+                {...klikAlboDotyk((e) => {
                   e.cancelBubble = true;
                   onSelectOpening(o.id);
-                }}
+                })}
                 onContextMenu={(e) => {
                   e.evt.preventDefault();
                   e.cancelBubble = true;
                   onOpeningContextMenu(o.id, e.evt.clientX, e.evt.clientY);
                 }}
+                {...przytrzymanie.propsy((x, y) => onOpeningContextMenu(o.id, x, y))}
               >
                 <Rect
                   x={o.x}
@@ -2153,26 +2447,39 @@ export function DesignCanvas({
                   lineJoin="round"
                   listening={routeInteractive}
                   hitStrokeWidth={10}
-                  onClick={(e) => {
+                  {...klikAlboDotyk((e) => {
                     e.cancelBubble = true;
                     onSelectRoute(r.id);
-                  }}
-                  onDblClick={(e) => {
+                  })}
+                  /**
+                   * Dwuklik dokłada trasie punkt — ZAWSZE, także gdy nie była jeszcze
+                   * zaznaczona.
+                   *
+                   * Stała tu wcześniej straż „pierwszy dwuklik na niezaznaczonej trasie
+                   * tylko ją zaznacza", mająca chronić przed przypadkowym zniekształceniem.
+                   * Nie chroniła przed niczym: dwuklik niesie w sobie pojedyncze kliknięcie,
+                   * które zaznacza trasę ułamek sekundy wcześniej, więc do straży docierał
+                   * już stan „zaznaczona" i punkt dokładał się i tak. Zmierzone tak samo
+                   * myszą i palcem.
+                   *
+                   * Gorzej: straż zadziałałaby tylko wtedy, gdy przerysowanie nie zdąży
+                   * między kliknięciem a dwuklikiem — czyli ten sam gest na wolniejszej
+                   * maszynie robiłby co innego. Niewidoczna loteria jest gorsza od obu
+                   * jawnych zachowań, więc straż odpada.
+                   *
+                   * Przypadkowej zmiany pilnuje to, co widać: pasek pod rysunkiem mówi
+                   * wprost „dwuklik dokłada punkt", zmiana siedzi w projekcie (więc cofa ją
+                   * `Ctrl+Z`), a przy poprawionej trasie stoi „Cofnij do trasy automatycznej".
+                   */
+                  {...dwuklikAlboDotyk((e) => {
                     e.cancelBubble = true;
-                    if (!isSelRoute) {
-                      // pierwszy dwuklik na jeszcze niezaznaczonej trasie tylko ją
-                      // zaznacza — dokładanie punktu wymaga świadomego DRUGIEGO dwukliku,
-                      // żeby przypadkowe trafienie od razu nie zniekształcało trasy
-                      onSelectRoute(r.id);
-                      return;
-                    }
                     const stage = e.target.getStage();
                     const p = stage && planPoint(stage);
                     if (!p) return;
                     const segIdx = nearestRouteSegmentIndex(p, r.points);
                     const withInserted = [...r.points.slice(0, segIdx + 1), p, ...r.points.slice(segIdx + 1)];
                     onSetRoutePoints(r.id, withInserted.slice(1, -1));
-                  }}
+                  })}
                 />
                 {/* Uchwyty ZAŁAMAŃ trasy — bez pierwszego/ostatniego punktu, bo te są
                     zawsze przypięte do rzeczywistej pozycji rozdzielnicy/łącznika i
@@ -2190,7 +2497,8 @@ export function DesignCanvas({
                       fill="#fff"
                       stroke="#C1793F"
                       strokeWidth={px(2)}
-                      draggable
+                      // Nieprzeciągalny na czas szczypania — patrz `szczypie`.
+                      draggable={!szczypie}
                       onDragMove={(e) => {
                         const mid = r.points.slice(1, -1).map((mp, mi) => (mi === i ? { x: e.target.x(), y: e.target.y() } : mp));
                         const newPts = [r.points[0], ...mid, r.points[r.points.length - 1]].flatMap((pp) => [pp.x, pp.y]);
@@ -2202,12 +2510,12 @@ export function DesignCanvas({
                         const mid = r.points.slice(1, -1).map((mp, mi) => (mi === i ? { x, y } : mp));
                         onSetRoutePoints(r.id, mid);
                       }}
-                      onDblClick={(e) => {
+                      {...dwuklikAlboDotyk((e) => {
                         e.cancelBubble = true;
                         const mid = r.points.slice(1, -1).filter((_, mi) => mi !== i);
                         if (mid.length === 0) onResetRoute(r.id);
                         else onSetRoutePoints(r.id, mid);
-                      }}
+                      })}
                     />
                   ))}
               </Group>
@@ -2618,11 +2926,14 @@ export function DesignCanvas({
                 // Pozostałe narzędzia (ściany, pomieszczenia…) zostają wyłączone:
                 // tam przeciąganie elementu kolidowałoby z klikaniem kolejnych
                 // punktów rysowanej figury.
-                draggable={toolMode === "zaznacz" || toolMode === "elementy"}
+                // `!szczypie`: na czas gestu dwoma palcami element przestaje być
+                // przeciągalny, inaczej Konva przesuwałaby go tym samym palcem, którym
+                // się przybliża rzut — patrz `szczypie`.
+                draggable={(toolMode === "zaznacz" || toolMode === "elementy") && !szczypie}
                 onMouseDown={(e) => {
                   e.cancelBubble = true;
                 }}
-                onClick={(e) => {
+                {...klikAlboDotyk((e) => {
                   /**
                    * W trybie WSTAWIANIA klik ma postawić kolejny element — także wtedy,
                    * gdy trafi w już stojący.
@@ -2643,17 +2954,20 @@ export function DesignCanvas({
                    */
                   if (toolMode === "elementy") return;
                   e.cancelBubble = true;
-                  onSelectElement(el.id, e.evt.shiftKey);
-                }}
-                onDblClick={(e) => {
+                  // Shift istnieje tylko przy myszy; na dotyku dokładanie do zaznaczenia
+                  // idzie przełącznikiem „Zaznacz kilka" (patrz DesignTab.tsx).
+                  onSelectElement(el.id, "shiftKey" in e.evt ? e.evt.shiftKey : false);
+                })}
+                {...dwuklikAlboDotyk((e) => {
                   e.cancelBubble = true;
                   onEditElement(el.id);
-                }}
+                })}
                 onContextMenu={(e) => {
                   e.evt.preventDefault();
                   e.cancelBubble = true;
                   onElementContextMenu(el.id, e.evt.clientX, e.evt.clientY);
                 }}
+                {...przytrzymanie.propsy((x, y) => onElementContextMenu(el.id, x, y))}
                 onDragStart={() => {
                   // jeśli przeciągany element jest częścią większego zaznaczenia — przesuwamy
                   // całą grupę naraz, nie tylko element pod kursorem

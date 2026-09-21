@@ -65,6 +65,26 @@ export interface EditorToolbarProps {
   onZoomChange: (z: number) => void;
   /** Dopasowanie rzutu do dostępnego miejsca — wraca też do trybu automatycznego. */
   onDopasuj: () => void;
+  /**
+   * Kotwica dymka o nawigacji po rzucie — grupa przycisków powiększenia.
+   *
+   * Dymek tłumaczy `Ctrl` + kółko i wciśniętą rolkę, ale strzałką pokazuje właśnie
+   * TE przyciski: to jedyna droga do przybliżenia, która działa wszędzie, także na
+   * dotyku (patrz `CoachMark` w DesignTab). Ten sam wzorzec, co refy narzędzi
+   * w `ToolRail`.
+   *
+   * Ref PRZEZ WYWOŁANIE, nie obiekt — tak samo jak `onToolRef` obok: pasek przerysowuje
+   * się przy każdej zmianie powiększenia, a rodzic musi wtedy dostać aktualny węzeł.
+   */
+  onGrupaZoomuRef?: (el: HTMLDivElement | null) => void;
+  /**
+   * Czy grupa powiększenia ma być WSKAZANA — pulsującą, miedzianą obwódką.
+   *
+   * Włączane na czas dymka o nawigacji: strzałka dymka celuje w bok paska, a same
+   * przyciski są szare wśród kilkunastu innych szarych ikon. Podświetlenie mówi
+   * „TE, nie tamte", zanim ktokolwiek zacznie czytać.
+   */
+  wskazZoom?: boolean;
   /** Widoczność siatki — osobno od `snapOn`, patrz komentarz przy obu kontrolkach. */
   gridOn: boolean;
   onGridChange: (v: boolean) => void;
@@ -134,6 +154,8 @@ export function EditorToolbar({
   zoom,
   onZoomChange,
   onDopasuj,
+  onGrupaZoomuRef,
+  wskazZoom,
   pelnyEkran,
   onTogglePelnyEkran,
   przypinacz,
@@ -413,7 +435,10 @@ export function EditorToolbar({
 
       {/* Powiększenie WIDOKU. Wcześniej dostępne tylko przez Ctrl+scroll, czyli
           praktycznie niewykrywalne — teraz ma jawną kontrolkę z wartością. */}
-      <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-border p-0.5">
+      <div
+        ref={(el) => onGrupaZoomuRef?.(el)}
+        className={`ml-auto flex items-center gap-0.5 rounded-lg border border-border p-0.5${wskazZoom ? " pe-wskazane" : ""}`}
+      >
         <button
           onClick={() => onZoomChange(clampZoom(zoom - ZOOM_STEP))}
           disabled={zoom <= minZoom()}

@@ -668,6 +668,28 @@ export interface KadrPlotna {
 }
 
 /**
+ * Powiększenie, przy którym `obszar` mieści się w oknie — w granicach suwaka.
+ *
+ * Osobna funkcja, a nie dwie linijki w `kadrOtwarcia`, bo to jedyne miejsce,
+ * w którym wolno zdecydować, w którą stronę zaokrąglić — a od tego zależy, czy
+ * dopasowany rzut mieści się w oknie w całości.
+ *
+ * Zaokrąglenie do dwóch miejsc W DÓŁ, bo ta sama wartość ląduje w pasku jako „85%”.
+ * W dół, a nie do najbliższego: zaokrąglenie w górę potrafi dołożyć pół procentu,
+ * przy którym dopasowany rysunek wystaje poza okno o kilka pikseli — niewidocznie,
+ * dopóki kadr siedział w rogu, ale po wyśrodkowaniu ucina go z obu stron naraz.
+ */
+function zoomDopasowania(
+  obszar: { w: number; h: number },
+  okno: { w: number; h: number },
+  granice: { min: number; max: number }
+): number {
+  const dopasowanie = Math.min(okno.w / obszar.w, okno.h / obszar.h);
+  if (!Number.isFinite(dopasowanie)) return granice.min;
+  return Math.min(granice.max, Math.max(granice.min, Math.floor(dopasowanie * 100) / 100));
+}
+
+/**
  * Kadr, w którym otwiera się rysunek — dopasowany do TREŚCI, nie do arkusza.
  *
  * Arkusz to 1000 × 700 jedn., czyli 50 × 35 m przy rysowaniu od zera. Dom o 140 m²
@@ -727,17 +749,17 @@ export function kadrOtwarcia(
   }
 
   const obszar = rysunek ?? { x: 0, y: 0, w: podklad!.w, h: podklad!.h };
-  const dopasowanie = Math.min(okno.w / obszar.w, okno.h / obszar.h);
-  // Zaokrąglenie do dwóch miejsc, bo ta sama wartość ląduje w pasku jako „87%".
-  const zoom = Number.isFinite(dopasowanie)
-    ? Math.round(Math.min(granice.max, Math.max(granice.min, dopasowanie)) * 100) / 100
-    : granice.min;
+  const zoom = zoomDopasowania(obszar, okno, granice);
 
-  if (!tresc) return { zoom, widok: { x: 0, y: 0 } };
-
-  // Środek treści na środek okna. Przy powiększeniu uciętym do granicy okno bywa
-  // węższe od rysunku — wtedy wyśrodkowanie i tak pokazuje jego środek, zamiast
-  // zaczynać od rogu i uciąć resztę niewidocznie.
+  // Środek treści na środek okna — a gdy rysunku jeszcze nie ma, środek PODKŁADU.
+  // Wgrany rzut bez ani jednej narysowanej ściany siadał dotąd w lewym górnym rogu
+  // (kadr w zerze) i przy oknie szerszym niż on sam wyglądał na zepchnięty w bok,
+  // z pustą siatką po prawej. Wyśrodkowanie dotyczy więc OBU przypadków: tego, co
+  // narysowane, a zanim cokolwiek powstanie — tego, co wgrane.
+  //
+  // Przy powiększeniu uciętym do granicy okno bywa węższe od rysunku — wtedy
+  // wyśrodkowanie i tak pokazuje jego środek, zamiast zaczynać od rogu i uciąć
+  // resztę niewidocznie.
   return {
     zoom,
     widok: {
