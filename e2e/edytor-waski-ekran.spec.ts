@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { otworzKatalogElementow, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
+import { otworzKatalogElementow, otworzMenuPaska, zamknijMenuPaska, odslonNarzedziaRysowania } from "./_flow";
 
 /**
  * Edytor planu na ekranie telefonu.
@@ -209,7 +209,7 @@ test("telefon w pelnym ekranie: karta narzedzi jest WASKA i nie zakrywa rysunku"
   await page.setViewportSize(TELEFON);
   await otworzEdytor(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
-  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  await odslonNarzedziaRysowania(page);
 
   const karta = (await page.getByTestId("karta-narzedzi").boundingBox())!;
   // Sam pionowy pasek ikon plus uchwyt zwijania — nie pol ekranu.
@@ -218,20 +218,34 @@ test("telefon w pelnym ekranie: karta narzedzi jest WASKA i nie zakrywa rysunku"
   expect(TELEFON.width - (karta.x + karta.width)).toBeGreaterThan(200);
 });
 
-test("telefon w pelnym ekranie: karte da sie schowac PALCEM, bez najezdzania myszą", async ({ page }) => {
-  await page.setViewportSize(TELEFON);
-  await otworzEdytor(page);
-  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+/**
+ * Test nazywa sie „PALCEM", a robil to mysza — i to nie byla drobna niescislosc.
+ *
+ * Mysza tej drogi nie da sie sprawdzic: sam ruch kursora na uchwyt wysuwa karte
+ * (`PAS_WYZWALAJACY`, patrz `odslonNarzedziaRysowania`), wiec klikniecie i najechanie
+ * daja ten sam skutek i test przechodzil niezaleznie od tego, czy dotyk dziala.
+ * Przy okazji przegrywal wyscig z wlasnym ruchem myszy — ten sam, ktory wywrocil
+ * dwa przebiegi CI w innych plikach. Palec nie wysyla `mousemove`, wiec dopiero on
+ * odroznia jedno od drugiego.
+ */
+test.describe("telefon w pelnym ekranie, dotykiem", () => {
+  test.use({ hasTouch: true });
 
-  const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
-  await uchwyt.click();
-  const zamknij = page.getByRole("button", { name: "Schowaj narzędzia rysowania" });
-  await expect(zamknij).toBeVisible();
-  await zamknij.click();
+  test("telefon w pelnym ekranie: karte da sie schowac PALCEM, bez najezdzania myszą", async ({ page }) => {
+    await page.setViewportSize(TELEFON);
+    await otworzEdytor(page);
+    await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
 
-  // Karta zjechala za krawedz, a uchwyt wrocil — droga w obie strony jest klikalna.
-  await expect(zamknij).toBeHidden();
-  await expect(uchwyt).toBeVisible();
+    const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
+    await uchwyt.tap();
+    const zamknij = page.getByRole("button", { name: "Schowaj narzędzia rysowania" });
+    await expect(zamknij).toBeVisible();
+    await zamknij.tap();
+
+    // Karta zjechala za krawedz, a uchwyt wrocil — droga w obie strony dziala palcem.
+    await expect(zamknij).toBeHidden();
+    await expect(uchwyt).toBeVisible();
+  });
 });
 
 test("monitor w pelnym ekranie: pasek narzedzi bez zmian — i tak byl pionowy", async ({ page }) => {
@@ -239,29 +253,10 @@ test("monitor w pelnym ekranie: pasek narzedzi bez zmian — i tak byl pionowy",
   await otworzEdytor(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
 
-  /**
-   * NAJECHANIE na krawedz, nie klikniecie uchwytu — i to nie jest kosmetyka.
-   *
-   * Uchwyt ma 24 px szerokosci i stoi przy samej krawedzi, a `onMouseMove` wysuwa
-   * panel juz przy `x <= 24` (PAS_WYZWALAJACY w DesignTab.tsx). Playwright, zeby
-   * kliknac, musi najpierw przesunac mysz na srodek uchwytu, czyli mniej wiecej
-   * na 12 px — i tym samym ruchem wysuwa panel, po czym uchwyt znika z drzewa
-   * (`pelnyEkran && !widocznaLewa`). Klikniecie trafia w pustke: „element was
-   * detached from the DOM, retrying" az do 30-sekundowego limitu.
-   *
-   * Na szybkiej maszynie przerysowanie nie zdazylo miedzy ruchem a kliknieciem
-   * i test przechodzil; pierwszy przebieg CI, na wolniejszym runnerze, przegral
-   * ten wyscig. Niewidoczna loteria — a najechanie jest zreszta droga, ktora
-   * uchwyt reklamuje wprost: „najedz na krawedz albo kliknij".
-   *
-   * Ten sam haczyk czai sie pod pozostalymi klknieciami w uchwyty (tutaj i w
-   * fullscreen.spec.ts); na razie przegral tylko ten jeden.
-   */
-  await page.mouse.move(10, MONITOR.height / 2);
-  const railLoc = page.locator('nav[aria-label="Narzędzia rysowania"]');
-  await expect(railLoc).toBeVisible();
+  // Najechaniem, nie kliknieciem uchwytu — powod w `odslonNarzedziaRysowania`.
+  await odslonNarzedziaRysowania(page);
 
-  const rail = (await railLoc.boundingBox())!;
+  const rail = (await page.locator('nav[aria-label="Narzędzia rysowania"]').boundingBox())!;
   // Pionowy: wyzszy niz szerszy, tak jak od zawsze powyzej progu `md`.
   expect(rail.height).toBeGreaterThan(rail.width);
 });

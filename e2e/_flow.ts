@@ -88,3 +88,27 @@ export async function wczytajPrzyklad(page: Page, id: "mieszkanie" | "dom"): Pro
   await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
   await page.getByRole("button", { name: nazwa }).click();
 }
+
+/**
+ * Odsłania lewy panel narzędzi w pełnym ekranie — NAJECHANIEM na krawędź.
+ *
+ * Uchwyt „Pokaż narzędzia rysowania" ma 24 px szerokości i stoi przy samej krawędzi,
+ * a `onMouseMove` wysuwa panel już przy `x <= 24` (`PAS_WYZWALAJACY` w DesignTab.tsx).
+ * Playwright, żeby kliknąć, musi najpierw przesunąć mysz na środek uchwytu, czyli
+ * mniej więcej na 12 px — i tym samym ruchem wysuwa panel, po czym uchwyt znika
+ * z drzewa (`pelnyEkran && !widocznaLewa`). Kliknięcie trafia w pustkę:
+ * „element was detached from the DOM, retrying" aż do 30-sekundowego limitu.
+ *
+ * Na szybkiej maszynie przerysowanie nie zdąży między ruchem a kliknięciem i test
+ * przechodzi — dlatego lokalnie nie widać tego nigdy, a w CI wywróciło dwa przebiegi
+ * pod rząd, za każdym razem inny test. Niewidoczna loteria.
+ *
+ * Stąd JEDNO wejście dla wszystkich testów, które panel tylko OTWIERAJĄ po drodze.
+ * Testy, których tematem jest samo otwieranie uchwytem, robią to u siebie wprost —
+ * i robią to dotknięciem, bo tylko ono odróżnia kliknięcie od najechania.
+ */
+export async function odslonNarzedziaRysowania(page: Page): Promise<void> {
+  const okno = page.viewportSize()!;
+  await page.mouse.move(10, okno.height / 2);
+  await page.locator('[data-testid="karta-narzedzi"], nav[aria-label="Narzędzia rysowania"]').first().waitFor({ state: "visible" });
+}
