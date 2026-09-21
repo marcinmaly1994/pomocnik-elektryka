@@ -72,6 +72,22 @@ export function accentForDevice(d: PanelDevice): string {
   return manualDef ? manualDef.accent : "#16202B";
 }
 
+/**
+ * Czy ten aparat wolno skasować.
+ *
+ * Rozłącznik główny jest punktem, z którego wychodzi cała reszta — rozdzielnica bez
+ * niego nie jest rozdzielnicą, więc kasowanie go nie ma sensownego wyniku. Zaślepka
+ * to z kolei puste miejsce na szynie, a nie aparat: nie ma tam czego kasować, bo
+ * zniknięcie „niczego" nie zmienia rysunku.
+ *
+ * Osobna funkcja, bo pytają o to DWA miejsca i muszą odpowiadać tak samo: kółko „×"
+ * na licu aparatu (`PanelRender`) i przycisk w oknie edycji (`EditDeviceModal`).
+ * Rozjazd między nimi znaczyłby, że jedna droga kasuje coś, czego druga broni.
+ */
+export function daSieSkasowac(d: Pick<PanelDevice, "kind">): boolean {
+  return d.kind !== "main" && d.kind !== "blank";
+}
+
 /** Wyciąga prąd znamionowy z etykiety aparatu (np. "B16" -> 16, "C25 3-faz." -> 25). */
 export function ratedCurrent(label: string): number {
   const m = String(label || "").match(/(\d+)/);

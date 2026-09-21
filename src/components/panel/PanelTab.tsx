@@ -532,6 +532,7 @@ export function PanelTab() {
           device={devices.find((d) => d.uid === edytowany) ?? null}
           onClose={() => setEdytowany(null)}
           onSave={zapiszEdycje}
+          onDelete={removeDevice}
           supply3f={supply3f}
         />
 
