@@ -2,6 +2,8 @@ import { describe, expect, it, beforeEach } from "vitest";
 import {
   KLUCZ_POWITANIE,
   KLUCZ_UMIE,
+  ODSTEP_ZGLOSZEN_KOLKA,
+  czyOdnotowacKolko,
   czyPokazacPodpowiedzKolka,
   czyPokazacPowitanie,
   odczytajStanNawigacji,
@@ -101,5 +103,27 @@ describe("podpowiedzi nawigacji po rzucie", () => {
     it("klucze są rozłączne — jedno nie kasuje drugiego", () => {
       expect(KLUCZ_POWITANIE).not.toBe(KLUCZ_UMIE);
     });
+  });
+});
+
+describe("czyOdnotowacKolko", () => {
+  it("pierwsze krecenie odnotowuje sie zawsze", () => {
+    expect(czyOdnotowacKolko(0, 1_000_000)).toBe(true);
+  });
+
+  it("tiki gestsze niz odstep sa pomijane — to one byly praca bez celu", () => {
+    const start = 1_000_000;
+    expect(czyOdnotowacKolko(start, start + 16)).toBe(false);
+    expect(czyOdnotowacKolko(start, start + ODSTEP_ZGLOSZEN_KOLKA - 1)).toBe(false);
+  });
+
+  it("po odstepie znow sie odnotowuje — dalsze krecenie ma przedluzac komunikat", () => {
+    const start = 1_000_000;
+    expect(czyOdnotowacKolko(start, start + ODSTEP_ZGLOSZEN_KOLKA)).toBe(true);
+    expect(czyOdnotowacKolko(start, start + 2000)).toBe(true);
+  });
+
+  it("odstep jest wyraznie krotszy niz zycie komunikatu — inaczej dymek gasnalby miedzy zgloszeniami", () => {
+    expect(ODSTEP_ZGLOSZEN_KOLKA).toBeLessThan(2600 / 2);
   });
 });
