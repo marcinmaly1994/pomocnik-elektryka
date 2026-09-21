@@ -13,9 +13,11 @@ import type { PanelDevice } from "@/types";
  * różnicówki pokazuje klamra nad grupą, a nie linia — to informacja logiczna,
  * nie fizyczna trasa.
  *
- * SVG, a nie Konva (jak w `PanelCanvas`), bo ten widok ma się skalować razem
- * z szerokością strony i zachować tekst jako tekst — do wydruku, eksportu
- * i czytania na telefonie. Płótno rastrowe nie daje żadnej z tych rzeczy.
+ * SVG, a nie Konva — mimo że rzut obok rysuje się właśnie Konvą. Ten widok ma się
+ * skalować razem z szerokością strony i zachować tekst jako tekst: do wydruku,
+ * eksportu i czytania na telefonie. Płótno rastrowe nie daje żadnej z tych rzeczy.
+ * Pierwsza wersja była konwowa (`PanelCanvas.tsx`, usunięta) i rozbiła się dokładnie
+ * o to.
  */
 
 const MODULE_W = 30;
