@@ -84,10 +84,18 @@ test("recznie rozwiniety panel zostaje rozwiniety po odswiezeniu telefonu", asyn
 });
 
 test("pasek edytora jest nizszy niz przed zwinieciem — na monitorze jeden rzad", async ({ page }) => {
-  // Zmierzone PRZED krokiem 83: 84 px i na telefonie, i na monitorze. Zwijanie
+  // Przed krokiem 83 pasek mial DWA rzedy i na telefonie, i na monitorze. Zwijanie
   // („Ustawienia planu") wlaczalo sie wtedy WYLACZNIE ponizej 768 px, wiec na
   // monitorze — czyli tam, gdzie te dwa rzedy realnie zjadaly rysunek — nie robilo nic.
-  const PROGI = { telefon: 84, monitor: 70 } as const;
+  //
+  // Liczymy RZEDY, nie piksele. Wczesniej staly tu progi 84 i 70 px, zmierzone na
+  // Windowsie, i one wlasnie wywrocily pierwszy przebieg CI: na runnerze Ubuntu pasek
+  // mial 116 px zamiast 78. Winna byla czcionka — `Inter Tight` bylo tylko NAZWANE,
+  // nigdy nie wczytywane, wiec kazdy system podstawial wlasny zamiennik o innej
+  // szerokosci znakow (naprawione w `main.tsx`). Prog w pikselach mierzyl jednak nie
+  // to, o co chodzi: tresc tego testu brzmi „jeden rzad, nie dwa", a liczba rzedow
+  // nie zalezy od kroju pisma. Zapas przy 84 px wynosil zreszta 6 px.
+  const RZEDY = { telefon: 2, monitor: 1 } as const;
 
   for (const [nazwa, rozmiar] of [["telefon", TELEFON], ["monitor", MONITOR]] as const) {
     await page.setViewportSize(rozmiar);
@@ -96,8 +104,22 @@ test("pasek edytora jest nizszy niz przed zwinieciem — na monitorze jeden rzad
     const pasek = page
       .getByRole("button", { name: "Plan", exact: true })
       .locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]");
-    const wysokosc = (await pasek.boundingBox())!.height;
-    expect(wysokosc, `pasek na szerokosci: ${nazwa}`).toBeLessThanOrEqual(PROGI[nazwa]);
+    /**
+     * Kontrolki grupowane po srodku w pionie: dwie leza w tym samym rzedzie, gdy
+     * dzieli je mniej niz POLOWA wysokosci najwyzszej z nich. Tolerancja z samych
+     * kontrolek, a nie stala — pasek miesza przyciski z polami wyboru, ktore roznia
+     * sie o kilka pikseli i przy sztywnym progu rozjezdzaly sie na osobne rzedy.
+     */
+    const rzedy = await pasek.evaluate((el) => {
+      const pudelka = [...el.querySelectorAll("button, select, input")]
+        .map((c) => c.getBoundingClientRect())
+        .filter((b) => b.height > 0);
+      if (!pudelka.length) return 0;
+      const tolerancja = Math.max(...pudelka.map((b) => b.height)) / 2;
+      const srodki = pudelka.map((b) => b.top + b.height / 2).sort((a, z) => a - z);
+      return srodki.reduce((n, s, i) => (i > 0 && s - srodki[i - 1] > tolerancja ? n + 1 : n), 1);
+    });
+    expect(rzedy, `rzedy paska na szerokosci: ${nazwa}`).toBeLessThanOrEqual(RZEDY[nazwa]);
 
     // Schowane jest to, co ustawia sie RAZ...
     await expect(page.getByRole("button", { name: "Wgraj podkład" })).toHaveCount(0);
@@ -216,9 +238,30 @@ test("monitor w pelnym ekranie: pasek narzedzi bez zmian — i tak byl pionowy",
   await page.setViewportSize(MONITOR);
   await otworzEdytor(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
-  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
 
-  const rail = (await page.locator('nav[aria-label="Narzędzia rysowania"]').boundingBox())!;
+  /**
+   * NAJECHANIE na krawedz, nie klikniecie uchwytu — i to nie jest kosmetyka.
+   *
+   * Uchwyt ma 24 px szerokosci i stoi przy samej krawedzi, a `onMouseMove` wysuwa
+   * panel juz przy `x <= 24` (PAS_WYZWALAJACY w DesignTab.tsx). Playwright, zeby
+   * kliknac, musi najpierw przesunac mysz na srodek uchwytu, czyli mniej wiecej
+   * na 12 px — i tym samym ruchem wysuwa panel, po czym uchwyt znika z drzewa
+   * (`pelnyEkran && !widocznaLewa`). Klikniecie trafia w pustke: „element was
+   * detached from the DOM, retrying" az do 30-sekundowego limitu.
+   *
+   * Na szybkiej maszynie przerysowanie nie zdazylo miedzy ruchem a kliknieciem
+   * i test przechodzil; pierwszy przebieg CI, na wolniejszym runnerze, przegral
+   * ten wyscig. Niewidoczna loteria — a najechanie jest zreszta droga, ktora
+   * uchwyt reklamuje wprost: „najedz na krawedz albo kliknij".
+   *
+   * Ten sam haczyk czai sie pod pozostalymi klknieciami w uchwyty (tutaj i w
+   * fullscreen.spec.ts); na razie przegral tylko ten jeden.
+   */
+  await page.mouse.move(10, MONITOR.height / 2);
+  const railLoc = page.locator('nav[aria-label="Narzędzia rysowania"]');
+  await expect(railLoc).toBeVisible();
+
+  const rail = (await railLoc.boundingBox())!;
   // Pionowy: wyzszy niz szerszy, tak jak od zawsze powyzej progu `md`.
   expect(rail.height).toBeGreaterThan(rail.width);
 });
