@@ -16,7 +16,12 @@ export default {
         border: "#DFE4E9",
       },
       fontFamily: {
-        sans: ["Inter Tight", "ui-sans-serif", "system-ui", "sans-serif"],
+        // „Inter Tight Variable" PRZED „Inter Tight": pierwsza to nazwa, pod którą
+        // zgłasza się plik wczytywany w `main.tsx` (tak nazywa odmiany zmienne
+        // `@fontsource-variable`), druga zostaje dla kogoś, kto ma zwykły Inter Tight
+        // zainstalowany w systemie. Reszta listy to zamienniki na wypadek, gdyby plik
+        // nie doszedł — i to WYŁĄCZNIE one działały, zanim krój zaczął być wczytywany.
+        sans: ["Inter Tight Variable", "Inter Tight", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["IBM Plex Mono", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       borderRadius: {

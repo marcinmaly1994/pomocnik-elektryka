@@ -11,7 +11,9 @@ body {
  * stopniowo — tylko te, których używają już przeniesione komponenty. */
 @layer components {
   .pe-display {
-    font-family: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+    /* „Variable" to nazwa, pod którą zgłasza się wczytywany plik — patrz `main.tsx`
+       i `fontFamily` w tailwind.config.ts, gdzie stoi ta sama lista. */
+    font-family: "Inter Tight Variable", "Inter Tight", ui-sans-serif, system-ui, sans-serif;
     font-weight: 600;
     letter-spacing: -0.015em;
   }
