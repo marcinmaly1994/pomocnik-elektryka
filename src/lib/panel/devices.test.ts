@@ -4,6 +4,7 @@ import {
   buildPanelDevices,
   computePhaseLoad,
   computeSelectivity,
+  daSieSkasowac,
   layoutPanel,
   MANUAL_DEVICE_TYPES,
   przeniesAparat,
@@ -263,5 +264,22 @@ describe("przeniesAparat", () => {
     const kopia = [...lista];
     przeniesAparat(lista, 3, 1);
     expect(lista).toEqual(kopia);
+  });
+});
+
+describe("daSieSkasowac", () => {
+  /** Ta sama odpowiedź musi iść do kółka „×" na licu i do przycisku w oknie edycji. */
+  it("zwykły aparat wolno skasować", () => {
+    expect(daSieSkasowac({ kind: "mcb" })).toBe(true);
+    expect(daSieSkasowac({ kind: "rcd" })).toBe(true);
+    expect(daSieSkasowac({ kind: "spd" })).toBe(true);
+  });
+
+  it("rozłącznika głównego NIE — rozdzielnica bez niego nie jest rozdzielnicą", () => {
+    expect(daSieSkasowac({ kind: "main" })).toBe(false);
+  });
+
+  it("zaślepki NIE — to puste miejsce na szynie, nie aparat", () => {
+    expect(daSieSkasowac({ kind: "blank" })).toBe(false);
   });
 });

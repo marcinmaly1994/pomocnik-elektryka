@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { PHASE_COLORS, accentForDevice, layoutPanel } from "@/lib/panel/devices";
+import { PHASE_COLORS, accentForDevice, daSieSkasowac, layoutPanel } from "@/lib/panel/devices";
 import { zawijNaDwieLinie } from "@/lib/tekst";
 import type { SizedCircuit } from "@/lib/panel/sizing";
 import type { PanelDevice } from "@/types";
@@ -281,7 +281,23 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
   // i protokołach ZOSTAWIAMY z widocznym suwakiem — tam pasek niesie informację,
   // że dalej są kolejne kolumny.
   return (
-    <div className="pe-bez-suwaka overflow-x-auto rounded-card border border-border" style={{ background: "#EDF0F3" }}>
+    <div
+      className="pe-bez-suwaka overflow-x-auto rounded-card border border-border"
+      /**
+       * `pan-y`: pionowe przewijanie STRONY zostaje przeglądarce, poziome gesty
+       * bierzemy my — a przenoszenie aparatów po szynie jest właśnie poziome.
+       *
+       * Bez tego palec przeciągający aparat równocześnie przewijał stronę i żadna
+       * z dwóch rzeczy nie dochodziła do skutku. `none` odebrałoby przewijanie
+       * całkiem, a rysunek zajmuje na telefonie sporą część ekranu.
+       *
+       * Poziomego przewijania nie tracimy: `maxWidth` rysunku nie pozwala mu
+       * przerosnąć kontenera (patrz `style` przy `svg`), więc `overflow-x-auto`
+       * i tak nie ma czego przewijać — zmierzone na oknie 375 px, gdzie rysunek
+       * skaluje się do 325 px, czyli dokładnie do szerokości kolumny.
+       */
+      style={{ background: "#EDF0F3", touchAction: "pan-y" }}
+    >
       <svg
         viewBox={`0 0 ${svgW} ${svgH}`}
         preserveAspectRatio="xMidYMin meet"
@@ -359,7 +375,7 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                 const accent = accentForDevice(d);
                 const phase = d.phase ?? "";
                 const phaseColor = PHASE_COLORS[phase] ?? PHASE_COLORS[""];
-                const deletable = d.kind !== "main" && d.kind !== "blank";
+                const deletable = daSieSkasowac(d);
 
                 if (d.kind === "blank") {
                   return (
@@ -383,6 +399,31 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                       if (!przenoszalny) return;
                       // Bez tego przeciąganie zaznacza tekst opisów i rysunek „skacze".
                       e.preventDefault();
+                      /**
+                       * DOTYK: zdejmujemy przechwycenie, którego nikt tu nie zakładał.
+                       *
+                       * Przy wskaźniku dotykowym przeglądarka przechwytuje go SAMA, już
+                       * przy `pointerdown`, na elemencie, w który trafił palec — i od tej
+                       * chwili wszystkie zdarzenia wskaźnika idą wyłącznie tam. A całe
+                       * przenoszenie stoi na `onPointerEnter` SĄSIADÓW (patrz komentarz
+                       * przy `chwycony`: dlatego właśnie nie wołamy `setPointerCapture`).
+                       * Sąsiedzi nie dostawali więc niczego i przeciągnięcie palcem nie
+                       * robiło nic — bez żadnego znaku, że gest w ogóle istnieje.
+                       *
+                       * Mysz tego nie potrzebuje: tam przechwycenia nie ma, więc warunek
+                       * jest fałszywy i nic się nie dzieje.
+                       *
+                       * Zwalniamy na `e.target`, NIE na `e.currentTarget`. Przeglądarka
+                       * zakłada przechwycenie na elemencie, który zdarzenie trafiło —
+                       * czyli na konkretnym `<rect>` lica aparatu, a nie na grupie, która
+                       * zdarzenie obsługuje. Pytanie grupy o `hasPointerCapture` zwraca
+                       * fałsz i zwolnienie nie wykonuje się wcale (sprawdzone: sąsiedzi
+                       * nadal nie dostawali `pointerenter`).
+                       */
+                      const trafiony = e.target as Element;
+                      if (trafiony.hasPointerCapture?.(e.pointerId)) {
+                        trafiony.releasePointerCapture(e.pointerId);
+                      }
                       przeciagnieto.current = false;
                       setChwycony(d.index);
                       setCel(d.index);

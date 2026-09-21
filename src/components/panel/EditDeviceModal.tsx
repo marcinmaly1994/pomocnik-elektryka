@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MANUAL_DEVICE_TYPES } from "@/lib/panel/devices";
+import { MANUAL_DEVICE_TYPES, daSieSkasowac } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
 
 /**
@@ -20,6 +20,19 @@ export interface EditDeviceModalProps {
   device: PanelDevice | null;
   onClose: () => void;
   onSave: (uid: string, zmiany: Partial<PanelDevice>) => void;
+  /**
+   * Kasowanie aparatu — DRUGA droga do tej samej czynności, obok kółka „×" na jego
+   * licu (patrz `PanelRender`).
+   *
+   * Tamto kółko pokazuje się wyłącznie pod kursorem, więc na telefonie nie pojawia
+   * się nigdy: rysunek rozdzielnicy dawał się tam oglądać i nic więcej. Kasowanie
+   * było wprawdzie osiągalne z listy „Aparaty" obok, ale nie z samego rysunku —
+   * czyli nie stamtąd, gdzie się patrzy. Okno otwiera się dotknięciem aparatu i jest
+   * jedynym miejscem, w którym mieszka już wszystko inne na jego temat.
+   *
+   * Przy okazji pomaga myszy: kółko „×" ma 15 px i trzeba w nie trafić.
+   */
+  onDelete: (uid: string) => void;
   /** Czy zasilanie jest 3-fazowe — decyduje, czy fazę w ogóle da się wybrać. */
   supply3f: boolean;
 }
@@ -39,7 +52,7 @@ const SUGEROWANE_MODULY: Partial<Record<string, number>> = {
 };
 const FAZY = ["L1", "L2", "L3", "3F"] as const;
 
-export function EditDeviceModal({ device, onClose, onSave, supply3f }: EditDeviceModalProps) {
+export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f }: EditDeviceModalProps) {
   const [tag, setTag] = useState("");
   const [caption, setCaption] = useState("");
   const [label, setLabel] = useState("");
@@ -176,8 +189,25 @@ export function EditDeviceModal({ device, onClose, onSave, supply3f }: EditDevic
           </p>
         )}
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md px-3 py-2 text-xs text-slate-500 hover:text-ink">
+        <div className="mt-4 flex items-center gap-2">
+          {/* Kasowanie po LEWEJ, odsunięte od „Zapisz zmiany": to jedyny przycisk
+              w tym oknie, który usuwa, a nie zmienia, więc sąsiadowanie z przyciskiem
+              zatwierdzającym prosiłoby się o pomyłkę. Bez pytania „czy na pewno" —
+              `removeDevice` zapisuje migawkę, więc „Cofnij" nad rysunkiem przywraca
+              aparat razem z jego miejscem na szynie.
+              Rozłącznika głównego i zaślepki nie dotyczy (patrz `daSieSkasowac`). */}
+          {daSieSkasowac(device) && (
+            <button
+              onClick={() => {
+                onDelete(device.uid);
+                onClose();
+              }}
+              className="rounded-md px-3 py-2 text-xs text-slate-500 hover:text-warn"
+            >
+              Usuń aparat
+            </button>
+          )}
+          <button onClick={onClose} className="ml-auto rounded-md px-3 py-2 text-xs text-slate-500 hover:text-ink">
             Anuluj
           </button>
           <Button variant="copper" size="sm" onClick={zapisz}>
