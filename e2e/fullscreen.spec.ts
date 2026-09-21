@@ -1,6 +1,6 @@
 import type Konva from "konva";
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska, odslonNarzedziaRysowania } from "./_flow";
 
 /**
  * Tryb pełnoekranowy: plan dostaje całe okno pomniejszone o dwa niskie paski
@@ -104,27 +104,43 @@ test("Escape wychodzi z pełnego ekranu, ale najpierw porzuca rozpoczęty rysune
   await expect(page.getByRole("button", { name: "Projektowanie na pełnym ekranie" })).toBeVisible();
 });
 
-test("uchwyt przy lewej krawędzi zapowiada schowane narzędzia i otwiera je kliknięciem", async ({ page }) => {
-  await page.goto("/");
-  await skipEntryScreen(page);
-  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+/**
+ * DOTKNIĘCIEM, nie kliknięciem myszy — i to jest jedyny sposób, żeby ten test
+ * w ogóle coś znaczył.
+ *
+ * Powód, dla którego uchwyt jest przyciskiem, a nie samą dekoracją, brzmi: „na
+ * tablecie nie ma najeżdżania myszą". Myszą nie da się tego sprawdzić, bo ruch
+ * kursora na uchwyt sam wysuwa panel (`PAS_WYZWALAJACY`, patrz
+ * `odslonNarzedziaRysowania`) — kliknięcie i najechanie dają ten sam skutek, więc
+ * test przechodził niezależnie od tego, czy `onClick` w ogóle istnieje. Gorzej:
+ * przegrywał przy tym wyścig z własnym ruchem myszy i wywrócił CI.
+ *
+ * Palec nie wysyła `mousemove` przed dotknięciem. Dopiero on odróżnia jedną drogę
+ * od drugiej — i dopiero on odpowiada temu, co w komentarzu obiecywał tablet.
+ */
+test.describe("uchwyt otwierany dotykiem", () => {
+  test.use({ hasTouch: true });
 
-  // Uchwyt to jedyny sygnał, że coś tam jest — bez niego tryb wygląda jak plan
-  // bez narzędzi. Musi być widoczny od razu po wejściu, bez ruszania myszą.
-  const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
-  await expect(uchwyt).toBeVisible();
-  await expect(uchwyt).toContainText("Narzędzia");
+  test("uchwyt przy lewej krawędzi zapowiada schowane narzędzia i otwiera je dotknięciem", async ({ page }) => {
+    await page.goto("/");
+    await skipEntryScreen(page);
+    await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
 
-  const karta = lewaKarta(page);
-  await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeLessThan(0);
+    // Uchwyt to jedyny sygnał, że coś tam jest — bez niego tryb wygląda jak plan
+    // bez narzędzi. Musi być widoczny od razu po wejściu, bez ruszania myszą.
+    const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
+    await expect(uchwyt).toBeVisible();
+    await expect(uchwyt).toContainText("Narzędzia");
 
-  // Kliknięcie, nie najechanie: na tablecie nie ma najeżdżania myszą, więc sam
-  // hover nie wystarczy do otwarcia panelu.
-  await uchwyt.click();
-  await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
+    const karta = lewaKarta(page);
+    await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeLessThan(0);
 
-  // Gdy panel jest już wysunięty, uchwyt nie ma czego zapowiadać.
-  await expect(uchwyt).toHaveCount(0);
+    await uchwyt.tap();
+    await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
+
+    // Gdy panel jest już wysunięty, uchwyt nie ma czego zapowiadać.
+    await expect(uchwyt).toHaveCount(0);
+  });
 });
 
 test("uchwyt mieści się w pasie wyzwalającym — najechanie na niego wysuwa panel", async ({ page }) => {
@@ -194,7 +210,7 @@ test("panel narzędzi w pełnym ekranie ma JEDEN obszar przewijania, bez suwakó
   await page.goto("/");
   await skipEntryScreen(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
-  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  await odslonNarzedziaRysowania(page);
   await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
 
   // Zagnieżdżone przewijanie (panel + lista w środku) dawało dwa suwaki obok
@@ -225,7 +241,7 @@ test("panel narzędzi w pełnym ekranie ma JEDEN obszar przewijania, bez suwakó
 /** Wchodzi w pełny ekran i odsłania lewy panel uchwytem. */
 async function odslonNarzedzia(page: Page) {
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
-  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  await odslonNarzedziaRysowania(page);
   await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
 }
 
@@ -319,7 +335,7 @@ test("przypięcie panelu nie przesuwa rysunku — ten sam punkt planu zostaje w 
 
   const przed = await pozycjaRysunku();
 
-  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  await odslonNarzedziaRysowania(page);
   // Panel wysuwa się z animacją. Klikając „Przypnij" w jej trakcie, test mierzyłby
   // wyścig z animacją, a nie to, co ma w tytule: kompensacja czyta wtedy położenie
   // okna sprzed ustabilizowania układu (zmierzone: 2 px zamiast 8) i wychodzi o tyle

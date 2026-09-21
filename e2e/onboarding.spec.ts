@@ -63,6 +63,12 @@ test("ekran startowy prowadzi od wgrania rzutu przez skalę do pierwszego elemen
   // Podkład wgrany — aplikacja sama wchodzi w krok 1 (skala) i tłumaczy go dymkiem
   // przy linijce, bez czekania, aż użytkownik znajdzie CTA w karcie.
   const coach = page.getByRole("dialog", { name: "Podpowiedź" });
+  // PRZED nim staje jednak podpowiedź o nawigacji po rzucie (patrz
+  // `poWgraniuPodkladu` w DesignTab.tsx i e2e/podpowiedzi-nawigacji.spec.ts):
+  // dwóch punktów o znanej odległości nie da się wskazać na rzucie, którego nie
+  // umie się przybliżyć. Pokazuje się raz na przeglądarkę i ustępuje miejsca skali.
+  await expect(coach).toContainText("Rzut przybliżysz");
+  await coach.getByRole("button", { name: "Rozumiem" }).click();
   await expect(coach).toBeVisible();
   await expect(coach).toContainText("dwa punkty o znanej odległości");
   // Karta „3 kroki" jest na ten czas ZWINIĘTA do samego przycisku: oba elementy

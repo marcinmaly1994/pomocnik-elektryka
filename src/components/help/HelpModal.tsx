@@ -57,6 +57,27 @@ export const SKROTY: { klawisz: string; opis: string }[] = [
   { klawisz: "Enter", opis: "zatwierdza rysowaną ścianę albo zaznaczony obszar" },
   { klawisz: "Esc", opis: "anuluje bieżącą operację" },
   { klawisz: "F", opis: "przełącza pełny ekran — rysunek dostaje całe okno" },
+  /**
+   * Dwa gesty myszy w spisie KLAWISZY, bo tu ludzie szukają odpowiedzi na „jak to
+   * przybliżyć" — i dotąd jej nie znajdowali. Nawigacja po płótnie jest jedyną rzeczą
+   * wziętą w tej aplikacji wprost z programów CAD: samo kółko przewija stronę (inaczej
+   * nie dałoby się jej przewinąć znad rzutu), a przybliża dopiero `Ctrl` + kółko.
+   * Kto tego nie wie, ten kręci kółkiem i patrzy, jak ucieka mu cała strona.
+   */
+  { klawisz: "Ctrl + kółko", opis: "przybliża i oddala rzut w miejscu, gdzie stoi kursor — samo kółko przewija stronę" },
+  { klawisz: "wciśnięta rolka", opis: "przesuwa widok planu, bez przerywania rysowania i bez zmiany narzędzia" },
+  /** Na dotyku nie ma ani `Ctrl`, ani rolki — patrz `gestDotyku.ts`. */
+  { klawisz: "szczypanie dwoma palcami", opis: "przybliża i oddala rzut na ekranie dotykowym — jednym palcem przewija się strona" },
+  /**
+   * Na dotyku nie ma prawego przycisku, a w menu kontekstowym mieszka usuwanie,
+   * obracanie i zatwierdzanie ściany — bez tego gestu telefon pozwalał narysować
+   * cały plan i nie pozwalał niczego z niego skasować.
+   */
+  { klawisz: "przytrzymanie palcem", opis: "otwiera menu podręczne elementu, ściany albo pomieszczenia — odpowiednik prawego przycisku myszy" },
+  {
+    klawisz: "dwuklik w puste miejsce",
+    opis: "dopasowuje widok do rysunku — to samo co ikona obok procentów; działa też jako podwójne dotknięcie",
+  },
 ];
 
 function Key({ children }: { children: string }) {

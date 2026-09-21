@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ChevronUp,
   Copy,
+  CopyCheck,
   Eye,
   HelpCircle,
   Layers,
@@ -90,6 +91,14 @@ import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
 import { PoleWymiarowProstokata } from "@/components/design/PoleWymiarowProstokata";
 import { DlugosciOdcinkowSciany } from "@/components/design/DlugosciOdcinkowSciany";
 import { PodpowiedzPelnyEkran } from "@/components/design/PodpowiedzPelnyEkran";
+import { PodpowiedzKolka } from "@/components/design/PodpowiedzKolka";
+import {
+  czyPokazacPodpowiedzKolka,
+  czyPokazacPowitanie,
+  odczytajStanNawigacji,
+  zapamietajOdrzuceniePowitania,
+  zapamietajUmiejetnosc,
+} from "@/lib/podpowiedziNawigacji";
 import { zapamietajOdrzucenie } from "@/lib/podpowiedzPelnyEkran";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { useRysowanieScian } from "@/hooks/useRysowanieScian";
@@ -506,6 +515,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
 
   const [toolMode, setToolMode] = useState<ToolMode>("zaznacz");
+  /**
+   * Zatrzaśnięty Shift: każde kliknięcie DOKŁADA element do zaznaczenia zamiast
+   * zaczynać nowe.
+   *
+   * Zaznaczenie wielokrotne miało dotąd dwie drogi i obie wymagały czegoś, czego
+   * telefon nie ma: Shift z kliknięciem albo ramkę przeciągniętą myszą (przeciągnięcie
+   * palcem dochodzi do płótna jako JEDNO kliknięcie po oderwaniu palca, więc ramka nie
+   * ma z czego rosnąć). A bez zaznaczenia wielokrotnego nie ma wyrównywania,
+   * rozkładania, duplikowania ani „Usuń zaznaczone".
+   *
+   * Przełącznik, a nie gest przeciągnięcia: „Zaznacz" jest narzędziem DOMYŚLNYM, więc
+   * ramka z przeciągnięcia zabrałaby telefonowi przewijanie strony nad rysunkiem w tym
+   * stanie, w którym aplikacja się otwiera.
+   */
+  const [zaznaczanieWielokrotne, setZaznaczanieWielokrotne] = useState(false);
   /** Przyciąganie do siatki. Domyślnie WYŁĄCZONE, bo na wgranym podkładzie ściany
    *  budynku nie leżą na oczkach siatki i przyciąganie tylko odciągałoby od rzutu.
    *  Rysowanie od zera włącza je jawnie — patrz `startManualDrawing`. */
@@ -1185,9 +1209,111 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
 
   const scaleToolRef = useRef<HTMLButtonElement | null>(null);
   const wallToolRef = useRef<HTMLButtonElement | null>(null);
-  // Który dymek pokazać — dwa różne narzędzia (linijka / ściany), ten sam popover.
-  const [coachMark, setCoachMark] = useState<"skala" | "sciany" | null>(null);
+  /** Grupa przycisków powiększenia w pasku — kotwica dymka o nawigacji po rzucie. */
+  const [grupaZoomu, setGrupaZoomu] = useState<HTMLDivElement | null>(null);
+  // Który dymek pokazać — trzy okazje (linijka / ściany / nawigacja), ten sam popover.
+  const [coachMark, setCoachMark] = useState<"skala" | "sciany" | "nawigacja" | null>(null);
+  /**
+   * Co użytkownik już wie o ruszaniu rzutem (patrz `podpowiedziNawigacji.ts`).
+   *
+   * Czytane RAZ, przy montowaniu: między zapisem a odczytem stoi tylko ta zakładka,
+   * więc stan Reacta i `localStorage` nie mają jak się rozjechać.
+   */
+  const [stanNawigacji, setStanNawigacji] = useState(odczytajStanNawigacji);
+  /**
+   * Licznik pomyłek „kółko bez Ctrl" — patrz `PodpowiedzKolka`. Licznik, a nie flaga,
+   * żeby kolejne kręcenie przedłużało komunikat, zamiast nie robić nic.
+   */
+  const [sygnalKolka, setSygnalKolka] = useState(0);
   const [seenBefore] = useState(hasSeenOnboarding);
+
+  /**
+   * Dymek czekający na SWOJĄ kolej — patrz `poWgraniuPodkladu`.
+   *
+   * Ref, nie stan: nikt go nie ogląda, dopóki nie nadejdzie jego moment, a zmiana
+   * kolejki sama w sobie nie ma prawa niczego przerysować.
+   */
+  const nastepnyCoachMark = useRef<"skala" | null>(null);
+
+  /** Pokazuje dymek czekający w kolejce (jeśli jakiś jest) i opróżnia ją. */
+  const pokazNastepnyCoachMark = useCallback(() => {
+    const nastepny = nastepnyCoachMark.current;
+    nastepnyCoachMark.current = null;
+    setCoachMark(nastepny);
+  }, []);
+  /**
+   * Pierwsze przybliżenie rzutu — gasi obie podpowiedzi o nawigacji na dobre.
+   *
+   * Wołane z JEDNEGO miejsca dla wszystkich dróg: `Ctrl` + kółko na płótnie i
+   * przyciski w pasku wchodzą tym samym `onZoomChange`, więc nie da się nauczyć
+   * przybliżania „po cichu", z pominięciem tego zapisu.
+   */
+  const oznaczUmiejetnoscNawigacji = useCallback(() => {
+    zapamietajUmiejetnosc();
+    setStanNawigacji((s) => (s.umieNawigowac ? s : { ...s, umieNawigowac: true }));
+    // Dymek, który właśnie o tym mówił, nie ma już czego tłumaczyć — ustępuje
+    // miejsca temu, co czekało za nim.
+    //
+    // Kolejkę opróżniamy POZA funkcją aktualizującą stan. React woła ją w trybie
+    // ścisłym dwa razy dla tej samej zmiany: pierwsze wywołanie zabierało dymek
+    // z kolejki, drugie zastawało ją pustą i kasowało go z powrotem.
+    if (coachMark === "nawigacja") pokazNastepnyCoachMark();
+  }, [coachMark, pokazNastepnyCoachMark]);
+
+  /**
+   * „Rozumiem" pod dymkiem o nawigacji — zamyka go na dobre, także po odświeżeniu,
+   * i oddaje scenę temu, co czekało w kolejce (zwykle: dymkowi o skali).
+   */
+  const zamknijPowitanieNawigacji = useCallback(() => {
+    zapamietajOdrzuceniePowitania();
+    setStanNawigacji((s) => ({ ...s, powitanieOdrzucone: true }));
+    pokazNastepnyCoachMark();
+  }, [pokazNastepnyCoachMark]);
+
+  /**
+   * Ktoś kręci kółkiem nad rzutem bez `Ctrl` — czyli przewija stronę, prawdopodobnie
+   * próbując przybliżyć plan. Podnosimy licznik, a `PodpowiedzKolka` zamienia go na
+   * gasnący sam komunikat.
+   */
+  const zglosKolkoBezCtrl = useCallback(() => {
+    if (!czyPokazacPodpowiedzKolka(stanNawigacji, coachMark === "nawigacja")) return;
+    setSygnalKolka((n) => n + 1);
+  }, [stanNawigacji, coachMark]);
+
+
+  /**
+   * Koniec wgrywania podkładu — przycięciem albo z jego pominięciem.
+   *
+   * Kolejność dymków jest tu celowa: najpierw JAK oglądać rzut, dopiero potem CO z nim
+   * zrobić. Dwóch punktów o znanej odległości nie da się wskazać na rzucie, którego nie
+   * umie się przybliżyć — a nawigacja po płótnie jest jedyną rzeczą w tej aplikacji
+   * wziętą wprost z programów CAD (patrz `podpowiedziNawigacji.ts`).
+   *
+   * Kto nawigację już zna, ten przechodzi prosto do skali, czyli do stanu sprzed tej
+   * zmiany. Kolejka ma najwyżej dwa elementy i nie zamierza być mechanizmem ogólnym.
+   */
+  const poWgraniuPodkladu = useCallback(() => {
+    // Po podkładzie naturalny następny krok to skala — bez niej nie policzymy metrów.
+    setToolMode("skala");
+    if (czyPokazacPowitanie(stanNawigacji)) {
+      nastepnyCoachMark.current = "skala";
+      setCoachMark("nawigacja");
+      return;
+    }
+    setCoachMark("skala");
+  }, [stanNawigacji]);
+
+  /**
+   * „Dopasuj widok" — kadr wraca na rysunek.
+   *
+   * JEDNA funkcja dla ikony w pasku i dla dwukliku w puste miejsce płótna: obie drogi
+   * muszą też zdjąć `zoomReczny`, bo inaczej widok zostałby „ręczny" i przestał
+   * reagować na zmiany okna mimo świeżego dopasowania.
+   */
+  const dopasujWidok = useCallback(() => {
+    setZoomReczny(false);
+    dopasujKadr();
+  }, [dopasujKadr]);
 
   /** Klik w CTA kroku ustawia narzędzie i — dla skali — pokazuje dymek nad linijką. */
   function handleStepAction(id: "skala" | "pomieszczenia" | "element") {
@@ -1242,6 +1368,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  panelu, rozwinięcie zwiniętego panelu, zgaszenie dymka coach-marka) —
    *  bez wspólnej funkcji skrót klawiszowy "po cichu" pomijałby część z nich. */
   function selectTool(id: ToolMode) {
+    // Dokładanie do zaznaczenia dotyczy WYŁĄCZNIE narzędzia „Zaznacz" — zostawione
+    // włączone na później byłoby pułapką: po powrocie kliknięcie w element dokładałoby
+    // go do zaznaczenia sprzed kwadransa, bez żadnego widocznego powodu.
+    if (id !== "zaznacz") setZaznaczanieWielokrotne(false);
     // Wyjście z trybu porzuca niedokończoną figurę — inaczej jej punkty
     // wisiałyby na planie i doklejałyby się po powrocie do rysowania.
     if (id !== "pomieszczenie") pokoje.setDrawingRoomPoints([]);
@@ -1872,11 +2002,16 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     toolMode === "pomieszczenie" ||
     toolMode === "otwory" ||
     toolMode === "skala" ||
-    (selected?.kind === "wall" && toolMode === "zaznacz" && walls.some((w) => w.id === selected.id)) ||
-    (selected?.kind === "opening" && toolMode === "zaznacz" && openings.some((o) => o.id === selected.id)) ||
-    (selected?.kind === "route" && toolMode === "zaznacz") ||
-    // `toolMode !== "skala"` pominięte celowo: powyżej już wykluczyliśmy ten
-    // przypadek (`toolMode === "skala"` zwróciłoby true wcześniej w tym samym `||`).
+    /**
+     * CAŁY tryb „zaznacz", a nie tylko chwile z czymś zaznaczonym: stoi w nim
+     * przełącznik „Zaznacz kilka", który ma być pod ręką ZANIM cokolwiek zaznaczono —
+     * to on odblokowuje resztę operacji na zaznaczeniu.
+     *
+     * Pochłania tym samym trzy dawne warunki („zaznaczona ściana/otwór/trasa w trybie
+     * zaznacz"): pigułka i tak jest wtedy aktywna, a ich treść dokłada `kontekstoweTresc`
+     * własnymi warunkami. Slot nie świeci już pustką, bo zawsze ma co najmniej przełącznik.
+     */
+    toolMode === "zaznacz" ||
     !!skalaPotwierdzenie;
 
   /**
@@ -1919,6 +2054,22 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    */
   const kontekstoweTresc = (
     <>
+      {/* Zatrzaśnięty Shift — jedyna droga do zaznaczenia wielokrotnego bez klawiatury
+          i bez myszy (patrz `zaznaczanieWielokrotne`). Stoi NAD listą operacji na
+          zaznaczeniu, bo to on je odblokowuje: najpierw się zaznacza, potem wyrównuje. */}
+      {toolMode === "zaznacz" && (
+        <button
+          data-testid="zaznacz-kilka"
+          onClick={() => setZaznaczanieWielokrotne((v) => !v)}
+          aria-pressed={zaznaczanieWielokrotne}
+          title="Kolejne kliknięcia dokładają elementy do zaznaczenia — to samo co Shift z kliknięciem"
+          className="pe-btn-ghost flex items-center gap-1.5 px-2.5 py-1 text-xs"
+          style={zaznaczanieWielokrotne ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : undefined}
+        >
+          <CopyCheck size={13} /> Zaznacz kilka
+        </button>
+      )}
+
       {multiSelected.length > 0 && (
         <div className="flex min-w-0 flex-col items-start gap-1.5">
           <span className="text-xs font-medium text-slate-600">Zaznaczono: {multiSelected.length}</span>
@@ -2548,15 +2699,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           wysokoscObrazu={wgrywanie.rzut.wysokosc}
           onPrzytnij={(obszar) => {
             wgrywanie.przytnij(obszar);
-            // Po podkładzie naturalny następny krok to skala — bez niej nie
-            // policzymy metrów, więc od razu kierujemy tam uwagę użytkownika.
-            setToolMode("skala");
-            setCoachMark("skala");
+            poWgraniuPodkladu();
           }}
           onPomin={() => {
             wgrywanie.pominPrzyciecie();
-            setToolMode("skala");
-            setCoachMark("skala");
+            poWgraniuPodkladu();
           }}
         />
       )}
@@ -2680,14 +2827,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         onUndo={undo}
         onRedo={redo}
         zoom={zoom}
+        onGrupaZoomuRef={setGrupaZoomu}
+        wskazZoom={coachMark === "nawigacja"}
         onZoomChange={(z) => {
           setZoomReczny(true);
           setZoom(z);
+          oznaczUmiejetnoscNawigacji();
         }}
-        onDopasuj={() => {
-          setZoomReczny(false);
-          dopasujKadr();
-        }}
+        onDopasuj={dopasujWidok}
       />
       </div>
 
@@ -2990,13 +3137,18 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           // narzędzi na ekranie 375 px i rozpychało stronę w poziomie. Płótno i tak
           // dopasowuje powiększenie do szerokości kolumny (patrz `dopasujZoom`), więc
           // węższa kolumna daje mniejszy, ale CAŁY rzut zamiast wystającego kadru.
-          className={pelnyEkran ? "h-full w-full p-2" : "min-w-0 md:min-w-[320px]"}
+          // `relative`: komunikat „przytrzymaj Ctrl" pływa NAD płótnem i liczy pozycję
+          // od tej kolumny — bez niej uciekłby do najbliższego przodka z pozycją, czyli
+          // gdzieś na stronę.
+          className={pelnyEkran ? "relative h-full w-full p-2" : "relative min-w-0 md:min-w-[320px]"}
           style={pelnyEkran ? undefined : { flex: "1 1 480px" }}
         >
           {/* Podpowiedź o pełnym ekranie stoi TU, tuż nad płótnem, którego dotyczy —
               i tylko poza pełnym ekranem, gdzie byłaby zaprzeczeniem samej siebie.
               O wąskim ekranie decyduje `sm:hidden` w samym komponencie. */}
           {!pelnyEkran && <PodpowiedzPelnyEkran onPelnyEkran={przelaczPelnyEkran} />}
+          {/* Komunikat o `Ctrl` — nad płótnem, bo dotyczy gestu robionego właśnie na nim. */}
+          <PodpowiedzKolka sygnal={sygnalKolka} />
           <DesignCanvas
             stageRef={stageRef}
             anulujPodgladRef={anulujPodgladRef}
@@ -3033,18 +3185,24 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             onZoomChange={(z) => {
               setZoomReczny(true);
               setZoom(z);
+              oznaczUmiejetnoscNawigacji();
             }}
+            onKolkoBezCtrl={zglosKolkoBezCtrl}
+            onDopasujWidok={dopasujWidok}
             widokRef={widokRef}
-            /* Okno widoku bierze CAŁE dostępne miejsce, zamiast kurczyć się do arkusza.
-               Dopóki miało rozmiar arkusza, poza arkusz nie dało się nawet kliknąć —
-               okno BYŁO rysunkiem. Teraz okno jest wziernikiem: arkusz leży w nim jako
-               podkład, a rysować można wszędzie. */
+            /* Okno widoku bierze CAŁE dostępne miejsce, zamiast kurczyć się do arkusza
+               albo do wgranego rzutu. Dopóki miało rozmiar arkusza, poza arkusz nie dało
+               się nawet kliknąć — okno BYŁO rysunkiem. Teraz okno jest wziernikiem:
+               podkład leży w nim wyśrodkowany, a rysować można wszędzie, także obok niego.
+               Próba przykrojenia okna do rzutu została wycofana: kratka ma sięgać tak
+               daleko, jak daleko jest miejsce. */
             rozmiarOkna={{
               w: Math.max(1, dostepnaSzer || planSize.w * zoom),
               h: Math.max(1, wysPlotna),
             }}
             onSelectElement={(id, shiftKey) => {
-              if (shiftKey) {
+              // Shift i przełącznik znaczą DOKŁADNIE to samo — jedna droga, dwa wejścia.
+              if (shiftKey || zaznaczanieWielokrotne) {
                 setMultiSelected((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
                 return;
               }
@@ -3316,6 +3474,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           anchor={scaleToolRef.current}
           text="Kliknij dwa punkty o znanej odległości — na przykład dwa końce ściany albo framugę drzwi. Potem podasz, ile to metrów."
           onDismiss={() => setCoachMark(null)}
+        />
+      )}
+
+      {coachMark === "nawigacja" && (
+        <CoachMark
+          anchor={grupaZoomu}
+          /* Dwa różne zestawy gestów, bo na dotyku nie ma ani `Ctrl`, ani rolki —
+             jest za to szczypanie dwoma palcami (patrz `gestDotyku.ts`). Obie wersje
+             kończą się na przyciskach w pasku, bo to na nie dymek pokazuje strzałką. */
+          text={
+            szerokieOkno
+              ? "Rzut przybliżysz Ctrl + kółkiem myszy, a przesuniesz wciśniętą rolką — albo narzędziem ręki z paska. Ikona obok procentów wraca do całego rzutu."
+              : "Rzut przybliżysz szczypaniem dwoma palcami albo przyciskami − i + w pasku, a przesuniesz narzędziem ręki. Ikona obok procentów wraca do całego rzutu."
+          }
+          onDismiss={zamknijPowitanieNawigacji}
         />
       )}
 

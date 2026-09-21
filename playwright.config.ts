@@ -18,6 +18,22 @@ const OFFLINE = "offline";
 
 export default defineConfig({
   testDir: "./e2e",
+  /**
+   * W CI DWA workery zamiast jednego.
+   *
+   * Playwright domyslnie schodzi w CI do jednego procesu i pierwszy przebieg trwal
+   * przez to 17,5 minuty zamiast lokalnych czterech. Runner GitHuba ma cztery rdzenie,
+   * wiec dwa workery to nadal polowa maszyny — zapas dla dwoch serwerow (dev i
+   * `vite preview`), ktore chodza obok testow.
+   *
+   * Nie wiecej niz dwa: testy kontowe loguja sie na WSPOLNE konto i kasuja z niego
+   * zapisy „E2E-TEST" (patrz e2e/_konto.ts). Playwright trzyma wprawdzie pliki jednego
+   * zestawu w jednym workerze, ale im wiecej rownoleglosci, tym blizej do sytuacji,
+   * w ktorej dwa pliki siegajace chmury jada naraz.
+   *
+   * Lokalnie bez zmian — domyslna polowa rdzeni.
+   */
+  workers: process.env.CI ? 2 : undefined,
   webServer: [
     {
       command: "npm run dev",

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { otworzKatalogElementow, otworzMenuPaska, zamknijMenuPaska } from "./_flow";
+import { otworzKatalogElementow, otworzMenuPaska, zamknijMenuPaska, odslonNarzedziaRysowania } from "./_flow";
 
 /**
  * Edytor planu na ekranie telefonu.
@@ -84,10 +84,18 @@ test("recznie rozwiniety panel zostaje rozwiniety po odswiezeniu telefonu", asyn
 });
 
 test("pasek edytora jest nizszy niz przed zwinieciem — na monitorze jeden rzad", async ({ page }) => {
-  // Zmierzone PRZED krokiem 83: 84 px i na telefonie, i na monitorze. Zwijanie
+  // Przed krokiem 83 pasek mial DWA rzedy i na telefonie, i na monitorze. Zwijanie
   // („Ustawienia planu") wlaczalo sie wtedy WYLACZNIE ponizej 768 px, wiec na
   // monitorze — czyli tam, gdzie te dwa rzedy realnie zjadaly rysunek — nie robilo nic.
-  const PROGI = { telefon: 84, monitor: 70 } as const;
+  //
+  // Liczymy RZEDY, nie piksele. Wczesniej staly tu progi 84 i 70 px, zmierzone na
+  // Windowsie, i one wlasnie wywrocily pierwszy przebieg CI: na runnerze Ubuntu pasek
+  // mial 116 px zamiast 78. Winna byla czcionka — `Inter Tight` bylo tylko NAZWANE,
+  // nigdy nie wczytywane, wiec kazdy system podstawial wlasny zamiennik o innej
+  // szerokosci znakow (naprawione w `main.tsx`). Prog w pikselach mierzyl jednak nie
+  // to, o co chodzi: tresc tego testu brzmi „jeden rzad, nie dwa", a liczba rzedow
+  // nie zalezy od kroju pisma. Zapas przy 84 px wynosil zreszta 6 px.
+  const RZEDY = { telefon: 2, monitor: 1 } as const;
 
   for (const [nazwa, rozmiar] of [["telefon", TELEFON], ["monitor", MONITOR]] as const) {
     await page.setViewportSize(rozmiar);
@@ -96,8 +104,22 @@ test("pasek edytora jest nizszy niz przed zwinieciem — na monitorze jeden rzad
     const pasek = page
       .getByRole("button", { name: "Plan", exact: true })
       .locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]");
-    const wysokosc = (await pasek.boundingBox())!.height;
-    expect(wysokosc, `pasek na szerokosci: ${nazwa}`).toBeLessThanOrEqual(PROGI[nazwa]);
+    /**
+     * Kontrolki grupowane po srodku w pionie: dwie leza w tym samym rzedzie, gdy
+     * dzieli je mniej niz POLOWA wysokosci najwyzszej z nich. Tolerancja z samych
+     * kontrolek, a nie stala — pasek miesza przyciski z polami wyboru, ktore roznia
+     * sie o kilka pikseli i przy sztywnym progu rozjezdzaly sie na osobne rzedy.
+     */
+    const rzedy = await pasek.evaluate((el) => {
+      const pudelka = [...el.querySelectorAll("button, select, input")]
+        .map((c) => c.getBoundingClientRect())
+        .filter((b) => b.height > 0);
+      if (!pudelka.length) return 0;
+      const tolerancja = Math.max(...pudelka.map((b) => b.height)) / 2;
+      const srodki = pudelka.map((b) => b.top + b.height / 2).sort((a, z) => a - z);
+      return srodki.reduce((n, s, i) => (i > 0 && s - srodki[i - 1] > tolerancja ? n + 1 : n), 1);
+    });
+    expect(rzedy, `rzedy paska na szerokosci: ${nazwa}`).toBeLessThanOrEqual(RZEDY[nazwa]);
 
     // Schowane jest to, co ustawia sie RAZ...
     await expect(page.getByRole("button", { name: "Wgraj podkład" })).toHaveCount(0);
@@ -187,7 +209,7 @@ test("telefon w pelnym ekranie: karta narzedzi jest WASKA i nie zakrywa rysunku"
   await page.setViewportSize(TELEFON);
   await otworzEdytor(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
-  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+  await odslonNarzedziaRysowania(page);
 
   const karta = (await page.getByTestId("karta-narzedzi").boundingBox())!;
   // Sam pionowy pasek ikon plus uchwyt zwijania — nie pol ekranu.
@@ -196,27 +218,43 @@ test("telefon w pelnym ekranie: karta narzedzi jest WASKA i nie zakrywa rysunku"
   expect(TELEFON.width - (karta.x + karta.width)).toBeGreaterThan(200);
 });
 
-test("telefon w pelnym ekranie: karte da sie schowac PALCEM, bez najezdzania myszą", async ({ page }) => {
-  await page.setViewportSize(TELEFON);
-  await otworzEdytor(page);
-  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+/**
+ * Test nazywa sie „PALCEM", a robil to mysza — i to nie byla drobna niescislosc.
+ *
+ * Mysza tej drogi nie da sie sprawdzic: sam ruch kursora na uchwyt wysuwa karte
+ * (`PAS_WYZWALAJACY`, patrz `odslonNarzedziaRysowania`), wiec klikniecie i najechanie
+ * daja ten sam skutek i test przechodzil niezaleznie od tego, czy dotyk dziala.
+ * Przy okazji przegrywal wyscig z wlasnym ruchem myszy — ten sam, ktory wywrocil
+ * dwa przebiegi CI w innych plikach. Palec nie wysyla `mousemove`, wiec dopiero on
+ * odroznia jedno od drugiego.
+ */
+test.describe("telefon w pelnym ekranie, dotykiem", () => {
+  test.use({ hasTouch: true });
 
-  const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
-  await uchwyt.click();
-  const zamknij = page.getByRole("button", { name: "Schowaj narzędzia rysowania" });
-  await expect(zamknij).toBeVisible();
-  await zamknij.click();
+  test("telefon w pelnym ekranie: karte da sie schowac PALCEM, bez najezdzania myszą", async ({ page }) => {
+    await page.setViewportSize(TELEFON);
+    await otworzEdytor(page);
+    await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
 
-  // Karta zjechala za krawedz, a uchwyt wrocil — droga w obie strony jest klikalna.
-  await expect(zamknij).toBeHidden();
-  await expect(uchwyt).toBeVisible();
+    const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
+    await uchwyt.tap();
+    const zamknij = page.getByRole("button", { name: "Schowaj narzędzia rysowania" });
+    await expect(zamknij).toBeVisible();
+    await zamknij.tap();
+
+    // Karta zjechala za krawedz, a uchwyt wrocil — droga w obie strony dziala palcem.
+    await expect(zamknij).toBeHidden();
+    await expect(uchwyt).toBeVisible();
+  });
 });
 
 test("monitor w pelnym ekranie: pasek narzedzi bez zmian — i tak byl pionowy", async ({ page }) => {
   await page.setViewportSize(MONITOR);
   await otworzEdytor(page);
   await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
-  await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).click();
+
+  // Najechaniem, nie kliknieciem uchwytu — powod w `odslonNarzedziaRysowania`.
+  await odslonNarzedziaRysowania(page);
 
   const rail = (await page.locator('nav[aria-label="Narzędzia rysowania"]').boundingBox())!;
   // Pionowy: wyzszy niz szerszy, tak jak od zawsze powyzej progu `md`.

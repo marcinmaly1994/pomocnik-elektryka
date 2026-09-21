@@ -69,3 +69,52 @@ test("wgrywanie planu: ekran startowy widoczny bez scrollowania, zwija się po w
   await page.getByRole("button", { name: "Usuń", exact: true }).click();
   await expect(cta).toBeVisible();
 });
+
+/**
+ * Zgłoszenie: „po wgraniu i przycięciu rzut ustawia się z lewej strony".
+ *
+ * Kadr siadał w lewym górnym rogu okna — podkład bez ani jednej narysowanej ściany
+ * nie był wyśrodkowany — więc rzut o proporcjach kartki zajmował niecałą połowę
+ * szerokości i tonął w pustej siatce po prawej.
+ *
+ * Naprawą jest SAM KADR. Kratka ma dalej sięgać tak daleko, jak daleko jest miejsce:
+ * próba przykrojenia okna do rzutu została wycofana na wyraźne życzenie, więc test
+ * pilnuje obu rzeczy naraz — pełnej szerokości płótna I rzutu na jego środku.
+ */
+test("wgrany rzut: kratka na całą szerokość, a rzut na jej środku", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Instalacja" }).click();
+
+  await page.setInputFiles('input[accept*="image"]', {
+    name: "rzut.png",
+    mimeType: "image/png",
+    buffer: PNG,
+  });
+  await page.getByRole("button", { name: "Pomiń — użyj całego rzutu" }).click();
+
+  const okno = page.locator("[data-testid=plan-okno]").first();
+  await expect(okno).toBeVisible();
+  const ramka = (await okno.boundingBox())!;
+  const kolumna = (await okno.locator("xpath=..").boundingBox())!;
+  // płótno bierze całą kolumnę (1 px luzu na obramowanie)
+  expect(ramka.width).toBeGreaterThanOrEqual(kolumna.width - 4);
+
+  /**
+   * Wyśrodkowanie czytamy z PASKA STANU, bo podkład jest węzłem Konvy i nie ma
+   * własnego prostokąta w DOM. Kursor postawiony na środku płótna musi pokazać
+   * środek podkładu — a nie punkt gdzieś w jego prawej połowie, jak wtedy, gdy rzut
+   * siedział przy lewej krawędzi.
+   *
+   * 420 jedn. to połowa podkładu: `planSizeForImage` skaluje każdy rzut do stałego
+   * POLA 1000 × 700 jedn. z zachowaniem proporcji, więc rzut kwadratowy (1 × 1 px)
+   * dostaje 840 × 840 jedn. Bez ustawionej skali pasek podaje właśnie jednostki planu.
+   */
+  await page.mouse.move(ramka.x + ramka.width / 2, ramka.y + ramka.height / 2);
+  const odczyt = page.getByText(/X:\s*-?\d+\s+Y:\s*-?\d+ jedn\./).first();
+  await expect(odczyt).toBeVisible();
+  const [, x, y] = (await odczyt.textContent())!.match(/X:\s*(-?\d+)\s+Y:\s*(-?\d+)/)!;
+  expect(Math.abs(Number(x) - 420)).toBeLessThanOrEqual(8);
+  expect(Math.abs(Number(y) - 420)).toBeLessThanOrEqual(8);
+});
