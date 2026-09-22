@@ -632,14 +632,43 @@ export function PanelTab() {
                 >
                   <Pencil size={13} />
                 </button>
-                <button onClick={() => moveDevice(d.uid, -1)} disabled={i === 0} className="text-slate-400 hover:text-blueprint disabled:opacity-30">
+                {/* Etykiety z OZNACZENIEM aparatu, tak samo jak przy ołówku obok.
+                    Sama ikona nie niesie nic dla czytnika ekranu, a w tym wierszu
+                    stoją trzy takie obok siebie: bez nazwy słychać „przycisk,
+                    przycisk, przycisk", i to czternaście razy pod rząd. Oznaczenie
+                    w treści, bo lista ma kilkanaście wierszy różniących się tylko nim
+                    — „Przesuń w górę" powtórzone czternaście razy nie mówi, KTÓRY. */}
+                <button
+                  onClick={() => moveDevice(d.uid, -1)}
+                  disabled={i === 0}
+                  title="Przesuń wyżej na szynie"
+                  aria-label={`Przesuń aparat ${d.tag} wyżej na szynie`}
+                  className="text-slate-400 hover:text-blueprint disabled:opacity-30"
+                >
                   <ArrowUp size={13} />
                 </button>
-                <button onClick={() => moveDevice(d.uid, 1)} disabled={i === devices.length - 1} className="text-slate-400 hover:text-blueprint disabled:opacity-30">
+                <button
+                  onClick={() => moveDevice(d.uid, 1)}
+                  disabled={i === devices.length - 1}
+                  title="Przesuń niżej na szynie"
+                  aria-label={`Przesuń aparat ${d.tag} niżej na szynie`}
+                  className="text-slate-400 hover:text-blueprint disabled:opacity-30"
+                >
                   <ArrowDown size={13} />
                 </button>
+                {/* `kind !== "main"`, a NIE `daSieSkasowac` — ta druga wyklucza jeszcze
+                    zaślepki, i słusznie tam, gdzie jej się używa: na rysunku zaślepka
+                    nie ma żadnej obsługi, bo to puste miejsce na szynie. Ale dodaje się
+                    ją RĘCZNIE z katalogu („Rezerwa (zaślepka)" w MANUAL_DEVICE_TYPES),
+                    więc z listy trzeba móc ją zdjąć — inaczej raz dodana zostawałaby
+                    na zawsze. */}
                 {d.kind !== "main" && (
-                  <button onClick={() => removeDevice(d.uid)} className="text-slate-400 hover:text-red-500">
+                  <button
+                    onClick={() => removeDevice(d.uid)}
+                    title="Usuń aparat"
+                    aria-label={`Usuń aparat ${d.tag}`}
+                    className="text-slate-400 hover:text-red-500"
+                  >
                     <Trash2 size={13} />
                   </button>
                 )}
