@@ -40,9 +40,20 @@ jobs:
       - run: npm test
 
   e2e:
-    name: Testy end-to-end
+    # Zestaw pocięty na SHARDY, bo 17 minut na każdym pull requeście zaczęło boleć.
+    # Playwright dzieli testy sam; dołożenie trzeciego shardu to dopisanie „3" niżej,
+    # bo liczbę części bierzemy z `strategy.job-total`, a nie z drugiej stałej,
+    # która musiałaby się z tą listą zgadzać.
+    name: Testy end-to-end (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
+    strategy:
+      # Bez `fail-fast`: jeden czerwony shard ma NIE przerywać drugiego. Inaczej przy
+      # pierwszej awarii nie wiadomo, czy druga połowa zestawu też coś łapie, i trzeba
+      # ją puszczać od nowa.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -91,6 +102,7 @@ jobs:
               echo "E2E_TEST_EMAIL=$E2E_TEST_EMAIL"
               echo "E2E_TEST_PASSWORD=$E2E_TEST_PASSWORD"
             } >> .env
+            echo "MA_KONTO=1" >> "$GITHUB_ENV"
             echo "Konto testowe: ustawione, testy chmury wejdą do zestawu."
           else
             echo "Konto testowe: brak sekretów, e2e/konto.spec.ts i rooms-reconcile-cloud.spec.ts zostaną POMINIĘTE."
@@ -100,13 +112,37 @@ jobs:
       # `vite preview` na 5190 (ten drugi buduje paczkę, bo tryb offline da się
       # sprawdzić WYŁĄCZNIE na zbudowanej wersji). `CI` ustawia GitHub z automatu,
       # więc `reuseExistingServer` jest tu wyłączone.
-      - run: npx playwright test
+      #
+      # `--grep-invert @chmura`, bo testy chmury idą osobno — patrz krok niżej.
+      # WAŻNE: zbiór testów musi być IDENTYCZNY we wszystkich shardach. `--shard`
+      # dzieli to, co zebrał; gdyby każdy shard zbierał co innego, podział przestałby
+      # się składać w całość i część testów nie uruchomiłaby się nigdzie.
+      - name: Zestaw
+        run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }} --grep-invert @chmura
+
+      # Testy chmury POZA podziałem i na JEDNYM workerze.
+      #
+      # Oba pliki logują się na WSPÓLNE konto testowe, a sprzątanie (`posprzataj`
+      # w e2e/_konto.ts) kasuje z niego wszystkie zapisy o nazwach z prefiksem
+      # „E2E-TEST" — także CUDZE. Puszczone równolegle kasowałyby sobie dane w trakcie,
+      # a do tego dzielą limit pięciu zapisów na konto, który jedne z nich wprost
+      # sprawdzają. `mode: "serial"` w obu plikach pilnuje kolejności tylko WEWNĄTRZ
+      # pliku — między plikami nie znaczy nic.
+      #
+      # Tylko pierwszy shard, bo to jedno konto na cały przebieg, i tylko gdy sekrety
+      # są ustawione: bez nich te testy i tak by się pominęły, a serwery trzeba by
+      # podnieść drugi raz po nic.
+      - name: Testy chmury
+        if: matrix.shard == 1 && env.MA_KONTO == '1'
+        run: npx playwright test --grep @chmura --workers=1
 
       - name: Ślady z nieudanych testów
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-slady
+          # Nazwa z numerem shardu — artefakty z tego samego przebiegu nie mogą
+          # nazywać się tak samo.
+          name: playwright-slady-${{ matrix.shard }}
           path: |
             test-results/
             playwright-report/

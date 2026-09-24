@@ -23,7 +23,7 @@ import {
  * po samym sklonowaniu repo.
  */
 
-test.describe("konto i chmura", () => {
+test.describe("konto i chmura", { tag: "@chmura" }, () => {
   test.skip(!KONTO_DOSTEPNE, POWOD_POMINIECIA);
   // Testy dzielą jedno konto i limit pięciu zapisów, więc muszą iść po kolei.
   test.describe.configure({ mode: "serial" });
