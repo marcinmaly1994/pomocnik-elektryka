@@ -26,12 +26,20 @@ export default defineConfig({
    * wiec dwa workery to nadal polowa maszyny — zapas dla dwoch serwerow (dev i
    * `vite preview`), ktore chodza obok testow.
    *
-   * Nie wiecej niz dwa: testy kontowe loguja sie na WSPOLNE konto i kasuja z niego
-   * zapisy „E2E-TEST" (patrz e2e/_konto.ts). Playwright trzyma wprawdzie pliki jednego
-   * zestawu w jednym workerze, ale im wiecej rownoleglosci, tym blizej do sytuacji,
-   * w ktorej dwa pliki siegajace chmury jada naraz.
-   *
    * Lokalnie bez zmian — domyslna polowa rdzeni.
+   *
+   * TESTY CHMURY SA POZA TA ARYTMETYKA. Oba pliki (`konto.spec.ts`,
+   * `rooms-reconcile-cloud.spec.ts`, oznaczone `@chmura`) loguja sie na WSPOLNE konto,
+   * a `posprzataj` w e2e/_konto.ts kasuje z niego wszystkie zapisy z prefiksem
+   * „E2E-TEST" — takze cudze. Rownolegle kasowalyby sobie dane w trakcie.
+   * `mode: "serial"` w obu plikach pilnuje kolejnosci tylko WEWNATRZ pliku; miedzy
+   * plikami nie znaczy nic. W CI jada wiec osobnym krokiem, poza shardami i na jednym
+   * workerze (patrz .github/workflows/sprawdzenia.yml).
+   *
+   * Lokalne `npm run e2e` puszcza je razem z reszta i teoretycznie moze na to trafic.
+   * Zostawione swiadomie: podzial lokalnego przebiegu na dwa przejscia znaczylby drugie
+   * budowanie paczki pod serwer `preview`, czyli mniej wiecej minute za kazdym razem,
+   * a przy jednej osobie i natychmiast widocznej porazce to zla wymiana.
    */
   workers: process.env.CI ? 2 : undefined,
   webServer: [

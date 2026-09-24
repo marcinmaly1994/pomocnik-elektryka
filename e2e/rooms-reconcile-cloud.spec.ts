@@ -48,7 +48,7 @@ function gniazdko(id: string, x: number, y: number, room: string) {
   return { id, type: "gniazdko", x, y, room, floor: "f1", dedicated: false, note: "", gangs: 1 };
 }
 
-test.describe("remont przypisań do pomieszczeń — projekt z chmury", () => {
+test.describe("remont przypisań do pomieszczeń — projekt z chmury", { tag: "@chmura" }, () => {
   test.skip(!KONTO_DOSTEPNE, POWOD_POMINIECIA);
   // Konto testowe jest jedno i ma limit pięciu zapisów — bez współbieżności.
   test.describe.configure({ mode: "serial" });
