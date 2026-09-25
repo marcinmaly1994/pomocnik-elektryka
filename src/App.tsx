@@ -56,6 +56,7 @@ import { etapy, type Etap, type StanEtapu } from "@/lib/postepKrokow";
  * u kogoś, kto wszedł prosto w Kosztorys, i drugie źródło prawdy do utrzymania.
  */
 import { computeCircuits } from "@/lib/panel/circuits";
+import { useWygaszenieKrawedzi } from "@/hooks/useWygaszenieKrawedzi";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
 
 /**
@@ -601,6 +602,10 @@ export default function App() {
     setAuthOpen(true);
   }, []);
 
+  // Wygaszenie krawędzi obu przewijanych pasków na telefonie — patrz `useWygaszenieKrawedzi`.
+  const pasekZakladek = useWygaszenieKrawedzi<HTMLDivElement>();
+  const pasekEtapow = useWygaszenieKrawedzi<HTMLDivElement>();
+
   function signOut() {
     setSession(null);
   }
@@ -679,7 +684,7 @@ export default function App() {
             Dokumentacja + Pomoc, Nowy projekt + Zaloguj się) i sama brała 122 px —
             więcej niż logo, nazwa projektu i pasek etapów razem. Teraz przewija się
             poziomo, tak samo jak pasek etapów niżej: że jest czym przewijać, widać po
-            przyciętym ostatnim przycisku. Etykiety zostają PEŁNE — skracanie ich
+            wygaszonej krawędzi (`useWygaszenieKrawedzi`). Etykiety zostają PEŁNE — skracanie ich
             zmieniłoby nazwy dostępnościowe, a na nich stoi kilkanaście testów e2e. */}
         {/* Od 640 px w górę obie grupy dostają `display: contents` i podział ZNIKA:
             przyciski wracają do zawijania pojedynczo, dokładnie jak przed rozdzieleniem.
@@ -693,7 +698,12 @@ export default function App() {
 
               Etykiety zostają PEŁNE: skracanie ich na telefonie zmieniłoby nazwy
               dostępnościowe, na których stoi kilkanaście testów e2e i czytniki ekranu. */}
-          <div className="pe-bez-suwaka flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto [&>*]:shrink-0 sm:contents">
+          <div
+            ref={pasekZakladek.ref}
+            style={pasekZakladek.styl}
+            data-testid="pasek-zakladek"
+            className="pe-bez-suwaka flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto [&>*]:shrink-0 sm:contents"
+          >
           <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
           <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
           {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów
@@ -829,14 +839,19 @@ export default function App() {
           <KopiaZapasowa onOtworzListe={otworzListeProjektow} />
         </div>
         {/* Bez widocznego suwaka: to pasek nawigacji, a nie okno z treścią. Że da
-            się przewinąć, widać po przyciętej karcie następnego etapu — tak samo
+            się przewinąć, widać po wygaszonej krawędzi (`useWygaszenieKrawedzi`) — tak samo
             jak w paskach kart przeglądarki. */}
         {/* `min-w-0` NIE jest tu ozdobą. Element elastyczny ma domyślnie
             `min-width: auto`, więc nie kurczy się poniżej szerokości swojej treści —
             i `overflow-x-auto` nigdy się nie włączało: zamiast przewijać kafle
             wewnątrz, pasek rozpychał całą stronę. Na oknie 375 px dawało to dokument
             o szerokości 655 px, czyli poziome przewijanie CAŁEJ aplikacji. */}
-        <div className="pe-bez-suwaka -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-0.5">
+        <div
+          ref={pasekEtapow.ref}
+          style={pasekEtapow.styl}
+          data-testid="pasek-etapow"
+          className="pe-bez-suwaka -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-0.5"
+        >
           <FlowCard
             step="01"
             title="Instalacja"
