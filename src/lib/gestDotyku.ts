@@ -53,3 +53,41 @@ export function zoomZeSzczypania(
   const proporcja = dystansTeraz / dystansPoczatkowy;
   return Math.min(granice.max, Math.max(granice.min, zoomPoczatkowy * proporcja));
 }
+
+/**
+ * O ile palec musi się ruszyć [px], zanim uznamy, że PRZESUWA, a nie dotyka.
+ *
+ * Poniżej tego progu ruch to drżenie ręki przy zwykłym dotknięciu — a dotknięcie
+ * stawia element albo punkt ściany. Przesuwanie odpalone od pierwszego piksela
+ * zjadałoby co trzecie takie dotknięcie.
+ */
+export const PROG_PRZESUWANIA_PX = 10;
+
+export type KierunekPalca = "za-wcześnie" | "poziomo" | "pionowo";
+
+/**
+ * Czym jest ruch JEDNEGO palca nad płótnem: przesuwaniem rzutu czy przewijaniem strony.
+ *
+ * Płótno oddaje przeglądarce ruch pionowy (`touch-action: pan-y`), bo zajmuje pół
+ * ekranu telefonu i bez tego strony nie dałoby się przewinąć znad rzutu. Ruch w bok
+ * strona i tak na nic nie zamienia — więc ten należy do rzutu.
+ *
+ * Rozstrzyga PIERWSZY ruch ponad próg, dalej gest trzyma się tej decyzji: rzut chwycony
+ * w bok da się potem ciągnąć w dowolną stronę, a przewijanie strony nie zamienia się
+ * w połowie w przesuwanie rzutu.
+ */
+export function kierunekPalca(dx: number, dy: number, prog = PROG_PRZESUWANIA_PX): KierunekPalca {
+  if (Math.hypot(dx, dy) < prog) return "za-wcześnie";
+  return Math.abs(dx) >= Math.abs(dy) ? "poziomo" : "pionowo";
+}
+
+/**
+ * Kadr, w którym punkt planu `kotwica` leży dokładnie pod punktem ekranu `palec`.
+ *
+ * Wspólna zasada przesuwania i przybliżania dotykiem: to, co palec chwycił, jedzie
+ * razem z nim. `palec` jest liczony względem płótna, `kotwica` i wynik — w jednostkach
+ * planu (lewy górny róg okna).
+ */
+export function kadrPodPalcem(kotwica: PunktEkranu, palec: PunktEkranu, zoom: number): PunktEkranu {
+  return { x: kotwica.x - palec.x / zoom, y: kotwica.y - palec.y / zoom };
+}
