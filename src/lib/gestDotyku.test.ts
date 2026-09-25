@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dystansPalcow, srodekPalcow, zoomZeSzczypania } from "./gestDotyku";
+import { dystansPalcow, kadrPodPalcem, kierunekPalca, srodekPalcow, zoomZeSzczypania } from "./gestDotyku";
 
 const GRANICE = { min: 0.2, max: 4 };
 
@@ -41,5 +41,41 @@ describe("szczypanie dwoma palcami", () => {
     const b = { x: 30, y: 40 };
     expect(dystansPalcow(a, b)).toBe(50);
     expect(srodekPalcow(a, b)).toEqual({ x: 15, y: 20 });
+  });
+});
+
+describe("jeden palec nad płótnem", () => {
+  it("drżenie przy dotknięciu nie jest jeszcze przesuwaniem", () => {
+    expect(kierunekPalca(4, 3)).toBe("za-wcześnie");
+  });
+
+  it("ruch w bok przesuwa rzut", () => {
+    expect(kierunekPalca(20, 5)).toBe("poziomo");
+    expect(kierunekPalca(-20, -12)).toBe("poziomo");
+  });
+
+  it("ruch w pionie zostaje przeglądarce", () => {
+    expect(kierunekPalca(3, 25)).toBe("pionowo");
+    expect(kierunekPalca(-8, -30)).toBe("pionowo");
+  });
+});
+
+describe("kadr pod palcem", () => {
+  it("chwycony punkt planu zostaje pod palcem", () => {
+    const kotwica = { x: 120, y: 80 };
+    const palec = { x: 300, y: 200 };
+    const zoom = 2.5;
+    const kadr = kadrPodPalcem(kotwica, palec, zoom);
+    // Punkt ekranu `palec` przeliczony z powrotem na plan musi dać kotwicę.
+    expect(kadr.x + palec.x / zoom).toBeCloseTo(kotwica.x, 9);
+    expect(kadr.y + palec.y / zoom).toBeCloseTo(kotwica.y, 9);
+  });
+
+  it("palec w lewo przesuwa kadr w prawo", () => {
+    const kotwica = { x: 100, y: 100 };
+    const przed = kadrPodPalcem(kotwica, { x: 200, y: 150 }, 1);
+    const po = kadrPodPalcem(kotwica, { x: 150, y: 150 }, 1);
+    expect(po.x - przed.x).toBeCloseTo(50, 9);
+    expect(po.y).toBeCloseTo(przed.y, 9);
   });
 });

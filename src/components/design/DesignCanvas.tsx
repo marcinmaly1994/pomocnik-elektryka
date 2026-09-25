@@ -5,6 +5,7 @@ import { rozmiescEtykietyGrup, type EtykietaDoRozmieszczenia } from "@/lib/light
 import { Stage, Layer, Rect, Line, Circle, Arc, Arrow, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
+import { DD } from "konva/lib/DragAndDrop";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import {
@@ -31,7 +32,7 @@ import {
   type Przyciagniecie,
 } from "@/lib/drawSnap";
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
-import { dystansPalcow, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from "@/lib/gestDotyku";
+import { dystansPalcow, kadrPodPalcem, kierunekPalca, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from "@/lib/gestDotyku";
 import { useDlugiePrzytrzymanie } from "@/hooks/useDlugiePrzytrzymanie";
 import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
@@ -579,10 +580,12 @@ export function DesignCanvas({
     return {
       onClick: (e: KonvaEventObject<MouseEvent>) => {
         if (Date.now() - echoTapuRef.current < ECHO_TAPU_MS) return;
+        if (poGescieKadru()) return;
         akcja(e);
       },
       onTap: (e: KonvaEventObject<TouchEvent>) => {
         echoTapuRef.current = Date.now();
+        if (poGescieKadru()) return;
         akcja(e);
       },
     };
@@ -593,17 +596,48 @@ export function DesignCanvas({
     return {
       onDblClick: (e: KonvaEventObject<MouseEvent>) => {
         if (Date.now() - echoTapuRef.current < ECHO_TAPU_MS) return;
+        if (poGescieKadru()) return;
         akcja(e);
       },
       onDblTap: (e: KonvaEventObject<TouchEvent>) => {
         echoTapuRef.current = Date.now();
+        if (poGescieKadru()) return;
         akcja(e);
       },
     };
   }
 
-  /** Rozstaw palców i powiększenie z chwili ROZPOCZĘCIA szczypania — patrz `zoomZeSzczypania`. */
-  const szczypanieRef = useRef<{ dystans: number; zoom: number } | null>(null);
+  /**
+   * Gest palcami, który ruszał KADREM (przesuwanie jednym palcem, szczypanie) —
+   * trwający albo zakończony przed chwilą.
+   *
+   * Konva odpala `tap` przy puszczeniu palca bez względu na to, ile palec po drodze
+   * przejechał: jej jedyny warunek to ten sam kształt na starcie i na końcu. Bez tej
+   * straży każde przesunięcie rzutu kończyłoby się tak jak dotknięcie w miejscu,
+   * w którym palec zszedł z ekranu — postawionym gniazdkiem albo punktem ściany.
+   */
+  const gestKadruRef = useRef({ trwa: false, koniec: 0 });
+  function poGescieKadru() {
+    const g = gestKadruRef.current;
+    return g.trwa || Date.now() - g.koniec < ECHO_TAPU_MS;
+  }
+  /**
+   * Jeden palec na płótnie: gdzie wylądował i co z niego wyszło. `kotwica` to punkt
+   * planu, który palec chwycił — ustawiana dopiero, gdy ruch okazał się przesuwaniem
+   * rzutu (patrz `kierunekPalca`); `oddany` — gest należy do kogoś innego (przewijanie
+   * strony, przeciąganie elementu).
+   */
+  const palecRef = useRef<{
+    x: number;
+    y: number;
+    naKsztalcie: boolean;
+    kotwica: PunktEkranu | null;
+    oddany: boolean;
+  } | null>(null);
+
+  /** Rozstaw palców, powiększenie i punkt planu spod środka palców z chwili
+   *  ROZPOCZĘCIA szczypania — patrz `zoomZeSzczypania` i `kadrPodPalcem`. */
+  const szczypanieRef = useRef<{ dystans: number; zoom: number; kotwica: PunktEkranu } | null>(null);
   /**
    * Trwa szczypanie — na ten czas NIC na płótnie nie jest przeciągalne.
    *
@@ -636,8 +670,8 @@ export function DesignCanvas({
    * było zatrzymać przewijanie strony), a kadr zmienia się co klatkę gestu. Bez refa
    * trzeba by go przepinać po każdym przesunięciu — w środku szczypania.
    */
-  const kadrRef = useRef({ zoom, widok, onZoomChange });
-  kadrRef.current = { zoom, widok, onZoomChange };
+  const kadrRef = useRef({ zoom, widok, onZoomChange, toolMode });
+  kadrRef.current = { zoom, widok, onZoomChange, toolMode };
   /**
    * Wystawia sterowanie kadrem na zewnątrz. `useLayoutEffect`, bo `DesignTab` woła
    * `przesunOPiksele` ze SWOJEGO efektu układu — a efekty układu dziecka wchodzą przed
@@ -1497,10 +1531,9 @@ export function DesignCanvas({
    * Przybliżenie z rozstawu palców — kotwiczone w punkcie MIĘDZY nimi.
    *
    * Ta sama droga, co przy `Ctrl` + kółku: nowe powiększenie idzie do rodzica, a
-   * `kotwicaZoomRef` pilnuje, żeby punkt planu spod środka gestu został pod nim
-   * (patrz `useLayoutEffect` wyżej). Dzięki temu szczypanie i przesuwanie dwoma
-   * palcami dzieją się naraz, bez osobnej obsługi: kotwica liczona jest za każdym
-   * razem z BIEŻĄCEGO położenia palców.
+   * `kotwicaZoomRef` pilnuje, żeby punkt planu chwycony na początku gestu leżał pod
+   * bieżącym środkiem palców (patrz `useLayoutEffect` wyżej). Dzięki temu szczypanie
+   * i przesuwanie dwoma palcami dzieją się naraz.
    */
 
   /**
@@ -1513,7 +1546,7 @@ export function DesignCanvas({
    * NATYWNY nasłuch, a nie `onTouchMove` Reacta, i to jest tu sedno: React podpina
    * `touchmove` jako PASYWNY, czyli taki, któremu nie wolno zatrzymać przewijania.
    * Bez `preventDefault` przeglądarka przewijałaby stronę w trakcie gestu (płótno ma
-   * `touch-action: pan-x pan-y`, żeby JEDEN palec nadal przewijał), a my zmienialibyśmy
+   * `touch-action: pan-y`, żeby JEDEN palec nadal przewijał w pionie), a my zmienialibyśmy
    * przy tym powiększenie — dwie rzeczy naraz i żadna do końca.
    *
    * Montowany RAZ. Wszystko, co zmienne, idzie przez `kadrRef`: przepinanie nasłuchu
@@ -1534,10 +1567,44 @@ export function DesignCanvas({
       ];
     }
 
+    /** Punkt ekranu względem lewego górnego rogu płótna. */
+    function naPlotnie(p: PunktEkranu): PunktEkranu {
+      const ramka = el!.getBoundingClientRect();
+      return { x: p.x - ramka.left, y: p.y - ramka.top };
+    }
+
+    /** Punkt planu leżący pod punktem ekranu — w BIEŻĄCYM kadrze. */
+    function punktPlanu(p: PunktEkranu): PunktEkranu {
+      const { zoom: z, widok: w } = kadrRef.current;
+      const n = naPlotnie(p);
+      return { x: w.x + n.x / z, y: w.y + n.y / z };
+    }
+
     function zacznij(e: TouchEvent) {
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        palecRef.current = {
+          x: t.clientX,
+          y: t.clientY,
+          // Nasz nasłuch siedzi na kontenerze, więc Konva obsłużyła już to dotknięcie
+          // — i jeśli trafiło w kształt, zgasiła je (patrz `klikAlboDotyk`). Przeglądarka
+          // nie przewinie wtedy strony w żadną stronę, więc rzut może jechać także w pionie.
+          naKsztalcie: e.defaultPrevented,
+          kotwica: null,
+          oddany: false,
+        };
+        return;
+      }
       const para = palce(e);
       if (!para) return;
-      szczypanieRef.current = { dystans: dystansPalcow(para[0], para[1]), zoom: kadrRef.current.zoom };
+      // Drugi palec przejmuje gest od pierwszego: od teraz to szczypanie.
+      palecRef.current = null;
+      gestKadruRef.current.trwa = true;
+      szczypanieRef.current = {
+        dystans: dystansPalcow(para[0], para[1]),
+        zoom: kadrRef.current.zoom,
+        kotwica: punktPlanu(srodekPalcow(para[0], para[1])),
+      };
       // Drugi palec wylądował — zdejmujemy przeciąganie, ZANIM przyjdzie pierwszy ruch
       // (patrz `szczypie`). React zbiera tę zmianę w mikrozadaniu, czyli przed kolejnym
       // zdarzeniem dotyku, więc węzły są już nieprzeciągalne, gdy Konva zaczyna czytać
@@ -1546,40 +1613,91 @@ export function DesignCanvas({
     }
 
     function prowadz(e: TouchEvent) {
+      if (e.touches.length === 1) {
+        prowadzJednym(e, e.touches[0]);
+        return;
+      }
       const start = szczypanieRef.current;
       const para = palce(e);
-      if (!start || !para || !el) return;
+      if (!start || !para) return;
       // Gest należy do nas — strona nie ma się przy okazji przewijać.
       e.preventDefault();
-      const { zoom: zoomTeraz, widok: widokTeraz, onZoomChange: zmienZoom } = kadrRef.current;
+      const { zoom: zoomTeraz, onZoomChange: zmienZoom } = kadrRef.current;
       const nowaSkala = zoomZeSzczypania(start.zoom, start.dystans, dystansPalcow(para[0], para[1]), {
         min: minZoom(),
         max: MAX_ZOOM,
       });
-      if (nowaSkala === zoomTeraz) return;
       /**
-       * Kotwicą jest punkt MIĘDZY palcami — dokładnie tak, jak kursor przy `Ctrl` +
-       * kółku (patrz `handleWheel` i `useLayoutEffect` wyżej). Liczona za każdym razem
-       * z BIEŻĄCEGO położenia palców, więc przesuwanie dwoma palcami dzieje się przy
-       * okazji, bez osobnej obsługi.
+       * Punkt planu chwycony NA POCZĄTKU gestu ma leżeć pod BIEŻĄCYM środkiem palców.
+       * Jedna zasada na oba ruchy naraz: palce rozsunięte przybliżają, palce przesunięte
+       * ciągną za sobą rzut.
+       *
+       * Wcześniej kotwica była liczona co klatkę z bieżącego położenia palców — czyli
+       * trzymała pod palcami to, co akurat pod nimi było, i przesuwanie dwoma palcami
+       * nie ruszało rzutu wcale. Do tego klatka bez zmiany powiększenia (palce w stałym
+       * rozstawie, albo powiększenie oparte o granicę) kończyła się, zanim cokolwiek
+       * przesunęła.
        */
-      const ramka = el.getBoundingClientRect();
-      const srodek = srodekPalcow(para[0], para[1]);
-      const kursorX = srodek.x - ramka.left;
-      const kursorY = srodek.y - ramka.top;
-      kotwicaZoomRef.current = {
-        planX: widokTeraz.x + kursorX / zoomTeraz,
-        planY: widokTeraz.y + kursorY / zoomTeraz,
-        kursorX,
-        kursorY,
-      };
+      const kursor = naPlotnie(srodekPalcow(para[0], para[1]));
+      if (nowaSkala === zoomTeraz) {
+        setWidok(kadrPodPalcem(start.kotwica, kursor, zoomTeraz));
+        return;
+      }
+      // Nowe powiększenie wchodzi przez rodzica, a kadr dopiero po przerysowaniu —
+      // ta sama droga co `Ctrl` + kółko (patrz `handleWheel` i `useLayoutEffect` wyżej).
+      kotwicaZoomRef.current = { planX: start.kotwica.x, planY: start.kotwica.y, kursorX: kursor.x, kursorY: kursor.y };
       zmienZoom(nowaSkala);
+    }
+
+    /**
+     * Przesuwanie rzutu JEDNYM palcem.
+     *
+     * W bok — zawsze: strona w poziomie się nie przewija, więc ten ruch nikomu innemu
+     * nie jest potrzebny. W pionie — tylko gdy przeglądarka i tak by go nie wzięła
+     * (palec postawiony na narysowanym kształcie) albo gdy wybrane jest „Przesuń widok";
+     * poza tym pion zostaje przewijaniu strony (patrz `touchAction` na kontenerze).
+     *
+     * Przeciąganie elementu albo uchwytu ma pierwszeństwo: Konva zakłada jego zalążek
+     * już przy dotknięciu (`DD._dragElements`), a nasz nasłuch na kontenerze dostaje
+     * pierwszy ruch, ZANIM Konva zdąży zacząć właściwe przeciąganie.
+     */
+    function prowadzJednym(e: TouchEvent, t: Touch) {
+      const p = palecRef.current;
+      if (!p || p.oddany) return;
+      if (!p.kotwica) {
+        if (DD._dragElements.size > 0) {
+          p.oddany = true;
+          return;
+        }
+        const kierunek = kierunekPalca(t.clientX - p.x, t.clientY - p.y);
+        if (kierunek === "za-wcześnie") return;
+        if (kierunek === "pionowo" && !p.naKsztalcie && kadrRef.current.toolMode !== "pan") {
+          p.oddany = true;
+          return;
+        }
+        // Chwytamy punkt spod MIEJSCA DOTKNIĘCIA, nie spod palca po przekroczeniu progu —
+        // rzut dociąga wtedy te kilka pikseli i dalej jedzie dokładnie pod palcem.
+        p.kotwica = punktPlanu({ x: p.x, y: p.y });
+        gestKadruRef.current.trwa = true;
+      }
+      if (e.cancelable) e.preventDefault();
+      setWidok(kadrPodPalcem(p.kotwica, naPlotnie({ x: t.clientX, y: t.clientY }), kadrRef.current.zoom));
     }
 
     /** Jeden palec to już nie szczypanie. Kolejne rozsunięcie zaczyna gest OD NOWA,
      *  od bieżącego powiększenia — inaczej po puszczeniu i ponownym złapaniu rzut
      *  skakałby do rozstawu sprzed przerwy. */
     function zakoncz(e: TouchEvent) {
+      if (e.touches.length === 0) {
+        palecRef.current = null;
+        // Straż `poGescieKadru` trzyma jeszcze chwilę po zejściu palców: zdarzenie
+        // dorobione przez przeglądarkę przychodzi PO `touchend`.
+        const g = gestKadruRef.current;
+        if (g.trwa) {
+          g.trwa = false;
+          g.koniec = Date.now();
+        }
+      }
       if (e.touches.length >= 2) return;
       szczypanieRef.current = null;
       // Przeciąganie wraca dopiero, gdy z ekranu zejdzie DRUGI palec. Palec, który
@@ -1606,6 +1724,9 @@ export function DesignCanvas({
     const rolka = e.button === 1;
     const lewyWTrybiePan = e.button === 0 && toolMode === "pan";
     if (!rolka && !lewyWTrybiePan) return;
+    // Palec przesuwa rzut własną drogą (`prowadzJednym`), która zna też szczypanie —
+    // tutaj każdy palec zaczynałby osobne przesuwanie i dwa gesty biłyby się o kadr.
+    if (e.pointerType === "touch") return;
     const el = kontenerRef.current;
     if (!el) return;
     // `preventDefault` gasi windowsowe autoprzewijanie (kółko z kotwicą), które
@@ -1659,15 +1780,16 @@ export function DesignCanvas({
         height: rozmiarOkna.h,
         cursor: przesuwa ? "grabbing" : toolMode === "pan" ? "grab" : undefined,
         /**
-         * Jeden palec zostaje PRZEGLĄDARCE (przewijanie strony nad płótnem, stawianie
-         * elementów dotknięciem), dwa palce bierzemy my.
+         * Pion jednego palca zostaje PRZEGLĄDARCE (przewijanie strony nad płótnem),
+         * resztę — ruch w bok i dwa palce — bierzemy my (patrz `prowadzJednym`).
          *
-         * `pan-x pan-y` znaczy dokładnie tyle: przewijaj, ale nie powiększaj. Bez tego
-         * szczypanie powiększało CAŁĄ STRONĘ razem z paskami, zamiast rzutu. `none`
-         * dałoby nam wszystko, ale odebrałoby telefonowi przewijanie akurat nad tym,
-         * co zajmuje pół ekranu.
+         * `pan-y` znaczy dokładnie tyle: przewijaj w pionie, ale nie w bok i nie
+         * powiększaj. Bez zakazu powiększania szczypanie powiększało CAŁĄ STRONĘ razem
+         * z paskami, zamiast rzutu. `none` dałoby nam wszystko, ale odebrałoby telefonowi
+         * przewijanie akurat nad tym, co zajmuje pół ekranu — dlatego tylko w „Przesuń
+         * widok", gdzie palec na płótnie ma przesuwać rzut w każdą stronę.
          */
-        touchAction: "pan-x pan-y",
+        touchAction: toolMode === "pan" ? "none" : "pan-y",
       }}
       onPointerDown={zacznijPrzesuwanie}
       onPointerMove={przesuwajSrodkowym}
@@ -2935,24 +3057,18 @@ export function DesignCanvas({
                 }}
                 {...klikAlboDotyk((e) => {
                   /**
-                   * W trybie WSTAWIANIA klik ma postawić kolejny element — także wtedy,
-                   * gdy trafi w już stojący.
+                   * Klik w JUŻ STOJĄCY element zaznacza go — także w trybie wstawiania.
                    *
-                   * Wcześniej taki klik zaznaczał trafiony element i na tym się kończyło,
-                   * więc dostawienie gniazda obok istniejącego wymagało trafienia poza
-                   * jego symbol (ok. 4 jedn.). To zderzało się z rozsuwaniem osprzętu,
-                   * które powstało dokładnie po to, żeby gniazda klikane blisko siebie
-                   * układały się w rząd: pomoc włączała się dopiero wtedy, gdy i tak
-                   * trafiło się w wolne miejsce.
+                   * Przez chwilę (6f650fd) klik w symbol w tym trybie stawiał kolejny
+                   * element, a rozsuwanie odsuwało go obok. Na telefonie wychodziło to
+                   * źle: palec, którym chciało się wskazać gniazdko, dokładał drugie,
+                   * a do zaznaczenia trzeba było przełączać narzędzie. Gniazdo obok
+                   * stojącego stawia się dotknięciem tuż za jego symbolem — rozsuwanie
+                   * dalej układa je w rząd.
                    *
-                   * Nie gasimy bąbelkowania, więc zdarzenie dochodzi do sceny i idzie
-                   * zwykłą drogą stawiania (patrz `handleStageClick`), a rozsuwanie
-                   * odsuwa nowy element obok trafionego. Przeciąganie zostaje: poprawka
-                   * pozycji to gest z przytrzymaniem, nie klik, a echo po przeciągnięciu
-                   * gasi `elementDragJustEndedRef`. Do zaznaczenia jest tryb „Zaznacz",
-                   * do edycji dwuklik, do menu PPM — wszystkie trzy działają jak dotąd.
+                   * `cancelBubble` gasi drogę do sceny, czyli do `handleStageClick`,
+                   * który postawiłby nowy element pod zaznaczonym.
                    */
-                  if (toolMode === "elementy") return;
                   e.cancelBubble = true;
                   // Shift istnieje tylko przy myszy; na dotyku dokładanie do zaznaczenia
                   // idzie przełącznikiem „Zaznacz kilka" (patrz DesignTab.tsx).

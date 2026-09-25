@@ -133,14 +133,13 @@ function nachodza(
 }
 
 /**
- * Klik W ISTNIEJĄCY element w trybie wstawiania stawia KOLEJNY, a nie zaznacza.
+ * Klik W ISTNIEJĄCY element w trybie wstawiania ZAZNACZA go, a nie stawia kolejnego.
  *
- * Wcześniej taki klik tylko zaznaczał trafiony element, więc dostawienie gniazda obok
- * istniejącego wymagało trafienia poza jego symbol (ok. 4 jedn.). To zderzało się
- * z rozsuwaniem, które powstało po to, żeby gniazda klikane blisko siebie układały się
- * w rząd: pomoc włączała się dopiero wtedy, gdy i tak trafiło się w wolne miejsce.
+ * Przez chwilę taki klik dostawiał drugie gniazdo obok trafionego. Na telefonie palec,
+ * którym chciało się wskazać gniazdko, dokładał następne — a do zaznaczenia trzeba było
+ * przełączać narzędzie.
  */
-test("klik w stojące gniazdo dostawia obok kolejne, zamiast je zaznaczyć", async ({ page }) => {
+test("klik w stojące gniazdo zaznacza je, zamiast dostawiać kolejne", async ({ page }) => {
   await otworzPlan(page);
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
@@ -153,11 +152,11 @@ test("klik w stojące gniazdo dostawia obok kolejne, zamiast je zaznaczyć", asy
   const naSymbolu = await naEkranie(page, pierwsze.x, pierwsze.y);
   await page.mouse.click(naSymbolu.x, naSymbolu.y);
 
-  const elementy = await zapisaneElementy(page);
-  expect(elementy, "klik w symbol ma postawić drugie gniazdo").toHaveLength(2);
-
-  const ramki = (await ramkiSymboli(page, elementy)) as { x: number; y: number; width: number; height: number }[];
-  expect(nachodza(ramki[0], ramki[1]), "i ma stanąć OBOK, nie na wierzchu").toBe(false);
+  expect(await zapisaneElementy(page), "klik w symbol nie może postawić drugiego gniazda").toHaveLength(1);
+  // Pojedyncze zaznaczenie widać tylko na płótnie — sprawdzamy je tym, co z nim robi
+  // klawisz Delete: usuwa ZAZNACZONE.
+  await page.keyboard.press("Delete");
+  expect(await zapisaneElementy(page), "gniazdo miało być zaznaczone").toHaveLength(0);
 });
 
 /**
