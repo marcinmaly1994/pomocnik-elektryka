@@ -667,6 +667,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const dolnyPasekRef = useRef<HTMLDivElement>(null);
   const kolumnaPlotnaRef = useRef<HTMLDivElement>(null);
   const [wysPlotna, setWysPlotna] = useState(wysokoscPlotna);
+  /**
+   * Czy `wysPlotna` jest już ZMIERZONA, a nie zgadnięta na starcie (`wysokoscPlotna()`
+   * bez argumentów daje 640 px). Kadr otwarcia wolno odhaczyć dopiero po pomiarze —
+   * patrz efekt dopasowania niżej.
+   */
+  const [wysZmierzona, setWysZmierzona] = useState(false);
   /** Szerokość dostępna dla płótna — mierzona razem z dopasowaniem powiększenia.
    *  Razem z `wysPlotna` wyznacza OKNO widoku, które dostaje płótno. */
   const [dostepnaSzer, setDostepnaSzer] = useState(0);
@@ -1105,6 +1111,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // różnica jest dla Reacta nowym stanem. Bez progu obserwator niżej budziłby się
       // w kółko na własnym skutku.
       setWysPlotna((poprzednia) => (Math.abs(nowa - poprzednia) > 1 ? nowa : poprzednia));
+      // Bez kolumny płótna (ekran startowy, wgrywanie) liczba wyżej to nadal zgadywanie.
+      if (pelnyEkran || gora !== null) setWysZmierzona(true);
     };
     przelicz();
     window.addEventListener("resize", przelicz);
@@ -1187,9 +1195,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
      * wtedy ostatnią rzeczą, jakiej ktoś chce: dorysowanie ściany zmienia wysokość
      * panelu bocznego, więc rysunek uciekałby spod kursora w trakcie rysowania.
      * Poza pierwszym razem zostaje samo powiększenie, dokładnie jak dotąd.
+     *
+     * Znacznik „skadrowana" dopiero przy ZMIERZONEJ wysokości płótna. Pomiar
+     * i dopasowanie ruszają w tym samym cyklu, więc pierwsze dopasowanie widzi jeszcze
+     * zgadnięte 640 px — a zmierzona wysokość (360 px na telefonie) wchodziła, gdy
+     * kadr był już zablokowany. Otwarty przykład miał wtedy pustą górę płótna i dół
+     * mieszkania za krawędzią. `wysZmierzona` w zależnościach budzi efekt ponownie
+     * także wtedy, gdy pomiar trafi akurat w zgadniętą liczbę i sama wysokość się
+     * nie zmieni.
      */
     if (skadrowanaRef.current !== activeFloorId) {
-      if (dopasujKadr()) skadrowanaRef.current = activeFloorId;
+      if (dopasujKadr() && wysZmierzona) skadrowanaRef.current = activeFloorId;
     } else {
       dopasujPustaKartke();
     }
@@ -1206,7 +1222,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [dopasujKadr, dopasujPustaKartke, zoomReczny, wgrywanie.stan, showEntryScreen, activeFloorId]);
+  }, [dopasujKadr, dopasujPustaKartke, zoomReczny, wgrywanie.stan, showEntryScreen, activeFloorId, wysZmierzona]);
 
   const scaleToolRef = useRef<HTMLButtonElement | null>(null);
   const wallToolRef = useRef<HTMLButtonElement | null>(null);
