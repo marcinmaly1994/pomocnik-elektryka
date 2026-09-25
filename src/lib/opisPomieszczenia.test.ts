@@ -5,6 +5,7 @@ import {
   MIN_FONT_OPISU,
   WYSOKOSC_NAZWY_M,
   fontOpisuPokoju,
+  miejsceNaOpis,
   fontRzutu,
   skalaOpisowRzutu,
   szerokoscRamki,
@@ -107,5 +108,197 @@ describe("szerokoscRamki", () => {
     // Przybliżenie 0,5 znaku na jednostkę fontu jest odrobinę ZA MAŁE — prawdziwa
     // szerokość „Salon" przy foncie 5,6 leży między 14,01 a 15,4 jedn.
     expect(szerokoscRamki("Salon", 5.6)).toBeGreaterThan(15.4);
+  });
+});
+
+describe("miejsce na opis pomieszczenia", () => {
+  const pokoj = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 80 },
+    { x: 0, y: 80 },
+  ];
+  const blok = { lewo: 20, prawo: 20, gora: 6, dol: 6 };
+  /** Lampa sufitowa w środku pokoju — dokładnie tam, gdzie stoi nazwa. */
+  const lampa = { x1: 44, y1: 34, x2: 56, y2: 46 };
+
+  it("bez symboli opis zostaje w kotwicy", () => {
+    expect(miejsceNaOpis({ kotwica: { x: 50, y: 40 }, blok, przeszkody: [], obrys: pokoj, krok: 8 })).toEqual({
+      x: 50,
+      y: 40,
+    });
+  });
+
+  it("lampa na środku spycha opis w pionie, poza nią", () => {
+    const p = miejsceNaOpis({ kotwica: { x: 50, y: 40 }, blok, przeszkody: [lampa], obrys: pokoj, krok: 8 });
+    expect(p.x).toBe(50);
+    // Blok opisu nie nachodzi już na lampę.
+    expect(p.y - blok.gora >= lampa.y2 || p.y + blok.dol <= lampa.y1).toBe(true);
+  });
+
+  it("nie wyprowadza opisu za ścianę", () => {
+    const niski = [
+      { x: 0, y: 0 },
+      { x: 120, y: 0 },
+      { x: 120, y: 16 },
+      { x: 0, y: 16 },
+    ];
+    // Lampa w środku niskiego pokoju: w pionie miejsce jest tylko ZA ścianą, więc opis
+    // idzie w bok — wolne miejsce w pokoju ma pierwszeństwo przed wolnym poza nim.
+    const p = miejsceNaOpis({
+      kotwica: { x: 60, y: 8 },
+      blok,
+      przeszkody: [{ x1: 54, y1: 2, x2: 66, y2: 14 }],
+      obrys: niski,
+      krok: 8,
+    });
+    expect(p.y).toBe(8);
+    expect(Math.abs(p.x - 60)).toBeGreaterThan(0);
+    expect(p.x - blok.lewo).toBeGreaterThanOrEqual(0);
+    expect(p.x + blok.prawo).toBeLessThanOrEqual(120);
+  });
+
+  it("gdy wolnego miejsca nie ma, wybiera najmniej zasłonięte", () => {
+    // Cały pokój zastawiony — ale jeden symbol mniejszy od reszty.
+    const p = miejsceNaOpis({
+      kotwica: { x: 50, y: 40 },
+      blok,
+      przeszkody: [{ x1: 0, y1: 0, x2: 100, y2: 80 }],
+      obrys: pokoj,
+      krok: 8,
+    });
+    // Pole zasłonięte wszędzie takie samo — zostaje kotwica.
+    expect(p).toEqual({ x: 50, y: 40 });
+  });
+});
+
+describe("miejsce na opis — kandydaci podani wprost", () => {
+  const lazienka = [
+    { x: 0, y: 0 },
+    { x: 60, y: 0 },
+    { x: 60, y: 60 },
+    { x: 0, y: 60 },
+  ];
+  const blok = { lewo: 15, prawo: 15, gora: 0, dol: 5 };
+
+  it("kotwica za ścianą przegrywa z pierwszym miejscem w obrysie", () => {
+    // Podpis strefy stał NAD strefą — czyli za ścianą łazienki, w sąsiednim pokoju.
+    const p = miejsceNaOpis({
+      kotwica: { x: 30, y: -10 },
+      blok,
+      przeszkody: [],
+      obrys: lazienka,
+      kandydaci: [
+        { x: 30, y: 70 },
+        { x: 30, y: 40 },
+      ],
+    });
+    expect(p).toEqual({ x: 30, y: 40 });
+  });
+
+  it("omija zajęte miejsce, np. nazwę pomieszczenia", () => {
+    const nazwa = { x1: 15, y1: 38, x2: 45, y2: 48 };
+    const p = miejsceNaOpis({
+      kotwica: { x: 30, y: 40 },
+      blok,
+      przeszkody: [nazwa],
+      obrys: lazienka,
+      kandydaci: [{ x: 30, y: 10 }],
+    });
+    expect(p).toEqual({ x: 30, y: 10 });
+  });
+
+  it("gdy nic nie mieści się w obrysie, zostaje kotwica", () => {
+    const p = miejsceNaOpis({
+      kotwica: { x: 30, y: -10 },
+      blok: { lewo: 100, prawo: 100, gora: 0, dol: 5 },
+      przeszkody: [],
+      obrys: lazienka,
+      kandydaci: [{ x: 30, y: 30 }],
+    });
+    expect(p).toEqual({ x: 30, y: -10 });
+  });
+});
+
+describe("miejsce na opis — pokój bez wolnego miejsca", () => {
+  it("czytelny napis za ścianą wygrywa z napisem pod symbolem", () => {
+    // Mała łazienka, w której podpis strefy nie mieści się nigdzie obok przyboru.
+    const lazienka = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 20 },
+      { x: 0, y: 20 },
+    ];
+    const p = miejsceNaOpis({
+      kotwica: { x: 20, y: 10 },
+      blok: { lewo: 15, prawo: 15, gora: 0, dol: 5 },
+      przeszkody: [{ x1: 0, y1: 0, x2: 40, y2: 20 }],
+      obrys: lazienka,
+      wolnoZaObrys: true,
+      kandydaci: [
+        { x: 20, y: 5 },
+        { x: 20, y: -10 },
+      ],
+    });
+    expect(p).toEqual({ x: 20, y: -10 });
+  });
+});
+
+describe("miejsce na opis — nazwa pomieszczenia", () => {
+  it("bez `wolnoZaObrys` nie wychodzi za ścianę, nawet gdy w środku ciasno", () => {
+    // Ta sama ciasna łazienka — ale to NAZWA pokoju, a nie podpis strefy.
+    const lazienka = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 20 },
+      { x: 0, y: 20 },
+    ];
+    const p = miejsceNaOpis({
+      kotwica: { x: 20, y: 10 },
+      blok: { lewo: 15, prawo: 15, gora: 0, dol: 5 },
+      przeszkody: [{ x1: 0, y1: 0, x2: 40, y2: 20 }],
+      obrys: lazienka,
+      kandydaci: [{ x: 20, y: -10 }],
+    });
+    expect(p).toEqual({ x: 20, y: 10 });
+  });
+});
+
+describe("miejsce na opis — pokój w kształcie L", () => {
+  it("znajduje wolne miejsce poza głównymi kierunkami od środka", () => {
+    // Przedpokój z przykładu: ramię poziome u góry, pionowe po lewej.
+    const przedpokoj = [
+      { x: 60, y: 90 },
+      { x: 160, y: 90 },
+      { x: 160, y: 120 },
+      { x: 90, y: 120 },
+      { x: 90, y: 160 },
+      { x: 60, y: 160 },
+    ];
+    const p = miejsceNaOpis({
+      kotwica: { x: 103, y: 123 },
+      blok: { lewo: 16, prawo: 16, gora: 3, dol: 3 },
+      // Lampa i czujnik w poziomym ramieniu, zostawiają wolny jego prawy koniec.
+      przeszkody: [
+        { x1: 89, y1: 99, x2: 101, y2: 111 },
+        { x1: 109, y1: 106, x2: 121, y2: 118 },
+        { x1: 112, y1: 89, x2: 120, y2: 99 },
+      ],
+      obrys: przedpokoj,
+      krok: 2.8,
+      krokow: 16,
+    });
+    // Blok opisu leży w obrysie i nie dotyka żadnej przeszkody.
+    const blok = { x1: p.x - 16, y1: p.y - 3, x2: p.x + 16, y2: p.y + 3 };
+    for (const q of [
+      { x1: 89, y1: 99, x2: 101, y2: 111 },
+      { x1: 109, y1: 106, x2: 121, y2: 118 },
+      { x1: 112, y1: 89, x2: 120, y2: 99 },
+    ]) {
+      expect(blok.x1 >= q.x2 || blok.x2 <= q.x1 || blok.y1 >= q.y2 || blok.y2 <= q.y1).toBe(true);
+    }
+    // Poziome ramię (y 90–120) — pionowe ma tylko 30 jedn. szerokości, opis 32 się w nim nie mieści.
+    expect(blok.y1).toBeGreaterThanOrEqual(90);
+    expect(blok.y2).toBeLessThanOrEqual(120);
   });
 });

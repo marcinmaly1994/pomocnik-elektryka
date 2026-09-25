@@ -1,4 +1,4 @@
-import type { ElementType, InstallationElement, Point } from "@/types";
+import type { ElementType, InstallationElement, Opening, Point } from "@/types";
 import { fixtureSizeM, SANITARY_FIXTURES } from "./elements";
 import { glyphBoxSize } from "./glyphs";
 import { MANUAL_DRAW_SCALE_MPU } from "./design";
@@ -184,4 +184,71 @@ export function bezNakladaniaNaSasiadow(
     kandydat.rotation ?? 0,
     ODSTEP_SYMBOLI_M / mpu
   );
+}
+
+/** Prostokąt osiowy w jednostkach planu. */
+export interface Prostokat {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+/**
+ * Prostokąt osiowy zajmowany przez symbol NA RYSUNKU — z uwzględnieniem obrotu.
+ *
+ * Gniazdo przy pionowej ścianie stoi obrócone o 90°, więc jego pudełko ma w poziomie
+ * wysokość, a nie szerokość symbolu. `rogiSymbolu` bierze tu okrąg opisany (kadr ma
+ * nie obcinać niczego), ale do omijania symboli podpisem jest on za szeroki: w małym
+ * pokoju nie zostawiłby na nazwę ani skrawka.
+ */
+export function prostokatSymbolu(e: InstallationElement, skalaSymboli: number): Prostokat {
+  const s = pudelkoSymbolu(e, skalaSymboli);
+  const kat = (s.obrot * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(kat));
+  const sin = Math.abs(Math.sin(kat));
+  const polX = cos * s.polSzer + sin * s.polWys;
+  const polY = sin * s.polSzer + cos * s.polWys;
+  return { x1: s.x - polX, y1: s.y - polY, x2: s.x + polX, y2: s.y + polY };
+}
+
+/**
+ * Prostokąt osiowy zajmowany przez OTWÓR na rysunku — dla drzwi razem z łukiem skrzydła.
+ *
+ * Ta sama geometria co glif w `DesignCanvas`: zawias na jednym końcu otworu (drugim przy
+ * `lustro`), skrzydło zamiata ćwierć koła o promieniu szerokości otworu, od położenia
+ * zamkniętego (wzdłuż ściany) do otwartego (`perp`). Łuk próbkowany co 10° — prostokąt
+ * ma powiedzieć, gdzie NIE stawiać napisu, a nie trafić co do ułamka jednostki.
+ *
+ * Zgrubne „± szerokość w każdą stronę" zajmowało w przedpokoju z czterema drzwiami
+ * niemal cały pokój i nazwa nie miała gdzie stanąć.
+ */
+export function prostokatOtworu(o: Opening, gruboscSciany: number): Prostokat {
+  const halfW = o.width / 2;
+  const kat = o.angle + (o.flip ? Math.PI : 0);
+  const dir = { x: Math.cos(kat), y: Math.sin(kat) };
+  const perp = { x: -dir.y, y: dir.x };
+  const edge1 = { x: o.x - dir.x * halfW, y: o.y - dir.y * halfW };
+  const edge2 = { x: o.x + dir.x * halfW, y: o.y + dir.y * halfW };
+  // Sam otwór w murze — pas szerokości otworu na grubość ściany.
+  const punkty: Point[] = [edge1, edge2].flatMap((p) => [
+    { x: p.x + (perp.x * gruboscSciany) / 2, y: p.y + (perp.y * gruboscSciany) / 2 },
+    { x: p.x - (perp.x * gruboscSciany) / 2, y: p.y - (perp.y * gruboscSciany) / 2 },
+  ]);
+  if (o.kind === "drzwi") {
+    const zawias = o.lustro ? edge2 : edge1;
+    // Położenie zamknięte: od zawiasu w stronę drugiego końca otworu.
+    const zamkniete = o.lustro ? { x: -dir.x, y: -dir.y } : dir;
+    for (let st = 0; st <= 90; st += 10) {
+      const a = (st * Math.PI) / 180;
+      const kier = {
+        x: zamkniete.x * Math.cos(a) + perp.x * Math.sin(a),
+        y: zamkniete.y * Math.cos(a) + perp.y * Math.sin(a),
+      };
+      punkty.push({ x: zawias.x + kier.x * o.width, y: zawias.y + kier.y * o.width });
+    }
+  }
+  const xs = punkty.map((p) => p.x);
+  const ys = punkty.map((p) => p.y);
+  return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) };
 }
