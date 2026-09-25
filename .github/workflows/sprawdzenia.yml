@@ -122,12 +122,15 @@ jobs:
 
       # Testy chmury POZA podziałem i na JEDNYM workerze.
       #
-      # Oba pliki logują się na WSPÓLNE konto testowe, a sprzątanie (`posprzataj`
-      # w e2e/_konto.ts) kasuje z niego wszystkie zapisy o nazwach z prefiksem
-      # „E2E-TEST" — także CUDZE. Puszczone równolegle kasowałyby sobie dane w trakcie,
-      # a do tego dzielą limit pięciu zapisów na konto, który jedne z nich wprost
-      # sprawdzają. `mode: "serial"` w obu plikach pilnuje kolejności tylko WEWNĄTRZ
-      # pliku — między plikami nie znaczy nic.
+      # Oba pliki dzielą jedno konto testowe z limitem PIĘCIU zapisów. Każdy z osobna
+      # mieści się w nim z zapasem, ale sumy nikt nie pilnuje — a przekroczenie limitu
+      # objawiłoby się błędem zapisu w losowym teście, czyli najgorszym możliwym
+      # sposobem. Jeden worker to tanie ubezpieczenie: jeden krok w jednym shardzie.
+      #
+      # Samo równoległe sprzątanie nie jest już problemem — `posprzataj` w e2e/_konto.ts
+      # kasuje wyłącznie WŁASNE wpisy. Kiedyś kasowało wszystkie z prefiksem „E2E-TEST",
+      # także cudze, i wtedy te dwa pliki puszczone razem wywracały się w dwóch próbach
+      # na dwie.
       #
       # Tylko pierwszy shard, bo to jedno konto na cały przebieg, i tylko gdy sekrety
       # są ustawione: bez nich te testy i tak by się pominęły, a serwery trzeba by

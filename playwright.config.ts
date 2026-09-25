@@ -28,18 +28,16 @@ export default defineConfig({
    *
    * Lokalnie bez zmian — domyslna polowa rdzeni.
    *
-   * TESTY CHMURY SA POZA TA ARYTMETYKA. Oba pliki (`konto.spec.ts`,
-   * `rooms-reconcile-cloud.spec.ts`, oznaczone `@chmura`) loguja sie na WSPOLNE konto,
-   * a `posprzataj` w e2e/_konto.ts kasuje z niego wszystkie zapisy z prefiksem
-   * „E2E-TEST" — takze cudze. Rownolegle kasowalyby sobie dane w trakcie.
-   * `mode: "serial"` w obu plikach pilnuje kolejnosci tylko WEWNATRZ pliku; miedzy
-   * plikami nie znaczy nic. W CI jada wiec osobnym krokiem, poza shardami i na jednym
-   * workerze (patrz .github/workflows/sprawdzenia.yml).
+   * TESTY CHMURY (`@chmura`) jada w CI osobnym krokiem, poza shardami i na jednym
+   * workerze — patrz .github/workflows/sprawdzenia.yml.
    *
-   * Lokalne `npm run e2e` puszcza je razem z reszta i teoretycznie moze na to trafic.
-   * Zostawione swiadomie: podzial lokalnego przebiegu na dwa przejscia znaczylby drugie
-   * budowanie paczki pod serwer `preview`, czyli mniej wiecej minute za kazdym razem,
-   * a przy jednej osobie i natychmiast widocznej porazce to zla wymiana.
+   * NIE dlatego, ze inaczej sie psuja: `posprzataj` w e2e/_konto.ts kasuje juz tylko
+   * WLASNE wpisy, wiec rownolegle przechodza (sprawdzone `--grep @chmura --workers=2`,
+   * trzy proby na trzy). Powodem jest to, czego sprzataniem nie da sie zalatwic:
+   * oba pliki dziela jedno konto z limitem PIECIU zapisow. Kazdy z osobna miesci sie
+   * w nim z zapasem, ale sumy nikt nie pilnuje, a przekroczenie limitu objawiloby sie
+   * bledem zapisu w losowym tescie. Jeden worker na chmure to tanie ubezpieczenie:
+   * jeden krok w jednym shardzie.
    */
   workers: process.env.CI ? 2 : undefined,
   webServer: [

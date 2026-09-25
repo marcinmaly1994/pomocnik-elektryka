@@ -48,9 +48,37 @@ export const POWOD_POMINIECIA =
  */
 export const PREFIKS = "E2E-TEST";
 
+/**
+ * Znacznik TEGO procesu testowego — wchodzi w nazwę każdego zakładanego dokumentu.
+ *
+ * Sprzątanie kasowało wcześniej wszystko z prefiksem `E2E-TEST`, także dokumenty
+ * ZAŁOŻONE PRZEZ INNY PLIK. Oba pliki chmury dzielą jedno konto, więc puszczone
+ * równolegle kasowały sobie dane w trakcie. Zmierzone: `--grep @chmura --workers=2`
+ * wywracało `rooms-reconcile-cloud` w dwóch próbach na dwie.
+ *
+ * Playwright daje każdemu workerowi osobny proces, a `mode: "serial"` trzyma cały
+ * plik w jednym workerze — więc PID wystarcza, żeby oddzielić pliki od siebie.
+ * Losowy człon na wypadek, gdyby system nadał ten sam PID dwa razy w odstępie,
+ * w którym stary wpis jeszcze żyje.
+ */
+const ZNACZNIK = `${process.pid.toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+/**
+ * Po tylu milisekundach wpis uznajemy za PORZUCONY i kasujemy mimo cudzego znacznika.
+ *
+ * Bez tego przerwany w połowie przebieg (Ctrl+C, timeout, awaria runnera) zostawiałby
+ * śmieci na koncie NA ZAWSZE — a konto ma limit pięciu zapisów, który część testów
+ * wprost sprawdza, więc kilka takich sierot i zestaw przestaje przechodzić z powodu,
+ * którego nie widać w kodzie.
+ *
+ * Pół godziny, bo dokumenty testowe żyją sekundy, a najdłuższy job w CI ma limit
+ * 25 minut. Żaden wpis z RÓWNOLEGLE działającego pliku nie zdąży się zestarzeć.
+ */
+const PRZETERMINOWANE_MS = 30 * 60 * 1000;
+
 /** Nazwa unikalna w obrębie przebiegu — testy chodzą równolegle. */
 export function nazwaTestowa(sufiks: string): string {
-  return `${PREFIKS} ${sufiks} ${Date.now().toString(36)}`;
+  return `${PREFIKS} ${ZNACZNIK} ${sufiks} ${Date.now().toString(36)}`;
 }
 
 /** Loguje się przez interfejs aplikacji — tą samą drogą co użytkownik, więc test
@@ -91,14 +119,36 @@ export async function tokenZSesji(page: Page): Promise<{ token: string; userId: 
  * teście: przed — bo poprzedni przebieg mógł zostawić śmieci i zająć miejsca
  * w limicie pięciu; po — żeby nie zostawiać ich następnemu.
  */
+/**
+ * Czy ten wpis wolno skasować — WŁASNY albo porzucony.
+ *
+ * Osobno i bez sięgania po zegar w środku, żeby dało się przeczytać regułę bez
+ * czytania całego sprzątania: kasujemy to, co założył ten proces, oraz to, co jest
+ * na tyle stare, że nikt już tego nie używa. Cudzy wpis sprzed chwili zostaje —
+ * to jest cała poprawka.
+ */
+export function doSkasowania(
+  wpis: { name?: string; updated_at?: string },
+  znacznik: string,
+  teraz: number
+): boolean {
+  if (!wpis.name?.startsWith(PREFIKS)) return false;
+  if (wpis.name.includes(znacznik)) return true;
+  const zmieniony = Date.parse(wpis.updated_at ?? "");
+  // Wpis bez czytelnej daty ZOSTAJE: lepiej zostawić śmiecia niż skasować coś,
+  // czego akurat używa drugi plik.
+  return Number.isFinite(zmieniony) && teraz - zmieniony > PRZETERMINOWANE_MS;
+}
+
 export async function posprzataj(request: APIRequestContext, token: string, userId: string): Promise<void> {
   const lista = await request.get(
-    `${SUPABASE_URL}/rest/v1/projects?user_id=eq.${userId}&select=id,name`,
+    `${SUPABASE_URL}/rest/v1/projects?user_id=eq.${userId}&select=id,name,updated_at`,
     { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } },
   );
   if (!lista.ok()) return;
-  for (const wpis of (await lista.json()) as { id: string; name: string }[]) {
-    if (!wpis.name?.startsWith(PREFIKS)) continue;
+  const teraz = Date.now();
+  for (const wpis of (await lista.json()) as { id: string; name: string; updated_at: string }[]) {
+    if (!doSkasowania(wpis, ZNACZNIK, teraz)) continue;
     await request.delete(`${SUPABASE_URL}/rest/v1/projects?id=eq.${wpis.id}`, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
     });
