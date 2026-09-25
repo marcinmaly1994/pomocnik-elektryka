@@ -157,8 +157,8 @@ test("zakladki kondygnacji sa w pasku na monitorze, a na telefonie w menu „Pla
  * narzedzi. Klikniecie „Narysuj dom samodzielnie" nie zmienialo NICZEGO w kadrze,
  * wiec nie bylo zadnego znaku, ze gdzies nizej czeka kartka do rysowania.
  *
- * Celem przewijania jest WIERSZ EDYTORA, nie samo plotno: wiersz zaczyna sie paskiem
- * narzedzi, wiec po przewinieciu widac i czym rysowac, i po czym.
+ * Celem przewijania jest KORZEN EDYTORA, nie samo plotno: zaczyna sie paskiem edytora
+ * i paskiem narzedzi, wiec po przewinieciu widac i czym rysowac, i po czym.
  */
 test("telefon: po wybraniu drogi startu rysunek jest w kadrze, razem z paskiem narzedzi", async ({ page }) => {
   await page.setViewportSize(TELEFON);

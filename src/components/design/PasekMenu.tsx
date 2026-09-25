@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 
 /**
@@ -82,16 +83,47 @@ export function PasekMenu({
   const [otwarte, setOtwarte] = useState(false);
   const szerokieOkno = useSzerokieOkno();
   const pudloRef = useRef<HTMLDivElement>(null);
+  const przyciskRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  /**
+   * Położenie panelu w oknie — liczone od przycisku, bo panel żyje w PORTALU.
+   *
+   * Na telefonie pasek edytora jest jednym przewijanym rzędem (`overflow-x-auto`),
+   * a przewijany pojemnik przycina wszystko, co z niego wystaje — panel zawieszony
+   * `absolute` pod przyciskiem byłby ucięty do wysokości paska. Portal do `body`
+   * wyprowadza go spod tego przycięcia; `fixed` wewnątrz paska by nie wystarczył,
+   * bo w pełnym ekranie pasek wysuwa się transformacją, a przodek z transformacją
+   * zamienia `fixed` w pozycjonowanie względem siebie.
+   */
+  const [polozenie, setPolozenie] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!otwarte) return;
+    const ustaw = () => {
+      const r = przyciskRef.current?.getBoundingClientRect();
+      if (!r) return;
+      // Na wąskim ekranie panel (320 px) jest niemal szerokości okna — dosuwamy go
+      // tak, żeby nie wyszedł za prawą krawędź.
+      const width = Math.min(szerokosc, window.innerWidth - 16);
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+      setPolozenie({ top: r.bottom + 4, left, width });
+    };
+    ustaw();
+    // `capture`: przewija się nie tylko okno, ale i sam pasek (na telefonie).
+    window.addEventListener("scroll", ustaw, true);
+    window.addEventListener("resize", ustaw);
+    return () => {
+      window.removeEventListener("scroll", ustaw, true);
+      window.removeEventListener("resize", ustaw);
+    };
+  }, [otwarte, szerokosc]);
 
   useEffect(() => {
     if (!otwarte) return;
     function naZewnatrz(e: PointerEvent) {
-      // Okna dialogowe otwierane Z WNĘTRZA panelu (np. „Duplikuj") renderują się
-      // w portalu, czyli POZA tym pudłem — bez tego wyjątku pierwsze kliknięcie
-      // w takim oknie zamykałoby panel razem z nim.
       const cel = e.target as HTMLElement | null;
-      if (!cel || pudloRef.current?.contains(cel) || cel.closest("[role='dialog']")) return;
+      if (!cel || pudloRef.current?.contains(cel) || panelRef.current?.contains(cel) || cel.closest("[role='dialog']")) return;
       setOtwarte(false);
     }
     function naEscape(e: KeyboardEvent) {
@@ -110,6 +142,7 @@ export function PasekMenu({
   return (
     <div ref={pudloRef} className="relative">
       <button
+        ref={przyciskRef}
         type="button"
         onClick={() => setOtwarte((v) => !v)}
         aria-expanded={otwarte}
@@ -117,21 +150,32 @@ export function PasekMenu({
         className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs text-slate-600 transition-colors hover:text-copper"
       >
         {ikona}
-        {etykieta}
-        <ChevronDown size={13} className={otwarte ? "rotate-180 transition-transform" : "transition-transform"} />
+        {/* Na telefonie sama ikona: pasek edytora jest tam jednym rzędem i przy pełnych
+            etykietach cofnij/ponów i powiększenie uciekały za prawą krawędź. Nazwa
+            zostaje dla czytnika ekranu (`sr-only`), więc i nazwa dostępnościowa. */}
+        <span className={ikona ? "sr-only md:not-sr-only" : undefined}>{etykieta}</span>
+        <ChevronDown
+          size={13}
+          className={`${ikona ? "hidden md:block " : ""}${otwarte ? "rotate-180 transition-transform" : "transition-transform"}`}
+        />
       </button>
 
-      {otwarte && (
-        <div
-          id={panelId}
-          // `z-30` nad płótnem, ale POD paskami pełnego ekranu (`z-40`) i oknami
-          // dialogowymi — panel ma przykrywać rysunek, nic więcej.
-          className="absolute left-0 top-full z-30 mt-1 flex flex-col gap-2.5 rounded-card border border-border bg-white p-3 shadow-lg"
-          style={{ width: szerokosc }}
-        >
-          <ZamknijContext.Provider value={() => setOtwarte(false)}>{children}</ZamknijContext.Provider>
-        </div>
-      )}
+      {otwarte &&
+        polozenie &&
+        createPortal(
+          <div
+            ref={panelRef}
+            id={panelId}
+            // `z-[45]`: nad pełnoekranowym edytorem (`z-40` — w portalu panel nie jest
+            // już jego dzieckiem), ale pod oknami dialogowymi (`z-50`), które otwiera
+            // choćby „Duplikuj" z wnętrza panelu.
+            className="fixed z-[45] flex flex-col gap-2.5 rounded-card border border-border bg-white p-3 shadow-lg"
+            style={{ top: polozenie.top, left: polozenie.left, width: polozenie.width }}
+          >
+            <ZamknijContext.Provider value={() => setOtwarte(false)}>{children}</ZamknijContext.Provider>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
