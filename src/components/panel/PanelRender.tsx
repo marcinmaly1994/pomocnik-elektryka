@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
+import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
 import { PHASE_COLORS, accentForDevice, daSieSkasowac, layoutPanel } from "@/lib/panel/devices";
 import { zawijNaDwieLinie } from "@/lib/tekst";
 import type { SizedCircuit } from "@/lib/panel/sizing";
@@ -34,7 +36,7 @@ const PAD = 26;
 const LEGEND_H = 80;
 
 /** O ile powiększyć cały rysunek względem rozmiaru naturalnego — patrz komentarz
- *  przy `maxWidth` niżej. Skalujemy WIDOK, nie geometrię, więc proporcje aparatów
+ *  przy `width` rysunku niżej. Skalujemy WIDOK, nie geometrię, więc proporcje aparatów
  *  i wzajemne odległości zostają dokładnie takie same. */
 const SKALA_WIDOKU = 1.8;
 
@@ -264,6 +266,11 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
   // Rozróżnia kliknięcie od przeciągnięcia — bez tego puszczenie aparatu nad kółkiem
   // kasowania kasowałoby go zamiast przenieść.
   const przeciagnieto = useRef(false);
+  /** Czy bieżący `pointerdown` trafił w przenoszalny aparat — ustawiane przez aparat,
+   *  czytane przez pojemnik, który dostaje to samo zdarzenie zaraz potem. */
+  const chwycilAparat = useRef(false);
+  /** Przesuwanie powiększonego rysunku palcem — patrz komentarz przy pojemniku. */
+  const przesuw = useRef<{ id: number; x: number; scrollLeft: number } | null>(null);
 
   const zakonczPrzenoszenie = () => {
     if (chwycony !== null && cel !== null && cel !== chwycony) onMove?.(chwycony, cel);
@@ -275,14 +282,28 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
   const innerW = perRow * MODULE_W;
   const svgW = innerW + PAD * 2;
   const svgH = Math.max(rows.length, 1) * rowH + PAD * 2 + LEGEND_H;
+  /**
+   * Powiększanie — przyciski i szczypanie (patrz `usePowiekszanieRysunku`).
+   *
+   * Na telefonie front mieści się w całości, ale opisy obwodów pod aparatami mają
+   * wtedy kilka pikseli i nie da się ich przeczytać. Punktem odniesienia jest rozmiar,
+   * w którym rysunek stoi na monitorze (`SKALA_WIDOKU`), a domyślnie — jak dotąd —
+   * dopasowanie do szerokości, więc bez sięgania po powiększenie nic się nie zmienia.
+   */
+  const szerNaturalna = svgW * SKALA_WIDOKU;
+  const p = usePowiekszanieRysunku(szerNaturalna, true);
 
   // Rysunek rozdzielnicy traktujemy jak plan: suwak systemowy pod rysunkiem
   // technicznym wygląda jak podgląd pliku, a nie jak narzędzie. Tabele w kosztorysie
   // i protokołach ZOSTAWIAMY z widocznym suwakiem — tam pasek niesie informację,
   // że dalej są kolejne kolumny.
   return (
+    <div className="space-y-2">
+    <PrzyciskiPowiekszenia p={p} nazwa={{ dopelniacz: "rozdzielnicy", biernik: "rozdzielnicę" }} />
     <div
-      className="pe-bez-suwaka overflow-x-auto rounded-card border border-border"
+      ref={p.kontenerRef}
+      data-testid="rozdzielnica-okno"
+      className="pe-bez-suwaka overflow-auto rounded-card border border-border"
       /**
        * `pan-y`: pionowe przewijanie STRONY zostaje przeglądarce, poziome gesty
        * bierzemy my — a przenoszenie aparatów po szynie jest właśnie poziome.
@@ -291,26 +312,47 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
        * z dwóch rzeczy nie dochodziła do skutku. `none` odebrałoby przewijanie
        * całkiem, a rysunek zajmuje na telefonie sporą część ekranu.
        *
-       * Poziomego przewijania nie tracimy: `maxWidth` rysunku nie pozwala mu
-       * przerosnąć kontenera (patrz `style` przy `svg`), więc `overflow-x-auto`
-       * i tak nie ma czego przewijać — zmierzone na oknie 375 px, gdzie rysunek
-       * skaluje się do 325 px, czyli dokładnie do szerokości kolumny.
+       * Po POWIĘKSZENIU rysunek ma co przewijać w bok — i tu `pan-x` byłoby pułapką:
+       * Chrome nie stosuje `touch-action` do elementów WEWNĄTRZ SVG, więc aparat nie
+       * mógłby zostawić sobie gestu poziomego i przeglądarka przejmowała każde
+       * przeciągnięcie (sprawdzone: aparat przestawał się przenosić). Przewijamy więc
+       * sami: palec, który NIE chwycił aparatu, przesuwa rysunek (`przesuw`).
        */
       style={{ background: "#EDF0F3", touchAction: "pan-y" }}
+      onPointerDownCapture={() => {
+        // Przed aparatem: każdy nacisk zaczyna od „nic nie chwycono".
+        chwycilAparat.current = false;
+      }}
+      onPointerDown={(e) => {
+        if (e.pointerType === "mouse" || chwycilAparat.current || !p.powiekszony) return;
+        przesuw.current = { id: e.pointerId, x: e.clientX, scrollLeft: e.currentTarget.scrollLeft };
+      }}
+      onPointerMove={(e) => {
+        const s = przesuw.current;
+        if (!s || s.id !== e.pointerId) return;
+        e.currentTarget.scrollLeft = s.scrollLeft - (e.clientX - s.x);
+      }}
+      onPointerUp={() => {
+        przesuw.current = null;
+      }}
+      onPointerCancel={() => {
+        przesuw.current = null;
+      }}
     >
       <svg
         viewBox={`0 0 ${svgW} ${svgH}`}
         preserveAspectRatio="xMidYMin meet"
         role="img"
         aria-label="Widok czołowy rozdzielnicy"
-        // Rozdzielnica nadal nie rozciąga się na CAŁĄ szerokość — aparat modułowy ma
-        // realny rozmiar (17,5 mm) i rozdmuchany do monitora wygląda jak makieta.
-        // Ale sam „rozmiar naturalny" okazał się w praktyce za mały: przy 12 modułach
-        // to ~410 px, na których opisy obwodów i oznaczenia aparatów są ledwo czytelne.
-        // Stąd stały mnożnik: proporcje aparatów zostają nietknięte (skalujemy cały
-        // rysunek, nie geometrię), a wszystko — łącznie z tekstem — rośnie razem.
-        // `width: 100%` nadal pozwala rysunkowi ZMALEĆ na wąskim ekranie.
-        style={{ display: "block", width: "100%", maxWidth: svgW * SKALA_WIDOKU, height: "auto" }}
+        // Rozdzielnica nie rozciąga się na CAŁĄ szerokość — aparat modułowy ma realny
+        // rozmiar (17,5 mm) i rozdmuchany do monitora wygląda jak makieta. Ale sam
+        // „rozmiar naturalny" okazał się w praktyce za mały: przy 12 modułach to ~410 px,
+        // na których opisy obwodów i oznaczenia aparatów są ledwo czytelne. Stąd stały
+        // mnożnik `SKALA_WIDOKU` jako 100%, a powiększenie (domyślnie: dopasowanie do
+        // szerokości) skaluje cały rysunek razem z tekstem.
+        width={szerNaturalna * p.zoom}
+        height={svgH * SKALA_WIDOKU * p.zoom}
+        style={{ display: "block", margin: "0 auto" }}
         onPointerUp={zakonczPrzenoszenie}
         // Wyjście wskaźnikiem poza rysunek ANULUJE przeniesienie: aparat nie ma dokąd
         // trafić, a zostawienie stanu „w trakcie" łapałoby każde kolejne najechanie.
@@ -425,6 +467,9 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                         trafiony.releasePointerCapture(e.pointerId);
                       }
                       przeciagnieto.current = false;
+                      // Ten palec chwycił aparat — przewijanie rysunku go nie dostanie
+                      // (patrz `przesuw` przy pojemniku).
+                      chwycilAparat.current = true;
                       setChwycony(d.index);
                       setCel(d.index);
                     }}
@@ -614,6 +659,7 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
           </text>
         </g>
       </svg>
+    </div>
     </div>
   );
 }
