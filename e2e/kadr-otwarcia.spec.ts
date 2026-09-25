@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen } from "./_flow";
+import { skipEntryScreen, wczytajPrzyklad } from "./_flow";
 
 /**
  * Kadr, w którym otwiera się rysunek.
@@ -114,3 +114,46 @@ test("rysowanie nie przestawia kadru pod ręką", async ({ page }) => {
 
   expect(await scena()).toEqual(przed);
 });
+
+/**
+ * Otwarty przykład dostaje TEN SAM kadr, co „Dopasuj widok" — na monitorze i na telefonie.
+ *
+ * Przed poprawką kadr liczył się do wysokości płótna ZGADYWANEJ przed pierwszym
+ * pomiarem (640 px), a kondygnacja od razu dostawała znacznik „skadrowana". Zmierzona
+ * wysokość (360 px na telefonie, 447 na monitorze) wchodziła chwilę później, gdy kadr
+ * był już zablokowany. Zmierzone: na telefonie górne 60% płótna puste, a łazienka
+ * i przedpokój za dolną krawędzią; na monitorze powiększenie 1,98 zamiast 2,90 i brak
+ * dolnej trzeciej części mieszkania.
+ *
+ * Porównanie z „Dopasuj widok", a nie z ramką rysunku: dopasowanie liczy się z obrysu
+ * ścian, więc symbole i podpisy wystające poza obrys i tak potrafią sięgnąć za krawędź.
+ * Tu sprawdzamy jedno — że otwarcie nie daje INNEGO kadru niż dopasowanie na żądanie.
+ */
+for (const [nazwa, okno] of [
+  ["monitorze", { width: 1280, height: 800 }],
+  ["telefonie", { width: 375, height: 812 }],
+] as const) {
+  test(`otwarty przykład ma kadr jak po „Dopasuj widok" na ${nazwa}`, async ({ page }) => {
+    await page.setViewportSize(okno);
+    await page.goto("/");
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await wczytajPrzyklad(page, "mieszkanie");
+    await page.waitForTimeout(1500);
+
+    const scena = () =>
+      page.evaluate(() => {
+        const st = (window as unknown as { Konva: { stages: { scaleX(): number; x(): number; y(): number }[] } })
+          .Konva.stages[0];
+        return { skala: st.scaleX(), x: st.x(), y: st.y() };
+      });
+    const poOtwarciu = await scena();
+    await page.getByRole("button", { name: "Dopasuj widok do planu" }).first().click();
+    await page.waitForTimeout(300);
+    const poDopasowaniu = await scena();
+
+    expect(poOtwarciu.skala).toBeCloseTo(poDopasowaniu.skala, 3);
+    expect(Math.abs(poOtwarciu.x - poDopasowaniu.x)).toBeLessThan(1);
+    expect(Math.abs(poOtwarciu.y - poDopasowaniu.y)).toBeLessThan(1);
+  });
+}
