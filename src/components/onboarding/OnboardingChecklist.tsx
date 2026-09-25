@@ -124,7 +124,11 @@ export function OnboardingChecklist({
         onClick={onReopen}
         aria-label="Otwórz przewodnik: zacznij w 3 krokach"
         title="Zacznij w 3 krokach"
-        className="fixed bottom-4 left-4 z-30 flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow-md transition hover:border-copper hover:text-copper"
+        // Na telefonie w ZWYKŁYM PRZEPŁYWIE, pod edytorem; od 768 px — przypięty w rogu.
+        // Przypięty w lewym dolnym rogu telefonu leżał na pasku stanu edytora, który
+        // po przewinięciu do rysunku stoi właśnie przy dolnej krawędzi ekranu — na
+        // „Zapisano", tuż obok „Dalej". Na monitorze róg jest wolny (kolumna narzędzi).
+        className="mt-4 inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow-md transition hover:border-copper hover:text-copper md:fixed md:bottom-4 md:left-4 md:z-30 md:mt-0 md:flex"
         style={{ borderColor: "#DDE3E9" }}
       >
         <HelpCircle size={14} className="text-copper" /> Zacznij w 3 krokach
