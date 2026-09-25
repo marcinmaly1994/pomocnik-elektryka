@@ -93,3 +93,22 @@ test("baner „Mało miejsca na rysunek?” zniknął — pełny ekran jest w pa
   await expect(page.getByText("Mało miejsca na rysunek?")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Projektowanie na pełnym ekranie" })).toHaveCount(1);
 });
+
+/**
+ * Zwinięty przewodnik „Zacznij w 3 krokach” nie leży na pasku stanu.
+ *
+ * Przypięty w lewym dolnym rogu ekranu wypadał na telefonie dokładnie na pasku stanu
+ * edytora — ten po przewinięciu do rysunku stoi przy dolnej krawędzi — i zasłaniał
+ * „Zapisano” tuż obok „Dalej”. Na telefonie stoi teraz w zwykłym przepływie, pod edytorem.
+ */
+test("zwinięty przewodnik nie zasłania paska stanu", async ({ page }) => {
+  await start(page);
+  await wczytajPrzyklad(page, "mieszkanie");
+  await pomiar(page);
+  const przewodnik = (await page.getByRole("button", { name: /Otwórz przewodnik/ }).boundingBox())!;
+  const stan = (await page.getByLabel("Stan projektu").boundingBox())!;
+  expect(przewodnik.y, "przewodnik ma stać pod paskiem stanu, nie na nim").toBeGreaterThanOrEqual(stan.y + stan.height);
+  // I nadal działa: otwiera kartę.
+  await page.getByRole("button", { name: /Otwórz przewodnik/ }).click();
+  await expect(page.getByRole("complementary", { name: /Zacznij w 3 krokach/i })).toBeVisible();
+});

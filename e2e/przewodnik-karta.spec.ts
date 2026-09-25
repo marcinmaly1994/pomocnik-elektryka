@@ -110,3 +110,19 @@ test("przycisk pomocy otwiera karte z powrotem na ukonczonym projekcie", async (
   await page.waitForTimeout(2200);
   await expect(karta(page)).toBeVisible();
 });
+
+/** Na monitorze zwinięty przewodnik zostaje przypięty w lewym dolnym rogu okna. */
+test("na monitorze zwinięty przewodnik stoi w lewym dolnym rogu okna", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await page.getByRole("button", { name: /Mieszkanie 70 m²/ }).click();
+  const przycisk = page.getByRole("button", { name: /Otwórz przewodnik/ });
+  await expect(przycisk).toBeVisible();
+  expect(await przycisk.evaluate((el) => getComputedStyle(el).position)).toBe("fixed");
+  const box = (await przycisk.boundingBox())!;
+  expect(box.x).toBeLessThan(40);
+  expect(800 - (box.y + box.height)).toBeLessThan(40);
+});
