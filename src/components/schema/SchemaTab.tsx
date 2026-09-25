@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Eye, FileText } from "lucide-react";
+import { Download, Eye, FileText, Minus, Plus, Scan } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { downloadBlob, downloadPdfBytes, projectFileName } from "@/lib/pdf/download";
 import { buildDrawingDoc } from "@/lib/pdf/drawing";
@@ -14,6 +14,8 @@ import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits } from "@/lib/panel/project";
 import { buildPanelDevices, PHASE_COLORS } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
+import { PROG_WASKIEGO_EKRANU } from "@/lib/design";
+import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 
 const MUTED = "#6B7684";
 
@@ -537,6 +539,12 @@ export function SchemaTab() {
     if (!node) return;
     const clone = node.cloneNode(true) as SVGSVGElement;
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    // Rozmiar NATURALNY, nie ten z ekranu — powiększenie w oknie schematu zmienia
+    // `width`/`height`, a plik ma wyglądać tak samo niezależnie od tego, jak go oglądano.
+    const vb = node.viewBox.baseVal;
+    clone.setAttribute("width", String(vb.width));
+    clone.setAttribute("height", String(vb.height));
+    clone.removeAttribute("style");
     // Białe tło — bez niego rysunek na czarnej kreskce ginie w przeglądarkach
     // i podglądach, które domyślnie renderują SVG na ciemnym tle.
     const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -678,8 +686,7 @@ export function SchemaTab() {
         />
       </div>
 
-      <div className="pe-card pe-scroll overflow-auto p-4" style={{ background: "#fff" }}>
-        <svg ref={svgRef} viewBox={`0 0 ${width} ${SCHEMA_HEIGHT}`} width={width} height={SCHEMA_HEIGHT} style={{ minWidth: 700 }}>
+      <OknoRysunku szerokosc={width} wysokosc={SCHEMA_HEIGHT} svgRef={svgRef}>
           <IncomingSupply x={mainX} supply3f={panelConfig.supply3f} />
           <MainSwitch x={mainX} device={mainDevice} />
 
@@ -726,6 +733,94 @@ export function SchemaTab() {
           <PeTaps columns={columns} />
 
           <FinalCircuitsTable columns={columns} />
+      </OknoRysunku>
+    </div>
+  );
+}
+
+/**
+ * Okno schematu: rysunek w przewijanym pojemniku plus powiększenie.
+ *
+ * Na telefonie schemat otwiera się DOPASOWANY do szerokości — w naturalnym rozmiarze
+ * (1200 px w okienku 330 px) widać było pustą górną połowę i ani kawałka rozdzielnicy
+ * głównej. Na monitorze zostaje 100%, jak dotąd. W obu przypadkach dochodzą przyciski
+ * −/+ i „Dopasuj", a na dotyku szczypanie (patrz `usePowiekszanieRysunku`).
+ *
+ * Osobny komponent, bo hook potrzebuje szerokości rysunku, a ta jest znana dopiero
+ * po wczesnym `return` pustego schematu w `SchemaTab`.
+ *
+ * Powiększenie zmienia tylko `width`/`height` na ekranie. Eksport SVG przywraca rozmiar
+ * naturalny, a raster do PDF-a i tak ustawia własny (`svgDoPlotna`).
+ */
+function OknoRysunku({
+  szerokosc,
+  wysokosc,
+  svgRef,
+  children,
+}: {
+  szerokosc: number;
+  wysokosc: number;
+  svgRef: React.RefObject<SVGSVGElement>;
+  children: React.ReactNode;
+}) {
+  const wasko = typeof window !== "undefined" && window.innerWidth < PROG_WASKIEGO_EKRANU;
+  const p = usePowiekszanieRysunku(szerokosc, wasko);
+  const przycisk = "rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30";
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <div className="flex items-center gap-0.5 rounded-lg border border-border bg-white p-0.5">
+          <button
+            onClick={p.pomniejsz}
+            disabled={p.zoom <= p.min + 1e-6}
+            aria-label="Pomniejsz schemat"
+            title="Pomniejsz schemat"
+            className={przycisk}
+          >
+            <Minus size={14} />
+          </button>
+          <button
+            onClick={p.naturalny}
+            title="Przywróć naturalny rozmiar"
+            aria-label={`Powiększenie schematu ${Math.round(p.zoom * 100)} procent — kliknij, aby przywrócić 100%`}
+            className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600"
+          >
+            {Math.round(p.zoom * 100)}%
+          </button>
+          <button
+            onClick={p.powieksz}
+            disabled={p.zoom >= p.max - 1e-6}
+            aria-label="Powiększ schemat"
+            title="Powiększ schemat"
+            className={przycisk}
+          >
+            <Plus size={14} />
+          </button>
+          <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+          <button onClick={p.dopasuj} aria-label="Dopasuj schemat do szerokości" title="Dopasuj schemat do szerokości" className={przycisk}>
+            <Scan size={13} />
+          </button>
+        </div>
+      </div>
+      <div
+        ref={p.kontenerRef}
+        data-testid="schemat-okno"
+        className="pe-card pe-scroll overflow-auto p-4"
+        // `pan-x pan-y`: jeden palec przewija pojemnik, ale szczypanie nie powiększa
+        // CAŁEJ strony — to bierze `usePowiekszanieRysunku`.
+        // `maxHeight`: powiększony schemat przesuwa się w pionie WEWNĄTRZ okienka.
+        // Bez limitu okienko rosło razem z rysunkiem i rozpychało stronę — a wtedy
+        // punkt spod palców uciekał w pionie, bo nie było czego przewinąć.
+        style={{ background: "#fff", touchAction: "pan-x pan-y", maxHeight: "70vh" }}
+      >
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${szerokosc} ${wysokosc}`}
+          width={szerokosc * p.zoom}
+          height={wysokosc * p.zoom}
+          style={{ display: "block" }}
+        >
+          {children}
         </svg>
       </div>
     </div>
