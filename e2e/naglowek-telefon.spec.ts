@@ -49,3 +49,23 @@ test("strona nie dostaje poziomego przewijania", async ({ page }) => {
   const rozjazd = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(rozjazd).toBeLessThanOrEqual(0);
 });
+
+/**
+ * Że pasek da się przewinąć, mówi WYGASZONA krawędź, a nie słowo urwane w pół.
+ *
+ * Przycięty „Protokoły pomiar" czytał się jak błąd układu. Wygaszenie stoi przy tej
+ * krawędzi, za którą jest jeszcze treść, i znika, gdy pasek dojedzie do końca.
+ * Obliczony styl oddaje kolory jako `rgb(...)`/`rgba(...)`, stąd takie dopasowania.
+ */
+test("pasek zakładek wygasza prawą krawędź, dopóki jest za nią treść", async ({ page }) => {
+  await page.goto("/");
+  const pasek = page.getByTestId("pasek-zakladek");
+  const maska = () => pasek.evaluate((el) => getComputedStyle(el).webkitMaskImage || getComputedStyle(el).maskImage);
+
+  // Na starcie: pełny kolor po lewej, przezroczystość na prawym końcu.
+  await expect.poll(maska).toMatch(/^linear-gradient\(to right, rgb\(0, 0, 0\),.*rgba\(0, 0, 0, 0\)\)$/);
+
+  await pasek.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
+  // Na końcu: wygaszona już tylko LEWA krawędź, za którą schowały się pierwsze zakładki.
+  await expect.poll(maska).toMatch(/^linear-gradient\(to right, rgba\(0, 0, 0, 0\),.*rgb\(0, 0, 0\)\)$/);
+});
