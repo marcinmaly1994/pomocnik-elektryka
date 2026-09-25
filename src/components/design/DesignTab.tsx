@@ -57,7 +57,7 @@ import {
   rozpietoscRysunku,
   ROOM_TYPE_LABELS,
   WALL_SNAP_TOLERANCE_M,
-  PROG_WASKIEGO_EKRANU,
+  waskiEkran,
   contentBounds,
   kadrOtwarcia,
   zoomSkaliRysowania,
@@ -90,7 +90,6 @@ import { WyborPrzykladu } from "@/components/onboarding/WyborPrzykladu";
 import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
 import { PoleWymiarowProstokata } from "@/components/design/PoleWymiarowProstokata";
 import { DlugosciOdcinkowSciany } from "@/components/design/DlugosciOdcinkowSciany";
-import { PodpowiedzPelnyEkran } from "@/components/design/PodpowiedzPelnyEkran";
 import { PodpowiedzKolka } from "@/components/design/PodpowiedzKolka";
 import {
   czyOdnotowacKolko,
@@ -100,7 +99,6 @@ import {
   zapamietajOdrzuceniePowitania,
   zapamietajUmiejetnosc,
 } from "@/lib/podpowiedziNawigacji";
-import { zapamietajOdrzucenie } from "@/lib/podpowiedzPelnyEkran";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { useRysowanieScian } from "@/hooks/useRysowanieScian";
 import { useRysowaniePomieszczen } from "@/hooks/useRysowaniePomieszczen";
@@ -195,6 +193,14 @@ function odczytajOdrzuconyPrompt(): boolean {
  *  localStorage, a nie zapisywany dokument. Kto raz zwinie, ma zwinięty na stałe. */
 const PANEL_ZWINIETY_KEY = "pomocnikelektryka_panel_zwiniety";
 
+
+/** Szerokość okna płótna, zanim kolumna zostanie zmierzona: arkusz, ale nie szerzej
+ *  niż ekran (patrz komentarz przy `rozmiarOkna`). Bez znanej szerokości ekranu
+ *  (środowisko testów jednostkowych) — sam arkusz, jak dotąd. */
+function szerokoscPrzedPomiarem(arkusz: number): number {
+  const ekran = typeof document === "undefined" ? 0 : document.documentElement.clientWidth;
+  return ekran > 0 ? Math.min(arkusz, ekran) : arkusz;
+}
 /**
  * Bez ZAPISANEGO wyboru decyduje szerokość okna: na telefonie panel startuje
  * zwinięty, na monitorze rozwinięty.
@@ -215,7 +221,7 @@ function odczytajPanelZwiniety(): boolean {
   } catch {
     // patrz odczytajOdrzuconyPrompt — brak dostępu do pamięci nie może wywrócić edytora
   }
-  return typeof window !== "undefined" && window.innerWidth < PROG_WASKIEGO_EKRANU;
+  return waskiEkran();
 }
 
 /**
@@ -658,9 +664,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  etapów, czyli tej części chrome'u, która nigdy się nie zmienia. Potrzebna do
    *  policzenia wysokości płótna z pominięciem banerów (patrz efekt `wysPlotna`). */
   const korzenZakladkiRef = useRef<HTMLDivElement>(null);
-  /** Wiersz z paskiem narzędzi rysowania i płótnem — czyli wszystko, czego potrzeba,
-   *  żeby rysować. Na telefonie przewijamy do niego (patrz efekt `pokazRysunek`). */
-  const wierszEdytoraRef = useRef<HTMLDivElement>(null);
   const pelnyEkranRef = useRef<HTMLDivElement>(null);
   const gornyPasekRef = useRef<HTMLDivElement>(null);
   const lewaKartaRef = useRef<HTMLDivElement>(null);
@@ -812,10 +815,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  Zostawienie starego powiększenia dawało rysunek wielkości znaczka w rogu
    *  pustego ekranu, czyli dokładne przeciwieństwo tego, po co się tu wchodzi. */
   const przelaczPelnyEkran = useCallback(() => {
-    // Kto raz użył pełnego ekranu, ten wie, że istnieje — podpowiedź na wąskim
-    // ekranie nie ma po co wracać. Zapis TUTAJ, a nie w samej podpowiedzi, bo
-    // w tryb wchodzi się trzema drogami: ikoną w pasku, skrótem `F` i podpowiedzią.
-    zapamietajOdrzucenie();
     setPelnyEkran((v) => !v);
     setZoomReczny(false);
     setChromeLewo(false);
@@ -1086,6 +1085,23 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           banery += box.height + parseFloat(getComputedStyle(brat).marginTop || "0");
         }
         gora = kolumna.getBoundingClientRect().top + window.scrollY - banery;
+        /**
+         * Na TELEFONIE liczymy od początku EDYTORA, nie od góry strony.
+         *
+         * Nad edytorem stoi tam 185 px nagłówka i paska etapów (więcej z banerami),
+         * a przy wejściu do edytora strona i tak przewija się do niego (patrz efekt
+         * `pokazRysunek` niżej). Liczone od góry strony płótno dostawało 360 px —
+         * dolną granicę — choć po przewinięciu na ekranie mieściło się prawie dwa
+         * razy tyle. Nagłówek zostaje osiągalny przewinięciem w górę.
+         */
+        //
+        // Od samego OKNA płótna, nie od kolumny: nad płótnem w kolumnie stoją kontrolki
+        // narzędzia (np. grubość ściany), a na telefonie każde 50 px nad płótnem to
+        // pasek stanu z „Dalej" wypchnięty za dolną krawędź ekranu.
+        if (waskiEkran()) {
+          const okno = kolumna.querySelector<HTMLElement>("[data-plan-okno]") ?? kolumna;
+          gora = okno.getBoundingClientRect().top - korzenEdytora.getBoundingClientRect().top;
+        }
       }
       // SAM pasek stanu — REZERWUJEMY mu miejsce, żeby nie wypadł pod zgięcie. Niesie
       // powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku; rysowanie bez ani
@@ -1147,10 +1163,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * nagłówek co przed chwilą i nie ma żadnego znaku, że gdzieś niżej czeka kartka do
    * rysowania. Odpowiedzią na „chcę rysować" ma być rysunek na ekranie.
    *
-   * Celem jest WIERSZ EDYTORA, nie sama kolumna płótna: wiersz zaczyna się paskiem
-   * narzędzi (na wąskim ekranie zwija się do 58 px i stoi nad płótnem), więc po
-   * przewinięciu widać i czym rysować, i po czym. Samo płótno wypchnęłoby pasek
-   * narzędzi nad górną krawędź.
+   * Celem jest KORZEŃ EDYTORA, nie sama kolumna płótna: zaczyna się paskiem edytora
+   * (powiększenie, cofnij) i paskiem narzędzi, więc po przewinięciu widać i czym
+   * rysować, i po czym. Wysokość płótna jest na telefonie liczona właśnie od tego
+   * miejsca (patrz `przelicz` wyżej) — przewinięcie i rachunek muszą się zgadzać.
    *
    * Tylko przy PRZEJŚCIU do edytora — czyli gdy schodzi z wierzchu ekran wejściowy,
    * wczytywanie pliku albo przycinanie podkładu — i tylko poniżej progu wąskiego
@@ -1164,13 +1180,32 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     const bylZasloniety = edytorZaslonietyRef.current;
     edytorZaslonietyRef.current = zaslonietyTeraz;
     if (!bylZasloniety || zaslonietyTeraz) return;
-    if (typeof window === "undefined" || window.innerWidth >= PROG_WASKIEGO_EKRANU) return;
+    if (!waskiEkran()) return;
     // Po zamontowaniu kolumny, nie w tej samej klatce co zmiana stanu — inaczej
     // przewijalibyśmy do elementu, który jeszcze nie ma swojej wysokości.
+    //
+    // Płynne przewinięcie liczy cel NA STARCIE, a układ nad edytorem jeszcze się
+    // wtedy układa (zmierzone: znikający element zabierał 52 px w trakcie ruchu, więc
+    // edytor lądował tyle niżej i pasek stanu z „Dalej" wypadał za dolną krawędź).
+    // Po zakończeniu ruchu dosuwamy więc edytor do góry jednym skokiem. `scrollend`
+    // tam, gdzie jest; zegar jako zapas dla przeglądarek, które go nie znają.
+    let zegar = 0;
+    const dosun = () => {
+      window.removeEventListener("scrollend", dosun);
+      window.clearTimeout(zegar);
+      const el = pelnyEkranRef.current;
+      if (el && Math.abs(el.getBoundingClientRect().top) > 2) el.scrollIntoView({ block: "start" });
+    };
     const id = window.requestAnimationFrame(() => {
-      wierszEdytoraRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      pelnyEkranRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.addEventListener("scrollend", dosun);
+      zegar = window.setTimeout(dosun, 900);
     });
-    return () => window.cancelAnimationFrame(id);
+    return () => {
+      window.cancelAnimationFrame(id);
+      window.removeEventListener("scrollend", dosun);
+      window.clearTimeout(zegar);
+    };
   }, [showEntryScreen, wgrywanie.stan]);
 
   /**
@@ -2899,7 +2934,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           pracy bez możliwości zajrzenia pod spód. Nieprzypięte paski nadal pływają
           nad planem — tam przykrycie trwa chwilę i jest ceną za odsłonięcie. */}
       <div
-        ref={wierszEdytoraRef}
         className={pelnyEkran ? "h-full w-full" : "flex flex-wrap items-start gap-4"}
         style={
           pelnyEkran
@@ -3170,7 +3204,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           {/* Podpowiedź o pełnym ekranie stoi TU, tuż nad płótnem, którego dotyczy —
               i tylko poza pełnym ekranem, gdzie byłaby zaprzeczeniem samej siebie.
               O wąskim ekranie decyduje `sm:hidden` w samym komponencie. */}
-          {!pelnyEkran && <PodpowiedzPelnyEkran onPelnyEkran={przelaczPelnyEkran} />}
           {/* Komunikat o `Ctrl` — nad płótnem, bo dotyczy gestu robionego właśnie na nim. */}
           <PodpowiedzKolka sygnal={sygnalKolka} />
           <DesignCanvas
@@ -3221,7 +3254,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                Próba przykrojenia okna do rzutu została wycofana: kratka ma sięgać tak
                daleko, jak daleko jest miejsce. */
             rozmiarOkna={{
-              w: Math.max(1, dostepnaSzer || planSize.w * zoom),
+              // Przed pierwszym pomiarem kolumny — nie szerzej niż ekran. Arkusz
+              // (1000 px) przez jedną klatkę rozpychał stronę telefonu do 1024 px,
+              // przeglądarka mobilna się na tę chwilę oddalała, a przewinięcie do
+              // edytora (patrz `waskiEkran`) gasło razem z powrotem układu.
+              w: Math.max(1, dostepnaSzer || szerokoscPrzedPomiarem(planSize.w * zoom)),
               h: Math.max(1, wysPlotna),
             }}
             onSelectElement={(id, shiftKey) => {

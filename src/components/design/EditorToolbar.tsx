@@ -201,8 +201,16 @@ export function EditorToolbar({
    *  - „Rysunek": przyciąganie do siatki, przyciąganie osprzętu do ścian i rozmiar
    *    symboli.
    */
+  /**
+   * Na telefonie JEDEN PRZEWIJANY RZĄD, od 768 px zawijanie jak dotąd.
+   *
+   * Przy 375 px pasek zawijał się na dwa rzędy (78 px) i razem z paskiem ikon, banerem
+   * i nagłówkiem spychał rzut do 487 px od góry ekranu — na starcie widać było z niego
+   * ok. 325 px. Jeden rząd to 44 px. Menu „Plan" i „Rysunek" otwierają się w portalu
+   * (patrz `PasekMenu`), więc przewijany pasek ich nie przycina.
+   */
   return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-card border border-border bg-white px-2.5 py-1.5">
+    <div className="pe-bez-suwaka flex flex-nowrap items-center gap-x-2.5 gap-y-1.5 overflow-x-auto rounded-card border border-border bg-white px-2.5 py-1.5 [&>*]:shrink-0 md:flex-wrap md:overflow-visible">
       {szerokieOkno && <FloorTabs />}
 
       <PasekMenu etykieta="Plan" ikona={<SlidersHorizontal size={14} />} szerokosc={320}>

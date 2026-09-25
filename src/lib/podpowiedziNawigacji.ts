@@ -16,7 +16,7 @@
  * obie naraz — wtedy wiadomo, że wiedza doszła.
  *
  * Preferencja widoku, nie część projektu, więc `localStorage` — tym samym wzorcem, co
- * `podpowiedzPelnyEkran.ts` i zwinięcie panelu bocznego.
+ * zwinięcie panelu bocznego.
  */
 
 export const KLUCZ_POWITANIE = "pomocnikelektryka_podpowiedz_nawigacja";

@@ -434,12 +434,18 @@ test("pasek edytora trzyma wszystkie ustawienia planu w JEDNEJ karcie", async ({
     .getByRole("button", { name: "Parter", exact: true })
     .locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]");
 
+  // Przyciski menu siedzą w TEJ SAMEJ karcie co zakładki kondygnacji. Samą zawartość
+  // menu sprawdzamy już na stronie, nie w karcie: panel otwiera się w portalu (patrz
+  // `PasekMenu`), bo na telefonie przewijany pasek przycinał go do swojej wysokości.
+  await expect(pasek.getByRole("button", { name: "Plan", exact: true })).toBeVisible();
+  await expect(pasek.getByRole("button", { name: "Rysunek", exact: true })).toBeVisible();
+
   await otworzMenuPaska(page, "Plan");
-  await expect(pasek.getByRole("button", { name: "+ Dodaj kondygnację" })).toBeVisible();
-  await expect(pasek.getByRole("button", { name: "Wgraj podkład" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "+ Dodaj kondygnację" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Wgraj podkład" })).toBeVisible();
   await zamknijMenuPaska(page);
 
   await otworzMenuPaska(page, "Rysunek");
-  await expect(pasek.getByLabel("Przyciągaj do siatki")).toBeVisible();
-  await expect(pasek.getByLabel("Rozmiar elementów")).toBeVisible();
+  await expect(page.getByLabel("Przyciągaj do siatki")).toBeVisible();
+  await expect(page.getByLabel("Rozmiar elementów")).toBeVisible();
 });

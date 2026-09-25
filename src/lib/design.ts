@@ -105,6 +105,24 @@ export function wysokoscPlotna(
  */
 export const PROG_WASKIEGO_EKRANU = 768;
 
+/**
+ * Czy ekran jest wąski — z MEDIA QUERY, nie z `window.innerWidth`.
+ *
+ * Na telefonie `innerWidth` potrafi chwilowo podać szerokość obszaru układu zamiast
+ * ekranu: gdy coś na stronie na moment wystaje (płótno przed pierwszym pomiarem),
+ * przeglądarka mobilna poszerza obszar układu i `innerWidth` skacze do 1024. Zmierzone
+ * w emulacji telefonu dokładnie w chwili wejścia do edytora — przez to przewinięcie
+ * do rysunku nie odpalało na telefonie NIGDY, a test bez emulacji tego nie widział.
+ * Media query odnosi się do szerokości urządzenia i tego skoku nie ma.
+ */
+export function waskiEkran(): boolean {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia === "function") {
+    return window.matchMedia(`(max-width: ${PROG_WASKIEGO_EKRANU - 0.02}px)`).matches;
+  }
+  return window.innerWidth < PROG_WASKIEGO_EKRANU;
+}
+
 /** Domyślna grubość ściany w jednostkach planu — dawna sztywna wartość `strokeWidth`
  *  sprzed dodania regulowanej grubości. Zapisy bez pola `thickness` (patrz `Wall`
  *  w types/index.ts) muszą wyglądać identycznie jak przed tą zmianą. */

@@ -81,7 +81,7 @@ describe("podpowiedzi nawigacji po rzucie", () => {
     /**
      * Tryb prywatny potrafi rzucać przy samym dostępie do `localStorage`. Pokazanie
      * podpowiedzi raz za dużo jest tańsze niż wywrócenie edytora — ta sama zasada,
-     * co w `podpowiedzPelnyEkran.ts`.
+     * co przy zwinięciu panelu bocznego.
      */
     it("zablokowany magazyn nie wywraca edytora", () => {
       const pierwotny = Object.getOwnPropertyDescriptor(window, "localStorage")!;
