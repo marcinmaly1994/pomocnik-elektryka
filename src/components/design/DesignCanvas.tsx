@@ -20,8 +20,12 @@ import {
   FALLBACK_FONT_ADNOTACJI,
   FALLBACK_FONT_NAZWY,
   fontOpisuPokoju,
+  miejsceNaOpis,
+  przesunieciaWokol,
+  type ZajeteMiejsce,
   skalaOpisowRzutu,
   szerokoscRamki,
+  szerokoscTekstu,
 } from "@/lib/opisPomieszczenia";
 import {
   promieniePrzyciagania,
@@ -33,7 +37,8 @@ import {
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { dystansPalcow, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from "@/lib/gestDotyku";
 import { useDlugiePrzytrzymanie } from "@/hooks/useDlugiePrzytrzymanie";
-import { clampNum, nearestPointOnPolyline, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
+import { prostokatOtworu, prostokatSymbolu } from "@/lib/rozstawElementow";
+import { clampNum, nearestPointOnPolyline, pointInPolygon, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { glyphBoxSize, groupLabelAnchors, groupLabelCandidates } from "@/lib/glyphs";
 
@@ -395,6 +400,26 @@ function centroid(points: Point[]): Point {
   };
 }
 
+/**
+ * Powierzchnia obrysu do etykiety: m², gdy skala jest znana, inaczej `null`.
+ * Poza komponentem, bo korzysta z niej też układ opisów (`opisyPomieszczen`),
+ * liczony w `useMemo` — tam zależnością ma być sama skala, a nie funkcja.
+ */
+function formatPowierzchniaObrysu(points: Point[], mpu: number | null): string | null {
+  const m2 = polygonAreaM2(points, mpu);
+  if (m2 === null) return null;
+  return `${m2.toFixed(1).replace(".", ",")} m²`;
+}
+
+/** Podpis „3,45 × 4,20 m" dla prostokątnego obrysu — sama detekcja i przeliczenie
+ *  siedzą w `rectangleSizeM` (geometry.ts), tutaj zostaje wyłącznie formatowanie. */
+function formatWymiaryObrysu(points: Point[], mpu: number | null): string | null {
+  const rozmiar = rectangleSizeM(points, mpu);
+  if (!rozmiar) return null;
+  const f = (v: number) => v.toFixed(2).replace(".", ",");
+  return `${f(rozmiar.w)} × ${f(rozmiar.h)} m`;
+}
+
 export function DesignCanvas({
   stageRef,
   anulujPodgladRef,
@@ -466,7 +491,6 @@ export function DesignCanvas({
   /** Osprzęt idzie za suwakiem „Rozmiar elementów", przybory sanitarne nie — ich obrys
    *  jest strefą 1 i musi zgadzać się z tym, co liczy walidator (patrz `sanitaryRenderScale`). */
   const skalaSymbolu = (type: ElementType) => (SANITARY_FIXTURES[type] ? sanitaryScale : elementScale);
-
   /**
    * Strona symbolu, po której staje etykieta numeru grupy — wybierana tak, żeby cyfry
    * sąsiadów na siebie nie wchodziły.
@@ -497,6 +521,121 @@ export function DesignCanvas({
     // jak symbol — inaczej próg byłby poprawny wyłącznie przy rysunku odręcznym.
     return rozmiescEtykietyGrup(doRozmieszczenia, 40 * elementScale);
   }, [elements, lightGroups, elementScale, sanitaryScale]);
+
+  /**
+   * Miejsce zajęte przez symbole, ich numery grup i otwory — omijają je opisy (patrz
+   * `miejsceNaOpis`). Sam symbol nie wystarczał: numer lampy stoi obok niej, więc nazwa
+   * zepchnięta spod krzyżyka lądowała na jego cyfrze.
+   */
+  const zajetePrzezRysunek = useMemo(() => {
+    const wynik: ZajeteMiejsce[] = [];
+    for (const e of elements) {
+      const skala = SANITARY_FIXTURES[e.type] ? sanitaryScale : elementScale;
+      wynik.push(prostokatSymbolu(e, skala));
+      (lightGroups.get(e.id) ?? []).forEach((n, i) => {
+        if (n === undefined) return;
+        const at = kotwiceEtykiet.get(`${e.id}:${i}`)?.kotwica ?? groupLabelAnchors(e.type)[i] ?? groupLabelAnchors(e.type)[0];
+        if (!at) return;
+        // Ta sama droga co przy rysowaniu cyfry: punkt w układzie grupy symbolu, czyli
+        // przeskalowany i obrócony razem z nim. Pudełko cyfry to 14 × 14 jedn.
+        const kat = ((e.rotation ?? 0) * Math.PI) / 180;
+        const x = e.x + (at.x * Math.cos(kat) - at.y * Math.sin(kat)) * skala;
+        const y = e.y + (at.x * Math.sin(kat) + at.y * Math.cos(kat)) * skala;
+        const pol = 7 * skala;
+        wynik.push({ x1: x - pol, y1: y - pol, x2: x + pol, y2: y + pol });
+      });
+    }
+    // Otwory razem z łukiem skrzydła — bez tego „Hol" w przykładowym domu uciekał spod
+    // lampy prosto na łuk drzwi (patrz `prostokatOtworu`).
+    for (const o of openings) {
+      const sciana = walls.find((w) => w.id === o.wallId);
+      wynik.push(prostokatOtworu(o, sciana?.thickness ?? DEFAULT_WALL_THICKNESS));
+    }
+    return wynik;
+  }, [elements, sanitaryScale, elementScale, lightGroups, kotwiceEtykiet, openings, walls]);
+
+  /**
+   * Układ opisu każdego pomieszczenia: nazwa, podpisy pod nią i miejsce całego bloku.
+   *
+   * Liczony tu, a nie przy rysowaniu pokoju, bo potrzebują go też podpisy stref
+   * łazienkowych — mają omijać nazwy pomieszczeń tak samo jak symbole.
+   */
+  const opisyPomieszczen = useMemo(() => {
+    const wynik = new Map<
+      string,
+      {
+        fontNazwy: number;
+        odsadzenieNazwy: number;
+        podpisy: { tekst: string; font: number; szer: number }[];
+        goraPodpisu: (i: number) => number;
+        kotwica: Point;
+        zajete: ZajeteMiejsce;
+      }
+    >();
+    for (const r of roomShapes) {
+      // Szerokość obrysu — do niej docinany jest rozmiar opisów, żeby nazwa
+      // nie wychodziła poza ściany małego pokoju (patrz `fontOpisuPokoju`).
+      const xsPokoju = r.points.map((p) => p.x);
+      const szerokoscPokoju = Math.max(...xsPokoju) - Math.min(...xsPokoju);
+      const fontNazwy = fontOpisuPokoju(metersPerUnit, r.name, szerokoscPokoju);
+      // Odstępy podążają za rozmiarem pisma, a nie za dawnymi stałymi — inaczej
+      // przy mniejszym foncie opisy rozjeżdżałyby się od swojego pomieszczenia.
+      // Proporcje wzięte z poprzednich wartości (6/11 i 13/11), więc bez znanej
+      // skali rysunek wychodzi piksel w piksel taki jak przedtem.
+      const odsadzenieNazwy = (6 / FALLBACK_FONT_NAZWY) * fontNazwy;
+      const odsadzenieAdnotacji = (13 / FALLBACK_FONT_NAZWY) * fontNazwy;
+      const podpisy = [
+        pokazWymiary ? formatWymiaryObrysu(r.points, metersPerUnit) : null,
+        pokazPowierzchnie ? formatPowierzchniaObrysu(r.points, metersPerUnit) : null,
+      ]
+        .filter((t): t is string => t !== null)
+        .map((tekst) => {
+          const font = fontOpisuPokoju(metersPerUnit, tekst, szerokoscPokoju, {
+            fallback: FALLBACK_FONT_ADNOTACJI,
+          });
+          // Ramka dokładnie na miarę napisu: stałe 100 jedn. (= 5 m!) łamały
+          // dłuższe podpisy dopiero daleko poza małym pokojem.
+          return { tekst, font, szer: szerokoscRamki(tekst, font) };
+        });
+      /** Górna krawędź i-tego podpisu względem kotwicy — patrz komentarz przy `y` podpisu. */
+      const goraPodpisu = (i: number) =>
+        odsadzenieAdnotacji - (podpisy.length - 1 - i) * (10 / FALLBACK_FONT_ADNOTACJI) * podpisy[i].font;
+      const polSzer = Math.max(szerokoscRamki(r.name, fontNazwy), ...podpisy.map((p) => p.szer)) / 2;
+      const blok = {
+        lewo: polSzer,
+        prawo: polSzer,
+        gora: Math.max(odsadzenieNazwy, ...podpisy.map((_, i) => -goraPodpisu(i))),
+        dol: podpisy.length ? odsadzenieAdnotacji + podpisy[podpisy.length - 1].font : fontNazwy - odsadzenieNazwy,
+      };
+      // Nazwa i podpisy stoją tam, gdzie nie zasłania ich symbol — patrz `miejsceNaOpis`.
+      // Cały blok jedzie razem, żeby wymiary zostały pod swoją nazwą.
+      const kotwica = miejsceNaOpis({
+        kotwica: centroid(r.points),
+        blok,
+        przeszkody: zajetePrzezRysunek,
+        obrys: r.points,
+        // Pół wysokości litery, a zasięg osiem pełnych: w pokoju w kształcie L środek
+        // obrysu wypada na styku ramion, a wolne miejsce bywa dopiero w końcu ramienia
+        // (przedpokój w przykładzie — ok. 40 jedn. od środka).
+        krok: fontNazwy / 2,
+        krokow: 16,
+      });
+      wynik.set(r.id, {
+        fontNazwy,
+        odsadzenieNazwy,
+        podpisy,
+        goraPodpisu,
+        kotwica,
+        zajete: {
+          x1: kotwica.x - blok.lewo,
+          y1: kotwica.y - blok.gora,
+          x2: kotwica.x + blok.prawo,
+          y2: kotwica.y + blok.dol,
+        },
+      });
+    }
+    return wynik;
+  }, [roomShapes, metersPerUnit, pokazWymiary, pokazPowierzchnie, zajetePrzezRysunek]);
 
   /**
    * Obszar TRAFIENIA symbolu — osobny od tego, co widać.
@@ -863,6 +1002,63 @@ export function DesignCanvas({
    */
   const so = skalaOpisowRzutu(metersPerUnit);
 
+  /**
+   * Gdzie stoi podpis „strefy: …" każdego przyboru — lewy górny róg środka tekstu.
+   *
+   * Domyślnie NAD strefą, czyli tam, gdzie stał zawsze. Przybór stoi jednak przy ścianie
+   * łazienki, więc „nad strefą" to najczęściej ZA ścianą: w przykładach napis przecinał
+   * mur i wchodził na nazwę sąsiedniego pokoju („Hol"), albo stawał na nazwie łazienki.
+   * Szukamy więc miejsca wewnątrz pomieszczenia przyboru, wolnego od symboli, nazw
+   * pomieszczeń i podpisów stref postawionych wcześniej.
+   */
+  const podpisyStref = useMemo(() => {
+    const zajete: ZajeteMiejsce[] = [
+      ...zajetePrzezRysunek,
+      ...Array.from(opisyPomieszczen.values(), (o) => o.zajete),
+    ];
+    const wynik = new Map<string, { x: number; y: number; tekst: string }>();
+    for (const z of zones) {
+      const tekst = `strefy: ${z.label}${!z.calibrated ? " (bez skali)" : ""}`;
+      const font = 8 * so;
+      // Sam tekst, bez zapasu ramki: łazienka ma zwykle 2 m szerokości, a podpis
+      // z zapasem nie zmieściłby się w niej nigdzie.
+      const polSzer = szerokoscTekstu(tekst, font) / 2;
+      // Zapas liczony z WIĘKSZEGO boku: przy obrocie o 90° to szerokość wchodzi w pion,
+      // więc stała oparta na wysokości kładłaby napis na strefie.
+      const zasieg = Math.max(z.w, z.h) / 2 + z.zone2;
+      const pokoj = roomShapes.find((r) => pointInPolygon({ x: z.x, y: z.y }, r.points));
+      // Przybór stoi przy ścianie, więc podpis wyśrodkowany nad nim wystaje za mur.
+      // Dosuwamy go w poziomie do wnętrza pokoju (w granicach jego obrysu).
+      const xs = pokoj?.points.map((p) => p.x) ?? [];
+      const wPoziomie = (x: number) =>
+        xs.length && Math.max(...xs) - Math.min(...xs) > 2 * polSzer
+          ? clampNum(x, Math.min(...xs) + polSzer, Math.max(...xs) - polSzer)
+          : x;
+      const miejsce = miejsceNaOpis({
+        kotwica: { x: z.x, y: z.y - zasieg - 14 * so },
+        blok: { lewo: polSzer, prawo: polSzer, gora: 0, dol: font },
+        przeszkody: zajete,
+        obrys: pokoj?.points,
+        wolnoZaObrys: true,
+        kandydaci: [
+          // Nad strefą i pod nią, potem przy jej krawędziach od środka — i na końcu po bokach.
+          { x: wPoziomie(z.x), y: z.y - zasieg - 14 * so },
+          { x: wPoziomie(z.x), y: z.y + zasieg + 4 * so },
+          { x: wPoziomie(z.x), y: z.y - zasieg + 2 * so },
+          { x: wPoziomie(z.x), y: z.y + zasieg - 2 * so - font },
+          { x: z.x + zasieg + polSzer + 4 * so, y: z.y - font / 2 },
+          { x: z.x - zasieg - polSzer - 4 * so, y: z.y - font / 2 },
+          // Ciasna łazienka: żadne z miejsc przy strefie nie jest wolne — szukamy dalej
+          // po całym pokoju, od przyboru na zewnątrz.
+          ...przesunieciaWokol({ x: wPoziomie(z.x), y: z.y }, font, 12),
+        ],
+      });
+      zajete.push({ x1: miejsce.x - polSzer, y1: miejsce.y, x2: miejsce.x + polSzer, y2: miejsce.y + font });
+      wynik.set(z.id, { ...miejsce, tekst });
+    }
+    return wynik;
+  }, [zones, so, roomShapes, zajetePrzezRysunek, opisyPomieszczen]);
+
   function withSnap(p: Point): Point {
     return snapOn ? { x: snap(p.x, krok), y: snap(p.y, krok) } : p;
   }
@@ -1093,18 +1289,7 @@ export function DesignCanvas({
    * powodu siedzieć w jednym miejscu — patrz komentarz przy tamtej funkcji.
    */
   function formatPowierzchnia(points: Point[]): string | null {
-    const m2 = polygonAreaM2(points, metersPerUnit);
-    if (m2 === null) return null;
-    return `${m2.toFixed(1).replace(".", ",")} m²`;
-  }
-
-  /** Podpis „3,45 × 4,20 m" dla prostokątnego obrysu — sama detekcja i przeliczenie
-   *  siedzą w `rectangleSizeM` (geometry.ts), tutaj zostaje wyłącznie formatowanie. */
-  function formatWymiaryProstokata(points: Point[]): string | null {
-    const rozmiar = rectangleSizeM(points, metersPerUnit);
-    if (!rozmiar) return null;
-    const f = (v: number) => v.toFixed(2).replace(".", ",");
-    return `${f(rozmiar.w)} × ${f(rozmiar.h)} m`;
+    return formatPowierzchniaObrysu(points, metersPerUnit);
   }
 
   /** Cztery narożniki prostokąta podglądu jako obrys — żeby powierzchnia liczyła się
@@ -1810,18 +1995,8 @@ export function DesignCanvas({
         <Layer ref={layerRef}>
           {roomShapes.map((r) => {
             const pts = r.points.flatMap((p) => [p.x, p.y]);
-            const c = centroid(r.points);
-            // Szerokość obrysu — do niej docinany jest rozmiar opisów, żeby nazwa
-            // nie wychodziła poza ściany małego pokoju (patrz `fontOpisuPokoju`).
-            const xsPokoju = r.points.map((p) => p.x);
-            const szerokoscPokoju = Math.max(...xsPokoju) - Math.min(...xsPokoju);
-            const fontNazwy = fontOpisuPokoju(metersPerUnit, r.name, szerokoscPokoju);
-            // Odstępy podążają za rozmiarem pisma, a nie za dawnymi stałymi — inaczej
-            // przy mniejszym foncie opisy rozjeżdżałyby się od swojego pomieszczenia.
-            // Proporcje wzięte z poprzednich wartości (6/11 i 13/11), więc bez znanej
-            // skali rysunek wychodzi piksel w piksel taki jak przedtem.
-            const odsadzenieNazwy = (6 / FALLBACK_FONT_NAZWY) * fontNazwy;
-            const odsadzenieAdnotacji = (13 / FALLBACK_FONT_NAZWY) * fontNazwy;
+            const { fontNazwy, odsadzenieNazwy, podpisy, goraPodpisu, kotwica: kotwicaOpisu } =
+              opisyPomieszczen.get(r.id)!;
             const isSelRoom = selected?.kind === "room" && selected.id === r.id;
             // Krawędź i nazwa łapią klik TYLKO w trybie zaznaczania, rysowania pomieszczeń
             // i otworów (bo zaraz po narysowaniu pomieszczenia narzędzie zostaje w trybie
@@ -1971,22 +2146,10 @@ export function DesignCanvas({
                     dodatkiem do wymiarów: liczy się z obrysu (`polygonArea`, wzór
                     geodety), więc jest prawdziwa dla trójkąta, trapezu i wykuszu tak
                     samo jak dla prostokąta. Tam, gdzie wymiary milczą, ona nadal mówi. */}
-                {(() => {
-                  const podpisy = [
-                    pokazWymiary ? formatWymiaryProstokata(r.points) : null,
-                    pokazPowierzchnie ? formatPowierzchnia(r.points) : null,
-                  ].filter((t): t is string => t !== null);
-                  return podpisy.map((tekst, i) => {
-                    const font = fontOpisuPokoju(metersPerUnit, tekst, szerokoscPokoju, {
-                      fallback: FALLBACK_FONT_ADNOTACJI,
-                    });
-                    // Ramka dokładnie na miarę napisu: stałe 100 jedn. (= 5 m!) łamały
-                    // dłuższe podpisy dopiero daleko poza małym pokojem.
-                    const szer = szerokoscRamki(tekst, font);
-                    return (
+                {podpisy.map(({ tekst, font, szer }, i) => (
                     <Text
                       key={i}
-                      x={c.x - szer / 2}
+                      x={kotwicaOpisu.x - szer / 2}
                       // Blok rośnie W GÓRĘ, nie w dół: OSTATNI wiersz siada zawsze tam,
                       // gdzie siedziałby jedyny, a kolejne dokładają się nad nim.
                       //
@@ -1994,7 +2157,7 @@ export function DesignCanvas({
                       // 3 m (60 jedn.) od środka do ściany jest 30 jedn., a dwa wiersze
                       // zaczynające się 15 jedn. pod środkiem kończyły się na murze —
                       // dokładnie na etykiecie wymiaru ściany, przecinając oba napisy.
-                      y={c.y + odsadzenieAdnotacji - (podpisy.length - 1 - i) * (10 / FALLBACK_FONT_ADNOTACJI) * font}
+                      y={kotwicaOpisu.y + goraPodpisu(i)}
                       width={szer}
                       align="center"
                       text={tekst}
@@ -2008,13 +2171,11 @@ export function DesignCanvas({
                       fill="#8A5526"
                       listening={false}
                     />
-                    );
-                  });
-                })()}
+                ))}
 
                 <Text
-                  x={c.x - szerokoscRamki(r.name, fontNazwy) / 2}
-                  y={c.y - odsadzenieNazwy}
+                  x={kotwicaOpisu.x - szerokoscRamki(r.name, fontNazwy) / 2}
+                  y={kotwicaOpisu.y - odsadzenieNazwy}
                   width={szerokoscRamki(r.name, fontNazwy)}
                   align="center"
                   text={r.name}
@@ -2348,9 +2509,7 @@ export function DesignCanvas({
               `offset` przesuwa początek układu na środek kształtu, żeby `rotation` obracał
               strefę wokół przyboru, a nie wokół jego lewego górnego rogu. */}
           {zones.map((z) => {
-            // Zapas na etykietę liczony z WIĘKSZEGO boku: przy obrocie o 90° to szerokość
-            // wchodzi w pion, więc stała oparta na wysokości kładłaby napis na strefie.
-            const zasieg = Math.max(z.w, z.h) / 2 + z.zone2;
+            // Miejsce podpisu liczy `podpisyStref`.
             return (
               <Group key={z.id} listening={false}>
                 <Rect
@@ -2383,11 +2542,11 @@ export function DesignCanvas({
                   />
                 )}
                 <Text
-                  x={z.x - 60 * so}
-                  y={z.y - zasieg - 14 * so}
+                  x={podpisyStref.get(z.id)!.x - 60 * so}
+                  y={podpisyStref.get(z.id)!.y}
                   width={120 * so}
                   align="center"
-                  text={`strefy: ${z.label}${!z.calibrated ? " (bez skali)" : ""}`}
+                  text={podpisyStref.get(z.id)!.tekst}
                   fontSize={8 * so}
                   fill="#8A5526"
                 />

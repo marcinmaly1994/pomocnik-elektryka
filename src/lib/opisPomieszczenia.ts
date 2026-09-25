@@ -1,3 +1,5 @@
+import { pointInPolygon } from "./geometry";
+
 /**
  * Rozmiar opisów pomieszczeń na rzucie — nazwy i adnotacji (wymiary, powierzchnia).
  *
@@ -117,4 +119,107 @@ const ZAPAS_RAMKI = 1.15;
  */
 export function szerokoscRamki(tekst: string, font: number): number {
   return Math.max(szerokoscTekstu(tekst, font) * ZAPAS_RAMKI, 1);
+}
+
+/** Prostokąt osiowy w jednostkach planu — zajęte miejsce, które opis ma omijać. */
+export interface ZajeteMiejsce {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+/**
+ * Gdzie postawić opis, żeby nie leżał na symbolu ani na innym opisie.
+ *
+ * Nazwa pomieszczenia stoi w jego środku — a środek pokoju to dokładnie miejsce, w które
+ * stawia się lampę sufitową. W przykładowym mieszkaniu „Kuchnię" i „Sypialnię" przecinał
+ * krzyżyk oprawy; w projekcie użytkownika wyglądało to tak samo, bo tak się po prostu
+ * rozmieszcza oświetlenie.
+ *
+ * Sprawdzamy kotwicę, a potem kolejne miejsca — podane wprost (`kandydaci`) albo
+ * przesunięcia od kotwicy co `krok` (najpierw w pionie, bo nazwa pod lampą albo nad nią
+ * czyta się naturalnie, potem w bok). Bierzemy PIERWSZE, na którym blok opisu mieści się
+ * w obrysie i nie nachodzi na nic zajętego. Gdy takiego nie ma — pierwsze wolne za
+ * obrysem (tylko z `wolnoZaObrys`), potem miejsce w obrysie zasłonięte najmniej,
+ * a na końcu kotwica, czyli położenie sprzed tej zmiany.
+ *
+ * `blok` to zasięg opisu względem kotwicy (odległości od niej, dodatnie).
+ */
+export function miejsceNaOpis(opcje: {
+  kotwica: { x: number; y: number };
+  blok: { lewo: number; prawo: number; gora: number; dol: number };
+  przeszkody: ZajeteMiejsce[];
+  /** Obrys, w którym opis ma zostać; bez niego dowolne miejsce. */
+  obrys?: { x: number; y: number }[];
+  /** Czy wolne miejsce ZA obrysem wygrywa z zasłoniętym w obrysie — patrz koniec funkcji. */
+  wolnoZaObrys?: boolean;
+  /** Miejsca do sprawdzenia po kotwicy; bez nich — siatka przesunięć co `krok`. */
+  kandydaci?: { x: number; y: number }[];
+  krok?: number;
+  krokow?: number;
+}): { x: number; y: number } {
+  const { kotwica, blok, przeszkody, obrys, krok = 0, krokow = 4 } = opcje;
+
+  const zaslonieta = (x: number, y: number) => {
+    const x1 = x - blok.lewo;
+    const x2 = x + blok.prawo;
+    const y1 = y - blok.gora;
+    const y2 = y + blok.dol;
+    let pole = 0;
+    for (const p of przeszkody) {
+      const w = Math.min(x2, p.x2) - Math.max(x1, p.x1);
+      const h = Math.min(y2, p.y2) - Math.max(y1, p.y1);
+      if (w > 0 && h > 0) pole += w * h;
+    }
+    return pole;
+  };
+  const wObrysie = (x: number, y: number) =>
+    !obrys ||
+    [
+      { x: x - blok.lewo, y: y - blok.gora },
+      { x: x + blok.prawo, y: y - blok.gora },
+      { x: x - blok.lewo, y: y + blok.dol },
+      { x: x + blok.prawo, y: y + blok.dol },
+    ].every((p) => pointInPolygon(p, obrys));
+
+  const wszystkie = [kotwica, ...(opcje.kandydaci ?? przesunieciaWokol(kotwica, krok, krokow))];
+  let najlepsze: { x: number; y: number } | null = null;
+  let najmniej = Infinity;
+  for (const k of wszystkie) {
+    if (!wObrysie(k.x, k.y)) continue;
+    const pole = zaslonieta(k.x, k.y);
+    if (pole === 0) return k;
+    if (pole < najmniej) {
+      najmniej = pole;
+      najlepsze = k;
+    }
+  }
+  // W obrysie nie ma wolnego miejsca. Dla podpisu, który nie jest NAZWĄ obrysu (strefa
+  // przyboru), czytelny napis wystający za ścianę jest lepszy niż schowany pod symbolem
+  // — w małej łazience trafiał inaczej pod umywalkę albo pod brodzik. Nazwa pomieszczenia
+  // za ścianą czytałaby się już jako nazwa SĄSIADA, więc ona tej furtki nie dostaje.
+  const wolneGdziekolwiek = opcje.wolnoZaObrys ? wszystkie.find((k) => zaslonieta(k.x, k.y) === 0) : undefined;
+  return wolneGdziekolwiek ?? najlepsze ?? kotwica;
+}
+
+/**
+ * Pełna siatka punktów co `krok` wokół `p` (do `krokow` kroków w każdą stronę),
+ * od najbliższych. Przy równej odległości najpierw pion, potem poziom, na końcu skosy.
+ *
+ * Pełna siatka, a nie osiem promieni: w pokoju w kształcie L wolne miejsce leżało
+ * „w bok i trochę w górę" od środka obrysu, czyli między promieniami, i przeszukiwanie
+ * samych kierunków głównych nigdy by go nie znalazło.
+ */
+export function przesunieciaWokol(p: { x: number; y: number }, krok: number, krokow: number): { x: number; y: number }[] {
+  if (krok <= 0) return [];
+  const siatka: { i: number; j: number }[] = [];
+  for (let i = -krokow; i <= krokow; i++) {
+    for (let j = -krokow; j <= krokow; j++) {
+      if (i !== 0 || j !== 0) siatka.push({ i, j });
+    }
+  }
+  const ranga = ({ i, j }: { i: number; j: number }) => (i === 0 ? 0 : j === 0 ? 1 : 2);
+  siatka.sort((a, b) => Math.hypot(a.i, a.j) - Math.hypot(b.i, b.j) || ranga(a) - ranga(b) || b.j - a.j || b.i - a.i);
+  return siatka.map(({ i, j }) => ({ x: p.x + i * krok, y: p.y + j * krok }));
 }

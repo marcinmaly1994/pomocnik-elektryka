@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { bezNakladaniaNaSasiadow, kierunekWzdluzSciany, odsunOdSasiadow, pudelkoSymbolu, rozsuwalny, type ZajetySymbol } from "./rozstawElementow";
-import type { InstallationElement } from "@/types";
+import {
+  bezNakladaniaNaSasiadow,
+  kierunekWzdluzSciany,
+  odsunOdSasiadow,
+  prostokatOtworu,
+  prostokatSymbolu,
+  pudelkoSymbolu,
+  rozsuwalny,
+  type ZajetySymbol,
+} from "./rozstawElementow";
+import type { InstallationElement, Opening } from "@/types";
 
 /**
  * Rozsuwanie osprzętu stawianego blisko siebie.
@@ -171,5 +180,47 @@ describe("pudełko symbolu i rozsuwanie od sąsiadów", () => {
     const ten = el({ id: "ten", x: 100, y: 100 });
     const poz = bezNakladaniaNaSasiadow(ten, [ten], 1, 0.05, "ten");
     expect(poz).toEqual({ x: 100, y: 100 });
+  });
+});
+
+describe("prostokąt otworu", () => {
+  const drzwi = { id: "d", floor: "f", x: 0, y: 0, angle: 0, width: 20, kind: "drzwi" } as Opening;
+
+  it("skrzydło drzwi zajmuje ćwierć koła po stronie otwierania, nie po obu", () => {
+    const p = prostokatOtworu(drzwi, 4);
+    expect(p.x1).toBeCloseTo(-10, 6);
+    expect(p.x2).toBeCloseTo(10, 6);
+    // Otwiera się w stronę `perp` (tu +y) na szerokość skrzydła; w drugą — tylko mur.
+    expect(p.y2).toBeCloseTo(20, 6);
+    expect(p.y1).toBeCloseTo(-2, 6);
+  });
+
+  it("lustro przenosi zawias, ale nie stronę otwierania", () => {
+    const p = prostokatOtworu({ ...drzwi, lustro: true }, 4);
+    expect(p.x1).toBeCloseTo(-10, 6);
+    expect(p.x2).toBeCloseTo(10, 6);
+    expect(p.y2).toBeCloseTo(20, 6);
+  });
+
+  it("obrót odwraca stronę otwierania", () => {
+    const p = prostokatOtworu({ ...drzwi, flip: true }, 4);
+    expect(p.y1).toBeCloseTo(-20, 6);
+    expect(p.y2).toBeCloseTo(2, 6);
+  });
+
+  it("okno to sam pas muru", () => {
+    const p = prostokatOtworu({ ...drzwi, kind: "okno" }, 4);
+    expect(p.y1).toBeCloseTo(-2, 6);
+    expect(p.y2).toBeCloseTo(2, 6);
+  });
+});
+
+describe("prostokąt symbolu", () => {
+  it("obrót o 90° zamienia szerokość z wysokością", () => {
+    const e = { id: "a", type: "gniazdko", x: 10, y: 10, rotation: 0 } as unknown as InstallationElement;
+    const prosto = prostokatSymbolu(e, 1);
+    const obrocony = prostokatSymbolu({ ...e, rotation: 90 } as InstallationElement, 1);
+    expect(obrocony.x2 - obrocony.x1).toBeCloseTo(prosto.y2 - prosto.y1, 6);
+    expect(obrocony.y2 - obrocony.y1).toBeCloseTo(prosto.x2 - prosto.x1, 6);
   });
 });
