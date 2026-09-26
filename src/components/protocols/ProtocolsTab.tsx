@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
@@ -11,6 +11,7 @@ import { LIMIT_ZAPISOW } from "@/lib/dokumenty";
 import type { ProtocolKey } from "@/types";
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
+import { waskiEkran } from "@/lib/design";
 
 const HEADER_FIELDS: [string, string][] = [
   ["obiekt", "Obiekt / nazwa instalacji"], ["adres", "Adres obiektu"], ["zleceniodawca", "Zleceniodawca"],
@@ -46,6 +47,48 @@ const STATUS_OPTIONS: [string, string, string][] = [
  * planu — to osobny, niezależny dokument), żeby przetrwały przełączanie
  * zakładek i trafiały do zapisu projektu w chmurze.
  */
+/**
+ * Treść pozycji oględzin — pole wieloliniowe, które rośnie razem z tekstem.
+ *
+ * Pozycje listy kontrolnej mają po 50–90 znaków. W jednoliniowym polu na telefonie
+ * widać było ich początek („Izolacja przewodów widocznych bez…"), a reszta — czyli to,
+ * co właściwie się ocenia — zostawała za krawędzią. Wysokość z `scrollHeight`, bo
+ * `field-sizing: content` nie działa jeszcze w Safari.
+ */
+function TrescPozycji({ value, onChange, etykieta }: { value: string; onChange: (v: string) => void; etykieta: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const dopasuj = () => {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    dopasuj();
+    if (typeof ResizeObserver === "undefined") return;
+    // Zmiana szerokości (obrót telefonu, zwinięcie panelu) zmienia liczbę linii.
+    let szer = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth !== szer) {
+        szer = el.clientWidth;
+        dopasuj();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={etykieta}
+      className="min-w-0 flex-1 basis-[calc(100%-2rem)] resize-none overflow-hidden bg-transparent text-sm leading-snug outline-none md:basis-auto"
+    />
+  );
+}
+
 export function ProtocolsTab() {
   const rawHeader = useProjectStore((s) => s.docHeader);
   const setDocHeader = useProjectStore((s) => s.setDocHeader);
@@ -76,6 +119,8 @@ export function ProtocolsTab() {
   }, [route.tab, route.param, active, nawiguj]);
   const [blocked, setBlocked] = useState(false);
   const [podglad, setPodglad] = useState(false);
+  /** Karta wybranego protokołu — na telefonie przewijamy do niej po wyborze kafelka. */
+  const kartaRef = useRef<HTMLDivElement>(null);
   /** Dane ogólne wypełnia się RAZ na zlecenie, a potem przewija się je przy każdym
    *  wejściu w zakładkę. Stan zwinięcia w localStorage, bo to preferencja widoku,
    *  a nie część protokołu. */
@@ -152,7 +197,9 @@ export function ProtocolsTab() {
   const headerReady = !!header.obiekt && !!header.wykonawca;
 
   return (
-    <div className="space-y-5">
+    // Pola 16 px na wąskim ekranie — Safari na iPhonie przy mniejszej czcionce przybliża
+    // stronę przy każdym stuknięciu w pole (ten sam zabieg co w kalkulatorach).
+    <div className="space-y-5 max-md:[&_:is(input,select,textarea)]:text-base">
       <div>
         <h2 className="pe-display mb-1 text-xl">Protokoły pomiarowe</h2>
         <p className="text-sm text-slate-500">
@@ -289,7 +336,13 @@ export function ProtocolsTab() {
           return (
             <button
               key={k}
-              onClick={() => setActive(k)}
+              onClick={() => {
+                setActive(k);
+                // Na telefonie kafelki stoją jeden pod drugim, a protokół otwiera się
+                // pod nimi — po stuknięciu zmieniało się tylko obramowanie kafelka,
+                // a formularz zostawał poza ekranem.
+                if (waskiEkran()) requestAnimationFrame(() => kartaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+              }}
               className="rounded-lg px-3 py-2 text-left text-xs"
               style={
                 active === k
@@ -308,7 +361,7 @@ export function ProtocolsTab() {
         })}
       </div>
 
-      <div className="pe-card p-5">
+      <div ref={kartaRef} className="pe-card scroll-mt-3 p-5" data-testid="karta-protokolu">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="pe-display text-[15px]">{def.title}</h3>
@@ -356,15 +409,18 @@ export function ProtocolsTab() {
             </button>
           ) : (
             <div className="space-y-1">
+              {/* Na wąskim ekranie pozycja łamie się na dwie linie: treść na całą
+                  szerokość, pod nią oceny i kosz. W jednym rzędzie na treść zostawało
+                  62 px („Izolacja pr…") i nie było wiadomo, co się właściwie ocenia. */}
               {rows.map((r, i) => (
-                <div key={i} className="flex items-center gap-2 border-b py-1.5 last:border-0" style={{ borderColor: "#EEF1F4" }}>
-                  <span className="w-6 text-xs text-slate-400">{i + 1}.</span>
-                  <input
+                <div key={i} className="flex flex-wrap items-center gap-2 border-b py-1.5 last:border-0 md:flex-nowrap" style={{ borderColor: "#EEF1F4" }}>
+                  <span className="w-6 self-start pt-0.5 text-xs text-slate-400">{i + 1}.</span>
+                  <TrescPozycji
                     value={String(r.text ?? "")}
-                    onChange={(e) => setRow(i, { text: e.target.value })}
-                    className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                    onChange={(v) => setRow(i, { text: v })}
+                    etykieta={`Pozycja oględzin ${i + 1}`}
                   />
-                  <div className="flex shrink-0 gap-1">
+                  <div className="ml-8 flex shrink-0 gap-1 md:ml-0">
                     {STATUS_OPTIONS.map(([v, lbl, col]) => (
                       <button
                         key={v}
@@ -380,7 +436,11 @@ export function ProtocolsTab() {
                       </button>
                     ))}
                   </div>
-                  <button onClick={() => removeRow(i)} className="shrink-0 text-slate-300 hover:text-red-500">
+                  <button
+                    onClick={() => removeRow(i)}
+                    aria-label={`Usuń pozycję ${i + 1}`}
+                    className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 flex items-center justify-center ml-auto shrink-0 text-slate-300 hover:text-red-500 md:ml-0"
+                  >
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -407,9 +467,14 @@ export function ProtocolsTab() {
               <span className="text-xs text-slate-500">{def.limitUnit}</span>
             </div>
 
-            <div className="pe-scroll overflow-x-auto">
-              <table className="w-full text-sm" style={{ minWidth: 620 }}>
-                <thead>
+            {/* Na telefonie każdy wiersz jest KARTĄ — same klasy CSS, ten sam DOM. Tabela
+                miała 620–673 px w okienku 285 px: nagłówki łamały się na sześć linii,
+                pola wyników miały po 25 px, a „Ocena" i kosz stały za prawą krawędzią
+                bez żadnego znaku, że tabelę trzeba przesunąć. W karcie pola tekstowe idą
+                na całą szerokość, pomiary po trzy w rzędzie, każde z podpisem kolumny. */}
+            <div className="pe-scroll md:overflow-x-auto">
+              <table className="block w-full text-sm md:table md:min-w-[620px]">
+                <thead className="hidden md:table-header-group">
                   <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
                     <th className="w-8 py-2 pr-2">Lp.</th>
                     {def.columns!.map((c) => (
@@ -421,20 +486,30 @@ export function ProtocolsTab() {
                     <th className="w-8 py-2" />
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="block md:table-row-group">
                   {rows.map((r, i) => {
                     const ok = def.evaluate!(r, limit);
                     return (
-                      <tr key={i} className="border-b last:border-0" style={{ borderColor: "#EEF1F4" }}>
-                        <td className="py-1.5 pr-2 text-xs text-slate-400">{i + 1}</td>
+                      <tr
+                        key={i}
+                        className="grid grid-cols-6 gap-x-2 gap-y-2 border-b py-3 last:border-0 md:table-row md:py-0"
+                        style={{ borderColor: "#EEF1F4" }}
+                        data-testid="wiersz-pomiaru"
+                      >
+                        <td className="col-span-6 text-xs text-slate-400 md:py-1.5 md:pr-2">
+                          <span className="md:hidden">Pozycja </span>
+                          {i + 1}
+                        </td>
                         {def.columns!.map((c) => (
-                          <td key={c.key} className="py-1.5 pr-2">
+                          <td key={c.key} className={`min-w-0 md:py-1.5 md:pr-2 ${c.type === "text" ? "col-span-6" : "col-span-2"}`}>
+                            <span className="mb-0.5 block truncate text-[11px] text-slate-400 md:hidden">{c.label}</span>
                             {c.type === "computed" ? (
                               <span className="pe-mono text-xs text-slate-500">{c.compute!(r, limit)}</span>
                             ) : c.type === "select" ? (
                               <select
                                 value={String(r[c.key] ?? c.default ?? "")}
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
+                                aria-label={`${c.label}, pozycja ${i + 1}`}
                                 className="pe-input w-full py-1 text-xs"
                               >
                                 {c.options!.map((o) => (
@@ -449,12 +524,13 @@ export function ProtocolsTab() {
                                 step="any"
                                 value={String(r[c.key] ?? "")}
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
+                                aria-label={`${c.label}, pozycja ${i + 1}`}
                                 className={`pe-input w-full py-1 text-xs ${c.type === "number" ? "pe-mono" : ""}`}
                               />
                             )}
                           </td>
                         ))}
-                        <td className="py-1.5">
+                        <td className="col-span-4 flex items-center md:table-cell md:py-1.5">
                           {ok === null ? (
                             <span className="text-xs text-slate-300">—</span>
                           ) : (
@@ -466,8 +542,12 @@ export function ProtocolsTab() {
                             </span>
                           )}
                         </td>
-                        <td className="py-1.5">
-                          <button onClick={() => removeRow(i)} className="text-slate-300 hover:text-red-500">
+                        <td className="col-span-2 flex justify-end md:table-cell md:py-1.5">
+                          <button
+                            onClick={() => removeRow(i)}
+                            aria-label={`Usuń wiersz ${i + 1}`}
+                            className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 flex items-center justify-center text-slate-300 hover:text-red-500"
+                          >
                             <Trash2 size={13} />
                           </button>
                         </td>
