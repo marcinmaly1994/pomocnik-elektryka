@@ -3233,17 +3233,25 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             // Uchwyt idzie za układem karty: na telefonie jest poziomą listwą MIĘDZY
             // paskiem narzędzi a panelem pod nim, na monitorze — pionową kreską obok.
             // Strzałka obraca się razem z nim, bo „w prawo" nad panelem nic nie znaczy.
-            className="flex h-4 w-full shrink-0 items-center justify-center rounded-sm border border-border bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-copper md:h-14 md:w-4 md:self-center"
+            //
+            // W PEŁNYM EKRANIE karta jest rzędem także na telefonie (pasek narzędzi stoi
+            // pionowo przy lewej krawędzi), więc uchwyt ma być pionową kreską zawsze.
+            // Pozioma listwa `w-full` rozpychała tam rząd: zmierzone 340 px uchwytu
+            // na ekranie 375 px, a treść panelu (katalog, opcje, karty) zaczynała się
+            // na x=406 — poza ekranem.
+            className={`flex shrink-0 items-center justify-center rounded-sm border border-border bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-copper ${
+              pelnyEkran ? "h-14 w-4 self-center" : "h-4 w-full md:h-14 md:w-4 md:self-center"
+            }`}
           >
             {panelZwiniety ? (
               <>
-                <ChevronDown size={13} className="md:hidden" />
-                <ChevronRight size={13} className="hidden md:block" />
+                <ChevronDown size={13} className={pelnyEkran ? "hidden" : "md:hidden"} />
+                <ChevronRight size={13} className={pelnyEkran ? "block" : "hidden md:block"} />
               </>
             ) : (
               <>
-                <ChevronUp size={13} className="md:hidden" />
-                <ChevronLeft size={13} className="hidden md:block" />
+                <ChevronUp size={13} className={pelnyEkran ? "hidden" : "md:hidden"} />
+                <ChevronLeft size={13} className={pelnyEkran ? "block" : "hidden md:block"} />
               </>
             )}
           </button>
