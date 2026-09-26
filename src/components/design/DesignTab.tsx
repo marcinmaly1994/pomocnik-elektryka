@@ -3301,7 +3301,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           // od tej kolumny — bez niej uciekłby do najbliższego przodka z pozycją, czyli
           // gdzieś na stronę.
           className={pelnyEkran ? "relative h-full w-full p-2" : "relative min-w-0 md:min-w-[320px]"}
-          style={pelnyEkran ? undefined : { flex: "1 1 480px" }}
+          // Podstawa 320 px = `md:min-w-[320px]` wyżej. Dawne 480 px (z pierwszego commita,
+          // bez uzasadnienia) nie mieściło się obok karty narzędzi (343 px) na tablecie
+          // w pionie: przy 768–850 px płótno zawijało się POD kartę, na 861 px od góry
+          // i w dolnej granicy wysokości, a obok karty zostawała pustka.
+          style={pelnyEkran ? undefined : { flex: "1 1 320px" }}
         >
           {/* Podpowiedź o pełnym ekranie stoi TU, tuż nad płótnem, którego dotyczy —
               i tylko poza pełnym ekranem, gdzie byłaby zaprzeczeniem samej siebie.
