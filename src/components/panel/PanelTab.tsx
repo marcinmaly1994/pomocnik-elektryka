@@ -619,16 +619,20 @@ export function PanelTab() {
               ostatni wiersz był przecinany w połowie i wyglądał jak błąd renderowania,
               a nie jak przewijanie. Wyższy kontener mieści cały typowy zestaw. */}
           <div className="pe-scroll mb-4 max-h-[26rem] space-y-1 overflow-y-auto">
+            {/* Na dotyku ikonki mają 40 × 44 px (były 13 × 13 — cztery obok siebie,
+                zmieniane palcem). Żeby nie zjadły opisu aparatu, na wąskim ekranie
+                wiersz łamie się na dwie linie: oznaczenie i opis u góry, wartość
+                i ikonki pod nimi. */}
             {devices.map((d, i) => (
-              <div key={d.uid} className="flex items-center gap-2 rounded-md border border-border bg-white p-1.5 text-xs">
+              <div key={d.uid} className="flex flex-wrap items-center gap-x-2 rounded-md border border-border bg-white p-1.5 text-xs sm:flex-nowrap">
                 <span className="pe-mono w-10 shrink-0 font-semibold">{d.tag}</span>
-                <span className="min-w-0 flex-1 truncate">{d.caption}</span>
-                <span className="pe-mono shrink-0 text-slate-400">{d.label}</span>
+                <span className="min-w-0 flex-1 basis-[calc(100%-3rem)] truncate sm:basis-0">{d.caption}</span>
+                <span className="pe-mono ml-12 shrink-0 text-slate-400 sm:ml-0">{d.label}</span>
                 <button
                   onClick={() => setEdytowany(d.uid)}
                   title="Edytuj aparat"
                   aria-label={`Edytuj aparat ${d.tag}`}
-                  className="text-slate-400 hover:text-blueprint"
+                  className="flex items-center justify-center [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-10 ml-auto text-slate-400 hover:text-blueprint sm:ml-0"
                 >
                   <Pencil size={13} />
                 </button>
@@ -643,7 +647,7 @@ export function PanelTab() {
                   disabled={i === 0}
                   title="Przesuń wyżej na szynie"
                   aria-label={`Przesuń aparat ${d.tag} wyżej na szynie`}
-                  className="text-slate-400 hover:text-blueprint disabled:opacity-30"
+                  className="flex items-center justify-center [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-10 text-slate-400 hover:text-blueprint disabled:opacity-30"
                 >
                   <ArrowUp size={13} />
                 </button>
@@ -652,7 +656,7 @@ export function PanelTab() {
                   disabled={i === devices.length - 1}
                   title="Przesuń niżej na szynie"
                   aria-label={`Przesuń aparat ${d.tag} niżej na szynie`}
-                  className="text-slate-400 hover:text-blueprint disabled:opacity-30"
+                  className="flex items-center justify-center [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-10 text-slate-400 hover:text-blueprint disabled:opacity-30"
                 >
                   <ArrowDown size={13} />
                 </button>
@@ -667,7 +671,7 @@ export function PanelTab() {
                     onClick={() => removeDevice(d.uid)}
                     title="Usuń aparat"
                     aria-label={`Usuń aparat ${d.tag}`}
-                    className="text-slate-400 hover:text-red-500"
+                    className="flex items-center justify-center [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-10 text-slate-400 hover:text-red-500"
                   >
                     <Trash2 size={13} />
                   </button>

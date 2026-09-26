@@ -142,7 +142,8 @@ export function ListaKalkulatorow({
             <button
               onClick={() => onPrzelaczGrupe(grupa.id)}
               aria-expanded={!schowana}
-              className="mb-1.5 flex w-full items-center gap-1 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-copper"
+              // Na dotyku 44 px wysokości — przy 17 px zwijanie grupy palcem było loterią.
+              className="mb-1.5 flex w-full items-center gap-1 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-copper [@media(pointer:coarse)]:min-h-11"
             >
               {schowana ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
               {grupa.tytul}

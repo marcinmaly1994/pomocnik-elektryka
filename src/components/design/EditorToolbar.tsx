@@ -442,7 +442,11 @@ export function EditorToolbar({
       </div>
 
       {/* Powiększenie WIDOKU. Wcześniej dostępne tylko przez Ctrl+scroll, czyli
-          praktycznie niewykrywalne — teraz ma jawną kontrolkę z wartością. */}
+          praktycznie niewykrywalne — teraz ma jawną kontrolkę z wartością.
+          Na dotyku przyciski mają 44 px wysokości, a od `md` (tablet) także 44 px
+          szerokości, jak w `PrzyciskiPowiekszenia` — przy 26 × 22 px „+" i „Dopasuj"
+          leżały pod jednym opuszkiem. Na telefonie szerokość zostaje, bo pasek jest
+          tam wąski: szersze przyciski wypychały „+" za krawędź. */}
       <div
         ref={(el) => onGrupaZoomuRef?.(el)}
         className={`ml-auto flex items-center gap-0.5 rounded-lg border border-border p-0.5${wskazZoom ? " pe-wskazane" : ""}`}
@@ -452,7 +456,7 @@ export function EditorToolbar({
           disabled={zoom <= minZoom()}
           aria-label="Oddal widok"
           title="Oddal widok"
-          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30"
+          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
         >
           <Minus size={14} />
         </button>
@@ -468,7 +472,7 @@ export function EditorToolbar({
           onClick={() => onZoomChange(clampZoom(zoomStandardowy))}
           title="Przywróć standardowe powiększenie"
           aria-label={`Powiększenie ${Math.round((zoom / zoomStandardowy) * 100)} procent — kliknij, aby przywrócić 100%`}
-          className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600"
+          className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
         >
           {Math.round((zoom / zoomStandardowy) * 100)}%
         </button>
@@ -477,7 +481,7 @@ export function EditorToolbar({
           disabled={zoom >= MAX_ZOOM}
           aria-label="Przybliż widok"
           title="Przybliż widok"
-          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30"
+          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
         >
           <Plus size={14} />
         </button>
@@ -486,7 +490,7 @@ export function EditorToolbar({
           onClick={onDopasuj}
           aria-label="Dopasuj widok do planu"
           title="Dopasuj widok do planu"
-          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink"
+          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
         >
           <Scan size={13} />
         </button>
