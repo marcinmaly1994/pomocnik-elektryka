@@ -112,3 +112,32 @@ test("zwinięty przewodnik nie zasłania paska stanu", async ({ page }) => {
   await page.getByRole("button", { name: /Otwórz przewodnik/ }).click();
   await expect(page.getByRole("complementary", { name: /Zacznij w 3 krokach/i })).toBeVisible();
 });
+
+/**
+ * Powrót na „Instalację" z innej zakładki ląduje na edytorze — odświeżenie nie.
+ *
+ * Wcześniej powrót zostawiał stronę przy nagłówku: z rzutu widać było ok. 240 px,
+ * a pasek stanu leżał pod krawędzią ekranu (płótno liczy się na telefonie od
+ * początku edytora, więc bez przewinięcia jego dół wypada poza kadr).
+ */
+test("powrót na „Instalację” z Rozdzielnicy przewija do edytora, odświeżenie nie", async ({ page }) => {
+  await start(page);
+  await wczytajPrzyklad(page, "mieszkanie");
+  await pomiar(page);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Widok czołowy rozdzielnicy" })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole("button", { name: /Instalacja/ }).first().click();
+
+  const m = await pomiar(page);
+  expect(m.stanDol).toBeLessThanOrEqual(812);
+
+  // Odświeżenie to nie nawigacja w aplikacji — strona nie ma skakać.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.reload();
+  await expect(page.locator("[data-plan-okno]")).toBeVisible();
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(100);
+});
