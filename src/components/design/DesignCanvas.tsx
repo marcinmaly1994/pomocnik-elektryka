@@ -39,6 +39,7 @@ import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { dystansPalcow, kadrPodPalcem, kierunekPalca, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from "@/lib/gestDotyku";
 import { useDlugiePrzytrzymanie } from "@/hooks/useDlugiePrzytrzymanie";
 import { prostokatOtworu, prostokatSymbolu } from "@/lib/rozstawElementow";
+import { nearestRouteSegmentIndex } from "@/lib/punktTrasy";
 import { clampNum, nearestPointOnPolyline, pointInPolygon, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { glyphBoxSize, groupLabelAnchors, groupLabelCandidates } from "@/lib/glyphs";
@@ -328,6 +329,12 @@ interface DesignCanvasProps {
   onSetRoutePoints: (routeId: string, midPoints: Point[]) => void;
   /** Kasuje ręczną poprawkę — trasa wraca do automatycznego routingu. */
   onResetRoute: (routeId: string) => void;
+  /** PPM / przytrzymanie palcem na trasie. `punkt` to miejsce na PLANIE — tam „Dodaj
+   *  punkt" wstawi nowe załamanie. */
+  onRouteContextMenu: (routeId: string, clientX: number, clientY: number, punkt: Point) => void;
+  /** Dwuklik / podwójne dotknięcie trasy — okno z informacjami o przewodzie.
+   *  `odcinek` to indeks wskazanego odcinka w `CableRoute.points`. */
+  onRouteInfo: (routeId: string, odcinek: number) => void;
   onClearSelection: () => void;
   onMarqueeSelect: (ids: string[]) => void;
   onPlaceElement: (p: Point) => void;
@@ -369,30 +376,15 @@ function planPoint(stage: Konva.Stage): Point | null {
   return stage.getRelativePointerPosition();
 }
 
-/** Indeks odcinka [i, i+1] łamanej `points` najbliższego punktowi `p` — do
- *  wstawienia nowego załamania trasy dokładnie tam, gdzie użytkownik dwukliknął,
- *  zamiast zawsze na końcu. `nearestPointOnPolyline` w geometry.ts liczy to samo,
- *  ale nie zwraca indeksu, którego tu akurat potrzeba. */
-function nearestRouteSegmentIndex(p: Point, points: Point[]): number {
-  let bestIdx = 0;
-  let bestDistSq = Infinity;
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) continue;
-    const t = clampNum(((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq, 0, 1);
-    const distSq = (p.x - (a.x + t * dx)) ** 2 + (p.y - (a.y + t * dy)) ** 2;
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      bestIdx = i;
-    }
-  }
-  return bestIdx;
+/**
+ * Punkt planu pod wskazanym miejscem EKRANU. Do przytrzymania palcem, które podaje
+ * współrzędne ekranu, a nie ma skąd wziąć „wskaźnika" sceny — ten sam przelicznik,
+ * którego Konva używa w `getRelativePointerPosition`.
+ */
+function planZEkranu(stage: Konva.Stage, clientX: number, clientY: number): Point {
+  const r = stage.container().getBoundingClientRect();
+  return stage.getAbsoluteTransform().copy().invert().point({ x: clientX - r.left, y: clientY - r.top });
 }
-
 function centroid(points: Point[]): Point {
   const n = points.length || 1;
   return {
@@ -477,6 +469,8 @@ export function DesignCanvas({
   onSelectRoute,
   onSetRoutePoints,
   onResetRoute,
+  onRouteContextMenu,
+  onRouteInfo,
   onClearSelection,
   onMarqueeSelect,
   onPlaceElement,
@@ -730,10 +724,17 @@ export function DesignCanvas({
     };
   }
 
-  /** To samo co `klikAlboDotyk`, dla dwukliku i podwójnego dotknięcia. */
+  /**
+   * To samo co `klikAlboDotyk`, dla dwukliku i podwójnego dotknięcia.
+   *
+   * Tylko LEWYM przyciskiem. Konva liczy dwuklik z dwóch dowolnych kliknięć w krótkim
+   * odstępie, więc zaznaczenie trasy lewym i zaraz potem PPM dawało „dwuklik" — zamiast
+   * menu z „Dodaj punkt" otwierało się okno informacji.
+   */
   function dwuklikAlboDotyk(akcja: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void) {
     return {
       onDblClick: (e: KonvaEventObject<MouseEvent>) => {
+        if (e.evt.button !== 0) return;
         if (Date.now() - echoTapuRef.current < ECHO_TAPU_MS) return;
         if (poGescieKadru()) return;
         akcja(e);
@@ -2744,33 +2745,33 @@ export function DesignCanvas({
                     onSelectRoute(r.id);
                   })}
                   /**
-                   * Dwuklik dokłada trasie punkt — ZAWSZE, także gdy nie była jeszcze
-                   * zaznaczona.
+                   * Dwuklik (albo podwójne dotknięcie) pokazuje INFORMACJE o przewodzie:
+                   * długość wskazanego odcinka i całej trasy, obwód, zabezpieczenie, przewód.
                    *
-                   * Stała tu wcześniej straż „pierwszy dwuklik na niezaznaczonej trasie
-                   * tylko ją zaznacza", mająca chronić przed przypadkowym zniekształceniem.
-                   * Nie chroniła przed niczym: dwuklik niesie w sobie pojedyncze kliknięcie,
-                   * które zaznacza trasę ułamek sekundy wcześniej, więc do straży docierał
-                   * już stan „zaznaczona" i punkt dokładał się i tak. Zmierzone tak samo
-                   * myszą i palcem.
-                   *
-                   * Gorzej: straż zadziałałaby tylko wtedy, gdy przerysowanie nie zdąży
-                   * między kliknięciem a dwuklikiem — czyli ten sam gest na wolniejszej
-                   * maszynie robiłby co innego. Niewidoczna loteria jest gorsza od obu
-                   * jawnych zachowań, więc straż odpada.
-                   *
-                   * Przypadkowej zmiany pilnuje to, co widać: pasek pod rysunkiem mówi
-                   * wprost „dwuklik dokłada punkt", zmiana siedzi w projekcie (więc cofa ją
-                   * `Ctrl+Z`), a przy poprawionej trasie stoi „Cofnij do trasy automatycznej".
+                   * Wcześniej dwuklik dokładał trasie załamanie. Był to jednak gest, który
+                   * zmieniał rysunek „przy okazji" — dwuklik niesie w sobie pojedyncze
+                   * kliknięcie, więc pierwszy odruch „co to za kabel?" kończył się
+                   * zniekształconą trasą. Dokładanie punktu przeszło do menu pod PPM
+                   * (na dotyku — przytrzymanie palcem), gdzie jest nazwane wprost.
+                   * Dwuklik na UCHWYCIE dalej kasuje punkt — tam wiadomo, w co się celuje.
                    */
                   {...dwuklikAlboDotyk((e) => {
                     e.cancelBubble = true;
                     const stage = e.target.getStage();
                     const p = stage && planPoint(stage);
                     if (!p) return;
-                    const segIdx = nearestRouteSegmentIndex(p, r.points);
-                    const withInserted = [...r.points.slice(0, segIdx + 1), p, ...r.points.slice(segIdx + 1)];
-                    onSetRoutePoints(r.id, withInserted.slice(1, -1));
+                    onRouteInfo(r.id, nearestRouteSegmentIndex(p, r.points));
+                  })}
+                  onContextMenu={(e) => {
+                    e.evt.preventDefault();
+                    e.cancelBubble = true;
+                    const stage = e.target.getStage();
+                    if (!stage) return;
+                    onRouteContextMenu(r.id, e.evt.clientX, e.evt.clientY, planZEkranu(stage, e.evt.clientX, e.evt.clientY));
+                  }}
+                  {...przytrzymanie.propsy((x, y) => {
+                    const stage = routeLineNodesRef.current.get(r.id)?.getStage();
+                    if (stage) onRouteContextMenu(r.id, x, y, planZEkranu(stage, x, y));
                   })}
                 />
                 {/* Uchwyty ZAŁAMAŃ trasy — bez pierwszego/ostatniego punktu, bo te są

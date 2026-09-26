@@ -19,10 +19,12 @@ import {
   CopyCheck,
   Eye,
   HelpCircle,
+  Info,
   Layers,
   Loader2,
   Pencil,
   Pin,
+  Plus,
   FlipHorizontal,
   RotateCw,
   ShieldAlert,
@@ -123,6 +125,8 @@ import { QuantitiesPanel } from "./QuantitiesPanel";
 import { EditElementModal } from "./EditElementModal";
 import type Konva from "konva";
 import { ELEMENT_TYPES, libSubtitle, VARIANTS_FOR } from "@/lib/elements";
+import { nearestRouteSegmentIndex, zalamaniaZNowymPunktem } from "@/lib/punktTrasy";
+import { InfoTrasy } from "./InfoTrasy";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
 import { buildDrawingDoc, hexNaRgb, KLUCZ_TRAS } from "@/lib/pdf/drawing";
 import type { PdfDoc } from "@/lib/pdf/engine";
@@ -1552,6 +1556,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   /** Edycja nazwy pomieszczenia w miejscu dwukliku na planie (input-nakładka, bo
    *  Konva nie ma natywnego pola tekstowego — ten sam trik co przy contextMenu). */
   const [roomNameEdit, setRoomNameEdit] = useState<{ x: number; y: number; id: string; value: string } | null>(null);
+  /** Okno informacji o przewodzie — trasa i wskazany odcinek (patrz `InfoTrasy`). */
+  const [infoTrasy, setInfoTrasy] = useState<{ id: string; odcinek: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   /**
@@ -2406,14 +2412,19 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           </div>
         );
       })()}
-      {/* Zaznaczona trasa przewodu — podpowiedź jak ją edytować (dwuklik dokłada
-          załamanie, przeciągnięcie uchwytu je przesuwa, dwuklik na uchwycie kasuje)
+      {/* Zaznaczona trasa przewodu — podpowiedź jak ją edytować (PPM / przytrzymanie
+          → „Dodaj punkt", przeciągnięcie uchwytu go przesuwa, dwuklik na uchwycie kasuje,
+          dwuklik na trasie pokazuje informacje o przewodzie)
           i przycisk powrotu do routingu automatycznego, widoczny tylko gdy trasa
           FAKTYCZNIE ma ręczną poprawkę — inaczej wisiałby bez sensu przy każdej
           jeszcze nietkniętej trasie. */}
       {selected?.kind === "route" && toolMode === "zaznacz" && (
         <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span>Trasa: dwuklik dokłada punkt, przeciągnij uchwyt, dwuklik na uchwycie go kasuje.</span>
+          <span>
+            {!szerokieOkno
+              ? "Trasa: przytrzymaj palec → „Dodaj punkt”, przeciągnij uchwyt, stuknij dwa razy w uchwyt, żeby go skasować, a w trasę — żeby zobaczyć informacje."
+              : "Trasa: PPM → „Dodaj punkt”, przeciągnij uchwyt, dwuklik na uchwycie go kasuje, dwuklik na trasie pokazuje informacje."}
+          </span>
           {selected.id in routeOverrides && (
             <button
               onClick={() => clearRouteOverride(selected.id)}
@@ -3477,6 +3488,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             }}
             onSetRoutePoints={setRouteOverride}
             onResetRoute={clearRouteOverride}
+            onRouteContextMenu={(id, x, y, punkt) => zaznaczenie.menuKontekstowe("route", id, x, y, punkt)}
+            onRouteInfo={(id, odcinek) => {
+              setSelected({ kind: "route", id });
+              setMultiSelected([]);
+              setInfoTrasy({ id, odcinek });
+            }}
             onClearSelection={() => {
               setSelected(null);
               setMultiSelected([]);
@@ -3749,6 +3766,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         />
       )}
 
+      {infoTrasy &&
+        (() => {
+          const trasa = cableRoutes.find((r) => r.id === infoTrasy.id);
+          if (!trasa) return null;
+          return (
+            <InfoTrasy
+              trasa={trasa}
+              odcinek={infoTrasy.odcinek}
+              mpu={scaleOf(scales, trasa.floor)}
+              reczna={trasa.id in routeOverrides}
+              onClose={() => setInfoTrasy(null)}
+            />
+          );
+        })()}
+
       {contextMenu && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => zaznaczenie.zamknijMenu()} onContextMenu={(e) => e.preventDefault()} />
@@ -3895,6 +3927,43 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 >
                   <Trash2 size={14} /> Usuń pomieszczenie
                 </button>
+              </>
+            ) : contextMenu.kind === "route" ? (
+              <>
+                {contextMenu.punkt && (
+                  <button
+                    onClick={() => {
+                      const trasa = cableRoutes.find((r) => r.id === contextMenu.id);
+                      if (trasa && contextMenu.punkt) setRouteOverride(trasa.id, zalamaniaZNowymPunktem(trasa.points, contextMenu.punkt));
+                      zaznaczenie.zamknijMenu();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
+                  >
+                    <Plus size={14} /> Dodaj punkt
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    const trasa = cableRoutes.find((r) => r.id === contextMenu.id);
+                    // Odcinek pod kursorem — ten sam, który wskazałby dwuklik.
+                    if (trasa) setInfoTrasy({ id: trasa.id, odcinek: contextMenu.punkt ? nearestRouteSegmentIndex(contextMenu.punkt, trasa.points) : 0 });
+                    zaznaczenie.zamknijMenu();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
+                >
+                  <Info size={14} /> Informacje o przewodzie
+                </button>
+                {contextMenu.id in routeOverrides && (
+                  <button
+                    onClick={() => {
+                      clearRouteOverride(contextMenu.id);
+                      zaznaczenie.zamknijMenu();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-ink hover:bg-slate-50"
+                  >
+                    <Undo2 size={14} /> Cofnij do trasy automatycznej
+                  </button>
+                )}
               </>
             ) : contextMenu.kind === "wallDraw" ? (
               <button
