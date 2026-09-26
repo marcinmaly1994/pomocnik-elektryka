@@ -2102,8 +2102,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
 
   const blokujaceKontrolki = sciany.drawingWall.length > 0 || pokoje.drawingRoomPoints.length > 0 || toolMode === "skala";
   useEffect(() => {
-    if (!pelnyEkran && blokujaceKontrolki && panelZwiniety) rozwinPanel();
-  }, [pelnyEkran, blokujaceKontrolki, panelZwiniety, rozwinPanel]);
+    // Tylko na SZEROKIM ekranie, gdzie panel stoi OBOK rzutu. Na telefonie stoi NAD nim,
+    // więc rozwinięcie przy pierwszym punkcie ściany spychało rzut o 261 px w połowie
+    // rysowania i kolejne narożniki trafiały w panel. Tam kontrolki pływają nad
+    // płótnem (patrz nakładka przy `DesignCanvas`), więc panel nie musi się rozwijać.
+    if (!pelnyEkran && szerokieOkno && blokujaceKontrolki && panelZwiniety) rozwinPanel();
+  }, [pelnyEkran, szerokieOkno, blokujaceKontrolki, panelZwiniety, rozwinPanel]);
 
   /**
    * Treść pigułki kontrolek kontekstowych — WSPÓLNA dla obu miejsc, w których się
@@ -2221,7 +2225,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       )}
 
       {sciany.drawingWall.length > 0 && (
-        <div className="flex flex-nowrap items-center gap-2 text-sm">
+        // Zawijany: na telefonie ten wiersz stoi w nakładce szerokiej na ekran i przy
+        // `flex-nowrap` „Zakończ" i „Anuluj" wychodziły poza prawą krawędź.
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
           <span className="whitespace-nowrap font-medium text-slate-600">Rysowanie ściany: {sciany.drawingWall.length} pkt.</span>
           <PoleDlugosciOdcinka
             punkty={sciany.drawingWall}
@@ -2382,7 +2388,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           prostokącie tylko wprowadzałyby w błąd. „Anuluj" jest wspólne — kasuje
           kotwicę tak samo jak zaczęty wielobok. */}
       {pokoje.drawingRoomPoints.length > 0 && (
-        <div className="flex flex-nowrap items-center gap-2 text-sm">
+        // Zawijany — ten sam powód co przy rysowaniu ściany wyżej.
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
           <span className="whitespace-nowrap font-medium text-slate-600">
             {pokoje.roomMode === "prostokat" ? (
               "Narożnik postawiony — kliknij przeciwległy"
@@ -3124,7 +3131,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               stoi równo z górną krawędzią paska narzędzi niezależnie od narzędzia.
               Zgodne zresztą z podziałem opisanym przy tej karcie wyżej: pasek wybiera,
               CZYM pracuję, panel pokazuje opcje dla tego wyboru. */}
-          {!pelnyEkran && kontekstoweAktywne && (
+          {/* Na telefonie te same kontrolki pływają nad płótnem — patrz nakładka przy
+              `DesignCanvas`. Tylko w JEDNYM miejscu naraz: dwie kopie dawałyby dwa
+              przyciski „Zakończ" o tej samej nazwie. */}
+          {!pelnyEkran && szerokieOkno && kontekstoweAktywne && (
             // `flex-col`, nie `flex-wrap` jak w wersji pełnoekranowej: tam pigułka ma
             // całą szerokość okna i bloki spokojnie stoją obok siebie, tu kolumna ma
             // 268 px, więc każdy blok dostaje własny wiersz. `min-w-0` na kontenerze
@@ -3206,6 +3216,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               O wąskim ekranie decyduje `sm:hidden` w samym komponencie. */}
           {/* Komunikat o `Ctrl` — nad płótnem, bo dotyczy gestu robionego właśnie na nim. */}
           <PodpowiedzKolka sygnal={sygnalKolka} />
+          {/* `relative` dla nakładki kontrolek na telefonie — liczy się od PŁÓTNA, nie od
+              całej kolumny (pod płótnem stoi jeszcze pasek stanu). */}
+          <div className="relative">
+          {/* Kontrolki bieżącego narzędzia na TELEFONIE: nakładka przy dolnej krawędzi
+              rzutu, nie treść nad nim. Każda treść nad płótnem, która pojawia się
+              w trakcie rysowania, przesuwa płótno pod palcem — a na telefonie panel
+              stoi właśnie nad płótnem. Na monitorze kontrolki są w panelu obok rzutu. */}
+          {!pelnyEkran && !szerokieOkno && kontekstoweAktywne && (
+            <div
+              data-testid="kontrolki-narzedzia"
+              className="pe-bez-suwaka absolute inset-x-2 bottom-2 z-20 flex max-h-[45%] min-w-0 flex-wrap items-center gap-2 overflow-y-auto rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-2 text-left shadow-lg empty:hidden"
+            >
+              {kontekstoweTresc}
+            </div>
+          )}
           <DesignCanvas
             stageRef={stageRef}
             anulujPodgladRef={anulujPodgladRef}
@@ -3361,6 +3386,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             onCloseRoomPolygon={pokoje.zakonczRysowanie}
             onAddCalibPoint={(p) => setCalibPoints((pts) => (pts.length >= 2 ? [p] : [...pts, p]))}
           />
+          </div>
           {/* Pasek stanu razem z linijką danych planu — w pełnym ekranie wysuwany zza
               dolnej krawędzi. Liczby (powierzchnia, skala, pozycja kursora) przydają
               się przy sprawdzaniu, a nie przy samym rysowaniu, więc mogą być schowane. */}

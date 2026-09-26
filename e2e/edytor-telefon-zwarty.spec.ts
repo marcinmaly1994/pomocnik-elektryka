@@ -112,3 +112,52 @@ test("zwinięty przewodnik nie zasłania paska stanu", async ({ page }) => {
   await page.getByRole("button", { name: /Otwórz przewodnik/ }).click();
   await expect(page.getByRole("complementary", { name: /Zacznij w 3 krokach/i })).toBeVisible();
 });
+
+/**
+ * Rysowanie ściany PALCEM: rzut nie ucieka spod palca, a „Zakończ" jest w kadrze.
+ *
+ * Kontrolki rysowania mieszkały w panelu, który na telefonie stoi NAD rzutem —
+ * a przy pierwszym punkcie ściany panel rozwijał się sam. Zmierzone: rzut zjeżdżał
+ * o 261 px (ze 142 na 403), więc kolejne narożniki trafiały w panel i z pięciu dotknięć
+ * ściana dostawała dwa punkty. Teraz kontrolki pływają nad dolną krawędzią rzutu.
+ */
+test("ściana rysowana palcem: każdy narożnik trafia, „Zakończ” w kadrze", async ({ page }) => {
+  await start(page);
+  await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).first().click();
+  await pomiar(page);
+  const rozumiem = page.getByRole("button", { name: "Rozumiem" });
+  if (await rozumiem.count()) await rozumiem.click();
+
+  const okno = page.locator("[data-plan-okno]");
+  const start0 = (await okno.boundingBox())!;
+  for (const [x, y] of [
+    [60, 80],
+    [280, 80],
+    [280, 300],
+    [60, 300],
+  ]) {
+    await page.touchscreen.tap(start0.x + x, start0.y + y);
+    await page.waitForTimeout(250);
+    expect((await okno.boundingBox())!.y, "rzut nie może się ruszyć w trakcie rysowania").toBeCloseTo(start0.y, 0);
+  }
+  await expect(page.getByText("Rysowanie ściany: 4 pkt.")).toBeVisible();
+
+  // „Zakończ" w kadrze i niczym nieprzykryty — na telefonie to jedyne (obok
+  // przytrzymania palca) wyjście z rysowania.
+  const zakoncz = page.getByRole("button", { name: "Zakończ" });
+  const b = (await zakoncz.boundingBox())!;
+  expect(b.x + b.width).toBeLessThanOrEqual(375);
+  expect(b.y + b.height).toBeLessThanOrEqual(812);
+  const trafiony = await page.evaluate(
+    ([x, y]) => document.elementFromPoint(x, y)?.closest("button")?.textContent ?? "",
+    [b.x + b.width / 2, b.y + b.height / 2]
+  );
+  expect(trafiony).toBe("Zakończ");
+  await zakoncz.tap();
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
+      return raw ? (JSON.parse(raw).draft.walls as unknown[]).length : 0;
+    })
+  ).toBe(1);
+});
