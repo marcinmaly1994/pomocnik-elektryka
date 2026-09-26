@@ -7,8 +7,12 @@ import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
  * (patrz e2e/dotyk-plotna.spec.ts i komentarz przy tych pomocnikach w DesignCanvas).
  *
  * Trasa jest tu przypadkiem najtrudniejszym i dlatego wartym osobnego testu: nie da
- * się jej wskazać „na oko" (biegnie tam, gdzie policzy ją routing), a obie czynności
- * na niej TWORZĄ ALBO KASUJĄ punkty — czyli wykonane dwa razy zniekształcają rysunek.
+ * się jej wskazać „na oko" (biegnie tam, gdzie policzy ją routing), a czynności na
+ * niej TWORZĄ ALBO KASUJĄ punkty — czyli wykonane dwa razy zniekształcają rysunek.
+ *
+ * Punkt dokłada się z menu (PPM, na dotyku przytrzymanie palcem → „Dodaj punkt"),
+ * a dwuklik / podwójne dotknięcie trasy pokazuje informacje o przewodzie i niczego
+ * na rysunku nie zmienia.
  */
 
 test.use({ hasTouch: true });
@@ -101,6 +105,19 @@ async function wskaz(page: Page, x: number, y: number, dotykiem: boolean) {
   else await page.mouse.click(x, y);
 }
 
+/** PPM myszą albo przytrzymanie palcem — to samo menu. */
+async function otworzMenu(page: Page, x: number, y: number, dotykiem: boolean) {
+  if (!dotykiem) {
+    await page.mouse.click(x, y, { button: "right" });
+    return;
+  }
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+  await page.waitForTimeout(700);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await cdp.detach();
+}
+
 async function wskazDwaRazy(page: Page, x: number, y: number, dotykiem: boolean) {
   if (!dotykiem) {
     await page.mouse.dblclick(x, y);
@@ -120,20 +137,33 @@ for (const dotykiem of [false, true]) {
 
     const p = await punktNaTrasie(page);
     await wskaz(page, p.x, p.y, dotykiem);
-    await expect(page.getByText(/Trasa: dwuklik dokłada punkt/)).toBeVisible();
+    await expect(page.getByText(/^Trasa: /)).toBeVisible();
   });
 
   /**
    * DOKŁADNIE jeden punkt, nie dwa. To jest tu sedno: obie czynności na trasie
    * zmieniają rysunek, więc gdyby obok dotknięcia przyszedł jeszcze dorobiony klik
-   * (patrz `echoTapuRef` w DesignCanvas), trasa dostałaby dwa załamania zamiast jednego.
-   *
-   * Punkt dokłada się JUŻ ZA PIERWSZYM dwuklikiem, także na trasie jeszcze
-   * niezaznaczonej — bo dwuklik niesie w sobie pojedyncze kliknięcie, które zaznacza ją
-   * ułamek sekundy wcześniej. Stała tu kiedyś straż udająca, że jest inaczej; patrz
-   * komentarz przy tym dwukliku w DesignCanvas.tsx.
+   * (patrz `echoTapuRef` w DesignCanvas i echo przytrzymania w
+   * `useDlugiePrzytrzymanie`), trasa dostałaby dwa załamania zamiast jednego.
    */
-  test(`dwukrotne wskazanie ${jak} dokłada trasie jeden punkt, a potem go kasuje`, async ({ page }) => {
+  test(`menu ${jak} dokłada trasie jeden punkt, a dwukrotne wskazanie uchwytu go kasuje`, async ({ page }) => {
+    await otworzPlan(page);
+    await jednaTrasa(page);
+
+    const przed = await zalamaniaTrasy(page);
+    const p = await punktNaTrasie(page);
+
+    await otworzMenu(page, p.x, p.y, dotykiem);
+    await page.getByRole("button", { name: "Dodaj punkt", exact: true }).click();
+    await expect(page.getByText(/^Trasa: /)).toBeVisible();
+    expect(await zalamaniaTrasy(page)).toBe(przed + 1);
+
+    // dwukrotne wskazanie UCHWYTU kasuje dołożony punkt — trasa wraca do liczonej
+    await wskazDwaRazy(page, p.x, p.y, dotykiem);
+    expect(await zalamaniaTrasy(page)).toBe(przed);
+  });
+
+  test(`dwukrotne wskazanie trasy ${jak} pokazuje informacje o przewodzie i niczego nie dokłada`, async ({ page }) => {
     await otworzPlan(page);
     await jednaTrasa(page);
 
@@ -141,11 +171,13 @@ for (const dotykiem of [false, true]) {
     const p = await punktNaTrasie(page);
 
     await wskazDwaRazy(page, p.x, p.y, dotykiem);
-    await expect(page.getByText(/Trasa: dwuklik dokłada punkt/)).toBeVisible();
-    expect(await zalamaniaTrasy(page)).toBe(przed + 1);
-
-    // dwukrotne wskazanie UCHWYTU kasuje dołożony punkt — trasa wraca do liczonej
-    await wskazDwaRazy(page, p.x, p.y, dotykiem);
+    const info = page.getByTestId("info-trasy");
+    await expect(info).toBeVisible();
+    await expect(info).toContainText("Obwód");
+    await expect(info).toContainText(/Przewód\s*YDY/);
+    await expect(info).toContainText(/Ten odcinek\s*\d+,\d{2} m/);
+    await expect(info).toContainText(/Cała trasa\s*\d+,\d{2} m/);
+    await expect(info).toContainText("Gniazdo 230 V");
     expect(await zalamaniaTrasy(page)).toBe(przed);
   });
 }

@@ -504,7 +504,7 @@ async function setupEditableRoute(page: import("@playwright/test").Page) {
   return { route, panel: { x: panelX, y: panelY }, socket: { x: sockX, y: sockY }, toScreen };
 }
 
-test("ręczna edycja trasy: dwuklik dokłada punkt, przeciągnięcie go przesuwa, „Cofnij do trasy automatycznej” wraca do routingu", async ({ page }) => {
+test("ręczna edycja trasy: PPM → „Dodaj punkt” dokłada punkt, przeciągnięcie go przesuwa, „Cofnij do trasy automatycznej” wraca do routingu", async ({ page }) => {
   const { route: original, panel, socket, toScreen } = await setupEditableRoute(page);
   // trasa zapasowa (Manhattan): panel -> (gniazdko.x, panel.y) -> gniazdko, przerywana
   const corner = { x: socket.x, y: panel.y };
@@ -514,10 +514,13 @@ test("ręczna edycja trasy: dwuklik dokłada punkt, przeciągnięcie go przesuwa
   const mid = { x: (panel.x + corner.x) / 2, y: panel.y };
   const screenMid = toScreen(mid);
   await page.mouse.click(screenMid.x, screenMid.y);
-  await expect(page.getByText(/Trasa: dwuklik dokłada punkt/)).toBeVisible();
+  await expect(page.getByText(/Trasa: PPM → „Dodaj punkt”/)).toBeVisible();
 
-  // drugi dwuklik (trasa już zaznaczona) dokłada tam nowe załamanie
-  await page.mouse.dblclick(screenMid.x, screenMid.y);
+  // PPM → „Dodaj punkt" dokłada załamanie DOKŁADNIE tam, gdzie otwarto menu
+  // Zaraz po lewym kliknięciu — Konva policzyłaby te dwa kliknięcia jako dwuklik
+  // i zamiast menu otworzyła okno informacji (patrz `dwuklikAlboDotyk`).
+  await page.mouse.click(screenMid.x, screenMid.y, { button: "right" });
+  await page.getByRole("button", { name: "Dodaj punkt", exact: true }).click();
   await page.waitForTimeout(200);
   let route = await soleRoute(page);
   expect(route?.points.length).toBe(8); // 4 punkty zamiast 3 — doszło jedno załamanie
@@ -567,8 +570,8 @@ test("ręczna edycja trasy przeżywa odświeżenie strony (autozapis)", async ({
   const mid = { x: (panel.x + socket.x) / 2, y: panel.y };
   const screenMid = toScreen(mid);
 
-  await page.mouse.click(screenMid.x, screenMid.y);
-  await page.mouse.dblclick(screenMid.x, screenMid.y);
+  await page.mouse.click(screenMid.x, screenMid.y, { button: "right" });
+  await page.getByRole("button", { name: "Dodaj punkt", exact: true }).click();
   await page.waitForTimeout(900); // debounce autozapisu
 
   await page.reload();

@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
 import { useProjectStore } from "@/store/useProjectStore";
 import type { Selection } from "@/components/design/DesignCanvas";
+import type { Point } from "@/types";
 
 /** Rodzaj obiektu, na którym otwarto menu kontekstowe. `wallDraw` nie jest zaznaczeniem —
  *  to menu płótna w trakcie rysowania ściany, dlatego nie ma go w `Selection`. */
-export type RodzajMenu = "el" | "wall" | "room" | "wallDraw" | "opening";
+export type RodzajMenu = "el" | "wall" | "room" | "wallDraw" | "opening" | "route";
 
 export interface MenuKontekstowe {
   x: number;
@@ -13,6 +14,8 @@ export interface MenuKontekstowe {
   id: string;
   /** Menu dotyczy CAŁEJ zaznaczonej grupy, nie jednego elementu pod kursorem. */
   multi: boolean;
+  /** Miejsce na PLANIE, w którym otwarto menu — trasa wstawia tam nowy punkt. */
+  punkt?: Point;
 }
 
 /**
@@ -39,7 +42,7 @@ export interface ZaznaczenieApi {
   contextMenu: MenuKontekstowe | null;
   zamknijMenu: () => void;
   /** Zaznacza i otwiera menu — w tej kolejności. */
-  menuKontekstowe: (kind: RodzajMenu, id: string, x: number, y: number) => void;
+  menuKontekstowe: (kind: RodzajMenu, id: string, x: number, y: number, punkt?: Point) => void;
   /** Menu na ELEMENCIE. Osobno, bo element bywa częścią zaznaczonej grupy i wtedy menu
    *  ma dotyczyć całej grupy, a klik nie może jej rozbić. */
   menuElementu: (id: string, x: number, y: number) => void;
@@ -75,11 +78,11 @@ export function useZaznaczenie(): ZaznaczenieApi {
   const zamknijMenu = useCallback(() => setContextMenu(null), []);
 
   const menuKontekstowe = useCallback(
-    (kind: RodzajMenu, id: string, x: number, y: number) => {
+    (kind: RodzajMenu, id: string, x: number, y: number, punkt?: Point) => {
       // Najpierw zaznaczenie, dopiero potem menu — inaczej jego pozycje dotyczyłyby
       // czegoś innego niż to, w co użytkownik kliknął.
       if (kind !== "wallDraw") zaznacz(kind as NonNullable<Selection>["kind"], id);
-      setContextMenu({ x, y, kind, id, multi: false });
+      setContextMenu({ x, y, kind, id, multi: false, punkt });
     },
     [zaznacz]
   );
