@@ -24,6 +24,15 @@ async function otworzPlan(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).click();
 }
 
+/**
+ * Wybór numeru obwodu w menu pod prawym przyciskiem albo w oknie edycji — nie w karcie
+ * zaznaczonego elementu w panelu, która pokazuje TEN SAM wybór równolegle (patrz
+ * KartaElementu.tsx). Bez zawężenia każdy przycisk „+ 1" byłby tu dwa razy.
+ */
+function wybor(page: import("@playwright/test").Page) {
+  return page.locator('[data-testid="menu-kontekstowe"], [role="dialog"]');
+}
+
 async function planBox(page: import("@playwright/test").Page) {
   const wrap = page.locator("[data-testid=plan-okno]").first();
   await wrap.evaluate((e) => {
@@ -95,13 +104,13 @@ test("dwa gniazda dostaja ten sam numer obwodu i skladaja sie na JEDEN obwod", a
 
   // Pierwsze gniazdo zaklada nowy obwod...
   await klikPlan(page, 150, 150, { button: "right" });
-  await expect(page.getByText("Numer obwodu")).toBeVisible();
-  await page.getByRole("button", { name: "+ 1" }).click();
+  await expect(wybor(page).getByText("Numer obwodu")).toBeVisible();
+  await wybor(page).getByRole("button", { name: "+ 1" }).click();
 
   // ...a drugie DOLACZA do istniejacego. Bez listy uzytych numerow trzeba by
   // pamietac, ze obwod 1 w ogole istnieje.
   await klikPlan(page, 220, 150, { button: "right" });
-  await page.getByTitle("Dołącz do obwodu 1").click();
+  await wybor(page).getByTitle("Dołącz do obwodu 1").click();
   await page.waitForTimeout(900); // autozapis ma 600 ms debounce'u
 
   // Rozdzielnica pokazuje JEDEN obwod z dwoma punktami, nazwany numerem.
@@ -118,8 +127,8 @@ test("odbiornik z wlasnym obwodem z definicji nie da sie przypisac — i menu mo
   await postaw(page, /Ładowarka EV/, [{ x: 180, y: 150 }]);
 
   await klikPlan(page, 180, 150, { button: "right" });
-  await expect(page.getByText("Numer obwodu")).toBeVisible();
-  await expect(page.getByText(/ma własny obwód z definicji/)).toBeVisible();
+  await expect(wybor(page).getByText("Numer obwodu")).toBeVisible();
+  await expect(wybor(page).getByText(/ma własny obwód z definicji/)).toBeVisible();
   // Zadnego przycisku wyboru — ani „auto", ani numeru.
   await expect(page.getByRole("button", { name: "auto" })).toHaveCount(0);
 });
@@ -165,9 +174,9 @@ test("obwod mieszajacy oswietlenie z gniazdami jest zglaszany w rozdzielnicy", a
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
 
   await prawyKlikWElement(page, "gniazdko");
-  await page.getByRole("button", { name: "+ 1" }).click();
+  await wybor(page).getByRole("button", { name: "+ 1" }).click();
   await prawyKlikWElement(page, "oswietlenie");
-  await page.getByTitle("Dołącz do obwodu 1").click();
+  await wybor(page).getByTitle("Dołącz do obwodu 1").click();
   await page.waitForTimeout(900);
 
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
@@ -185,7 +194,7 @@ test("numery z innych kondygnacji sa widoczne, a nowy numer ich nie powtarza", a
   await otworzPlan(page);
   await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
   await klikPlan(page, 150, 150, { button: "right" });
-  await page.getByRole("button", { name: "+ 1" }).click();
+  await wybor(page).getByRole("button", { name: "+ 1" }).click();
   await page.waitForTimeout(900);
 
   await otworzMenuPaska(page, "Plan");
@@ -198,10 +207,10 @@ test("numery z innych kondygnacji sa widoczne, a nowy numer ich nie powtarza", a
   await klikPlan(page, 200, 200, { button: "right" });
 
   // Obwod 1 z parteru JEST na liscie — i mowi, ze jest gdzie indziej.
-  await expect(page.getByTitle(/Dołącz do obwodu 1 — ten obwód jest na innej kondygnacji/)).toBeVisible();
+  await expect(wybor(page).getByTitle(/Dołącz do obwodu 1 — ten obwód jest na innej kondygnacji/)).toBeVisible();
   // A „nowy" proponuje 2, nie 1: inaczej klikniecie scalaloby pietro z parterem.
-  await expect(page.getByRole("button", { name: "+ 2" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "+ 1" })).toHaveCount(0);
+  await expect(wybor(page).getByRole("button", { name: "+ 2" })).toBeVisible();
+  await expect(wybor(page).getByRole("button", { name: "+ 1" })).toHaveCount(0);
 });
 
 /**
@@ -222,14 +231,14 @@ test("numer obwodu da sie nadac, zmienic i skasowac z okna edycji (dwuklik)", as
   // Pierwsze gniazdo zaklada obwod 1 BEZ prawego przycisku.
   await dwuklikPlan(page, 150, 150);
   await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("button", { name: "+ 1" }).click();
+  await wybor(page).getByRole("button", { name: "+ 1" }).click();
   // Wybor od razu widac na chipie — inaczej nie wiadomo, co sie zapisze.
   await expect(page.getByRole("dialog").locator("button.border-copper")).toHaveText("1");
   await page.getByRole("button", { name: "Zapisz" }).click();
 
   // Drugie DOLACZA do istniejacego — lista numerow jest ta sama, co w menu.
   await dwuklikPlan(page, 220, 150);
-  await page.getByTitle("Dołącz do obwodu 1").click();
+  await wybor(page).getByTitle("Dołącz do obwodu 1").click();
   await page.getByRole("button", { name: "Zapisz" }).click();
   await page.waitForTimeout(900);
 
@@ -269,11 +278,11 @@ test("okno edycji odbiera wybor obwodu, gdy typ zmienia sie na taki z wlasnym ob
   await postaw(page, /Gniazdo 230 V/, [{ x: 150, y: 150 }]);
 
   await dwuklikPlan(page, 150, 150);
-  await expect(page.getByRole("button", { name: "+ 1" })).toBeVisible();
+  await expect(wybor(page).getByRole("button", { name: "+ 1" })).toBeVisible();
 
   // Zaznaczenie „dedykowane" zabiera wybor natychmiast, bez zapisywania i ponownego
   // otwierania okna.
   await page.getByText("Gniazdo dedykowane (AGD, własny obwód)").click();
-  await expect(page.getByText(/ma własny obwód z definicji/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "+ 1" })).toHaveCount(0);
+  await expect(wybor(page).getByText(/ma własny obwód z definicji/)).toBeVisible();
+  await expect(wybor(page).getByRole("button", { name: "+ 1" })).toHaveCount(0);
 });

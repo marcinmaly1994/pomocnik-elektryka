@@ -85,6 +85,7 @@ import { Button } from "@/components/ui/button";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
 import { NaglowekNarzedzia, PodpowiedzPrzesun, PodpowiedzZaznacz } from "./PanelNarzedzia";
+import { KartaElementu } from "./KartaElementu";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useSzerokieOkno } from "./PasekMenu";
@@ -3314,6 +3315,24 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               naDotyku={naDotyku}
               onWybierz={selectTool}
             />
+          ) : toolMode === "zaznacz" && selected?.kind === "el" && multiSelected.length === 0 ? (
+            (() => {
+              const el = elements.find((e) => e.id === selected.id);
+              if (!el) return null;
+              return (
+                <KartaElementu
+                  element={el}
+                  uzyteNumery={uzyteNumeryObwodow}
+                  onEdytuj={() => setEditingId(el.id)}
+                  onObroc={() => rotateElements([el.id])}
+                  onUsun={() => {
+                    removeElements([el.id]);
+                    setSelected(null);
+                  }}
+                  onObwod={(n) => przypiszObwod([el.id], n)}
+                />
+              );
+            })()
           ) : null}
           </div>
           )}
@@ -3752,6 +3771,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <div className="fixed inset-0 z-40" onClick={() => zaznaczenie.zamknijMenu()} onContextMenu={(e) => e.preventDefault()} />
           <div
             className="pe-card fixed z-50 overflow-hidden py-1 text-sm"
+            data-testid="menu-kontekstowe"
             style={{ left: contextMenu.x, top: contextMenu.y, minWidth: 170 }}
           >
             {contextMenu.multi ? (
