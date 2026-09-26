@@ -57,9 +57,10 @@ test("przełącznik zamienia kolejne kliknięcia w dokładanie do zaznaczenia", 
   await przelacznik(page).click();
   await expect(przelacznik(page)).toHaveAttribute("aria-pressed", "true");
 
+  // Element zaznaczony przed chwilą pojedynczo (środkowy) wchodzi do grupy sam —
+  // patrz `przelaczWGrupie` — więc dokładamy już tylko dwa pozostałe.
   box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 200);
-  await page.mouse.click(box.x + 250, box.y + 215);
   await page.mouse.click(box.x + 400, box.y + 190);
   await expect(page.getByText(/Zaznaczono: 3/)).toBeVisible();
 

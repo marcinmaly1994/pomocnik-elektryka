@@ -97,3 +97,45 @@ test("przy kilku zaznaczonych elementach karty nie ma — są operacje na grupie
   await expect(page.getByText("Zaznaczono: 2")).toBeVisible();
   await expect(page.getByTestId("karta-elementu")).toHaveCount(0);
 });
+
+/**
+ * Element zaznaczony pojedynczo NIE przepada przy przejściu na zaznaczanie grupowe.
+ * Dotąd grupa zaczynała się od pustej listy: zaznaczenie gniazda, potem „Zaznacz
+ * kilka" (albo Shift) i drugie — w grupie było tylko drugie.
+ */
+test("zaznaczony wcześniej element trafia do grupy razem z następnym", async ({ page }) => {
+  await otworzPlan(page);
+  await postawGniazda(page, [
+    { x: 150, y: 150 },
+    { x: 230, y: 150 },
+  ]);
+  await klikPlan(page, 150, 150);
+  await expect(page.getByTestId("karta-elementu")).toBeVisible();
+  await page.getByTestId("zaznacz-kilka").click();
+  await klikPlan(page, 230, 150);
+  await expect(page.getByText("Zaznaczono: 2")).toBeVisible();
+});
+
+/**
+ * Wybór numeru obwodu tylko przy odbiornikach. Rozdzielnica (tak jak łącznik czy
+ * gniazdo RJ45) do obwodu 230 V nie należy, a wybór stał przy niej w karcie i w menu.
+ */
+test("rozdzielnica nie ma wyboru numeru obwodu — ani w karcie, ani w menu", async ({ page }) => {
+  await otworzPlan(page);
+  await otworzKatalogElementow(page);
+  // Przez wyszukiwarkę katalogu — „Rozdzielnica" to też nazwa zakładki na górze strony.
+  await page.getByPlaceholder("Szukaj elementu…").fill("Rozdzielnica");
+  await page.getByTestId("karta-narzedzi").getByRole("button", { name: /^Rozdzielnica/ }).first().click();
+  await klikPlan(page, 150, 150);
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+
+  await klikPlan(page, 150, 150);
+  const karta = page.getByTestId("karta-elementu");
+  await expect(karta).toContainText("Rozdzielnica");
+  await expect(karta.getByText("Numer obwodu")).toHaveCount(0);
+
+  await klikPlan(page, 150, 150, { button: "right" });
+  const menu = page.getByTestId("menu-kontekstowe");
+  await expect(menu.getByText("Edytuj")).toBeVisible();
+  await expect(menu.getByText("Numer obwodu")).toHaveCount(0);
+});

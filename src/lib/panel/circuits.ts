@@ -85,9 +85,30 @@ export function maWlasnyObwodZDefinicji(e: InstallationElement): boolean {
   return rola === "ev" || rola === "socket3f" || rola === "dedicated" || (rola === "socket" && e.dedicated);
 }
 
-/** Numer obwodu wskazany ręcznie — tylko tam, gdzie w ogóle wolno go wskazać. */
+/** Role, które reguły `computeCircuits` rozdzielają na obwody 230 V. */
+const ROLE_OBWODOWE = new Set(["socket", "socketWet", "dedicated", "ev", "socket3f", "light", "blind"]);
+
+/**
+ * Czy element w ogóle NALEŻY do obwodu — czyli jest odbiornikiem zasilanym z rozdzielnicy.
+ *
+ * Nie należą: łączniki i czujniki (sterują oprawą, ale obwodu nie tworzą), teletechnika
+ * (niskie napięcie, poza rozdzielnicą 230 V), rozdzielnica, szafka i puszki, przybory
+ * sanitarne. Wybór numeru obwodu stał dotąd przy KAŻDYM elemencie — także przy samej
+ * rozdzielnicy — a nadany takiemu elementowi numer wciągał go do obwodu jak zwykły
+ * punkt gniazdowy (patrz `recznyNumer`).
+ */
+export function wchodziDoObwodu(e: InstallationElement): boolean {
+  return ROLE_OBWODOWE.has(roleOf(e) ?? "");
+}
+
+/**
+ * Numer obwodu wskazany ręcznie — tylko tam, gdzie w ogóle wolno go wskazać.
+ *
+ * Numer zapisany kiedyś przy elemencie, który do obwodu nie należy (patrz
+ * `wchodziDoObwodu`), jest pomijany, a nie zamieniany w punkt obwodu.
+ */
 function recznyNumer(e: InstallationElement): number | undefined {
-  return !maWlasnyObwodZDefinicji(e) && typeof e.obwod === "number" ? e.obwod : undefined;
+  return wchodziDoObwodu(e) && !maWlasnyObwodZDefinicji(e) && typeof e.obwod === "number" ? e.obwod : undefined;
 }
 
 /**

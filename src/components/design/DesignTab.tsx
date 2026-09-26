@@ -48,7 +48,7 @@ import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type Distribu
 import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
-import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
+import { computeCircuits, maWlasnyObwodZDefinicji, wchodziDoObwodu } from "@/lib/panel/circuits";
 
 import { bezNakladaniaNaSasiadow } from "@/lib/rozstawElementow";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
@@ -86,6 +86,7 @@ import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
 import { NaglowekNarzedzia, PodpowiedzPrzesun, PodpowiedzZaznacz } from "./PanelNarzedzia";
 import { KartaElementu } from "./KartaElementu";
+import { przelaczWGrupie } from "@/lib/zaznaczanieGrupy";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useSzerokieOkno } from "./PasekMenu";
@@ -1819,7 +1820,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     setDraft((d) => ({
       ...d,
       elements: d.elements.map((e) =>
-        ids.includes(e.id) && !maWlasnyObwodZDefinicji(e) ? { ...e, obwod: numer } : e
+        ids.includes(e.id) && wchodziDoObwodu(e) && !maWlasnyObwodZDefinicji(e) ? { ...e, obwod: numer } : e
       ),
     }));
   }
@@ -3433,7 +3434,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             onSelectElement={(id, shiftKey) => {
               // Shift i przełącznik znaczą DOKŁADNIE to samo — jedna droga, dwa wejścia.
               if (shiftKey || zaznaczanieWielokrotne) {
-                setMultiSelected((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+                // Element zaznaczony wcześniej pojedynczo idzie do grupy razem z nowym —
+                // patrz `przelaczWGrupie`.
+                const pojedynczy = selected?.kind === "el" ? selected.id : null;
+                setMultiSelected((ids) => przelaczWGrupie(ids, pojedynczy, id));
                 return;
               }
               setSelected({ kind: "el", id });
@@ -3799,7 +3803,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                     z kilku punktów, więc klikanie ich po jednym byłoby karą za
                     korzystanie z funkcji. */}
                 {(() => {
-                  const zaznaczone = elements.filter((e) => multiSelected.includes(e.id));
+                  // Elementy spoza obwodów (łączniki, teletechnika, rozdzielnica…) w ogóle
+                  // się tu nie liczą — patrz `wchodziDoObwodu`. Gdy zostaną same takie,
+                  // wyboru nie ma wcale: nie ma czemu nadać numeru ani czego wyjaśniać.
+                  const zaznaczone = elements.filter((e) => multiSelected.includes(e.id) && wchodziDoObwodu(e));
+                  if (zaznaczone.length === 0) return null;
                   const doPrzypisania = zaznaczone.filter((e) => !maWlasnyObwodZDefinicji(e));
                   if (doPrzypisania.length === 0) {
                     return (
@@ -3993,7 +4001,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 </button>
                 {(() => {
                   const el = elements.find((e) => e.id === contextMenu.id);
-                  if (!el) return null;
+                  // Rozdzielnica, łącznik czy gniazdo RJ45 nie należą do obwodu 230 V —
+                  // wybór numeru byłby tam przyciskiem bez skutku (patrz `wchodziDoObwodu`).
+                  if (!el || !wchodziDoObwodu(el)) return null;
                   return (
                     <WyborObwodu
                       numerAktualny={el.obwod}

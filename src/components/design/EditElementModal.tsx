@@ -5,7 +5,7 @@ import { circuitCount, isLightControl, isLightPoint, manualGroups } from "@/lib/
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
-import { maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
+import { maWlasnyObwodZDefinicji, wchodziDoObwodu } from "@/lib/panel/circuits";
 import { WyborObwodu, type UzytyNumer } from "./WyborObwodu";
 
 export interface EditElementPatch {
@@ -389,17 +389,21 @@ export function EditElementModal({
               obie drogi nie rozjechały się w tym, co pokazują. Dwuklik otwiera to okno,
               więc bez tego numer obwodu był jedyną własnością elementu, której się tu
               nie dało zmienić: trzeba było okno zamknąć i sięgnąć po prawy przycisk. */}
-          <WyborObwodu
-            wariant="formularz"
-            numerAktualny={obwod}
-            uzyte={uzyteObwody}
-            onWybierz={setObwod}
-            zablokowane={
-              wlasnyObwod
-                ? "Ten odbiornik ma własny obwód z definicji — inny przewód i inne zabezpieczenie niż obwód wspólny."
-                : undefined
-            }
-          />
+          {/* Z typu ustawianego w tym oknie, jak `wlasnyObwod` wyżej — zmiana gniazdka na
+              łącznik chowa wybór od razu. */}
+          {wchodziDoObwodu({ ...element, type }) && (
+            <WyborObwodu
+              wariant="formularz"
+              numerAktualny={obwod}
+              uzyte={uzyteObwody}
+              onWybierz={setObwod}
+              zablokowane={
+                wlasnyObwod
+                  ? "Ten odbiornik ma własny obwód z definicji — inny przewód i inne zabezpieczenie niż obwód wspólny."
+                  : undefined
+              }
+            />
+          )}
 
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="ghost" className="flex-1" onClick={onClose}>

@@ -2,7 +2,7 @@ import { Pencil, RotateCw, Trash2 } from "lucide-react";
 import type { InstallationElement } from "@/types";
 import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
 import { formatLiczba } from "@/lib/liczby";
-import { maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
+import { maWlasnyObwodZDefinicji, wchodziDoObwodu } from "@/lib/panel/circuits";
 import { WyborObwodu, type UzytyNumer } from "./WyborObwodu";
 
 /**
@@ -76,6 +76,8 @@ export function KartaElementu({
         </button>
       </div>
 
+      {/* Tylko przy odbiornikach — patrz `wchodziDoObwodu`. */}
+      {wchodziDoObwodu(element) && (
       <WyborObwodu
         wariant="formularz"
         numerAktualny={element.obwod}
@@ -87,6 +89,7 @@ export function KartaElementu({
             : undefined
         }
       />
+      )}
     </div>
   );
 }
