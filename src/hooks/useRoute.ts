@@ -4,6 +4,17 @@ import { buildPath, parsePath, zakladkaZParametrem, type AppTab, type Route } fr
 /** Wszystkie zywe instancje hooka — patrz komentarz przy subskrypcji nizej. */
 const subskrybenci = new Set<() => void>();
 
+/**
+ * Ile razy użytkownik przeszedł do innej zakładki WEWNĄTRZ aplikacji (bez `replace`).
+ *
+ * Pozwala odróżnić wejście na zakładkę z nawigacji od otwarcia/odświeżenia strony —
+ * patrz przewinięcie do edytora na telefonie w `DesignTab`. Przy starcie strony 0.
+ */
+let liczbaNawigacji = 0;
+export function licznikNawigacji(): number {
+  return liczbaNawigacji;
+}
+
 export interface NawigujOpcje {
   /**
    * Podmienia bieżący wpis w historii zamiast dokładać nowy.
@@ -73,7 +84,10 @@ export function useRoute(): [Route, (tab: AppTab, param?: string | null, opts?: 
     // `history` zmieniamy sami, a `popstate` NIE odpala się dla własnych wywołań
     // push/replaceState — stąd jawne powiadomienie subskrybentów obok.
     if (opts?.replace) window.history.replaceState(null, "", sciezka);
-    else window.history.pushState(null, "", sciezka);
+    else {
+      window.history.pushState(null, "", sciezka);
+      liczbaNawigacji++;
+    }
     subskrybenci.forEach((f) => f());
   }, []);
 

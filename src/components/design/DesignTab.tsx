@@ -85,6 +85,7 @@ import { zakladkaPanelu, type ZakladkaPanelu } from "@/lib/panelBoczny";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useSzerokieOkno } from "./PasekMenu";
+import { licznikNawigacji } from "@/hooks/useRoute";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { WyborPrzykladu } from "@/components/onboarding/WyborPrzykladu";
 import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
@@ -193,6 +194,10 @@ function odczytajOdrzuconyPrompt(): boolean {
  *  localStorage, a nie zapisywany dokument. Kto raz zwinie, ma zwinięty na stałe. */
 const PANEL_ZWINIETY_KEY = "pomocnikelektryka_panel_zwiniety";
 
+/** Ostatnia wartość `licznikNawigacji()` obsłużona przez przewinięcie do edytora —
+ *  patrz efekt przy `edytorZaslonietyRef`. Poza komponentem, bo przeżywa jego
+ *  odmontowanie przy przejściu na inną zakładkę. */
+let ostatniaObsluzonaNawigacja = 0;
 
 /** Szerokość okna płótna, zanim kolumna zostanie zmierzona: arkusz, ale nie szerzej
  *  niż ekran (patrz komentarz przy `rozmiarOkna`). Bez znanej szerokości ekranu
@@ -1207,6 +1212,29 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       window.clearTimeout(zegar);
     };
   }, [showEntryScreen, wgrywanie.stan]);
+
+  /**
+   * Na TELEFONIE przewijamy do edytora także przy POWROCIE na tę zakładkę z innej —
+   * ale nie przy otwarciu ani odświeżeniu strony.
+   *
+   * Wcześniej świadomie nie przewijaliśmy przy powrotach (patrz efekt wyżej), bo
+   * płótno liczyło się od góry strony i po powrocie było w całości w kadrze. Odkąd na
+   * telefonie wysokość płótna liczy się od początku EDYTORA, powrót z Rozdzielnicy
+   * zostawiał stronę przy nagłówku: z rzutu widać było ok. 240 px, a pasek stanu
+   * z „Dalej" leżał pod krawędzią ekranu. Kliknięcie w etap „Instalacja" to jasna
+   * intencja pracy na rzucie.
+   *
+   * Nawigację odróżnia licznik z `useRoute` — przy starcie strony ma 0. Moduł pamięta
+   * ostatnią obsłużoną wartość, więc podwójne montowanie w trybie deweloperskim nie
+   * przewija dwa razy (dlatego też sprzątanie efektu NIE anuluje klatki).
+   */
+  useEffect(() => {
+    const licznik = licznikNawigacji();
+    if (licznik === ostatniaObsluzonaNawigacja) return;
+    ostatniaObsluzonaNawigacja = licznik;
+    if (!waskiEkran() || edytorZaslonietyRef.current) return;
+    window.requestAnimationFrame(() => pelnyEkranRef.current?.scrollIntoView({ block: "start" }));
+  }, []);
 
   /**
    * Dopasowanie zoomu działa też wtedy, gdy kolumna płótna DOPIERO CO się
