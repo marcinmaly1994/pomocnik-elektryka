@@ -485,3 +485,36 @@ describe("computeCosts — aparaty z rozdzielnicy", () => {
     expect(q.rcd).toBe(1);
   });
 });
+
+describe("parsePriceCsv — aparaty dokładane w Rozdzielnicy", () => {
+  it("każdy trafia do swojej pozycji, także gdy nazwa zawiera słowa innych", () => {
+    const csv = [
+      "Wyłącznik różnicowo-nadprądowy RCBO B16/30mA;125,00",
+      "Rozłącznik izolacyjny bezpiecznikowy 3P gG 63A;180,00",
+      "Bezpiecznik pod SPD gG 63A;35,00",
+      "Ogranicznik przepięć SPD T1+T2 4P;650,00",
+      "Czujnik zaniku fazy CZF;110,00",
+      "Rozłącznik przeciwpożarowy 63A;240,00",
+      "Stycznik modułowy 20A 2P;90,00",
+      "Przekaźnik bistabilny 16A;75,00",
+      "Zasilacz modułowy 12V DC;140,00",
+      "Lampka sygnalizacyjna L1-L2-L3;45,00",
+      "Rozłącznik izolacyjny 63A 4P;120,00",
+      "Wyłącznik nadprądowy B16;15,00",
+    ].join("\n");
+    expect(parsePriceCsv(csv)).toEqual({
+      rcbo: 125,
+      rozBezp: 180,
+      spdFuse: 35,
+      spd: 650,
+      ovr: 110,
+      ppoz: 240,
+      stycznik: 90,
+      przekaznik: 75,
+      zasilacz: 140,
+      lampka: 45,
+      glowny: 120,
+      mcb: 15,
+    });
+  });
+});

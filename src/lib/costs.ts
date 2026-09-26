@@ -439,6 +439,20 @@ export function podsumowanieKosztorysu(rows: CostRow[]): PodsumowanieKosztorysu 
  * „16 mm" zawiera „6 mm", a cena przewodu 3×16 lądowała w pozycji 3×6.
  */
 const CSV_KEYWORD_MAP: [string, string[]][] = [
+  // Aparaty dokładane w Rozdzielnicy ręcznie (patrz `APARATY_DOKLADANE`). Kolejność:
+  // RCBO przed `mcb` („RCBO B16/30mA" zawiera „ b16"), rozłącznik bezpiecznikowy przed
+  // `glowny` (zawiera „rozłącznik izolacyjny"), bezpiecznik pod SPD przed `spd`
+  // („pod SPD" zawiera „ spd"), rozłącznik ppoż. przed łącznikami („łącznik").
+  ["rcbo", ["rcbo", "różnicowo-nadprądow", "roznicowo-nadpradow", "różnicowo nadprądow", "roznicowo nadpradow"]],
+  ["ppoz", ["przeciwpożar", "przeciwpozar", "ppoż", "ppoz"]],
+  ["rozBezp", ["rozłącznik bezpiecznikow", "rozlacznik bezpiecznikow", "izolacyjny bezpiecznikow"]],
+  ["spdFuse", ["pod spd", "wkładka topikowa", "wkladka topikowa"]],
+  ["spd", ["ogranicznik przepięć", "ogranicznik przepiec", "ochronnik przepięciow", "ochronnik przepieciow", " spd", "spd "]],
+  ["ovr", ["czujnik zaniku", "zaniku fazy", "kolejności faz", "kolejnosci faz", "czf"]],
+  ["stycznik", ["stycznik"]],
+  ["przekaznik", ["przekaźnik", "przekaznik"]],
+  ["zasilacz", ["zasilacz modułow", "zasilacz modulow", "zasilacz din", "zasilacz na szyn"]],
+  ["lampka", ["lampka sygnaliz", "lampka kontrol"]],
   ["rcd", ["różnicowoprądowy", "roznicowopradowy", "rcd"]],
   ["glowny", ["wyłącznik główny", "wylacznik glowny", "rozłącznik izolacyjny", "rozlacznik izolacyjny"]],
   ["mcb", ["wyłącznik nadprądowy", "wylacznik nadpradowy", " b16", " b10", " b20", " c16", " c20", " c25"]],
