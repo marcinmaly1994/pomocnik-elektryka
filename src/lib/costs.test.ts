@@ -128,17 +128,23 @@ describe("parsePriceCsv", () => {
     expect(updates.rcd).toBe(95);
   });
 
-  it("odziedziczona z oryginału usterka: dopasowanie po pierwszym pasującym słowie kluczowym w kolejności deklaracji może przechwycić niewłaściwą pozycję (\"Wyłącznik różnicowoprądowy\" trafia w \"włącznik\", bo zawiera podciąg „łącznik”, zanim dotrze do „różnicowoprądowy”)", () => {
-    const csv = "Wyłącznik różnicowoprądowy 30mA;95";
-    expect(parsePriceCsv(csv).wlacznik).toBe(95);
-    expect(parsePriceCsv(csv).rcd).toBeUndefined();
+  it("„Wyłącznik różnicowoprądowy” i „nadprądowy” trafiają do aparatów, nie do łącznika", () => {
+    expect(parsePriceCsv("Wyłącznik różnicowoprądowy 30mA;95")).toEqual({ rcd: 95 });
+    expect(parsePriceCsv("Wyłącznik nadprądowy B16;15")).toEqual({ mcb: 15 });
+    expect(parsePriceCsv("Wyłącznik nadprądowy B16 3P;48,00")).toEqual({ mcb3f: 48 });
   });
 
-  it("odziedziczona z oryginału usterka: przecinek jako separator pól rozbija też przecinek dziesiętny w cenie — port jest celowo wierny źródłu", () => {
-    // separator pól to [,;\t] łącznie, więc "Gniazdko;18,50" dzieli się na 3 pola
-    // (["Gniazdko","18","50"]) i jako cena brany jest tylko ostatni fragment ("50")
-    const csv = "Gniazdko;18,50";
-    expect(parsePriceCsv(csv).gniazdko).toBe(50);
+  it("przecinek dziesiętny (polski Excel) daje właściwą cenę", () => {
+    expect(parsePriceCsv("Gniazdko podtynkowe;15,90")).toEqual({ gniazdko: 15.9 });
+    expect(parsePriceCsv("Gniazdko podtynkowe\t15,90")).toEqual({ gniazdko: 15.9 });
+    expect(parsePriceCsv("Gniazdko podtynkowe,15,90")).toEqual({ gniazdko: 15.9 });
+    expect(parsePriceCsv("Obudowa rozdzielnicy;1 234,56 zł")).toEqual({ rozdzielnica: 1234.56 });
+  });
+
+  it("przewód trafia do pozycji swojego przekroju — 3×16 nie wpada do 3×6", () => {
+    expect(parsePriceCsv("Przewód YDYp 3x2,5 mm;3,50")).toEqual({ kabel25: 3.5 });
+    expect(parsePriceCsv("Przewód YDYp 3x16 mm;28,00")).toEqual({ kabel3x16: 28 });
+    expect(parsePriceCsv("Przewód YDYp 3x10 mm;13,20")).toEqual({ kabel3x10: 13.2 });
   });
 
   it("pomija linie bez rozpoznanego słowa kluczowego lub ceny", () => {
