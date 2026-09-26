@@ -47,7 +47,7 @@ import { checkPlan } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji } from "@/lib/panel/circuits";
-import { rogiSymbolu } from "@/lib/glyphs";
+
 import { bezNakladaniaNaSasiadow } from "@/lib/rozstawElementow";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
 import {
@@ -85,6 +85,7 @@ import { zakladkaPanelu, type ZakladkaPanelu } from "@/lib/panelBoczny";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useSzerokieOkno } from "./PasekMenu";
+import { punktyZajeteRysunkiem } from "@/lib/obszarRysunku";
 import { licznikNawigacji } from "@/hooks/useRoute";
 import { CoPowstanie } from "@/components/onboarding/CoPowstanie";
 import { WyborPrzykladu } from "@/components/onboarding/WyborPrzykladu";
@@ -383,20 +384,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
      * grup sterowania. Stały margines „na wannę" pomniejszał rzut o prawie ćwierć
      * także wtedy, gdy żadnej wanny na nim nie było.
      */
-    /**
-     * Strefy ochronne przyborów sanitarnych wchodzą do kadru OSOBNO, bo sięgają dalej
-     * niż sam symbol i liczą się inną skalą — z kalibracji rzutu, a nie z rozmiaru
-     * symboli (patrz `computeSanitaryZones`). Przy wannie tuż przy ścianie zabrakłoby
-     * bez tego kilku jednostek i obwódka strefy wyszłaby poza kartkę.
-     */
-    const rogiStref = computeSanitaryZones(elements, activeFloorId, mpu).flatMap((z) => {
-      const r = Math.hypot(z.w, z.h) / 2 + z.zone2;
-      return [
-        { x: z.x - r, y: z.y - r },
-        { x: z.x + r, y: z.y + r },
-      ];
-    });
-    const rogi = [...elements.flatMap((e) => rogiSymbolu(e, skalaOsprzetu)), ...rogiStref];
+    // Symbole, strefy przyborów i otwory z łukiem skrzydła — to samo źródło co kadr
+    // na ekranie (patrz `punktyZajeteRysunkiem`).
+    const rogi = punktyZajeteRysunkiem(elements, openings, walls, skalaOsprzetu, activeFloorId, mpu);
     const kadr = contentBounds(walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
       x: 0,
       y: 0,
@@ -725,6 +715,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * a dziać się tylko wtedy, gdy ktoś o nie poprosi albo gdy zmieni się okno.
    */
   const trescRef = useRef({ walls, roomShapes, elements, openings });
+  /** Skala symboli dla kadru — liczona w komponencie dopiero niżej (`skalaOsprzetu`),
+   *  a kadr czyta ją w chwili dopasowania, więc przez ref. */
+  const skalaOsprzetuRef = useRef(1);
   trescRef.current = { walls, roomShapes, elements, openings };
 
   /**
@@ -779,7 +772,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // Margines ZERO: oddech wokół rysunku dokłada `kadrOtwarcia` ułamkiem jego
       // rozmiaru. Domyślny margines tej funkcji jest skrojony pod eksport (ma zmieścić
       // wannę ze strefą ochronną) i przy małym pokoju zabrałby pół kadru.
-      contentBounds(sc, pom, el, otw, 0),
+      //
+      // Razem z tym, co wystaje poza obrys ścian (symbole, strefy, łuki drzwi) — liczony
+      // z samych środków kadr ucinał łuk drzwi wejściowych i numery obwodów przy dolnej
+      // ścianie przykładu (patrz `punktyZajeteRysunkiem`).
+      contentBounds(
+        sc,
+        pom,
+        [...el, ...punktyZajeteRysunkiem(el, otw, sc, skalaOsprzetuRef.current, activeFloorId, mpu)],
+        otw,
+        0
+      ),
       // Podkład, a nie „obszar planu": bez wgranego rzutu nie ma czego dopasowywać
       // i kadr bierze wtedy skalę rysowania (patrz `kadrOtwarcia`).
       bgImageUrl ? { w: planSize.w, h: planSize.h } : null,
@@ -790,7 +793,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     setZoom(kadr.zoom);
     widokRef.current?.ustaw(kadr.widok.x, kadr.widok.y);
     return true;
-  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc, bgImageUrl, mpu]);
+  }, [planSize.w, planSize.h, wysPlotna, zmierzSzerokosc, bgImageUrl, mpu, activeFloorId]);
 
   /**
    * Odpowiedź na zmianę rozmiaru okna: zwinięcie panelu, pojawienie się listy
@@ -2007,6 +2010,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * elementów od ściany. Wydzielona, bo pilnuje jej efekt niżej.
    */
   const skalaOsprzetu = elementRenderScale(mpu, elementScale, skalaBezKalibracji);
+  skalaOsprzetuRef.current = skalaOsprzetu;
 
   /** Czwarte skupisko — patrz `useWstawianieElementu`. Stoi TUTAJ, a nie przy
    *  pozostałych hookach, bo potrzebuje `skalaOsprzetu` policzonej wyżej. */
