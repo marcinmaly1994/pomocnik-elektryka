@@ -486,3 +486,32 @@ test("pełny ekran: pasek stanu pod rzutem, rzut na całą szerokość i dopasow
   expect(tresc.y).toBeGreaterThanOrEqual(-2);
   expect(tresc.y + tresc.height).toBeLessThanOrEqual(wys + 2);
 });
+
+/**
+ * Telefon w pełnym ekranie: wysunięty panel ma pokazywać swoją TREŚĆ.
+ *
+ * Karta narzędzi jest tu rzędem (pasek pionowo przy lewej krawędzi), a uchwyt
+ * zwijania miał na telefonie klasę poziomej listwy `w-full` — rozpychał rząd na
+ * 340 px i treść panelu (nagłówek, katalog, opcje, karty) zaczynała się za prawą
+ * krawędzią ekranu. Panel wyglądał na pusty.
+ */
+test.describe("telefon w pełnym ekranie", () => {
+  test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+
+  test("wysunięty panel pokazuje nagłówek narzędzia i katalog w granicach ekranu", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await skipEntryScreen(page);
+    await page.getByRole("button", { name: "Wstaw Element", exact: true }).click();
+    await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+    await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).tap();
+
+    const naglowek = page.getByTestId("naglowek-narzedzia");
+    const szukaj = page.getByPlaceholder("Szukaj elementu…");
+    await expect(naglowek).toBeInViewport();
+    await expect(szukaj).toBeInViewport();
+    const b = (await szukaj.boundingBox())!;
+    expect(b.x + b.width).toBeLessThanOrEqual(375);
+  });
+});
