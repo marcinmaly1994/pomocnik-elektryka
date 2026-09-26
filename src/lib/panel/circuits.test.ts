@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { chunkLightsByGroup, colorForCircuit, kolorObwodu, KOLORY_OBWODOW, computeCircuits, computeLowVoltage, computeRcdGroups, mainBreakerFor, ostrzezeniaObwodow, ZALECANE_MAKS } from "./circuits";
+import { chunkLightsByGroup, colorForCircuit, kolorObwodu, KOLORY_OBWODOW, computeCircuits, computeLowVoltage, computeRcdGroups, mainBreakerFor, ostrzezeniaObwodow, wchodziDoObwodu, ZALECANE_MAKS } from "./circuits";
 import type { InstallationElement } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -48,6 +48,30 @@ describe("computeCircuits", () => {
     const circuits = computeCircuits([el({ type: "gniazdko", dedicated: true, note: "Piekarnik", room: "Kuchnia" })]);
     expect(circuits).toHaveLength(1);
     expect(circuits[0].name).toContain("Piekarnik");
+  });
+});
+
+describe("wchodziDoObwodu — komu w ogóle nadaje się numer obwodu", () => {
+  it("odbiorniki zasilane z rozdzielnicy należą do obwodu", () => {
+    for (const type of ["gniazdko", "gniazdkoHerm", "oswietlenie", "ladowarkaEV", "wypustAGD"] as const) {
+      expect(wchodziDoObwodu(el({ type })), type).toBe(true);
+    }
+  });
+
+  it("rozdzielnica, łącznik, teletechnika i przybory — nie", () => {
+    for (const type of ["rozdzielnica", "wlacznik", "czujnikRuchu", "rj45", "puszka", "wanna"] as const) {
+      expect(wchodziDoObwodu(el({ type })), type).toBe(false);
+    }
+  });
+
+  it("numer zapisany przy rozdzielnicy nie wciąga jej do obwodu", () => {
+    const circuits = computeCircuits([
+      el({ type: "gniazdko", obwod: 1 }),
+      el({ type: "rozdzielnica", obwod: 1 }),
+    ]);
+    const obwod1 = circuits.find((c) => c.name.startsWith("Obwód 1"))!;
+    expect(obwod1.elements.map((e) => e.type)).toEqual(["gniazdko"]);
+    expect(circuits.flatMap((c) => c.elements).some((e) => e.type === "rozdzielnica")).toBe(false);
   });
 });
 
