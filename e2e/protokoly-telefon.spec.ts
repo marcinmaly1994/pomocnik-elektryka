@@ -97,6 +97,41 @@ test.describe("na telefonie", () => {
   });
 });
 
+/**
+ * Tablet w pionie. Karty włączały się dopiero poniżej 768 px, więc tablet dostawał
+ * tabelę, w której pola pomiarów miały po 22 px, a kosz był częściowo ucięty.
+ */
+for (const okno of [
+  { width: 768, height: 1024 },
+  { width: 820, height: 1180 },
+]) {
+  test.describe(`tablet ${okno.width}×${okno.height}`, () => {
+    test.use({ viewport: okno, hasTouch: true });
+    test("pomiary są kartami z polami, w które da się wpisać wynik", async ({ page }) => {
+      await otworzProtokoly(page);
+      await kafelek(page, "Pomiar rezystancji izolacji").click();
+      await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+      const wiersz = page.getByTestId("wiersz-pomiaru").first();
+      expect(await wiersz.evaluate((e) => getComputedStyle(e).display)).toBe("grid");
+      const pole = (await page.getByLabel("L1-L2, pozycja 1").boundingBox())!;
+      expect(pole.width).toBeGreaterThanOrEqual(70);
+      const kosz = (await wiersz.getByRole("button", { name: /^Usuń wiersz/ }).boundingBox())!;
+      expect(kosz.x + kosz.width).toBeLessThanOrEqual(okno.width);
+      // Od `sm` pomiary po sześć w rzędzie — L1-L2 i L2-N w jednej linii.
+      const l2n = (await page.getByLabel("L2-N, pozycja 1").boundingBox())!;
+      expect(Math.abs(l2n.y - pole.y)).toBeLessThan(4);
+    });
+  });
+}
+
+test("na tablecie w poziomie (1024 px) pomiary zostają tabelą", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await otworzProtokoly(page);
+  await kafelek(page, "Pomiar rezystancji izolacji").click();
+  await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+  await expect(page.getByRole("columnheader", { name: "L1-L2" })).toBeVisible();
+});
+
 test("na komputerze pomiary zostają tabelą z nagłówkiem", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await otworzProtokoly(page);

@@ -168,6 +168,26 @@ test.describe("na telefonie", () => {
   });
 });
 
+/**
+ * Tablet w pionie: rysunek (ok. 1240 px) nie mieści się w okienku (720–770 px), a
+ * wyśrodkowanie działało tylko na telefonie — schemat startował od lewej krawędzi
+ * i wyłącznik główny był przecięty prawą krawędzią okienka.
+ */
+for (const okno of [
+  { width: 768, height: 1024 },
+  { width: 820, height: 1180 },
+]) {
+  test.describe(`tablet ${okno.width}×${okno.height}`, () => {
+    test.use({ viewport: okno, hasTouch: true });
+    test("schemat otwiera się z wyłącznikiem głównym na środku okienka", async ({ page }) => {
+      await otworzSchemat(page);
+      const w = await wymiary(page);
+      expect(w.naturalna, "test ma sens tylko dla rysunku szerszego niż okienko").toBeGreaterThan(w.miejsce);
+      expect(Math.abs(await odSrodka(page))).toBeLessThan(20);
+    });
+  });
+}
+
 test("na monitorze schemat zostaje w naturalnym rozmiarze", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await otworzSchemat(page);

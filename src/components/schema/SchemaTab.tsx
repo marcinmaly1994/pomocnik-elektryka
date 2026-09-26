@@ -14,7 +14,6 @@ import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits } from "@/lib/panel/project";
 import { buildPanelDevices, PHASE_COLORS } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
-import { waskiEkran } from "@/lib/design";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
 
@@ -753,8 +752,12 @@ export function SchemaTab() {
 /**
  * Okno schematu: rysunek w przewijanym pojemniku plus powiększenie.
  *
- * Na telefonie schemat otwiera się w NATURALNYM rozmiarze, wycentrowany na wyłączniku
- * głównym. Wcześniej otwierał się dopasowany do szerokości: 24%, napisy po 2,5 px,
+ * Schemat otwiera się w NATURALNYM rozmiarze, wycentrowany na wyłączniku głównym —
+ * na każdej szerokości, na której rysunek się nie mieści (telefon, tablet w pionie).
+ * Na tablecie 768–820 px startował wcześniej od lewej krawędzi i Q1 był przecięty
+ * prawą krawędzią okienka; tam, gdzie rysunek się mieści, przewinięcie i tak wynosi 0.
+ *
+ * Na telefonie wcześniej otwierał się dopasowany do szerokości: 24%, napisy po 2,5 px,
  * okienko 140 px wysokości — miniatura, z której nie dało się odczytać niczego, a do
  * czytelnego rozmiaru trzeba było siedmiu stuknięć w „+". Całość jest o jedno
  * stuknięcie dalej, pod „Dopasuj". Jeszcze wcześniej 100% startowało od LEWEJ krawędzi
@@ -779,13 +782,11 @@ function OknoRysunku({
   szerokosc: number;
   wysokosc: number;
   svgRef: React.RefObject<SVGSVGElement>;
-  /** Wyłącznik główny — na telefonie staje na środku okienka. */
+  /** Wyłącznik główny — staje na środku okienka, gdy rysunek jest od niego szerszy. */
   srodekStartowyX: number;
   children: React.ReactNode;
 }) {
-  // Media query, nie `innerWidth` — patrz `waskiEkran`.
-  const wasko = waskiEkran();
-  const p = usePowiekszanieRysunku(szerokosc, false, wasko ? srodekStartowyX : undefined);
+  const p = usePowiekszanieRysunku(szerokosc, false, srodekStartowyX);
   return (
     <div className="space-y-2">
       <PrzyciskiPowiekszenia p={p} nazwa={{ dopelniacz: "schematu", biernik: "schemat" }} />
