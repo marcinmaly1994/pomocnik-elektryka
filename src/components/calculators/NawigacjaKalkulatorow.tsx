@@ -60,7 +60,8 @@ export function SzukajkaKalkulatorow({
       />
       <kbd
         aria-hidden="true"
-        className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400"
+        // Skrót klawiszowy nic nie mówi na ekranie dotykowym bez klawiatury.
+        className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 [@media(pointer:coarse)]:hidden"
       >
         ⌘K
       </kbd>

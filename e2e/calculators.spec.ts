@@ -638,7 +638,7 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
   await openCalculators(page);
 
   await page.getByRole("button", { name: "Bilans mocy budynku" }).first().click();
-  const firstDeviceName = page.locator("input.pe-input.text-sm.flex-1").first();
+  const firstDeviceName = page.getByLabel("Nazwa odbiornika").first();
   await firstDeviceName.fill("Test trwałości");
 
   // zmiana zakładki na Instalację i powrót — bez utraty ani aktywnego
@@ -650,7 +650,7 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
   // trwałość WPISANYCH DANYCH, a nie tego, co się otwiera samo.
   await page.getByRole("button", { name: "Bilans mocy budynku" }).first().click();
   await expect(page.getByRole("heading", { name: "Bilans mocy budynku" })).toBeVisible();
-  await expect(page.locator("input.pe-input.text-sm.flex-1").first()).toHaveValue("Test trwałości");
+  await expect(page.getByLabel("Nazwa odbiornika").first()).toHaveValue("Test trwałości");
 
   // odświeżenie strony wraca zawsze na zakładkę Instalacja (to `App`-owy `tab`,
   // nieprzeliczany w tym store — patrz `useState<AppTab>` w App.tsx), ale samo
@@ -660,7 +660,7 @@ test("wejścia kalkulatora (aktywny kalkulator, lista odbiorników) przetrwają 
   await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
   await page.getByRole("button", { name: "Bilans mocy budynku" }).first().click();
   await expect(page.getByRole("heading", { name: "Bilans mocy budynku" })).toBeVisible();
-  await expect(page.locator("input.pe-input.text-sm.flex-1").first()).toHaveValue("Test trwałości");
+  await expect(page.getByLabel("Nazwa odbiornika").first()).toHaveValue("Test trwałości");
 });
 
 test("dobór WLZ dla domyślnych danych (20 A, 3F, 20 m, w rurce) -> 10 mm² / B20, ten sam silnik co obwód odbiorczy", async ({ page }) => {
@@ -735,7 +735,7 @@ test("kalkulatory nie siegaja do rzutu, nawet gdy projekt ma gotowy obwod", asyn
   await expect(page.getByRole("button", { name: "Wczytaj z projektu" })).toHaveCount(0);
   // Lista odbiornikow zostaje wlasnoscia kalkulatora: gniazdko z rzutu nie ma prawa
   // sie w niej pojawic samo.
-  const nazwy = page.locator("input.pe-input.text-sm.flex-1");
+  const nazwy = page.getByLabel("Nazwa odbiornika");
   // Petla po WARTOSCIACH pol, nie po ich tresci: input nie ma tekstu, wiec filtr
   // `hasText` przechodzilby zawsze i niczego by nie pilnowal. Asercja na liczbie
   // pol pilnuje, zeby petla nie okazala sie pusta i przez to bezzebna.

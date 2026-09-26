@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Info } from "lucide-react";
 
 interface FieldOption {
@@ -27,6 +27,31 @@ interface FieldProps {
 export function HintButton({ hint }: { hint: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
+  const dymekRef = useRef<HTMLDivElement>(null);
+  /**
+   * Przesunięcie dymka w bok [px], żeby zmieścił się w oknie.
+   *
+   * Dymek stoi wyśrodkowany nad ikonką i ma 256 px — na telefonie ikonka przy krótkiej
+   * etykiecie z lewej albo przy długiej z prawej wypychała go poza ekran nawet o 77 px,
+   * a tekstu nie dało się doczytać (zmierzone: 23 dymki w 14 kalkulatorach).
+   */
+  const [przesuniecie, setPrzesuniecie] = useState(0);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPrzesuniecie(0);
+      return;
+    }
+    const d = dymekRef.current;
+    if (!d) return;
+    const MARGINES = 8;
+    // Pozycja bez bieżącego przesunięcia — liczona od wyśrodkowania nad ikonką.
+    const r = d.getBoundingClientRect();
+    const lewa = r.left - przesuniecie;
+    const prawa = r.right - przesuniecie;
+    const szer = document.documentElement.clientWidth;
+    const dx = lewa < MARGINES ? MARGINES - lewa : prawa > szer - MARGINES ? szer - MARGINES - prawa : 0;
+    if (Math.abs(dx - przesuniecie) > 0.5) setPrzesuniecie(dx);
+  }, [open, przesuniecie]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,14 +84,18 @@ export function HintButton({ hint }: { hint: string }) {
         }}
         aria-expanded={open}
         aria-label={open ? "Ukryj podpowiedź" : "Pokaż podpowiedź"}
-        className="cursor-pointer text-slate-400 hover:text-blueprint"
+        // Na dotyku pole trafienia 44 × 44 px (niewidoczne `::after` wokół ikonki) — sama
+        // ikonka ma 12 px i palcem trafiało się w nią co któryś raz. Wygląd bez zmian.
+        className="relative cursor-pointer text-slate-400 hover:text-blueprint after:absolute after:content-[''] [@media(pointer:coarse)]:after:-inset-4"
       >
         <Info size={12} />
       </button>
       {open && (
         <div
+          ref={dymekRef}
           role="tooltip"
-          className="pe-card absolute left-1/2 top-full z-20 mt-1.5 w-64 -translate-x-1/2 p-2.5 text-[11.5px] font-normal leading-relaxed text-ink shadow-lg"
+          className="pe-card absolute left-1/2 top-full z-20 mt-1.5 w-64 max-w-[calc(100vw-16px)] p-2.5 text-[11.5px] font-normal leading-relaxed text-ink shadow-lg"
+          style={{ transform: `translateX(calc(-50% + ${przesuniecie}px))` }}
         >
           {hint}
         </div>

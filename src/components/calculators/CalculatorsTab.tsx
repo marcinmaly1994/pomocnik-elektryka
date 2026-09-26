@@ -1016,7 +1016,14 @@ export function CalculatorsTab() {
   const active = CALC_LIST.find((c) => c.id === activeCalc) ?? CALC_LIST[0];
 
   return (
-    <div className="space-y-5">
+    /*
+     * Pola na wąskim ekranie mają 16 px. Safari na iPhonie przy stuknięciu w pole
+     * z mniejszą czcionką przybliża stronę i sam jej już nie oddala — przy kalkulatorze
+     * z czternastoma polami oznaczało to ręczne oddalanie po każdym z nich. Jeden
+     * selektor na korzeniu zamiast klasy w każdym polu: `.x input` wygrywa z `text-sm`
+     * na samym polu, a nowe pola dostają to same.
+     */
+    <div className="space-y-5 max-md:[&_:is(input,select,textarea)]:text-base">
       <div>
         <h2 className="pe-display text-xl mb-1">Kalkulatory elektryczne</h2>
         <p className="text-sm text-slate-500">
@@ -2313,24 +2320,30 @@ export function CalculatorsTab() {
               </div>
 
               <div className="space-y-2 mb-3">
+                {/* Na wąskim ekranie wiersz łamie się na dwa: nazwa i faza, pod nimi moc,
+                    cos φ i kosz (`order`). W jednym rzędzie pięć pól ściskało nazwę do
+                    pustego kwadracika ok. 26 px; z fazą w drugim rzędzie ucinało „L1".
+                    Kreska między odbiorami, bo przy dwóch liniach na odbiór sam odstęp
+                    nie mówił, która moc należy do której nazwy. */}
                 {bfOdbiory.map((o) => (
-                  <div key={o.id} className="flex items-center gap-2">
+                  <div key={o.id} className="flex flex-wrap items-center gap-2 border-b border-border pb-2 last:border-0 last:pb-0 sm:border-0 sm:pb-0 sm:flex-nowrap">
                     <input
-                      className="pe-input text-sm flex-1 min-w-0"
+                      className="pe-input text-sm order-1 min-w-0 flex-1 basis-40 sm:order-none sm:basis-auto"
+                      aria-label="Nazwa odbioru"
                       value={o.nazwa}
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, nazwa: e.target.value } : x)))}
                     />
                     <input
-                      className="pe-input text-sm w-20 pe-mono"
+                      className="pe-input text-sm order-3 w-20 pe-mono sm:order-none"
                       type="number"
                       aria-label={`Moc: ${o.nazwa}`}
                       title="Moc czynna odbioru [W] — z tabliczki znamionowej."
                       value={o.mocW}
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, mocW: Number(e.target.value) } : x)))}
                     />
-                    <span className="text-xs text-slate-400">W</span>
+                    <span className="order-3 text-xs text-slate-400 sm:order-none">W</span>
                     <input
-                      className="pe-input text-sm w-16 pe-mono"
+                      className="pe-input text-sm order-3 w-16 pe-mono sm:order-none"
                       type="number"
                       step="0.05"
                       aria-label={`cos φ: ${o.nazwa}`}
@@ -2339,7 +2352,7 @@ export function CalculatorsTab() {
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, cosfi: Number(e.target.value) } : x)))}
                     />
                     <select
-                      className="pe-input text-sm w-24"
+                      className="pe-input text-sm order-2 w-28 sm:order-none sm:w-24"
                       aria-label={`Faza: ${o.nazwa}`}
                       title="Do której fazy podłączony jest ten odbiór — albo „3-fazowy”, jeśli obciąża wszystkie trzy równo."
                       value={o.faza ?? "3f"}
@@ -2355,7 +2368,11 @@ export function CalculatorsTab() {
                         </option>
                       ))}
                     </select>
-                    <button onClick={() => setOdbioryFazowe((ds) => ds.filter((x) => x.id !== o.id))} className="text-slate-400 hover:text-red-500">
+                    <button
+                      onClick={() => setOdbioryFazowe((ds) => ds.filter((x) => x.id !== o.id))}
+                      aria-label={`Usuń odbiór: ${o.nazwa}`}
+                      className="order-3 ml-auto sm:order-none sm:ml-0 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 flex items-center justify-center text-slate-400 hover:text-red-500"
+                    >
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -2847,22 +2864,31 @@ export function CalculatorsTab() {
           {activeCalc === "moc" && (
             <Card title={active.label} tag="bilans mocy">
               <div className="space-y-2 mb-3">
+                {/* Na wąskim ekranie nazwa idzie na całą szerokość, a moc i kosz pod nią —
+                    w jednym rzędzie kosz wypadał za krawędź ekranu i strona przewijała się
+                    w bok (patrz bilans faz, ten sam układ). */}
                 {devices.map((d) => (
-                  <div key={d.id} className="flex items-center gap-2">
+                  <div key={d.id} className="flex flex-wrap items-center gap-2 border-b border-border pb-2 last:border-0 last:pb-0 sm:border-0 sm:pb-0 sm:flex-nowrap">
                     <input
-                      className="pe-input text-sm flex-1"
+                      className="pe-input text-sm w-full min-w-0 sm:w-auto sm:flex-1"
+                      aria-label="Nazwa odbiornika"
                       value={d.name}
                       onChange={(e) => setDevices((ds) => ds.map((x) => (x.id === d.id ? { ...x, name: e.target.value } : x)))}
                     />
                     <input
                       className="pe-input text-sm w-24 pe-mono"
                       type="number"
+                      aria-label={`Moc: ${d.name}`}
                       title="Moc znamionowa tego odbiornika [W] — z tabliczki znamionowej."
                       value={d.power}
                       onChange={(e) => setDevices((ds) => ds.map((x) => (x.id === d.id ? { ...x, power: Number(e.target.value) } : x)))}
                     />
                     <span className="text-xs text-slate-400 w-6">W</span>
-                    <button onClick={() => setDevices((ds) => ds.filter((x) => x.id !== d.id))} className="text-slate-400 hover:text-red-500">
+                    <button
+                      onClick={() => setDevices((ds) => ds.filter((x) => x.id !== d.id))}
+                      aria-label={`Usuń odbiornik: ${d.name}`}
+                      className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 flex items-center justify-center ml-auto text-slate-400 hover:text-red-500 sm:ml-0"
+                    >
                       <Trash2 size={15} />
                     </button>
                   </div>
