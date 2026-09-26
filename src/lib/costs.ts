@@ -425,57 +425,119 @@ export function podsumowanieKosztorysu(rows: CostRow[]): PodsumowanieKosztorysu 
   };
 }
 
-/** Dopasowuje pozycje cennika CSV (nazwa;cena) po słowach kluczowych w nazwie. */
-const CSV_KEYWORD_MAP: Record<string, string[]> = {
-  gniazdko: ["gniazdko", "gniazdo podtynkowe"],
-  // Warianty łączników MUSZĄ stać przed ogólnym `wlacznik`: dopasowanie kończy się na
-  // pierwszym trafieniu, a "łącznik" jest podciągiem każdej z tych nazw, więc odwrotna
-  // kolejność wrzucałaby cenę np. krzyżowego do pozycji jednobiegunowej.
-  wlacznikDwubiegunowy: ["dwubiegunow"],
-  wlacznikGrupowy: ["grupow", "świecznikow", "swiecznikow"],
+/**
+ * Słowa kluczowe pozycji cennika CSV — dopasowanie kończy się na PIERWSZYM trafieniu,
+ * więc kolejność ma znaczenie.
+ *
+ * Aparaty rozdzielnicy stoją PRZED łącznikami: „wyłącznik" zawiera podciąg „łącznik",
+ * więc „Wyłącznik nadprądowy B16" i „Wyłącznik różnicowoprądowy" trafiały dotąd do
+ * pozycji łącznika jednobiegunowego (usterka przeniesiona z pierwowzoru i przypięta
+ * testem jako „celowo wierna źródłu").
+ *
+ * Przewody z przekrojem w nazwie („YDYp 3x2,5") rozpoznaje `kluczKabla`, zanim dojdzie
+ * do tej listy — tu zostają tylko nazwy bez żył × przekroju. Dłuższe przed krótszymi:
+ * „16 mm" zawiera „6 mm", a cena przewodu 3×16 lądowała w pozycji 3×6.
+ */
+const CSV_KEYWORD_MAP: [string, string[]][] = [
+  ["rcd", ["różnicowoprądowy", "roznicowopradowy", "rcd"]],
+  ["glowny", ["wyłącznik główny", "wylacznik glowny", "rozłącznik izolacyjny", "rozlacznik izolacyjny"]],
+  ["mcb", ["wyłącznik nadprądowy", "wylacznik nadpradowy", " b16", " b10", " b20", " c16", " c20", " c25"]],
+  ["rozdzielnica", ["rozdzielnica", "obudowa"]],
+  ["gniazdkoPodwojne", ["gniazdo podwójne", "gniazdko podwójne", "gniazdo podwojne", "gniazdko podwojne"]],
+  ["gniazdko", ["gniazdko", "gniazdo podtynkowe"]],
+  // Warianty łączników MUSZĄ stać przed ogólnym `wlacznik`: „łącznik" jest podciągiem
+  // każdej z tych nazw.
+  ["wlacznikDwubiegunowy", ["dwubiegunow"]],
+  ["wlacznikGrupowy", ["grupow", "świecznikow", "swiecznikow"]],
   // „zmienny" zostaje jako alias — cenniki bywają opisane jedną albo drugą nazwą
-  wlacznikSchodowy: ["schodow", "zmienny"],
-  wlacznikKrzyzowy: ["krzyżow", "krzyzow"],
-  wlacznik: ["włącznik", "lacznik", "łącznik"],
-  puszkaPodtynkowa: ["puszka podtynkowa"],
-  puszkaRozgalezna: ["puszka rozgałęźna", "rozgalezna"],
-  // Pięciożyłowe PRZED trzyżyłowymi: „5x4" zawiera „4", więc odwrotna kolejność
-  // wrzucałaby cenę kabla pięciożyłowego do pozycji 3×4 mm².
-  kabel4: ["ydyp 5x2,5", "ydyp 5×2,5", "5x4", "5×4"],
-  kabel5x6: ["5x6", "5×6"],
-  kabel5x10: ["5x10", "5×10"],
-  kabel5x16: ["5x16", "5×16"],
-  kabel5x25: ["5x25", "5×25"],
-  kabel15: ["ydyp 3x1,5", "ydyp 3×1,5", "1,5 mm"],
-  kabel25: ["ydyp 3x2,5", "ydyp 3×2,5", "2,5 mm"],
-  kabel3x4: ["ydyp 3x4", "ydyp 3×4", "4 mm"],
-  kabel3x6: ["ydyp 3x6", "ydyp 3×6", "6 mm"],
-  kabel3x10: ["ydyp 3x10", "ydyp 3×10", "10 mm"],
-  kabel3x16: ["ydyp 3x16", "ydyp 3×16", "16 mm"],
-  kabel3x25: ["ydyp 3x25", "ydyp 3×25", "25 mm"],
-  mcb: ["wyłącznik nadprądowy", "wylacznik nadpradowy", " b16", " b10", " b20"],
-  rcd: ["różnicowoprądowy", "roznicowopradowy", "rcd"],
-  glowny: ["wyłącznik główny", "wylacznik glowny", "rozłącznik izolacyjny", "rozlacznik izolacyjny"],
-  rozdzielnica: ["rozdzielnica", "obudowa"],
-};
+  ["wlacznikSchodowy", ["schodow", "zmienny"]],
+  ["wlacznikKrzyzowy", ["krzyżow", "krzyzow"]],
+  ["wlacznik", ["włącznik", "lacznik", "łącznik"]],
+  ["puszkaPodtynkowa", ["puszka podtynkowa"]],
+  ["puszkaRozgalezna", ["puszka rozgałęźna", "rozgalezna"]],
+  ["kabelLan", ["utp", "ftp", "skrętka", "skretka"]],
+  ["kabelKoncentryk", ["koncentry", "rg-6", "rg6"]],
+  ["kabel3x25", ["25 mm"]],
+  ["kabel3x16", ["16 mm"]],
+  ["kabel3x10", ["10 mm"]],
+  ["kabel3x6", ["6 mm"]],
+  ["kabel3x4", ["4 mm"]],
+  ["kabel25", ["2,5 mm"]],
+  ["kabel15", ["1,5 mm"]],
+];
+
+/**
+ * Cena z pola cennika: „15,90", „15.90", „1 234,56", „1.234,56", „15,90 zł".
+ *
+ * Polski Excel eksportuje przecinek dziesiętny, więc przecinek jest tu domyślnie
+ * separatorem części ułamkowej. Gdy są oba znaki, dziesiętny jest ten OSTATNI.
+ */
+function parsujCene(pole: string): number {
+  let t = pole.replace(/[^\d.,]/g, "");
+  const przecinek = t.lastIndexOf(",");
+  const kropka = t.lastIndexOf(".");
+  if (przecinek !== -1 && kropka !== -1) {
+    t = przecinek > kropka ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "");
+  } else if (przecinek !== -1) {
+    t = t.replace(",", ".");
+  }
+  return parseFloat(t);
+}
+
+/**
+ * Linia cennika → nazwa i cena. Ostatnie pole to cena, reszta — opis.
+ *
+ * Separatorem jest średnik albo tabulator, a PRZECINEK tylko wtedy, gdy nie ma żadnego
+ * z nich. Dotąd dzielił po wszystkich trzech naraz, więc przecinek dziesiętny rozbijał
+ * cenę: „Gniazdko podtynkowe;15,90" dawało 90 zł, „YDYp 3x10 mm;13,20" — 20 zł,
+ * a „YDYp 3x2,5 mm;3,50" rozpadało się już w nazwie i nie dopasowywało wcale.
+ */
+function rozbijLinieCennika(linia: string): { nazwa: string; cena: number } | null {
+  let pola: string[];
+  if (linia.includes(";")) pola = linia.split(";");
+  else if (linia.includes("\t")) pola = linia.split("\t");
+  else {
+    pola = linia.split(",");
+    // „Gniazdko,15,90" — przecinek dziesiętny w pliku rozdzielanym przecinkami.
+    const ost = pola[pola.length - 1];
+    const przed = pola[pola.length - 2];
+    if (pola.length >= 3 && /^\s*\d{1,2}\s*$/.test(ost) && /^\s*\d[\d\s]*$/.test(przed)) {
+      pola = [...pola.slice(0, -2), `${przed},${ost}`];
+    }
+  }
+  if (pola.length < 2) return null;
+  const cena = parsujCene(pola[pola.length - 1]);
+  if (!(cena > 0)) return null;
+  return { nazwa: pola.slice(0, -1).join(" "), cena };
+}
+
+/** Pozycja cennika dla nazwy z pliku CSV — albo `null`, gdy nic nie pasuje. */
+function kluczZNazwy(nazwa: string): string | null {
+  const mala = nazwa.toLowerCase();
+  // Przewód z żyłami × przekrojem w nazwie — ta sama droga co w kosztorysie, więc
+  // cena trafia dokładnie do tej pozycji, do której trafią policzone metry.
+  if (/ydy|yky|przew|kabel/.test(mala)) {
+    const klucz = kluczKabla(nazwa);
+    if (klucz !== "kabelInny") return klucz;
+  }
+  for (const [klucz, slowa] of CSV_KEYWORD_MAP) {
+    if (!slowa.some((kw) => mala.includes(kw))) continue;
+    // Nadprądowy 3-biegunowy / 3-fazowy ma w kosztorysie własną pozycję.
+    if (klucz === "mcb" && /\b[34]p\b|3\s*-?\s*faz/.test(mala)) return "mcb3f";
+    return klucz;
+  }
+  return null;
+}
 
 /** Parsuje cennik CSV (`nazwa;cena` per linia) i zwraca dopasowane aktualizacje cen. */
 export function parsePriceCsv(text: string): Record<string, number> {
-  const lines = text.split(/\r?\n/).filter(Boolean);
   const updates: Record<string, number> = {};
-  lines.forEach((line) => {
-    const parts = line.split(/[,;\t]/);
-    if (parts.length < 2) return;
-    const name = parts[0].toLowerCase();
-    const priceRaw = parts[parts.length - 1].replace(/[^\d.,]/g, "").replace(",", ".");
-    const price = parseFloat(priceRaw);
-    if (!price) return;
-    for (const [key, keywords] of Object.entries(CSV_KEYWORD_MAP)) {
-      if (keywords.some((kw) => name.includes(kw))) {
-        updates[key] = price;
-        break;
-      }
-    }
-  });
+  for (const linia of text.split(/\r?\n/)) {
+    if (!linia.trim()) continue;
+    const pozycja = rozbijLinieCennika(linia);
+    if (!pozycja) continue;
+    const klucz = kluczZNazwy(pozycja.nazwa);
+    if (klucz) updates[klucz] = pozycja.cena;
+  }
   return updates;
 }
