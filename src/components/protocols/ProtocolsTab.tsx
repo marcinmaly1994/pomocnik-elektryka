@@ -467,14 +467,16 @@ export function ProtocolsTab() {
               <span className="text-xs text-slate-500">{def.limitUnit}</span>
             </div>
 
-            {/* Na telefonie każdy wiersz jest KARTĄ — same klasy CSS, ten sam DOM. Tabela
+            {/* Poniżej `lg` każdy wiersz jest KARTĄ — same klasy CSS, ten sam DOM. Tabela
                 miała 620–673 px w okienku 285 px: nagłówki łamały się na sześć linii,
                 pola wyników miały po 25 px, a „Ocena" i kosz stały za prawą krawędzią
-                bez żadnego znaku, że tabelę trzeba przesunąć. W karcie pola tekstowe idą
-                na całą szerokość, pomiary po trzy w rzędzie, każde z podpisem kolumny. */}
-            <div className="pe-scroll md:overflow-x-auto">
-              <table className="block w-full text-sm md:table md:min-w-[620px]">
-                <thead className="hidden md:table-header-group">
+                bez żadnego znaku, że tabelę trzeba przesunąć. Próg `lg`, nie `md`: na
+                tablecie w pionie (768–820 px) tabela wracała, a pola pomiarów miały po
+                22 px. W karcie pomiary stoją po trzy w rzędzie (telefon) albo po sześć
+                (od `sm`), pola tekstowe na całą szerokość albo po dwa, każde z podpisem. */}
+            <div className="pe-scroll lg:overflow-x-auto">
+              <table className="block w-full text-sm lg:table lg:min-w-[620px]">
+                <thead className="hidden lg:table-header-group">
                   <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
                     <th className="w-8 py-2 pr-2">Lp.</th>
                     {def.columns!.map((c) => (
@@ -486,23 +488,23 @@ export function ProtocolsTab() {
                     <th className="w-8 py-2" />
                   </tr>
                 </thead>
-                <tbody className="block md:table-row-group">
+                <tbody className="block lg:table-row-group">
                   {rows.map((r, i) => {
                     const ok = def.evaluate!(r, limit);
                     return (
                       <tr
                         key={i}
-                        className="grid grid-cols-6 gap-x-2 gap-y-2 border-b py-3 last:border-0 md:table-row md:py-0"
+                        className="grid grid-cols-6 gap-x-2 gap-y-2 border-b py-3 last:border-0 sm:grid-cols-12 lg:table-row lg:py-0"
                         style={{ borderColor: "#EEF1F4" }}
                         data-testid="wiersz-pomiaru"
                       >
-                        <td className="col-span-6 text-xs text-slate-400 md:py-1.5 md:pr-2">
-                          <span className="md:hidden">Pozycja </span>
+                        <td className="col-span-6 text-xs text-slate-400 sm:col-span-12 lg:py-1.5 lg:pr-2">
+                          <span className="lg:hidden">Pozycja </span>
                           {i + 1}
                         </td>
                         {def.columns!.map((c) => (
-                          <td key={c.key} className={`min-w-0 md:py-1.5 md:pr-2 ${c.type === "text" ? "col-span-6" : "col-span-2"}`}>
-                            <span className="mb-0.5 block truncate text-[11px] text-slate-400 md:hidden">{c.label}</span>
+                          <td key={c.key} className={`min-w-0 lg:py-1.5 lg:pr-2 ${c.type === "text" ? "col-span-6" : "col-span-2"}`}>
+                            <span className="mb-0.5 block truncate text-[11px] text-slate-400 lg:hidden">{c.label}</span>
                             {c.type === "computed" ? (
                               <span className="pe-mono text-xs text-slate-500">{c.compute!(r, limit)}</span>
                             ) : c.type === "select" ? (
@@ -510,7 +512,7 @@ export function ProtocolsTab() {
                                 value={String(r[c.key] ?? c.default ?? "")}
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
                                 aria-label={`${c.label}, pozycja ${i + 1}`}
-                                className="pe-input w-full py-1 text-xs"
+                                className="pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm"
                               >
                                 {c.options!.map((o) => (
                                   <option key={o} value={o}>
@@ -525,12 +527,12 @@ export function ProtocolsTab() {
                                 value={String(r[c.key] ?? "")}
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
                                 aria-label={`${c.label}, pozycja ${i + 1}`}
-                                className={`pe-input w-full py-1 text-xs ${c.type === "number" ? "pe-mono" : ""}`}
+                                className={`pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm ${c.type === "number" ? "pe-mono" : ""}`}
                               />
                             )}
                           </td>
                         ))}
-                        <td className="col-span-4 flex items-center md:table-cell md:py-1.5">
+                        <td className="col-span-4 flex items-center sm:col-span-10 lg:table-cell lg:py-1.5">
                           {ok === null ? (
                             <span className="text-xs text-slate-300">—</span>
                           ) : (
@@ -542,7 +544,7 @@ export function ProtocolsTab() {
                             </span>
                           )}
                         </td>
-                        <td className="col-span-2 flex justify-end md:table-cell md:py-1.5">
+                        <td className="col-span-2 flex justify-end lg:table-cell lg:py-1.5">
                           <button
                             onClick={() => removeRow(i)}
                             aria-label={`Usuń wiersz ${i + 1}`}
