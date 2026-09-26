@@ -121,7 +121,7 @@ import { EditorStatusBar } from "./EditorStatusBar";
 import { ToolRail } from "./ToolRail";
 import { WyborObwodu } from "./WyborObwodu";
 import { ElementLibrary } from "./ElementLibrary";
-import { RoomPanel } from "./RoomPanel";
+import { RoomPanel, WierszPomieszczenia } from "./RoomPanel";
 import { PlanCheckPanel } from "./PlanCheckPanel";
 import { QuantitiesPanel } from "./QuantitiesPanel";
 import { EditElementModal } from "./EditElementModal";
@@ -2233,6 +2233,71 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       </div>
     ) : null;
 
+/**
+   * Karta ZAZNACZONEJ ściany: długość, grubość, długości odcinków i akcje.
+   *
+   * Grubość i odcinki stały tu już wcześniej; doszedł nagłówek (ile ściana ma i z ilu
+   * odcinków) i akcje, które dotąd były tylko w menu pod prawym przyciskiem: „Usuń
+   * ścianę" i — dla pętli bez pomieszczenia — „Utwórz pomieszczenie z obrysu".
+   */
+  const kartaSciany = (() => {
+    if (toolMode !== "zaznacz" || selected?.kind !== "wall" || multiSelected.length > 0) return null;
+    const w = walls.find((x) => x.id === selected.id);
+    if (!w) return null;
+    const currentThickness = w.thickness ?? DEFAULT_WALL_THICKNESS;
+    const odcinki = Math.max(0, w.points.length - 1);
+    let dlugosc = 0;
+    for (let i = 1; i < w.points.length; i++) {
+      dlugosc += Math.hypot(w.points[i].x - w.points[i - 1].x, w.points[i].y - w.points[i - 1].y);
+    }
+    const petla = petleBezPomieszczenia.some((x) => x.wall.id === w.id);
+    const przycisk = "pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs [@media(pointer:coarse)]:min-h-11";
+    return (
+      <div className="flex min-w-0 flex-col items-start gap-2 text-xs" data-testid="karta-sciany">
+        <div>
+          <div className="text-sm font-semibold text-ink">Ściana</div>
+          <div className="text-[11px] text-slate-500">
+            {mpu !== null ? `${formatLiczba(dlugosc * mpu, 2)} m` : `${Math.round(dlugosc)} jedn.`} ·{" "}
+            {odcinki} {odcinki === 1 ? "odcinek" : odcinki < 5 ? "odcinki" : "odcinków"}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <span className="text-slate-500">Grubość:</span>
+          <input
+            data-testid="selected-wall-thickness-input"
+            type="number"
+            min={1}
+            step={mpu !== null ? 0.5 : 1}
+            value={thicknessToDisplay(currentThickness)}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isFinite(v) && v > 0) setWallThicknessOf(w.id, thicknessFromDisplay(v));
+            }}
+            className="w-16 rounded border border-border px-1.5 py-0.5"
+          />
+          {mpu !== null ? "cm" : "jedn."}
+        </div>
+        {/* Długości odcinków obok grubości, bo to ta sama sprawa: poprawianie
+            wymiarów ściany JUŻ NARYSOWANEJ, gdy pomyłka wyszła później. */}
+        <DlugosciOdcinkowSciany
+          punkty={w.points}
+          mpu={mpu}
+          onPrzesunPunkt={(index, punkt) => moveWallPoint(w.id, index, punkt)}
+        />
+        <div className="flex flex-wrap gap-1.5">
+          {petla && (
+            <button onClick={() => createRoomFromWall(w.id)} className={przycisk}>
+              <Layers size={13} /> Utwórz pomieszczenie z obrysu
+            </button>
+          )}
+          <button onClick={zaznaczenie.usunZaznaczone} className={`${przycisk} text-red-600`}>
+            <Trash2 size={13} /> Usuń ścianę
+          </button>
+        </div>
+      </div>
+    );
+  })();
+
   const kontekstoweTresc = (
     <>
       {/* Zatrzaśnięty Shift — jedyna droga do zaznaczenia wielokrotnego bez klawiatury
@@ -2360,36 +2425,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
 
       {/* Grubość JUŻ ZAPISANEJ ściany — edytowalna tylko w trybie „zaznacz", tak jak
           uchwyty narożników w DesignCanvas (w trybie „ściany" klik dokłada nowy punkt). */}
-      {selected?.kind === "wall" && toolMode === "zaznacz" && (() => {
-        const w = walls.find((x) => x.id === selected.id);
-        if (!w) return null;
-        const currentThickness = w.thickness ?? DEFAULT_WALL_THICKNESS;
-        return (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
-            <span className="text-slate-500">Grubość zaznaczonej ściany:</span>
-            <input
-              data-testid="selected-wall-thickness-input"
-              type="number"
-              min={1}
-              step={mpu !== null ? 0.5 : 1}
-              value={thicknessToDisplay(currentThickness)}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (Number.isFinite(v) && v > 0) setWallThicknessOf(w.id, thicknessFromDisplay(v));
-              }}
-              className="w-16 rounded border border-border px-1.5 py-0.5"
-            />
-            {mpu !== null ? "cm" : "jedn."}
-            {/* Długości odcinków obok grubości, bo to ta sama sprawa: poprawianie
-                wymiarów ściany JUŻ NARYSOWANEJ, gdy pomyłka wyszła później. */}
-            <DlugosciOdcinkowSciany
-              punkty={w.points}
-              mpu={mpu}
-              onPrzesunPunkt={(index, punkt) => moveWallPoint(w.id, index, punkt)}
-            />
-          </div>
-        );
-      })()}
+      {/* Karta zaznaczonej ściany stoi TU (pigułka nad rzutem) na telefonie i w pełnym
+          ekranie; w zwykłym widoku na szerokim ekranie — w panelu obok, jak karta
+          elementu. Jedno miejsce naraz, żeby nie było dwóch pól grubości. */}
+      {(!szerokieOkno || pelnyEkran) && kartaSciany}
       {/* Zaznaczona trasa przewodu — podpowiedź jak ją edytować (PPM / przytrzymanie
           → „Dodaj punkt", przeciągnięcie uchwytu go przesuwa, dwuklik na uchwycie kasuje,
           dwuklik na trasie pokazuje informacje o przewodzie)
@@ -3332,6 +3371,28 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   }}
                   onObwod={(n) => przypiszObwod([el.id], n)}
                 />
+              );
+            })()
+          ) : kartaSciany && szerokieOkno && !pelnyEkran ? (
+            kartaSciany
+          ) : toolMode === "zaznacz" && selected?.kind === "room" && multiSelected.length === 0 ? (
+            (() => {
+              const pokoj = roomShapes.find((r) => r.id === selected.id);
+              if (!pokoj) return null;
+              // Karta zaznaczonego pomieszczenia — ten sam wiersz co na liście w
+              // „Narysuj pomieszczenie", tu z podpisanymi akcjami (patrz `WierszPomieszczenia`).
+              return (
+                <div className="space-y-1.5" data-testid="karta-pomieszczenia">
+                  <div className="text-sm font-semibold text-ink">Pomieszczenie</div>
+                  <WierszPomieszczenia
+                    key={pokoj.id}
+                    room={pokoj}
+                    metersPerUnit={mpu}
+                    onCreateWall={sciany.createWallFromRoom}
+                    podpisy
+                    onUsuniete={() => setSelected(null)}
+                  />
+                </div>
               );
             })()
           ) : null}

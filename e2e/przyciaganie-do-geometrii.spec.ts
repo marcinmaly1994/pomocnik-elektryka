@@ -244,7 +244,7 @@ test.describe("pomieszczenie z zamkniętej pętli ścian", () => {
     // PPM na murze — ta sama operacja, tylko bez pośpiechu.
     await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
     await page.mouse.click(box.x + 210, box.y + 60, { button: "right" });
-    await expect(page.getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeVisible();
+    await expect(page.getByTestId("menu-kontekstowe").getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeVisible();
   });
 
   test("otwarta ściana nie ma w menu kontekstowym tworzenia pomieszczenia", async ({ page }) => {
@@ -258,8 +258,8 @@ test.describe("pomieszczenie z zamkniętej pętli ścian", () => {
 
     await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
     await page.mouse.click(box.x + 200, box.y + 100, { button: "right" });
-    await expect(page.getByRole("button", { name: "Usuń ścianę" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeHidden();
+    await expect(page.getByTestId("menu-kontekstowe").getByRole("button", { name: "Usuń ścianę" })).toBeVisible();
+    await expect(page.getByTestId("menu-kontekstowe").getByRole("button", { name: "Utwórz pomieszczenie z obrysu" })).toBeHidden();
   });
 });
 
