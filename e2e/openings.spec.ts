@@ -146,7 +146,8 @@ test("usunięcie ściany kasuje też jej otwory (nie zostają osierocone)", asyn
 
   ({ box: box2, zoom } = await planBoxAndZoom(page));
   await page.mouse.click(box2.x + farPoint.x * zoom, box2.y + farPoint.y * zoom, { button: "right" });
-  const usunSciane = page.getByText("Usuń ścianę");
+  // W menu PPM — ta sama akcja stoi też w karcie zaznaczonej ściany w panelu.
+  const usunSciane = page.getByTestId("menu-kontekstowe").getByText("Usuń ścianę");
   await expect(usunSciane).toBeVisible();
   await usunSciane.click();
   await page.waitForTimeout(900);
@@ -190,7 +191,8 @@ test("usunięcie pomieszczenia kasuje też otwory na jego krawędzi (nie zostaj�
   await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
   box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 100, { button: "right" });
-  const usunPomieszczenie = page.getByText("Usuń pomieszczenie");
+  // W menu PPM — ta sama akcja stoi też w karcie zaznaczonego pomieszczenia w panelu.
+  const usunPomieszczenie = page.getByTestId("menu-kontekstowe").getByText("Usuń pomieszczenie");
   await expect(usunPomieszczenie).toBeVisible();
   await usunPomieszczenie.click();
   await page.waitForTimeout(900);
