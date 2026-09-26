@@ -25,11 +25,27 @@ export const DEFAULT_PRICES: PriceTable = {
   rcbo: 0, spd: 0, spdFuse: 0, rozBezp: 0, ovr: 0, ppoz: 0, stycznik: 0, przekaznik: 0, zasilacz: 0, lampka: 0,
 };
 
-/** Podstawowa stawka VAT. Dla materiałów i usług elektrycznych w budownictwie
- *  mieszkaniowym bywa 8%, ale to zależy od rodzaju obiektu i zakresu prac — kosztorys
- *  jest orientacyjny, więc przyjmujemy stawkę podstawową i nie udajemy doradztwa
- *  podatkowego. */
-export const VAT_RATE = 23;
+/**
+ * Stawki VAT do wyboru w kosztorysie.
+ *
+ * 8% to stawka dla robót (budowa, remont, modernizacja) w budownictwie objętym
+ * społecznym programem mieszkaniowym — w praktyce mieszkania do 150 m² i domy do
+ * 300 m², razem z materiałem wliczonym w usługę. 23% to stawka podstawowa: sam zakup
+ * materiału, większe powierzchnie, lokale użytkowe.
+ *
+ * Wybiera użytkownik, bo o stawce decyduje obiekt i sposób rozliczenia z wykonawcą,
+ * a nie to, co widać na rzucie — i nie udajemy doradztwa podatkowego.
+ */
+export const STAWKI_VAT = [23, 8] as const;
+export type StawkaVat = (typeof STAWKI_VAT)[number];
+
+/** Stawka domyślna — podstawowa, więc projekt bez wyboru liczy się tak jak dotąd. */
+export const VAT_RATE: StawkaVat = 23;
+
+/** Stawka z zapisu projektu; cokolwiek innego niż znana stawka wraca do domyślnej. */
+export function stawkaVatZZapisu(v: unknown): StawkaVat {
+  return STAWKI_VAT.find((s) => s === v) ?? VAT_RATE;
+}
 
 export const PRICE_LABELS: Record<string, string> = {
   gniazdko: "Gniazdko 230V podtynkowe (szt.)",
@@ -406,9 +422,9 @@ export interface PodsumowanieKosztorysu {
 /** Klucz robocizny w cenniku — jedno miejsce, żeby nazwa nie rozjechała się z `DEFAULT_PRICES`. */
 const KLUCZ_ROBOCIZNY = "robocizna";
 
-export function podsumowanieKosztorysu(rows: CostRow[]): PodsumowanieKosztorysu {
+export function podsumowanieKosztorysu(rows: CostRow[], stawkaVat: StawkaVat = VAT_RATE): PodsumowanieKosztorysu {
   const netto = rows.reduce((a, r) => a + r.value, 0);
-  const vat = netto * (VAT_RATE / 100);
+  const vat = netto * (stawkaVat / 100);
   const bezCeny = wierszeBezCeny(rows);
   const brakRobocizny = bezCeny.some((r) => r.key === KLUCZ_ROBOCIZNY);
   return {

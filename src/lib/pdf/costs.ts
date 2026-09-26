@@ -1,6 +1,6 @@
 import type { DocumentHeader } from "@/types";
 import type { CostRow } from "@/lib/costs";
-import { VAT_RATE, podsumowanieKosztorysu } from "@/lib/costs";
+import { VAT_RATE, podsumowanieKosztorysu, type StawkaVat } from "@/lib/costs";
 import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
@@ -49,7 +49,7 @@ function tekstDoPrawej(doc: PdfDoc, str: string, prawy: number, y: number, size:
   doc.text(str, prawy - pdfTextWidth(str, size, bold), y, size, bold);
 }
 
-export function buildCostsDoc(rows: CostRow[], header: DocumentHeader): PdfDoc {
+export function buildCostsDoc(rows: CostRow[], header: DocumentHeader, stawkaVat: StawkaVat = VAT_RATE): PdfDoc {
   const doc = createPdfDoc({ footer: (d) => drawTitleBlock(d, header, "Kosztorys instalacji") });
   const M = doc.margin;
   const W = doc.innerW;
@@ -57,7 +57,7 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader): PdfDoc {
   // Sumy i PODPIS pod nimi z tego samego miejsca co w zakladce — patrz
   // `podsumowanieKosztorysu`. To jest dokument, ktory idzie do wykonawcy, wiec
   // podpis pod wielka liczba musi byc prawdziwy tak samo jak na ekranie.
-  const podsumowanie = podsumowanieKosztorysu(rows);
+  const podsumowanie = podsumowanieKosztorysu(rows, stawkaVat);
   const netto = podsumowanie.netto;
   const vat = podsumowanie.vat;
   const ryczaltowe = rows.filter((r) => r.overridden).length;
@@ -135,7 +135,7 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader): PdfDoc {
     doc.y -= duzy ? 20 : 15;
   };
   wiersz("Razem netto", netto);
-  wiersz(`VAT ${VAT_RATE}%`, vat);
+  wiersz(`VAT ${stawkaVat}%`, vat);
   doc.line(etykietaPrawy - 90, doc.y + 12, M + W, doc.y + 12, 0.8, 0.3);
   doc.y -= 4;
   wiersz(podsumowanie.etykietaSumy, netto + vat, true);
@@ -185,8 +185,8 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader): PdfDoc {
   return doc;
 }
 
-export async function downloadCostsPdf(rows: CostRow[], header: DocumentHeader): Promise<boolean> {
-  const bytes = await buildCostsPdf(rows, header);
+export async function downloadCostsPdf(rows: CostRow[], header: DocumentHeader, stawkaVat: StawkaVat = VAT_RATE): Promise<boolean> {
+  const bytes = await buildCostsPdf(rows, header, stawkaVat);
   return downloadPdfBytes(bytes, projectFileName("kosztorys", header.obiekt, "pdf"));
 }
 

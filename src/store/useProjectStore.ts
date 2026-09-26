@@ -40,7 +40,7 @@ import {
   scaleOf,
   type PlanSize,
 } from "@/lib/design";
-import { DEFAULT_PRICES, type CostOverrides, type QtyOverrides } from "@/lib/costs";
+import { DEFAULT_PRICES, stawkaVatZZapisu, VAT_RATE, type CostOverrides, type QtyOverrides, type StawkaVat } from "@/lib/costs";
 import { INITIAL_ONBOARDING, type OnboardingState } from "@/lib/onboarding";
 import type { ProtocolRow } from "@/lib/protocols";
 import { decyzjaZapisu, type RodzajDokumentu } from "@/lib/dokumenty";
@@ -215,6 +215,9 @@ export interface ProjectPayload {
   costOverrides: CostOverrides;
   /** Recznie poprawione ILOSCI pozycji kosztorysu — patrz `QtyOverrides`. */
   qtyOverrides: QtyOverrides;
+  /** Stawka VAT kosztorysu — patrz `STAWKI_VAT`. Zapisy sprzed wyboru stawki tego pola
+   *  nie mają i liczą się stawką podstawową, czyli tak jak dotąd. */
+  stawkaVat?: StawkaVat;
   docHeader: DocumentHeader;
   protocols: Partial<Record<ProtocolKey, ProtocolState>>;
   projectName: string;
@@ -342,6 +345,8 @@ interface ProjectState {
   costOverrides: CostOverrides;
   /** Recznie poprawione ILOSCI pozycji kosztorysu — patrz `QtyOverrides`. */
   qtyOverrides: QtyOverrides;
+  /** Stawka VAT kosztorysu — patrz `STAWKI_VAT`. */
+  stawkaVat: StawkaVat;
   docHeader: DocumentHeader;
   projectName: string;
   protocols: Partial<Record<ProtocolKey, ProtocolState>>;
@@ -514,6 +519,7 @@ interface ProjectState {
   /** Poprawia ilosc pozycji kosztorysu; `null` przywraca oszacowanie z rzutu. */
   setQtyOverride: (key: string, value: number | null) => void;
   setPrices: (patch: Record<string, number>) => void;
+  setStawkaVat: (stawka: StawkaVat) => void;
   setDocHeader: (patch: Partial<DocumentHeader>) => void;
   setProjectName: (name: string) => void;
   setPanelConfig: (patch: Partial<PanelConfig>) => void;
@@ -581,6 +587,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   prices: { ...DEFAULT_PRICES },
   costOverrides: {},
   qtyOverrides: {},
+  stawkaVat: VAT_RATE,
   projectName: "Mój dom",
   protocols: {},
   panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
@@ -742,6 +749,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       prices: { ...DEFAULT_PRICES },
       costOverrides: {},
       qtyOverrides: {},
+      stawkaVat: VAT_RATE,
       konfliktChmury: null,
       protocols: {},
       cloudId: null,
@@ -777,8 +785,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   getProjectPayload: () => {
-    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding, projektPrzykladowy } = get();
-    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding, projektPrzykladowy };
+    const { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, stawkaVat, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding, projektPrzykladowy } = get();
+    return { draft, floors, activeFloorId, bgImages, scales, prices, costOverrides, qtyOverrides, stawkaVat, docHeader, protocols, projectName, panelConfig, warunkiDoboru, panelDevices, panelHidden, panelTryb, panelOverrides, planSize, onboarding, projektPrzykladowy };
   },
 
   loadProjectPayload: (payload) => {
@@ -804,6 +812,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Zapisy sprzed tej zmiany nie maja tego pola — pusta mapa znaczy "wszystko liczone".
       costOverrides: payload.costOverrides ?? {},
       qtyOverrides: payload.qtyOverrides ?? {},
+      stawkaVat: stawkaVatZZapisu(payload.stawkaVat),
       // Uzupełniane jak `prices` i `panelConfig` wyżej: zapis sprzed dodania pola
       // po prostu go NIE MA, a dotyczy to też projektów z chmury, wczytywanych na
       // dowolnym urządzeniu. `docHeader` szedł tu dotąd SUROWY i brak jednego pola
@@ -1022,6 +1031,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setPrices: (patch) =>
     set((state) => ({ prices: { ...state.prices, ...patch } })),
+
+  setStawkaVat: (stawkaVat) => set({ stawkaVat }),
 
   setCostOverride: (key, value) =>
     set((state) => {

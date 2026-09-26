@@ -269,6 +269,23 @@ describe("useProjectStore", () => {
     expect(useProjectStore.getState().draft.elements.map((e) => e.id)).toEqual(["e1"]);
   });
 
+  it("stawka VAT kosztorysu zapisuje się z projektem, a stary zapis dostaje podstawową", () => {
+    const { setStawkaVat, getProjectPayload, loadProjectPayload, resetProject } = useProjectStore.getState();
+    expect(useProjectStore.getState().stawkaVat).toBe(23);
+    setStawkaVat(8);
+    const payload = getProjectPayload();
+    expect(payload.stawkaVat).toBe(8);
+
+    resetProject();
+    expect(useProjectStore.getState().stawkaVat).toBe(23);
+    loadProjectPayload(payload);
+    expect(useProjectStore.getState().stawkaVat).toBe(8);
+
+    // Zapis sprzed wyboru stawki nie ma tego pola — liczy się tak jak dotąd.
+    loadProjectPayload({ ...payload, stawkaVat: undefined });
+    expect(useProjectStore.getState().stawkaVat).toBe(23);
+  });
+
   describe("remont przypisań do pomieszczeń przy wczytaniu projektu", () => {
     // Kwadrat 100×100 jedn. w lewym górnym rogu; skala jak przy rysowaniu od zera.
     const kuchnia = {
