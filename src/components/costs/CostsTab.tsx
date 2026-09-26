@@ -325,8 +325,13 @@ export function CostsTab() {
           że lista nigdy nie była pusta — a przy okazji odsyłał do zakładki
           „Zaprojektuj instalację", która nazywa się „Instalacja" od kroku 62. */}
         <div className="pe-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
+          {/* Na telefonie wiersze są KARTAMI (nazwa na całą szerokość, pod nią ilość,
+              cena i wartość), od 768 px — zwykłą tabelą. Samym CSS-em, na tym samym
+              drzewie: druga kopia kontrolek dałaby dwa pola o tej samej nazwie.
+              Tabela miała na telefonie 553 px w okienku 325 px — kolumna „Wartość"
+              była całkiem poza ekranem, a „Cena jedn." przycięta. */}
+          <table className="block w-full text-sm md:table">
+            <thead className="hidden md:table-header-group">
               <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
                 <th className="p-3">Pozycja</th>
                 <th className="w-36 p-3">Ilość</th>
@@ -334,15 +339,21 @@ export function CostsTab() {
                 <th className="w-44 p-3 text-right">Wartość</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="block md:table-row-group">
               {rows.map((r) => (
-                <tr key={r.key} className="border-b last:border-0" style={{ borderColor: "#EEF1F4" }}>
-                  <td className="p-3">{r.label}</td>
+                <tr
+                  key={r.key}
+                  className="grid grid-cols-[1fr_1fr_1.35fr] gap-x-2 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0"
+                  style={{ borderColor: "#EEF1F4" }}
+                >
+                  <td className="col-span-3 font-medium md:p-3 md:font-normal">{r.label}</td>
                   {/* Ilość do poprawienia ręcznie. Aplikacja sama pisze pod tabelą, żeby
                       zweryfikować ilości na realnym rzucie — a puszki i robocizna to
                       czyste szacunki z liczby punktów i pomieszczeń. Puste pole = wartość
                       z rzutu, pokazana jako podpowiedź. */}
-                  <td className="p-3">
+                  <td className="min-w-0 md:p-3">
+                    {/* Podpis pola tylko w karcie na telefonie — na monitorze robi to nagłówek tabeli. */}
+                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Ilość</span>
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
@@ -351,7 +362,7 @@ export function CostsTab() {
                         onChange={(e) => setQtyOverride(r.key, e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0))}
                         placeholder={String(r.qty)}
                         aria-label={`Ilość: ${r.label}`}
-                        className="pe-input pe-mono w-20 text-sm"
+                        className="pe-input pe-mono w-full min-w-0 text-sm md:w-20"
                         style={r.qtyOverridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
                       />
                       <button
@@ -364,7 +375,8 @@ export function CostsTab() {
                       </button>
                     </div>
                   </td>
-                  <td className="p-3">
+                  <td className="min-w-0 md:p-3">
+                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Cena jedn.</span>
                     <input
                       type="number"
                       value={r.price}
@@ -376,7 +388,7 @@ export function CostsTab() {
                         if (r.overridden) setCostOverride(r.key, null);
                       }}
                       aria-label={`Cena jednostkowa: ${r.label}`}
-                      className="pe-input pe-mono w-24 text-sm"
+                      className="pe-input pe-mono w-full min-w-0 text-sm md:w-24"
                       style={r.overridden ? { color: "#94A3B8" } : undefined}
                       title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
                       step="0.5"
@@ -387,7 +399,8 @@ export function CostsTab() {
                       klucz"), a takiej kwoty nie da się sensownie rozbić na sztuki.
                       Puste pole = wartość liczona z ilości i ceny — ten sam zapis co
                       przy wysokości montażu elementu. */}
-                  <td className="p-3 text-right">
+                  <td className="min-w-0 text-right md:p-3">
+                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Wartość</span>
                     <div className="flex items-center justify-end gap-1">
                       <input
                         type="number"
@@ -399,7 +412,7 @@ export function CostsTab() {
                         // czego kontrolka nie przyjmie.
                         placeholder={r.value.toFixed(2)}
                         aria-label={`Wartość pozycji: ${r.label}`}
-                        className="pe-input pe-mono w-28 text-right text-sm"
+                        className="pe-input pe-mono w-full min-w-0 text-right text-sm md:w-28"
                         style={r.overridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
                         step="1"
                       />
@@ -419,14 +432,14 @@ export function CostsTab() {
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr>
+            <tfoot className="block md:table-footer-group">
+              <tr className="flex items-baseline justify-between md:table-row [&>td]:grow md:[&>td]:grow-0">
                 <td className="p-3 pb-1 text-sm text-slate-500" colSpan={3}>
                   Razem netto
                 </td>
                 <td className="pe-mono p-3 pb-1 text-right text-sm">{formatLiczba(grandTotal, 2)} zł</td>
               </tr>
-              <tr>
+              <tr className="flex items-baseline justify-between md:table-row [&>td]:grow md:[&>td]:grow-0">
                 <td className="px-3 py-1 text-sm text-slate-500" colSpan={3}>
                   VAT {VAT_RATE}%
                 </td>
@@ -458,7 +471,7 @@ export function CostsTab() {
                   </td>
                 </tr>
               )}
-              <tr>
+              <tr className="flex items-baseline justify-between md:table-row [&>td]:grow md:[&>td]:grow-0">
                 <td className="pe-display p-3 pt-1 font-bold" colSpan={3}>
                   {podsumowanie.etykietaSumy}
                 </td>
