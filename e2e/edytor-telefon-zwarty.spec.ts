@@ -161,3 +161,42 @@ test("ściana rysowana palcem: każdy narożnik trafia, „Zakończ” w kadrze"
     })
   ).toBe(1);
 });
+
+/**
+ * Stawianie osprzętu na telefonie bez przewijania tam i z powrotem.
+ *
+ * Biblioteka elementów stoi na telefonie NAD rzutem: po „Wstaw Element" rzut miał
+ * 360 px i zaczynał się ponad 530 px od góry. Teraz wybór elementu zwija bibliotekę,
+ * a pigułka nad rzutem przejmuje jej opcje (liczba gniazd, AGD) i drogę powrotną.
+ */
+test("wybór elementu zwija bibliotekę, pigułka przejmuje jej opcje", async ({ page }) => {
+  await start(page);
+  await wczytajPrzyklad(page, "mieszkanie");
+  await pomiar(page);
+  await page.getByRole("button", { name: "Wstaw Element" }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
+
+  const okno = page.locator("[data-plan-okno]");
+  await expect.poll(async () => (await okno.boundingBox())!.y).toBeLessThan(200);
+  await expect(page.getByPlaceholder("Szukaj elementu…")).toHaveCount(0);
+  const pigulka = page.getByTestId("kontrolki-narzedzia");
+  await expect(pigulka).toContainText("Wstawiasz: Gniazdo 230 V");
+
+  // Liczba gniazd z pigułki trafia do stawianego elementu.
+  await pigulka.getByRole("button", { name: "2", exact: true }).tap();
+  const o = (await okno.boundingBox())!;
+  await page.touchscreen.tap(o.x + 150, o.y + 60);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
+        const el = JSON.parse(raw!).draft.elements as { gangs?: number }[];
+        return el[el.length - 1]?.gangs;
+      })
+    )
+    .toBe(2);
+
+  // „Zmień" wraca do biblioteki.
+  await pigulka.getByRole("button", { name: "Zmień" }).tap();
+  await expect(page.getByPlaceholder("Szukaj elementu…")).toBeVisible();
+});
