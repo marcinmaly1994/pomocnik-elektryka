@@ -694,6 +694,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const ostatniaSzerRef = useRef(0);
   /** Kondygnacja, dla której kadr został już ustawiony na rysunku — patrz efekt niżej. */
   const skadrowanaRef = useRef<string | null>(null);
+  /** Prośba o ponowne dopasowanie kadru po wejściu/wyjściu z pełnego ekranu — patrz
+   *  efekt dopasowania. Osobno od `skadrowanaRef`, bo gaśnie dopiero przy ustalonych
+   *  wymiarach, a nie przy pierwszej udanej próbie. */
+  const przekadrujRef = useRef(false);
   const [cursor, setCursor] = useState<Point | null>(null);
   /** Nazwa pliku podkładu — sam „wgrany" nie mówi, KTÓRY rzut leży pod spodem. */
   const [bgName, setBgName] = useState<string | null>(null);
@@ -751,7 +755,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const zmierzSzerokosc = useCallback(() => {
     const el = kolumnaPlotnaRef.current;
     if (!el) return null;
-    const szer = el.clientWidth - 2;
+    // Bez paddingu kolumny: w pełnym ekranie ma ona `p-2` i płótno liczone z samego
+    // `clientWidth` wystawało 8 px za prawą krawędź okna.
+    const s = getComputedStyle(el);
+    const szer = el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) - 2;
     if (szer <= 0) return null;
     setDostepnaSzer(szer);
     ostatniaSzerRef.current = szer;
@@ -815,9 +822,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    */
   const dopasujPustaKartke = useCallback(() => {
     const { walls: sc, roomShapes: pom, elements: el, openings: otw } = trescRef.current;
+    // Pomiar szerokości PRZED wyjściem — tak jak mówi komentarz wyżej. Wcześniej
+    // wychodziliśmy przed nim i przy narysowanym rzucie okno widoku zostawało
+    // w starej szerokości: w pełnym ekranie płótno miało 1030 px zamiast 1424.
+    zmierzSzerokosc();
     if (sc.length || pom.length || el.length || otw.length) return;
     dopasujKadr();
-  }, [dopasujKadr]);
+  }, [dopasujKadr, zmierzSzerokosc]);
 
   /** Wejście i wyjście z pełnego ekranu zmienia dostępne miejsce skokowo, więc rzut
    *  dopasowujemy na nowo — nawet jeśli użytkownik wcześniej ustawił zoom ręcznie.
@@ -825,6 +836,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  pustego ekranu, czyli dokładne przeciwieństwo tego, po co się tu wchodzi. */
   const przelaczPelnyEkran = useCallback(() => {
     setPelnyEkran((v) => !v);
+    // Prośba o ponowne dopasowanie — bez niej efekt dopasowania dla narysowanego
+    // rzutu niczego nie robił (kondygnacja była już „skadrowana") i obietnica z
+    // komentarza wyżej była martwa: rzut zostawał w powiększeniu sprzed zmiany,
+    // w rogu dużo większego okna. Patrz `przekadrujRef` w efekcie dopasowania.
+    przekadrujRef.current = true;
+    // Okno, w którym każda zmiana wymiarów dopasowuje kadr od nowa — patrz efekt
+    // dopasowania. Wymiary ustalają się w kilku krokach (kolumna, potem paski,
+    // potem wysokość płótna), więc ostatnie dopasowanie trafia w ostateczne.
+    window.setTimeout(() => {
+      przekadrujRef.current = false;
+    }, 400);
     setZoomReczny(false);
     setChromeLewo(false);
   }, []);
@@ -1135,8 +1157,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         const okno = kolumna.querySelector<HTMLElement>("[data-plan-okno]") ?? kolumna;
         gora = okno.getBoundingClientRect().top - korzenEdytora.getBoundingClientRect().top;
       }
+      // W pełnym ekranie z WNĘTRZA kolumny płótna: ma ona wysokość okna minus paski,
+      // a sama od płótna nie zależy (`h-full` w wierszu o stałej wysokości). Stały wzór
+      // `innerHeight − 16 − paski` pomijał odstęp nad wierszem i płótno wchodziło
+      // pod pasek stanu o 8 px. Wzór zostaje jako zapas, gdy kolumny jeszcze nie ma.
+      const wnetrzeKolumny = (() => {
+        if (!pelnyEkran || !kolumna) return null;
+        const s = getComputedStyle(kolumna);
+        return kolumna.clientHeight - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom);
+      })();
       const nowa = pelnyEkran
-        ? Math.max(320, window.innerHeight - 16 - zajetePionowo)
+        ? Math.max(320, wnetrzeKolumny ?? window.innerHeight - 16 - zajetePionowo)
         : wysokoscPlotna(gora, window.innerHeight, zapasPod);
       // Próg 1 px: `getBoundingClientRect` potrafi oddać ułamek piksela, a każda taka
       // różnica jest dla Reacta nowym stanem. Bez progu obserwator niżej budziłby się
@@ -1277,7 +1308,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
      * także wtedy, gdy pomiar trafi akurat w zgadniętą liczbę i sama wysokość się
      * nie zmieni.
      */
-    if (skadrowanaRef.current !== activeFloorId) {
+    /**
+     * `przekadrujRef` — przez chwilę po wejściu/wyjściu z pełnego ekranu każda zmiana
+     * wymiarów dopasowuje kadr od nowa (flagę gasi zegar w `przelaczPelnyEkran`): tuż po
+     * wejściu kolumna ma przez chwilę wysokość bez pasków (zmierzone 868 zamiast
+     * 733 px) i jednorazowe dopasowanie do niej wypychało dół rysunku za pasek stanu.
+     */
+    if (skadrowanaRef.current !== activeFloorId || przekadrujRef.current) {
       if (dopasujKadr() && wysZmierzona) skadrowanaRef.current = activeFloorId;
     } else {
       dopasujPustaKartke();
@@ -3499,8 +3536,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               się przy sprawdzaniu, a nie przy samym rysowaniu, więc mogą być schowane. */}
           <div
             className={
+              // W pełnym ekranie `fixed` do dołu OKNA, nie `absolute` do dołu kolumny płótna.
+              // Układ rezerwuje na pasek pas o jego wysokości (`paddingBottom` wiersza,
+              // `bottom` karty narzędzi, wysokość płótna) — a pasek przypięty do kolumny
+              // stał NAD tym pasem, czyli na rzucie: zmierzone przy 1440 × 900 pasek
+              // 722–811 px na płótnie kończącym się na 819, a pas 811–900 pusty.
+              // Korzeń pełnego ekranu jest `fixed inset-0` bez transformacji, więc
+              // `fixed` liczy się tu od okna.
               pelnyEkran
-                ? "absolute inset-x-0 bottom-0 z-30 border border-border bg-white px-2 py-1 shadow-xl"
+                ? "fixed inset-x-0 bottom-0 z-30 border border-border bg-white px-2 py-1 shadow-xl"
                 : undefined
             }
             ref={dolnyPasekRef}
