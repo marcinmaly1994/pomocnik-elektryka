@@ -309,6 +309,14 @@ function PeTaps({ columns }: { columns: Column[] }) {
  * `LampkaBranch`) zamiast rzędu wyłączników obwodowych, więc wypadła z tego filtru tak
  * samo jak main/spd/rcd.
  */
+/** „1 obwód", „3 obwody", „12 obwodów", „22 obwody" — polska odmiana liczebnika. */
+function odmiana(n: number, jeden: string, kilka: string, wiele: string): string {
+  if (n === 1) return `1 ${jeden}`;
+  const d = n % 10;
+  const s = n % 100;
+  return `${n} ${d >= 2 && d <= 4 && !(s >= 12 && s <= 14) ? kilka : wiele}`;
+}
+
 function jestOdplywem(d: PanelDevice): boolean {
   return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank" && d.kind !== "lampka";
 }
@@ -587,6 +595,7 @@ export function SchemaTab() {
   const spdDevice = devices.find((d) => d.kind === "spd");
   const rcdDevices = devices.filter((d) => d.kind === "rcd");
   const lampkaDevices = devices.filter((d) => d.kind === "lampka");
+  const liczbaObwodow = devices.filter(jestOdplywem).length;
 
   /**
    * Grupy różnicówek wyprowadzone z SAMYCH APARATÓW (po `rcdTag`), a nie z obwodów
@@ -655,9 +664,11 @@ export function SchemaTab() {
         <div>
           <h2 className="pe-display mb-1 text-xl">Schemat instalacji (jednokreskowy)</h2>
           <p className="text-sm text-slate-500">
-            Generowany automatycznie z obwodów rozdzielnicy — {circuits.length}{" "}
-            {circuits.length === 1 ? "obwód" : circuits.length < 5 ? "obwody" : "obwodów"}, {rcdBlocks.length}{" "}
-            {rcdBlocks.length === 1 ? "różnicówka" : "różnicówki"}.
+            {/* Liczby z APARATÓW, tak jak sam rysunek — nie z obwodów policzonych z rzutu
+                (po usunięciu aparatu w Rozdzielnicy nagłówek mówił dalej „11 obwodów").
+                Różnicówki to prawdziwe aparaty RCD, bez umownej grupy „poza różnicówką". */}
+            Generowany automatycznie z obwodów rozdzielnicy — {odmiana(liczbaObwodow, "obwód", "obwody", "obwodów")},{" "}
+            {odmiana(rcdDevices.length, "różnicówka", "różnicówki", "różnicówek")}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

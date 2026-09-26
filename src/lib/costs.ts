@@ -1,4 +1,4 @@
-import type { Circuit, ElementType, InstallationElement, PriceTable, RcdGroup } from "@/types";
+import type { Circuit, ElementType, InstallationElement, PanelDevice, PriceTable, RcdGroup } from "@/types";
 import { ELEMENT_TYPES, gniazdoPodwojne, mechanizmowWElemencie } from "@/lib/elements";
 
 export const DEFAULT_PRICES: PriceTable = {
@@ -19,6 +19,10 @@ export const DEFAULT_PRICES: PriceTable = {
   kabel3x16: 0, kabel3x25: 0, kabel5x6: 0, kabel5x10: 0, kabel5x16: 0, kabel5x25: 0,
   kabelInny: 0,
   mcb: 15, mcb3f: 45, rcd: 90, glowny: 60, rozdzielnica: 130, szafkaTeletech: 0, robocizna: 0,
+  // Aparaty dokładane w Rozdzielnicy ręcznie — BEZ ceny, z tego samego powodu co rzadkie
+  // przekroje: rozrzut cen jest duży (SPD T1+T2 to kilkaset złotych, T2 — sto kilkadziesiąt),
+  // a zmyślona liczba jest gorsza od jawnego pytania. Trafiają na listę „uzupełnij".
+  rcbo: 0, spd: 0, spdFuse: 0, rozBezp: 0, ovr: 0, ppoz: 0, stycznik: 0, przekaznik: 0, zasilacz: 0, lampka: 0,
 };
 
 /** Podstawowa stawka VAT. Dla materiałów i usług elektrycznych w budownictwie
@@ -74,6 +78,16 @@ export const PRICE_LABELS: Record<string, string> = {
   mcb3f: "Wyłącznik nadprądowy 3-faz. C16/C25 (szt.)",
   rcd: "Wyłącznik różnicowoprądowy 30mA (szt.)",
   glowny: "Wyłącznik główny (szt.)",
+  rcbo: "Wyłącznik różnicowo-nadprądowy RCBO (szt.)",
+  spd: "Ogranicznik przepięć SPD (szt.)",
+  spdFuse: "Bezpiecznik z podstawą pod SPD (szt.)",
+  rozBezp: "Rozłącznik izolacyjny bezpiecznikowy (szt.)",
+  ovr: "Czujnik zaniku / kolejności faz (szt.)",
+  ppoz: "Rozłącznik przeciwpożarowy (szt.)",
+  stycznik: "Stycznik modułowy (szt.)",
+  przekaznik: "Przekaźnik bistabilny (szt.)",
+  zasilacz: "Zasilacz modułowy (szt.)",
+  lampka: "Lampka sygnalizacyjna (szt.)",
   rozdzielnica: "Obudowa rozdzielnicy (szt.)",
   szafkaTeletech: "Szafka teletechniczna / rack (szt., opcjonalnie)",
   robocizna: "Robocizna za punkt instalacyjny (szt., opcjonalnie)",
@@ -93,6 +107,10 @@ const TYPE_TO_PRICE_KEY: Partial<Record<ElementType, string>> = {
   puszka: "puszkaRozgalezna", rozdzielnica: "rozdzielnica", szafkaTeletech: "szafkaTeletech",
 };
 
+/** Rodzaje aparatów z katalogu Rozdzielnicy (`MANUAL_DEVICE_TYPES`), które mają w cenniku
+ *  pozycję o tym samym kluczu co `kind` aparatu. */
+const APARATY_DOKLADANE = ["rcbo", "spd", "spdFuse", "rozBezp", "ovr", "ppoz", "stycznik", "przekaznik", "zasilacz", "lampka"];
+
 export interface CostResult {
   quantities: Record<string, number>;
   /** Skąd wzięły się metry kabla: policzone z planu czy z ryczałtu na punkt. */
@@ -109,6 +127,18 @@ export interface CostOptions {
    * Brak = ryczałt 15 mb na punkt, czyli zachowanie sprzed mierzenia tych tras.
    */
   lvLengthsM?: { lan: number; koncentryk: number };
+  /**
+   * Aparaty z zakładki ROZDZIELNICA — to je wyceniamy, a nie odtwarzamy z obwodów.
+   *
+   * Dotąd kosztorys liczył wyłączniki z obwodów policzonych z rzutu, więc nic, co
+   * użytkownik zrobił w Rozdzielnicy, do niego nie trafiało: po usunięciu aparatu F7
+   * rozdzielnica miała 13 aparatów, a kosztorys dalej 10 wyłączników 1-faz.; dołożony
+   * ogranicznik przepięć, stycznik czy lampka nie były wyceniane wcale. Schemat bierze
+   * aparaty z rozdzielnicy od dawna — teraz tak samo kosztorys.
+   *
+   * Brak = zachowanie dotychczasowe (aparaty z obwodów).
+   */
+  aparaty?: PanelDevice[];
 }
 
 /**
@@ -215,12 +245,25 @@ export function computeCosts(
   q.kabelLan = Math.round(opts.lvLengthsM ? opts.lvLengthsM.lan : (q.rj45 + q.domofon) * 15);
   q.kabelKoncentryk = Math.round(opts.lvLengthsM ? opts.lvLengthsM.koncentryk : q.rtvsat * 15);
 
-  const threePhase = circuits.filter((c) => c.breaker.includes("3-faz.")).length;
-  q.mcb3f = threePhase;
-  q.mcb = circuits.length - threePhase;
-  q.rcd = rcdGroups.length;
-  q.glowny = circuits.length ? 1 : 0;
-  q.rozdzielnica = Math.max(q.rozdzielnica, circuits.length ? 1 : 0);
+  if (opts.aparaty) {
+    // Aparaty z ROZDZIELNICY, nie odtworzone z obwodów — patrz `CostOptions.aparaty`.
+    const ap = opts.aparaty;
+    const ile = (warunek: (d: PanelDevice) => boolean) => ap.filter(warunek).length;
+    const wielobiegunowy = (d: PanelDevice) => /^[34]P/.test(d.poles);
+    q.mcb = ile((d) => d.kind === "mcb" && !wielobiegunowy(d));
+    q.mcb3f = ile((d) => d.kind === "mcb" && wielobiegunowy(d));
+    q.rcd = ile((d) => d.kind === "rcd");
+    q.glowny = ile((d) => d.kind === "main");
+    for (const k of APARATY_DOKLADANE) q[k] = ile((d) => d.kind === k);
+    q.rozdzielnica = Math.max(q.rozdzielnica, ap.length ? 1 : 0);
+  } else {
+    const threePhase = circuits.filter((c) => c.breaker.includes("3-faz.")).length;
+    q.mcb3f = threePhase;
+    q.mcb = circuits.length - threePhase;
+    q.rcd = rcdGroups.length;
+    q.glowny = circuits.length ? 1 : 0;
+    q.rozdzielnica = Math.max(q.rozdzielnica, circuits.length ? 1 : 0);
+  }
 
   return { quantities: q, cableLengthSource: hasMeasured ? "plan" : "ryczalt" };
 }
