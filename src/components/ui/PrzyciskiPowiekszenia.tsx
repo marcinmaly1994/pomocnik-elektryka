@@ -9,7 +9,12 @@ import type { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
  *
  * `nazwa` wchodzi do etykiet dostępnościowych w dwóch przypadkach, bo polski ich
  * wymaga: „Powiększenie schematu", ale „Powiększ schemat".
+ *
+ * Na ekranie dotykowym (`pointer: coarse`) każdy przycisk ma co najmniej 44 × 44 px.
+ * Dotąd miały 26 × 22 px przy 2 px odstępu — przy palcu „+" i „Dopasuj" leżały pod
+ * tym samym opuszkiem. Pod myszą zostaje zwarty pasek, jak w edytorze rzutu.
  */
+const DOTYK = "[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11";
 export function PrzyciskiPowiekszenia({
   p,
   nazwa,
@@ -17,7 +22,7 @@ export function PrzyciskiPowiekszenia({
   p: ReturnType<typeof usePowiekszanieRysunku>;
   nazwa: { dopelniacz: string; biernik: string };
 }) {
-  const przycisk = "rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30";
+  const przycisk = `flex items-center justify-center rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30 ${DOTYK}`;
   const procent = Math.round(p.zoom * 100);
   return (
     <div className="flex justify-end">
@@ -35,7 +40,7 @@ export function PrzyciskiPowiekszenia({
           onClick={p.naturalny}
           title="Przywróć naturalny rozmiar"
           aria-label={`Powiększenie ${nazwa.dopelniacz} ${procent} procent — kliknij, aby przywrócić 100%`}
-          className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600"
+          className={`pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600 ${DOTYK}`}
         >
           {procent}%
         </button>

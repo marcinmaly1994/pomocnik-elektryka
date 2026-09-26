@@ -698,7 +698,7 @@ export function SchemaTab() {
         />
       </div>
 
-      <OknoRysunku szerokosc={width} wysokosc={SCHEMA_HEIGHT} svgRef={svgRef}>
+      <OknoRysunku szerokosc={width} wysokosc={SCHEMA_HEIGHT} svgRef={svgRef} srodekStartowyX={mainX}>
           <IncomingSupply x={mainX} supply3f={panelConfig.supply3f} />
           <MainSwitch x={mainX} device={mainDevice} />
 
@@ -753,10 +753,15 @@ export function SchemaTab() {
 /**
  * Okno schematu: rysunek w przewijanym pojemniku plus powiększenie.
  *
- * Na telefonie schemat otwiera się DOPASOWANY do szerokości — w naturalnym rozmiarze
- * (1200 px w okienku 330 px) widać było pustą górną połowę i ani kawałka rozdzielnicy
- * głównej. Na monitorze zostaje 100%, jak dotąd. W obu przypadkach dochodzą przyciski
- * −/+ i „Dopasuj", a na dotyku szczypanie (patrz `usePowiekszanieRysunku`).
+ * Na telefonie schemat otwiera się w NATURALNYM rozmiarze, wycentrowany na wyłączniku
+ * głównym. Wcześniej otwierał się dopasowany do szerokości: 24%, napisy po 2,5 px,
+ * okienko 140 px wysokości — miniatura, z której nie dało się odczytać niczego, a do
+ * czytelnego rozmiaru trzeba było siedmiu stuknięć w „+". Całość jest o jedno
+ * stuknięcie dalej, pod „Dopasuj". Jeszcze wcześniej 100% startowało od LEWEJ krawędzi
+ * i pokazywało pustą górną połowę bez rozdzielnicy głównej — stąd środek na wyłączniku.
+ *
+ * Na monitorze rysunek mieści się w 100%, jak dotąd. W obu przypadkach dochodzą
+ * przyciski −/+ i „Dopasuj", a na dotyku szczypanie (patrz `usePowiekszanieRysunku`).
  *
  * Osobny komponent, bo hook potrzebuje szerokości rysunku, a ta jest znana dopiero
  * po wczesnym `return` pustego schematu w `SchemaTab`.
@@ -768,16 +773,19 @@ function OknoRysunku({
   szerokosc,
   wysokosc,
   svgRef,
+  srodekStartowyX,
   children,
 }: {
   szerokosc: number;
   wysokosc: number;
   svgRef: React.RefObject<SVGSVGElement>;
+  /** Wyłącznik główny — na telefonie staje na środku okienka. */
+  srodekStartowyX: number;
   children: React.ReactNode;
 }) {
   // Media query, nie `innerWidth` — patrz `waskiEkran`.
   const wasko = waskiEkran();
-  const p = usePowiekszanieRysunku(szerokosc, wasko);
+  const p = usePowiekszanieRysunku(szerokosc, false, wasko ? srodekStartowyX : undefined);
   return (
     <div className="space-y-2">
       <PrzyciskiPowiekszenia p={p} nazwa={{ dopelniacz: "schematu", biernik: "schemat" }} />
