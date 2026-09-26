@@ -54,25 +54,23 @@ export async function zamknijMenuPaska(page: Page): Promise<void> {
 }
 
 /**
- * Otwiera w panelu bocznym zakładkę „Elementy" (katalog osprzętu).
+ * Otwiera katalog osprzętu — czyli wybiera narzędzie „Wstaw Element".
  *
- * Od kroku 84 panel na PUSTEJ kondygnacji startuje na „Pomieszczeniach" — osprzętu
- * nie ma tam jeszcze gdzie postawić, więc katalog nie jest tym, co powinno się czytać
- * najpierw (patrz `zakladkaPanelu` w lib/panelBoczny.ts). Testy, które sięgają po
- * element od razu na czystym rzucie, muszą więc katalog otworzyć.
+ * Katalog nie ma już własnej zakładki: panel boczny pokazuje wyłącznie opcje
+ * WYBRANEGO narzędzia (patrz `NaglowekNarzedzia` w PanelNarzedzia.tsx), a katalog
+ * należy do „Wstaw Element". Kliknięcie w pozycję katalogu i tak przełącza na to
+ * narzędzie, więc testy, które sięgają po element, niczego tu nie tracą.
  *
- * Rusza WYŁĄCZNIE zakładkę panelu, nie narzędzie — w odróżnieniu od kliknięcia
- * w „Wstaw Element" w pasku narzędzi, które zmienia jedno i drugie i mogłoby po cichu
- * zmienić sens testu. Bezpieczne do powtórzenia i do wywołania tam, gdzie zakładka
- * już jest otwarta albo gdzie panelu w ogóle nie ma.
+ * Bezpieczne do powtórzenia i do wywołania tam, gdzie paska narzędzi nie widać
+ * (np. schowany w pełnym ekranie) — wtedy nic nie robi.
  */
 export async function otworzKatalogElementow(page: Page): Promise<void> {
-  const zakladka = page.getByRole("button", { name: "Elementy", exact: true });
+  const narzedzie = page.getByRole("button", { name: "Wstaw Element", exact: true });
   try {
-    await zakladka.waitFor({ state: "visible", timeout: 2000 });
-    await zakladka.click();
+    await narzedzie.waitFor({ state: "visible", timeout: 2000 });
+    await narzedzie.click();
   } catch {
-    // panel zwinięty albo widok bez panelu — nie ma czego otwierać
+    // pasek narzędzi schowany — nie ma czego otwierać
   }
 }
 

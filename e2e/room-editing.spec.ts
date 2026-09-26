@@ -19,7 +19,7 @@ async function openPlan(page: import("@playwright/test").Page) {
 }
 
 async function roomCount(page: import("@playwright/test").Page) {
-  const label = await page.getByRole("button", { name: /Pomieszczenia \(\d+\)/ }).textContent();
+  const label = await page.getByTestId("liczba-pomieszczen").textContent();
   return Number(label!.match(/\((\d+)\)/)![1]);
 }
 

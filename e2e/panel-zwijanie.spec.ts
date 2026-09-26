@@ -3,14 +3,15 @@ import { test, expect, type Page } from "@playwright/test";
 import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
 
 /**
- * Zwijanie panelu bocznego (Elementy / Pomieszczenia).
+ * Zwijanie panelu bocznego.
  *
- * Rozważaliśmy wariant, w którym panel pojawia się WYŁĄCZNIE przy narzędziach
- * „Wstaw Element" i „Narysuj Pomieszczenie". Odrzucony, bo biblioteka elementów
- * jest punktem STARTU (kliknięcie elementu samo włącza narzędzie), a domyślnym
- * trybem jest „Zaznacz" — nowy użytkownik zobaczyłby pusty plan bez śladu po
- * katalogu. Stąd: zwijanie ręczne z zapamiętaniem, automatyczne rozwijanie przy
- * sięgnięciu po narzędzie, i NIGDY automatyczne zamykanie.
+ * Panel pokazuje opcje WYBRANEGO narzędzia (patrz `NaglowekNarzedzia`), a katalog
+ * elementów należy do „Wstaw Element". Wcześniej panel miał stałe zakładki
+ * „Elementy / Pomieszczenia", a wariant „panel idzie za narzędziem" był odrzucony
+ * z obawy, że nowy użytkownik w domyślnym „Zaznacz" nie zobaczy śladu po katalogu.
+ * Tę obawę pokrywa podpowiedź „Zaznacz" na pustej kondygnacji — z przyciskiem
+ * „Postaw pierwszy element". Zostaje: zwijanie ręczne z zapamiętaniem, rozwijanie przy
+ * sięgnięciu po narzędzie z własną treścią, i NIGDY automatyczne zamykanie.
  */
 
 function biblioteka(page: Page) {
@@ -24,12 +25,10 @@ test("panel jest domyślnie widoczny — katalog nie jest schowany przed nowym u
   await skipEntryScreen(page);
 
   // Panel JEST rozwinięty od razu — i to jest treść tej decyzji (patrz nagłówek pliku).
-  // Od kroku 84 na pustej kondygnacji otwiera się na „Pomieszczeniach", bo osprzętu nie
-  // ma tam jeszcze gdzie postawić — ale obie zakładki stoją na wierzchu, więc katalog
-  // nie jest ani schowany, ani niewidoczny: jest jedno kliknięcie stąd.
-  await expect(page.getByRole("button", { name: "Elementy", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Pomieszczenia/ })).toBeVisible();
-  await otworzKatalogElementow(page);
+  // Na pustej kondygnacji „Zaznacz" pokazuje drogę startu, a katalog jest jedno
+  // kliknięcie stąd.
+  await expect(page.getByTestId("panel-zaznacz")).toBeVisible();
+  await page.getByRole("button", { name: "Postaw pierwszy element" }).click();
   await expect(biblioteka(page)).toBeVisible();
 });
 
@@ -62,8 +61,8 @@ test("zwinięcie panelu przeżywa odświeżenie strony", async ({ page }) => {
 
   await page.reload();
   await skipEntryScreen(page);
-  await otworzKatalogElementow(page);
-  await expect(biblioteka(page)).toHaveCount(0);
+  // Bez sięgania po „Wstaw Element" — to narzędzie samo rozwija panel (patrz test niżej).
+  await expect(page.getByTestId("naglowek-narzedzia")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Pokaż panel boczny" })).toBeVisible();
 });
 
@@ -80,14 +79,14 @@ test("„Wstaw Element” rozwija zwinięty panel, ale inne narzędzia go nie za
   await page.getByRole("button", { name: "Wstaw Element", exact: true }).click();
   await expect(biblioteka(page)).toBeVisible();
 
-  // Sedno decyzji projektowej: narzędzie rysujące ściany NIE chowa biblioteki.
-  // Automatyczne zamykanie zabierałoby ją dokładnie wtedy, gdy jest potrzebna —
-  // zaraz po narysowaniu pomieszczenia stawia się w nim gniazdka.
+  // Inne narzędzie zmienia TREŚĆ panelu, ale go nie zwija — panel zostaje na miejscu,
+  // z opcjami tego narzędzia.
   await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
-  await expect(biblioteka(page)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Zwiń panel boczny" })).toBeVisible();
+  await expect(page.getByTestId("naglowek-narzedzia")).toContainText("Narysuj Ścianę");
 
   await page.getByRole("button", { name: "Przesuń widok", exact: true }).click();
-  await expect(biblioteka(page)).toBeVisible();
+  await expect(page.getByTestId("panel-przesun")).toBeVisible();
 });
 
 test("„Narysuj Pomieszczenie” też rozwija zwinięty panel", async ({ page }) => {
@@ -101,7 +100,7 @@ test("„Narysuj Pomieszczenie” też rozwija zwinięty panel", async ({ page }
   await expect(biblioteka(page)).toHaveCount(0);
 
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
-  await expect(page.getByRole("button", { name: /^Pomieszczenia \(/ })).toBeVisible();
+  await expect(page.getByTestId("liczba-pomieszczen")).toBeVisible();
 });
 
 test("zwijanie panelu nie przesuwa rysunku w widoku standardowym", async ({ page }) => {

@@ -95,24 +95,34 @@ test.describe("Cofnij w trakcie rysowania", () => {
   });
 });
 
-test("zakładka panelu podąża za wybranym narzędziem", async ({ page }) => {
+/**
+ * Panel obok paska pokazuje WYŁĄCZNIE opcje wybranego narzędzia.
+ *
+ * Wcześniej stały tam zawsze zakładki „Elementy / Pomieszczenia", więc po wybraniu
+ * drzwi, przesuwania widoku czy kalibracji pod ich opcjami dalej wisiał katalog od
+ * poprzedniego wyboru — wyglądało to tak, jakby menu nie reagowało na pasek.
+ */
+test("panel pokazuje opcje wybranego narzędzia, a katalog tylko przy „Wstaw Element”", async ({ page }) => {
   await pustyProjekt(page);
   await zacznijRysowacRecznie(page);
+  const naglowek = page.getByTestId("naglowek-narzedzia");
+  const katalog = page.getByPlaceholder("Szukaj elementu…");
 
-  // Kolor aktywnej zakładki (`#2D5A8C` — niebieski akcent) jest ustawiany inline
-  // przez `style`, więc sprawdzamy go wprost, a nie po samej obecności elementu.
-  const NIEBIESKI = /rgb\(45,\s*90,\s*140\)/;
-
-  // Realna, DOSTĘPNOŚCIOWA nazwa przycisku na pasku narzędzi to treść „Narysuj
-  // Pomieszczenie” — „Obrysuj pomieszczenie” jest tylko podpowiedzią (`title`), a osobno
-  // istnieje TAKI SAM napis jako CTA listy startowej („Zacznij w 3 krokach”), która i tak
-  // już poprawnie przełącza zakładkę (`handleStepAction`, nietknięte tym fixem). Trzeba
-  // trafić w przycisk PASKA, żeby test sprawdzał to, co miał sprawdzać.
-  await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
-  await expect(page.getByRole("button", { name: /^Pomieszczenia/ })).toHaveCSS("color", NIEBIESKI);
-
-  await page.getByRole("button", { name: "Wstaw Element" }).click();
-  await expect(page.getByRole("button", { name: "Elementy", exact: true })).toHaveCSS("color", NIEBIESKI);
+  const narzedzia: [string, (() => Promise<void>) | null][] = [
+    ["Zaznacz", async () => { await expect(page.getByTestId("panel-zaznacz")).toBeVisible(); }],
+    ["Wstaw Element", async () => { await expect(katalog).toBeVisible(); }],
+    ["Narysuj Pomieszczenie", async () => { await expect(page.getByTestId("liczba-pomieszczen")).toBeVisible(); }],
+    ["Narysuj Ścianę", async () => { await expect(page.getByText("Grubość:")).toBeVisible(); }],
+    ["Drzwi i okna", async () => { await expect(page.getByText("Rodzaj:")).toBeVisible(); }],
+    ["Przesuń widok", async () => { await expect(page.getByTestId("panel-przesun")).toBeVisible(); }],
+    ["Kalibracja skali", null],
+  ];
+  for (const [nazwa, sprawdz] of narzedzia) {
+    await page.getByRole("button", { name: nazwa, exact: true }).first().click();
+    await expect(naglowek, nazwa).toContainText(nazwa);
+    if (sprawdz) await sprawdz();
+    if (nazwa !== "Wstaw Element") await expect(katalog, `katalog przy „${nazwa}"`).toHaveCount(0);
+  }
 });
 
 test("element da się przeciągnąć w narzędziu „Wstaw element”, bez przełączania na „Zaznacz”", async ({ page }) => {

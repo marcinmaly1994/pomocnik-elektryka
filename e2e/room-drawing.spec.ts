@@ -21,9 +21,9 @@ async function openPlan(page: import("@playwright/test").Page) {
   return box;
 }
 
-/** Liczba pomieszczeń wg zakładki „Pomieszczenia (N)" w bibliotece. */
+/** Liczba pomieszczeń wg licznika „Pomieszczenia (N)" w panelu narzędzia „Narysuj Pomieszczenie". */
 async function roomCount(page: import("@playwright/test").Page) {
-  const label = await page.getByRole("button", { name: /Pomieszczenia \(\d+\)/ }).textContent();
+  const label = await page.getByTestId("liczba-pomieszczen").textContent();
   return Number(label!.match(/\((\d+)\)/)![1]);
 }
 

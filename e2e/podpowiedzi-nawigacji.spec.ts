@@ -148,7 +148,8 @@ test("bez wgranego rzutu podpowiedź nie zaczepia — na pustej kratce nie ma cz
   await page.getByRole("button", { name: "Instalacja" }).click();
   await page.getByRole("button", { name: "Pomiń — zacznę na pustym planie" }).click();
 
-  await expect(page.getByRole("button", { name: /Narysuj pomieszczenie/ }).first()).toBeVisible();
+  // Edytor już stoi — panel narzędzi z nagłówkiem bieżącego narzędzia.
+  await expect(page.getByTestId("naglowek-narzedzia")).toBeVisible();
   await expect(dymek(page)).toHaveCount(0);
 });
 
