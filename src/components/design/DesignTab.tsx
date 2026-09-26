@@ -58,6 +58,7 @@ import {
   ROOM_TYPE_LABELS,
   WALL_SNAP_TOLERANCE_M,
   waskiEkran,
+  MIN_WYS_PLOTNA,
   contentBounds,
   kadrOtwarcia,
   zoomSkaliRysowania,
@@ -681,6 +682,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * patrz efekt dopasowania niżej.
    */
   const [wysZmierzona, setWysZmierzona] = useState(false);
+  /** Czy płótno liczy się od początku edytora (telefon albo niskie okno) — patrz
+   *  `przelicz` w efekcie wysokości. Czytane przez efekty przewijania do edytora. */
+  const odEdytoraRef = useRef(false);
   /** Szerokość dostępna dla płótna — mierzona razem z dopasowaniem powiększenia.
    *  Razem z `wysPlotna` wyznacza OKNO widoku, które dostaje płótno. */
   const [dostepnaSzer, setDostepnaSzer] = useState(0);
@@ -1090,23 +1094,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           banery += box.height + parseFloat(getComputedStyle(brat).marginTop || "0");
         }
         gora = kolumna.getBoundingClientRect().top + window.scrollY - banery;
-        /**
-         * Na TELEFONIE liczymy od początku EDYTORA, nie od góry strony.
-         *
-         * Nad edytorem stoi tam 185 px nagłówka i paska etapów (więcej z banerami),
-         * a przy wejściu do edytora strona i tak przewija się do niego (patrz efekt
-         * `pokazRysunek` niżej). Liczone od góry strony płótno dostawało 360 px —
-         * dolną granicę — choć po przewinięciu na ekranie mieściło się prawie dwa
-         * razy tyle. Nagłówek zostaje osiągalny przewinięciem w górę.
-         */
-        //
-        // Od samego OKNA płótna, nie od kolumny: nad płótnem w kolumnie stoją kontrolki
-        // narzędzia (np. grubość ściany), a na telefonie każde 50 px nad płótnem to
-        // pasek stanu z „Dalej" wypchnięty za dolną krawędź ekranu.
-        if (waskiEkran()) {
-          const okno = kolumna.querySelector<HTMLElement>("[data-plan-okno]") ?? kolumna;
-          gora = okno.getBoundingClientRect().top - korzenEdytora.getBoundingClientRect().top;
-        }
       }
       // SAM pasek stanu — REZERWUJEMY mu miejsce, żeby nie wypadł pod zgięcie. Niesie
       // powierzchnię, skalę, stan zapisu i przycisk kolejnego kroku; rysowanie bez ani
@@ -1125,6 +1112,29 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           parseFloat(getComputedStyle(pasekStanu).marginTop || "0") +
           ZAPAS_POD_PLOTNEM
         : ZAPAS_POD_PLOTNEM;
+      /**
+       * Liczymy od początku EDYTORA, nie od góry strony — na TELEFONIE zawsze, a na
+       * większym ekranie wtedy, gdy okno jest za NISKIE, żeby liczenie od góry strony
+       * dało płótnu choćby dolną granicę wysokości.
+       *
+       * Nad edytorem stoją nagłówek, pasek etapów i banery. Na telefonie to 185 px
+       * i więcej, a na laptopie 1024×768 czy 1280×720 — tyle, że płótno dostawało
+       * 360 px (dolną granicę), a pasek stanu z „Dalej" lądował pod krawędzią ekranu.
+       * Przy wejściu do edytora strona w tym trybie przewija się do niego (patrz efekty
+       * `pokazRysunek` i powrotu na zakładkę niżej), więc płótno liczone od edytora
+       * mieści się razem z paskiem stanu. Nagłówek zostaje osiągalny przewinięciem.
+       *
+       * Od samego OKNA płótna, nie od kolumny: nad płótnem w kolumnie stoją kontrolki
+       * narzędzia (np. grubość ściany), a każde 50 px nad płótnem to pasek stanu
+       * wypchnięty za dolną krawędź ekranu.
+       */
+      const odEdytora =
+        !pelnyEkran && gora !== null && (waskiEkran() || window.innerHeight - gora - zapasPod < MIN_WYS_PLOTNA);
+      odEdytoraRef.current = odEdytora;
+      if (odEdytora && kolumna && korzenEdytora) {
+        const okno = kolumna.querySelector<HTMLElement>("[data-plan-okno]") ?? kolumna;
+        gora = okno.getBoundingClientRect().top - korzenEdytora.getBoundingClientRect().top;
+      }
       const nowa = pelnyEkran
         ? Math.max(320, window.innerHeight - 16 - zajetePionowo)
         : wysokoscPlotna(gora, window.innerHeight, zapasPod);
@@ -1185,7 +1195,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     const bylZasloniety = edytorZaslonietyRef.current;
     edytorZaslonietyRef.current = zaslonietyTeraz;
     if (!bylZasloniety || zaslonietyTeraz) return;
-    if (!waskiEkran()) return;
+    if (!odEdytoraRef.current) return;
     // Po zamontowaniu kolumny, nie w tej samej klatce co zmiana stanu — inaczej
     // przewijalibyśmy do elementu, który jeszcze nie ma swojej wysokości.
     //
@@ -1232,7 +1242,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     const licznik = licznikNawigacji();
     if (licznik === ostatniaObsluzonaNawigacja) return;
     ostatniaObsluzonaNawigacja = licznik;
-    if (!waskiEkran() || edytorZaslonietyRef.current) return;
+    if (!odEdytoraRef.current || edytorZaslonietyRef.current) return;
     window.requestAnimationFrame(() => pelnyEkranRef.current?.scrollIntoView({ block: "start" }));
   }, []);
 
