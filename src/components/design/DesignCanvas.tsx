@@ -1050,6 +1050,16 @@ export function DesignCanvas({
       ...zajetePrzezRysunek,
       ...Array.from(opisyPomieszczen.values(), (o) => o.zajete),
     ];
+    /** Ściany i obrysy pomieszczeń (też rysowane jak mur) — podpis nie ma leżeć na
+     *  murze. W przykładzie „strefy: umywalka" stała dokładnie na linii ściany łazienki. */
+    const mury = [
+      ...walls.flatMap((w) =>
+        w.points.slice(1).map((b, i) => ({ a: w.points[i], b, grubosc: w.thickness ?? DEFAULT_WALL_THICKNESS }))
+      ),
+      ...roomShapes.flatMap((r) =>
+        r.points.map((a, i) => ({ a, b: r.points[(i + 1) % r.points.length], grubosc: grubosciObrysu }))
+      ),
+    ];
     const wynik = new Map<string, { x: number; y: number; tekst: string }>();
     for (const z of zones) {
       const tekst = `strefy: ${z.label}${!z.calibrated ? " (bez skali)" : ""}`;
@@ -1074,6 +1084,7 @@ export function DesignCanvas({
         przeszkody: zajete,
         obrys: pokoj?.points,
         wolnoZaObrys: true,
+        odcinki: mury,
         kandydaci: [
           // Nad strefą i pod nią, potem przy jej krawędziach od środka — i na końcu po bokach.
           { x: wPoziomie(z.x), y: z.y - zasieg - 14 * so },
@@ -1091,7 +1102,7 @@ export function DesignCanvas({
       wynik.set(z.id, { ...miejsce, tekst });
     }
     return wynik;
-  }, [zones, so, roomShapes, zajetePrzezRysunek, opisyPomieszczen]);
+  }, [zones, so, roomShapes, zajetePrzezRysunek, opisyPomieszczen, walls, grubosciObrysu]);
 
   function withSnap(p: Point): Point {
     return snapOn ? { x: snap(p.x, krok), y: snap(p.y, krok) } : p;

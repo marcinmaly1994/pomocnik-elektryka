@@ -302,3 +302,37 @@ describe("miejsce na opis — pokój w kształcie L", () => {
     expect(blok.y2).toBeLessThanOrEqual(120);
   });
 });
+
+describe("miejsce na opis — ściany", () => {
+  const blok = { lewo: 15, prawo: 15, gora: 0, dol: 5 };
+
+  it("napis nie staje na ścianie, choć nic innego go tam nie zasłania", () => {
+    // Pozioma ściana na y = 40 przechodzi dokładnie przez kotwicę.
+    const sciana = { a: { x: 0, y: 40 }, b: { x: 100, y: 40 }, grubosc: 4 };
+    const p = miejsceNaOpis({
+      kotwica: { x: 50, y: 38 },
+      blok,
+      przeszkody: [],
+      odcinki: [sciana],
+      kandydaci: [
+        { x: 50, y: 39 },
+        { x: 50, y: 50 },
+      ],
+    });
+    // Blok (y..y+5) nie może dotykać pasa muru 38..42.
+    expect(p.y >= 42 || p.y + 5 <= 38).toBe(true);
+  });
+
+  it("ukośna ściana blokuje tylko to, co naprawdę przecina", () => {
+    // Skos z (0,0) do (100,100) — prostokąt otaczający objąłby cały kwadrat.
+    const sciana = { a: { x: 0, y: 0 }, b: { x: 100, y: 100 }, grubosc: 2 };
+    const p = miejsceNaOpis({
+      kotwica: { x: 80, y: 10 },
+      blok,
+      przeszkody: [],
+      odcinki: [sciana],
+    });
+    // Róg daleko od skosu jest wolny — kotwica zostaje.
+    expect(p).toEqual({ x: 80, y: 10 });
+  });
+});

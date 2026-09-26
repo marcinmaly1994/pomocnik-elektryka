@@ -152,6 +152,9 @@ export function miejsceNaOpis(opcje: {
   przeszkody: ZajeteMiejsce[];
   /** Obrys, w którym opis ma zostać; bez niego dowolne miejsce. */
   obrys?: { x: number; y: number }[];
+  /** Ściany jako odcinki z grubością — napis nie może na nich leżeć. Odcinki, a nie
+   *  prostokąty: prostokąt otaczający UKOŚNĄ ścianę zablokowałby pół pokoju. */
+  odcinki?: { a: { x: number; y: number }; b: { x: number; y: number }; grubosc: number }[];
   /** Czy wolne miejsce ZA obrysem wygrywa z zasłoniętym w obrysie — patrz koniec funkcji. */
   wolnoZaObrys?: boolean;
   /** Miejsca do sprawdzenia po kotwicy; bez nich — siatka przesunięć co `krok`. */
@@ -159,7 +162,7 @@ export function miejsceNaOpis(opcje: {
   krok?: number;
   krokow?: number;
 }): { x: number; y: number } {
-  const { kotwica, blok, przeszkody, obrys, krok = 0, krokow = 4 } = opcje;
+  const { kotwica, blok, przeszkody, obrys, krok = 0, krokow = 4, odcinki = [] } = opcje;
 
   const zaslonieta = (x: number, y: number) => {
     const x1 = x - blok.lewo;
@@ -171,6 +174,13 @@ export function miejsceNaOpis(opcje: {
       const w = Math.min(x2, p.x2) - Math.max(x1, p.x1);
       const h = Math.min(y2, p.y2) - Math.max(y1, p.y1);
       if (w > 0 && h > 0) pole += w * h;
+    }
+    // Ściana przecinająca napis liczy się jak PEŁNE zasłonięcie: napis na murze jest
+    // nieczytelny tak samo jak pod symbolem, a „najmniej zasłonięte" miejsce nie może
+    // wygrać tylko dlatego, że mur jest cieńszy od symbolu.
+    for (const o of odcinki) {
+      const g = o.grubosc / 2;
+      if (odcinekPrzecinaProstokat(o.a, o.b, x1 - g, y1 - g, x2 + g, y2 + g)) pole += (x2 - x1) * (y2 - y1);
     }
     return pole;
   };
@@ -222,4 +232,43 @@ export function przesunieciaWokol(p: { x: number; y: number }, krok: number, kro
   const ranga = ({ i, j }: { i: number; j: number }) => (i === 0 ? 0 : j === 0 ? 1 : 2);
   siatka.sort((a, b) => Math.hypot(a.i, a.j) - Math.hypot(b.i, b.j) || ranga(a) - ranga(b) || b.j - a.j || b.i - a.i);
   return siatka.map(({ i, j }) => ({ x: p.x + i * krok, y: p.y + j * krok }));
+}
+
+/**
+ * Czy odcinek ab przecina prostokąt [x1, x2] × [y1, y2] (albo w nim leży).
+ * Obcinanie Lianga–Barsky'ego: parametr t przesuwa się po odcinku, a każda krawędź
+ * prostokąta zawęża przedział, w którym odcinek jest wewnątrz.
+ */
+function odcinekPrzecinaProstokat(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): boolean {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  let t0 = 0;
+  let t1 = 1;
+  for (const [p, q] of [
+    [-dx, a.x - x1],
+    [dx, x2 - a.x],
+    [-dy, a.y - y1],
+    [dy, y2 - a.y],
+  ]) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return false;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return false;
+      if (r < t1) t1 = r;
+    }
+  }
+  return true;
 }
