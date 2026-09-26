@@ -31,8 +31,8 @@ test("Rozdzielnica: „Cofnij”/„Ponów” działają niezależnie od cofania
   await expect(cofnij).toBeEnabled();
 
   // Kasowanie aparatu (nie głównego) — pierwszy wiersz na liście, który ma kosz.
-  const wiersze = page.locator("div.flex.items-center.gap-2.rounded-md.border");
-  await wiersze.nth(1).locator("button").last().click();
+  // Po etykiecie, nie po klasach wiersza — te zmieniają się razem z układem.
+  await page.getByRole("button", { name: /^Usuń aparat / }).first().click();
   await expect(page.getByRole("heading", { name: "Aparaty (2)" })).toBeVisible();
 
   // To jest sedno zgłoszenia: cofnięcie POJEDYNCZEGO kasowania, bez utraty reszty

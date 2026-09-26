@@ -61,7 +61,9 @@ test("pasek edytora to jeden rząd z widocznym powiększeniem", async ({ page })
   await pomiar(page);
   const powiekszenie = (await page.getByRole("button", { name: /Powiększenie \d+ procent/ }).boundingBox())!;
   const plan = (await page.getByRole("button", { name: "Plan", exact: true }).boundingBox())!;
-  expect(Math.abs(powiekszenie.y - plan.y)).toBeLessThan(10);
+  // Środki w pionie, nie górne krawędzie: na dotyku przyciski powiększenia mają 44 px,
+  // więc w tym samym rzędzie ich góra leży wyżej niż góra niższego „Plan".
+  expect(Math.abs(powiekszenie.y + powiekszenie.height / 2 - (plan.y + plan.height / 2))).toBeLessThan(10);
   expect(powiekszenie.x + powiekszenie.width).toBeLessThanOrEqual(375);
 });
 

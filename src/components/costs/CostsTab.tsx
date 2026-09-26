@@ -371,7 +371,8 @@ export function CostsTab() {
                         onClick={() => setQtyOverride(r.key, null)}
                         aria-label={`Przywróć ilość z rzutu: ${r.label}`}
                         title="Wróć do ilości oszacowanej z rzutu"
-                        className={`rounded p-0.5 text-slate-400 hover:text-ink ${r.qtyOverridden ? "" : "invisible"}`}
+                        // Na dotyku 32 × 44 px — szerzej zjadałoby pole ilości w karcie na telefonie.
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.qtyOverridden ? "" : "invisible"}`}
                       >
                         <X size={13} />
                       </button>
@@ -425,7 +426,7 @@ export function CostsTab() {
                         onClick={() => setCostOverride(r.key, null)}
                         aria-label={`Przywróć liczoną wartość: ${r.label}`}
                         title="Wróć do liczenia ilość × cena"
-                        className={`rounded p-0.5 text-slate-400 hover:text-ink ${r.overridden ? "" : "invisible"}`}
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.overridden ? "" : "invisible"}`}
                       >
                         <X size={13} />
                       </button>
