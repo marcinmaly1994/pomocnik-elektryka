@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Eye, FileText, Minus, Plus, Scan } from "lucide-react";
+import { Download, Eye, FileText } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { downloadBlob, downloadPdfBytes, projectFileName } from "@/lib/pdf/download";
 import { buildDrawingDoc } from "@/lib/pdf/drawing";
@@ -14,8 +14,9 @@ import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits } from "@/lib/panel/project";
 import { buildPanelDevices, PHASE_COLORS } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
-import { PROG_WASKIEGO_EKRANU } from "@/lib/design";
+import { waskiEkran } from "@/lib/design";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
+import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
 
 const MUTED = "#6B7684";
 
@@ -763,45 +764,12 @@ function OknoRysunku({
   svgRef: React.RefObject<SVGSVGElement>;
   children: React.ReactNode;
 }) {
-  const wasko = typeof window !== "undefined" && window.innerWidth < PROG_WASKIEGO_EKRANU;
+  // Media query, nie `innerWidth` — patrz `waskiEkran`.
+  const wasko = waskiEkran();
   const p = usePowiekszanieRysunku(szerokosc, wasko);
-  const przycisk = "rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30";
   return (
     <div className="space-y-2">
-      <div className="flex justify-end">
-        <div className="flex items-center gap-0.5 rounded-lg border border-border bg-white p-0.5">
-          <button
-            onClick={p.pomniejsz}
-            disabled={p.zoom <= p.min + 1e-6}
-            aria-label="Pomniejsz schemat"
-            title="Pomniejsz schemat"
-            className={przycisk}
-          >
-            <Minus size={14} />
-          </button>
-          <button
-            onClick={p.naturalny}
-            title="Przywróć naturalny rozmiar"
-            aria-label={`Powiększenie schematu ${Math.round(p.zoom * 100)} procent — kliknij, aby przywrócić 100%`}
-            className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600"
-          >
-            {Math.round(p.zoom * 100)}%
-          </button>
-          <button
-            onClick={p.powieksz}
-            disabled={p.zoom >= p.max - 1e-6}
-            aria-label="Powiększ schemat"
-            title="Powiększ schemat"
-            className={przycisk}
-          >
-            <Plus size={14} />
-          </button>
-          <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
-          <button onClick={p.dopasuj} aria-label="Dopasuj schemat do szerokości" title="Dopasuj schemat do szerokości" className={przycisk}>
-            <Scan size={13} />
-          </button>
-        </div>
-      </div>
+      <PrzyciskiPowiekszenia p={p} nazwa={{ dopelniacz: "schematu", biernik: "schemat" }} />
       <div
         ref={p.kontenerRef}
         data-testid="schemat-okno"

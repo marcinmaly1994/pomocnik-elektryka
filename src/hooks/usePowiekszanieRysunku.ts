@@ -139,6 +139,8 @@ export function usePowiekszanieRysunku(szerRysunku: number, dopasujNaStarcie: bo
     powieksz: () => ustaw(zoom * 1.25),
     pomniejsz: () => ustaw(zoom / 1.25),
     dopasuj: () => setReczny(dopasowany),
+    /** Powiększony ponad dopasowanie — czyli jest co przewijać w bok. */
+    powiekszony: zoom > dopasowany + 1e-6,
     naturalny: () => setReczny(1),
   };
 }
