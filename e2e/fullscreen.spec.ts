@@ -449,3 +449,40 @@ test("pasek edytora trzyma wszystkie ustawienia planu w JEDNEJ karcie", async ({
   await expect(page.getByLabel("Przyciągaj do siatki")).toBeVisible();
   await expect(page.getByLabel("Rozmiar elementów")).toBeVisible();
 });
+
+/**
+ * Pełny ekran: pasek stanu POD rzutem, rzut na całą szerokość i dopasowany.
+ *
+ * Zmierzone przed poprawką przy 1440 × 900: pasek stanu przypięty do dołu kolumny płótna
+ * leżał na rzucie (722–811 px), a zarezerwowany dla niego pas 811–900 był pusty; płótno
+ * zostawało w szerokości sprzed wejścia (1031 zamiast ~1422 px), a rzut w powiększeniu
+ * sprzed wejścia — mimo komentarza, który obiecywał ponowne dopasowanie.
+ */
+test("pełny ekran: pasek stanu pod rzutem, rzut na całą szerokość i dopasowany", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
+  await page.getByRole("button", { name: /Mieszkanie 70 m²/ }).click();
+  await expect(page.locator("[data-plan-okno]")).toBeVisible();
+  await page.waitForTimeout(800);
+  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await page.waitForTimeout(1200);
+
+  const plotno = (await page.locator("[data-plan-okno]").boundingBox())!;
+  const stan = (await page.getByLabel("Stan projektu").boundingBox())!;
+  expect(stan.y, "pasek stanu ma stać pod rzutem, nie na nim").toBeGreaterThanOrEqual(plotno.y + plotno.height);
+  expect(plotno.x + plotno.width).toBeLessThanOrEqual(1440);
+  expect(plotno.width).toBeGreaterThan(1300);
+
+  const { tresc, wys } = await page.evaluate(() => {
+    const st = (window as unknown as {
+      Konva: { stages: { height(): number; getLayers(): { getClientRect(): { y: number; height: number } }[] }[] };
+    }).Konva.stages[0];
+    const w = st.getLayers();
+    return { tresc: w[w.length - 1].getClientRect(), wys: st.height() };
+  });
+  expect(tresc.y).toBeGreaterThanOrEqual(-2);
+  expect(tresc.y + tresc.height).toBeLessThanOrEqual(wys + 2);
+});
