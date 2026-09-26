@@ -3,6 +3,7 @@ import { formatLiczba } from "@/lib/liczby";
 import { AlertTriangle, ArrowLeft, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
+import { buildPanelDevices } from "@/lib/panel/devices";
 import { computeSizedCircuits, lowVoltageLengths, routeSummaries } from "@/lib/panel/project";
 import { ZAPAS_MONTAZOWY_M } from "@/lib/panel/norms";
 import { computeCosts, kosztorysRows, parsePriceCsv, podsumowanieKosztorysu, VAT_RATE } from "@/lib/costs";
@@ -74,13 +75,30 @@ export function CostsTab() {
   /** Niskoprądówka łączy się GWIAZDĄ — każdy punkt własnym kablem — więc liczy się
    *  osobno od obwodów (patrz `lowVoltageLengths`). `null` = nie ma od czego mierzyć. */
   const niskopradowe = useMemo(() => lowVoltageLengths(elements, opcjeDoboru), [elements, opcjeDoboru]);
+  /**
+   * Aparaty z ROZDZIELNICY — ta sama reguła co w schemacie: zapisana rozdzielnica,
+   * a jeśli jej jeszcze nie ma, odbudowana z obwodów. Dzięki temu kosztorys wycenia to,
+   * co użytkownik ma w Rozdzielnicy (usunięte aparaty, dołożony SPD, stycznik…),
+   * a nie osobno odtworzoną kopię.
+   *
+   * Sam rozłącznik główny (i zaślepki) bez żadnego obwodu to jeszcze nie rozdzielnica —
+   * inaczej pusty projekt, na którym ktoś tylko zajrzał do Rozdzielnicy, dostawałby
+   * rachunek za obudowę i rozłącznik (ten sam problem co dawna widmowa puszka).
+   */
+  const panelDevices = useProjectStore((s) => s.panelDevices);
+  const panelConfig = useProjectStore((s) => s.panelConfig);
+  const aparaty = useMemo(() => {
+    const zapisane = panelDevices.length ? panelDevices : circuits.length ? buildPanelDevices(rcdGroups, panelConfig) : [];
+    return circuits.length || zapisane.some((d) => d.kind !== "main" && d.kind !== "blank") ? zapisane : [];
+  }, [panelDevices, circuits, rcdGroups, panelConfig]);
   const { quantities, cableLengthSource } = useMemo(
     () =>
       computeCosts(elements, circuits, rcdGroups, {
         routeLengthsM: new Map([...trasy].map(([id, r]) => [id, r.totalM])),
         lvLengthsM: niskopradowe ?? undefined,
+        aparaty,
       }),
-    [elements, circuits, rcdGroups, trasy, niskopradowe]
+    [elements, circuits, rcdGroups, trasy, niskopradowe, aparaty]
   );
 
   const rows = kosztorysRows(quantities, prices, costOverrides, qtyOverrides);

@@ -445,3 +445,43 @@ describe("computeCosts — gniazdo podwójne", () => {
     expect(quantities.wlacznik).toBe(2);
   });
 });
+
+describe("computeCosts — aparaty z rozdzielnicy", () => {
+  const ap = (kind: string, poles = "1P") => ({ uid: kind + Math.random(), kind, tag: "", modules: 1, label: "", caption: "", poles });
+
+  it("wycenia to, co jest w rozdzielnicy, a nie obwody z rzutu", () => {
+    // Rzut ma dwa obwody, ale w Rozdzielnicy jeden wyłącznik usunięto.
+    const obwod = (id: string): Circuit => ({
+      id, name: id, type: "gniazdko", elements: [], breaker: "B16", cable: "YDYp 3x2,5 mm²", rcdGroup: "a",
+    } as unknown as Circuit);
+    const q = computeCosts([], [obwod("a"), obwod("b")], [], {
+      aparaty: [ap("main", "4P"), ap("rcd", "4P"), ap("mcb")],
+    }).quantities;
+    expect(q.mcb).toBe(1);
+    expect(q.rcd).toBe(1);
+    expect(q.glowny).toBe(1);
+    expect(q.rozdzielnica).toBe(1);
+  });
+
+  it("wyłącznik 3P idzie do pozycji 3-fazowej", () => {
+    const q = computeCosts([], [], [], { aparaty: [ap("mcb", "3P"), ap("mcb", "1P")] }).quantities;
+    expect(q.mcb3f).toBe(1);
+    expect(q.mcb).toBe(1);
+  });
+
+  it("aparaty dokładane ręcznie mają własne pozycje — bez ceny, więc na liście „uzupełnij”", () => {
+    const q = computeCosts([], [], [], { aparaty: [ap("spd", "4P"), ap("spdFuse"), ap("stycznik"), ap("lampka")] }).quantities;
+    expect([q.spd, q.spdFuse, q.stycznik, q.lampka]).toEqual([1, 1, 1, 1]);
+    const rows = kosztorysRows(q, DEFAULT_PRICES);
+    expect(pozycjeBezCeny(rows)).toEqual(
+      expect.arrayContaining(["Ogranicznik przepięć SPD", "Stycznik modułowy", "Lampka sygnalizacyjna"])
+    );
+  });
+
+  it("bez aparatów — zachowanie jak dotąd (z obwodów)", () => {
+    const obwod = { id: "a", name: "a", type: "gniazdko", elements: [], breaker: "B16", cable: "YDYp 3x2,5 mm²" } as unknown as Circuit;
+    const q = computeCosts([], [obwod], [{ id: "r", circuits: [obwod] } as unknown as RcdGroup]).quantities;
+    expect(q.mcb).toBe(1);
+    expect(q.rcd).toBe(1);
+  });
+});
