@@ -119,7 +119,7 @@ import { PlanCheckPanel } from "./PlanCheckPanel";
 import { QuantitiesPanel } from "./QuantitiesPanel";
 import { EditElementModal } from "./EditElementModal";
 import type Konva from "konva";
-import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
+import { ELEMENT_TYPES, libSubtitle, VARIANTS_FOR } from "@/lib/elements";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
 import { buildDrawingDoc, hexNaRgb, KLUCZ_TRAS } from "@/lib/pdf/drawing";
 import type { PdfDoc } from "@/lib/pdf/engine";
@@ -2115,6 +2115,61 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * definicja, żeby te same kontrolki (grubość ściany, kształt pomieszczenia,
    * kalibracja skali…) nie rozjechały się przypadkiem między dwiema kopiami JSX.
    */
+  /**
+   * Pigułka „Wstawiasz: …" — na TELEFONIE, gdy biblioteka elementów jest zwinięta.
+   *
+   * Biblioteka stoi tam NAD rzutem i zajmuje ekran: rzut miał wtedy 360 px i zaczynał
+   * się ponad 530 px od góry, więc każde gniazdko to było przewinięcie w dół (postaw)
+   * i w górę (wybierz następne). Po wybraniu elementu biblioteka się zwija, a to, co
+   * dało się w niej ustawić dla wybranego elementu — liczba gniazd, „Dedykowane (AGD)"
+   * — przechodzi tutaj, razem z drogą powrotną („Zmień").
+   *
+   * Tylko przy ZWINIĘTYM panelu: przy rozwiniętym te same kontrolki są w bibliotece
+   * i dwie kopie dałyby dwa pola o tej samej nazwie.
+   */
+  const aktywnyTyp = wstawianie.activeType;
+  const warianty = aktywnyTyp ? VARIANTS_FOR[aktywnyTyp] : undefined;
+  const pigulkaWstawiania =
+    !szerokieOkno && !pelnyEkran && panelZwiniety && toolMode === "elementy" && aktywnyTyp ? (
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
+        <span className="font-medium text-slate-600">Wstawiasz: {ELEMENT_TYPES[aktywnyTyp].label}</span>
+        {warianty && warianty.length > 1 && (
+          <div className="flex gap-1" role="group" aria-label="Liczba gniazd">
+            {warianty.map((n) => {
+              const wybrany = wstawianie.gangsForType(aktywnyTyp) === n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={wybrany}
+                  onClick={() => wstawianie.ustawGangs(aktywnyTyp, n)}
+                  className={`min-w-8 rounded-md border px-2 py-1 text-xs ${wybrany ? "border-copper bg-white text-copper" : "border-border bg-white text-slate-500"}`}
+                >
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {aktywnyTyp === "gniazdko" && (
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <input type="checkbox" checked={wstawianie.dedicated} onChange={(e) => wstawianie.setDedicated(e.target.checked)} />
+            Dedykowane (AGD)
+          </label>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setSidebarTab("elementy");
+            rozwinPanel();
+          }}
+          className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm"
+        >
+          Zmień
+        </button>
+      </div>
+    ) : null;
+
   const kontekstoweTresc = (
     <>
       {/* Zatrzaśnięty Shift — jedyna droga do zaznaczenia wielokrotnego bez klawiatury
@@ -3170,6 +3225,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               onPick={(type) => {
                 wstawianie.setActiveType(type);
                 setToolMode("elementy");
+                // Na telefonie wybór zwija bibliotekę, która stoi tam nad rzutem — a jej
+                // opcje dla wybranego elementu przejmuje pigułka nad płótnem (patrz
+                // `pigulkaWstawiania`). Bez zapisu w pamięci: to nie zmiana preferencji,
+                // tylko zejście z drogi. Strona dosuwa się do edytora, bo po zwinięciu
+                // rzut wjechałby na miejsce biblioteki, czyli wyżej niż kadr.
+                if (!szerokieOkno && !pelnyEkran) {
+                  setPanelZwiniety(true);
+                  window.requestAnimationFrame(() => pelnyEkranRef.current?.scrollIntoView({ block: "start" }));
+                }
               }}
               gangs={wstawianie.gangsForType(wstawianie.activeType)}
               onSetGangs={wstawianie.ustawGangs}
@@ -3223,12 +3287,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               rzutu, nie treść nad nim. Każda treść nad płótnem, która pojawia się
               w trakcie rysowania, przesuwa płótno pod palcem — a na telefonie panel
               stoi właśnie nad płótnem. Na monitorze kontrolki są w panelu obok rzutu. */}
-          {!pelnyEkran && !szerokieOkno && kontekstoweAktywne && (
+          {!pelnyEkran && !szerokieOkno && (kontekstoweAktywne || pigulkaWstawiania) && (
             <div
               data-testid="kontrolki-narzedzia"
               className="pe-bez-suwaka absolute inset-x-2 bottom-2 z-20 flex max-h-[45%] min-w-0 flex-wrap items-center gap-2 overflow-y-auto rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-2 text-left shadow-lg empty:hidden"
             >
-              {kontekstoweTresc}
+              {kontekstoweAktywne && kontekstoweTresc}
+              {pigulkaWstawiania}
             </div>
           )}
           <DesignCanvas
