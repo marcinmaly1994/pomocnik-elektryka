@@ -157,3 +157,38 @@ for (const [nazwa, okno] of [
     expect(Math.abs(poOtwarciu.y - poDopasowaniu.y)).toBeLessThan(1);
   });
 }
+
+/**
+ * Kadr obejmuje także to, co wystaje poza obrys ścian: symbole, strefy przyborów
+ * i łuki drzwi.
+ *
+ * Liczony z samych środków elementów i otworów ucinał je: w przykładzie łuk drzwi
+ * wejściowych i numery obwodów przy dolnej ścianie wystawały ok. 34 px za dolną
+ * krawędź płótna (przy 1440 × 900).
+ */
+test("otwarty przykład mieści się w płótnie razem z symbolami i łukami drzwi", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await wczytajPrzyklad(page, "mieszkanie");
+  await page.waitForTimeout(1500);
+
+  const { tresc, plotno } = await page.evaluate(() => {
+    const st = (window as unknown as {
+      Konva: {
+        stages: {
+          width(): number;
+          height(): number;
+          getLayers(): { getClientRect(): { x: number; y: number; width: number; height: number } }[];
+        }[];
+      };
+    }).Konva.stages[0];
+    const warstwy = st.getLayers();
+    return { tresc: warstwy[warstwy.length - 1].getClientRect(), plotno: { w: st.width(), h: st.height() } };
+  });
+  expect(tresc.y).toBeGreaterThanOrEqual(-2);
+  expect(tresc.y + tresc.height).toBeLessThanOrEqual(plotno.h + 2);
+  expect(tresc.x).toBeGreaterThanOrEqual(-2);
+  expect(tresc.x + tresc.width).toBeLessThanOrEqual(plotno.w + 2);
+});
