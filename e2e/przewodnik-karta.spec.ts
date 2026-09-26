@@ -30,9 +30,9 @@ async function pustyProjekt(page: Page, wysokosc = 900) {
   if (await rozumiem.count()) await rozumiem.click();
   await expect(karta(page)).toBeVisible();
   // Karta przewodnika ogranicza wysokosc LISTY ELEMENTOW, wiec testy mierza katalog —
-  // a ten na pustej kondygnacji stoi teraz za zakladka „Elementy" (patrz zakladkaPanelu).
+  // a ten nalezy do narzedzia „Wstaw Element".
   await otworzKatalogElementow(page);
-  // Przelaczenie zakladki przerysowuje liste, a jej wysokosc liczy ResizeObserver
+  // Przelaczenie narzedzia przerysowuje liste, a jej wysokosc liczy ResizeObserver
   // (patrz goraKarty w ElementLibrary) — pomiar tuz po kliknieciu lapal stan sprzed
   // przeliczenia i wychodzil o 2 px za wysoki.
   await page.waitForTimeout(300);
@@ -56,10 +56,10 @@ test("karta przewodnika nie zaslania niczego, w co sie klika w kolumnie", async 
   // wysokość płótna obok, żeby nie rozpychać strony). Karta pływa więc nad jej dolną,
   // PUSTĄ częścią — i to jest w porządku, dopóki nie zasłania niczego, w co się klika.
   // Tego właśnie pilnujemy zamiast dawnego pomiaru całej kolumny: pod kartą nie ma
-  // wylądować ani lista wyżej, ani szukajka, ani zakładki panelu.
+  // wylądować ani lista wyżej, ani szukajka, ani nagłówek panelu.
   for (const [co, loc] of [
     ["szukajka", page.getByPlaceholder("Szukaj elementu…")],
-    ["zakładka Elementy", page.getByRole("button", { name: "Elementy", exact: true })],
+    ["nagłówek narzędzia", page.getByTestId("naglowek-narzedzia")],
   ] as const) {
     const b = (await loc.boundingBox())!;
     expect(b.y + b.height, `karta zasłania: ${co}`).toBeLessThanOrEqual(k.y);

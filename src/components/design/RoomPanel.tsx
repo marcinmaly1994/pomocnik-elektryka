@@ -29,9 +29,8 @@ export function RoomPanel({ roomShapes, metersPerUnit, onCreateWall }: RoomPanel
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
 
   if (roomShapes.length === 0) {
-    // Na pustej kondygnacji panel otwiera się WŁAŚNIE TUTAJ (patrz `zakladkaPanelu`
-    // w lib/panelBoczny.ts), więc to jest pierwsze zdanie, jakie czyta nowy użytkownik
-    // w kolumnie narzędzi. Samo „Brak pomieszczeń na tej kondygnacji." stwierdzało
+    // To pierwsze zdanie, jakie widzi ktoś, kto sięgnął po „Narysuj pomieszczenie" na
+    // pustej kondygnacji. Samo „Brak pomieszczeń na tej kondygnacji." stwierdzało
     // fakt i nie mówiło ani po co je rysować, ani co się stanie, jeśli się tego nie
     // zrobi — a od pomieszczenia zależą rzeczy, których po nim nie widać.
     return (

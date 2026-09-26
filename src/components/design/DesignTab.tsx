@@ -84,7 +84,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
-import { zakladkaPanelu, type ZakladkaPanelu } from "@/lib/panelBoczny";
+import { NaglowekNarzedzia, PodpowiedzPrzesun, PodpowiedzZaznacz } from "./PanelNarzedzia";
 import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import { CoachMark } from "@/components/onboarding/CoachMark";
 import { useSzerokieOkno } from "./PasekMenu";
@@ -504,21 +504,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     [walls, roomShapes]
   );
 
-  /**
-   * Zakładka panelu bocznego wybrana RĘCZNIE, albo `null` — „jeszcze nic nie kliknąłem
-   * na tej kondygnacji", czyli decyduje podpowiedź (patrz `zakladkaPanelu`).
-   *
-   * Zerowane przy zmianie kondygnacji, bo podpowiedź dotyczy TEJ kondygnacji, na którą
-   * się właśnie weszło: nowe, puste piętro ma poprosić o pomieszczenia tak samo jak
-   * parter, nawet jeśli na parterze użytkownik przełączył panel na elementy.
-   */
-  const [sidebarTabReczny, setSidebarTabReczny] = useState<ZakladkaPanelu | null>(null);
-  useEffect(() => setSidebarTabReczny(null), [activeFloorId]);
-  const sidebarTab = zakladkaPanelu(sidebarTabReczny, {
-    maPomieszczenia: roomShapes.length > 0,
-    maElementy: elements.length > 0,
-  });
-  const setSidebarTab = setSidebarTabReczny;
   const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
 
   const [toolMode, setToolMode] = useState<ToolMode>("zaznacz");
@@ -685,6 +670,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   /** Od 768 px w górę kolumna narzędzi stoi OBOK rysunku i równa się z nim wysokością;
    *  niżej stoi NAD nim i bierze wysokość z treści (patrz styl `lewaKartaRef`). */
   const szerokieOkno = useSzerokieOkno();
+  /** Palec zamiast myszy — tylko do słów w podpowiedziach panelu („Kliknij" / „Stuknij"). */
+  const naDotyku = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
   const ostatniaSzerRef = useRef(0);
   /** Kondygnacja, dla której kadr został już ustawiony na rysunku — patrz efekt niżej. */
   const skadrowanaRef = useRef<string | null>(null);
@@ -1473,11 +1460,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     }
     if (id === "pomieszczenia") {
       setToolMode("pomieszczenie");
-      setSidebarTab("pomieszczenia");
       return;
     }
     setToolMode("elementy");
-    setSidebarTab("elementy");
   }
 
   /** Druga, równoległa droga startu obok wgrania rzutu: dom rysowany od zera na
@@ -1522,15 +1507,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // jej przy powrocie do rysowania pół godziny później byłoby natręctwem. Sama
     // operacja zostaje dostępna w menu kontekstowym ściany, więc nic nie przepada.
     if (id !== "sciany") setPetlaDoNazwania(null);
+    // Treść panelu idzie za narzędziem sama (patrz `NaglowekNarzedzia`) — nie ma
+    // już osobnej zakładki, którą trzeba by tu przestawiać.
     setToolMode(id);
-    // Zakładka panelu ma pokazywać zawartość ZGODNĄ z wybranym narzędziem —
-    // „Wstaw element” podświetla „Elementy”, „Obrysuj pomieszczenie” podświetla
-    // „Pomieszczenia”. Wcześniej pasek zmieniał tylko narzędzie i zostawiał
-    // zakładkę bez zmian, więc po przejściu z jednego narzędzia na drugie w
-    // panelu nadal stała treść od poprzedniego wyboru — myląco, bo z boku
-    // wyglądało to na niedziałający przycisk.
-    if (id === "elementy") setSidebarTab("elementy");
-    if (id === "pomieszczenie") setSidebarTab("pomieszczenia");
     // Sięgnięcie po narzędzie, które karmi się panelem, rozwija go, jeśli był
     // zwinięty. W drugą stronę NIE działa: żadne narzędzie panelu nie zamyka.
     if (id === "elementy" || id === "pomieszczenie") rozwinPanel();
@@ -2244,10 +2223,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         )}
         <button
           type="button"
-          onClick={() => {
-            setSidebarTab("elementy");
-            rozwinPanel();
-          }}
+          onClick={() => rozwinPanel()}
           className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm"
         >
           Zmień
@@ -2456,7 +2432,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             ))}
           </div>
           <span className="min-w-0 basis-full text-slate-500">
-            Kliknij ścianę albo krawędź pomieszczenia, żeby wstawić tam {otwory.openingKind === "okno" ? "okno" : "drzwi"}.
+            {/* Na szerokim ekranie to samo zdanie stoi już w nagłówku panelu tuż nad tą
+                ramką (patrz `NaglowekNarzedzia`). Na telefonie ramka pływa nad rzutem,
+                a panel z nagłówkiem bywa zwinięty — tam zdanie jest potrzebne. */}
+            {!szerokieOkno && (
+              <>Kliknij ścianę albo krawędź pomieszczenia, żeby wstawić tam {otwory.openingKind === "okno" ? "okno" : "drzwi"}. </>
+            )}
             Szerokość poprawisz po zaznaczeniu otworu.
           </span>
         </div>
@@ -3279,6 +3260,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           {/* Na telefonie te same kontrolki pływają nad płótnem — patrz nakładka przy
               `DesignCanvas`. Tylko w JEDNYM miejscu naraz: dwie kopie dawałyby dwa
               przyciski „Zakończ" o tej samej nazwie. */}
+          <NaglowekNarzedzia narzedzie={toolMode} />
           {!pelnyEkran && szerokieOkno && kontekstoweAktywne && (
             // `flex-col`, nie `flex-wrap` jak w wersji pełnoekranowej: tam pigułka ma
             // całą szerokość okna i bloki spokojnie stoją obok siebie, tu kolumna ma
@@ -3290,24 +3272,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             </div>
           )}
 
-          <div className="mb-2 flex gap-1 rounded-lg border border-border bg-white p-1 text-xs">
-            <button
-              onClick={() => setSidebarTab("elementy")}
-              className="flex-1 rounded-md py-1.5"
-              style={sidebarTab === "elementy" ? { background: "#2D5A8C10", color: "#2D5A8C" } : { color: "#64748B" }}
-            >
-              Elementy
-            </button>
-            <button
-              onClick={() => setSidebarTab("pomieszczenia")}
-              className="flex-1 rounded-md py-1.5"
-              style={sidebarTab === "pomieszczenia" ? { background: "#2D5A8C10", color: "#2D5A8C" } : { color: "#64748B" }}
-            >
-              Pomieszczenia ({roomShapes.length})
-            </button>
-          </div>
-
-          {sidebarTab === "elementy" ? (
+          {/* Treść panelu idzie za WYBRANYM NARZĘDZIEM — patrz `NaglowekNarzedzia`.
+              Dotąd stały tu zawsze zakładki „Elementy / Pomieszczenia", więc przy
+              drzwiach, przesuwaniu widoku czy kalibracji pod ich opcjami wisiał katalog
+              od poprzedniego wyboru. Narzędzia, których opcje to same kontrolki
+              kontekstowe (ściany, drzwi i okna, kalibracja), nie mają tu nic więcej. */}
+          {toolMode === "elementy" ? (
             <ElementLibrary
               wypelnijWysokosc={pelnyEkran}
               goraKarty={goraPrzewodnika}
@@ -3315,11 +3285,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               onPick={(type) => {
                 wstawianie.setActiveType(type);
                 setToolMode("elementy");
-                // Na telefonie wybór zwija bibliotekę, która stoi tam nad rzutem — a jej
-                // opcje dla wybranego elementu przejmuje pigułka nad płótnem (patrz
-                // `pigulkaWstawiania`). Bez zapisu w pamięci: to nie zmiana preferencji,
-                // tylko zejście z drogi. Strona dosuwa się do edytora, bo po zwinięciu
-                // rzut wjechałby na miejsce biblioteki, czyli wyżej niż kadr.
                 if (!szerokieOkno && !pelnyEkran) {
                   setPanelZwiniety(true);
                   window.requestAnimationFrame(() => pelnyEkranRef.current?.scrollIntoView({ block: "start" }));
@@ -3330,25 +3295,26 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               dedicated={wstawianie.dedicated}
               onToggleDedicated={wstawianie.setDedicated}
             />
-          ) : (
-            <div className="flex min-h-0 flex-1 flex-col gap-2">
-              {/* Wejście w tę zakładkę było dotąd jedynym sposobem, żeby zobaczyć, że
-                  trzeba wrócić do paska narzędzi po ikonę „Narysuj Pomieszczenie" —
-                  przycisk tutaj skraca to o jeden krok, niezależnie od tego, czy
-                  pomieszczenia już są, czy lista dopiero czeka na pierwsze. */}
-              <button
-                onClick={() => selectTool("pomieszczenie")}
-                className="pe-btn-copper flex w-full items-center justify-center gap-1.5 py-1.5 text-xs"
-              >
-                <Layers size={13} /> Narysuj pomieszczenie
-              </button>
-              {/* Przycisk zostaje na wierzchu, przewija sie sama LISTA — przy kilkunastu
-                  pomieszczeniach inaczej uciekalby poza kolumne. */}
+          ) : toolMode === "pomieszczenie" ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+              <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400" data-testid="liczba-pomieszczen">
+                Pomieszczenia ({roomShapes.length})
+              </div>
+              {/* Przewija się sama LISTA — przy kilkunastu pomieszczeniach inaczej
+                  wypychałaby kontrolki kształtu nad nią poza kolumnę. */}
               <div className="pe-bez-suwaka min-h-0 flex-1 overflow-y-auto pr-1">
                 <RoomPanel roomShapes={roomShapes} metersPerUnit={mpu} onCreateWall={sciany.createWallFromRoom} />
               </div>
             </div>
-          )}
+          ) : toolMode === "pan" ? (
+            <PodpowiedzPrzesun naDotyku={naDotyku} />
+          ) : toolMode === "zaznacz" && !selected && multiSelected.length === 0 ? (
+            <PodpowiedzZaznacz
+              pustaKondygnacja={roomShapes.length === 0 && elements.length === 0 && walls.length === 0}
+              naDotyku={naDotyku}
+              onWybierz={selectTool}
+            />
+          ) : null}
           </div>
           )}
         </div>
