@@ -57,6 +57,7 @@ import { etapy, type Etap, type StanEtapu } from "@/lib/postepKrokow";
  */
 import { computeCircuits } from "@/lib/panel/circuits";
 import { useWygaszenieKrawedzi } from "@/hooks/useWygaszenieKrawedzi";
+import { useChowanieNaPrzewijaniu } from "@/hooks/useChowanieNaPrzewijaniu";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
 
 /**
@@ -332,6 +333,16 @@ type AppTab = AppTabRoute;
  *  „Kalkulatory”/„Protokoły pomiarowe”, które są narzędziami OBOK przepływu, nie jego
  *  krokami. Używana przez przycisk „Dalej”, żeby wiedzieć, dokąd prowadzi kolejny krok,
  *  bez zgadywania po całej liście zakładek. */
+/**
+ * Schowana pigułka zjeżdża pod dolną krawędź i przestaje łapać kliknięcia, ale
+ * zostaje w DOM i w kolejności Tab: fokus z klawiatury wyciąga ją z powrotem.
+ */
+function klasySchowanejPigulki(schowana: boolean): string {
+  return schowana
+    ? "pointer-events-none translate-y-24 opacity-0 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100"
+    : "";
+}
+
 const KOLEJNOSC_KROKOW: { id: AppTab; tytul: string }[] = [
   { id: "projekt", tytul: "Instalacja" },
   { id: "rozdzielnica", tytul: "Rozdzielnica" },
@@ -450,6 +461,8 @@ export default function App() {
   // go używają: kalkulatory i protokoły.
   const [route, nawiguj] = useRoute();
   const tab = route.tab;
+  // Pigułki „Cofnij/Dalej" chowają się przy czytaniu w dół — patrz hook.
+  const pigulkiSchowane = useChowanieNaPrzewijaniu(tab);
   const setTab = (t: AppTab) => nawiguj(t);
 
   // Adres, którego nie dało się rozpoznać, pokazuje stronę startową — więc niech i
@@ -1050,7 +1063,8 @@ export default function App() {
             // Odstęp od dolnej krawędzi ze wspólnej stałej, nie z klasy `bottom-5` —
             // patrz `NAWIGACJA_ODSTEP_PX`, gdzie stoi też historia pigułki na płótnie.
             style={{ bottom: NAWIGACJA_ODSTEP_PX }}
-            className="fixed left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
+            data-schowana={pigulkiSchowane || undefined}
+            className={`fixed left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-[transform,opacity] duration-200 hover:scale-105 hover:bg-copper/90 md:flex ${klasySchowanejPigulki(pigulkiSchowane)}`}
           >
             <ArrowLeft size={15} />
             Cofnij: {poprzedni.tytul}
@@ -1083,7 +1097,8 @@ export default function App() {
             // Patrz komentarz przy „Cofnij" wyżej — ten sam powód, ten sam próg,
             // ten sam odstęp ze wspólnej stałej.
             style={{ bottom: NAWIGACJA_ODSTEP_PX }}
-            className="fixed right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105 hover:bg-copper/90 md:flex"
+            data-schowana={pigulkiSchowane || undefined}
+            className={`fixed right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-[transform,opacity] duration-200 hover:scale-105 hover:bg-copper/90 md:flex ${klasySchowanejPigulki(pigulkiSchowane)}`}
           >
             Dalej: {nastepny.tytul}
             <ArrowRight size={15} />
