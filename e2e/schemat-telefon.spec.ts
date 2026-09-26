@@ -5,9 +5,10 @@ import { wczytajPrzyklad } from "./_flow";
  * Schemat jednokreskowy na telefonie.
  *
  * Rysunek ma ok. 1200 px szerokości, a okienko na telefonie ok. 330 px. W naturalnym
- * rozmiarze widać było pustą górną połowę i ani kawałka rozdzielnicy głównej, a jedynym
- * sposobem zobaczenia całości było przewijanie w bok na ślepo. Teraz schemat otwiera się
- * dopasowany do szerokości i da się go szczypać.
+ * rozmiarze od lewej krawędzi widać było pustą górną połowę i ani kawałka rozdzielnicy
+ * głównej; dopasowany do szerokości był z kolei miniaturą z napisami po 2,5 px. Teraz
+ * otwiera się w czytelnym rozmiarze, wycentrowany na wyłączniku głównym, całość jest pod
+ * „Dopasuj", a powiększanie przyciskami trzyma środek widoku.
  */
 
 const TELEFON = { width: 375, height: 812 };
@@ -27,6 +28,19 @@ async function powiekszenie(page: Page): Promise<number> {
   return Number(etykieta!.match(/(\d+) procent/)![1]);
 }
 
+/**
+ * O ile [px ekranu] oś wyłącznika głównego odstaje od środka okienka w poziomie.
+ * Oś bierzemy z wyśrodkowanego napisu faz nad wyłącznikiem — grupa samego wyłącznika
+ * ma podpis z prawej, więc jej środek nie leży na osi.
+ */
+async function odSrodka(page: Page): Promise<number> {
+  return page.getByTestId("schemat-okno").evaluate((el) => {
+    const q = el.querySelector("#incoming-supply text")!.getBoundingClientRect();
+    const o = el.getBoundingClientRect();
+    return q.left + q.width / 2 - (o.left + o.width / 2);
+  });
+}
+
 /** Szerokość rysunku na ekranie i miejsce na niego w okienku. */
 async function wymiary(page: Page) {
   return page.getByTestId("schemat-okno").evaluate((el) => {
@@ -43,13 +57,40 @@ async function wymiary(page: Page) {
 test.describe("na telefonie", () => {
   test.use({ viewport: TELEFON, hasTouch: true });
 
-  test("schemat otwiera się dopasowany do szerokości — cały, bez przewijania w bok", async ({ page }) => {
+  test("schemat otwiera się czytelny, z wyłącznikiem głównym na środku okienka", async ({ page }) => {
     await otworzSchemat(page);
     const w = await wymiary(page);
     expect(w.naturalna, "test ma sens tylko dla rysunku szerszego niż okienko").toBeGreaterThan(w.miejsce);
+    expect(await powiekszenie(page)).toBe(100);
+    expect(Math.abs(await odSrodka(page))).toBeLessThan(20);
+  });
+
+  test("„Dopasuj” pokazuje cały schemat w szerokości okienka", async ({ page }) => {
+    await otworzSchemat(page);
+    await page.getByRole("button", { name: "Dopasuj schemat do szerokości" }).click();
+    const w = await wymiary(page);
     expect(w.rysunek).toBeLessThanOrEqual(w.miejsce + 1);
     expect(w.rysunek).toBeGreaterThan(w.miejsce - 2);
-    expect(await powiekszenie(page)).toBeLessThan(100);
+  });
+
+  test("„+” i „−” trzymają środek widoku, a nie lewą krawędź", async ({ page }) => {
+    await otworzSchemat(page);
+    await page.getByRole("button", { name: "Dopasuj schemat do szerokości" }).click();
+    for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Powiększ schemat" }).click();
+    expect(await powiekszenie(page)).toBeGreaterThan(40);
+    // Wyłącznik główny stoi na środku rysunku, więc przy dopasowaniu był na środku okienka.
+    expect(Math.abs(await odSrodka(page))).toBeLessThan(20);
+    await page.getByRole("button", { name: "Pomniejsz schemat" }).click();
+    expect(Math.abs(await odSrodka(page))).toBeLessThan(20);
+  });
+
+  test("przyciski powiększenia mają rozmiar pod palec", async ({ page }) => {
+    await otworzSchemat(page);
+    for (const nazwa of ["Pomniejsz schemat", "Powiększ schemat", "Dopasuj schemat do szerokości", /Powiększenie schematu \d+ procent/]) {
+      const box = (await page.getByRole("button", { name: nazwa }).boundingBox())!;
+      expect(box.width, String(nazwa)).toBeGreaterThanOrEqual(44);
+      expect(box.height, String(nazwa)).toBeGreaterThanOrEqual(44);
+    }
   });
 
   /** Dotyk prawdziwy, przez CDP — `page.touchscreen` potrafi tylko pojedyncze dotknięcie. */
@@ -57,6 +98,9 @@ test.describe("na telefonie", () => {
     await otworzSchemat(page);
     const przed = await powiekszenie(page);
     const okno = page.getByTestId("schemat-okno");
+    // W czytelnym rozmiarze okienko jest wysokie i zaczyna się pod nagłówkiem — gest
+    // musi paść na nie, a nie pod dolną krawędzią ekranu.
+    await okno.evaluate((el) => el.scrollIntoView({ block: "center" }));
     const box = (await okno.boundingBox())!;
     const sx = box.x + box.width / 2;
     const sy = box.y + box.height / 2;
@@ -101,7 +145,9 @@ test.describe("na telefonie", () => {
 
   test("przyciski powiększają i wracają do dopasowania", async ({ page }) => {
     await otworzSchemat(page);
+    await page.getByRole("button", { name: "Dopasuj schemat do szerokości" }).click();
     const dopasowane = await powiekszenie(page);
+    expect(dopasowane).toBeLessThan(100);
     await page.getByRole("button", { name: "Powiększ schemat" }).click();
     expect(await powiekszenie(page)).toBeGreaterThan(dopasowane);
     await page.getByRole("button", { name: "Dopasuj schemat do szerokości" }).click();

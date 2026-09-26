@@ -14,8 +14,10 @@ import { dystansPalcow, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from 
  *
  * @param szerRysunku naturalna szerokość rysunku [px] (przy powiększeniu 1)
  * @param dopasujNaStarcie czy bez ręcznego wyboru rysunek ma wypełnić szerokość
+ * @param srodekStartowyX punkt rysunku (x w jednostkach rysunku), który na starcie ma
+ *   stanąć na środku okienka — np. wyłącznik główny schematu. Bez niego start od lewej.
  */
-export function usePowiekszanieRysunku(szerRysunku: number, dopasujNaStarcie: boolean) {
+export function usePowiekszanieRysunku(szerRysunku: number, dopasujNaStarcie: boolean, srodekStartowyX?: number) {
   const kontenerRef = useRef<HTMLDivElement>(null);
   /** Szerokość wnętrza pojemnika (bez paddingu) — do niej dopasowujemy. */
   const [dostepna, setDostepna] = useState(0);
@@ -48,7 +50,13 @@ export function usePowiekszanieRysunku(szerRysunku: number, dopasujNaStarcie: bo
    * nakładany dopiero po przerysowaniu, kiedy pojemnik zna już nowy rozmiar treści
    * (wcześniej przewinięcie zostałoby przycięte do starego).
    */
-  const kotwicaRef = useRef<{ rys: PunktEkranu; palce: PunktEkranu; palceEkran: PunktEkranu } | null>(null);
+  const kotwicaRef = useRef<{
+    rys: PunktEkranu;
+    palce: PunktEkranu;
+    palceEkran: PunktEkranu;
+    /** Czy wyrównywać też przewinięcie STRONY — patrz `kotwiczWSrodku`. */
+    strona: boolean;
+  } | null>(null);
   useLayoutEffect(() => {
     const k = kotwicaRef.current;
     const el = kontenerRef.current;
@@ -62,10 +70,56 @@ export function usePowiekszanieRysunku(szerRysunku: number, dopasujNaStarcie: bo
     // Czego nie da się ustawić przewinięciem pojemnika, wyrównuje przewinięcie STRONY.
     // Dopasowany schemat jest niski i po powiększeniu dalej mieści się w okienku w pionie
     // — okienko po prostu rośnie w dół, a z nim ucieka punkt spod palców.
+    if (!k.strona) return;
     const r = el.getBoundingClientRect();
     const dy = r.top + padT + k.rys.y * zoom - el.scrollTop - k.palceEkran.y;
     if (Math.abs(dy) > 0.5) window.scrollBy(0, dy);
   }, [zoom]);
+
+  /**
+   * Kadr startowy: `srodekStartowyX` na środku okienka, raz — gdy pojemnik zna już
+   * swoją szerokość. Schemat w czytelnym rozmiarze jest kilka razy szerszy od telefonu,
+   * a start od lewej krawędzi pokazywał ogranicznik przepięć i pierwsze obwody zamiast
+   * wyłącznika głównego, od którego schemat się czyta.
+   */
+  const startUstawionyRef = useRef(false);
+  useLayoutEffect(() => {
+    const el = kontenerRef.current;
+    if (!el || startUstawionyRef.current || dostepna <= 0 || srodekStartowyX === undefined) return;
+    startUstawionyRef.current = true;
+    const padL = parseFloat(getComputedStyle(el).paddingLeft);
+    el.scrollLeft = srodekStartowyX * zoom + padL - el.clientWidth / 2;
+  }, [dostepna, srodekStartowyX, zoom]);
+
+  /**
+   * Zmiana powiększenia PRZYCISKIEM trzyma środek tego, co widać w okienku.
+   *
+   * Bez tego „+" powiększał od lewej krawędzi: po trzech stuknięciach widać było lewą
+   * grupę obwodów, a wyłącznik główny, na który się patrzyło, uciekał za prawą krawędź.
+   *
+   * Strony tu NIE przewijamy (w odróżnieniu od szczypania): okienko rośnie w dół, a
+   * dociąganie strony za jego środkiem wypychałoby w górę pasek z „+", w który ktoś
+   * właśnie stuka po raz kolejny.
+   */
+  const zmienWSrodku = useCallback((nowy: number) => {
+    const el = kontenerRef.current;
+    const { zoom: teraz, min: zMin, max: zMax } = stanRef.current;
+    const docelowy = Math.min(zMax, Math.max(zMin, nowy));
+    if (el && Math.abs(docelowy - teraz) > 1e-9) {
+      const s = getComputedStyle(el);
+      const palce = { x: el.clientWidth / 2, y: el.clientHeight / 2 };
+      kotwicaRef.current = {
+        rys: {
+          x: (el.scrollLeft + palce.x - parseFloat(s.paddingLeft)) / teraz,
+          y: (el.scrollTop + palce.y - parseFloat(s.paddingTop)) / teraz,
+        },
+        palce,
+        palceEkran: palce,
+        strona: false,
+      };
+    }
+    setReczny(docelowy);
+  }, []);
 
   /** Bieżące wartości dla nasłuchu montowanego raz — patrz ten sam wzorzec w DesignCanvas. */
   const stanRef = useRef({ zoom, ustaw, min, max });
@@ -111,6 +165,7 @@ export function usePowiekszanieRysunku(szerRysunku: number, dopasujNaStarcie: bo
         },
         palce: palceWPojemniku,
         palceEkran: srodek,
+        strona: true,
       };
       ustawZoom(nowy);
     }
@@ -136,11 +191,11 @@ export function usePowiekszanieRysunku(szerRysunku: number, dopasujNaStarcie: bo
     zoom,
     min,
     max,
-    powieksz: () => ustaw(zoom * 1.25),
-    pomniejsz: () => ustaw(zoom / 1.25),
-    dopasuj: () => setReczny(dopasowany),
+    powieksz: () => zmienWSrodku(zoom * 1.25),
+    pomniejsz: () => zmienWSrodku(zoom / 1.25),
+    dopasuj: () => zmienWSrodku(dopasowany),
     /** Powiększony ponad dopasowanie — czyli jest co przewijać w bok. */
     powiekszony: zoom > dopasowany + 1e-6,
-    naturalny: () => setReczny(1),
+    naturalny: () => zmienWSrodku(1),
   };
 }
