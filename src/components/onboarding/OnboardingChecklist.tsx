@@ -164,7 +164,10 @@ export function OnboardingChecklist({
     <aside
       ref={pudloRef as React.RefObject<HTMLElement>}
       aria-label="Przewodnik: zacznij w 3 krokach"
-      className={`pe-card pe-onboarding fixed bottom-4 left-4 z-30 w-[264px] p-3 shadow-lg ${leaving ? "pe-onboarding-leave" : "pe-onboarding-enter"}`}
+      // Na telefonie w ZWYKŁYM PRZEPŁYWIE, pod edytorem — tak jak zwinięty przycisk
+      // wyżej. Przypięta w lewym dolnym rogu zasłaniała tam dół rzutu, pasek stanu
+      // i nakładkę kontrolek rysowania, a z nią „Zakończ" ściany.
+      className={`pe-card pe-onboarding mt-4 w-full max-w-sm p-3 shadow-lg md:fixed md:bottom-4 md:left-4 md:z-30 md:mt-0 md:w-[264px] ${leaving ? "pe-onboarding-leave" : "pe-onboarding-enter"}`}
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="pe-display text-[14px]">Zacznij w 3 krokach</h2>
