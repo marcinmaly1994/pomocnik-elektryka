@@ -3652,7 +3652,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {coachMark === "skala" && (
         <CoachMark
           anchor={scaleToolRef.current}
-          text="Kliknij dwa punkty o znanej odległości — na przykład dwa końce ściany albo framugę drzwi. Potem podasz, ile to metrów."
+          text={`${szerokieOkno ? "Kliknij" : "Dotknij"} dwa punkty o znanej odległości — na przykład dwa końce ściany albo framugę drzwi. Potem podasz, ile to metrów.`}
           onDismiss={() => setCoachMark(null)}
         />
       )}
@@ -3675,7 +3675,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {coachMark === "sciany" && (
         <CoachMark
           anchor={wallToolRef.current}
-          text="Klikaj kolejne narożniki, żeby postawić odcinki ściany. Enter, PPM → „Zatwierdź ścianę” albo przycisk „Zakończ” kończy bieżącą ścianę — możesz od razu zacząć kolejną."
+          /* Na dotyku nie ma ani Entera, ani prawego przycisku — jest przytrzymanie palca
+             na płótnie (to samo menu co PPM) i „Zakończ" w nakładce nad dolną krawędzią
+             rzutu. Ten sam podział co w dymku nawigacji niżej. */
+          text={
+            szerokieOkno
+              ? "Klikaj kolejne narożniki, żeby postawić odcinki ściany. Enter, PPM → „Zatwierdź ścianę” albo przycisk „Zakończ” kończy bieżącą ścianę — możesz od razu zacząć kolejną."
+              : "Dotykaj kolejnych narożników, żeby postawić odcinki ściany. Przytrzymaj palec na rzucie → „Zatwierdź ścianę” albo „Zakończ” na dole rzutu kończy bieżącą ścianę — możesz od razu zacząć kolejną."
+          }
           onDismiss={() => setCoachMark(null)}
         />
       )}

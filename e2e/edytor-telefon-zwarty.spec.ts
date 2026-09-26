@@ -70,7 +70,7 @@ test("menu „Plan” otwiera się w całości, a nie przycięte do paska", asyn
   await start(page);
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).first().click();
   await pomiar(page);
-  // Dymek wprowadzający ("Klikaj kolejne narożniki…") leży nad wszystkim, także nad
+  // Dymek wprowadzający („Dotykaj kolejnych narożników…”) leży nad wszystkim, także nad
   // menu — to jego zamierzona rola. Zamykamy go jak użytkownik, zanim sięgniemy do menu.
   const rozumiem = page.getByRole("button", { name: "Rozumiem" });
   if (await rozumiem.count()) await rozumiem.click();
@@ -199,4 +199,21 @@ test("wybór elementu zwija bibliotekę, pigułka przejmuje jej opcje", async ({
   // „Zmień" wraca do biblioteki.
   await pigulka.getByRole("button", { name: "Zmień" }).tap();
   await expect(page.getByPlaceholder("Szukaj elementu…")).toBeVisible();
+});
+
+/**
+ * Dymek przy ścianach mówi językiem dotyku.
+ *
+ * Mówił o Enterze i prawym przycisku myszy, których telefon nie ma — na nim ścianę
+ * kończy przytrzymanie palca na rzucie albo „Zakończ" w nakładce na dole rzutu.
+ */
+test("dymek przy ścianach na telefonie mówi o dotyku, nie o Enter i PPM", async ({ page }) => {
+  await start(page);
+  await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).first().click();
+  await pomiar(page);
+  const dymek = page.getByText(/kolejnych narożników/);
+  await expect(dymek).toBeVisible();
+  await expect(dymek).toContainText("Przytrzymaj palec");
+  await expect(dymek).not.toContainText("PPM");
+  await expect(dymek).not.toContainText("Enter");
 });
