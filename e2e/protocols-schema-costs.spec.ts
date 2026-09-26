@@ -241,7 +241,8 @@ test("Kosztorys: rozbija sumę na netto/VAT/brutto i ostrzega o pozycjach bez ce
   await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
 
   await expect(page.getByText("Razem netto")).toBeVisible();
-  await expect(page.getByText("VAT 23%")).toBeVisible();
+  // Stawka jest do wyboru (patrz kosztorys-vat.spec.ts) — domyślnie podstawowa.
+  await expect(page.getByLabel("Stawka VAT")).toHaveValue("23");
   // Trzy gniazdka to trzy punkty instalacyjne, a `robocizna` ma w domyślnym cenniku
   // cenę 0 — więc ostrzeżenie jest tu w MOCNIEJSZYM wariancie („cena materiału, nie
   // cena instalacji"), zarezerwowanym dla braku samej robocizny. Słabszy wariant

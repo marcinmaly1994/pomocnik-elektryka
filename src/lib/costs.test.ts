@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, podsumowanieKosztorysu, kluczKabla, DEFAULT_PRICES, PRICE_LABELS, type CostRow } from "./costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, podsumowanieKosztorysu, stawkaVatZZapisu, kluczKabla, DEFAULT_PRICES, PRICE_LABELS, type CostRow } from "./costs";
 import type { Circuit, InstallationElement, RcdGroup } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -381,6 +381,24 @@ describe("podsumowanieKosztorysu — suma mówi, czym jest", () => {
     expect(p.niewycenione).toEqual([]);
     expect(p.netto).toBe(4800);
     expect(p.brutto).toBeCloseTo(4800 * 1.23, 2);
+  });
+
+  it("stawka 8% liczy VAT od tej samej sumy netto", () => {
+    const wiersze = [w("gniazdko", "Gniazdko 230V podtynkowe (szt.)", 10, 1000)];
+    const p = podsumowanieKosztorysu(wiersze, 8);
+    expect(p.netto).toBe(1000);
+    expect(p.vat).toBeCloseTo(80, 2);
+    expect(p.brutto).toBeCloseTo(1080, 2);
+    // Bez podanej stawki — podstawowa, jak dotąd.
+    expect(podsumowanieKosztorysu(wiersze).vat).toBeCloseTo(230, 2);
+  });
+
+  it("stawka z zapisu: tylko znane wartości, reszta wraca do 23%", () => {
+    expect(stawkaVatZZapisu(8)).toBe(8);
+    expect(stawkaVatZZapisu(23)).toBe(23);
+    expect(stawkaVatZZapisu(undefined)).toBe(23);
+    expect(stawkaVatZZapisu(5)).toBe(23);
+    expect(stawkaVatZZapisu("8")).toBe(23);
   });
 
   it("brak INNEJ pozycji to suma niepełna, ale nadal nie «sam materiał»", () => {

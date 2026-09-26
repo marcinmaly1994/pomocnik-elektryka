@@ -51,6 +51,14 @@ describe("buildCostsPdf", () => {
     expect(out).toContain("180,00"); // 12 x 15 zl
   });
 
+  it("drukuje wybraną stawkę VAT i liczy od niej kwotę", async () => {
+    const out = bytesToAscii(await buildCostsPdf(rows, header, 8));
+    expect(out).toContain("VAT 8%");
+    expect(out).not.toContain("VAT 23%");
+    expect(out).toContain("14,40"); // 8% od 180 zl
+    expect(out).toContain("194,40"); // brutto
+  });
+
   it("podsumowuje netto, VAT i brutto", async () => {
     const out = bytesToAscii(await buildCostsPdf(rows, header));
     expect(out).toContain("Razem netto");

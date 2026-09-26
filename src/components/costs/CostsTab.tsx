@@ -6,7 +6,7 @@ import { computeRcdGroups } from "@/lib/panel/circuits";
 import { buildPanelDevices } from "@/lib/panel/devices";
 import { computeSizedCircuits, lowVoltageLengths, routeSummaries } from "@/lib/panel/project";
 import { ZAPAS_MONTAZOWY_M } from "@/lib/panel/norms";
-import { computeCosts, kosztorysRows, parsePriceCsv, podsumowanieKosztorysu, VAT_RATE } from "@/lib/costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, podsumowanieKosztorysu, STAWKI_VAT, stawkaVatZZapisu } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 import { buildCostsDoc, buildCostsPdf } from "@/lib/pdf/costs";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
@@ -43,6 +43,8 @@ export function CostsTab() {
   const setCostOverride = useProjectStore((s) => s.setCostOverride);
   const qtyOverrides = useProjectStore((s) => s.qtyOverrides);
   const setQtyOverride = useProjectStore((s) => s.setQtyOverride);
+  const stawkaVat = useProjectStore((s) => s.stawkaVat);
+  const setStawkaVat = useProjectStore((s) => s.setStawkaVat);
   const projectName = useProjectStore((s) => s.projectName);
   const rawDocHeader = useProjectStore((s) => s.docHeader);
   // Nazwa projektu jako domyślny „Obiekt" — dzięki temu tabliczka rysunkowa i nazwa
@@ -103,13 +105,13 @@ export function CostsTab() {
 
   const rows = kosztorysRows(quantities, prices, costOverrides, qtyOverrides);
   /** Zgloszenie kosztorysu do kompletu dokumentacji — patrz lib/pdf/rejestr.ts. */
-  useEffect(() => zarejestrujProducenta("kosztorys", async () => buildCostsDoc(rows, docHeader)));
+  useEffect(() => zarejestrujProducenta("kosztorys", async () => buildCostsDoc(rows, docHeader, stawkaVat)));
 
   // Sumy i PODPIS pod nimi z jednego miejsca — patrz `podsumowanieKosztorysu`.
   // Etykieta jest liczona tam, bo „RAZEM brutto" bywa NIEPRAWDĄ: przy domyślnym
   // cenniku `robocizna` ma cenę 0 i do sumy w ogóle nie wchodzi, a to ona bywa
   // większą częścią kosztu niż cały materiał.
-  const podsumowanie = podsumowanieKosztorysu(rows);
+  const podsumowanie = podsumowanieKosztorysu(rows, stawkaVat);
   const grandTotal = podsumowanie.netto;
   const vat = podsumowanie.vat;
   const gross = podsumowanie.brutto;
@@ -182,7 +184,7 @@ export function CostsTab() {
       .join("\n");
     const summary =
       `\nRazem netto;;;${formatLiczba(grandTotal, 2)};` +
-      `\nVAT ${VAT_RATE}%;;;${formatLiczba(vat, 2)};` +
+      `\nVAT ${stawkaVat}%;;;${formatLiczba(vat, 2)};` +
       `\n${podsumowanie.etykietaSumy};;;${formatLiczba(gross, 2)};`;
     const blob = new Blob(["﻿" + header + body + summary], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, projectFileName("kosztorys", projectName, "csv"));
@@ -441,7 +443,24 @@ export function CostsTab() {
               </tr>
               <tr className="flex items-baseline justify-between md:table-row [&>td]:grow md:[&>td]:grow-0">
                 <td className="px-3 py-1 text-sm text-slate-500" colSpan={3}>
-                  VAT {VAT_RATE}%
+                  {/* Stawka do wyboru — patrz `STAWKI_VAT` i zdanie pod tabelą. Idzie też
+                      do CSV i PDF-a, więc wykonawca dostaje tę samą kwotę co na ekranie. */}
+                  <label className="inline-flex items-center gap-1.5">
+                    VAT
+                    <select
+                      aria-label="Stawka VAT"
+                      value={stawkaVat}
+                      onChange={(e) => setStawkaVat(stawkaVatZZapisu(Number(e.target.value)))}
+                      className="rounded border bg-white px-1.5 py-0.5 text-sm text-slate-700"
+                      style={{ borderColor: "#D6DCE3" }}
+                    >
+                      {STAWKI_VAT.map((s) => (
+                        <option key={s} value={s}>
+                          {s}%
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </td>
                 <td className="pe-mono px-3 py-1 text-right text-sm text-slate-500">{formatLiczba(vat, 2)} zł</td>
               </tr>
@@ -492,6 +511,11 @@ export function CostsTab() {
         Liczba puszek jest szacowana z liczby punktów instalacyjnych (podtynkowe) i pomieszczeń (rozgałęźne).
         Zweryfikuj ilości na realnym rzucie budynku przed zakupem materiału — każdą da się poprawić w kolumnie
         „Ilość”, a krzyżyk obok wraca do wartości z rzutu.
+        <span className="mt-1.5 block">
+          VAT 8% dotyczy robót w mieszkaniu do 150 m² albo domu do 300 m², rozliczanych razem z materiałem przez
+          wykonawcę. Sam zakup materiału, większy metraż i lokale użytkowe to 23%. W razie wątpliwości zapytaj
+          wykonawcę albo księgowego.
+        </span>
       </div>
 
       {/* Dokument składany jest RAZ, a „Pobierz" zapisuje dokładnie te bajty, które
@@ -501,7 +525,7 @@ export function CostsTab() {
         onOpenChange={setPodgladPdf}
         title="Kosztorys instalacji"
         filename={projectFileName("kosztorys", docHeader.obiekt, "pdf")}
-        build={() => buildCostsPdf(rows, docHeader)}
+        build={() => buildCostsPdf(rows, docHeader, stawkaVat)}
       />
     </div>
   );
