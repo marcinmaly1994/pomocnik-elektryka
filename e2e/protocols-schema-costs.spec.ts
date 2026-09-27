@@ -204,7 +204,7 @@ test("Kosztorys: wylicza pozycje z elementów i eksportuje CSV", async ({ page }
   await placeThreeSockets(page);
   await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
 
-  await expect(page.getByText("RAZEM brutto")).toBeVisible();
+  await expect(page.locator("tfoot").getByText("RAZEM brutto")).toBeVisible();
   await expect(page.getByRole("cell", { name: /Gniazdko/ }).first()).toBeVisible();
 
   const downloadPromise = page.waitForEvent("download");

@@ -230,6 +230,49 @@ export function CostsTab() {
         </div>
       </div>
       {/*
+        Podsumowanie NA GÓRZE. Kwota to pierwsze, czego szuka się w kosztorysie, a stała
+        wyłącznie pod tabelą — ok. 1700 px niżej, za trzydziestoma wierszami. Ten sam
+        podpis co suma na dole (`etykietaSumy`: „sam materiał" / „niepełny"), bo liczba
+        wyniesiona na górę bez niego znów udawałaby cenę całej instalacji. Suma na dole
+        zostaje: tam kończy się czytanie tabeli.
+      */}
+      {rows.length > 0 && (
+        <div
+          className="flex flex-wrap items-end justify-between gap-x-8 gap-y-2 rounded-card border border-border bg-white px-4 py-3"
+          data-testid="podsumowanie-kosztorysu"
+        >
+          <div>
+            <div className="text-sm font-semibold text-ink">{podsumowanie.etykietaSumy}</div>
+            <div className="pe-display text-2xl font-bold text-copper">{formatLiczba(gross, 2)} zł</div>
+          </div>
+          <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            <div>
+              <dt className="text-slate-500">Netto</dt>
+              <dd className="pe-mono">{formatLiczba(grandTotal, 2)} zł</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">VAT {stawkaVat}%</dt>
+              <dd className="pe-mono">{formatLiczba(vat, 2)} zł</dd>
+            </div>
+            {unpriced.length > 0 && (
+              <div>
+                <dt className="text-slate-500">Bez ceny</dt>
+                <dd style={{ color: "#8A5526" }}>
+                  {unpriced.length}{" "}
+                  {unpriced.length === 1
+                    ? "pozycja"
+                    : unpriced.length % 10 >= 2 && unpriced.length % 10 <= 4 && !(unpriced.length % 100 >= 12 && unpriced.length % 100 <= 14)
+                      ? "pozycje"
+                      : "pozycji"}{" "}
+                  — poza sumą
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
+
+      {/*
         JEDEN blok „skąd wzięły się metry", zamiast dwóch pełnych akapitów jeden pod
         drugim — plus trzeci, o imporcie cen, który zszedł do dymka przycisku.
         Trzy bannery stały między nagłówkiem a pierwszą pozycją tabeli i trzeba je było
@@ -413,7 +456,7 @@ export function CostsTab() {
                         // dla pola `type="number"`, ktore przechowuje wartosc wylacznie z kropka.
                         // Przecinek w podpowiedzi mowilby uzytkownikowi, zeby wpisal cos,
                         // czego kontrolka nie przyjmie.
-                        placeholder={r.value.toFixed(2)}
+                        placeholder={formatLiczba(r.value, 2)}
                         aria-label={`Wartość pozycji: ${r.label}`}
                         className="pe-input pe-mono w-full min-w-0 text-right text-sm md:w-28"
                         style={r.overridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}

@@ -38,7 +38,7 @@ async function kosztorysZTrzemaGniazdkami(page: Page) {
     await page.mouse.click(box.x + dx, box.y + 80);
   }
   await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
-  await expect(page.getByText("RAZEM brutto")).toBeVisible();
+  await expect(page.locator("tfoot").getByText("RAZEM brutto")).toBeVisible();
 }
 
 test("wpisana wartosc wchodzi do sumy zamiast rachunku ilosc x cena", async ({ page }) => {
@@ -75,7 +75,7 @@ test("zmiana ceny jednostkowej wraca do liczenia, zamiast zostawiac martwa kontr
   await cena(page).fill("120");
   // 3 punkty x 120 zl = 360 zl; ryczalt znika, bo uzytkownik wlasnie podal cene za punkt.
   await expect(wartosc(page)).toHaveValue("");
-  await expect(wartosc(page)).toHaveAttribute("placeholder", "360.00");
+  await expect(wartosc(page)).toHaveAttribute("placeholder", "360,00");
 });
 
 test("krzyzyk przywraca liczona wartosc i sam znika", async ({ page }) => {
