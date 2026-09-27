@@ -56,6 +56,7 @@ import { etapy, type Etap, type StanEtapu } from "@/lib/postepKrokow";
  * u kogoś, kto wszedł prosto w Kosztorys, i drugie źródło prawdy do utrzymania.
  */
 import { computeCircuits } from "@/lib/panel/circuits";
+import { jestOdplywem } from "@/lib/panel/devices";
 import { useWygaszenieKrawedzi } from "@/hooks/useWygaszenieKrawedzi";
 import { useChowanieNaPrzewijaniu } from "@/hooks/useChowanieNaPrzewijaniu";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
@@ -551,6 +552,7 @@ export default function App() {
   const wallCount = useProjectStore((s) => s.draft.walls.length);
   const panelTryb = useProjectStore((s) => s.panelTryb);
   const aparatyReczne = useProjectStore((s) => s.panelDevices.filter((d) => d.manual).length);
+  const odplywy = useProjectStore((s) => s.panelDevices.filter((d) => jestOdplywem(d) || d.kind === "lampka").length);
   /** `useMemo` na `elements`/`roomShapes`, nie na ich długościach: obwody zmieniają
    *  się też przy samym PRZENIESIENIU elementu do innego pokoju, przy tej samej
    *  liczbie punktów. Przeliczenie jest tanie (grupowanie, bez doboru), ale nie ma
@@ -566,8 +568,9 @@ export default function App() {
       obwody,
       trybReczny: panelTryb === "reczny",
       aparatyReczne,
+      odplywy,
     });
-  }, [elements, roomShapes, wallCount, panelTryb, aparatyReczne]);
+  }, [elements, roomShapes, wallCount, panelTryb, aparatyReczne, odplywy]);
   const etap = (id: Etap["id"]) => stanEtapow.find((e) => e.id === id)!;
 
   const [authOpen, setAuthOpen] = useState(false);

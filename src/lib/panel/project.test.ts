@@ -156,6 +156,13 @@ describe("assignPhases / phaseBalance", () => {
     const balance = phaseBalance(assigned);
     expect(balance.amps.L1).toBe(15);
     expect(balance.spreadPct).toBeGreaterThan(0);
+    expect(balance.spreadA).toBe(12);
+  });
+
+  it("pusta rozdzielnica ma rozrzut 0 A, a nie 1 A z progu skali pasków", () => {
+    const balance = phaseBalance([]);
+    expect(balance.amps).toEqual({ L1: 0, L2: 0, L3: 0 });
+    expect(balance.spreadA).toBe(0);
   });
 
   it("wyrównuje obciążenie, dokładając kolejny obwód do najmniej obciążonej fazy", () => {

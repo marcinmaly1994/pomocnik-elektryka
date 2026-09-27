@@ -75,12 +75,15 @@ test("kafel „czeka” nadal prowadzi do zakładki — mówi prawdę, nie stawi
   await expect(page.getByRole("button", { name: /Zbuduj rozdzielnicę bez rzutu/ })).toBeVisible();
 });
 
-test("ręcznie składana rozdzielnica zapala 02 i 03, ale nie kosztorys", async ({ page }) => {
+test("ręcznie składana rozdzielnica zapala 02 od razu, 03 po pierwszym wyłączniku, a kosztorysu wcale", async ({ page }) => {
   await swiezyProjekt(page);
   await kafel(page, "Rozdzielnica").click();
   await page.getByRole("button", { name: /Zbuduj rozdzielnicę bez rzutu/ }).click();
 
   await expect(kafel(page, "Rozdzielnica")).toContainText("ręcznie");
+  // Sam rozłącznik główny to jeszcze nie schemat — schemat pokazywałby pusty stan.
+  await expect(kafel(page, "Schemat")).toContainText("czeka");
+  await page.getByRole("button", { name: "Dodaj", exact: true }).click();
   await expect(kafel(page, "Schemat")).toContainText("gotowy");
   // Kosztorys liczy się WYŁĄCZNIE z rzutu: ręczna rozdzielnica nie mówi, ile
   // metrów kabla ani ile puszek trzeba kupić.
