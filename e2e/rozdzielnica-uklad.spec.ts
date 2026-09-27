@@ -75,3 +75,22 @@ test("plakietka różnicówki nie nachodzi na oznaczenia aparatów", async ({ pa
   expect(kolizje.plakietek).toBe(2);
   expect(kolizje.kolizje).toEqual([]);
 });
+
+/**
+ * Podpisy przekroju pod aparatami. Pełny „3x2,5 mm²" ma ok. 42 px, a wyłącznik
+ * jednomodułowy 30 px — nad rzędem wąskich wyłączników podpisy zlewały się w jeden
+ * ciąg. Przy aparacie na jeden moduł zostaje sam przekrój, a pełna nazwa w dymku.
+ */
+test("podpisy przekroju pod sąsiednimi aparatami nie nachodzą na siebie", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await otworz(page);
+  const wynik = await page.evaluate(() => {
+    const podpisy = [...document.querySelectorAll("text[data-podpis-przewodu]")].map((t) => t.getBoundingClientRect());
+    const nachodzi = (a: DOMRect, b: DOMRect) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom && b.top < a.bottom;
+    let kolizje = 0;
+    for (let i = 0; i < podpisy.length; i++) for (let j = i + 1; j < podpisy.length; j++) if (nachodzi(podpisy[i], podpisy[j])) kolizje++;
+    return { ile: podpisy.length, kolizje };
+  });
+  expect(wynik.ile).toBeGreaterThan(8);
+  expect(wynik.kolizje).toBe(0);
+});
