@@ -51,3 +51,27 @@ for (const r of [
     });
   });
 }
+
+/**
+ * Plakietka różnicówki („FI2 · 30 mA") stała na środku klamry, na wysokości oznaczeń
+ * aparatów — i wchodziła na oznaczenie tego, który akurat wypadł pod środkiem klamry
+ * (F7 obok FI2). Stoi teraz nad samą różnicówką, w miejscu jej oznaczenia.
+ */
+test("plakietka różnicówki nie nachodzi na oznaczenia aparatów", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await otworz(page);
+  const kolizje = await page.evaluate(() => {
+    const svg = [...document.querySelectorAll("svg")].find((s) => s.textContent?.includes("30 mA"))!;
+    const plakietki = [...svg.querySelectorAll("rect")].filter((r) => r.getAttribute("fill") === "#FDF6EF").map((r) => r.getBoundingClientRect());
+    const oznaczenia = [...svg.querySelectorAll("text")]
+      .filter((t) => t.getAttribute("font-size") === "11" && /^[A-Z]+\d+$/.test((t.textContent || "").trim()))
+      .map((t) => ({ tag: t.textContent!.trim(), r: t.getBoundingClientRect() }));
+    const nachodzi = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    return {
+      plakietek: plakietki.length,
+      kolizje: oznaczenia.filter((o) => plakietki.some((p) => nachodzi(p, o.r))).map((o) => o.tag),
+    };
+  });
+  expect(kolizje.plakietek).toBe(2);
+  expect(kolizje.kolizje).toEqual([]);
+});
