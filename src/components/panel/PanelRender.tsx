@@ -381,9 +381,17 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
               if (members.length === 0) return null;
               const startSlot = rcd.slot;
               const endSlot = Math.max(...members.map((m) => m.slot + m.modules));
-              return { tag: rcd.tag, x1: PAD + startSlot * MODULE_W, x2: PAD + endSlot * MODULE_W };
+              return {
+                tag: rcd.tag,
+                x1: PAD + startSlot * MODULE_W,
+                x2: PAD + endSlot * MODULE_W,
+                /** Środek SAMEJ różnicówki — tam stoi plakietka, patrz niżej. */
+                xRcd: PAD + (startSlot + rcd.modules / 2) * MODULE_W,
+              };
             })
-            .filter((b): b is { tag: string; x1: number; x2: number } => b !== null);
+            .filter((b): b is { tag: string; x1: number; x2: number; xRcd: number } => b !== null);
+          /** Różnicówki z klamrą — ich oznaczenie niesie plakietka, więc bez osobnego napisu. */
+          const zPlakietka = new Set(brackets.map((b) => b.tag));
 
           return (
             <g key={ri}>
@@ -398,8 +406,13 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                       strokeWidth={1.3}
                       strokeLinecap="round"
                     />
-                    <rect x={(b.x1 + b.x2) / 2 - 26} y={top - 8} width={52} height={12} rx={6} fill="#FDF6EF" stroke="#C1793F" strokeWidth={0.8} />
-                    <text x={(b.x1 + b.x2) / 2} y={top + 0.5} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#8A5526">
+                    {/* Plakietka nad SAMĄ różnicówką, w miejscu jej oznaczenia — nie na
+                        środku klamry. Środek klamry wypadał nad innym aparatem grupy
+                        (np. F7 obok FI2) i plakietka wchodziła na jego oznaczenie, bo
+                        stoją na tej samej wysokości. Różnicówka ma co najmniej 2 moduły
+                        (60 px), więc 52-pikselowa plakietka nie wychodzi poza nią. */}
+                    <rect x={b.xRcd - 26} y={top - 8} width={52} height={12} rx={6} fill="#FDF6EF" stroke="#C1793F" strokeWidth={0.8} />
+                    <text x={b.xRcd} y={top + 0.5} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#8A5526">
                       {b.tag} · 30 mA
                     </text>
                   </g>
@@ -500,9 +513,11 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                         fill="#C1793F"
                       />
                     )}
-                    <text x={x + w / 2} y={y - 20} textAnchor="middle" fontSize={11} fontWeight={700} fill="#16202B">
-                      {d.tag}
-                    </text>
+                    {!(d.kind === "rcd" && zPlakietka.has(d.tag)) && (
+                      <text x={x + w / 2} y={y - 20} textAnchor="middle" fontSize={11} fontWeight={700} fill="#16202B">
+                        {d.tag}
+                      </text>
+                    )}
 
                     <g transform={`translate(${x} ${y})`}>
                       <rect width={w} height={DEVICE_H} rx={2.5} fill="#F7F8FA" stroke={stroke} strokeWidth={width} />
