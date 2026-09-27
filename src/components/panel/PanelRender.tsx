@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
-import { PHASE_COLORS, accentForDevice, daSieSkasowac, layoutPanel } from "@/lib/panel/devices";
+import { PHASE_COLORS, accentForDevice, daSieSkasowac, layoutPanel, podpisPrzewoduNaFroncie } from "@/lib/panel/devices";
 import { zawijNaDwieLinie } from "@/lib/tekst";
 import type { SizedCircuit } from "@/lib/panel/sizing";
 import type { PanelDevice } from "@/types";
@@ -546,8 +546,10 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                         w tym widoku nie ma z założenia. */}
                     <g transform={`translate(${x} ${y + DEVICE_H + 9})`}>
                       {sized?.kabel && (
-                        <text x={w / 2} y={7} textAnchor="middle" fontSize={6.8} fill="#8494A5">
-                          {sized.kabel.replace("YDYp ", "")}
+                        <text x={w / 2} y={7} textAnchor="middle" fontSize={6.8} fill="#8494A5" data-podpis-przewodu="">
+                          {/* Pełna nazwa w dymku — przy wąskim aparacie podpis jest skrócony. */}
+                          <title>{sized.kabel}</title>
+                          {podpisPrzewoduNaFroncie(sized.kabel, d.modules)}
                         </text>
                       )}
                       {phase === "3F" ? (

@@ -101,6 +101,22 @@ export function jestOdplywem(d: Pick<PanelDevice, "kind">): boolean {
   return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank" && d.kind !== "lampka";
 }
 
+/**
+ * Podpis przewodu pod aparatem na froncie rozdzielnicy.
+ *
+ * Pełny podpis („3x2,5 mm²") ma przy czcionce frontu ok. 42 px, a aparat jednomodułowy
+ * — 30 px. Nad rzędem wąskich wyłączników podpisy zlewały się w jeden ciąg
+ * („3x2,5 mm²3x2,5 mm²3x2,5…"). Przy aparacie o szerokości jednego modułu zostaje
+ * więc sam przekrój („2,5") — liczba żył wynika z rodzaju obwodu, a pełny opis jest
+ * w dymku, na liście aparatów i w tabeli doboru. Szersze aparaty mają miejsce na całość.
+ */
+export function podpisPrzewoduNaFroncie(kabel: string, moduly: number): string {
+  const bezTypu = kabel.replace(/^YDYp\s+/, "");
+  if (moduly >= 2) return bezTypu;
+  const m = bezTypu.match(/^\d+\s*[x×]\s*([\d.,]+)/);
+  return m ? m[1] : bezTypu;
+}
+
 export function daSieSkasowac(d: Pick<PanelDevice, "kind">): boolean {
   return d.kind !== "main" && d.kind !== "blank";
 }

@@ -7,10 +7,27 @@ import {
   daSieSkasowac,
   layoutPanel,
   MANUAL_DEVICE_TYPES,
+  podpisPrzewoduNaFroncie,
   przeniesAparat,
   ratedCurrent,
 } from "./devices";
 import type { Circuit, PanelDevice, RcdGroup } from "@/types";
+
+describe("podpisPrzewoduNaFroncie", () => {
+  it("wąski aparat (1 moduł) dostaje sam przekrój — pełny podpis zlewał się z sąsiednimi", () => {
+    expect(podpisPrzewoduNaFroncie("YDYp 3x2,5 mm²", 1)).toBe("2,5");
+    expect(podpisPrzewoduNaFroncie("YDYp 3x1,5 mm²", 1)).toBe("1,5");
+  });
+
+  it("szerszy aparat ma miejsce na pełny podpis (bez nazwy typu przewodu)", () => {
+    expect(podpisPrzewoduNaFroncie("YDYp 5x2,5 mm²", 3)).toBe("5x2,5 mm²");
+    expect(podpisPrzewoduNaFroncie("YDYp 5x4 mm²", 4)).toBe("5x4 mm²");
+  });
+
+  it("podpis w innym formacie zostaje taki, jaki jest", () => {
+    expect(podpisPrzewoduNaFroncie("przewód własny", 1)).toBe("przewód własny");
+  });
+});
 
 describe("ratedCurrent", () => {
   it("wyciąga liczbę z etykiety", () => {
