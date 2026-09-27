@@ -62,7 +62,7 @@ test("jedno kliknięcie wypełnia wszystkie cztery zakładki przepływu", async 
   // to dlatego w przykładzie stoi rozdzielnica (patrz `elementy` w lib/demo/mieszkanie.ts).
   await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
   await expect(page.getByText(/Metry kabla policzone z tras po planie/)).toBeVisible();
-  await expect(page.getByText("RAZEM brutto")).toBeVisible();
+  await expect(page.locator("tfoot").getByText("RAZEM brutto")).toBeVisible();
 });
 
 test("pasek przykładu jedzie za użytkownikiem po zakładkach", async ({ page }) => {
