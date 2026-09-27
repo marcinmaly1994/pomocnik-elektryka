@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PROTOCOL_DEFS, protocolVerdict, type ProtocolRow } from "./protocols";
+import { PROTOCOL_DEFS, protocolVerdict, wierszeBezOceny, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
@@ -196,5 +196,27 @@ describe("protocolVerdict", () => {
   it("tabelaryczny: wszystkie wiersze pozytywne -> pozytywny", () => {
     const rows: ProtocolRow[] = [{ r: 10 }, { r: 20 }];
     expect(protocolVerdict(PROTOCOL_DEFS.uziemienie, rows, 30)).toBe(true);
+  });
+
+  it("tabelaryczny: wiersz bez wyniku obok pozytywnych -> brak kompletu, a nie pozytywny", () => {
+    const rows: ProtocolRow[] = [{ r: 10 }, {}, {}];
+    expect(protocolVerdict(PROTOCOL_DEFS.uziemienie, rows, 30)).toBeNull();
+    expect(wierszeBezOceny(PROTOCOL_DEFS.uziemienie, rows, 30)).toBe(2);
+  });
+
+  it("tabelaryczny: negatywny przesądza, nawet gdy są wiersze bez wyniku", () => {
+    const rows: ProtocolRow[] = [{ r: 50 }, {}];
+    expect(protocolVerdict(PROTOCOL_DEFS.uziemienie, rows, 30)).toBe(false);
+  });
+
+  it("checklist: jedna pozycja zgodna, reszta nieoceniona -> brak kompletu", () => {
+    const rows: ProtocolRow[] = [{ text: "x", status: "tak" }, { text: "y", status: "" }, { text: "z", status: "" }];
+    expect(protocolVerdict(PROTOCOL_DEFS.ogledziny, rows, 0)).toBeNull();
+    expect(wierszeBezOceny(PROTOCOL_DEFS.ogledziny, rows, 0)).toBe(2);
+  });
+
+  it("checklist: same n/d to jeszcze nie ocena", () => {
+    const rows: ProtocolRow[] = [{ text: "x", status: "nd" }];
+    expect(protocolVerdict(PROTOCOL_DEFS.ogledziny, rows, 0)).toBeNull();
   });
 });
