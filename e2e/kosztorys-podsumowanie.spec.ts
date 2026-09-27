@@ -41,3 +41,36 @@ test("wartości w tabeli z polskim przecinkiem dziesiętnym", async ({ page }) =
   expect(placeholdery.length).toBeGreaterThan(10);
   for (const p of placeholdery) expect(p).toMatch(/^\d+,\d{2}$/);
 });
+
+/**
+ * Tabela kosztorysu: grupy z sumą częściową, pozycje bez ceny widoczne w wierszu
+ * i rozsądna szerokość na monitorze.
+ */
+test("pozycje w grupach z sumą częściową; suma grup = netto", async ({ page }) => {
+  await otworz(page);
+  const grupy = page.getByTestId("grupa-kosztorysu");
+  await expect(grupy.filter({ hasText: "Przewody" })).toBeVisible();
+  expect(await grupy.count()).toBeGreaterThanOrEqual(6);
+  const sumy = await grupy.evaluateAll((gs) =>
+    gs.map((g) => Number((g.querySelector(".pe-mono")?.textContent || "").replace(/[^\d,]/g, "").replace(",", ".")))
+  );
+  const netto = await page.getByTestId("podsumowanie-kosztorysu").evaluate((e) => {
+    const dd = [...e.querySelectorAll("dt")].find((d) => d.textContent === "Netto")!.nextElementSibling!;
+    return Number(dd.textContent!.replace(/[^\d,]/g, "").replace(",", "."));
+  });
+  expect(sumy.reduce((a, b) => a + b, 0)).toBeCloseTo(netto, 2);
+});
+
+test("pozycje bez ceny są oznaczone w samym wierszu", async ({ page }) => {
+  await otworz(page);
+  const bez = page.locator("tr[data-bez-ceny]");
+  await expect(bez).toHaveCount(4);
+  await expect(bez.filter({ hasText: "Robocizna" })).toContainText("Bez ceny — nie wchodzi do sumy");
+});
+
+test("na szerokim ekranie nazwa pozycji nie odjeżdża od liczb", async ({ page }) => {
+  await otworz(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const szer = await page.locator("thead th").first().evaluate((e) => e.getBoundingClientRect().width);
+  expect(szer).toBeLessThan(700);
+});

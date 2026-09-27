@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, podsumowanieKosztorysu, stawkaVatZZapisu, kluczKabla, DEFAULT_PRICES, PRICE_LABELS, type CostRow } from "./costs";
+import { computeCosts, kosztorysRows, parsePriceCsv, pozycjeBezCeny, podsumowanieKosztorysu, stawkaVatZZapisu, kluczKabla, DEFAULT_PRICES, PRICE_LABELS, GRUPY_KOSZTORYSU, pogrupujWiersze, bezCeny, type CostRow } from "./costs";
 import type { Circuit, InstallationElement, RcdGroup } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
@@ -534,5 +534,36 @@ describe("parsePriceCsv — aparaty dokładane w Rozdzielnicy", () => {
       glowny: 120,
       mcb: 15,
     });
+  });
+});
+
+describe("grupy kosztorysu", () => {
+  const w = (key: string, value: number, qty = 1): CostRow => ({
+    key, label: key, qty, qtyOverridden: false, price: qty ? value / qty : 0, value, overridden: false,
+  });
+
+  it("każda pozycja cennika należy do dokładnie jednej grupy", () => {
+    for (const k of Object.keys(PRICE_LABELS)) {
+      const ile = GRUPY_KOSZTORYSU.filter((g) => g.klucze.includes(k)).length;
+      expect(ile, k).toBe(1);
+    }
+  });
+
+  it("dzieli wiersze na grupy z sumą częściową, pomija puste grupy", () => {
+    const g = pogrupujWiersze([w("gniazdko", 90), w("kabel25", 400), w("gniazdko400", 45), w("kabel15", 100)]);
+    expect(g.map((x) => x.nazwa)).toEqual(["Gniazda i zasilanie", "Przewody"]);
+    expect(g[0].suma).toBe(135);
+    expect(g[1].wiersze.map((r) => r.key)).toEqual(["kabel25", "kabel15"]);
+  });
+
+  it("pozycja spoza grup trafia do „Inne” zamiast zniknąć", () => {
+    const g = pogrupujWiersze([w("nowyKlucz", 10)]);
+    expect(g).toEqual([{ nazwa: "Inne", wiersze: [w("nowyKlucz", 10)], suma: 10 }]);
+  });
+
+  it("bez ceny = jest ilość, nie ma wartości", () => {
+    expect(bezCeny(w("oprawa", 0, 9))).toBe(true);
+    expect(bezCeny(w("oprawa", 0, 0))).toBe(false);
+    expect(bezCeny(w("gniazdko", 90, 6))).toBe(false);
   });
 });
