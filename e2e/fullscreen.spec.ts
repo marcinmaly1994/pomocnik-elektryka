@@ -515,3 +515,73 @@ test.describe("telefon w pełnym ekranie", () => {
     expect(b.x + b.width).toBeLessThanOrEqual(375);
   });
 });
+
+/**
+ * Pełny ekran na szerokim oknie: opcje ZAZNACZENIA w panelu, który wysuwa się sam.
+ *
+ * Dotąd karta elementu siedziała w schowanym panelu (niewidoczna, dopóki ktoś nie
+ * najechał na krawędź), a karta ściany pływała nad rzutem u góry i zasłaniała
+ * okolicę zaznaczonej ściany — dwa różne miejsca na to samo.
+ */
+test.describe("zaznaczenie w pełnym ekranie", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  async function pelnyEkranZElementem(page: Page) {
+    await page.goto("/");
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await skipEntryScreen(page);
+    await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+    const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
+    await page.mouse.click(box.x + 300, box.y + 200);
+    await page.mouse.click(box.x + 600, box.y + 200);
+    await page.getByRole("button", { name: "Zakończ" }).click();
+    await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+    await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+    await expect.poll(() => pozycjaX(lewaKarta(page)), { timeout: 3000 }).toBeLessThan(0);
+  }
+
+  /** Środek pierwszej ściany na ekranie — z żywej transformacji sceny. */
+  async function srodekSciany(page: Page) {
+    return page.evaluate(() => {
+      const raw = localStorage.getItem("pomocnikelektryka_projekt_" + localStorage.getItem("pomocnikelektryka_projekt_biezacy"));
+      const w = JSON.parse(raw!).draft.walls[0].points as { x: number; y: number }[];
+      const st = (window as unknown as { Konva: { stages: Konva.Stage[] } }).Konva.stages[0];
+      const c = st.container().getBoundingClientRect();
+      const t = st.getAbsoluteTransform().point({ x: (w[0].x + w[1].x) / 2, y: (w[0].y + w[1].y) / 2 });
+      return { x: c.left + t.x, y: c.top + t.y };
+    });
+  }
+
+  test("zaznaczenie ściany wysuwa panel z kartą, a pigułka nad rzutem jej nie powtarza", async ({ page }) => {
+    await pelnyEkranZElementem(page);
+    await page.waitForTimeout(900); // autozapis — z niego bierzemy współrzędne ściany
+    const p = await srodekSciany(page);
+    await page.mouse.click(p.x, p.y);
+
+    const karta = lewaKarta(page);
+    await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeGreaterThanOrEqual(0);
+    const kartaSciany = page.getByTestId("karta-sciany");
+    await expect(kartaSciany).toHaveCount(1);
+    await expect(page.getByTestId("karta-narzedzi").getByTestId("karta-sciany")).toBeVisible();
+
+    // Ruch myszy nad rzutem NIE chowa panelu, dopóki coś jest zaznaczone.
+    await page.mouse.move(900, 500);
+    await page.waitForTimeout(300);
+    expect(await pozycjaX(karta)).toBeGreaterThanOrEqual(0);
+
+    // Odznaczenie (klik w pusty rzut) chowa go z powrotem.
+    await page.mouse.click(1300, 800);
+    await expect.poll(() => pozycjaX(karta), { timeout: 3000 }).toBeLessThan(0);
+  });
+});
+
+test("na pustej kondygnacji nie ma „Zaznacz kilka” — nie ma czego zaznaczać", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await skipEntryScreen(page);
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+  await expect(page.getByTestId("panel-zaznacz")).toBeVisible();
+  await expect(page.getByTestId("zaznacz-kilka")).toHaveCount(0);
+});

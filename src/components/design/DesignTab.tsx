@@ -979,8 +979,18 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     widokRef.current?.przesunOPiksele(el.getBoundingClientRect().left - przed, 0);
   }, [przypietyPanel, panelZwiniety, kontenerPlotna]);
 
-  // Panel: widoczny pod kursorem albo przypięty. Paski poziome: zawsze.
-  const widocznaLewa = chromeLewo || przypietyPanel;
+  /**
+   * Coś zaznaczone w pełnym ekranie na szerokim oknie — panel wysuwa się wtedy sam, bo
+   * stoją w nim opcje zaznaczenia (karta elementu, ściany, pomieszczenia, operacje na
+   * grupie; patrz `trescKontekstu`). Bez tego karta elementu siedziała w schowanym
+   * panelu i nikt jej nie widział. Odznaczenie chowa panel z powrotem, chyba że jest
+   * przypięty. Na telefonie nie: tam panel zasłoniłby prawie cały rysunek, a opcje
+   * zaznaczenia zostają w pigułce nad rzutem.
+   */
+  const zaznaczenieWysuwaPanel =
+    pelnyEkran && szerokieOkno && toolMode === "zaznacz" && (selected !== null || multiSelected.length > 0);
+  // Panel: widoczny pod kursorem, przypięty albo z opcjami zaznaczenia. Paski poziome: zawsze.
+  const widocznaLewa = chromeLewo || przypietyPanel || zaznaczenieWysuwaPanel;
 
   useEffect(() => {
     if (!pelnyEkran) {
@@ -2298,12 +2308,24 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     );
   })();
 
-  const kontekstoweTresc = (
+  /**
+   * Treść kontrolek kontekstowych w zadanym zakresie.
+   *
+   * W pełnym ekranie na szerokim oknie część ZAZNACZENIA (przełącznik „Zaznacz kilka",
+   * operacje na grupie, karta ściany, trasa, szerokość otworu) idzie do panelu obok
+   * paska — tam, gdzie karta elementu — a pigułka nad rzutem zostaje dla RYSOWANIA
+   * (grubość ściany, kształt pomieszczenia, otwory, kalibracja). Dotąd karta ściany
+   * pływała nad rzutem i zasłaniała okolicę zaznaczonej ściany, a karta elementu stała
+   * w schowanym panelu — dwa różne miejsca na to samo.
+   */
+  const trescKontekstu = (zakres: "wszystko" | "zaznaczenie" | "rysowanie") => (
     <>
+      {zakres !== "rysowanie" && (
+      <>
       {/* Zatrzaśnięty Shift — jedyna droga do zaznaczenia wielokrotnego bez klawiatury
           i bez myszy (patrz `zaznaczanieWielokrotne`). Stoi NAD listą operacji na
           zaznaczeniu, bo to on je odblokowuje: najpierw się zaznacza, potem wyrównuje. */}
-      {toolMode === "zaznacz" && (
+      {toolMode === "zaznacz" && elements.length > 0 && (
         <button
           data-testid="zaznacz-kilka"
           onClick={() => setZaznaczanieWielokrotne((v) => !v)}
@@ -2375,6 +2397,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         </div>
       )}
 
+      </>
+      )}
+      {zakres !== "zaznaczenie" && (
+      <>
       {/* Grubość i ortogonalność ustawia się PRZED pierwszym kliknięciem, nie tylko
           w trakcie — stąd osobny warunek na `toolMode`, a nie na `drawingWall.length`. */}
       {toolMode === "sciany" && (
@@ -2423,6 +2449,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         </div>
       )}
 
+      </>
+      )}
+      {zakres !== "rysowanie" && (
+      <>
       {/* Grubość JUŻ ZAPISANEJ ściany — edytowalna tylko w trybie „zaznacz", tak jak
           uchwyty narożników w DesignCanvas (w trybie „ściany" klik dokłada nowy punkt). */}
       {/* Karta zaznaczonej ściany stoi TU (pigułka nad rzutem) na telefonie i w pełnym
@@ -2452,6 +2482,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           )}
         </div>
       )}
+      </>
+      )}
+      {zakres !== "zaznaczenie" && (
+      <>
       {/* Jedyna podpowiedź, jaką dostaje to narzędzie — bez ustawień typu grubość
           ściany/kształt pomieszczenia (stąd brak własnego coach-marka jak przy
           skali/ścianach, patrz `coachMark`), więc bez tej linijki jedyne wyjaśnienie
@@ -2484,6 +2518,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         </div>
       )}
 
+      </>
+      )}
+      {zakres !== "rysowanie" && (
+      <>
       {/* Szerokość ZAZNACZONEGO otworu — ten sam wzorzec co grubość zaznaczonej ściany
           wyżej. Wcześniej każdy otwór miał na sztywno 90 cm i nie było jak tego zmienić,
           więc drzwi balkonowe i okno tarasowe rysowały się jak zwykłe drzwi wewnętrzne. */}
@@ -2510,6 +2548,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         );
       })()}
 
+      </>
+      )}
+      {zakres !== "zaznaczenie" && (
+      <>
       {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
           poza nim byłby tylko szumem w pasku narzędzi. */}
       {toolMode === "pomieszczenie" && (
@@ -2646,8 +2688,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           </button>
         </div>
       )}
+      </>
+      )}
     </>
   );
+  const kontekstoweTresc = trescKontekstu("wszystko");
 
   return (
     // Na ekranie startowym zakładka sięga po CAŁĄ wolną wysokość okna (rodzic jest
@@ -3099,7 +3144,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           // zamiast się z nim nakładać.
           style={{ top: rozmiaryChrome.gora + 12 }}
         >
-          {kontekstoweTresc}
+          {/* Na szerokim oknie opcje zaznaczenia są w panelu — tu tylko rysowanie. */}
+          {szerokieOkno ? trescKontekstu("rysowanie") : kontekstoweTresc}
         </div>
       )}
 
@@ -3198,7 +3244,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               z definicji, a jej pinezka obok i tak jest sposobem na zmianę zdania. */}
           {pelnyEkran && widocznaLewa && !przypietyPanel && (
             <button
-              onClick={() => setChromeLewo(false)}
+              onClick={() => {
+                setChromeLewo(false);
+                // Panel wysunięty przez zaznaczenie schowa się dopiero razem z nim.
+                if (zaznaczenieWysuwaPanel) zaznaczenie.wyczysc();
+              }}
               title="Schowaj narzędzia — wrócą uchwytem przy krawędzi"
               aria-label="Schowaj narzędzia rysowania"
               className="absolute right-1 top-8 z-10 rounded bg-white/90 p-1 text-slate-300 transition-colors hover:text-slate-500"
@@ -3310,14 +3360,18 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               `DesignCanvas`. Tylko w JEDNYM miejscu naraz: dwie kopie dawałyby dwa
               przyciski „Zakończ" o tej samej nazwie. */}
           <NaglowekNarzedzia narzedzie={toolMode} />
-          {!pelnyEkran && szerokieOkno && kontekstoweAktywne && (
+          {szerokieOkno && kontekstoweAktywne && (
             // `flex-col`, nie `flex-wrap` jak w wersji pełnoekranowej: tam pigułka ma
             // całą szerokość okna i bloki spokojnie stoją obok siebie, tu kolumna ma
             // 268 px, więc każdy blok dostaje własny wiersz. `min-w-0` na kontenerze
             // pozwala długim podpowiedziom („przytrzymaj lewy przycisk i przeciągnij")
             // zawinąć się wewnątrz zamiast wypychać treść poza panel.
-            <div className="mb-2 flex min-w-0 flex-col items-start gap-2 rounded-card border border-copper/40 bg-[#FDF6EF] px-2.5 py-2 text-left shadow-sm">
-              {kontekstoweTresc}
+            //
+            // W pełnym ekranie — tylko część ZAZNACZENIA; rysowanie zostaje w pigułce nad
+            // rzutem (patrz `trescKontekstu`). `empty:hidden`: bez zaznaczenia i na
+            // pustej kondygnacji (bez „Zaznacz kilka") ramka nie ma czego pokazać.
+            <div className="mb-2 flex min-w-0 flex-col items-start gap-2 rounded-card border border-copper/40 bg-[#FDF6EF] px-2.5 py-2 text-left shadow-sm empty:hidden">
+              {pelnyEkran ? trescKontekstu("zaznaczenie") : kontekstoweTresc}
             </div>
           )}
 
