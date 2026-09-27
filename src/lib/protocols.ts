@@ -314,15 +314,30 @@ export const PROTOCOL_ORDER: ProtocolKey[] = [
   "odgromowa",
 ];
 
-/** Werdykt ogólny protokołu: `true` pozytywny, `false` negatywny, `null` brak kompletu danych. */
+/**
+ * Werdykt ogólny protokołu: `true` pozytywny, `false` negatywny, `null` brak kompletu danych.
+ *
+ * Niezgodność przesądza od razu — jeden zły pomiar czyni protokół negatywnym, niezależnie
+ * od reszty. Ale wynik POZYTYWNY wymaga oceny każdego wiersza: dotąd wiersze bez wyników
+ * były po prostu pomijane, więc jeden wypełniony pomiar izolacji na trzy wiersze albo
+ * jedna pozycja oględzin „zgodne" na dwanaście dawały „instalacja w badanym zakresie
+ * spełnia wymagania" — także na wydruku, czyli w dokumencie formalnym.
+ */
 export function protocolVerdict(def: ProtocolDef, rows: ProtocolRow[], limit: number): boolean | null {
   if (def.checklist) {
-    const bad = rows.filter((r) => r.status === "nie").length;
-    const done = rows.filter((r) => r.status && r.status !== "nd").length;
-    if (!done) return null;
-    return bad === 0;
+    if (rows.some((r) => r.status === "nie")) return false;
+    if (rows.some((r) => !r.status)) return null;
+    // Same „n/d" to jeszcze nie ocena — nic nie zostało sprawdzone jako zgodne.
+    return rows.some((r) => r.status === "tak") ? true : null;
   }
-  const evals = rows.map((r) => def.evaluate!(r, limit)).filter((v): v is boolean => v !== null);
-  if (!evals.length) return null;
-  return evals.every(Boolean);
+  const evals = rows.map((r) => def.evaluate!(r, limit));
+  if (evals.some((v) => v === false)) return false;
+  if (!evals.length || evals.some((v) => v === null)) return null;
+  return true;
+}
+
+/** Ile wierszy protokołu nie ma jeszcze oceny — do komunikatu „niekompletny". */
+export function wierszeBezOceny(def: ProtocolDef, rows: ProtocolRow[], limit: number): number {
+  if (def.checklist) return rows.filter((r) => !r.status).length;
+  return rows.filter((r) => def.evaluate!(r, limit) === null).length;
 }

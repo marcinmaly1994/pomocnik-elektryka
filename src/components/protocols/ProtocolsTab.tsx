@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
 import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
@@ -87,6 +87,15 @@ function TrescPozycji({ value, onChange, etykieta }: { value: string; onChange: 
       className="min-w-0 flex-1 basis-[calc(100%-2rem)] resize-none overflow-hidden bg-transparent text-sm leading-snug outline-none md:basis-auto"
     />
   );
+}
+
+/** „1 wiersz bez wyników", „3 wiersze…", „12 wierszy…" — albo pozycje oględzin. */
+function brakOpis(n: number, checklist: boolean): string {
+  const formy = checklist
+    ? ["pozycja bez oceny", "pozycje bez oceny", "pozycji bez oceny"]
+    : ["wiersz bez wyników", "wiersze bez wyników", "wierszy bez wyników"];
+  const kilka = n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14);
+  return `${n} ${n === 1 ? formy[0] : kilka ? formy[1] : formy[2]}`;
 }
 
 export function ProtocolsTab() {
@@ -355,6 +364,7 @@ export function ProtocolsTab() {
                 {st?.rows?.length ? `${st.rows.length} poz.` : "brak danych"}
                 {v === true && <span style={{ color: "#3B8C63" }}>· pozytywny</span>}
                 {v === false && <span style={{ color: "#C6433A" }}>· negatywny</span>}
+                {v === null && !!st?.rows?.length && <span style={{ color: "#8A5526" }}>· niekompletny</span>}
               </div>
             </button>
           );
@@ -567,6 +577,18 @@ export function ProtocolsTab() {
           </>
         )}
 
+        {/* Niekompletny ZAMIAST pozytywnego: wiersze bez wyników nie są „zgodne" — nikt ich
+            nie sprawdził (patrz `protocolVerdict`). Na wydruku stoi wtedy „Brak kompletu
+            danych", więc tu mówimy to samo i od razu, czego brakuje. */}
+        {verdict === null && rows.length > 0 && (() => {
+          const brak = wierszeBezOceny(def, rows, limit);
+          return (
+            <div className="mt-4 rounded-md p-3 text-sm" style={{ background: "#C1793F14", color: "#8A5526" }} data-testid="protokol-niekompletny">
+              Niekompletny — {brakOpis(brak, !!def.checklist)}.
+              {def.checklist ? " Oceń każdą pozycję albo usuń te, które nie dotyczą obiektu." : " Uzupełnij pomiary albo usuń puste wiersze."}
+            </div>
+          );
+        })()}
         {verdict !== null && (
           <div
             className="mt-4 rounded-md p-3 text-sm"
