@@ -13,12 +13,31 @@ import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { waskiEkran } from "@/lib/design";
 
-const HEADER_FIELDS: [string, string][] = [
-  ["obiekt", "Obiekt / nazwa instalacji"], ["adres", "Adres obiektu"], ["zleceniodawca", "Zleceniodawca"],
-  ["wykonawca", "Wykonawca pomiarów"], ["uprawnienia", "Nr uprawnień (SEP E/D)"], ["uklad", "Układ sieci"],
-  ["przyrzad", "Przyrząd pomiarowy"], ["nrFabryczny", "Nr fabryczny przyrządu"], ["swiadectwo", "Świadectwo wzorcowania"],
-  ["data", "Data pomiarów"], ["temperatura", "Temperatura [°C]"], ["wilgotnosc", "Wilgotność [%]"],
-  ["drawingNo", "Nr rysunku / dokumentu"], ["revision", "Rewizja"],
+/**
+ * Pola danych ogólnych w kolejności i szerokości układu od `xl` (siatka 12 kolumn,
+ * trzy wiersze: obiekt — wykonawca i przyrząd — warunki i dokument, z uwagami na końcu).
+ *
+ * Dotąd każde pole miało jedną trzecią szerokości karty: przy 1920 px temperatura „20"
+ * i rewizja „A" stały w polach po 600 px, a cała karta (ok. 500 px wysokości) spychała
+ * właściwy protokół pod krawędź ekranu (przy 1440×900 zaczynał się na ok. 910 px).
+ * Szerokość idzie teraz za długością wartości. Poniżej `xl` — jak dotąd (dwie albo trzy
+ * kolumny); od `xl` kolumna ma ok. 90 px, więc etykiety się jeszcze mieszczą.
+ */
+const HEADER_FIELDS: [string, string, string][] = [
+  ["obiekt", "Obiekt / nazwa instalacji", "xl:col-span-3"],
+  ["adres", "Adres obiektu", "xl:col-span-4"],
+  ["zleceniodawca", "Zleceniodawca", "xl:col-span-3"],
+  ["uklad", "Układ sieci", "xl:col-span-2"],
+  ["wykonawca", "Wykonawca pomiarów", "xl:col-span-3"],
+  ["uprawnienia", "Nr uprawnień (SEP E/D)", "xl:col-span-2"],
+  ["przyrzad", "Przyrząd pomiarowy", "xl:col-span-3"],
+  ["nrFabryczny", "Nr fabryczny przyrządu", "xl:col-span-2"],
+  ["swiadectwo", "Świadectwo wzorcowania", "xl:col-span-2"],
+  ["data", "Data pomiarów", "xl:col-span-2"],
+  ["temperatura", "Temperatura [°C]", "xl:col-span-2"],
+  ["wilgotnosc", "Wilgotność [%]", "xl:col-span-2"],
+  ["drawingNo", "Nr rysunku / dokumentu", "xl:col-span-2"],
+  ["revision", "Rewizja", "xl:col-span-1"],
 ];
 
 const DANE_ZWINIETE_KEY = "pomocnikelektryka_dane_ogolne_zwiniete";
@@ -272,10 +291,10 @@ export function ProtocolsTab() {
         </button>
         {!daneZwiniete && (
         <>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {HEADER_FIELDS.map(([k, label]) => (
-            <label key={k} className="block">
-              <div className="mb-1 text-xs text-slate-500">{label}</div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-12">
+          {HEADER_FIELDS.map(([k, label, szer]) => (
+            <label key={k} className={`block min-w-0 ${szer}`}>
+              <div className="mb-1 truncate text-xs text-slate-500" title={label}>{label}</div>
               {k === "uklad" ? (
                 <select
                   value={header.uklad}
@@ -302,8 +321,9 @@ export function ProtocolsTab() {
               )}
             </label>
           ))}
-        </div>
-        <label className="mt-3 block">
+        {/* Uwagi w tej samej siatce — w trzecim wierszu, obok warunków pomiaru, a nie
+            w osobnym pasie na całą szerokość karty. */}
+        <label className="block min-w-0 sm:col-span-2 lg:col-span-3 xl:col-span-3">
           <div className="mb-1 text-xs text-slate-500">Uwagi / zalecenia (drukowane na protokole)</div>
           <textarea
             value={header.uwagi || ""}
@@ -312,6 +332,7 @@ export function ProtocolsTab() {
             className="pe-input w-full text-sm"
           />
         </label>
+        </div>
         </>
         )}
         {/* Ostrzeżenie o brakach zostaje widoczne TAKŻE po zwinięciu — inaczej
@@ -408,7 +429,9 @@ export function ProtocolsTab() {
               <Plus size={14} /> Wczytaj listę kontrolną oględzin
             </button>
           ) : (
-            <div className="space-y-1">
+            // Najwyżej 56rem: przy 1920 px treść pozycji stała przy lewej krawędzi,
+            // a „zgodne / niezgodne / n/d" ok. 1600 px dalej.
+            <div className="space-y-1 xl:max-w-4xl" data-testid="lista-ogledzin">
               {/* Na wąskim ekranie pozycja łamie się na dwie linie: treść na całą
                   szerokość, pod nią oceny i kosz. W jednym rzędzie na treść zostawało
                   62 px („Izolacja pr…") i nie było wiadomo, co się właściwie ocenia. */}
