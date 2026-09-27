@@ -16,15 +16,22 @@ import { dystansPalcow, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from 
  * @param dopasujNaStarcie czy bez ręcznego wyboru rysunek ma wypełnić szerokość
  * @param srodekStartowyX punkt rysunku (x w jednostkach rysunku), który na starcie ma
  *   stanąć na środku okienka — np. wyłącznik główny schematu. Bez niego start od lewej.
+ * @param maxDopasowania do ilu „dopasuj do szerokości" wolno POWIĘKSZYĆ rysunek, gdy
+ *   okienko jest szersze od niego. Domyślnie 1 — rysunek tylko się zmniejsza.
  */
-export function usePowiekszanieRysunku(szerRysunku: number, dopasujNaStarcie: boolean, srodekStartowyX?: number) {
+export function usePowiekszanieRysunku(
+  szerRysunku: number,
+  dopasujNaStarcie: boolean,
+  srodekStartowyX?: number,
+  maxDopasowania = 1,
+) {
   const kontenerRef = useRef<HTMLDivElement>(null);
   /** Szerokość wnętrza pojemnika (bez paddingu) — do niej dopasowujemy. */
   const [dostepna, setDostepna] = useState(0);
   /** Powiększenie wybrane ręcznie; `null` = domyślne (dopasowane albo 100%). */
   const [reczny, setReczny] = useState<number | null>(null);
 
-  const dopasowany = dostepna > 0 ? Math.min(1, dostepna / szerRysunku) : 1;
+  const dopasowany = dostepna > 0 ? Math.min(maxDopasowania, dostepna / szerRysunku) : 1;
   const min = Math.min(0.25, dopasowany);
   const max = 3;
   const zoom = reczny ?? (dopasujNaStarcie ? dopasowany : 1);
