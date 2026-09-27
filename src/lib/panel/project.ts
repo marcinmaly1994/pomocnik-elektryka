@@ -210,6 +210,10 @@ export interface PhaseBalance {
   percent: Record<Phase, number>;
   /** Różnica między najbardziej i najmniej obciążoną fazą [%]. */
   spreadPct: number;
+  /** Ta sama różnica w amperach. Liczona tu, z prawdziwych prądów — zakładka liczyła
+   *  ją od maksimum z dolnym progiem 1 A (potrzebnym tylko do skali pasków), więc
+   *  przy zerowym obciążeniu pokazywała „rozrzut 1,0 A". */
+  spreadA: number;
 }
 
 /**
@@ -267,6 +271,7 @@ export function phaseBalance(sized: SizedCircuit[]): PhaseBalance {
     amps: { L1: round1(amps.L1), L2: round1(amps.L2), L3: round1(amps.L3) },
     percent,
     spreadPct: round1(Math.max(...values) - Math.min(...values)),
+    spreadA: round1(Math.max(amps.L1, amps.L2, amps.L3) - Math.min(amps.L1, amps.L2, amps.L3)),
   };
 }
 

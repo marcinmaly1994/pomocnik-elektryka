@@ -84,6 +84,23 @@ export function accentForDevice(d: PanelDevice): string {
  * na licu aparatu (`PanelRender`) i przycisk w oknie edycji (`EditDeviceModal`).
  * Rozjazd między nimi znaczyłby, że jedna droga kasuje coś, czego druga broni.
  */
+/**
+ * Czy aparat rysujemy jako gałąź odpływową pod szyną (MCB, RCBO, stycznik…).
+ * Wyklucza aparaty, które mają już własne, osobne miejsce na schemacie (main/spd/rcd/
+ * lampka) oraz `blank` — zaślepka nie jest prawdziwym aparatem, nie ma czego rysować.
+ * Wcześniej ten filtr sprawdzał wyłącznie `kind === "mcb"`, więc cały reszta katalogu
+ * (stycznik, przekaźnik, zasilacz, lampka, CZF, rozłącznik ppoż, RCBO…) po prostu
+ * znikała ze schematu bez żadnego ostrzeżenia. Lampka dostała WŁASNE miejsce (patrz
+ * `LampkaBranch`) zamiast rzędu wyłączników obwodowych, więc wypadła z tego filtru tak
+ * samo jak main/spd/rcd.
+ *
+ * Wspólne dla schematu i paska etapów (App.tsx): etap „Schemat" jest gotowy dopiero,
+ * gdy jest co narysować — sam rozłącznik główny to jeszcze nie schemat.
+ */
+export function jestOdplywem(d: Pick<PanelDevice, "kind">): boolean {
+  return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank" && d.kind !== "lampka";
+}
+
 export function daSieSkasowac(d: Pick<PanelDevice, "kind">): boolean {
   return d.kind !== "main" && d.kind !== "blank";
 }

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { CadGlyph, GLYPHS, labelOffset, LINE_W, STROKE } from "./deviceGlyphs";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits } from "@/lib/panel/project";
-import { buildPanelDevices, PHASE_COLORS } from "@/lib/panel/devices";
+import { buildPanelDevices, jestOdplywem, PHASE_COLORS } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
@@ -298,26 +298,12 @@ function PeTaps({ columns }: { columns: Column[] }) {
   );
 }
 
-/**
- * Czy aparat rysujemy jako gałąź odpływową pod szyną (MCB, RCBO, stycznik…).
- * Wyklucza aparaty, które mają już własne, osobne miejsce na schemacie (main/spd/rcd/
- * lampka) oraz `blank` — zaślepka nie jest prawdziwym aparatem, nie ma czego rysować.
- * Wcześniej ten filtr sprawdzał wyłącznie `kind === "mcb"`, więc cały reszta katalogu
- * (stycznik, przekaźnik, zasilacz, lampka, CZF, rozłącznik ppoż, RCBO…) po prostu
- * znikała ze schematu bez żadnego ostrzeżenia. Lampka dostała WŁASNE miejsce (patrz
- * `LampkaBranch`) zamiast rzędu wyłączników obwodowych, więc wypadła z tego filtru tak
- * samo jak main/spd/rcd.
- */
 /** „1 obwód", „3 obwody", „12 obwodów", „22 obwody" — polska odmiana liczebnika. */
 function odmiana(n: number, jeden: string, kilka: string, wiele: string): string {
   if (n === 1) return `1 ${jeden}`;
   const d = n % 10;
   const s = n % 100;
   return `${n} ${d >= 2 && d <= 4 && !(s >= 12 && s <= 14) ? kilka : wiele}`;
-}
-
-function jestOdplywem(d: PanelDevice): boolean {
-  return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank" && d.kind !== "lampka";
 }
 
 /** Jeden obwód odbiorczy: wyłącznik nadprądowy (symbol MCB użytkownika), znacznik przewodu i nazwa odbiornika. */

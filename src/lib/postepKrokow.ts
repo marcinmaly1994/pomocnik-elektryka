@@ -52,6 +52,13 @@ export interface FaktyEtapow {
   trybReczny: boolean;
   /** Aparaty dołożone ręcznie — utrzymują etapy 02-03 przy życiu nawet bez rzutu. */
   aparatyReczne: number;
+  /**
+   * Aparaty w ZAPISANEJ rozdzielnicy, które schemat rysuje jako gałęzie (odpływy
+   * i lampki — patrz `jestOdplywem`). Etap „Schemat" bez rzutu jest gotowy dopiero,
+   * gdy jest ich choć jeden: sam włączony tryb ręczny z rozłącznikiem głównym dawał
+   * „gotowy", a schemat pokazywał pusty stan.
+   */
+  odplywy: number;
 }
 
 export interface Etap {
@@ -134,14 +141,21 @@ export function etapy(f: FaktyEtapow): Etap[] {
           : `Dobrana z obwodów policzonych z rzutu${obwodyOpis}.`
         : "Wypełni się sama, gdy rozstawisz osprzęt na rzucie — albo złóż ją ręcznie.",
     },
-    {
-      id: "schemat",
-      stan: gotowe ? "gotowy" : "czeka",
-      plakietka: gotowe ? "gotowy" : "czeka",
-      opis: gotowe
-        ? "Schemat jednokreskowy rysuje się z rozdzielnicy."
-        : "Powstanie z rozdzielnicy — a ta z osprzętu rozstawionego na rzucie.",
-    },
+    (() => {
+      // Z rzutu schemat powstaje zawsze (rozdzielnica odbudowuje się z obwodów);
+      // bez rzutu — dopiero gdy w rozdzielnicy stoi co najmniej jeden odpływ.
+      const schematGotowy = f.elementy > 0 || f.odplywy > 0;
+      return {
+        id: "schemat" as const,
+        stan: schematGotowy ? ("gotowy" as const) : ("czeka" as const),
+        plakietka: schematGotowy ? "gotowy" : "czeka",
+        opis: schematGotowy
+          ? "Schemat jednokreskowy rysuje się z rozdzielnicy."
+          : gotowe
+            ? "Powstanie, gdy w rozdzielnicy stanie pierwszy wyłącznik obwodu."
+            : "Powstanie z rozdzielnicy — a ta z osprzętu rozstawionego na rzucie.",
+      };
+    })(),
     {
       id: "kosztorys",
       // Kosztorys, w odróżnieniu od dwóch etapów wyżej, liczy się WYŁĄCZNIE z rzutu:

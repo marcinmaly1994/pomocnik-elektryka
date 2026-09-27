@@ -8,6 +8,7 @@ const pusty: FaktyEtapow = {
   obwody: null,
   trybReczny: false,
   aparatyReczne: 0,
+  odplywy: 0,
 };
 
 const f = (patch: Partial<FaktyEtapow> = {}): FaktyEtapow => ({ ...pusty, ...patch });
@@ -59,13 +60,22 @@ describe("stan etapów przepływu", () => {
     // Tryb ręczny istnieje po to, żeby dobrać rozdzielnicę bez rysowania czegokolwiek
     // (wymiana tablicy, wycena) — próg liczony z zawartości rzutu mówiłby wtedy
     // „czeka" komuś, kto ma pełną rozdzielnicę.
-    const e = wg(f({ trybReczny: true, aparatyReczne: 6 }));
+    const e = wg(f({ trybReczny: true, aparatyReczne: 6, odplywy: 6 }));
     expect(e.rozdzielnica.stan).toBe("gotowy");
     expect(e.rozdzielnica.plakietka).toBe("ręcznie");
     expect(e.schemat.stan).toBe("gotowy");
     // Ale kosztorys NIE: ręczna rozdzielnica nie mówi, ile metrów kabla kupić.
     expect(e.kosztorys.stan).toBe("czeka");
     expect(e.kosztorys.opis).toContain("rozdzielnica");
+  });
+
+  it("sam tryb ręczny z rozłącznikiem głównym to jeszcze nie schemat", () => {
+    // Schemat pokazywał wtedy pusty stan, a kafelek twierdził „gotowy".
+    const e = wg(f({ trybReczny: true }));
+    expect(e.rozdzielnica.stan).toBe("gotowy");
+    expect(e.schemat.stan).toBe("czeka");
+    expect(e.schemat.opis).toContain("pierwszy wyłącznik");
+    expect(wg(f({ trybReczny: true, odplywy: 1 })).schemat.stan).toBe("gotowy");
   });
 
   it("każdy etap mówi, czego mu brakuje, a nie tylko że jest pusty", () => {

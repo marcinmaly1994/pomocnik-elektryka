@@ -230,8 +230,10 @@ export function PanelTab() {
     () => computeSelectivity(devices, mainRating, supply3f, maSpd, balance.amps),
     [devices, mainRating, supply3f, maSpd, balance]
   );
+  // Dolny próg 1 A tylko dla SKALI pasków (bez niego pusta rozdzielnica dzieliłaby
+  // przez zero) — rozrzut idzie z bilansu, z prawdziwych prądów.
   const maxPhase = Math.max(phaseLoad.L1, phaseLoad.L2, phaseLoad.L3, 1);
-  const phaseSpread = Math.round((maxPhase - Math.min(phaseLoad.L1, phaseLoad.L2, phaseLoad.L3)) * 10) / 10;
+  const phaseSpread = balance.spreadA;
   /**
    * Czy obciążenie faktycznie jest rozłożone równo — liczone z UDZIAŁÓW
    * (`spreadPct`), nie z amperów.
@@ -884,6 +886,18 @@ export function PanelTab() {
               </tr>
             </thead>
             <tbody>
+              {/* Pusta tabela pokazywała same nagłówki, bez słowa dlaczego. Dobór liczy
+                  się z obwodów rozstawionych na RZUCIE (przewód, długość trasy), więc
+                  aparaty dołożone ręcznie — bez rzutu — nie mają tu z czego powstać. */}
+              {sized.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="py-3 text-slate-500" data-testid="dobor-pusty">
+                    Brak obwodów do doboru. Dobór przekroju i zabezpieczenia liczy się z osprzętu rozstawionego na
+                    rzucie w zakładce „Instalacja” — aparaty dołożone tu ręcznie nie mają danych o przewodzie ani
+                    długości trasy.
+                  </td>
+                </tr>
+              )}
               {sized.map((s) => {
                 const bad = s.status === "error";
                 const warn = s.status === "warn";
