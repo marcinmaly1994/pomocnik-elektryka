@@ -772,7 +772,11 @@ function OknoRysunku({
   srodekStartowyX: number;
   children: React.ReactNode;
 }) {
-  const p = usePowiekszanieRysunku(szerokosc, false, srodekStartowyX);
+  // Na monitorze rysunek mieści się w okienku i stał w 100% przy lewej krawędzi —
+  // obok 190 px (1440) do 670 px (1920) pustki, a opisy obwodów po 7,5 px. Teraz rośnie
+  // do szerokości okienka (najwyżej 140%) i stoi pośrodku. Tam, gdzie się nie mieści
+  // (telefon, tablet w pionie), start jak dotąd: 100% z wyłącznikiem na środku.
+  const p = usePowiekszanieRysunku(szerokosc, "powiekszaj", srodekStartowyX, 1.4);
   return (
     <div className="space-y-2">
       <PrzyciskiPowiekszenia p={p} nazwa={{ dopelniacz: "schematu", biernik: "schemat" }} />
@@ -792,7 +796,7 @@ function OknoRysunku({
           viewBox={`0 0 ${szerokosc} ${wysokosc}`}
           width={szerokosc * p.zoom}
           height={wysokosc * p.zoom}
-          style={{ display: "block" }}
+          style={{ display: "block", margin: "0 auto" }}
         >
           {children}
         </svg>

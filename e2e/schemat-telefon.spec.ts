@@ -193,3 +193,23 @@ test("na monitorze schemat zostaje w naturalnym rozmiarze", async ({ page }) => 
   await otworzSchemat(page);
   expect(await powiekszenie(page)).toBe(100);
 });
+
+/**
+ * Szeroki monitor: rysunek mieści się w okienku z zapasem. Stał w 100% przy lewej
+ * krawędzi — obok nawet 670 px pustki, a opisy obwodów po 7,5 px. Rośnie teraz do
+ * szerokości okienka (najwyżej 140%) i stoi pośrodku.
+ */
+test.describe("szeroki monitor", () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  test("schemat powiększa się do okienka i stoi pośrodku", async ({ page }) => {
+    await otworzSchemat(page);
+    expect(await powiekszenie(page)).toBeGreaterThan(100);
+    const odstepy = await page.getByTestId("schemat-okno").evaluate((el) => {
+      const o = el.getBoundingClientRect();
+      const s = el.querySelector("svg")!.getBoundingClientRect();
+      return { lewy: s.left - o.left, prawy: o.right - s.right };
+    });
+    expect(Math.abs(odstepy.lewy - odstepy.prawy)).toBeLessThan(4);
+  });
+});
