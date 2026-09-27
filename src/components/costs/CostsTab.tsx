@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { AlertTriangle, ArrowLeft, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
@@ -6,7 +6,7 @@ import { computeRcdGroups } from "@/lib/panel/circuits";
 import { buildPanelDevices } from "@/lib/panel/devices";
 import { computeSizedCircuits, lowVoltageLengths, routeSummaries } from "@/lib/panel/project";
 import { ZAPAS_MONTAZOWY_M } from "@/lib/panel/norms";
-import { computeCosts, kosztorysRows, parsePriceCsv, podsumowanieKosztorysu, STAWKI_VAT, stawkaVatZZapisu } from "@/lib/costs";
+import { bezCeny, computeCosts, kosztorysRows, parsePriceCsv, pogrupujWiersze, podsumowanieKosztorysu, STAWKI_VAT, stawkaVatZZapisu } from "@/lib/costs";
 import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 import { buildCostsDoc, buildCostsPdf } from "@/lib/pdf/costs";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
@@ -287,11 +287,15 @@ export function CostsTab() {
 
         Zasilanie idzie PIERWSZE, bo to ono daje większość metrów.
       */}
+      {/* Od `xl` dwie kolumny: tabela najwyżej 64rem, notki (skąd metry kabla, puszki,
+          VAT) w wąskiej kolumnie obok. Tabela na całą szerokość rozciągała kolumnę
+          „Pozycja" do 942 px przy 1440 i 1422 px przy 1920 — nazwę od liczb dzieliło
+          kilkaset pikseli pustego wiersza. Kolejność w DOM bez zmian (notka, tabela,
+          uwagi), więc na węższych ekranach wszystko stoi jak dotąd, jedno pod drugim. */}
+      <div className="space-y-5 xl:grid xl:grid-cols-[minmax(0,64rem)_20rem] xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-5 xl:space-y-0">
       {rows.length > 0 && (
-        <div className="rounded-lg border border-border px-3 py-2 text-xs" style={{ background: "#F7F9FB" }}>
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Skąd wzięły się metry kabla
-          </div>
+        <div className="rounded-lg border border-border px-3 py-2 text-xs xl:col-start-2 xl:row-start-1" style={{ background: "#F7F9FB" }}>
+          <div className="mb-1.5 text-xs font-semibold text-slate-600">Skąd wzięły się metry kabla</div>
           <div className="space-y-1.5">
             <div
               className="flex items-start gap-2"
@@ -369,7 +373,7 @@ export function CostsTab() {
           wariant pusty był i tak nieosiągalny — widmowa puszka rozgałęźna sprawiała,
           że lista nigdy nie była pusta — a przy okazji odsyłał do zakładki
           „Zaprojektuj instalację", która nazywa się „Instalacja" od kroku 62. */}
-        <div className="pe-card overflow-hidden">
+        <div className="pe-card overflow-hidden xl:col-start-1 xl:row-span-2 xl:row-start-1">
           {/* Na telefonie wiersze są KARTAMI (nazwa na całą szerokość, pod nią ilość,
               cena i wartość), od 768 px — zwykłą tabelą. Samym CSS-em, na tym samym
               drzewie: druga kopia kontrolek dałaby dwa pola o tej samej nazwie.
@@ -385,13 +389,37 @@ export function CostsTab() {
               </tr>
             </thead>
             <tbody className="block md:table-row-group">
-              {rows.map((r) => (
+              {/* Pozycje w GRUPACH z sumą częściową (patrz `GRUPY_KOSZTORYSU`) — w płaskiej
+                  liście trzydziestu wierszy nie było widać, co kosztuje najwięcej. */}
+              {pogrupujWiersze(rows).map((g) => (
+                <Fragment key={g.nazwa}>
+                <tr className="block border-b md:table-row" style={{ borderColor: "#EEF1F4", background: "#F7F9FB" }} data-testid="grupa-kosztorysu">
+                  <td colSpan={4} className="block px-3 py-2 md:table-cell">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-semibold text-ink">{g.nazwa}</span>
+                      <span className="pe-mono text-sm text-slate-600">{formatLiczba(g.suma, 2)} zł</span>
+                    </div>
+                  </td>
+                </tr>
+              {g.wiersze.map((r) => (
                 <tr
                   key={r.key}
-                  className="grid grid-cols-[1fr_1fr_1.35fr] gap-x-2 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0"
+                  // Pozycja bez ceny nie wchodzi do sumy — widać to w SAMYM wierszu, tam,
+                  // gdzie się ją uzupełnia, a nie tylko w ostrzeżeniu pod tabelą.
+                  className={`grid grid-cols-[1fr_1fr_1.35fr] gap-x-2 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
+                    bezCeny(r) ? "bg-[#FDF6EF]" : "md:hover:bg-slate-50"
+                  }`}
                   style={{ borderColor: "#EEF1F4" }}
+                  data-bez-ceny={bezCeny(r) || undefined}
                 >
-                  <td className="col-span-3 font-medium md:p-3 md:font-normal">{r.label}</td>
+                  <td className="col-span-3 font-medium md:p-3 md:font-normal">
+                    {r.label}
+                    {bezCeny(r) && (
+                      <span className="mt-0.5 block text-xs font-normal" style={{ color: "#8A5526" }}>
+                        Bez ceny — nie wchodzi do sumy. Wpisz cenę jednostkową albo wartość pozycji.
+                      </span>
+                    )}
+                  </td>
                   {/* Ilość do poprawienia ręcznie. Aplikacja sama pisze pod tabelą, żeby
                       zweryfikować ilości na realnym rzucie — a puszki i robocizna to
                       czyste szacunki z liczby punktów i pomieszczeń. Puste pole = wartość
@@ -477,6 +505,8 @@ export function CostsTab() {
                   </td>
                 </tr>
               ))}
+                </Fragment>
+              ))}
             </tbody>
             <tfoot className="block md:table-footer-group">
               <tr className="flex items-baseline justify-between md:table-row [&>td]:grow md:[&>td]:grow-0">
@@ -551,7 +581,7 @@ export function CostsTab() {
           tłumaczyły tę samą liczbę na dwa wykluczające się sposoby — i to właśnie
           w miejscu, na podstawie którego kupuje się materiał. Zostaje tu tylko to,
           co jest szacunkiem ZAWSZE, niezależnie od skali i tras. */}
-      <div className="text-xs text-slate-400">
+      <div className="text-xs text-slate-400 xl:col-start-2 xl:row-start-2 xl:mt-4">
         Liczba puszek jest szacowana z liczby punktów instalacyjnych (podtynkowe) i pomieszczeń (rozgałęźne).
         Zweryfikuj ilości na realnym rzucie budynku przed zakupem materiału — każdą da się poprawić w kolumnie
         „Ilość”, a krzyżyk obok wraca do wartości z rzutu.
@@ -560,6 +590,7 @@ export function CostsTab() {
           wykonawcę. Sam zakup materiału, większy metraż i lokale użytkowe to 23%. W razie wątpliwości zapytaj
           wykonawcę albo księgowego.
         </span>
+      </div>
       </div>
 
       {/* Dokument składany jest RAZ, a „Pobierz" zapisuje dokładnie te bajty, które

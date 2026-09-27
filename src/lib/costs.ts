@@ -343,6 +343,70 @@ function nadpisane(map: Record<string, number>, key: string): boolean {
  * 14 500 zł ryczałtem” to zdanie sensowne i poprawienie liczby punktów na 85 nie zmienia
  * umówionej kwoty.
  */
+/**
+ * Grupy pozycji kosztorysu — w kolejności, w jakiej stoją w tabeli.
+ *
+ * Trzydzieści pozycji w jednej płaskiej liście nie mówiło, co kosztuje najwięcej:
+ * żeby zobaczyć, ile idzie na przewody, trzeba było sumować siedem wierszy w głowie.
+ * Grupa z sumą częściową odpowiada na to pytanie od razu. Klucze to te same, co
+ * w `PRICE_LABELS` — test pilnuje, żeby każdy trafił do dokładnie jednej grupy.
+ */
+export const GRUPY_KOSZTORYSU: { nazwa: string; klucze: string[] }[] = [
+  { nazwa: "Gniazda i zasilanie", klucze: ["gniazdko", "gniazdkoPodwojne", "gniazdkoHerm", "gniazdko400", "wypustAGD", "ladowarkaEV"] },
+  {
+    nazwa: "Łączniki i sterowanie",
+    klucze: ["wlacznik", "wlacznikDwubiegunowy", "wlacznikGrupowy", "wlacznikSchodowy", "wlacznikKrzyzowy", "sciemniacz", "czujnikRuchu", "termostat"],
+  },
+  { nazwa: "Oświetlenie i odbiorniki", klucze: ["oprawa", "tasmaLed", "wentylator", "napedRolety", "napedBramy"] },
+  { nazwa: "Teletechnika", klucze: ["rj45", "rtvsat", "domofon", "dzwonek", "czujnikDymu", "czujnikCzadu", "szafkaTeletech"] },
+  { nazwa: "Puszki", klucze: ["puszkaPodtynkowa", "puszkaRozgalezna"] },
+  {
+    nazwa: "Przewody",
+    klucze: [
+      "kabel15", "kabel25", "kabel4", "kabel3x4", "kabel3x6", "kabel3x10", "kabel3x16", "kabel3x25",
+      "kabel5x6", "kabel5x10", "kabel5x16", "kabel5x25", "kabelInny", "kabelLan", "kabelKoncentryk",
+    ],
+  },
+  {
+    nazwa: "Rozdzielnica i aparatura",
+    klucze: [
+      "rozdzielnica", "glowny", "rcd", "mcb", "mcb3f", "rcbo", "spd", "spdFuse", "rozBezp", "ovr", "ppoz",
+      "stycznik", "przekaznik", "zasilacz", "lampka",
+    ],
+  },
+  { nazwa: "Robocizna", klucze: ["robocizna"] },
+];
+
+export interface GrupaWierszy {
+  nazwa: string;
+  wiersze: CostRow[];
+  /** Suma wartości pozycji grupy [zł netto]. */
+  suma: number;
+}
+
+/**
+ * Wiersze kosztorysu podzielone na grupy (`GRUPY_KOSZTORYSU`), bez pustych grup.
+ * Wewnątrz grupy kolejność jest ta sama co w `rows`. Pozycja spoza wszystkich grup
+ * (nowy klucz, którego nikt tu nie dopisał) trafia do „Inne" na końcu, zamiast zniknąć.
+ */
+export function pogrupujWiersze(rows: CostRow[]): GrupaWierszy[] {
+  const przypisane = new Set<string>();
+  const grupy: GrupaWierszy[] = [];
+  for (const g of GRUPY_KOSZTORYSU) {
+    const wiersze = rows.filter((r) => g.klucze.includes(r.key));
+    wiersze.forEach((r) => przypisane.add(r.key));
+    if (wiersze.length) grupy.push({ nazwa: g.nazwa, wiersze, suma: wiersze.reduce((a, r) => a + r.value, 0) });
+  }
+  const inne = rows.filter((r) => !przypisane.has(r.key));
+  if (inne.length) grupy.push({ nazwa: "Inne", wiersze: inne, suma: inne.reduce((a, r) => a + r.value, 0) });
+  return grupy;
+}
+
+/** Pozycja, która MA ilość, ale nie ma wartości — nie wchodzi do sumy, trzeba uzupełnić cenę. */
+export function bezCeny(r: CostRow): boolean {
+  return r.value === 0 && r.qty !== 0;
+}
+
 export function kosztorysRows(
   quantities: Record<string, number>,
   prices: Record<string, number>,
