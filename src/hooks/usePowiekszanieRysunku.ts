@@ -13,7 +13,10 @@ import { dystansPalcow, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from 
  * nie powiększa przy tym całej strony.
  *
  * @param szerRysunku naturalna szerokość rysunku [px] (przy powiększeniu 1)
- * @param dopasujNaStarcie czy bez ręcznego wyboru rysunek ma wypełnić szerokość
+ * @param dopasujNaStarcie czy bez ręcznego wyboru rysunek ma wypełnić szerokość.
+ *   `"powiekszaj"` — dopasuj tylko wtedy, gdy rysunek się mieści (powiększ do
+ *   `maxDopasowania`), a gdy jest szerszy od okienka, zostaw 100%. „Dopasuj" i tak
+ *   pokaże wtedy całość.
  * @param srodekStartowyX punkt rysunku (x w jednostkach rysunku), który na starcie ma
  *   stanąć na środku okienka — np. wyłącznik główny schematu. Bez niego start od lewej.
  * @param maxDopasowania do ilu „dopasuj do szerokości" wolno POWIĘKSZYĆ rysunek, gdy
@@ -21,7 +24,7 @@ import { dystansPalcow, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from 
  */
 export function usePowiekszanieRysunku(
   szerRysunku: number,
-  dopasujNaStarcie: boolean,
+  dopasujNaStarcie: boolean | "powiekszaj",
   srodekStartowyX?: number,
   maxDopasowania = 1,
 ) {
@@ -34,7 +37,8 @@ export function usePowiekszanieRysunku(
   const dopasowany = dostepna > 0 ? Math.min(maxDopasowania, dostepna / szerRysunku) : 1;
   const min = Math.min(0.25, dopasowany);
   const max = 3;
-  const zoom = reczny ?? (dopasujNaStarcie ? dopasowany : 1);
+  const startowy = dopasujNaStarcie === "powiekszaj" ? Math.max(1, dopasowany) : dopasujNaStarcie ? dopasowany : 1;
+  const zoom = reczny ?? startowy;
 
   useEffect(() => {
     const el = kontenerRef.current;
