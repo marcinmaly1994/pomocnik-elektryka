@@ -291,7 +291,9 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
    * dopasowanie do szerokości, więc bez sięgania po powiększenie nic się nie zmienia.
    */
   const szerNaturalna = svgW * SKALA_WIDOKU;
-  const p = usePowiekszanieRysunku(szerNaturalna, true);
+  // Do 125%: na dużym monitorze kolumna frontu ma ponad 1000 px, a rysunek zatrzymany
+  // na 100% zostawiał obok pusty pas (patrz układ kolumn w PanelTab).
+  const p = usePowiekszanieRysunku(szerNaturalna, true, undefined, 1.25);
 
   // Rysunek rozdzielnicy traktujemy jak plan: suwak systemowy pod rysunkiem
   // technicznym wygląda jak podgląd pliku, a nie jak narzędzie. Tabele w kosztorysie

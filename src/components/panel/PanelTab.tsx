@@ -587,7 +587,12 @@ export function PanelTab() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-start gap-5">
+      {/* Od `xl` dwie kolumny bez zawijania: front bierze całą resztę szerokości
+          (i rośnie do 125%, patrz PanelRender), lista aparatów ma stałe 440 px i jedzie
+          przy przewijaniu obok frontu. Dotąd front miał sztywne 720 px, a lista
+          rozciągała się na resztę — przy 1920 px na 1132 px, z ikonkami kilkaset
+          pikseli od nazwy aparatu. Poniżej `xl` układ bez zmian. */}
+      <div className="flex flex-wrap items-start gap-5 xl:flex-nowrap">
         {/* Kolumna rysunku dostaje własną podstawę szerokości (`basis`) zamiast samego
             `flex-none`. Przy `flex-none` szerokość brał się z zawartości, a rysunek ma
             `width: 100%` — czyli wymiar zależny od rodzica. Takie wzajemne odwołanie
@@ -595,7 +600,7 @@ export function PanelTab() {
             niezależnie od tego, ile miejsca było obok. Teraz kolumna zna swoją szerokość,
             a rysunek może ją wypełnić; `max-w-full` pilnuje, żeby na wąskim ekranie
             zmalała zamiast rozpychać układ. */}
-        <div className="w-[720px] max-w-full flex-none">
+        <div className="w-[720px] max-w-full flex-none xl:w-auto xl:min-w-0 xl:flex-1">
           <PanelRender
             devices={devices}
             perRow={perRow}
@@ -609,7 +614,7 @@ export function PanelTab() {
           />
         </div>
 
-        <div className="pe-card min-w-[280px] flex-1 p-4">
+        <div className="pe-card min-w-[280px] flex-1 p-4 xl:sticky xl:top-4 xl:w-[440px] xl:flex-none" data-testid="lista-aparatow">
           <div className="mb-3 flex items-center gap-2">
             <FileText size={15} className="text-copper" />
             <h3 className="pe-display text-[15px]">Aparaty ({devices.length})</h3>
@@ -618,7 +623,11 @@ export function PanelTab() {
           {/* Typowa rozdzielnica domowa to ~10–15 aparatów; przy `max-h-72` (≈9 wierszy)
               ostatni wiersz był przecinany w połowie i wyglądał jak błąd renderowania,
               a nie jak przewijanie. Wyższy kontener mieści cały typowy zestaw. */}
-          <div className="pe-scroll mb-4 max-h-[26rem] space-y-1 overflow-y-auto">
+          {/* Od `xl` lista jest przyklejona obok frontu, więc jej wysokość liczy się
+              z okna (minus nagłówek karty i formularz „Dodaj aparat" pod nią), a nie
+              ze sztywnych 26rem — przy 14 aparatach i wysokim frontcie obok ostatnie
+              trzy trzeba było doprzewijać w małym okienku. */}
+          <div className="pe-scroll mb-4 max-h-[26rem] space-y-1 overflow-y-auto xl:max-h-[calc(100vh-17rem)]">
             {/* Na dotyku ikonki mają 40 × 44 px (były 13 × 13 — cztery obok siebie,
                 zmieniane palcem). Żeby nie zjadły opisu aparatu, na wąskim ekranie
                 wiersz łamie się na dwie linie: oznaczenie i opis u góry, wartość
