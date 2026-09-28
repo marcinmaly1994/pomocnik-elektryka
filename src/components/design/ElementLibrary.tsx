@@ -150,7 +150,7 @@ export function ElementLibrary({
                 onClick={() => setOpenSection((s) => (s === section.title ? null : section.title))}
                 className="flex w-full items-center justify-between px-2.5 py-2 text-left"
               >
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{section.title}</span>
+                <span className="text-xs font-semibold text-slate-600">{section.title}</span>
                 <span className="flex items-center gap-1.5">
                   <span className="text-[10px] text-slate-400">{section.items.length}</span>
                   {isOpen ? <ChevronDown size={13} className="text-slate-400" /> : <ChevronRight size={13} className="text-slate-400" />}

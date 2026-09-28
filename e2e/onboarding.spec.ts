@@ -103,12 +103,12 @@ test("ekran startowy prowadzi od wgrania rzutu przez skalę do pierwszego elemen
   await lenInput.fill("abc");
   await page.getByRole("button", { name: "Zatwierdź skalę" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.locator("span.pe-chip", { hasText: /m szer\./ })).toHaveCount(0);
+  await expect(page.getByTestId("szerokosc-rzutu")).toHaveCount(0);
 
   // poprawna wartość zapisuje skalę i odhacza krok 1
   await lenInput.fill("4");
   await page.getByRole("button", { name: "Zatwierdź skalę" }).click();
-  await expect(page.locator("span.pe-chip", { hasText: /m szer\./ })).toBeVisible();
+  await expect(page.getByTestId("szerokosc-rzutu")).toBeAttached();
   // ukończony krok zachowuje tytuł (z checkmarkiem) — znika tylko jego przycisk CTA,
   // a aktywny staje się krok następny
   await expect(card(page).getByRole("button", { name: "Ustaw skalę" })).toHaveCount(0);
@@ -193,7 +193,7 @@ test("podmiana podkładu po kalibracji proponuje rekalibrację zamiast kasować 
   await page.mouse.click(box.x + 320, box.y + 100);
   await page.getByLabel("Długość odcinka w metrach").fill("4");
   await page.getByRole("button", { name: "Zatwierdź skalę" }).click();
-  await expect(page.locator("span.pe-chip", { hasText: /m szer\./ })).toBeVisible();
+  await expect(page.getByTestId("szerokosc-rzutu")).toBeAttached();
 
   const { makePng } = await import("./_png");
   await page.setInputFiles('input[accept*="image"]', {
@@ -208,7 +208,7 @@ test("podmiana podkładu po kalibracji proponuje rekalibrację zamiast kasować 
 
   await expect(page.getByText(/Podkład się zmienił/)).toBeVisible();
   // skala NIE została skasowana — nadal jest pokazana
-  await expect(page.locator("span.pe-chip", { hasText: /m szer\./ })).toBeVisible();
+  await expect(page.getByTestId("szerokosc-rzutu")).toBeAttached();
   await page.getByRole("button", { name: "Skala jest OK" }).click();
   await expect(page.getByText(/Podkład się zmienił/)).toHaveCount(0);
 });
@@ -224,7 +224,7 @@ test("kolejna kondygnacja dziedziczy skalę, ale prosi o własne pomieszczenia",
   await page.mouse.click(box.x + 320, box.y + 100);
   await page.getByLabel("Długość odcinka w metrach").fill("4");
   await page.getByRole("button", { name: "Zatwierdź skalę" }).click();
-  const parterScale = await page.locator("span.pe-chip", { hasText: /m szer\./ }).textContent();
+  const parterScale = await page.getByTestId("szerokosc-rzutu").textContent();
 
   await page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true }).click();
   const box2 = await planBox(page);
@@ -240,7 +240,7 @@ test("kolejna kondygnacja dziedziczy skalę, ale prosi o własne pomieszczenia",
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
   // skala przyjechała z parteru — bez ponownego mierzenia
-  await expect(page.locator("span.pe-chip", { hasText: /m szer\./ })).toHaveText(parterScale!);
+  await expect(page.getByTestId("szerokosc-rzutu")).toHaveText(parterScale!);
   // ...ale pomieszczenia są własne i aplikacja o nie prosi
   await expect(page.getByText(/ma już skalę z parteru, ale nie ma jeszcze pomieszczeń/)).toBeVisible();
   // ekran startowy pozostaje pominięty (skala jest projektowa, nie per kondygnacja)
@@ -262,7 +262,7 @@ test("szybka ścieżka: rzut w znanej skali ustawia skalę bez mierzenia", async
   await expect(page.getByText(/rzut ma wtedy ok\. 42,?\.?0? m/)).toBeVisible();
 
   await page.getByRole("button", { name: "Zatwierdź skalę" }).click();
-  await expect(page.locator("span.pe-chip", { hasText: "42,0 m szer." })).toBeVisible();
+  await expect(page.getByTestId("szerokosc-rzutu")).toContainText("42,0 m");
 });
 
 test("„Narysuj dom samodzielnie” z EKRANU STARTOWEGO ustawia standardową skalę i odhacza krok 1", async ({ page }) => {

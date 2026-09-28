@@ -26,9 +26,16 @@ export interface PlanCheckPanelProps {
   issues: PlanIssue[];
   /** Pokaż na planie elementy, których dotyczy spostrzeżenie (zaznacza je). */
   onShowElements: (ids: string[]) => void;
+  /**
+   * Stan rozwinięcia trzymany przez rodzica — pozycja „Sprawdzenie" w pasku stanu
+   * musi móc kartę ROZWINĄĆ, jeśli użytkownik ją wcześniej zwinął. Bez tych dwóch
+   * propsów karta trzyma stan sama, jak dotąd.
+   */
+  przelaczone?: boolean | null;
+  onPrzelacz?: (otwarte: boolean) => void;
 }
 
-export function PlanCheckPanel({ issues, onShowElements }: PlanCheckPanelProps) {
+export function PlanCheckPanel({ issues, onShowElements, przelaczone: przelaczoneZ, onPrzelacz }: PlanCheckPanelProps) {
   const maProblemy = issues.some((i) => i.level === "error" || i.level === "warn");
   /**
    * `null` = użytkownik jeszcze nie decydował, więc karta sama się otwiera, gdy jest
@@ -36,7 +43,9 @@ export function PlanCheckPanel({ issues, onShowElements }: PlanCheckPanelProps) 
    * zamraża ten wybór do końca sesji — inaczej karta rozwijałaby się z powrotem
    * po każdym postawionym elemencie, czyli wyglądała na niedziałający przycisk.
    */
-  const [przelaczone, setPrzelaczone] = useState<boolean | null>(null);
+  const [przelaczoneWew, setPrzelaczoneWew] = useState<boolean | null>(null);
+  const przelaczone = przelaczoneZ !== undefined ? przelaczoneZ : przelaczoneWew;
+  const setPrzelaczone = onPrzelacz ?? setPrzelaczoneWew;
   const otwarte = przelaczone ?? maProblemy;
 
   const bledy = issues.filter((i) => i.level === "error").length;
