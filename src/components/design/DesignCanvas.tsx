@@ -27,6 +27,7 @@ import {
   skalaOpisowRzutu,
   szerokoscRamki,
   szerokoscTekstu,
+  zasiegNapisu,
 } from "@/lib/opisPomieszczenia";
 import {
   promieniePrzyciagania,
@@ -561,7 +562,7 @@ export function DesignCanvas({
       {
         fontNazwy: number;
         odsadzenieNazwy: number;
-        podpisy: { tekst: string; font: number; szer: number }[];
+        podpisy: { tekst: string; font: number; szer: number; zasieg: number }[];
         goraPodpisu: (i: number) => number;
         kotwica: Point;
         zajete: ZajeteMiejsce;
@@ -590,12 +591,13 @@ export function DesignCanvas({
           });
           // Ramka dokładnie na miarę napisu: stałe 100 jedn. (= 5 m!) łamały
           // dłuższe podpisy dopiero daleko poza małym pokojem.
-          return { tekst, font, szer: szerokoscRamki(tekst, font) };
+          return { tekst, font, szer: szerokoscRamki(tekst, font), zasieg: zasiegNapisu(tekst, font) };
         });
       /** Górna krawędź i-tego podpisu względem kotwicy — patrz komentarz przy `y` podpisu. */
       const goraPodpisu = (i: number) =>
         odsadzenieAdnotacji - (podpisy.length - 1 - i) * (10 / FALLBACK_FONT_ADNOTACJI) * podpisy[i].font;
-      const polSzer = Math.max(szerokoscRamki(r.name, fontNazwy), ...podpisy.map((p) => p.szer)) / 2;
+      // Zasięg napisów, a nie ich ramek — patrz `zasiegNapisu`.
+      const polSzer = Math.max(zasiegNapisu(r.name, fontNazwy), ...podpisy.map((p) => p.zasieg)) / 2;
       const blok = {
         lewo: polSzer,
         prawo: polSzer,
@@ -614,6 +616,7 @@ export function DesignCanvas({
         // (przedpokój w przykładzie — ok. 40 jedn. od środka).
         krok: fontNazwy / 2,
         krokow: 16,
+        odstep: fontNazwy * 0.15,
       });
       wynik.set(r.id, {
         fontNazwy,
