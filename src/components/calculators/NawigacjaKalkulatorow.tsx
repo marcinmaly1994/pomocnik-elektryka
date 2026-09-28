@@ -74,6 +74,40 @@ export function SzukajkaKalkulatorow({
   );
 }
 
+/**
+ * Wiersz listy bocznej na monitorze: sama nazwa, opis tylko przy aktywnej pozycji.
+ *
+ * Kafelki z dwuwierszowym opisem dawały ok. 1200 px listy — więcej niż okno. Lista
+ * jest przyklejona (`sticky`), więc przy 1440×900 dolne pozycje („Dobór oświetlenia",
+ * cała grupa „Zaawansowane") siedziały pod krawędzią ekranu i dało się do nich dojść
+ * tylko, przewijając stronę do samego końca. Opis zostaje w dymku (`title`); na ekranie
+ * startowym i w wynikach szukania — gdzie wybiera się po opisie — kafelki są pełne.
+ */
+function WierszListy({
+  pozycja,
+  aktywny,
+  onWybierz,
+}: {
+  pozycja: PozycjaKalkulatora;
+  aktywny: boolean;
+  onWybierz: (id: CalcId) => void;
+}) {
+  return (
+    <button
+      onClick={() => onWybierz(pozycja.id)}
+      title={aktywny ? undefined : pozycja.desc}
+      aria-current={aktywny ? "page" : undefined}
+      className={`w-full rounded-md px-2.5 py-1 text-left ${aktywny ? "" : "hover:bg-white"}`}
+      style={aktywny ? { background: "#2D5A8C14", boxShadow: "inset 2px 0 0 #2D5A8C" } : undefined}
+    >
+      <div className="text-[13px] leading-5" style={{ color: aktywny ? "#2D5A8C" : "#16202B", fontWeight: aktywny ? 500 : 400 }}>
+        {pozycja.label}
+      </div>
+      {aktywny && <div className="pb-0.5 text-[11px] leading-snug text-slate-500">{pozycja.desc}</div>}
+    </button>
+  );
+}
+
 function Kafel({
   pozycja,
   aktywny,
@@ -110,6 +144,7 @@ export function ListaKalkulatorow({
   zwiniete,
   onPrzelaczGrupe,
   onWybierz,
+  zwarta = false,
 }: {
   lista: PozycjaKalkulatora[];
   aktywny: CalcId | null;
@@ -117,8 +152,11 @@ export function ListaKalkulatorow({
   zwiniete: GrupaId[];
   onPrzelaczGrupe: (id: GrupaId) => void;
   onWybierz: (id: CalcId) => void;
+  /** Wiersze zamiast kafelków (lista boczna na monitorze, patrz `WierszListy`). */
+  zwarta?: boolean;
 }) {
   const szuka = fraza.trim() !== "";
+  const Pozycja = zwarta ? WierszListy : Kafel;
   const widoczne = filtruj(lista, fraza);
   // W trakcie szukania grupy schodzą z drogi: liczy się jedna, krótka lista trafień,
   // a nie utrzymanie struktury, przez którą trzeba by wodzić wzrokiem.
@@ -133,7 +171,7 @@ export function ListaKalkulatorow({
   }
 
   return (
-    <div className="space-y-3">
+    <div className={zwarta ? "space-y-2" : "space-y-3"}>
       {pogrupuj(widoczne).map(({ grupa, pozycje }) => {
         if (pozycje.length === 0) return null;
         const schowana = zwiniete.includes(grupa.id);
@@ -143,16 +181,18 @@ export function ListaKalkulatorow({
               onClick={() => onPrzelaczGrupe(grupa.id)}
               aria-expanded={!schowana}
               // Na dotyku 44 px wysokości — przy 17 px zwijanie grupy palcem było loterią.
-              className="mb-1.5 flex w-full items-center gap-1 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-copper [@media(pointer:coarse)]:min-h-11"
+              // Nazwa grupy zwykłą pisownią, jak na ekranie startowym — wersaliki mówiły
+              // o tych samych grupach innym głosem niż kafelki obok.
+              className={`${zwarta ? "mb-0.5" : "mb-1.5"} flex w-full items-center gap-1 text-left text-xs font-semibold text-slate-500 hover:text-copper [@media(pointer:coarse)]:min-h-11`}
             >
               {schowana ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
               {grupa.tytul}
-              <span className="ml-auto font-normal normal-case tracking-normal text-slate-300">{pozycje.length}</span>
+              <span className="ml-auto font-normal text-slate-300">{pozycje.length}</span>
             </button>
             {!schowana && (
-              <div className="space-y-1.5">
+              <div className={zwarta ? "space-y-px" : "space-y-1.5"}>
                 {pozycje.map((p) => (
-                  <Kafel key={p.id} pozycja={p} aktywny={p.id === aktywny} onWybierz={onWybierz} />
+                  <Pozycja key={p.id} pozycja={p} aktywny={p.id === aktywny} onWybierz={onWybierz} />
                 ))}
               </div>
             )}
@@ -258,7 +298,7 @@ export function EkranStartowy({
     <div className="space-y-6">
       {ostatnieDoPokazania.length > 0 && (
         <div>
-          <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <h3 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink">
             <Clock size={12} /> Ostatnio używane
           </h3>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

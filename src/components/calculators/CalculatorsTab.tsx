@@ -1041,15 +1041,25 @@ export function CalculatorsTab() {
             trzecią szerokości, która przydaje się kafelkom.
 
             Poniżej `lg` znika na rzecz `WyborKalkulatoraMobile`: przy zawijaniu
-            siadała nad treścią i spychała właściwy kalkulator dwa ekrany w dół. */}
+            siadała nad treścią i spychała właściwy kalkulator dwa ekrany w dół.
+
+            Wysokość najwyżej okna: przyklejona lista wyższa od ekranu chowała dolne
+            pozycje pod jego krawędzią. Jeśli po rozwinięciu wszystkich grup nadal się
+            nie mieści, przewija się sama lista, a wyszukiwarka zostaje na górze. */}
         {activeCalc && (
-        <div className="hidden self-start lg:sticky lg:top-4 lg:block" style={{ width: 260, flexShrink: 0, flexGrow: 0 }}>
+        <div
+          className="hidden self-start lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-2rem)] lg:flex-col"
+          style={{ width: 260, flexShrink: 0, flexGrow: 0 }}
+          data-testid="lista-kalkulatorow"
+        >
           <SzukajkaKalkulatorow
             fraza={frazaSzukania}
             onZmien={setFrazaSzukania}
             liczbaWynikow={filtruj(CALC_LIST, frazaSzukania).length}
           />
+          <div className="-mx-1 min-h-0 overflow-y-auto px-1 pb-1">
           <ListaKalkulatorow
+            zwarta
             lista={CALC_LIST}
             aktywny={activeCalc}
             fraza={frazaSzukania}
@@ -1063,10 +1073,15 @@ export function CalculatorsTab() {
             }
             onWybierz={setActiveCalc}
           />
+          </div>
         </div>
         )}
 
-        <div style={{ flex: "1 1 480px", minWidth: 320 }}>
+        {/* Kalkulator najwyżej 60rem. Na całą szerokość przy 1920 px pole „Moc" na
+            „2000" miało 700 px, jednostka „W" stała daleko za nim, a „Rachunek krok po
+            kroku" ciągnął się w wierszach po 200 znaków. Ekran startowy (bez listy
+            bocznej) zostaje szeroki — tam miejsce zajmują kafelki w trzech kolumnach. */}
+        <div style={{ flex: "1 1 480px", minWidth: 320, maxWidth: activeCalc ? "60rem" : undefined }} data-testid="kalkulator">
           {activeCalc && (
             <WyborKalkulatoraMobile
               lista={CALC_LIST}
