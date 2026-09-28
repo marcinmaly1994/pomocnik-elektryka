@@ -94,8 +94,10 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
                 <div className="text-[11px] text-slate-500">{k.opis}</div>
                 <div className="pe-mono text-[11.5px] text-slate-600">{k.wzor}</div>
                 {/* Podstawienie łamie się na wąskim ekranie zamiast rozpychać kartę —
-                    to najdłuższa linia w całym widoku. */}
-                <div className="pe-mono break-all text-[11.5px] text-slate-500">= {k.podstawienie}</div>
+                    to najdłuższa linia w całym widoku. Najpierw na spacjach, w środku
+                    słowa dopiero, gdy nie ma innego wyjścia: `break-all` cięło „tablicy"
+                    na „tab/licy" nawet tam, gdzie spacja była tuż obok. */}
+                <div className="pe-mono text-[11.5px] text-slate-500 [overflow-wrap:anywhere]">= {k.podstawienie}</div>
                 <div className="pe-mono text-[12.5px] font-semibold text-blueprint">= {k.wynik}</div>
               </div>
             ))}
