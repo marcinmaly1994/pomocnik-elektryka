@@ -61,3 +61,35 @@ test.describe("1920", () => {
     expect(box.width).toBeGreaterThan(1500);
   });
 });
+
+/**
+ * Dobór obwodu — jedyny kalkulator, w którym wynik spadał pod krawędź ekranu
+ * (przy 1440×900 zaczynał się na 874–901 px w trzech z czterech trybów).
+ */
+test.describe("Dobór obwodu 1440×900", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  for (const tryb of ["Szukam przekroju", "Mam przekrój", "Pełny dobór"]) {
+    test(`${tryb}: wynik na pierwszym ekranie, obok pól`, async ({ page }) => {
+      await page.goto("/kalkulatory/obwod");
+      await page.getByRole("tab", { name: tryb }).click();
+      const wynik = (await page.getByTestId("wynik-obok").boundingBox())!;
+      const pole = (await page.getByTestId("kalkulator").getByRole("combobox").first().boundingBox())!;
+      expect(wynik.y).toBeLessThan(600);
+      expect(wynik.x).toBeGreaterThan(pole.x + pole.width);
+    });
+  }
+
+});
+
+test.describe("Dobór obwodu poniżej xl", () => {
+  test.use({ viewport: { width: 1100, height: 900 } });
+
+  test("wynik pod polami, jak dotąd", async ({ page }) => {
+    await page.goto("/kalkulatory/obwod");
+    await page.getByRole("tab", { name: "Szukam przekroju" }).click();
+    const wynik = (await page.getByTestId("wynik-obok").boundingBox())!;
+    const pole = (await page.getByTestId("kalkulator").getByRole("combobox").first().boundingBox())!;
+    expect(wynik.y).toBeGreaterThan(pole.y + pole.height);
+  });
+});

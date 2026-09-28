@@ -88,6 +88,18 @@ const STARE_ADRESY: Record<string, TrybObwodu> = {
   wlz: "wlz",
 };
 
+/**
+ * „Dobór obwodu" od `xl`: pola po lewej, wynik po prawej.
+ *
+ * Jedyny kalkulator, w którym wynik spadał pod krawędź ekranu — przy 1440×900 zaczynał
+ * się na 874–901 px w trzech z czterech trybów (przełącznik trybu, ściąga cos φ i warunki
+ * ułożenia stoją przed nim). W pozostałych osiemnastu wynik jest na pierwszym ekranie,
+ * więc zostają w jednej kolumnie. Pola i wynik mają podobną wysokość, więc skutek zmiany
+ * pola widać obok, bez przewijania w dół i z powrotem. Poniżej `xl` — bez zmian, wynik
+ * pod polami.
+ */
+const UKLAD_POLA_WYNIK = "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] xl:items-start xl:gap-x-6";
+
 const CALC_LIST: { id: CalcId; label: string; desc: string }[] = [
   { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza" },
   { id: "obwod", label: "Dobór obwodu", desc: "przekrój, zabezpieczenie, WLZ i cztery kryteria w jednym" },
@@ -1127,229 +1139,235 @@ export function CalculatorsTab() {
           )}
           {activeCalc === "obwod" && trybObwodu === "przekroj" && (
             <Card title={active.label} tag="przekrój żyły">
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Rodzaj obwodu"
-                  value={circuitKind}
-                  onChange={(v) => setCircuitKind(v as CircuitKind)}
-                  options={CIRCUIT_KIND_OPTIONS}
-                />
-                <Field
-                  label="Moc odbiornika"
-                  value={power}
-                  onChange={(v) => setPower(Number(v))}
-                  unit="W"
-                />
-                <Field
-                  label="Zasilanie"
-                  value={phase}
-                  onChange={(v) => setPhase(v as "1" | "3")}
-                  options={PHASE_OPTIONS}
-                />
-                <Field
-                  label="Współczynnik cos φ"
-                  value={cosphi}
-                  onChange={(v) => setCosphi(Number(v))}
-                  step="0.05"
-                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej albo karty katalogowej. Nie znasz wartości? Rozwiń podpowiedź „Nie znasz cos φ?” poniżej."
-                />
-              </div>
-
-              {/* Ściąga cos φ — patrz `COSPHI_EXAMPLES`. Wiersze są KLIKALNE i wpisują
-                  wartość do pola wyżej: to jedyne pole formularza, którego laik nie ma
-                  skąd wziąć, a przepisywanie liczby ręcznie z tabelki obok pola byłoby
-                  krokiem bez powodu. Aktywny wiersz jest podświetlony, żeby było widać,
-                  która wartość siedzi w formularzu. */}
-              <details className="mb-3 rounded-lg border border-border bg-white/60">
-                <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold text-slate-600 hover:text-copper">
-                  Nie znasz cos φ? Zobacz orientacyjne wartości dla typowych odbiorników
-                </summary>
-                <div className="border-t border-border px-1.5 py-1.5">
-                  {COSPHI_EXAMPLES.map((e) => {
-                    const on = Math.abs(cosphi - e.cos) < 0.001;
-                    return (
-                      <button
-                        key={e.cos}
-                        type="button"
-                        onClick={() => setCosphi(e.cos)}
-                        title={`Wpisz cos φ = ${String(e.cos).replace(".", ",")}`}
-                        className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
-                        style={on ? { background: "#2D5A8C10" } : undefined}
-                      >
-                        <span
-                          className="pe-mono shrink-0 text-[12px] font-semibold"
-                          style={{ color: on ? "#2D5A8C" : "#8A5526" }}
-                        >
-                          {e.cos.toFixed(2).replace(".", ",")}
-                        </span>
-                        <span className="text-[11.5px] leading-snug text-slate-600">{e.odbiorniki}</span>
-                      </button>
-                    );
-                  })}
-                  <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
-                    Wartości orientacyjne, dla pracy przy pełnym obciążeniu — jeśli tabliczka znamionowa albo karta
-                    katalogowa podaje cos φ, wpisz TĘ wartość. Silnik obciążony częściowo ma cos φ wyraźnie niższy niż
-                    znamionowy (nawet 0,3–0,5 na biegu jałowym), więc dla odbiorników silnikowych pracujących z zapasem
-                    mocy przyjmij wartość niższą od podanej tutaj.
+              <div className={UKLAD_POLA_WYNIK}>
+                <div className="min-w-0">
+                  <div className="grid sm:grid-cols-2 gap-x-4">
+                    <Field
+                      label="Rodzaj obwodu"
+                      value={circuitKind}
+                      onChange={(v) => setCircuitKind(v as CircuitKind)}
+                      options={CIRCUIT_KIND_OPTIONS}
+                    />
+                    <Field
+                      label="Moc odbiornika"
+                      value={power}
+                      onChange={(v) => setPower(Number(v))}
+                      unit="W"
+                    />
+                    <Field
+                      label="Zasilanie"
+                      value={phase}
+                      onChange={(v) => setPhase(v as "1" | "3")}
+                      options={PHASE_OPTIONS}
+                    />
+                    <Field
+                      label="Współczynnik cos φ"
+                      value={cosphi}
+                      onChange={(v) => setCosphi(Number(v))}
+                      step="0.05"
+                      hint="Współczynnik mocy odbiornika — z tabliczki znamionowej albo karty katalogowej. Nie znasz wartości? Rozwiń podpowiedź „Nie znasz cos φ?” poniżej."
+                    />
                   </div>
-                </div>
-              </details>
 
-              <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Trasa i warunki ułożenia</div>
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Długość trasy (w jedną stronę)"
-                  value={length}
-                  onChange={(v) => setLength(Number(v))}
-                  unit="m"
-                />
-                <Field
-                  label="Sposób ułożenia"
-                  value={layingMethod}
-                  onChange={(v) => setLayingMethod(v as LayingMethod)}
-                  options={LAYING_METHOD_OPTIONS}
-                />
-                <Field
-                  label="Temperatura otoczenia"
-                  value={ambientC}
-                  onChange={(v) => setAmbientC(Number(v))}
-                  unit="°C"
-                />
-                <Field
-                  label="Obwodów we wspólnej trasie"
-                  value={bundleCount}
-                  onChange={(v) => setBundleCount(Number(v))}
-                  step="1"
-                  hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy. Więcej przewodów obok siebie gorzej oddaje ciepło, więc obniża dopuszczalną obciążalność każdego z nich."
-                />
-              </div>
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={motorStart}
-                  onChange={(e) => setMotorStart(e.target.checked)}
-                  className="h-4 w-4 rounded border-border"
-                />
-                Odbiornik z rozruchem silnikowym (pompa, lodówka, klimatyzacja) — charakterystyka C
-              </label>
-
-              {/* Budżet spadku napięcia dotyczy CAŁEJ drogi od złącza. Te dwa pola
-                  domykają rachunek: pierwsze odejmuje to, co zjadła już WLZ, drugie
-                  podnosi limit tam, gdzie transformator stoi na terenie obiektu. */}
-              <div className="grid gap-x-4 sm:grid-cols-2">
-                <Field
-                  label="Spadek napięcia na WLZ"
-                  value={spadekWlzPct}
-                  onChange={(v) => setSpadekWlzPct(Number(v))}
-                  unit="%"
-                  step="0.1"
-                  hint="Ile z budżetu spadku zużywa już odcinek od złącza do rozdzielnicy. Typowo 0,5-1%. Limit 3/5% liczy się od ZŁĄCZA, więc obwód odbiorczy ma do dyspozycji resztę — zostaw 0, jeśli liczysz sam obwód."
-                />
-              </div>
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={wlasnaStacja}
-                  onChange={(e) => setWlasnaStacja(e.target.checked)}
-                  className="h-4 w-4 rounded border-border"
-                />
-                Zasilanie z własnej stacji transformatorowej — limit spadku większy o 2 p.p.
-              </label>
-
-              <div className="mt-2 p-3 pe-result">
-                <div className="text-xs text-slate-500 mb-1">Wymagany przekrój żyły</div>
-                {sized.przekroj_mm2 ? (
-                  <>
-                    <div className="pe-mono text-lg text-blueprint">
-                      {String(sized.przekroj_mm2).replace(".", ",")} mm²
+                  {/* Ściąga cos φ — patrz `COSPHI_EXAMPLES`. Wiersze są KLIKALNE i wpisują
+                      wartość do pola wyżej: to jedyne pole formularza, którego laik nie ma
+                      skąd wziąć, a przepisywanie liczby ręcznie z tabelki obok pola byłoby
+                      krokiem bez powodu. Aktywny wiersz jest podświetlony, żeby było widać,
+                      która wartość siedzi w formularzu. */}
+                  <details className="mb-3 rounded-lg border border-border bg-white/60">
+                    <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold text-slate-600 hover:text-copper">
+                      Nie znasz cos φ? Zobacz orientacyjne wartości dla typowych odbiorników
+                    </summary>
+                    <div className="border-t border-border px-1.5 py-1.5">
+                      {COSPHI_EXAMPLES.map((e) => {
+                        const on = Math.abs(cosphi - e.cos) < 0.001;
+                        return (
+                          <button
+                            key={e.cos}
+                            type="button"
+                            onClick={() => setCosphi(e.cos)}
+                            title={`Wpisz cos φ = ${String(e.cos).replace(".", ",")}`}
+                            className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
+                            style={on ? { background: "#2D5A8C10" } : undefined}
+                          >
+                            <span
+                              className="pe-mono shrink-0 text-[12px] font-semibold"
+                              style={{ color: on ? "#2D5A8C" : "#8A5526" }}
+                            >
+                              {e.cos.toFixed(2).replace(".", ",")}
+                            </span>
+                            <span className="text-[11.5px] leading-snug text-slate-600">{e.odbiorniki}</span>
+                          </button>
+                        );
+                      })}
+                      <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
+                        Wartości orientacyjne, dla pracy przy pełnym obciążeniu — jeśli tabliczka znamionowa albo karta
+                        katalogowa podaje cos φ, wpisz TĘ wartość. Silnik obciążony częściowo ma cos φ wyraźnie niższy niż
+                        znamionowy (nawet 0,3–0,5 na biegu jałowym), więc dla odbiorników silnikowych pracujących z zapasem
+                        mocy przyjmij wartość niższą od podanej tutaj.
+                      </div>
                     </div>
-                    <div className="mt-2 flex gap-2 flex-wrap">
-                      <span className="pe-chip pe-tag-copper">{sized.kabel}</span>
-                      <span className="pe-chip pe-tag-blue">Ib {formatLiczba((sized.Ib_A ?? 0), 2)} A</span>
-                      <span className="pe-chip pe-tag-green">obc. dop. {sized.Iz_A} A</span>
-                      {sized.spadek_napiecia_pct !== null && (
-                        // Z podanym spadkiem na WLZ pokazujemy SUMĘ — bo to ona jest
-                        // porównywana z limitem — i rozbicie, żeby było widać, skąd wyszła.
-                        <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
-                          {sized.spadek_wlz_pct > 0
-                            ? `ΔU ${formatLiczba(sized.spadek_calkowity_pct, 2)}% = WLZ ${formatLiczba(sized.spadek_wlz_pct, 2)}% + obwód ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`
-                            : `ΔU ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`}
-                        </span>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-sm mt-2 flex items-center gap-1" style={{ color: "#A2352C" }}>
-                    <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
+                  </details>
+
+                  <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Trasa i warunki ułożenia</div>
+                  <div className="grid sm:grid-cols-2 gap-x-4">
+                    <Field
+                      label="Długość trasy (w jedną stronę)"
+                      value={length}
+                      onChange={(v) => setLength(Number(v))}
+                      unit="m"
+                    />
+                    <Field
+                      label="Sposób ułożenia"
+                      value={layingMethod}
+                      onChange={(v) => setLayingMethod(v as LayingMethod)}
+                      options={LAYING_METHOD_OPTIONS}
+                    />
+                    <Field
+                      label="Temperatura otoczenia"
+                      value={ambientC}
+                      onChange={(v) => setAmbientC(Number(v))}
+                      unit="°C"
+                    />
+                    <Field
+                      label="Obwodów we wspólnej trasie"
+                      value={bundleCount}
+                      onChange={(v) => setBundleCount(Number(v))}
+                      step="1"
+                      hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy. Więcej przewodów obok siebie gorzej oddaje ciepło, więc obniża dopuszczalną obciążalność każdego z nich."
+                    />
                   </div>
-                )}
-              </div>
+                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={motorStart}
+                      onChange={(e) => setMotorStart(e.target.checked)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    Odbiornik z rozruchem silnikowym (pompa, lodówka, klimatyzacja) — charakterystyka C
+                  </label>
 
-              {/* Wpływ sposobu ułożenia — patrz `layingComparison`. Tabelka stoi POD
-                  wynikiem, bo to uzasadnienie wybranej liczby, a nie kolejne pole do
-                  wypełnienia. Aktualnie wybrany wariant jest podświetlony, a każdy
-                  wiersz klikalny — porównanie ma prowadzić do zmiany założenia jednym
-                  kliknięciem, nie do wracania w górę formularza. */}
-              <div className="mt-3 rounded-lg border border-border bg-white/60">
-                <div className="border-b border-border px-3 py-2 text-xs font-semibold text-slate-600">
-                  Jak sposób ułożenia zmienia wynik
-                </div>
-                <div className="px-1.5 py-1.5">
-                  {layingComparison.map((row) => {
-                    const on = row.value === layingMethod;
-                    return (
-                      <button
-                        key={row.value}
-                        type="button"
-                        onClick={() => setLayingMethod(row.value)}
-                        title={`Przyjmij ułożenie: ${row.label}`}
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
-                        style={on ? { background: "#2D5A8C10" } : undefined}
-                      >
-                        <span
-                          className="min-w-0 flex-1 truncate text-[11.5px]"
-                          style={on ? { color: "#2D5A8C", fontWeight: 600 } : { color: "#64748B" }}
-                        >
-                          {row.label}
-                        </span>
-                        <span className="pe-mono shrink-0 text-[11.5px] text-slate-500">
-                          {row.Iz !== null ? `${formatLiczba(row.Iz, row.Iz % 1 === 0 ? 0 : 1)} A` : "—"}
-                        </span>
-                        <span
-                          className="pe-mono w-16 shrink-0 text-right text-[12px] font-semibold"
-                          style={{ color: on ? "#2D5A8C" : "#8A5526" }}
-                        >
-                          {row.przekroj !== null ? `${String(row.przekroj).replace(".", ",")} mm²` : "—"}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
-                    Kolumny: obciążalność po współczynnikach i wynikający z niej przekrój. Ciepło musi mieć dokąd uciec —
-                    przewód natynkowy chłodzi się powietrzem, a ten w ścianie ocieplonej termicznie praktycznie nie oddaje
-                    ciepła, więc uniesie najmniej. Pomylenie tych dwóch przypadków to najczęstszy sposób na przegrzanie
-                    przewodu w domu energooszczędnym.
+                  {/* Budżet spadku napięcia dotyczy CAŁEJ drogi od złącza. Te dwa pola
+                      domykają rachunek: pierwsze odejmuje to, co zjadła już WLZ, drugie
+                      podnosi limit tam, gdzie transformator stoi na terenie obiektu. */}
+                  <div className="grid gap-x-4 sm:grid-cols-2">
+                    <Field
+                      label="Spadek napięcia na WLZ"
+                      value={spadekWlzPct}
+                      onChange={(v) => setSpadekWlzPct(Number(v))}
+                      unit="%"
+                      step="0.1"
+                      hint="Ile z budżetu spadku zużywa już odcinek od złącza do rozdzielnicy. Typowo 0,5-1%. Limit 3/5% liczy się od ZŁĄCZA, więc obwód odbiorczy ma do dyspozycji resztę — zostaw 0, jeśli liczysz sam obwód."
+                    />
                   </div>
+                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={wlasnaStacja}
+                      onChange={(e) => setWlasnaStacja(e.target.checked)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    Zasilanie z własnej stacji transformatorowej — limit spadku większy o 2 p.p.
+                  </label>
+
+                </div>
+                <div className="min-w-0" data-testid="wynik-obok">
+                  <div className="mt-2 p-3 pe-result">
+                    <div className="text-xs text-slate-500 mb-1">Wymagany przekrój żyły</div>
+                    {sized.przekroj_mm2 ? (
+                      <>
+                        <div className="pe-mono text-lg text-blueprint">
+                          {String(sized.przekroj_mm2).replace(".", ",")} mm²
+                        </div>
+                        <div className="mt-2 flex gap-2 flex-wrap">
+                          <span className="pe-chip pe-tag-copper">{sized.kabel}</span>
+                          <span className="pe-chip pe-tag-blue">Ib {formatLiczba((sized.Ib_A ?? 0), 2)} A</span>
+                          <span className="pe-chip pe-tag-green">obc. dop. {sized.Iz_A} A</span>
+                          {sized.spadek_napiecia_pct !== null && (
+                            // Z podanym spadkiem na WLZ pokazujemy SUMĘ — bo to ona jest
+                            // porównywana z limitem — i rozbicie, żeby było widać, skąd wyszła.
+                            <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                              {sized.spadek_wlz_pct > 0
+                                ? `ΔU ${formatLiczba(sized.spadek_calkowity_pct, 2)}% = WLZ ${formatLiczba(sized.spadek_wlz_pct, 2)}% + obwód ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`
+                                : `ΔU ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm mt-2 flex items-center gap-1" style={{ color: "#A2352C" }}>
+                        <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Wpływ sposobu ułożenia — patrz `layingComparison`. Tabelka stoi POD
+                      wynikiem, bo to uzasadnienie wybranej liczby, a nie kolejne pole do
+                      wypełnienia. Aktualnie wybrany wariant jest podświetlony, a każdy
+                      wiersz klikalny — porównanie ma prowadzić do zmiany założenia jednym
+                      kliknięciem, nie do wracania w górę formularza. */}
+                  <div className="mt-3 rounded-lg border border-border bg-white/60">
+                    <div className="border-b border-border px-3 py-2 text-xs font-semibold text-slate-600">
+                      Jak sposób ułożenia zmienia wynik
+                    </div>
+                    <div className="px-1.5 py-1.5">
+                      {layingComparison.map((row) => {
+                        const on = row.value === layingMethod;
+                        return (
+                          <button
+                            key={row.value}
+                            type="button"
+                            onClick={() => setLayingMethod(row.value)}
+                            title={`Przyjmij ułożenie: ${row.label}`}
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
+                            style={on ? { background: "#2D5A8C10" } : undefined}
+                          >
+                            <span
+                              className="min-w-0 flex-1 truncate text-[11.5px]"
+                              style={on ? { color: "#2D5A8C", fontWeight: 600 } : { color: "#64748B" }}
+                            >
+                              {row.label}
+                            </span>
+                            <span className="pe-mono shrink-0 text-[11.5px] text-slate-500">
+                              {row.Iz !== null ? `${formatLiczba(row.Iz, row.Iz % 1 === 0 ? 0 : 1)} A` : "—"}
+                            </span>
+                            <span
+                              className="pe-mono w-16 shrink-0 text-right text-[12px] font-semibold"
+                              style={{ color: on ? "#2D5A8C" : "#8A5526" }}
+                            >
+                              {row.przekroj !== null ? `${String(row.przekroj).replace(".", ",")} mm²` : "—"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
+                        Kolumny: obciążalność po współczynnikach i wynikający z niej przekrój. Ciepło musi mieć dokąd uciec —
+                        przewód natynkowy chłodzi się powietrzem, a ten w ścianie ocieplonej termicznie praktycznie nie oddaje
+                        ciepła, więc uniesie najmniej. Pomylenie tych dwóch przypadków to najczęstszy sposób na przegrzanie
+                        przewodu w domu energooszczędnym.
+                      </div>
+                    </div>
+                  </div>
+
+                  {sized.ostrzezenia.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      {sized.ostrzezenia.map((w, i) => (
+                        <div
+                          key={i}
+                          className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                          style={{
+                            background: w.level === "error" ? "#C6433A14" : "#C1793F14",
+                            color: w.level === "error" ? "#A2352C" : "#8A5526",
+                          }}
+                        >
+                          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                          <div>{w.message}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {sized.ostrzezenia.length > 0 && (
-                <div className="mt-2 space-y-1.5">
-                  {sized.ostrzezenia.map((w, i) => (
-                    <div
-                      key={i}
-                      className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
-                      style={{
-                        background: w.level === "error" ? "#C6433A14" : "#C1793F14",
-                        color: w.level === "error" ? "#A2352C" : "#8A5526",
-                      }}
-                    >
-                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                      <div>{w.message}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <HowItWorks
                 formulas={[
@@ -1373,148 +1391,154 @@ export function CalculatorsTab() {
 
           {activeCalc === "obwod" && trybObwodu === "zabezpieczenie" && (
             <Card title={active.label} tag="wyłącznik nadprądowy">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
-                Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
-                został narzucony projektem. Jeśli dopiero szukasz przekroju, zacznij od „Dobór przekroju przewodu”;
-                oba kalkulatory dzielą te same pola, więc nic nie trzeba przepisywać.
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Rodzaj obwodu"
-                  value={circuitKind}
-                  onChange={(v) => setCircuitKind(v as CircuitKind)}
-                  options={CIRCUIT_KIND_OPTIONS}
-                />
-                <Field
-                  label="Przekrój żyły przewodu"
-                  value={String(breakerSection)}
-                  onChange={(v) => setBreakerSection(Number(v))}
-                  options={SECTION_OPTIONS}
-                />
-                <Field
-                  label="Moc odbiornika"
-                  value={power}
-                  onChange={(v) => setPower(Number(v))}
-                  unit="W"
-                />
-                <Field
-                  label="Zasilanie"
-                  value={phase}
-                  onChange={(v) => setPhase(v as "1" | "3")}
-                  options={PHASE_OPTIONS}
-                />
-                <Field
-                  label="Współczynnik cos φ"
-                  value={cosphi}
-                  onChange={(v) => setCosphi(Number(v))}
-                  step="0.05"
-                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
-                />
-              </div>
-
-              <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Warunki ułożenia (decydują o obciążalności)</div>
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Sposób ułożenia"
-                  value={layingMethod}
-                  onChange={(v) => setLayingMethod(v as LayingMethod)}
-                  options={LAYING_METHOD_OPTIONS}
-                />
-                <Field
-                  label="Temperatura otoczenia"
-                  value={ambientC}
-                  onChange={(v) => setAmbientC(Number(v))}
-                  unit="°C"
-                />
-                <Field
-                  label="Obwodów we wspólnej trasie"
-                  value={bundleCount}
-                  onChange={(v) => setBundleCount(Number(v))}
-                  step="1"
-                  hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy — więcej obok siebie obniża obciążalność każdego z nich."
-                />
-              </div>
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={motorStart}
-                  onChange={(e) => setMotorStart(e.target.checked)}
-                  className="h-4 w-4 rounded border-border"
-                />
-                Odbiornik z rozruchem silnikowym (pompa, lodówka, klimatyzacja) — charakterystyka C
-              </label>
-
-              <div className="mt-2 p-3 pe-result">
-                <div className="text-xs text-slate-500 mb-1">Dobrany wyłącznik nadprądowy</div>
-                {sizedBreaker.aparat ? (
-                  <>
-                    <div className="pe-mono text-lg text-blueprint">
-                      {sizedBreaker.aparat.charakterystyka}
-                      {sizedBreaker.aparat.In_A} {sizedBreaker.aparat.bieguny}
-                    </div>
-                    <div className="mt-2 flex gap-2 flex-wrap">
-                      <span className="pe-chip pe-tag-blue">Ib {formatLiczba(sizedBreaker.Ib_A, 2)} A</span>
-                      <span className="pe-chip pe-tag-green">Iz {sizedBreaker.Iz_A} A</span>
-                      <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
-                        metoda {sizedBreaker.metoda_odniesienia} · k1 {sizedBreaker.wspolczynniki.k1_temperatura} · k2{" "}
-                        {sizedBreaker.wspolczynniki.k2_grupowanie}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-sm mt-2 flex items-center gap-1" style={{ color: "#A2352C" }}>
-                    <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
+              <div className={UKLAD_POLA_WYNIK}>
+                <div className="min-w-0">
+                  <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                    Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
+                    został narzucony projektem. Jeśli dopiero szukasz przekroju, zacznij od „Dobór przekroju przewodu”;
+                    oba kalkulatory dzielą te same pola, więc nic nie trzeba przepisywać.
                   </div>
-                )}
-              </div>
 
-              {/* Warunek Ib ≤ In ≤ Iz rozpisany na trzy liczby obok siebie: to JEDYNY
-                  warunek doboru zabezpieczenia i cały sens tego kalkulatora, więc ma
-                  być widoczny wprost, a nie do odtworzenia z chipów wyżej. */}
-              {sizedBreaker.aparat && (
-                <div className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2" style={{ background: "#3B8C631A", color: "#2C6B4A" }}>
-                  <Check size={16} className="shrink-0 mt-0.5" />
-                  <div>
-                    Warunek doboru spełniony:{" "}
-                    <strong className="pe-mono">
-                      {formatLiczba(sizedBreaker.Ib_A, 2)} A ≤ {sizedBreaker.aparat.In_A} A ≤ {sizedBreaker.Iz_A} A
-                    </strong>{" "}
-                    (Ib ≤ In ≤ Iz) — wyłącznik zadziała, zanim przewód się przegrzeje.
+                  <div className="grid sm:grid-cols-2 gap-x-4">
+                    <Field
+                      label="Rodzaj obwodu"
+                      value={circuitKind}
+                      onChange={(v) => setCircuitKind(v as CircuitKind)}
+                      options={CIRCUIT_KIND_OPTIONS}
+                    />
+                    <Field
+                      label="Przekrój żyły przewodu"
+                      value={String(breakerSection)}
+                      onChange={(v) => setBreakerSection(Number(v))}
+                      options={SECTION_OPTIONS}
+                    />
+                    <Field
+                      label="Moc odbiornika"
+                      value={power}
+                      onChange={(v) => setPower(Number(v))}
+                      unit="W"
+                    />
+                    <Field
+                      label="Zasilanie"
+                      value={phase}
+                      onChange={(v) => setPhase(v as "1" | "3")}
+                      options={PHASE_OPTIONS}
+                    />
+                    <Field
+                      label="Współczynnik cos φ"
+                      value={cosphi}
+                      onChange={(v) => setCosphi(Number(v))}
+                      step="0.05"
+                      hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
+                    />
                   </div>
+
+                  <div className="mb-2 mt-1 text-xs font-semibold text-slate-600">Warunki ułożenia (decydują o obciążalności)</div>
+                  <div className="grid sm:grid-cols-2 gap-x-4">
+                    <Field
+                      label="Sposób ułożenia"
+                      value={layingMethod}
+                      onChange={(v) => setLayingMethod(v as LayingMethod)}
+                      options={LAYING_METHOD_OPTIONS}
+                    />
+                    <Field
+                      label="Temperatura otoczenia"
+                      value={ambientC}
+                      onChange={(v) => setAmbientC(Number(v))}
+                      unit="°C"
+                    />
+                    <Field
+                      label="Obwodów we wspólnej trasie"
+                      value={bundleCount}
+                      onChange={(v) => setBundleCount(Number(v))}
+                      step="1"
+                      hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy — więcej obok siebie obniża obciążalność każdego z nich."
+                    />
+                  </div>
+                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={motorStart}
+                      onChange={(e) => setMotorStart(e.target.checked)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    Odbiornik z rozruchem silnikowym (pompa, lodówka, klimatyzacja) — charakterystyka C
+                  </label>
+
                 </div>
-              )}
-
-              {sizedBreaker.Ia_A !== null && sizedBreaker.Zs_max_Ohm !== null && (
-                <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="text-xs text-slate-500">Prąd zadziałania Ia</div>
-                    <div className="pe-mono">{formatLiczba(sizedBreaker.Ia_A, 0)} A</div>
+                <div className="min-w-0" data-testid="wynik-obok">
+                  <div className="mt-2 p-3 pe-result">
+                    <div className="text-xs text-slate-500 mb-1">Dobrany wyłącznik nadprądowy</div>
+                    {sizedBreaker.aparat ? (
+                      <>
+                        <div className="pe-mono text-lg text-blueprint">
+                          {sizedBreaker.aparat.charakterystyka}
+                          {sizedBreaker.aparat.In_A} {sizedBreaker.aparat.bieguny}
+                        </div>
+                        <div className="mt-2 flex gap-2 flex-wrap">
+                          <span className="pe-chip pe-tag-blue">Ib {formatLiczba(sizedBreaker.Ib_A, 2)} A</span>
+                          <span className="pe-chip pe-tag-green">Iz {sizedBreaker.Iz_A} A</span>
+                          <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                            metoda {sizedBreaker.metoda_odniesienia} · k1 {sizedBreaker.wspolczynniki.k1_temperatura} · k2{" "}
+                            {sizedBreaker.wspolczynniki.k2_grupowanie}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-sm mt-2 flex items-center gap-1" style={{ color: "#A2352C" }}>
+                        <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Wymagana Zs max</div>
-                    <div className="pe-mono text-copper">{formatLiczba(sizedBreaker.Zs_max_Ohm, 2)} Ω</div>
-                  </div>
-                </div>
-              )}
 
-              {sizedBreaker.ostrzezenia.length > 0 && (
-                <div className="mt-2 space-y-1.5">
-                  {sizedBreaker.ostrzezenia.map((w, i) => (
-                    <div
-                      key={i}
-                      className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
-                      style={{
-                        background: w.level === "error" ? "#C6433A14" : "#C1793F14",
-                        color: w.level === "error" ? "#A2352C" : "#8A5526",
-                      }}
-                    >
-                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                      <div>{w.message}</div>
+                  {/* Warunek Ib ≤ In ≤ Iz rozpisany na trzy liczby obok siebie: to JEDYNY
+                      warunek doboru zabezpieczenia i cały sens tego kalkulatora, więc ma
+                      być widoczny wprost, a nie do odtworzenia z chipów wyżej. */}
+                  {sizedBreaker.aparat && (
+                    <div className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2" style={{ background: "#3B8C631A", color: "#2C6B4A" }}>
+                      <Check size={16} className="shrink-0 mt-0.5" />
+                      <div>
+                        Warunek doboru spełniony:{" "}
+                        <strong className="pe-mono">
+                          {formatLiczba(sizedBreaker.Ib_A, 2)} A ≤ {sizedBreaker.aparat.In_A} A ≤ {sizedBreaker.Iz_A} A
+                        </strong>{" "}
+                        (Ib ≤ In ≤ Iz) — wyłącznik zadziała, zanim przewód się przegrzeje.
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  {sizedBreaker.Ia_A !== null && sizedBreaker.Zs_max_Ohm !== null && (
+                    <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-xs text-slate-500">Prąd zadziałania Ia</div>
+                        <div className="pe-mono">{formatLiczba(sizedBreaker.Ia_A, 0)} A</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500">Wymagana Zs max</div>
+                        <div className="pe-mono text-copper">{formatLiczba(sizedBreaker.Zs_max_Ohm, 2)} Ω</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {sizedBreaker.ostrzezenia.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      {sizedBreaker.ostrzezenia.map((w, i) => (
+                        <div
+                          key={i}
+                          className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                          style={{
+                            background: w.level === "error" ? "#C6433A14" : "#C1793F14",
+                            color: w.level === "error" ? "#A2352C" : "#8A5526",
+                          }}
+                        >
+                          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                          <div>{w.message}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               <HowItWorks
                 formulas={[
@@ -1552,196 +1576,202 @@ export function CalculatorsTab() {
 
           {activeCalc === "obwod" && trybObwodu === "pelny" && (
             <Card title={active.label} tag="4 kryteria naraz">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
-                Cztery kryteria liczone NIEZALEŻNIE — obciążalność, spadek napięcia i (opcjonalnie) ochrona
-                przeciwporażeniowa oraz wytrzymałość zwarciowa. Wynikowy przekrój to <strong>maksimum</strong> z nich, nie
-                pierwszy z brzegu. Tylko obwody <strong>3-fazowe</strong> — tablica dla dwóch żył obciążonych (1-fazowe)
-                nie została jeszcze dostarczona.
-              </div>
+              <div className={UKLAD_POLA_WYNIK}>
+                <div className="min-w-0">
+                  <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                    Cztery kryteria liczone NIEZALEŻNIE — obciążalność, spadek napięcia i (opcjonalnie) ochrona
+                    przeciwporażeniowa oraz wytrzymałość zwarciowa. Wynikowy przekrój to <strong>maksimum</strong> z nich, nie
+                    pierwszy z brzegu. Tylko obwody <strong>3-fazowe</strong> — tablica dla dwóch żył obciążonych (1-fazowe)
+                    nie została jeszcze dostarczona.
+                  </div>
 
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Prąd obliczeniowy Ib"
-                  value={pdIb}
-                  onChange={(v) => patch({ pdIb: Number(v) })}
-                  unit="A"
-                  hint="Prąd, jaki faktycznie popłynie tym obwodem przy pełnym obciążeniu — z bilansu mocy odbiorników (Ib = P / (√3 · U · cosφ) dla 3 faz) albo wprost z projektu."
-                />
-                <Field
-                  label="Napięcie międzyfazowe"
-                  value={pdNapiecie}
-                  onChange={(v) => patch({ pdNapiecie: Number(v) })}
-                  unit="V"
-                  hint="Napięcie między dwiema fazami — w polskiej sieci nn to standardowo 400 V."
-                />
-                <Field
-                  label="Materiał żyły"
-                  value={pdMaterial}
-                  onChange={(v) => patch({ pdMaterial: v as Material })}
-                  options={MATERIAL_OPTIONS}
-                />
-                <Field
-                  label="Izolacja"
-                  value={pdIzolacja}
-                  onChange={(v) => patch({ pdIzolacja: v as Izolacja })}
-                  options={IZOLACJA_OPTIONS}
-                  hint="Rodzaj izolacji przewodu — sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE). Wyższa dopuszczalna temperatura żyły XLPE daje większą obciążalność."
-                />
-                <Field
-                  label="Metoda odniesienia"
-                  value={pdMetoda}
-                  onChange={(v) => patch({ pdMetoda: v as MetodaOdniesienia3 })}
-                  options={METODA3_OPTIONS}
-                />
-                <Field
-                  label="Długość trasy"
-                  value={pdDlugosc}
-                  onChange={(v) => patch({ pdDlugosc: Number(v) })}
-                  unit="m"
-                />
-                <Field
-                  label="cos φ"
-                  value={pdCosfi}
-                  onChange={(v) => patch({ pdCosfi: Number(v) })}
-                  step="0.01"
-                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
-                />
-                <Field
-                  label="Dopuszczalny spadek napięcia"
-                  value={pdLimitSpadku}
-                  onChange={(v) => patch({ pdLimitSpadku: Number(v) })}
-                  unit="%"
-                  step="0.5"
-                  hint="Standardowo 5% dla obwodów siłowych i 3% dla oświetlenia przy zasilaniu z sieci publicznej — pełną listę progów (też dla własnej stacji trafo) znajdziesz w kalkulatorze „Spadek napięcia”."
-                />
-              </div>
-
-              {pdMetoda !== "D1" && pdMetoda !== "D2" ? (
-                <div className="grid sm:grid-cols-2 gap-x-4">
-                  <Field
-                    label="Temperatura otoczenia"
-                    value={pdTemperatura}
-                    onChange={(v) => patch({ pdTemperatura: Number(v) })}
-                    unit="°C"
-                  />
-                  <Field
-                    label="Obwodów we wspólnej trasie"
-                    value={pdWiazka}
-                    onChange={(v) => patch({ pdWiazka: Number(v) })}
-                    step="1"
-                    hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy — więcej obok siebie obniża obciążalność każdego z nich."
-                  />
-                </div>
-              ) : (
-                <div className="mb-3 text-[11px] leading-relaxed text-slate-500">
-                  Metoda gruntowa — bez korekty temperatury/grupowania (brak tablic dla gruntu). Wynik ważny dla 20°C w
-                  gruncie.
-                </div>
-              )}
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
-                <input type="checkbox" checked={pdRozruch} onChange={(e) => patch({ pdRozruch: e.target.checked })} className="h-4 w-4 rounded border-border" />
-                Odbiornik z rozruchem silnikowym — charakterystyka C
-              </label>
-
-              <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={pdSprawdzOchrone}
-                  onChange={(e) => patch({ pdSprawdzOchrone: e.target.checked })}
-                  className="h-4 w-4 rounded border-border"
-                />
-                Sprawdź też ochronę przeciwporażeniową (wymaga impedancji źródła)
-              </label>
-              {pdSprawdzOchrone && (
-                <div className="mb-3 grid sm:grid-cols-2 gap-x-4">
-                  <Field
-                    label="Impedancja źródła i reszty obwodu"
-                    value={pdImpedancjaZrodla}
-                    onChange={(v) => patch({ pdImpedancjaZrodla: Number(v) })}
-                    unit="Ω"
-                    step="0.01"
-                    hint="Impedancja CAŁEJ sieci przed tym miejscem — transformatora, WLZ i wszystkiego dotąd. Weź z pomiaru pętli zwarcia w rozdzielnicy zasilającej ten odcinek albo policz w kalkulatorze „Impedancja przewodu”."
-                  />
-                  <Field
-                    label="Układ sieci"
-                    value={pdUklad}
-                    onChange={(v) => patch({ pdUklad: v as "TN" | "TT" })}
-                    options={UKLAD_OPTIONS}
-                    hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce w budynkach zasilanych z sieci operatora). TT — własny uziom budynku, niezależny od sieci."
-                  />
-                </div>
-              )}
-
-              <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={pdSprawdzZwarcie}
-                  onChange={(e) => patch({ pdSprawdzZwarcie: e.target.checked })}
-                  className="h-4 w-4 rounded border-border"
-                />
-                Sprawdź też wytrzymałość zwarciową cieplną (wymaga prądu zwarciowego)
-              </label>
-              {pdSprawdzZwarcie && (
-                <>
-                  {/* Czas wyłączenia (kryterium 4) zależy od układu sieci i od tego, czy to
-                      obwód KOŃCOWY (≤ 32 A) czy rozdzielczy — inaczej niż przy kryterium 3
-                      (ochrona przeciwporażeniowa), które go nie potrzebuje. Bez tych dwóch pól
-                      kalkulator MILCZĄCO zakładał TN + obwód odbiorczy (0,4 s) — dla realnego
-                      obwodu rozdzielczego (5 s) to zaniża wymagany przekrój z kryterium 4,
-                      a ten kalkulator celuje właśnie w duże przekroje/prądy, gdzie obwody
-                      rozdzielcze są normą, nie wyjątkiem. */}
                   <div className="grid sm:grid-cols-2 gap-x-4">
                     <Field
-                      label="Układ sieci"
-                      value={pdUklad}
-                      onChange={(v) => patch({ pdUklad: v as "TN" | "TT" })}
-                      options={UKLAD_OPTIONS}
-                      hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce). TT — własny uziom budynku, niezależny od sieci."
+                      label="Prąd obliczeniowy Ib"
+                      value={pdIb}
+                      onChange={(v) => patch({ pdIb: Number(v) })}
+                      unit="A"
+                      hint="Prąd, jaki faktycznie popłynie tym obwodem przy pełnym obciążeniu — z bilansu mocy odbiorników (Ib = P / (√3 · U · cosφ) dla 3 faz) albo wprost z projektu."
                     />
                     <Field
-                      label="Prąd zwarciowy w tym miejscu"
-                      value={pdIk}
-                      onChange={(v) => patch({ pdIk: Number(v) })}
-                      unit="A"
-                      hint="Prąd zwarcia jednofazowego (L-PE) w tym miejscu instalacji — z pomiaru, z kalkulatora „Prądy zwarciowe” albo z dokumentacji projektowej."
+                      label="Napięcie międzyfazowe"
+                      value={pdNapiecie}
+                      onChange={(v) => patch({ pdNapiecie: Number(v) })}
+                      unit="V"
+                      hint="Napięcie między dwiema fazami — w polskiej sieci nn to standardowo 400 V."
+                    />
+                    <Field
+                      label="Materiał żyły"
+                      value={pdMaterial}
+                      onChange={(v) => patch({ pdMaterial: v as Material })}
+                      options={MATERIAL_OPTIONS}
+                    />
+                    <Field
+                      label="Izolacja"
+                      value={pdIzolacja}
+                      onChange={(v) => patch({ pdIzolacja: v as Izolacja })}
+                      options={IZOLACJA_OPTIONS}
+                      hint="Rodzaj izolacji przewodu — sprawdź na oznaczeniu kabla (np. YDY/YKY to PVC, YKYFtms/YKXS to XLPE). Wyższa dopuszczalna temperatura żyły XLPE daje większą obciążalność."
+                    />
+                    <Field
+                      label="Metoda odniesienia"
+                      value={pdMetoda}
+                      onChange={(v) => patch({ pdMetoda: v as MetodaOdniesienia3 })}
+                      options={METODA3_OPTIONS}
+                    />
+                    <Field
+                      label="Długość trasy"
+                      value={pdDlugosc}
+                      onChange={(v) => patch({ pdDlugosc: Number(v) })}
+                      unit="m"
+                    />
+                    <Field
+                      label="cos φ"
+                      value={pdCosfi}
+                      onChange={(v) => patch({ pdCosfi: Number(v) })}
+                      step="0.01"
+                      hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
+                    />
+                    <Field
+                      label="Dopuszczalny spadek napięcia"
+                      value={pdLimitSpadku}
+                      onChange={(v) => patch({ pdLimitSpadku: Number(v) })}
+                      unit="%"
+                      step="0.5"
+                      hint="Standardowo 5% dla obwodów siłowych i 3% dla oświetlenia przy zasilaniu z sieci publicznej — pełną listę progów (też dla własnej stacji trafo) znajdziesz w kalkulatorze „Spadek napięcia”."
                     />
                   </div>
+
+                  {pdMetoda !== "D1" && pdMetoda !== "D2" ? (
+                    <div className="grid sm:grid-cols-2 gap-x-4">
+                      <Field
+                        label="Temperatura otoczenia"
+                        value={pdTemperatura}
+                        onChange={(v) => patch({ pdTemperatura: Number(v) })}
+                        unit="°C"
+                      />
+                      <Field
+                        label="Obwodów we wspólnej trasie"
+                        value={pdWiazka}
+                        onChange={(v) => patch({ pdWiazka: Number(v) })}
+                        step="1"
+                        hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy — więcej obok siebie obniża obciążalność każdego z nich."
+                      />
+                    </div>
+                  ) : (
+                    <div className="mb-3 text-[11px] leading-relaxed text-slate-500">
+                      Metoda gruntowa — bez korekty temperatury/grupowania (brak tablic dla gruntu). Wynik ważny dla 20°C w
+                      gruncie.
+                    </div>
+                  )}
                   <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                    <input type="checkbox" checked={pdRozruch} onChange={(e) => patch({ pdRozruch: e.target.checked })} className="h-4 w-4 rounded border-border" />
+                    Odbiornik z rozruchem silnikowym — charakterystyka C
+                  </label>
+
+                  <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
                     <input
                       type="checkbox"
-                      checked={pdObwodOdbiorczy}
-                      onChange={(e) => patch({ pdObwodOdbiorczy: e.target.checked })}
+                      checked={pdSprawdzOchrone}
+                      onChange={(e) => patch({ pdSprawdzOchrone: e.target.checked })}
                       className="h-4 w-4 rounded border-border"
                     />
-                    Obwód odbiorczy (≤ 32 A) — inaczej rozdzielczy
+                    Sprawdź też ochronę przeciwporażeniową (wymaga impedancji źródła)
                   </label>
-                </>
-              )}
+                  {pdSprawdzOchrone && (
+                    <div className="mb-3 grid sm:grid-cols-2 gap-x-4">
+                      <Field
+                        label="Impedancja źródła i reszty obwodu"
+                        value={pdImpedancjaZrodla}
+                        onChange={(v) => patch({ pdImpedancjaZrodla: Number(v) })}
+                        unit="Ω"
+                        step="0.01"
+                        hint="Impedancja CAŁEJ sieci przed tym miejscem — transformatora, WLZ i wszystkiego dotąd. Weź z pomiaru pętli zwarcia w rozdzielnicy zasilającej ten odcinek albo policz w kalkulatorze „Impedancja przewodu”."
+                      />
+                      <Field
+                        label="Układ sieci"
+                        value={pdUklad}
+                        onChange={(v) => patch({ pdUklad: v as "TN" | "TT" })}
+                        options={UKLAD_OPTIONS}
+                        hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce w budynkach zasilanych z sieci operatora). TT — własny uziom budynku, niezależny od sieci."
+                      />
+                    </div>
+                  )}
 
-              {pelnyDobor.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Przekrój wynikowy</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(pelnyDobor.wartosci.przekroj_mm2, 1)} mm²</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">{pelnyDobor.wartosci.kabel}</span>
-                    <span className="pe-chip pe-tag-blue">In {pelnyDobor.wartosci.In_A} A</span>
-                    <span className="pe-chip pe-tag-green">
-                      decyduje: {pelnyDobor.wartosci.decydujace.map((k) => KRYTERIUM_LABELS[k]).join(" i ")}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-slate-500">
-                    {(Object.entries(pelnyDobor.wartosci.kryteria) as [string, (typeof pelnyDobor.wartosci.kryteria)[keyof typeof pelnyDobor.wartosci.kryteria]][]).map(
-                      ([k, v]) => (
-                        <span key={k} className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
-                          {KRYTERIUM_LABELS[k as keyof typeof KRYTERIUM_LABELS]}:{" "}
-                          {v.ocenione ? `${formatLiczba(v.minPrzekroj_mm2!, 1)} mm²` : "nieocenione"}
-                        </span>
-                      )
-                    )}
-                  </div>
+                  <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={pdSprawdzZwarcie}
+                      onChange={(e) => patch({ pdSprawdzZwarcie: e.target.checked })}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    Sprawdź też wytrzymałość zwarciową cieplną (wymaga prądu zwarciowego)
+                  </label>
+                  {pdSprawdzZwarcie && (
+                    <>
+                      {/* Czas wyłączenia (kryterium 4) zależy od układu sieci i od tego, czy to
+                          obwód KOŃCOWY (≤ 32 A) czy rozdzielczy — inaczej niż przy kryterium 3
+                          (ochrona przeciwporażeniowa), które go nie potrzebuje. Bez tych dwóch pól
+                          kalkulator MILCZĄCO zakładał TN + obwód odbiorczy (0,4 s) — dla realnego
+                          obwodu rozdzielczego (5 s) to zaniża wymagany przekrój z kryterium 4,
+                          a ten kalkulator celuje właśnie w duże przekroje/prądy, gdzie obwody
+                          rozdzielcze są normą, nie wyjątkiem. */}
+                      <div className="grid sm:grid-cols-2 gap-x-4">
+                        <Field
+                          label="Układ sieci"
+                          value={pdUklad}
+                          onChange={(v) => patch({ pdUklad: v as "TN" | "TT" })}
+                          options={UKLAD_OPTIONS}
+                          hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce). TT — własny uziom budynku, niezależny od sieci."
+                        />
+                        <Field
+                          label="Prąd zwarciowy w tym miejscu"
+                          value={pdIk}
+                          onChange={(v) => patch({ pdIk: Number(v) })}
+                          unit="A"
+                          hint="Prąd zwarcia jednofazowego (L-PE) w tym miejscu instalacji — z pomiaru, z kalkulatora „Prądy zwarciowe” albo z dokumentacji projektowej."
+                        />
+                      </div>
+                      <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={pdObwodOdbiorczy}
+                          onChange={(e) => patch({ pdObwodOdbiorczy: e.target.checked })}
+                          className="h-4 w-4 rounded border-border"
+                        />
+                        Obwód odbiorczy (≤ 32 A) — inaczej rozdzielczy
+                      </label>
+                    </>
+                  )}
+
                 </div>
-              )}
-              <CalcResultView wynik={pelnyDobor} />
+                <div className="min-w-0" data-testid="wynik-obok">
+                  {pelnyDobor.wartosci && (
+                    <div className="mt-2 p-3 pe-result">
+                      <div className="text-xs text-slate-500 mb-1">Przekrój wynikowy</div>
+                      <div className="pe-mono text-lg text-blueprint">{formatLiczba(pelnyDobor.wartosci.przekroj_mm2, 1)} mm²</div>
+                      <div className="mt-2 flex gap-2 flex-wrap">
+                        <span className="pe-chip pe-tag-copper">{pelnyDobor.wartosci.kabel}</span>
+                        <span className="pe-chip pe-tag-blue">In {pelnyDobor.wartosci.In_A} A</span>
+                        <span className="pe-chip pe-tag-green">
+                          decyduje: {pelnyDobor.wartosci.decydujace.map((k) => KRYTERIUM_LABELS[k]).join(" i ")}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-slate-500">
+                        {(Object.entries(pelnyDobor.wartosci.kryteria) as [string, (typeof pelnyDobor.wartosci.kryteria)[keyof typeof pelnyDobor.wartosci.kryteria]][]).map(
+                          ([k, v]) => (
+                            <span key={k} className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                              {KRYTERIUM_LABELS[k as keyof typeof KRYTERIUM_LABELS]}:{" "}
+                              {v.ocenione ? `${formatLiczba(v.minPrzekroj_mm2!, 1)} mm²` : "nieocenione"}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <CalcResultView wynik={pelnyDobor} />
+                </div>
+              </div>
             </Card>
           )}
 
