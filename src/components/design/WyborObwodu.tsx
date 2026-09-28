@@ -52,7 +52,7 @@ export function WyborObwodu({
   if (zablokowane) {
     return (
       <div className={otoczka}>
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Numer obwodu</div>
+        <div className="text-xs font-semibold text-slate-500">Numer obwodu</div>
         <p className={`mt-1 text-[11px] leading-relaxed text-slate-500 ${szerokosc}`}>{zablokowane}</p>
       </div>
     );
@@ -86,7 +86,7 @@ export function WyborObwodu({
 
   return (
     <div className={otoczka}>
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Numer obwodu</div>
+      <div className="text-xs font-semibold text-slate-500">Numer obwodu</div>
       <div className={`mt-1.5 flex flex-wrap gap-1 ${szerokosc}`}>
         <button onClick={() => onWybierz(undefined)} className={klasa(numerAktualny === undefined)} title="Obwód dobierze automat">
           auto

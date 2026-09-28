@@ -96,6 +96,37 @@ export function podsumowanieProblemow(issues: PlanIssue[]): string {
   return czesci.join(" · ");
 }
 
+/**
+ * Stan sprawdzenia w jednym słowie — do paska stanu pod płótnem.
+ *
+ * Karta „Sprawdzenie rzutu" stoi POD edytorem, a edytor zajmuje całą wysokość okna:
+ * przy 1440×900 zaczynała się na ok. 945 px, więc ostrzeżenie o braku czujnika czadu
+ * w kotłowni było widać dopiero po przewinięciu pod rysunek, a w pełnym ekranie wcale.
+ * Pasek stanu jest zawsze w kadrze.
+ *
+ * Tekst jest ZAWSZE, także przy czystym rzucie: pozycja, która pojawia się dopiero
+ * z pierwszą uwagą, mogłaby zawinąć pasek, a jego wysokość idzie prosto w wysokość
+ * płótna (patrz `zapasPod` w DesignTab.tsx) — rzut przeskakiwałby spod kursora
+ * dokładnie w chwili stawiania elementu.
+ */
+export function stanSprawdzenia(issues: PlanIssue[]): {
+  poziom: "error" | "warn" | "ok" | "pusto";
+  /** Pełne podsumowanie — do dymka i czytnika ekranu. */
+  tekst: string;
+  /** Wersja do paska: sam najpoważniejszy rodzaj. Pasek ma policzoną szerokość
+   *  (patrz komentarz w EditorStatusBar), „1 błąd · 2 uwagi" by go zawijało. */
+  krotko: string;
+} {
+  const bledy = issues.filter((i) => i.level === "error").length;
+  const uwagi = issues.filter((i) => i.level === "warn").length;
+  if (bledy > 0)
+    return { poziom: "error", tekst: podsumowanieProblemow(issues), krotko: `${bledy} ${bledy === 1 ? "błąd" : bledy < 5 ? "błędy" : "błędów"}` };
+  if (uwagi > 0)
+    return { poziom: "warn", tekst: podsumowanieProblemow(issues), krotko: `${uwagi} ${uwagi === 1 ? "uwaga" : uwagi < 5 ? "uwagi" : "uwag"}` };
+  if (issues.some((i) => i.rule === "pusto")) return { poziom: "pusto", tekst: "nic do sprawdzenia", krotko: "" };
+  return { poziom: "ok", tekst: "bez zastrzeżeń", krotko: "bez uwag" };
+}
+
 export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInput): PlanIssue[] {
   const out: PlanIssue[] = [];
 

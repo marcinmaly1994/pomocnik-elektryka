@@ -45,7 +45,7 @@ import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { computeSanitaryZones } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
 import { alignMoves, distributeMoves, offsetMoves, type AlignMode, type DistributeAxis, type Move } from "@/lib/align";
-import { checkPlan } from "@/lib/planCheck";
+import { checkPlan, stanSprawdzenia } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji, wchodziDoObwodu } from "@/lib/panel/circuits";
@@ -1128,10 +1128,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // jednej z tych rzeczy przed oczami to ten sam problem co rysowanie po niewidocznej
       // części planu. Mierzony, nie zgadywany: na węższym oknie pasek się zawija i rośnie.
       //
-      // Świadomie bez wiersza „Obszar planu… / rzut ≈ … m" spod paska: to informacja
-      // pomocnicza, którą można doczytać po przewinięciu, a każdy zarezerwowany piksel
-      // odbiera się rysunkowi.
-      //
       // Szukany po `aria-label`, bo to część kontraktu `EditorStatusBar` (pilnują go
       // testy e2e) — bliżej mu do trwałej nazwy niż do szczegółu budowy drzewa.
       const pasekStanu = dolnyPasekRef.current?.querySelector<HTMLElement>('[aria-label="Stan projektu"]');
@@ -2019,6 +2015,23 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     () => checkPlan({ elements, roomShapes, metersPerUnit: mpu }),
     [elements, roomShapes, mpu]
   );
+
+  /**
+   * Skok z pozycji „Sprawdzenie" w pasku stanu do karty z uwagami: rozwija ją (także
+   * zwiniętą wcześniej ręcznie) i przewija do niej. W pełnym ekranie karty nie ma,
+   * więc najpierw z niego wychodzi — kliknięcie w uwagę to jasna prośba o jej treść.
+   * Przewinięcie po chwili, bo karta pojawia się dopiero po wyjściu z pełnego ekranu.
+   */
+  const kartaSprawdzeniaRef = useRef<HTMLDivElement>(null);
+  const [kartaSprawdzeniaOtwarta, setKartaSprawdzeniaOtwarta] = useState<boolean | null>(null);
+  const pokazSprawdzenie = useCallback(() => {
+    setKartaSprawdzeniaOtwarta(true);
+    if (pelnyEkran) przelaczPelnyEkran();
+    window.setTimeout(
+      () => kartaSprawdzeniaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      pelnyEkran ? 450 : 0
+    );
+  }, [pelnyEkran, przelaczPelnyEkran]);
 
   /**
    * „Pokaż na planie" z listy spostrzeżeń. Zaznacza wskazane elementy i przełącza na
@@ -3694,6 +3707,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             // ma czego tam szukać. Ta sama zasada, według której chowa się w pełnym
             // ekranie reszta nawigacji (patrz `z-30` pigułek w App.tsx).
             nastepnyKrok={pelnyEkran ? undefined : nastepnyKrok}
+            szerokoscRzutuM={mpu ? planWidthMeters(mpu, planSize.w) : null}
+            sprawdzenie={{ stan: stanSprawdzenia(planIssues), pokaz: pokazSprawdzenie }}
           />
           {/*
             * Szerokość rzutu w metrach — tak laik może sprawdzić, czy skala się zgadza.
@@ -3707,17 +3722,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             * rozmiar mówi już tylko o tym, jak duży jest podkład — a o podkładzie
             * ten wiersz mówi właśnie w metrach.
             */}
-          {mpu && (
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-              <span className="pe-chip pe-tag-green">rzut ≈ {formatLiczba(planWidthMeters(mpu, planSize.w)!, 1)} m szer.</span>
-            </div>
-          )}
           </div>
 
           {/* Sprawdzenie rzutu — poza trybem pełnoekranowym. Tam plan ma dostać CAŁE
               okno, a paski zwijają się do krawędzi; karta z akapitami o normie jest
               dokładnie tym, czego ten tryb się pozbywa. Wraca po wyjściu. */}
-          {!pelnyEkran && <PlanCheckPanel issues={planIssues} onShowElements={pokazElementyNaPlanie} />}
+          {!pelnyEkran && (
+            <div ref={kartaSprawdzeniaRef} className="scroll-mt-4">
+              <PlanCheckPanel
+                issues={planIssues}
+                onShowElements={pokazElementyNaPlanie}
+                przelaczone={kartaSprawdzeniaOtwarta}
+                onPrzelacz={setKartaSprawdzeniaOtwarta}
+              />
+            </div>
+          )}
           {!pelnyEkran && <QuantitiesPanel zestawienie={zestawienie} />}
         </div>
       </div>

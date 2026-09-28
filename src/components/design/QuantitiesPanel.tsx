@@ -53,7 +53,7 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
       {otwarte && sztukRazem > 0 && (
         <div className="grid gap-5 px-3.5 pb-3.5 sm:grid-cols-2">
           <div>
-            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Wg rodzaju</h4>
+            <h4 className="mb-1.5 text-xs font-semibold text-slate-600">Wg rodzaju</h4>
             <table className="w-full text-[11.5px]">
               <tbody>
                 {wiersze.map((w) => (
@@ -72,7 +72,7 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
           </div>
 
           <div>
-            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Wg pomieszczenia</h4>
+            <h4 className="mb-1.5 text-xs font-semibold text-slate-600">Wg pomieszczenia</h4>
             <table className="w-full text-[11.5px]">
               <tbody>
                 {pomieszczenia.map((p) => (

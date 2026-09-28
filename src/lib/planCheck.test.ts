@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ElementType, InstallationElement, RoomShape, RoomType } from "@/types";
 import { NO_ROOM } from "./elements";
-import { checkPlan, podsumowanieProblemow, type PlanIssue } from "./planCheck";
+import { checkPlan, podsumowanieProblemow, stanSprawdzenia, type PlanIssue } from "./planCheck";
 
 /** 1 jedn. = 5 cm (MANUAL_DRAW_SCALE_MPU), więc 0,65 m = 13 jedn., a 1,25 m = 25 jedn. */
 const MPU = 0.05;
@@ -227,6 +227,26 @@ describe("podsumowanieProblemow", () => {
 
   it("info i ok NIE liczą się jako problemy", () => {
     expect(podsumowanieProblemow([iss("info"), iss("ok")])).toBe("bez zastrzeżeń");
+  });
+});
+
+describe("stanSprawdzenia", () => {
+  function iss(level: PlanIssue["level"], rule: string = level): PlanIssue {
+    return { rule, level, title: "", detail: "", elementIds: [] };
+  }
+
+  it("błąd wygrywa z uwagą, tekst to pełne podsumowanie", () => {
+    expect(stanSprawdzenia([iss("warn"), iss("error")])).toEqual({ poziom: "error", tekst: "1 błąd · 1 uwaga", krotko: "1 błąd" });
+    expect(stanSprawdzenia([iss("warn"), iss("warn", "b"), iss("ok")])).toEqual({ poziom: "warn", tekst: "2 uwagi", krotko: "2 uwagi" });
+  });
+
+  it("pusty rzut to nie „bez zastrzeżeń” — nie było czego sprawdzać", () => {
+    expect(stanSprawdzenia([iss("info", "pusto")])).toEqual({ poziom: "pusto", tekst: "nic do sprawdzenia", krotko: "" });
+  });
+
+  it("czysty rzut", () => {
+    expect(stanSprawdzenia([iss("ok"), iss("info")])).toEqual({ poziom: "ok", tekst: "bez zastrzeżeń", krotko: "bez uwag" });
+    expect(stanSprawdzenia([])).toEqual({ poziom: "ok", tekst: "bez zastrzeżeń", krotko: "bez uwag" });
   });
 });
 
