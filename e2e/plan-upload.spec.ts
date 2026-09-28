@@ -109,8 +109,11 @@ test("wgrany rzut: kratka na całą szerokość, a rzut na jej środku", async (
    * dostaje 840 × 840 jedn. Bez ustawionej skali pasek podaje właśnie jednostki planu.
    */
   await page.mouse.move(ramka.x + ramka.width / 2, ramka.y + ramka.height / 2);
+  // Odczyt kursora jest w pasku stanu widoczny dopiero od 1440 px (przy węższym oknie
+  // nie mieści się obok uwag ze sprawdzenia — patrz EditorStatusBar), ale liczy się
+  // i siedzi w drzewie zawsze. Tu chodzi o jego WARTOŚĆ, nie o to, czy go widać.
   const odczyt = page.getByText(/X:\s*-?\d+\s+Y:\s*-?\d+ jedn\./).first();
-  await expect(odczyt).toBeVisible();
+  await expect(odczyt).toBeAttached();
   const [, x, y] = (await odczyt.textContent())!.match(/X:\s*(-?\d+)\s+Y:\s*(-?\d+)/)!;
   expect(Math.abs(Number(x) - 420)).toBeLessThanOrEqual(8);
   expect(Math.abs(Number(y) - 420)).toBeLessThanOrEqual(8);
