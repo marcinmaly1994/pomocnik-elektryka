@@ -121,6 +121,21 @@ export function szerokoscRamki(tekst: string, font: number): number {
   return Math.max(szerokoscTekstu(tekst, font) * ZAPAS_RAMKI, 1);
 }
 
+/**
+ * Ile napis NAPRAWDĘ zajmuje w poziomie — do szukania mu miejsca, nie do ramki.
+ *
+ * Miejsce liczono dotąd z szerokości RAMKI, czyli z zapasem 15% (`ZAPAS_RAMKI`),
+ * który jest tylko po to, żeby Konva nie łamała tekstu. Nazwa docięta do pokoju ma
+ * 90% jego szerokości (`UDZIAL_SZEROKOSCI_POKOJU`), a jej ramka — 103%: żadne
+ * położenie nie mieściło się w obrysie i `miejsceNaOpis` wracało do środka pokoju,
+ * czyli na lampę. W przykładowym domu tak zostawała „Klatka schodowa" (2 m szerokości,
+ * siedem symboli). 1,1 to górna granica zmierzonego stosunku prawdziwej szerokości do
+ * przybliżenia (patrz komentarz przy `ZAPAS_RAMKI`: 14,0 wyliczone, do 15,4 zmierzone).
+ */
+export function zasiegNapisu(tekst: string, font: number): number {
+  return szerokoscTekstu(tekst, font) * 1.1;
+}
+
 /** Prostokąt osiowy w jednostkach planu — zajęte miejsce, które opis ma omijać. */
 export interface ZajeteMiejsce {
   x1: number;
@@ -161,14 +176,21 @@ export function miejsceNaOpis(opcje: {
   kandydaci?: { x: number; y: number }[];
   krok?: number;
   krokow?: number;
+  /**
+   * Odstęp od przeszkód [jedn. planu] — tylko przy sprawdzaniu zasłonięcia, nie przy
+   * mieszczeniu się w obrysie. Prostokąty symboli są przybliżeniem rysunku, a napis
+   * stawiany „na styk" potrafił zachodzić na symbol o ułamek jednostki („Hol" na
+   * lampie i gniazdku w przykładowym domu).
+   */
+  odstep?: number;
 }): { x: number; y: number } {
-  const { kotwica, blok, przeszkody, obrys, krok = 0, krokow = 4, odcinki = [] } = opcje;
+  const { kotwica, blok, przeszkody, obrys, krok = 0, krokow = 4, odcinki = [], odstep = 0 } = opcje;
 
   const zaslonieta = (x: number, y: number) => {
-    const x1 = x - blok.lewo;
-    const x2 = x + blok.prawo;
-    const y1 = y - blok.gora;
-    const y2 = y + blok.dol;
+    const x1 = x - blok.lewo - odstep;
+    const x2 = x + blok.prawo + odstep;
+    const y1 = y - blok.gora - odstep;
+    const y2 = y + blok.dol + odstep;
     let pole = 0;
     for (const p of przeszkody) {
       const w = Math.min(x2, p.x2) - Math.max(x1, p.x1);

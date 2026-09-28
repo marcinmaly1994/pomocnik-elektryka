@@ -6,6 +6,7 @@ import {
   WYSOKOSC_NAZWY_M,
   fontOpisuPokoju,
   miejsceNaOpis,
+  zasiegNapisu,
   fontRzutu,
   skalaOpisowRzutu,
   szerokoscRamki,
@@ -121,6 +122,39 @@ describe("miejsce na opis pomieszczenia", () => {
   const blok = { lewo: 20, prawo: 20, gora: 6, dol: 6 };
   /** Lampa sufitowa w środku pokoju — dokładnie tam, gdzie stoi nazwa. */
   const lampa = { x1: 44, y1: 34, x2: 56, y2: 46 };
+
+  it("nazwa docięta do szerokości pokoju mieści się w obrysie i ucieka spod lampy", () => {
+    // „Klatka schodowa" w pokoju 2 m (40 jedn. przy 0,05 m/jedn.) — nazwa docięta do 90%
+    // szerokości. Z zasięgiem liczonym z RAMKI (+15%) blok miał 103% pokoju, żadne położenie
+    // nie mieściło się w obrysie i opis zostawał na lampie w środku.
+    const klatka = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 60 },
+      { x: 0, y: 60 },
+    ];
+    const font = fontOpisuPokoju(0.05, "Klatka schodowa", 40);
+    const pol = zasiegNapisu("Klatka schodowa", font) / 2;
+    expect(2 * pol).toBeLessThanOrEqual(40);
+    const lampaKlatki = { x1: 14, y1: 24, x2: 26, y2: 36 };
+    const q = miejsceNaOpis({
+      kotwica: { x: 20, y: 30 },
+      blok: { lewo: pol, prawo: pol, gora: font / 2, dol: font / 2 },
+      przeszkody: [lampaKlatki],
+      obrys: klatka,
+      krok: font / 2,
+      krokow: 16,
+    });
+    expect(q.y + font / 2 <= lampaKlatki.y1 || q.y - font / 2 >= lampaKlatki.y2).toBe(true);
+  });
+
+  it("odstęp od przeszkód nie pozwala postawić opisu na styk", () => {
+    const tuz = { x1: 44, y1: 46, x2: 56, y2: 58 }; // symbol zaczyna się dokładnie pod blokiem
+    const bez = miejsceNaOpis({ kotwica: { x: 50, y: 40 }, blok, przeszkody: [tuz], obrys: pokoj, krok: 8 });
+    expect(bez).toEqual({ x: 50, y: 40 });
+    const z = miejsceNaOpis({ kotwica: { x: 50, y: 40 }, blok, przeszkody: [tuz], obrys: pokoj, krok: 8, odstep: 1 });
+    expect(z).not.toEqual({ x: 50, y: 40 });
+  });
 
   it("bez symboli opis zostaje w kotwicy", () => {
     expect(miejsceNaOpis({ kotwica: { x: 50, y: 40 }, blok, przeszkody: [], obrys: pokoj, krok: 8 })).toEqual({
