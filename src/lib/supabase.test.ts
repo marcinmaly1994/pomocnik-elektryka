@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { isSupabaseConfigured, sesjaZOdpowiedzi, supaDeleteAccount, supaUpdateProject, wymagaOdswiezenia } from "./supabase";
+import { isSupabaseConfigured, polskiKomunikatBledu, sesjaZOdpowiedzi, supaDeleteAccount, supaSignIn, supaUpdateProject, wymagaOdswiezenia } from "./supabase";
 
 describe("isSupabaseConfigured", () => {
   it("puste wartości -> nieskonfigurowane", () => {
@@ -137,5 +137,68 @@ describe("supaDeleteAccount", () => {
       ),
     );
     await expect(supaDeleteAccount("t")).rejects.toThrow("permission denied");
+  });
+});
+
+describe("polskiKomunikatBledu", () => {
+  // Supabase odpowiada po angielsku, a aplikacja wypisywała to wprost na ekranie
+  // logowania — najczęstszy błąd (zła para e-mail/hasło) wychodził jako „Invalid login credentials".
+  it("tłumaczy najczęstsze błędy logowania i rejestracji", () => {
+    expect(polskiKomunikatBledu(400, "Invalid login credentials")).toBe("Nieprawidłowy e-mail lub hasło.");
+    expect(polskiKomunikatBledu(400, "Email not confirmed")).toMatch(/nie został jeszcze potwierdzony/);
+    expect(polskiKomunikatBledu(422, "User already registered")).toMatch(/już istnieje/);
+    expect(polskiKomunikatBledu(422, "Password should be at least 6 characters.")).toMatch(/za krótkie/);
+    expect(polskiKomunikatBledu(422, "New password should be different from the old password.")).toMatch(/inne niż obecne/);
+  });
+
+  it("rozpoznaje też po kodzie błędu, gdy treść się zmieni", () => {
+    expect(polskiKomunikatBledu(400, "cokolwiek", "invalid_credentials")).toBe("Nieprawidłowy e-mail lub hasło.");
+    expect(polskiKomunikatBledu(422, "cokolwiek", "same_password")).toMatch(/inne niż obecne/);
+  });
+
+  it("limit żądań i awaria serwera dostają własne komunikaty", () => {
+    expect(polskiKomunikatBledu(429, "Too many requests")).toMatch(/Zbyt wiele prób/);
+    expect(polskiKomunikatBledu(400, "email rate limit exceeded")).toMatch(/Zbyt wiele prób/);
+    expect(polskiKomunikatBledu(502, "")).toMatch(/Serwer chwilowo nie odpowiada/);
+  });
+
+  it("nieznany komunikat przechodzi bez zmian — lepszy angielski niż żaden", () => {
+    expect(polskiKomunikatBledu(403, "permission denied")).toBe("permission denied");
+  });
+
+  it("pusty komunikat dostaje kod HTTP", () => {
+    expect(polskiKomunikatBledu(418, "")).toBe("Błąd 418");
+  });
+});
+
+describe("sbFetch — błędy sieci i odpowiedzi niebędące JSON-em", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("brak sieci daje polski komunikat zamiast „Failed to fetch”", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    await expect(supaSignIn("a@b.pl", "haslo123")).rejects.toThrow(/Brak połączenia z serwerem/);
+  });
+
+  it("odpowiedź 502 jako HTML nie wywraca się na JSON.parse i zachowuje kod HTTP", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(new Response("<html><body>Bad gateway</body></html>", { status: 502 })),
+    );
+    const blad = await supaSignIn("a@b.pl", "haslo123").catch((e) => e);
+    expect(blad.message).toMatch(/Serwer chwilowo nie odpowiada/);
+    expect(blad.status).toBe(502);
+  });
+
+  it("zła para e-mail/hasło wraca po polsku i z kodem 400", async () => {
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error_code: "invalid_credentials", msg: "Invalid login credentials" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    const blad = await supaSignIn("a@b.pl", "zle").catch((e) => e);
+    expect(blad.message).toBe("Nieprawidłowy e-mail lub hasło.");
+    expect(blad.status).toBe(400);
   });
 });

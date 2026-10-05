@@ -145,24 +145,66 @@ interface SbFetchOptions {
   token?: string;
 }
 
+/**
+ * Komunikaty Supabase po polsku.
+ *
+ * Serwer odpowiada po angielsku, a okna logowania i konta wypisywały `e.message` wprost —
+ * więc najczęstszy błąd, zła para e-mail/hasło, wychodził na ekranie jako „Invalid login
+ * credentials". Rozpoznajemy po KODZIE błędu, gdy serwer go podaje (jest stabilniejszy niż
+ * treść), a po treści jako zapasowo. Nieznany komunikat przechodzi bez zmian: angielskie
+ * zdanie z serwera wciąż mówi więcej niż ogólnikowe „coś poszło nie tak".
+ */
+export function polskiKomunikatBledu(status: number, surowy: string, kod?: string): string {
+  const tekst = `${kod ?? ""} ${surowy}`.toLowerCase();
+  const ma = (...fragmenty: string[]) => fragmenty.some((f) => tekst.includes(f));
+
+  if (ma("invalid_credentials", "invalid login credentials")) return "Nieprawidłowy e-mail lub hasło.";
+  if (ma("email_not_confirmed", "email not confirmed"))
+    return "Adres e-mail nie został jeszcze potwierdzony. Kliknij link z wiadomości wysłanej po rejestracji.";
+  if (ma("user_already_exists", "user already registered", "already been registered"))
+    return "Konto z tym adresem e-mail już istnieje. Zaloguj się albo zresetuj hasło.";
+  if (ma("same_password", "different from the old password")) return "Nowe hasło musi być inne niż obecne.";
+  if (ma("weak_password", "at least 6 characters")) return "Hasło jest za krótkie lub zbyt słabe (minimum 6 znaków).";
+  if (status === 429 || ma("rate_limit", "rate limit", "too many requests"))
+    return "Zbyt wiele prób. Odczekaj chwilę i spróbuj ponownie.";
+  if (status >= 500) return "Serwer chwilowo nie odpowiada. Spróbuj ponownie za chwilę.";
+  return surowy || `Błąd ${status}`;
+}
+
+const BRAK_SIECI = "Brak połączenia z serwerem. Sprawdź internet i spróbuj ponownie.";
+
 async function sbFetch<T>(path: string, { method = "GET", body, token }: SbFetchOptions = {}): Promise<T> {
-  const res = await fetch(`${SUPABASE_URL}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token || SUPABASE_ANON_KEY}`,
-      ...(method !== "GET" ? { Prefer: "return=representation" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${SUPABASE_URL}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token || SUPABASE_ANON_KEY}`,
+        ...(method !== "GET" ? { Prefer: "return=representation" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // `fetch` rzuca TypeError („Failed to fetch") przy braku sieci, blokadzie CSP albo
+    // zerwanym połączeniu. Bez `status` — wywołujący odróżnia to od odpowiedzi serwera.
+    throw new Error(BRAK_SIECI);
+  }
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  // Odpowiedź niebędąca JSON-em to zwykle strona błędu bramki (502/504 jako HTML).
+  // `JSON.parse` na niej rzucał SyntaxError i gubił kod HTTP.
+  let data: { error_description?: string; msg?: string; message?: string; error_code?: string; code?: string } | null = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
   if (!res.ok) {
-    const msg = data?.error_description || data?.msg || data?.message || `Błąd ${res.status}`;
+    const surowy = data?.error_description || data?.msg || data?.message || "";
     // Kod HTTP zachowany, żeby wywołujący odróżnił „sesja wygasła" (401) od
     // każdej innej awarii i mógł ponowić po odświeżeniu tokenu.
-    const err = new Error(msg) as SupaError;
+    const err = new Error(polskiKomunikatBledu(res.status, surowy, data?.error_code ?? data?.code)) as SupaError;
     err.status = res.status;
     throw err;
   }
