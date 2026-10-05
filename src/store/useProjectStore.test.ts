@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useProjectStore, useActiveFloorWalls, useActiveFloorElements } from "./useProjectStore";
+import { useProjectStore, useActiveFloorWalls, useActiveFloorElements, type ProjectPayload } from "./useProjectStore";
 
 const sampleElement = {
   id: "e1", type: "gniazdko" as const, x: 100, y: 100, room: "Salon", floor: "f1",
@@ -246,6 +246,36 @@ describe("useProjectStore", () => {
     removeElements(["lamp1"]);
     overrides = useProjectStore.getState().draft.routeOverrides;
     expect(overrides["sw1->lamp1"]).toBeUndefined(); // jedna strona zniknęła — poprawka też
+  });
+
+  it("loadProjectPayload uzupełnia pola, których brakuje w kopii sprzed ich dodania", () => {
+    // Kopia z pliku może pochodzić ze starej wersji aplikacji i nie mieć map `bgImages`,
+    // `scales` ani `protocols`. Brały się tu SUROWO, więc po wczytaniu były `undefined`
+    // i każdy odczyt `scales[floor]` czy `protocols[klucz]` wywracał ekran.
+    const stara = { draft: { elements: [] }, floors: [{ id: "f1", name: "Parter" }], activeFloorId: "f1" };
+
+    useProjectStore.getState().loadProjectPayload(stara as unknown as ProjectPayload);
+
+    const stan = useProjectStore.getState();
+    expect(stan.bgImages).toEqual({});
+    expect(stan.scales).toEqual({});
+    expect(stan.protocols).toEqual({});
+  });
+
+  it("loadProjectPayload nie przepuszcza listy planu, która nie jest tablicą", () => {
+    const zepsuta = {
+      draft: { elements: "nie tablica", walls: null, roomShapes: {}, openings: 7 },
+      floors: [{ id: "f1", name: "Parter" }],
+      activeFloorId: "f1",
+    };
+
+    useProjectStore.getState().loadProjectPayload(zepsuta as unknown as ProjectPayload);
+
+    const { draft } = useProjectStore.getState();
+    expect(draft.elements).toEqual([]);
+    expect(draft.walls).toEqual([]);
+    expect(draft.roomShapes).toEqual([]);
+    expect(draft.openings).toEqual([]);
   });
 
   it("getProjectPayload/loadProjectPayload zapisują i przywracają stan projektu bez historii cofnij/ponów", () => {
