@@ -51,11 +51,11 @@ wymusza wersji, więc starsze mogą działać, ale nikt tego nie sprawdzał.
 
 Dwa poziomy, obydwa wymagane przed wejściem na `main` (pilnuje tego CI).
 
-**Jednostkowe** (Vitest, ok. 1780 testów) siedzą obok kodu jako `*.test.ts`.
+**Jednostkowe** (Vitest, ok. 1850 testów) siedzą obok kodu jako `*.test.ts`.
 Pokrywają głównie `src/lib` — czyste funkcje bez Reacta: obliczenia elektryczne,
 geometria rysunku, dobór przewodów, kosztorys.
 
-**End-to-end** (Playwright, ok. 545 testów) w katalogu `e2e/`. Konfiguracja
+**End-to-end** (Playwright, ok. 650 testów) w katalogu `e2e/`. Konfiguracja
 definiuje **dwa projekty**, i to rozróżnienie jest celowe:
 
 - `dev` — zasadniczy zestaw, jedzie po serwerze deweloperskim;
