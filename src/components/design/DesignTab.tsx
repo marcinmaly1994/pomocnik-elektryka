@@ -2129,7 +2129,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             wszystkieElementy
           )
         : [],
-    [trasyPotrzebne, elements, wszystkieElementy, wszystkiePomieszczenia, walls, roomShapes, openings, mpu, elementScale, skalaBezKalibracji]
+    [trasyPotrzebne, elements, wszystkieElementy, wszystkiePomieszczenia, walls, roomShapes, openings, skalaOsprzetu]
   );
   // Ręczne poprawki (przeciągnięte przez użytkownika załamania, patrz DesignCanvas)
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
