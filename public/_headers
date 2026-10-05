@@ -1,0 +1,26 @@
+# Nagłówki bezpieczeństwa dla Cloudflare Pages (plik trafia do dist/ razem z resztą public/).
+#
+# Najważniejszy jest Content-Security-Policy. Sesja Supabase leży w localStorage, więc
+# gdyby kiedykolwiek udało się wstrzyknąć do strony cudzy skrypt, wyniósłby token razem
+# z całym kontem. CSP odcina to u źródła: strona wykona wyłącznie skrypty z własnej
+# domeny i połączy się wyłącznie z własnym adresem i z Supabase.
+#
+# Skąd te wyjątki — każdy ma powód, nie dopisujemy „na zapas":
+# - script-src 'wasm-unsafe-eval': pdf.js potrafi dekodować obrazy modułem WebAssembly.
+#   To NIE jest zwykłe 'unsafe-eval' — pozwala kompilować wasm, a nie wykonywać napisy.
+# - style-src 'unsafe-inline': React i Konva ustawiają style atrybutem (style="…"),
+#   a tego nie da się opatrzyć skrótem ani nonce'em.
+# - worker-src blob:, img-src blob: data:, connect-src blob: data: — rzut z pliku, podgląd
+#   PDF i rasteryzacja SVG działają na adresach blob:/data: tworzonych w locie.
+# - connect-src …supabase.co: jedyny zewnętrzny serwer, z którym aplikacja rozmawia.
+#   Adres jest ten sam co w .env.example; zmiana projektu Supabase wymaga zmiany TUTAJ,
+#   inaczej logowanie po cichu przestanie działać.
+#
+# frame-ancestors 'none' zastępuje X-Frame-Options (nowoczesne przeglądarki czytają to
+# pierwsze), ale zostawiamy oba: starsze znają tylko X-Frame-Options.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://wqfwrulbtpjgyyjubxud.supabase.co blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
