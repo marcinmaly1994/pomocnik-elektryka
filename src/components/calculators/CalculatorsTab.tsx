@@ -12,7 +12,6 @@ import { obliczSilnik, SPOSOB_ROZRUCHU_LABELS, type SposobRozruchu } from "@/lib
 import { CalcResultView, PasekWerdyktu } from "./CalcResultView";
 import { obliczSpadekNapiecia } from "@/lib/calc/voltageDrop";
 import { obliczMaksymalnaDlugosc } from "@/lib/calc/maxLength";
-import { obliczKompensacje, UKLAD_BATERII_LABELS, type UkladBaterii } from "@/lib/calc/powerFactor";
 import {
   CEL_ZWARCIA_LABELS,
   impedancjaTransformatora,
@@ -46,6 +45,7 @@ import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { Card } from "./Card";
 import { KalkulatorImpedancji } from "./KalkulatorImpedancji";
+import { KalkulatorKompensacji } from "./KalkulatorKompensacji";
 import { KalkulatorPeN } from "./KalkulatorPeN";
 import { KalkulatorSPD } from "./KalkulatorSPD";
 import { SZEREG_PELNY_OPTIONS, MATERIAL_OPTIONS, IZOLACJA_OPTIONS, RODZAJ_LINII_OPTIONS } from "./opcje";
@@ -169,10 +169,6 @@ const CEL_ZWARCIA_OPTIONS = (Object.entries(CEL_ZWARCIA_LABELS) as [CelZwarcia, 
   value,
   label,
 }));
-const UKLAD_BATERII_OPTIONS = (Object.entries(UKLAD_BATERII_LABELS) as [UkladBaterii, string][]).map(([value, label]) => ({
-  value,
-  label,
-}));
 
 /**
  * Progi dopuszczalnego spadku napięcia (PN-HD 60364-5-52 zał. G) — do szybkiego
@@ -281,12 +277,6 @@ export function CalculatorsTab() {
   const zwPrzekroj = useCalculatorsStore((s) => s.zwPrzekroj);
   const zwMaterial = useCalculatorsStore((s) => s.zwMaterial);
   const zwIzolacja = useCalculatorsStore((s) => s.zwIzolacja);
-  const kmPkW = useCalculatorsStore((s) => s.kmPkW);
-  const kmCos1 = useCalculatorsStore((s) => s.kmCos1);
-  const kmCos2 = useCalculatorsStore((s) => s.kmCos2);
-  const kmUV = useCalculatorsStore((s) => s.kmUV);
-  const kmUklad = useCalculatorsStore((s) => s.kmUklad);
-  const kmSkKVA = useCalculatorsStore((s) => s.kmSkKVA);
   const uzTyp = useCalculatorsStore((s) => s.uzTyp);
   const uzRho = useCalculatorsStore((s) => s.uzRho);
   const uzDlugosc = useCalculatorsStore((s) => s.uzDlugosc);
@@ -505,7 +495,6 @@ export function CalculatorsTab() {
   const setDuLength = (v: number) => patch({ duLength: v });
   const setDuSection = (v: number) => patch({ duSection: v });
   const setDuLimitPct = (v: number) => patch({ duLimitPct: v });
-  const setKm = (p: Partial<Parameters<typeof patch>[0]>) => patch(p);
   const setKs = (v: number) => patch({ ks: v });
   const setZCurve = (v: string) => patch({ zCurve: v });
   const setZIn = (v: number) => patch({ zIn: v });
@@ -846,21 +835,6 @@ export function CalculatorsTab() {
         maWbudowanaOchroneDC: evWbudowanaOchronaDC,
       }),
     [evMoc, evFaza, evCosfi, evDlugosc, evSposobUlozenia, evWbudowanaOchronaDC]
-  );
-
-  // --- kompensacja mocy biernej ---
-  const kompensacja = useMemo(
-    () =>
-      obliczKompensacje({
-        P_W: kmPkW * 1000,
-        cosfi1: kmCos1,
-        cosfi2: kmCos2,
-        napiecie_V: kmUV,
-        czestotliwosc_Hz: 50,
-        uklad: kmUklad,
-        Sk_VA: kmSkKVA > 0 ? kmSkKVA * 1000 : undefined,
-      }),
-    [kmPkW, kmCos1, kmCos2, kmUV, kmUklad, kmSkKVA]
   );
 
   // --- 3. bilans mocy ---
@@ -2837,74 +2811,7 @@ export function CalculatorsTab() {
             </Card>
           )}
 
-          {activeCalc === "kompensacja" && (
-            <Card title={active.label} tag="moc bierna">
-              <div className="grid sm:grid-cols-2 gap-x-4">
-                <Field
-                  label="Moc czynna odbioru"
-                  value={kmPkW}
-                  onChange={(v) => setKm({ kmPkW: Number(v) })}
-                  unit="kW"
-                />
-                <Field
-                  label="Napięcie (międzyfazowe)"
-                  value={kmUV}
-                  onChange={(v) => setKm({ kmUV: Number(v) })}
-                  unit="V"
-                  hint="Napięcie międzyfazowe sieci zasilającej — w Polsce standardowo 400 V."
-                />
-                <Field
-                  label="cos φ przed kompensacją"
-                  value={kmCos1}
-                  onChange={(v) => setKm({ kmCos1: Number(v) })}
-                  step="0.01"
-                  hint="Obecny współczynnik mocy instalacji — z pomiaru analizatorem sieci albo z faktury za energię (zakład energetyczny często go tam podaje, jeśli nalicza opłatę za energię bierną)."
-                />
-                <Field
-                  label="cos φ docelowy"
-                  value={kmCos2}
-                  onChange={(v) => setKm({ kmCos2: Number(v) })}
-                  step="0.01"
-                  hint="Współczynnik mocy, jaki chcesz uzyskać po kompensacji — zwykle 0,93–0,95, żeby uniknąć opłat za energię bierną (sprawdź próg w umowie z operatorem)."
-                />
-                <Field
-                  label="Układ połączeń baterii"
-                  value={kmUklad}
-                  onChange={(v) => setKm({ kmUklad: v as UkladBaterii })}
-                  options={UKLAD_BATERII_OPTIONS}
-                />
-                <Field
-                  label="Moc zwarciowa Sk (0 = nie sprawdzaj rezonansu)"
-                  value={kmSkKVA}
-                  onChange={(v) => setKm({ kmSkKVA: Number(v) })}
-                  unit="kVA"
-                  hint="Moc zwarciowa sieci w punkcie przyłączenia baterii — podaje ją zakład energetyczny w warunkach przyłączenia, albo policzysz ją z impedancji transformatora (kalkulator „Prądy zwarciowe”: Sk ≈ Un²/Zk). Potrzebna do sprawdzenia ryzyka rezonansu z harmonicznymi."
-                />
-              </div>
-
-              {kompensacja.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Wymagana moc baterii kondensatorów</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(kompensacja.wartosci.Qc_var / 1000, 2)} kvar</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">
-                      C = {formatLiczba(kompensacja.wartosci.C_F * 1e6, 1)} µF
-                      {kmUklad === "trojkat" ? " / gałąź" : ""}
-                    </span>
-                    <span className="pe-chip pe-tag-blue">tgφ₁ = {formatLiczba(kompensacja.wartosci.tgfi1, 3)}</span>
-                    <span className="pe-chip pe-tag-blue">tgφ₂ = {formatLiczba(kompensacja.wartosci.tgfi2, 3)}</span>
-                    {kompensacja.wartosci.rzadRezonansu !== null && (
-                      <span className="pe-chip pe-tag-green">
-                        rezonans przy n ≈ {formatLiczba(kompensacja.wartosci.rzadRezonansu, 2)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <CalcResultView wynik={kompensacja} />
-            </Card>
-          )}
+          {activeCalc === "kompensacja" && <KalkulatorKompensacji label={active.label} />}
 
           {activeCalc === "moc" && (
             <Card title={active.label} tag="bilans mocy">
