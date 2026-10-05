@@ -85,4 +85,17 @@ describe("czytajKopie", () => {
 
     expect(wynik.ok).toBe(true);
   });
+
+  it("odrzuca kopię, w której listy planu albo kondygnacje mają zły kształt", () => {
+    // Kształt szczytu (`draft` obiektem, `floors` tablicą) to za mało: plik z `elements`
+    // jako napisem przechodził sito i wywracał ekran dopiero przy pierwszym `.map`.
+    const zlyElements = { ...minimalnaKopia(), draft: { elements: "x", roomShapes: [] } };
+    const zlaSciana = { ...minimalnaKopia(), draft: { elements: [], walls: { a: 1 } } };
+    const zlaKondygnacja = { ...minimalnaKopia(), floors: [null, 5] };
+    const kondygnacjaBezId = { ...minimalnaKopia(), floors: [{ name: "Parter" }] };
+
+    for (const zepsuta of [zlyElements, zlaSciana, zlaKondygnacja, kondygnacjaBezId]) {
+      expect(czytajKopie(JSON.stringify(zepsuta)).ok).toBe(false);
+    }
+  });
 });

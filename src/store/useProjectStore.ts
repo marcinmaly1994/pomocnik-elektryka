@@ -305,6 +305,17 @@ interface Draft {
   routeOverrides: Record<string, Point[]>;
 }
 
+/** Wartość z wczytywanego zapisu jako tablica; cokolwiek innego to pusta lista.
+ *  Typ wejścia jest „zaufany" tylko formalnie — to właśnie tu sprawdzamy go w czasie działania. */
+function tablicaLubPusta<T>(v: T[]): T[] {
+  return Array.isArray(v) ? v : [];
+}
+
+/** Wartość z wczytywanego zapisu jako zwykły obiekt (mapa); cokolwiek innego to pusta mapa. */
+function obiektLubPusty<T extends object>(v: T): T {
+  return typeof v === "object" && v !== null && !Array.isArray(v) ? v : ({} as T);
+}
+
 const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [], routeOverrides: {} };
 
 /** Usuwa poprawki tras, których id odwołuje się do elementu, którego już nie ma
@@ -793,21 +804,36 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     // `{...emptyDraft, ...payload.draft}` — zapisy sprzed dodania `openings`
     // (pole nowe w tym kroku) nie mają go w ogóle, więc bez tego fallbacku
     // każdy odczyt `draft.openings` na starym projekcie rzucałby na `undefined`.
-    const draft = { ...emptyDraft, ...payload.draft };
+    //
+    // Uzupełnianie braków nie wystarcza przy złym KSZTAŁCIE: kopia z pliku jest daną
+    // z zewnątrz, więc lista planu może być napisem, `null` albo obiektem. `{...emptyDraft,
+    // ...payload.draft}` przepuszcza to dalej, a pierwszy `.map` wywraca ekran.
+    const surowy = { ...emptyDraft, ...payload.draft };
+    const draft = {
+      ...surowy,
+      elements: tablicaLubPusta(surowy.elements),
+      walls: tablicaLubPusta(surowy.walls),
+      roomShapes: tablicaLubPusta(surowy.roomShapes),
+      openings: tablicaLubPusta(surowy.openings),
+      routeOverrides: obiektLubPusty(surowy.routeOverrides),
+    };
+    const scales = obiektLubPusty(payload.scales);
     // Remont przypisań do pomieszczeń — patrz `reconcileRoomsOnLoad`. Wchodzi TU,
     // a nie w komponencie, bo to jedyne wejście dla obu dróg wczytania (autozapis
     // w localStorage i projekt z chmury), więc poprawka nie zależy od tego, którą
     // z nich użytkownik akurat wszedł. Po przeliczeniu historia i tak startuje
     // pusta (`past`/`future` niżej), więc poprawione dane SĄ punktem wyjścia
     // projektu — nie stanem pośrednim, który dałoby się przypadkiem cofnąć.
-    const { elements, poprawione } = reconcileRoomsOnLoad(draft.elements, draft.roomShapes, payload.scales);
+    const { elements, poprawione } = reconcileRoomsOnLoad(draft.elements, draft.roomShapes, scales);
     set({
       draft: { ...draft, elements },
       roomsFixedOnLoad: poprawione,
       floors: payload.floors.length ? payload.floors : [{ id: "f1", name: "Parter" }],
       activeFloorId: payload.activeFloorId || payload.floors[0]?.id || "f1",
-      bgImages: payload.bgImages,
-      scales: payload.scales,
+      // Mapy brane SUROWO wracały jako `undefined` z kopii sprzed ich dodania — a
+      // `scales[floor]` i `bgImages[floor]` czyta się wszędzie.
+      bgImages: obiektLubPusty(payload.bgImages),
+      scales,
       prices: { ...DEFAULT_PRICES, ...payload.prices },
       // Zapisy sprzed tej zmiany nie maja tego pola — pusta mapa znaczy "wszystko liczone".
       costOverrides: payload.costOverrides ?? {},
@@ -819,7 +845,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // kładł całą aplikację — `resolveDocHeader` woła sześć komponentów, a jeden
       // z nich jest zamontowany w `App` na stałe, więc zostawał sam ekran awarii.
       docHeader: { ...domyslnyNaglowek(), ...(payload.docHeader ?? {}) },
-      protocols: payload.protocols,
+      protocols: obiektLubPusty(payload.protocols),
       projectName: payload.projectName || "Projekt",
       // `panelConfig` dodane po pierwszych zapisach w chmurze/lokalnie — starsze
       // migawki go nie mają, stąd fallback do domyślnej konfiguracji. Starsze zapisy

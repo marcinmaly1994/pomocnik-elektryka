@@ -63,5 +63,19 @@ export function czytajKopie(tekst: string): WynikOdczytu {
   const maKondygnacje = Array.isArray(kandydat.floors);
   if (!maPlan || !maKondygnacje) return { ok: false, powod: NIE_TEN_PLIK };
 
+  // Kształt LIST, nie ich zawartości: pole może w ogóle nie istnieć (kopia sprzed jego
+  // dodania — to przechodzi), ale jeśli jest, musi być tym, czym ma być. Napis w miejscu
+  // `elements` wywracał ekran przy pierwszym `.map`, już PO potwierdzeniu wczytania.
+  const plan = kandydat.draft as unknown as Record<string, unknown>;
+  const listyPlanu = ["elements", "walls", "roomShapes", "openings"];
+  if (listyPlanu.some((k) => plan[k] !== undefined && !Array.isArray(plan[k]))) {
+    return { ok: false, powod: NIE_TEN_PLIK };
+  }
+  // Kondygnacja bez `id` nie ma do czego się odwołać elementom ani skalom.
+  const kondygnacjeOk = (kandydat.floors as unknown[]).every(
+    (f) => typeof f === "object" && f !== null && typeof (f as { id?: unknown }).id === "string"
+  );
+  if (!kondygnacjeOk) return { ok: false, powod: NIE_TEN_PLIK };
+
   return { ok: true, payload: kandydat as ProjectPayload };
 }
