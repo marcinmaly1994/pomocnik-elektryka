@@ -903,7 +903,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       floors: state.floors.map((f) => {
         if (f.id !== id) return f;
         if (heightM === undefined || !(heightM > 0)) {
-          const { heightM: _pominiete, ...reszta } = f;
+          const reszta = { ...f };
+          delete reszta.heightM;
           return reszta;
         }
         return { ...f, heightM };
