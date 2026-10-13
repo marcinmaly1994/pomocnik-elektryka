@@ -26,6 +26,10 @@ export interface ProtocolDef {
   limitLabel?: string;
   limitDefault?: number;
   limitUnit?: string;
+  /** Dopuszczalny zakres kryterium [min, max]. Wartość spoza niego jest PRZYCINANA przy
+   *  ocenie (patrz `limitOceny`) — dla kryteriów, w których zły kierunek rozluźniałby
+   *  werdykt. Brak = dowolna wartość (napięcie probiercze, rezystancje maksymalne). */
+  limitZakres?: [number, number];
   evaluate?: (row: ProtocolRow, limit: number) => boolean | null;
   checklist?: boolean;
   items?: string[];
@@ -143,9 +147,14 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
         },
       },
     ],
-    limitLabel: "Współczynnik bezpieczeństwa",
+    // Próg to Zs max × ta liczba, więc WIĘKSZA znaczy LUŹNIEJSZA ocena. Dawna etykieta
+    // „Współczynnik bezpieczeństwa" sugerowała odwrotnie, a pole przyjmowało dowolną
+    // wartość: wpisane 2 dawało wynik pozytywny dla pętli dwa razy za długiej. Zakres
+    // kończy się na 1,0 (bez zapasu); poniżej to zapas pomiarowy, czyli ocena ostrzejsza.
+    limitLabel: "Zapas pomiarowy",
     limitDefault: 1.0,
-    limitUnit: "×Zs max",
+    limitUnit: "× Zs max (1,0 = bez zapasu; mniej = ostrzej)",
+    limitZakres: [0.1, 1.0],
     extraCriterion:
       "Zs max liczone dla U0 = 230 V — zwarcie L-PE ma to samo napięcie w obwodzie 1- i 3-fazowym, więc próg jest wspólny. W obwodzie 3-fazowym mierzy się pętlę dla każdej fazy, a o ocenie decyduje NAJGORSZA z nich.",
     evaluate: (r, limit) => {
@@ -154,7 +163,9 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
       const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
       const { zsMax } = zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0));
       if (!zmierzone.length || !zsMax) return null;
-      return Math.max(...zmierzone) <= zsMax * Number(limit);
+      // Przycięcie także tutaj, a nie tylko w wywołującym: ocena nie może zależeć od tego,
+      // czy ktoś o nim pamiętał.
+      return Math.max(...zmierzone) <= zsMax * Math.min(Number(limit), 1);
     },
   },
 
@@ -323,6 +334,15 @@ export const PROTOCOL_ORDER: ProtocolKey[] = [
  * jedna pozycja oględzin „zgodne" na dwanaście dawały „instalacja w badanym zakresie
  * spełnia wymagania" — także na wydruku, czyli w dokumencie formalnym.
  */
+/** Kryterium protokołu w jego dopuszczalnym zakresie. Bez zakresu — bez zmian. Wartość
+ *  nieliczbowa wraca do domyślnej, bo `Number("")` dałoby 0 i ocenę negatywną bez powodu. */
+export function limitOceny(def: ProtocolDef, limit: number): number {
+  if (!def.limitZakres) return limit;
+  if (!Number.isFinite(limit)) return def.limitDefault ?? def.limitZakres[1];
+  const [min, max] = def.limitZakres;
+  return Math.min(max, Math.max(min, limit));
+}
+
 export function protocolVerdict(def: ProtocolDef, rows: ProtocolRow[], limit: number): boolean | null {
   if (def.checklist) {
     if (rows.some((r) => r.status === "nie")) return false;

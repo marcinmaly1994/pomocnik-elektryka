@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PROTOCOL_DEFS, protocolVerdict, wierszeBezOceny, type ProtocolRow } from "./protocols";
+import { PROTOCOL_DEFS, limitOceny, protocolVerdict, wierszeBezOceny, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
@@ -218,5 +218,37 @@ describe("protocolVerdict", () => {
   it("checklist: same n/d to jeszcze nie ocena", () => {
     const rows: ProtocolRow[] = [{ text: "x", status: "nd" }];
     expect(protocolVerdict(PROTOCOL_DEFS.ogledziny, rows, 0)).toBeNull();
+  });
+});
+
+describe("zapas pomiarowy w protokole pętli zwarcia", () => {
+  const def = PROTOCOL_DEFS.petla;
+  // B16: Zs max = 2,88 Ω. Pomiar 4,0 Ω NIE spełnia wymagania.
+  const zaDuza: ProtocolRow = { curve: "B", in: 16, zs: 4.0 };
+
+  it("współczynnik powyżej 1 nie rozluźnia oceny — pomiar niezgodny zostaje negatywny", () => {
+    // Etykieta „współczynnik bezpieczeństwa" sugerowała, że większa liczba = ostrzej,
+    // a próg to Zs max × współczynnik, więc 2 przepuszczało 4,0 Ω. Kierunek niebezpieczny.
+    expect(def.evaluate!(zaDuza, 2)).toBe(false);
+    expect(def.evaluate!(zaDuza, 1.5)).toBe(false);
+  });
+
+  it("zapas poniżej 1 zaostrza ocenę", () => {
+    const blisko: ProtocolRow = { curve: "B", in: 16, zs: 2.5 };
+    expect(def.evaluate!(blisko, 1)).toBe(true);
+    expect(def.evaluate!(blisko, 0.8)).toBe(false);
+  });
+
+  it("limitOceny przycina wartość do zakresu, a bez zakresu nic nie zmienia", () => {
+    expect(limitOceny(def, 2)).toBe(1);
+    expect(limitOceny(def, 0)).toBe(0.1);
+    expect(limitOceny(def, 0.8)).toBe(0.8);
+    expect(limitOceny(def, NaN)).toBe(def.limitDefault);
+    // izolacja: napięcie probiercze nie ma zakresu — wartość przechodzi bez zmian
+    expect(limitOceny(PROTOCOL_DEFS.izolacja, 1000)).toBe(1000);
+  });
+
+  it("werdykt protokołu liczy się z przyciętej wartości, także ze starego zapisu", () => {
+    expect(protocolVerdict(def, [zaDuza], limitOceny(def, 2))).toBe(false);
   });
 });

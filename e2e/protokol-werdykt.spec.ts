@@ -43,3 +43,21 @@ test("oględziny: jedna pozycja zgodna na dwanaście — niekompletny", async ({
   await expect(page.getByTestId("protokol-niekompletny")).toContainText("Niekompletny — 11 pozycji bez oceny");
   await expect(page.getByText("Wynik pozytywny")).toHaveCount(0);
 });
+
+test("pętla zwarcia: zapas powyżej 1,0 nie rozluźnia oceny — pomiar niezgodny zostaje negatywny", async ({ page }) => {
+  // Próg to Zs max × wpisana liczba, więc dawny „współczynnik bezpieczeństwa" równy 2
+  // przepuszczał pętlę dwa razy za długą jako wynik POZYTYWNY w dokumencie dla klienta.
+  await otworz(page);
+  await page.getByRole("button", { name: /^Pomiar impedancji pętli zwarcia/ }).first().click();
+  await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+  await page.getByLabel("Zs L1 [Ω], pozycja 1").fill("4");
+  await expect(page.getByText("Wynik negatywny")).toBeVisible();
+
+  const pole = page.locator('input[type="number"][max="1"]');
+  await expect(pole).toHaveAttribute("min", "0.1");
+  await pole.fill("2");
+
+  await expect(page.getByRole("status").filter({ hasText: "spoza dopuszczalnego zakresu" })).toContainText("użyto 1");
+  await expect(page.getByText("Wynik negatywny")).toBeVisible();
+  await expect(page.getByText("Wynik pozytywny")).toHaveCount(0);
+});
