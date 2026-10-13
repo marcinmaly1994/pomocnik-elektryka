@@ -1,7 +1,6 @@
 import type { DocumentHeader } from "@/types";
 import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc, type PdfImage } from "./engine";
 import { drawTitleBlock, TITLE_BLOCK_H } from "./titleBlock";
-import { downloadPdfBytes, projectFileName } from "./download";
 
 /**
  * Rysunek techniczny w PDF: kartka pozioma, tabliczka rysunkowa na dole, rysunek
@@ -391,11 +390,6 @@ function rysujZestawienie(doc: PdfDoc, pozycje: PozycjaZestawienia[]): void {
   doc.y -= 4;
   doc.text("RAZEM", MARGINES, doc.y, 9, true);
   doc.text(`${razem} szt.`, kolIlosc, doc.y, 9, true);
-}
-
-export async function downloadDrawingPdf(opcje: RysunekPdfOpcje, bazaNazwy: string): Promise<boolean> {
-  const bytes = await buildDrawingPdf(opcje);
-  return downloadPdfBytes(bytes, projectFileName(bazaNazwy, opcje.header.obiekt, "pdf"));
 }
 
 /**

@@ -16,7 +16,6 @@ export const PHASE_COLORS: Record<string, string> = {
 };
 
 export const MOD_W = 34; // szerokość 1 modułu (px) ~ 17,5 mm
-export const DEV_H = 150; // wysokość aparatu ~ 85 mm
 
 export interface ManualDeviceType {
   key: string;

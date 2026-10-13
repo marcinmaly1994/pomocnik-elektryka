@@ -3,7 +3,6 @@ import type { CostRow } from "@/lib/costs";
 import { VAT_RATE, podsumowanieKosztorysu, type StawkaVat } from "@/lib/costs";
 import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
-import { downloadPdfBytes, projectFileName } from "./download";
 
 /**
  * Kosztorys jako dokument do wysłania klientowi.
@@ -183,11 +182,6 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader, stawkaVat
   doc.text("nie zastępuje oferty ani projektu wykonanego przez osobę z uprawnieniami.", M, doc.y, 7.5, false, 0.5);
 
   return doc;
-}
-
-export async function downloadCostsPdf(rows: CostRow[], header: DocumentHeader, stawkaVat: StawkaVat = VAT_RATE): Promise<boolean> {
-  const bytes = await buildCostsPdf(rows, header, stawkaVat);
-  return downloadPdfBytes(bytes, projectFileName("kosztorys", header.obiekt, "pdf"));
 }
 
 /**
