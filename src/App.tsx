@@ -843,8 +843,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* Pasek projektu: nazwa po lewej, etapy przepływu po prawej. */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      {/* Pasek projektu: nazwa po lewej, etapy przepływu po prawej. `<section>` z nazwą,
+          bo to landmark: bez niego nazwa projektu i kafle etapów zostawały jedynym
+          fragmentem strony poza wszystkimi landmarkami. */}
+      <section aria-label="Projekt i etapy pracy" className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Folder size={15} className="text-slate-400" aria-hidden="true" />
           <span className="text-sm text-slate-400">Projekt:</span>
@@ -922,7 +924,7 @@ export default function App() {
             onPick={setTab}
           />
         </div>
-      </div>
+      </section>
 
       {/* Nawigacja celowo NIE zawija przepływu (`flex-wrap`, jak było wcześniej): przy
           wąskim oknie strzałka lądowała na końcu wiersza bez celu, a „3 Kosztorys"
@@ -940,7 +942,10 @@ export default function App() {
           SAMA sięgnąć po tę wysokość, gdy ma z niej pożytek: ekran startowy Instalacji
           rozciąga się na całą wolną przestrzeń i centruje w niej swoją treść, zamiast
           zostawiać pod sobą pas pustego tła (patrz `showEntryScreen` w DesignTab). */}
-      <div className="flex flex-1 flex-col">
+      {/* `<main>`, nie `<div>`: bez landmarka czytnik ekranu nie ma jak przeskoczyć od
+          nagłówka do treści, a audyt dostępności zgłaszał ponad 600 węzłów „poza
+          landmarkami". Układ bez zmian — te same klasy. */}
+      <main className="flex flex-1 flex-col">
       {/* Pasek przykładu stoi PONAD granicą błędu i poza nią: dotyczy projektu, a nie
           jednej zakładki, i ma przeżyć awarię dowolnej z nich, bo to stąd prowadzi
           wyjście do własnego projektu.
@@ -1022,7 +1027,7 @@ export default function App() {
         </>
       )}
       </ErrorBoundary>
-      </div>
+      </main>
 
       {/*
         Duży, zawsze widoczny przycisk „Dalej” — bez niego jedyną drogą do kolejnego
