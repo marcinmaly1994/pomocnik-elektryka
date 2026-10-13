@@ -2,7 +2,7 @@ import type { DocumentHeader } from "@/types";
 import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
-import { PROTOCOL_DEFS, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_DEFS, limitOceny, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
 import type { ProtocolKey } from "@/types";
 
 /** Łamie tekst na linie mieszczące się w `maxWidth`. Wydzielone z bloku „Uwagi",
@@ -24,8 +24,11 @@ function zawijajTekst(tekst: string, maxWidth: number, size: number): string[] {
 }
 
 /** Składa protokół pomiarowy i zwraca gotowe bajty PDF (bez pobierania — testowalne bez DOM-u). */
-export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows: ProtocolRow[], limit: number): PdfDoc {
+export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows: ProtocolRow[], zapisanyLimit: number): PdfDoc {
   const def = PROTOCOL_DEFS[key];
+  // Stary zapis mógł mieć wartość spoza dzisiejszego zakresu; na wydruku ma stać ta,
+  // wobec której FAKTYCZNIE oceniono wiersze.
+  const limit = limitOceny(def, zapisanyLimit);
   // Izolacja ma teraz kolumnę na każdą parę pomiarową (do 10 naraz, wzór Z.4.4) —
   // w portretowym A4 nagłówki obcinały się do nieczytelnego "L1-..". Poziomy A4
   // daje ~250 pt więcej szerokości, tyle wystarcza na czytelne 6-7-znakowe etykiety.

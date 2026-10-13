@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { PROTOCOL_DEFS, PROTOCOL_ORDER, protocolVerdict, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_DEFS, PROTOCOL_ORDER, limitOceny, protocolVerdict, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
 import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
@@ -190,7 +190,7 @@ export function ProtocolsTab() {
   useEffect(() => {
     const sprzataczki = PROTOCOL_ORDER.filter((k) => (protocols[k]?.rows.length ?? 0) > 0).map((k) => {
       const st = protocols[k]!;
-      const limitK = st.limit ?? PROTOCOL_DEFS[k].limitDefault ?? 0;
+      const limitK = limitOceny(PROTOCOL_DEFS[k], st.limit ?? PROTOCOL_DEFS[k].limitDefault ?? 0);
       return zarejestrujProducenta(`protokol:${k}`, async () => buildProtocolDoc(k, header, st.rows, limitK));
     });
     return () => sprzataczki.forEach((f) => f());
@@ -199,7 +199,11 @@ export function ProtocolsTab() {
   const def = PROTOCOL_DEFS[active];
   const state = protocols[active] ?? { rows: [] };
   const rows = state.rows;
-  const limit = state.limit ?? def.limitDefault ?? 0;
+  // `wpisany` to to, co stoi w polu; `limit` — wobec czego naprawdę oceniamy (przycięte do
+  // zakresu kryterium). Pole nie przycina w trakcie pisania, bo „0" w drodze do „0,8"
+  // przeskakiwałoby na minimum.
+  const wpisany = state.limit ?? def.limitDefault ?? 0;
+  const limit = limitOceny(def, wpisany);
 
   function update(patch: { rows?: ProtocolRow[]; limit?: number }) {
     setProtocolState(active, patch);
@@ -362,7 +366,7 @@ export function ProtocolsTab() {
         {PROTOCOL_ORDER.map((k) => {
           const d = PROTOCOL_DEFS[k];
           const st = protocols[k];
-          const v = st ? protocolVerdict(d, st.rows, st.limit ?? d.limitDefault ?? 0) : null;
+          const v = st ? protocolVerdict(d, st.rows, limitOceny(d, st.limit ?? d.limitDefault ?? 0)) : null;
           return (
             <button
               key={k}
@@ -493,11 +497,18 @@ export function ProtocolsTab() {
               <input
                 type="number"
                 step="0.1"
-                value={limit}
+                value={wpisany}
+                min={def.limitZakres?.[0]}
+                max={def.limitZakres?.[1]}
                 onChange={(e) => update({ limit: Number(e.target.value) })}
                 className="pe-input pe-mono w-24 text-sm"
               />
               <span className="text-xs text-slate-500">{def.limitUnit}</span>
+              {limit !== wpisany && (
+                <span role="status" className="w-full text-xs text-amber-700">
+                  Wartość spoza dopuszczalnego zakresu — do oceny użyto {String(limit).replace(".", ",")}.
+                </span>
+              )}
             </div>
 
             {/* Poniżej `lg` każdy wiersz jest KARTĄ — same klasy CSS, ten sam DOM. Tabela
