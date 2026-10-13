@@ -700,6 +700,7 @@ export function PanelTab() {
                   const def = MANUAL_DEVICE_TYPES.find((t) => t.key === e.target.value)!;
                   setAddForm({ kind: def.key, label: def.defLabel, caption: "" });
                 }}
+                aria-label="Rodzaj aparatu do dodania"
                 className="pe-input col-span-2 text-xs"
               >
                 {MANUAL_DEVICE_TYPES.map((t) => (
@@ -708,7 +709,12 @@ export function PanelTab() {
                   </option>
                 ))}
               </select>
-              <select value={addForm.label} onChange={(e) => setAddForm((f) => ({ ...f, label: e.target.value }))} className="pe-input text-xs">
+              <select
+                value={addForm.label}
+                onChange={(e) => setAddForm((f) => ({ ...f, label: e.target.value }))}
+                aria-label="Prąd znamionowy dodawanego aparatu"
+                className="pe-input text-xs"
+              >
                 {addDef.ratings.map((r) => (
                   <option key={r} value={r}>
                     {r || "—"}
