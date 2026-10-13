@@ -93,21 +93,6 @@ export function konduktywnosc(material: Material, tempC: number): number {
 }
 
 /**
- * Rezystancja żyły [Ω] dla długości L [m] i przekroju S [mm²].
- * `rownolegle` — liczba przewodów równoległych (dzieli rezystancję).
- */
-export function rezystancjaZyly(args: {
-  dlugosc_m: number;
-  przekroj_mm2: number;
-  material: Material;
-  tempC: number;
-  rownolegle?: number;
-}): number {
-  const n = args.rownolegle && args.rownolegle > 0 ? args.rownolegle : 1;
-  return (rezystywnosc(args.material, args.tempC) * args.dlugosc_m) / (args.przekroj_mm2 * n);
-}
-
-/**
  * Domyślna reaktancja jednostkowa X' [Ω/km] wg rodzaju linii (spec pkt 4).
  * Parametr edytowalny — dla kabli jednożyłowych i linii gołych realna wartość
  * zależy od rozstawu żył, więc podana jest środkiem widełek z zakresu.

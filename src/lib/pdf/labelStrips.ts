@@ -1,7 +1,6 @@
 import type { DocumentHeader, PanelDevice } from "@/types";
 import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
-import { downloadPdfBytes, projectFileName } from "./download";
 import { zawijNaDwieLinie } from "@/lib/tekst";
 
 /**
@@ -157,11 +156,6 @@ export function buildLabelStripsDoc(devices: PanelDevice[], perRow: number, head
   }
 
   return doc;
-}
-
-export async function downloadLabelStripsPdf(devices: PanelDevice[], perRow: number, header: DocumentHeader): Promise<boolean> {
-  const bytes = await buildLabelStripsPdf(devices, perRow, header);
-  return downloadPdfBytes(bytes, projectFileName("paski-opisowe-rozdzielnicy", header.obiekt, "pdf"));
 }
 
 /**

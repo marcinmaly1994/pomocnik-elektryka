@@ -15,7 +15,6 @@ import { formatLiczba } from "@/lib/liczby";
 import {
   BREAKER_RATINGS,
   CURVE_MULTIPLIER,
-  LAYING_METHOD_LABELS,
   limitSpadkuPct,
   REFERENCE_METHOD_FOR,
   RHO_CU_70C,
@@ -610,12 +609,6 @@ export function sizeBreakerForSection(spec: BreakerSpec): SizedBreaker {
     status: hasError ? "error" : warnings.length > 0 ? "warn" : "ok",
     ostrzezenia: warnings,
   };
-}
-
-/** Opis słowny przyjętych założeń — do legendy pod schematem. */
-export function sizingAssumptions(spec: CircuitSpec): string {
-  const method = REFERENCE_METHOD_FOR[spec.sposob_ulozenia];
-  return `metoda ${method} (${LAYING_METHOD_LABELS[spec.sposob_ulozenia]}), ${spec.temperatura_otoczenia_C ?? 30} °C, ${spec.obwodow_w_wiazce ?? 1} obw. w wiązce`;
 }
 
 // --- dobór WLZ (wewnętrznej linii zasilającej) -------------------------------

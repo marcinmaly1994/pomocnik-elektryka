@@ -15,11 +15,6 @@ export type RodzajDokumentu = "projekt" | "protokoly";
 /** Ile dokumentów każdego rodzaju wolno trzymać na koncie. */
 export const LIMIT_ZAPISOW = 5;
 
-export const NAZWA_RODZAJU: Record<RodzajDokumentu, string> = {
-  projekt: "projekt",
-  protokoly: "zestaw protokołów",
-};
-
 export interface PozycjaDokumentu {
   id: string;
   name: string;

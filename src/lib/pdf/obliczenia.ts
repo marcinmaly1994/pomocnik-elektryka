@@ -2,7 +2,6 @@ import type { DocumentHeader } from "@/types";
 import type { SizedCircuit } from "@/lib/panel/sizing";
 import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
-import { downloadPdfBytes, projectFileName } from "./download";
 
 /**
  * Karta obliczeń obwodów — dobór jako dokument, nie jako widok.
@@ -231,15 +230,6 @@ export function buildCalcSheetDoc(
   doc.text("wymagane pomiary powykonawcze.", M, doc.y, 7.5, false, 0.5);
 
   return doc;
-}
-
-export async function downloadCalcSheetPdf(
-  sized: SizedCircuit[],
-  dlugosci: Map<string, number>,
-  header: DocumentHeader
-): Promise<boolean> {
-  const bytes = await buildCalcSheetPdf(sized, dlugosci, header);
-  return downloadPdfBytes(bytes, projectFileName("karta-obliczen", header.obiekt, "pdf"));
 }
 
 /**
