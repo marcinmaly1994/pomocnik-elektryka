@@ -54,7 +54,7 @@ export interface EditorStatusBarProps {
   sprawdzenie?: { stan: ReturnType<typeof stanSprawdzenia>; pokaz: () => void };
 }
 
-const KOLOR_SPRAWDZENIA = { error: "#A2352C", warn: "#8A5526", ok: "#2C6B4A", pusto: "#64748B" } as const;
+const KOLOR_SPRAWDZENIA = { error: "#A2352C", warn: "#8A5526", ok: "#2C6B4A", pusto: "#4F5D73" } as const;
 
 /** Suma powierzchni obrysowanych pomieszczeń [m²]. `null` bez kalibracji skali. */
 export function totalRoomAreaM2(roomShapes: RoomShape[], metersPerUnit: number | null): number | null {

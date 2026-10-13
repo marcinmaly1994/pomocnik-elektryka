@@ -187,7 +187,7 @@ export function ListaKalkulatorow({
             >
               {schowana ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
               {grupa.tytul}
-              <span className="ml-auto font-normal text-slate-300">{pozycje.length}</span>
+              <span className="ml-auto font-normal text-slate-400">{pozycje.length}</span>
             </button>
             {!schowana && (
               <div className={zwarta ? "space-y-px" : "space-y-1.5"}>

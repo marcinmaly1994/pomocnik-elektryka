@@ -1298,7 +1298,7 @@ export function CalculatorsTab() {
                           >
                             <span
                               className="min-w-0 flex-1 truncate text-[11.5px]"
-                              style={on ? { color: "#2D5A8C", fontWeight: 600 } : { color: "#64748B" }}
+                              style={on ? { color: "#2D5A8C", fontWeight: 600 } : { color: "#4F5D73" }}
                             >
                               {row.label}
                             </span>

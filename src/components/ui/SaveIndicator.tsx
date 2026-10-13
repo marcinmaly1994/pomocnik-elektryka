@@ -21,7 +21,7 @@ export function SaveIndicator({ compact = false }: { compact?: boolean }) {
   const Ikona = stan.ostrzezenie ? AlertTriangle : Check;
   return (
     <span
-      className={`flex items-center gap-1 text-xs ${stan.ostrzezenie ? "font-medium text-warn" : "text-emerald-600"}`}
+      className={`flex items-center gap-1 text-xs ${stan.ostrzezenie ? "font-medium text-warn" : "text-emerald-700"}`}
       title={stan.tytul}
     >
       <Ikona size={12} /> {compact ? stan.krotki : stan.tekst}

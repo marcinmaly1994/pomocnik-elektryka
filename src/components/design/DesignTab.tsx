@@ -2513,7 +2513,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 key={id}
                 onClick={() => otwory.setOpeningKind(id)}
                 className="rounded-md px-2.5 py-1 text-xs"
-                style={otwory.openingKind === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
+                style={otwory.openingKind === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#4F5D73" }}
               >
                 {label}
               </button>
@@ -2579,7 +2579,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 }}
                 title={hint}
                 className="rounded-md px-2.5 py-1 text-sm"
-                style={pokoje.roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#64748B" }}
+                style={pokoje.roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#4F5D73" }}
               >
                 {label}
               </button>

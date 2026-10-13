@@ -7,6 +7,14 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Tekst wtórny: domyślne slate-400/500 Tailwinda (#94A3B8 / #64748B) dawały na
+        // białym 2,6:1 i 4,8:1, a na tle `paper` 2,3:1 i 4,2:1 — poniżej progu AA (4,5:1).
+        // Audyt axe-core wskazał ok. 540 takich miejsc na czternastu widokach. Te dwa
+        // stopnie są w kodzie używane WYŁĄCZNIE jako kolor tekstu (żadnych ramek ani teł),
+        // więc przyciemnienie ich w motywie jest bezpieczniejsze niż przepisywanie 300
+        // użyć. Kolejność jasności zostaje: 400 jaśniejszy od 500, a 600 bez zmian.
+        // Najsłabsze tło w aplikacji (#ECECED) daje po zmianie 4,7:1 i 5,7:1.
+        slate: { 400: "#5B6A80", 500: "#4F5D73" },
         ink: "#16202B",
         blueprint: "#2D5A8C",
         copper: "#C1793F",
