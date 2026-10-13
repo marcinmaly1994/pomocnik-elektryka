@@ -1,0 +1,43 @@
+# Cotygodniowe aktualizacje zależności — jeden zbiorczy PR na ekosystem.
+#
+# Powód: pdfjs-dist parsuje pliki wgrywane przez użytkownika, a bez przypomnienia
+# zależności starzeją się po cichu (przy ostatnim przeglądzie pdfjs był o dwa wydania
+# w tyle). Zbiorczy PR, bo przy jednej osobie pracującej nad repo dwadzieścia osobnych
+# PR-ów tygodniowo byłoby szumem, który kończy się ignorowaniem wszystkich.
+#
+# WYDANIA GŁÓWNE są pomijane celowo (React 19, Tailwind 4, TypeScript 7, ESLint 10,
+# Zustand 5, Konva 10…): każde to osobna migracja z własnym planem, a nie aktualizacja,
+# którą da się przejrzeć w minutę. Wejdą ręcznie, kiedy przyjdzie na nie czas.
+#
+# Testy chmury (@chmura) w PR-ach Dependabota się POMINĄ: sekrety konta testowego
+# należą do Actions, nie do Dependabota, a workflow już to znosi (patrz krok „Przygotuj
+# .env" w sprawdzenia.yml). Zmiany w zależnościach tych testów i tak nie dotykają.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      zaleznosci-npm:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "Zależności"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    groups:
+      akcje:
+        patterns: ["*"]
+    commit-message:
+      prefix: "CI"
