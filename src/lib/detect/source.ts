@@ -8,6 +8,7 @@
  */
 
 import { zakodujPodklad } from "./kodowaniePodkladu";
+import { zaladujPdfjs } from "@/lib/pdf/pdfjs";
 
 export interface WczytanyRzut {
   /** Piksele do analizy. */
@@ -74,9 +75,7 @@ async function wczytajObraz(file: File): Promise<WczytanyRzut> {
 }
 
 async function wczytajPdf(file: File): Promise<WczytanyRzut> {
-  const pdfjs = await import("pdfjs-dist");
-  // Worker pdf.js jako moduł — Vite rozwiąże URL na etapie budowania.
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  const pdfjs = await zaladujPdfjs();
 
   const bufor = await file.arrayBuffer();
   const dokument = await pdfjs.getDocument({ data: bufor }).promise;

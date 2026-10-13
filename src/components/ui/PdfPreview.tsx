@@ -2,13 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Download, ExternalLink, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { downloadPdfBytes } from "@/lib/pdf/download";
-// Worker budowany przez Vite (`?worker`) i podpinany jako gotowa instancja.
-// Sklejanie adresu z `import.meta.url` dawało ścieżkę względem KATALOGU TEGO PLIKU —
-// worker leciał na `/src/components/ui/pdfjs-dist/...` i kończył się błędem. Samo
-// podanie poprawnego adresu też nie wystarczy: pdf.js tworzy wtedy KLASYCZNY worker,
-// a serwowany plik jest modułem ESM i nie daje się sparsować — `getDocument` wisi
-// w nieskończoność, a podgląd nigdy się nie pojawia.
-import PdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?worker";
+import { zaladujPdfjs } from "@/lib/pdf/pdfjs";
 
 /**
  * Podgląd gotowego PDF-a przed pobraniem — wspólny dla wszystkich eksportów.
@@ -85,8 +79,7 @@ export function PdfPreview({ open, onOpenChange, title, filename, build, wariant
         url = URL.createObjectURL(new Blob([bajty] as BlobPart[], { type: "application/pdf" }));
         setAdres(url);
 
-        const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
+        const pdfjs = await zaladujPdfjs();
         // `getDocument` przejmuje bufor na własność (odpina go), więc oddajemy KOPIĘ.
         // Inaczej `bajtyRef` zostaje pustą skorupą i pobieranie zapisuje zerowy plik.
         const dokument = await pdfjs.getDocument({ data: bajty.slice() }).promise;
