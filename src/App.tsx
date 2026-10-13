@@ -261,7 +261,7 @@ function FlowCard({
         <span
           aria-hidden="true"
           className="pe-mono flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold"
-          style={isActive ? { background: "#C1793F", color: "#fff" } : { background: "#EEF1F4", color: "#94A3B8" }}
+          style={isActive ? { background: "#C1793F", color: "#fff" } : { background: "#EEF1F4", color: "#5B6A80" }}
         >
           {step}
         </span>
@@ -281,7 +281,7 @@ function FlowCard({
               style={
                 gotowy
                   ? { background: "#3B8C6318", color: "#2C6B4A", fontWeight: 600 }
-                  : { background: "#EEF1F4", color: "#94A3B8" }
+                  : { background: "#EEF1F4", color: "#5B6A80" }
               }
             >
               {plakietka}
@@ -318,7 +318,7 @@ function ToolTab({ id, label, active, onPick }: TabButtonProps) {
       onPointerEnter={() => pobierzZawczasu(id)}
       onFocus={() => pobierzZawczasu(id)}
       className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors"
-      style={isActive ? { color: "#C1793F", background: "#C1793F14", fontWeight: 600 } : { color: "#64748B" }}
+      style={isActive ? { color: "#C1793F", background: "#C1793F14", fontWeight: 600 } : { color: "#4F5D73" }}
     >
       {label}
     </button>
@@ -1417,7 +1417,7 @@ function SiteFooter({
           {/* Wersja wdrożenia. Przy zgłoszeniu „u mnie nie działa" nie było czym
               ustalić, co ktoś ma właściwie załadowane: aplikacja jest jednostronicowa,
               więc adres tego nie mówi, a przeglądarka potrafi trzymać starą wersję. */}
-          <div className="pe-mono mt-1 text-[10px] text-slate-300" title="Wersja wdrożenia — podaj ją przy zgłaszaniu problemu">
+          <div className="pe-mono mt-1 text-[10px] text-slate-400" title="Wersja wdrożenia — podaj ją przy zgłaszaniu problemu">
             wersja {WERSJA_BUILDU}
           </div>
         </div>

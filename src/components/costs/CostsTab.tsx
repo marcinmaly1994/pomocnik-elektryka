@@ -463,7 +463,7 @@ export function CostsTab() {
                       }}
                       aria-label={`Cena jednostkowa: ${r.label}`}
                       className="pe-input pe-mono w-full min-w-0 text-sm md:w-24"
-                      style={r.overridden ? { color: "#94A3B8" } : undefined}
+                      style={r.overridden ? { color: "#5B6A80" } : undefined}
                       title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
                       step="0.5"
                     />

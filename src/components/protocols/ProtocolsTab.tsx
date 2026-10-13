@@ -55,7 +55,7 @@ function odczytajDaneZwiniete(): boolean {
 const STATUS_OPTIONS: [string, string, string][] = [
   ["tak", "zgodne", "#3B8C63"],
   ["nie", "niezgodne", "#C6433A"],
-  ["nd", "n/d", "#64748B"],
+  ["nd", "n/d", "#4F5D73"],
 ];
 
 /**
@@ -381,7 +381,7 @@ export function ProtocolsTab() {
               style={
                 active === k
                   ? { background: "#2D5A8C12", border: "1px solid #2D5A8C", color: "#2D5A8C" }
-                  : { background: "#fff", border: "1px solid #DCE2E8", color: "#64748B" }
+                  : { background: "#fff", border: "1px solid #DCE2E8", color: "#4F5D73" }
               }
             >
               <div className="font-semibold">{d.title}</div>
@@ -466,7 +466,7 @@ export function ProtocolsTab() {
                         style={
                           r.status === v
                             ? { background: `${col}1A`, color: col, border: `1px solid ${col}` }
-                            : { background: "#fff", color: "#94A3B8", border: "1px solid #DCE2E8" }
+                            : { background: "#fff", color: "#5B6A80", border: "1px solid #DCE2E8" }
                         }
                       >
                         {lbl}
@@ -578,7 +578,7 @@ export function ProtocolsTab() {
                         ))}
                         <td className="col-span-4 flex items-center sm:col-span-10 lg:table-cell lg:py-1.5">
                           {ok === null ? (
-                            <span className="text-xs text-slate-300">—</span>
+                            <span className="text-xs text-slate-400">—</span>
                           ) : (
                             <span
                               className="pe-chip"

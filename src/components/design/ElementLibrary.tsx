@@ -193,7 +193,7 @@ export function ElementLibrary({
                                   style={
                                     sel
                                       ? { background: `${def.color}16`, color: def.color, border: `1px solid ${def.color}` }
-                                      : { background: "#fff", color: "#64748B", border: "1px solid #DCE2E8" }
+                                      : { background: "#fff", color: "#4F5D73", border: "1px solid #DCE2E8" }
                                   }
                                 >
                                   {n}

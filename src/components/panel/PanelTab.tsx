@@ -574,7 +574,7 @@ export function PanelTab() {
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-[11px]" style={{ color: phaseSpread > 32 ? "#A2352C" : "#64748B" }}>
+            <div className="mt-2 text-[11px]" style={{ color: phaseSpread > 32 ? "#A2352C" : "#4F5D73" }}>
               {phaseSpread > 32
                 ? `Różnica między najbardziej i najmniej obciążoną fazą wynosi ${formatLiczba(phaseSpread, 1)} A — rozważ przepięcie obwodów lub użyj „Wyrównaj fazy”.`
                 : rozlozoneRowno
