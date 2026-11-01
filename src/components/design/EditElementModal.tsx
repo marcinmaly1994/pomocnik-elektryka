@@ -211,7 +211,7 @@ export function EditElementModal({
                     type="button"
                     onClick={() => setGangs(n)}
                     className="pe-btn-ghost py-1.5 text-xs"
-                    style={gangs === n ? { borderColor: "#C1793F", color: "#C1793F", background: "#C1793F0D" } : undefined}
+                    style={gangs === n ? { borderColor: "#C1793F", color: "#9A5A27", background: "#C1793F0D" } : undefined}
                   >
                     {n}
                   </button>

@@ -51,7 +51,7 @@ body {
     @apply rounded-md bg-copper font-medium text-white transition-colors;
   }
   .pe-btn-copper:hover:not(:disabled) {
-    background: #a9652f;
+    background: #86501f;
   }
   .pe-btn-copper:disabled {
     opacity: 0.4;
@@ -81,7 +81,7 @@ body {
   }
   .pe-tag-copper {
     background: #c1793f0f;
-    color: #a9652f;
+    color: #8a5526;
     border: 1px solid #c1793f26;
   }
   .pe-tag-green {
