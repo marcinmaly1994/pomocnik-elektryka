@@ -783,6 +783,11 @@ function OknoRysunku({
       <div
         ref={p.kontenerRef}
         data-testid="schemat-okno"
+        // Przewijany obszar musi dać się obsłużyć z klawiatury: bez `tabIndex` kto nie ma
+        // myszy ani palca, nie przewinie powiększonego schematu (WCAG 2.1.1).
+        tabIndex={0}
+        role="region"
+        aria-label="Schemat jednokreskowy — obszar przewijany"
         className="pe-card pe-scroll overflow-auto p-4"
         // `pan-x pan-y`: jeden palec przewija pojemnik, ale szczypanie nie powiększa
         // CAŁEJ strony — to bierze `usePowiekszanieRysunku`.

@@ -666,7 +666,10 @@ export default function App() {
           onPointerEnter={() => pobierzZawczasu("projekt")}
           onFocus={() => pobierzZawczasu("projekt")}
           title="Wróć do projektowania instalacji"
-          aria-label="pomocnikelektryka.pl — wróć do projektowania instalacji"
+          // Nazwa dostępna MUSI zawierać cały widoczny tekst przycisku (nazwę i hasło) — kto
+          // steruje głosem, mówi to, co widzi („kliknij pomocnikelektryka"), a nazwa bez
+          // hasła tego nie rozpoznawała (WCAG 2.5.3).
+          aria-label="pomocnikelektryka.pl Zaprojektuj instalację elektryczną w swoim domu! — wróć do projektowania instalacji"
           className="flex min-w-0 items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-80"
         >
           <span className="flex min-w-0 items-center gap-3">
@@ -678,6 +681,10 @@ export default function App() {
               <h1 className="font-sans text-[17px] sm:text-[23px] font-bold leading-tight tracking-tight text-ink">
                 pomocnikelektryka<span className="text-copper">.pl</span>
               </h1>
+              {/* Spacja między nazwą a hasłem: oba są elementami blokowymi, więc jej NIE widać,
+                  ale bez niej tekst przycisku sklejał się w „…plZaprojektuj…" i nazwa dostępna
+                  (ze spacją) go nie zawierała. */}
+              {" "}
               {/* Hasło zostaje mimo makiety: aplikacja jest adresowana do laików i to
                   jedyne zdanie, które od razu mówi, co ona właściwie robi. Stoi pod
                   napisem, w tej samej kolumnie co on (czyli na prawo od domku), nie
