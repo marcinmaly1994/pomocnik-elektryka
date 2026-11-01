@@ -23,7 +23,10 @@ export function NaglowekNarzedzia({ narzedzie }: { narzedzie: ToolMode }) {
     <div className="mb-2 flex items-start gap-2 px-0.5" data-testid="naglowek-narzedzia">
       <Ikona size={15} className="mt-0.5 shrink-0 text-copper" aria-hidden="true" />
       <div className="min-w-0">
-        <h3 className="text-sm font-semibold leading-tight text-ink">{t.label}</h3>
+        {/* h2, nie h3: logo w nagłówku strony jest przyciskiem, więc jego <h1> nie liczy się jako
+            nagłówek, a ten jest pierwszym na ekranie edytora — przeskok od zera do h3 psuł
+            hierarchię dla czytnika ekranu. */}
+        <h2 className="text-sm font-semibold leading-tight text-ink">{t.label}</h2>
         <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{t.hint}</p>
       </div>
     </div>

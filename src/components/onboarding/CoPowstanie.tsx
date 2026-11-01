@@ -117,7 +117,12 @@ export function CoPowstanie() {
       {/* Przewijanie poziome zamiast zawijania: cztery miniatury w dwóch rzędach po dwie
           gubią kolejność etapów, a to ona jest tu treścią. Ten sam chwyt co w pasku
           etapów w nagłówku (patrz `pe-bez-suwaka` w App.tsx). */}
-      <div className="pe-bez-suwaka mt-3 flex items-start justify-center gap-2 overflow-x-auto">
+      <div
+        tabIndex={0}
+        role="group"
+        aria-label="Co z tego powstanie — etapy, obszar przewijany"
+        className="pe-bez-suwaka mt-3 flex items-start justify-center gap-2 overflow-x-auto"
+      >
         {ETAPY.map(({ ikona: Ikona, tytul, opis }, i) => (
           <div key={tytul} className="flex shrink-0 items-start gap-2">
             <div className="w-24 text-center">

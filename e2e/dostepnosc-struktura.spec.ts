@@ -35,3 +35,32 @@ test("formularz dodawania aparatu: pola wyboru mają nazwy", async ({ page }) =>
   await expect(page.getByRole("combobox", { name: "Rodzaj aparatu do dodania" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Prąd znamionowy dodawanego aparatu" })).toBeVisible();
 });
+
+test("przycisk logo ma w nazwie cały widoczny tekst (hasło też)", async ({ page }) => {
+  // Kto steruje głosem, mówi to, co widzi. Nazwa bez hasła pod nazwą marki go nie rozpoznawała.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await otworzPrzyklad(page);
+  await expect(
+    page.getByRole("button", { name: /Zaprojektuj instalację elektryczną w swoim domu!.*wróć do projektowania instalacji/ })
+  ).toBeVisible();
+});
+
+test("nagłówek narzędzia w edytorze to h2, a przycisk sprawdzenia zawiera swój widoczny tekst", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await otworzPrzyklad(page);
+  await expect(page.getByTestId("naglowek-narzedzia").getByRole("heading", { level: 2 })).toBeVisible();
+  const przycisk = page.getByTestId("sprawdzenie-w-pasku");
+  const widoczny = (await przycisk.innerText()).trim();
+  expect(widoczny.length).toBeGreaterThan(0);
+  expect(await przycisk.getAttribute("aria-label")).toContain(widoczny);
+});
+
+test("przewijany schemat na telefonie da się obsłużyć z klawiatury", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await otworzPrzyklad(page);
+  await page.getByRole("button", { name: /Schemat/ }).first().click();
+  const okno = page.getByRole("region", { name: /Schemat jednokreskowy/ });
+  await expect(okno).toHaveAttribute("tabindex", "0");
+  await okno.focus();
+  await expect(okno).toBeFocused();
+});
