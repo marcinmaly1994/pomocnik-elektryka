@@ -40,3 +40,17 @@ describe("kontrast tekstu wtórnego (slate w motywie)", () => {
     expect(luminancja(slate["400"])).toBeGreaterThan(luminancja(slate["500"]));
   });
 });
+
+describe("kontrast miedzi marki (copper w motywie)", () => {
+  const copper = (config.theme?.extend?.colors as { copper: string }).copper;
+
+  it("biały tekst na miedzi ma co najmniej 4,5:1 (przyciski)", () => {
+    expect(kontrast("#FFFFFF", copper)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  for (const [nazwa, tlo] of Object.entries(TLA)) {
+    it(`tekst w kolorze miedzi na tle „${nazwa}" ma co najmniej 4,5:1`, () => {
+      expect(kontrast(copper, tlo)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});

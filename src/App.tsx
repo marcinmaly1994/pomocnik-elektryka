@@ -261,7 +261,7 @@ function FlowCard({
         <span
           aria-hidden="true"
           className="pe-mono flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold"
-          style={isActive ? { background: "#C1793F", color: "#fff" } : { background: "#EEF1F4", color: "#5B6A80" }}
+          style={isActive ? { background: "#9A5A27", color: "#fff" } : { background: "#EEF1F4", color: "#5B6A80" }}
         >
           {step}
         </span>
@@ -318,7 +318,7 @@ function ToolTab({ id, label, active, onPick }: TabButtonProps) {
       onPointerEnter={() => pobierzZawczasu(id)}
       onFocus={() => pobierzZawczasu(id)}
       className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors"
-      style={isActive ? { color: "#C1793F", background: "#C1793F14", fontWeight: 600 } : { color: "#4F5D73" }}
+      style={isActive ? { color: "#8A5526", background: "#C1793F14", fontWeight: 600 } : { color: "#4F5D73" }}
     >
       {label}
     </button>

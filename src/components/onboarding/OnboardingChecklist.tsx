@@ -241,7 +241,7 @@ function Kropki({ steps, doneCount }: { steps: Step[]; doneCount: number }) {
             s.status === "done"
               ? { background: "#3B8C63" }
               : s.status === "active"
-                ? { background: "#C1793F" }
+                ? { background: "#9A5A27" }
                 : { background: "#EEF1F4", border: "1px solid #DDE3E9" }
           }
         >
