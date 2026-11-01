@@ -27,6 +27,11 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # 0.x: skok 0.4 -> 0.5 Dependabot liczy jako „minor", a wtyczka od 0.5 wymaga
+      # ESLinta 9+ (peer dependency), więc `npm ci` pada w całym zbiorczym PR-ze.
+      # Wejdzie razem z migracją ESLinta, nie wcześniej.
+      - dependency-name: "eslint-plugin-react-refresh"
+        versions: [">=0.5.0"]
     commit-message:
       prefix: "Zależności"
 
