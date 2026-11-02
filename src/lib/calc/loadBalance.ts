@@ -177,7 +177,7 @@ export function obliczBilans(w: BilansWejscie): CalcResult<BilansWynik> {
 
   // Ostrzeżenie, gdy N jest obciążony bardziej niż faza — to jest ten przypadek,
   // dla którego przewód N nie może być cieńszy od fazowego.
-  let ocena = null;
+  let ocena;
   if (IN_calk > Imax && Imax > 0) {
     ocena = {
       verdict: "niespelniony" as const,

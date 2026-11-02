@@ -4,7 +4,7 @@
  */
 export function downloadBlob(blob: Blob, filename: string): boolean {
   const url = URL.createObjectURL(blob);
-  let ok = false;
+  let ok: boolean;
   try {
     const a = document.createElement("a");
     a.href = url;

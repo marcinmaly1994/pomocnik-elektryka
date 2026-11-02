@@ -5,7 +5,7 @@
 # w tyle). Zbiorczy PR, bo przy jednej osobie pracującej nad repo dwadzieścia osobnych
 # PR-ów tygodniowo byłoby szumem, który kończy się ignorowaniem wszystkich.
 #
-# WYDANIA GŁÓWNE są pomijane celowo (React 19, Tailwind 4, TypeScript 7, ESLint 10,
+# WYDANIA GŁÓWNE są pomijane celowo (React 19, Tailwind 4, TypeScript 7,
 # Zustand 5, Konva 10…): każde to osobna migracja z własnym planem, a nie aktualizacja,
 # którą da się przejrzeć w minutę. Wejdą ręcznie, kiedy przyjdzie na nie czas.
 #
@@ -27,11 +27,6 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-      # 0.x: skok 0.4 -> 0.5 Dependabot liczy jako „minor", a wtyczka od 0.5 wymaga
-      # ESLinta 9+ (peer dependency), więc `npm ci` pada w całym zbiorczym PR-ze.
-      # Wejdzie razem z migracją ESLinta, nie wcześniej.
-      - dependency-name: "eslint-plugin-react-refresh"
-        versions: [">=0.5.0"]
     commit-message:
       prefix: "Zależności"
 
