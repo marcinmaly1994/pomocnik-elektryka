@@ -5,6 +5,7 @@ import { rozmiescEtykietyGrup, type EtykietaDoRozmieszczenia } from "@/lib/light
 import { Stage, Layer, Rect, Line, Circle, Arc, Arrow, Text, Group, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
+import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { DD } from "konva/lib/DragAndDrop";
 import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
@@ -13,7 +14,6 @@ import {
   gruboscObrysuPokoju,
   krokSiatki,
   MANUAL_DRAW_SCALE_MPU,
-  PROG_WASKIEGO_EKRANU,
   type PlanSize,
   schodySchemat,
 } from "@/lib/design";
@@ -83,8 +83,6 @@ const ZACZEP_KRESKA_PX = 1.5;
 
 const MIN_ROOM_SIZE = 8;
 
-/** Granice powiększenia widoku planu — wspólne dla Ctrl+scroll i przycisków paska. */
-export const MIN_ZOOM = 0.4;
 /**
  * Sterowanie kadrem dostępne z zewnątrz płótna.
  *
@@ -105,26 +103,6 @@ const BEZ_OSI = { x: false, y: false } as const;
 export interface WidokSterowanie {
   przesunOPiksele(dxPx: number, dyPx: number): void;
   ustaw(x: number, y: number): void;
-}
-
-export const MAX_ZOOM = 4;
-
-/** Dolna granica powiększenia na wąskim ekranie — patrz `minZoom`. */
-export const MIN_ZOOM_WASKI = 0.2;
-
-/**
- * Dolna granica powiększenia, zależna od szerokości okna.
- *
- * Na monitorze zostaje 0,4: niżej symbole osprzętu przestają być rozróżnialne, a
- * miejsca i tak nie brakuje. Na telefonie ta sama granica znaczyła co innego —
- * kolumna planu ma tam około 250 px, a plan przy 0,4 zajmuje 400 px, więc CAŁEGO
- * mieszkania nie dawało się zobaczyć ani razu, nawet po dopasowaniu widoku.
- * Alternatywą dla drobnego rzutu nie był większy rzut, tylko oglądanie go przez
- * dziurkę — stąd 0,2 poniżej progu.
- */
-export function minZoom(): number {
-  const okno = typeof window === "undefined" ? 1280 : window.innerWidth;
-  return okno < PROG_WASKIEGO_EKRANU ? MIN_ZOOM_WASKI : MIN_ZOOM;
 }
 
 /** Jak długo po dotknięciu ignorujemy dorobiony klik [ms]. Patrz `klikAlboDotyk`. */

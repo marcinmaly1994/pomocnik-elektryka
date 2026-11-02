@@ -2,9 +2,10 @@ import { type ReactNode } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { ArrowUpFromLine, Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MAX_ZOOM, minZoom } from "./DesignCanvas";
+import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { FloorManagement, FloorTabs } from "./FloorBar";
-import { PasekMenu, useSzerokieOkno } from "./PasekMenu";
+import { PasekMenu } from "./PasekMenu";
+import { useSzerokieOkno } from "./pasekMenuKontekst";
 
 /**
  * JEDEN pasek edytora, w JEDNYM rzędzie: zakładki kondygnacji, dwa rozwijane menu
