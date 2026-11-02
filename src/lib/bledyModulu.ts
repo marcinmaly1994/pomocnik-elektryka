@@ -56,7 +56,7 @@ export const ODSTEP_PRZELADOWAN_MS = 60_000;
  * i wtedy zamiast przeładowania pokazujemy komunikat z przyciskiem.
  */
 export function wolnoPrzeladowac(teraz: number = Date.now()): boolean {
-  let ostatnie = 0;
+  let ostatnie: number;
   try {
     ostatnie = Number(sessionStorage.getItem(KLUCZ_PRZELADOWANIA)) || 0;
   } catch {

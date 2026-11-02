@@ -194,7 +194,7 @@ async function sbFetch<T>(path: string, { method = "GET", body, token }: SbFetch
   const text = await res.text();
   // Odpowiedź niebędąca JSON-em to zwykle strona błędu bramki (502/504 jako HTML).
   // `JSON.parse` na niej rzucał SyntaxError i gubił kod HTTP.
-  let data: { error_description?: string; msg?: string; message?: string; error_code?: string; code?: string } | null = null;
+  let data: { error_description?: string; msg?: string; message?: string; error_code?: string; code?: string } | null;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {

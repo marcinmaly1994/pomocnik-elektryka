@@ -1,5 +1,6 @@
 import { Cookie, Database, HardDrive, Mail, ShieldCheck, Trash2 } from "lucide-react";
-import { AdresKontaktowy, BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja, USLUGODAWCA } from "./wspolne";
+import { AdresKontaktowy, BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja } from "./wspolne";
+import { USLUGODAWCA } from "./daneUslugodawcy";
 
 /**
  * Polityka prywatności — obowiązek informacyjny z art. 13 RODO.

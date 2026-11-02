@@ -1,6 +1,7 @@
 import { AlertTriangle, FileText, Laptop, MessageSquare, Scale, UserCog } from "lucide-react";
 import { LIMIT_ZAPISOW } from "@/lib/dokumenty";
-import { AdresKontaktowy, BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja, USLUGODAWCA } from "./wspolne";
+import { AdresKontaktowy, BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja } from "./wspolne";
+import { USLUGODAWCA } from "./daneUslugodawcy";
 
 /**
  * Regulamin świadczenia usługi drogą elektroniczną (art. 8 ustawy o świadczeniu
