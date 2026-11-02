@@ -57,7 +57,7 @@ export interface EditorStatusBarProps {
 const KOLOR_SPRAWDZENIA = { error: "#A2352C", warn: "#8A5526", ok: "#2C6B4A", pusto: "#4F5D73" } as const;
 
 /** Suma powierzchni obrysowanych pomieszczeń [m²]. `null` bez kalibracji skali. */
-export function totalRoomAreaM2(roomShapes: RoomShape[], metersPerUnit: number | null): number | null {
+function totalRoomAreaM2(roomShapes: RoomShape[], metersPerUnit: number | null): number | null {
   if (metersPerUnit === null || !(metersPerUnit > 0)) return null;
   let sum = 0;
   for (const r of roomShapes) {

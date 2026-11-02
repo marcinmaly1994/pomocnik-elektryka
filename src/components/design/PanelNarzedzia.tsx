@@ -1,6 +1,6 @@
 import { Layers, Plus } from "lucide-react";
 import type { ToolMode } from "./DesignCanvas";
-import { RAIL_TOOLS } from "./ToolRail";
+import { RAIL_TOOLS } from "./railTools";
 
 /**
  * Nagłówek panelu obok paska narzędzi: nazwa wybranego narzędzia i jedno zdanie, co

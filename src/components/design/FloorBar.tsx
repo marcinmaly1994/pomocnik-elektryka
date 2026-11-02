@@ -3,7 +3,7 @@ import { Copy, Layers, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
-import { useZamknijPasekMenu } from "./PasekMenu";
+import { useZamknijPasekMenu } from "./pasekMenuKontekst";
 
 /**
  * Kondygnacje — przeniesione z powłoki aplikacji do paska edytora, bo dotyczą

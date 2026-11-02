@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { KROKI, SKROTY } from "./HelpModal";
-import { RAIL_TOOLS } from "@/components/design/ToolRail";
+import { KROKI, SKROTY } from "./pomocTresc";
+import { RAIL_TOOLS } from "@/components/design/railTools";
 
 /**
  * Pomoc odsyła do narzędzi po nazwie („Narysuj Ścianę", „Wstaw Element"). Komentarz
