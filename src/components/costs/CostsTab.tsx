@@ -406,7 +406,13 @@ export function CostsTab() {
                   key={r.key}
                   // Pozycja bez ceny nie wchodzi do sumy — widać to w SAMYM wierszu, tam,
                   // gdzie się ją uzupełnia, a nie tylko w ostrzeżeniu pod tabelą.
-                  className={`grid grid-cols-[1fr_1fr_1.35fr] gap-x-2 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
+                  //
+                  // Proporcje kolumn pochodzą z POMIARU na telefonie, nie z wyczucia. Przy
+                  // 1 : 1 : 1,35 pole wartości ucinało liczby („220,0" zamiast „220,00" —
+                  // 13 z 32 pól przy 375 px, wszystkie przy 320 px), a kolumna ceny miała
+                  // zapas kilkudziesięciu pikseli. Pole wartości dzieli miejsce z krzyżykiem
+                  // cofania, a „zł" stoi w podpisie pola, nie obok liczby.
+                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-2 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
                     bezCeny(r) ? "bg-[#FDF6EF]" : "md:hover:bg-slate-50"
                   }`}
                   style={{ borderColor: "#EEF1F4" }}
@@ -435,7 +441,7 @@ export function CostsTab() {
                         onChange={(e) => setQtyOverride(r.key, e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0))}
                         placeholder={String(r.qty)}
                         aria-label={`Ilość: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 text-sm md:w-20"
+                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-sm md:w-20 md:px-2.5"
                         style={r.qtyOverridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
                       />
                       <button
@@ -450,23 +456,27 @@ export function CostsTab() {
                     </div>
                   </td>
                   <td className="min-w-0 md:p-3">
-                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Cena jedn.</span>
-                    <input
-                      type="number"
-                      value={r.price}
-                      // Ruszenie ceny jednostkowej ZDEJMUJE ryczałt. Inaczej zostawałaby
-                      // pozycja, w której użytkownik właśnie zmienił cenę, a wartość
-                      // stoi w miejscu — czyli kontrolka, która nic nie robi.
-                      onChange={(e) => {
-                        setPrice(r.key, Number(e.target.value) || 0);
-                        if (r.overridden) setCostOverride(r.key, null);
-                      }}
-                      aria-label={`Cena jednostkowa: ${r.label}`}
-                      className="pe-input pe-mono w-full min-w-0 text-sm md:w-24"
-                      style={r.overridden ? { color: "#5B6A80" } : undefined}
-                      title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
-                      step="0.5"
-                    />
+                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Cena</span>
+                    {/* Ten sam wiersz co ilość i wartość: tamte mają obok przycisk cofania, który na dotyku
+                        ma 44 px wysokości i centruje pole. Bez wrappera pole ceny leżało 5 px wyżej. */}
+                    <div className="flex items-center [@media(pointer:coarse)]:min-h-11">
+                      <input
+                        type="number"
+                        value={r.price}
+                        // Ruszenie ceny jednostkowej ZDEJMUJE ryczałt. Inaczej zostawałaby
+                        // pozycja, w której użytkownik właśnie zmienił cenę, a wartość
+                        // stoi w miejscu — czyli kontrolka, która nic nie robi.
+                        onChange={(e) => {
+                          setPrice(r.key, Number(e.target.value) || 0);
+                          if (r.overridden) setCostOverride(r.key, null);
+                        }}
+                        aria-label={`Cena jednostkowa: ${r.label}`}
+                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-sm md:w-24 md:px-2.5"
+                        style={r.overridden ? { color: "#5B6A80" } : undefined}
+                        title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
+                        step="0.5"
+                      />
+                    </div>
                   </td>
                   {/* Wartość pozycji do wpisania wprost. Realne oferty podają część
                       pozycji ryczałtem (robocizna za mieszkanie, rozdzielnica „pod
@@ -474,7 +484,7 @@ export function CostsTab() {
                       Puste pole = wartość liczona z ilości i ceny — ten sam zapis co
                       przy wysokości montażu elementu. */}
                   <td className="min-w-0 text-right md:p-3">
-                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Wartość</span>
+                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Wartość, zł</span>
                     <div className="flex items-center justify-end gap-1">
                       <input
                         type="number"
@@ -486,11 +496,11 @@ export function CostsTab() {
                         // czego kontrolka nie przyjmie.
                         placeholder={formatLiczba(r.value, 2)}
                         aria-label={`Wartość pozycji: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 text-right text-sm md:w-28"
+                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-right text-sm md:w-28 md:px-2.5"
                         style={r.overridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
                         step="1"
                       />
-                      <span className="text-xs text-slate-400">zł</span>
+                      <span className="hidden text-xs text-slate-400 md:inline">zł</span>
                       {/* Krzyżyk tylko przy nadpisanej pozycji: przy liczonej nie miałby
                           czego cofać, a stały „×" w każdym wierszu byłby szumem. */}
                       <button
