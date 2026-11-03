@@ -136,6 +136,104 @@ function rysujLegende(doc: PdfDoc, pozycje: PozycjaLegendy[], x: number, dol: nu
 }
 
 
+/** Odstęp między blokami (legenda, klucz) i między blokiem a rysunkiem [pt]. */
+const ODSTEP_BLOKU = 12;
+
+interface WejscieUkladu {
+  rysW: number;
+  rysH: number;
+  pelnaW: number;
+  poleH: number;
+  legendaPozycji: number;
+  kluczPozycji: number;
+}
+
+interface UkladStrony {
+  /** Blok (legenda + klucz) leży w pasku pod rysunkiem; inaczej w kolumnie po prawej. */
+  podSpodem: boolean;
+  kolumnyLegendy: number;
+  /** Szerokość i wysokość bloku. W kolumnie legenda i klucz są jedno pod drugim, w pasku
+   *  obok siebie. */
+  blokW: number;
+  blokH: number;
+  /** Pole, w które wpisuje się rysunek, i skala, z jaką się w nie mieści. */
+  poleW: number;
+  dostepnaH: number;
+  skala: number;
+}
+
+/**
+ * Wybiera, gdzie stoją legenda i klucz tras: w kolumnie po prawej (w 1–3 kolumnach
+ * legendy, klucz pod nią) albo w pasku pod rysunkiem. Wygrywa układ, w którym RYSUNEK
+ * wychodzi największy.
+ *
+ * Poprzednio klucz tras wymuszał pasek pod rysunkiem bez porównania. Przy długiej
+ * legendzie (23 pozycje w rzucie domu) pasek zostawiał legendzie tylko dwie kolumny —
+ * klucz zabierał resztę szerokości — czyli 332 z 461 pt wysokości pola, a rysunkowi
+ * 117 pt: około jednej czwartej kartki. Kolumna o dwóch kolumnach legendy, z kluczem
+ * pod nią, zostawia mu pełną wysokość i 406 pt szerokości.
+ *
+ * Remis (przy rysunku wysokim i wąskim ograniczeniem jest wysokość, więc szerokość
+ * kolumny niczego nie zmienia) rozstrzyga kolejność kandydatów: wąska kolumna przed
+ * szeroką, kolumna przed paskiem — czyli to samo, co robił układ bez klucza.
+ */
+function wybierzUklad({ rysW, rysH, pelnaW, poleH, legendaPozycji, kluczPozycji }: WejscieUkladu): UkladStrony {
+  const maLegende = legendaPozycji > 0;
+  const maKlucz = kluczPozycji > 0;
+  const kluczH = wysokoscKlucza(kluczPozycji);
+  const wpisz = (poleW: number, dostepnaH: number) =>
+    dostepnaH > 0 && poleW > 0 ? Math.min(poleW / rysW, dostepnaH / rysH) : 0;
+
+  if (!maLegende && !maKlucz) {
+    return { podSpodem: false, kolumnyLegendy: 1, blokW: 0, blokH: 0, poleW: pelnaW, dostepnaH: poleH, skala: wpisz(pelnaW, poleH) };
+  }
+
+  const kandydaci: UkladStrony[] = [];
+
+  // Kolumna po prawej: legenda w 1–3 kolumnach, pod nią klucz. Szerokość bloku to szersza
+  // z obu części, żeby klucz (246 pt) nie wychodził poza kolumnę.
+  for (const kolumny of maLegende ? [1, 2, 3].filter((k) => k <= legendaPozycji) : [1]) {
+    const legenda = maLegende ? wymiarLegendy(legendaPozycji, kolumny) : { w: 0, h: 0 };
+    const blokW = Math.max(legenda.w, maKlucz ? KLUCZ_W : 0);
+    const blokH = legenda.h + (maLegende && maKlucz ? ODSTEP_BLOKU : 0) + kluczH;
+    if (blokH > poleH) continue;
+    const poleW = pelnaW - blokW - ODSTEP_BLOKU;
+    kandydaci.push({ podSpodem: false, kolumnyLegendy: kolumny, blokW, blokH, poleW, dostepnaH: poleH, skala: wpisz(poleW, poleH) });
+  }
+
+  // Pasek pod rysunkiem: legenda w tylu kolumnach, ile się zmieści obok klucza. Więcej
+  // kolumn to niższy pasek, a szerokość rysunku i tak jest pełna, więc liczy się tylko ta.
+  const naLegende = pelnaW - (maKlucz ? KLUCZ_W + ODSTEP_BLOKU : 0);
+  const kolumnyPaska = maLegende ? Math.max(1, Math.min(Math.floor(naLegende / LEGENDA_W), legendaPozycji)) : 1;
+  const legendaPasek = maLegende ? wymiarLegendy(legendaPozycji, kolumnyPaska) : { w: 0, h: 0 };
+  const blokW = legendaPasek.w + (maKlucz ? (maLegende ? ODSTEP_BLOKU : 0) + KLUCZ_W : 0);
+  const blokH = Math.max(legendaPasek.h, kluczH);
+  const dostepnaH = poleH - blokH - ODSTEP_BLOKU;
+  if (dostepnaH > 0 && blokW <= pelnaW) {
+    kandydaci.push({ podSpodem: true, kolumnyLegendy: kolumnyPaska, blokW, blokH, poleW: pelnaW, dostepnaH, skala: wpisz(pelnaW, dostepnaH) });
+  }
+
+  // Najlepszy według skali; przy remisie wygrywa wcześniejszy (patrz komentarz wyżej).
+  let najlepszy: UkladStrony | undefined = kandydaci[0];
+  for (const k of kandydaci) if (najlepszy && k.skala > najlepszy.skala + 1e-9) najlepszy = k;
+  if (najlepszy) return najlepszy;
+
+  // Nic się nie mieści (absurdalnie długa legenda): kolumna o największej liczbie kolumn
+  // legendy, czyli najniższa. Lepiej rysunek mały niż żaden.
+  const legenda = maLegende ? wymiarLegendy(legendaPozycji, 3) : { w: 0, h: 0 };
+  const blokW3 = Math.max(legenda.w, maKlucz ? KLUCZ_W : 0);
+  const poleW3 = pelnaW - blokW3 - ODSTEP_BLOKU;
+  return {
+    podSpodem: false,
+    kolumnyLegendy: 3,
+    blokW: blokW3,
+    blokH: legenda.h + kluczH,
+    poleW: poleW3,
+    dostepnaH: poleH,
+    skala: wpisz(poleW3, poleH),
+  };
+}
+
 export function buildDrawingDoc({ tytul, header, rysunek, legenda, kluczTras, zestawienie, obwody }: RysunekPdfOpcje): PdfDoc {
   const doc = createPdfDoc({
     pageW: STRONA_W,
@@ -145,84 +243,56 @@ export function buildDrawingDoc({ tytul, header, rysunek, legenda, kluczTras, ze
   });
 
   const maLegende = !!legenda?.length;
+  const maKlucz = !!kluczTras?.length;
   const poleX = MARGINES;
   const poleY = MARGINES + TABLICZKA_H;
   const pelnaW = STRONA_W - MARGINES * 2;
   const poleH = STRONA_H - poleY - MARGINES;
 
-  /**
-   * Legenda idzie tam, gdzie kosztuje rysunek NAJMNIEJ — w kolumnę po prawej albo
-   * w pasek pod rysunkiem.
-   *
-   * Kolumna zabierała rysunkowi 188 z 770 punktów szerokości ZAWSZE, nawet gdy legenda
-   * miała cztery pozycje i sięgała jednej trzeciej wysokości kartki; pod nią zostawał
-   * pusty prostokąt przez całą wysokość. Przy rzucie szerszym niż wyższym — a takie są
-   * prawie wszystkie — pasek pod rysunkiem oddaje mu całą szerokość i wychodzi on
-   * o jedną trzecią większy. Przy rysunku wysokim i wąskim wygrywa kolumna, bo tam
-   * ograniczeniem jest wysokość, nie szerokość.
-   *
-   * Wybór przez PORÓWNANIE SKALI, a nie przez regułę „jeśli szeroki, to pod spodem":
-   * liczy się to, ile ostatecznie widać, a nie który wymiar jest większy.
-   */
-  const kolumnaW = pelnaW - (LEGENDA_W + 12);
-  const skalaKolumna = Math.min(kolumnaW / rysunek.width, poleH / rysunek.height);
-
-  const maKlucz = !!kluczTras?.length;
-  // Klucz staje OBOK legendy w pasku pod rysunkiem, więc na kolumny dla legendy
-  // zostaje reszta szerokości.
-  const naLegende = pelnaW - (maKlucz ? KLUCZ_W + 12 : 0);
-  const kolumnyPaska = maLegende ? Math.max(1, Math.min(Math.floor(naLegende / LEGENDA_W), legenda!.length)) : 1;
-  const legendaPasek = maLegende ? wymiarLegendy(legenda!.length, kolumnyPaska) : { w: 0, h: 0 };
-  const pasek = {
-    w: legendaPasek.w + (maKlucz ? (maLegende ? 12 : 0) + KLUCZ_W : 0),
-    h: Math.max(legendaPasek.h, wysokoscKlucza(kluczTras?.length ?? 0)),
-  };
-  const wysokoscNaRysunek = poleH - pasek.h - 12;
-  const skalaPasek = wysokoscNaRysunek > 0 ? Math.min(pelnaW / rysunek.width, wysokoscNaRysunek / rysunek.height) : 0;
-
-  /**
-   * Z kluczem zawsze pasek pod rysunkiem — klucz nie ma sensownego miejsca w wąskiej
-   * kolumnie obok legendy, a rzuty i tak są szersze niż wyższe, więc pasek jest dla
-   * nich wyborem lepszym albo równym. Świadome uproszczenie: przy rysunku wysokim
-   * i wąskim kosztuje to trochę wysokości.
-   */
-  const podSpodem = maKlucz || (maLegende && skalaPasek > skalaKolumna);
-  const poleW = podSpodem || !maLegende ? pelnaW : kolumnaW;
-  const dostepnaH = podSpodem ? wysokoscNaRysunek : poleH;
+  const uklad = wybierzUklad({
+    rysW: rysunek.width,
+    rysH: rysunek.height,
+    pelnaW,
+    poleH,
+    legendaPozycji: legenda?.length ?? 0,
+    kluczPozycji: kluczTras?.length ?? 0,
+  });
+  const { podSpodem, kolumnyLegendy, blokW, blokH, poleW, dostepnaH, skala } = uklad;
 
   // Rysunek wpisany w pole Z ZACHOWANIEM PROPORCJI i wyśrodkowany. Rozciągnięcie do
   // pełnego pola zniekształciłoby symbole — a na rzucie instalacji proporcje niosą
   // informację (odległości, strefy), więc nie wolno ich naruszyć.
-  const skala = Math.min(poleW / rysunek.width, dostepnaH / rysunek.height);
   const rysW = rysunek.width * skala;
   const rysH = rysunek.height * skala;
-  const rysDol = poleY + (podSpodem ? pasek.h + 12 : 0) + (dostepnaH - rysH) / 2;
+  const rysDol = poleY + (podSpodem ? blokH + ODSTEP_BLOKU : 0) + (dostepnaH - rysH) / 2;
   doc.image(rysunek, poleX + (poleW - rysW) / 2, rysDol, rysW, rysH);
 
-  if (maLegende) {
-    if (podSpodem) {
-      // Pasek wyśrodkowany pod rysunkiem, tuż nad tabliczką.
-      rysujLegende(doc, legenda!, poleX + (pelnaW - pasek.w) / 2, poleY, kolumnyPaska);
-    } else {
-      /**
-       * Góra legendy równo z górą RYSUNKU, a nie z górną krawędzią pola. Rysunek jest
-       * w pionie wyśrodkowany, więc przy przypięciu legendy do pola obie ramki zaczynały
-       * się na różnych wysokościach i kartka wyglądała na niepoprawnie złożoną.
-       *
-       * Dwa ograniczenia: legenda nie może zejść pod pole (weszłaby na tabliczkę
-       * rysunkową) ani wyjść ponad nie — przy długiej liście lub niskim rysunku
-       * wyrównanie ustępuje więc mieszczeniu się na kartce.
-       */
-      const wysokosc = Math.min(poleH, wymiarLegendy(legenda!.length, 1).h);
-      const gora = Math.min(poleY + poleH, Math.max(rysDol + rysH, poleY + wysokosc));
-      rysujLegende(doc, legenda!, STRONA_W - MARGINES - LEGENDA_W, gora - wysokosc, 1);
+  if (podSpodem) {
+    // Legenda i klucz obok siebie w pasku, wyśrodkowanym pod rysunkiem, tuż nad tabliczką.
+    const lewy = poleX + (pelnaW - blokW) / 2;
+    const legendaW = maLegende ? wymiarLegendy(legenda!.length, kolumnyLegendy).w : 0;
+    if (maLegende) rysujLegende(doc, legenda!, lewy, poleY, kolumnyLegendy);
+    if (maKlucz) rysujKlucz(doc, kluczTras!, lewy + (maLegende ? legendaW + ODSTEP_BLOKU : 0), poleY, KLUCZ_W);
+  } else if (maLegende || maKlucz) {
+    /**
+     * Kolumna po prawej: legenda, a pod nią klucz tras. Góra bloku równo z górą RYSUNKU,
+     * a nie z górną krawędzią pola. Rysunek jest w pionie wyśrodkowany, więc przy
+     * przypięciu bloku do pola obie ramki zaczynały się na różnych wysokościach
+     * i kartka wyglądała na niepoprawnie złożoną.
+     *
+     * Dwa ograniczenia: blok nie może zejść pod pole (weszłaby na tabliczkę rysunkową)
+     * ani wyjść ponad nie. `wybierzUklad` wybiera kolumnę tylko wtedy, gdy blok mieści
+     * się w polu, więc wyrównanie do rysunku nigdy nie wypycha go poza kartkę.
+     */
+    const gora = Math.min(poleY + poleH, Math.max(rysDol + rysH, poleY + blokH));
+    const lewy = STRONA_W - MARGINES - blokW;
+    let dol = gora;
+    if (maLegende) {
+      const h = wymiarLegendy(legenda!.length, kolumnyLegendy).h;
+      rysujLegende(doc, legenda!, lewy, dol - h, kolumnyLegendy);
+      dol -= h + ODSTEP_BLOKU;
     }
-  }
-
-  // Klucz oznaczeń tras — obok legendy w tym samym pasku, po jej prawej stronie.
-  if (maKlucz) {
-    const lewy = poleX + (pelnaW - pasek.w) / 2 + (maLegende ? legendaPasek.w + 12 : 0);
-    rysujKlucz(doc, kluczTras!, lewy, poleY, KLUCZ_W);
+    if (maKlucz) rysujKlucz(doc, kluczTras!, lewy, dol - wysokoscKlucza(kluczTras!.length), blokW);
   }
 
   if (zestawienie?.length) rysujZestawienie(doc, zestawienie);
