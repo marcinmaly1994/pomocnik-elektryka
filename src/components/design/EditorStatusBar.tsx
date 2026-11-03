@@ -102,7 +102,7 @@ export function EditorStatusBar({
         </span>
       </span>
 
-      <span>
+      <span title="Wszystkie elementy na planie, także wyposażenie sanitarne — zestawienie pod rysunkiem liczy tylko osprzęt elektryczny">
         Elementy: <span className="pe-mono text-slate-700">{elementCount}</span>
       </span>
 

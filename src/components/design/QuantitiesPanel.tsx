@@ -10,8 +10,12 @@ import type { Zestawienie } from "@/lib/quantities";
  *
  * Domyślnie ZWINIĘTA, w odróżnieniu od sprawdzenia rzutu. Tam rozwinięcie oznacza
  * „coś jest nie tak i trzeba na to spojrzeć"; tutaj nic nie wymaga reakcji, a nagłówek
- * z sumą („15 szt. w 12 punktach") odpowiada na najczęstsze pytanie bez otwierania
- * czegokolwiek.
+ * z sumą („15 szt. osprzętu w 12 punktach") odpowiada na najczęstsze pytanie bez
+ * otwierania czegokolwiek.
+ *
+ * „osprzętu" w nagłówku jest celowe: pasek stanu obok liczy WSZYSTKIE elementy planu,
+ * razem z wyposażeniem sanitarnym (wanna, prysznic, umywalka), a to zestawienie tylko
+ * to, co się kupuje u elektryka. Dwie różne liczby obok siebie muszą mówić, co liczą.
  */
 
 export interface QuantitiesPanelProps {
@@ -44,8 +48,8 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
           {sztukRazem === 0
             ? "nic jeszcze nie postawiono"
             : rozniSie
-              ? `${sztukRazem} szt. w ${punktowRazem} punktach`
-              : `${sztukRazem} szt.`}
+              ? `${sztukRazem} szt. osprzętu w ${punktowRazem} punktach`
+              : `${sztukRazem} szt. osprzętu`}
         </span>
         <span className="ml-auto text-[11px] text-slate-400">{otwarte ? "zwiń" : "rozwiń"}</span>
       </button>
