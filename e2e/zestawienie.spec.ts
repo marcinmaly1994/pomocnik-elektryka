@@ -63,7 +63,7 @@ test("wyposazenie sanitarne nie jest liczone jako osprzet", async ({ page }) => 
   // Pasek stanu liczy WSZYSTKIE elementy na planie, zestawienie tylko osprzet —
   // stad celowa roznica 2 kontra 1.
   await expect(page.getByText(/Elementy:\s*2/)).toBeVisible();
-  await expect(karta(page)).toContainText("1 szt.");
+  await expect(karta(page)).toContainText("1 szt. osprzętu");
   await rozwin(page);
   await expect(karta(page)).not.toContainText("Wanna");
 });
