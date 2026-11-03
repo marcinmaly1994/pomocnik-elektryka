@@ -408,7 +408,7 @@ export function sizeCircuit(spec: CircuitSpec): SizedCircuit {
     warnings.push({
       code: "DLUGOSC_SZACOWANA",
       level: "warn",
-      message: `Długość trasy obwodu „${spec.nazwa}" to szacunek (odległość prostokątna), bo na kondygnacji nie ma narysowanych ścian ani pomieszczeń, po których dałoby się poprowadzić przewód. Prawdziwa trasa będzie DŁUŻSZA, więc spadek napięcia ${formatLiczba(chosen.drop, 2)}% jest zaniżony. Narysuj ściany albo obrysy pomieszczeń, żeby policzyć go z rzeczywistej drogi.`,
+      message: `Długość trasy obwodu „${spec.nazwa}" to szacunek (odległość prostokątna): na kondygnacji brakuje ścian albo pomieszczeń, po których dałoby się poprowadzić przewód, albo do któregoś punktu obwodu nie da się trasy doprowadzić (np. osprzęt stoi wprost w osi ściany). Prawdziwa trasa będzie DŁUŻSZA, więc spadek napięcia ${formatLiczba(chosen.drop, 2)}% jest zaniżony. Narysuj ściany albo obrysy pomieszczeń, a osprzęt odsuń od osi ściany, żeby policzyć go z rzeczywistej drogi.`,
     });
   }
 
