@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { buildCostsPdf, formatujKwote, KOL_KWOTY } from "./costs";
+import { buildCostsDoc, buildCostsPdf, formatujKwote, KOL_KWOTY } from "./costs";
 import { pdfTextWidth } from "./engine";
 import { kosztorysRows } from "@/lib/costs";
 import { stubPdfFontFetch } from "./testFontMock";
@@ -97,6 +97,83 @@ describe("buildCostsPdf", () => {
     const out = bytesToAscii(await buildCostsPdf(duzo, header));
     expect((out.match(/\/Type \/Page /g) || []).length).toBeGreaterThan(1);
     expect(out).toContain(String.raw`KOSZTORYS \(cd.\)`);
+  });
+});
+
+/**
+ * Blok końcowy kosztorysu: sumy i zastrzeżenie o pozycjach bez ceny.
+ *
+ * Zastrzeżenie było składane jako jedna linia, ucinana wielokropkiem — a ostatnie pozycje
+ * listy to właśnie te, o których czytelnik miał się dowiedzieć. Gdy nie mieściło się
+ * na stronie, lądowało samo na stronie „cd." pod nagłówkiem tabeli bez wierszy,
+ * nakładając się na niego.
+ */
+describe("blok końcowy kosztorysu", () => {
+  const wiersz = (i: number, wycenione: boolean) => ({
+    key: `k${i}`,
+    // Znacznik w nawiasie: uwaga o brakach wyceny obcina końcowy nawias z nazwy, więc
+    // znacznik jest tylko w WIERSZU TABELI, a nie w tekście uwagi.
+    label: `Pozycja${i} (PozycjaTestowa${String(i).padStart(3, "0")})`,
+    qty: 1,
+    qtyOverridden: false,
+    price: wycenione ? 10 : 0,
+    value: wycenione ? 10 : 0,
+    overridden: false,
+  });
+  /** Treść stron dokumentu — nagłówek tabeli to napis "Lp.", wiersz to jego etykieta. */
+  const strony = (n: number, bezCeny: number) =>
+    buildCostsDoc(
+      [
+        ...Array.from({ length: n }, (_, i) => wiersz(i, true)),
+        ...Array.from({ length: bezCeny }, (_, i) => wiersz(1000 + i, false)),
+      ],
+      header
+    )
+      .czesci()
+      .pages.map((p) => p.content);
+
+  it("lista pozycji bez ceny jest wypisana w całości, nie ucięta wielokropkiem", async () => {
+    const bezCeny = [
+      "Ładowarka EV / wallbox",
+      "Oprawa oświetleniowa",
+      "Napęd rolety",
+      "Szafka teletechniczna / rack",
+      "Robocizna za punkt instalacyjny",
+    ].map((label, i) => ({
+      key: `b${i}`,
+      label: `${label} (szt.)`,
+      qty: 2,
+      qtyOverridden: false,
+      price: 0,
+      value: 0,
+      overridden: false,
+    }));
+    const out = bytesToAscii(await buildCostsPdf([...rows.filter((r) => r.value > 0), ...bezCeny], header));
+    // Nazwy tych pozycji są też wierszami tabeli, więc same nic nie dowodzą. Dowodzi koniec
+    // ZDANIA uwagi — kropka tuż po ostatniej pozycji, której w tabeli nie ma — oraz brak
+    // wielokropka, którym pdfFitText obcinał listę jako pierwszą rzecz od końca.
+    expect(out).toMatch(/instalacyjny\.\) Tj/);
+    expect(out).not.toContain("..) Tj");
+  });
+
+  it("żadna strona nie ma nagłówka tabeli bez wierszy — przy dowolnej długości listy", () => {
+    // Zakres obejmuje długości, przy których blok końcowy dokładnie nie mieści się
+    // na pierwszej stronie, czyli te, które dawały stronę „cd." z samym nagłówkiem.
+    for (let n = 10; n <= 70; n++) {
+      for (const p of strony(n, 3)) {
+        const maNaglowek = p.includes("(Lp.)");
+        const maWiersz = /PozycjaTestowa\d{3}/.test(p);
+        expect(maNaglowek, `n=${n}`).toBe(maWiersz);
+      }
+    }
+  });
+
+  it("suma i uwaga o brakach wyceny stoją na tej samej stronie — przy dowolnej długości listy", () => {
+    for (let n = 10; n <= 70; n++) {
+      const naStronie = strony(n, 3).filter((p) => p.includes("RAZEM brutto"));
+      expect(naStronie.length, `n=${n}`).toBe(1);
+      expect(naStronie[0], `n=${n}`).toContain("UWAGA");
+    }
   });
 });
 

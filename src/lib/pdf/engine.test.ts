@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, PDF_LAST_CHAR, PDF_POLISH, PDF_W_BOLD, PDF_W_REG, type CzesciDokumentu, type PdfImage } from "./engine";
+import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfZawin, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, PDF_LAST_CHAR, PDF_POLISH, PDF_W_BOLD, PDF_W_REG, type CzesciDokumentu, type PdfImage } from "./engine";
 import { parseTtf } from "./ttf";
 import { stubPdfFontFetch } from "./testFontMock";
 
@@ -83,6 +83,34 @@ describe("pdfFitText", () => {
     const fitted = pdfFitText(long, 60, 9, false);
     expect(fitted.endsWith("..")).toBe(true);
     expect(pdfTextWidth(fitted, 9, false)).toBeLessThanOrEqual(60);
+  });
+});
+
+describe("pdfZawin", () => {
+  const tekst = "Bez wyceny pozostają: Ładowarka EV / wallbox, Oprawa oświetleniowa, Napęd rolety, Szafka teletechniczna / rack, Robocizna za punkt instalacyjny.";
+
+  it("tekst, który się mieści, zostaje jedną linią", () => {
+    expect(pdfZawin("Krótki tekst", 500, 9, false)).toEqual(["Krótki tekst"]);
+  });
+
+  it("długi tekst łamie między słowami i nic nie gubi", () => {
+    const linie = pdfZawin(tekst, 200, 7.5, false);
+    expect(linie.length).toBeGreaterThan(1);
+    for (const l of linie) expect(pdfTextWidth(l, 7.5, false)).toBeLessThanOrEqual(200);
+    // Złożone z powrotem daje ten sam tekst — w odróżnieniu od pdfFitText nic nie ginie.
+    expect(linie.join(" ")).toBe(tekst);
+  });
+
+  it("słowo szersze niż linia tnie się twardo, zamiast wyjechać poza kartkę", () => {
+    const linie = pdfZawin("Wypustzasilajacyagdwersjapodwojnazuziemieniem", 60, 9, false);
+    expect(linie.length).toBeGreaterThan(1);
+    for (const l of linie) expect(pdfTextWidth(l, 9, false)).toBeLessThanOrEqual(60);
+    expect(linie.join("")).toBe("Wypustzasilajacyagdwersjapodwojnazuziemieniem");
+  });
+
+  it("pusty tekst daje pustą listę, a absurdalnie wąska kolumna nie zapętla się", () => {
+    expect(pdfZawin("   ", 100, 9, false)).toEqual([]);
+    expect(() => pdfZawin("abc def", 0.1, 9, false)).not.toThrow();
   });
 });
 
