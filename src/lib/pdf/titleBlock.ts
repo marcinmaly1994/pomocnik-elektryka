@@ -1,5 +1,5 @@
 import type { DocumentHeader } from "@/types";
-import { pdfFitText, type PdfDoc } from "./engine";
+import { pdfDopasujRozmiar, pdfFitText, type PdfDoc } from "./engine";
 
 /**
  * Tabliczka rysunkowa (metryka) rysowana na dole każdej strony — standard dokumentacji
@@ -21,8 +21,15 @@ export function drawTitleBlock(doc: PdfDoc, header: DocumentHeader, docTitle: st
   const W = doc.innerW;
   const H = TITLE_BLOCK_H;
   const y0 = M - 6; // pasek tuż nad marginesem dolnym
-  const c1 = 190;
-  const c2 = 130; // szerokości pierwszych dwóch kolumn
+  /**
+   * Szerokości pierwszych dwóch kolumn rosną z kartką. Na A4 pionowo (511 pt) zostają 190
+   * i 130, jak dotąd; na A4 poziomo (do 786 pt) dostają ok. 38% i 22%, bo trzecia kolumna
+   * — numer rysunku, rewizja, data — niczego tam nie potrzebuje w szerokości, której
+   * nie potrzebuje na pionie, a stała szerokość obiektu obcinała nazwę projektu
+   * („Dom jednorodzinny przykładowy,..") na każdym rysunku w poziomie.
+   */
+  const c1 = Math.max(190, W * 0.38);
+  const c2 = Math.max(130, W * 0.22);
 
   // Linie bazowe wierszy — liczone od dołu paska, wspólne dla całej tabliczki.
   const R1_ETYKIETA = y0 + 38;
@@ -48,19 +55,17 @@ export function drawTitleBlock(doc: PdfDoc, header: DocumentHeader, docTitle: st
   doc.line(x3 + polowa, y0, x3 + polowa, y0 + H, 0.4, 0.75);
 
   doc.text("OBIEKT", M + 6, R1_ETYKIETA, 6.5, true, 0.5);
-  doc.text(pdfFitText(header.obiekt || "—", c1 - 12, 9, true), M + 6, R1_WARTOSC, 9, true);
-  doc.text(pdfFitText(header.adres || "", c1 - 12, 7.5, false), M + 6, R2_WARTOSC, 7.5, false, 0.4);
+  // Najpierw mniejsza czcionka, dopiero potem wielokropek — patrz `pdfDopasujRozmiar`.
+  const obiekt = pdfDopasujRozmiar(header.obiekt || "—", c1 - 12, 9, 7, true);
+  doc.text(obiekt.tekst, M + 6, R1_WARTOSC, obiekt.size, true);
+  const adres = pdfDopasujRozmiar(header.adres || "", c1 - 12, 7.5, 6, false);
+  doc.text(adres.tekst, M + 6, R2_WARTOSC, adres.size, false, 0.4);
 
   doc.text("RYSUNEK / DOKUMENT", M + c1 + 6, R1_ETYKIETA, 6.5, true, 0.5);
-  doc.text(pdfFitText(docTitle || "—", c2 - 12, 8.5, true), M + c1 + 6, R1_WARTOSC, 8.5, true);
-  doc.text(
-    pdfFitText(header.wykonawca ? `Wykonał: ${header.wykonawca}` : "", c2 - 12, 7.5, false),
-    M + c1 + 6,
-    R2_WARTOSC,
-    7.5,
-    false,
-    0.4
-  );
+  const tytul = pdfDopasujRozmiar(docTitle || "—", c2 - 12, 8.5, 7, true);
+  doc.text(tytul.tekst, M + c1 + 6, R1_WARTOSC, tytul.size, true);
+  const wykonawca = pdfDopasujRozmiar(header.wykonawca ? `Wykonał: ${header.wykonawca}` : "", c2 - 12, 7.5, 6, false);
+  doc.text(wykonawca.tekst, M + c1 + 6, R2_WARTOSC, wykonawca.size, false, 0.4);
 
   // Rubryki przycinane do szerokości SWOJEJ komórki — długi numer rysunku ma się
   // skrócić, a nie wejść w sąsiednią rubrykę.

@@ -1,7 +1,6 @@
 import type { DocumentHeader, PanelDevice } from "@/types";
-import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
+import { createPdfDoc, pdfFitText, pdfTextWidth, pdfZawin, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
-import { zawijNaDwieLinie } from "@/lib/tekst";
 
 /**
  * Paski opisowe do wycięcia i wsunięcia w tabliczki na aparatach.
@@ -79,6 +78,30 @@ function naOdcinki(rzad: PanelDevice[], maxSzer: number): PanelDevice[][] {
 }
 
 /**
+ * Opis aparatu na pasku: do TRZECH linii, a gdy nie mieści się w trzech przy 6,5 pt,
+ * kolejno mniejszą czcionką (6, 5,5 pt) — dopiero na końcu przycięty.
+ *
+ * Pasek ma wysokość 15 mm, czyli miejsce na oznaczenie i trzy linie opisu. Opis łamany
+ * do dwóch linii ucinał nazwy obwodów w wąskim, jednomodułowym aparacie („Obwód gnia..
+ * ogólnych 1"), a tabliczka na froncie aparatu jest właśnie tym, po czym elektryk
+ * rozpoznaje obwód — ucięta nazwa to nieczytelna tabliczka. Mniejszy druk jest lepszy
+ * niż brakujące słowa; 5,5 pt to dolna granica czytelności wydruku 1:1.
+ */
+export function opisNaPasku(opis: string, szerokosc: number): { linie: string[]; size: number } {
+  const MAKS_LINII = 3;
+  for (const size of [6.5, 6, 5.5]) {
+    const linie = pdfZawin(opis, szerokosc, size, false);
+    if (linie.length <= MAKS_LINII) return { linie, size };
+  }
+  const size = 5.5;
+  const wszystkie = pdfZawin(opis, szerokosc, size, false);
+  // Trzecia linia dostaje CAŁĄ resztę tekstu i jest przycinana wielokropkiem: czytelnik
+  // ma wiedzieć, że opis był dłuższy, a nie że kończy się w tym miejscu.
+  const reszta = wszystkie.slice(MAKS_LINII - 1).join(" ");
+  return { linie: [...wszystkie.slice(0, MAKS_LINII - 1), pdfFitText(reszta, szerokosc, size, false)], size };
+}
+
+/**
  * Składa PDF z paskami opisowymi i zwraca gotowe bajty (bez pobierania — testowalne
  * bez DOM-u, jak reszta silnika).
  */
@@ -125,14 +148,10 @@ export function buildLabelStripsDoc(devices: PanelDevice[], perRow: number, head
         const tag = pdfFitText(device.tag, w - 4, 7.5, true);
         doc.text(tag, srodekX - pdfTextWidth(tag, 7.5, true) / 2, doc.y - 9, 7.5, true);
 
-        const naLinie = Math.max(6, Math.floor(w / 3.2));
-        const [l1, l2] = zawijNaDwieLinie(device.caption || device.label, naLinie);
-        const l1w = pdfFitText(l1, w - 4, 6.5, false);
-        doc.text(l1w, srodekX - pdfTextWidth(l1w, 6.5, false) / 2, doc.y - 20, 6.5);
-        if (l2) {
-          const l2w = pdfFitText(l2, w - 4, 6.5, false);
-          doc.text(l2w, srodekX - pdfTextWidth(l2w, 6.5, false) / 2, doc.y - 28, 6.5);
-        }
+        const opis = opisNaPasku(device.caption || device.label, w - 4);
+        opis.linie.forEach((linia, n) => {
+          doc.text(linia, srodekX - pdfTextWidth(linia, opis.size, false) / 2, doc.y - 20 - n * (opis.size + 1), opis.size);
+        });
 
         x += w;
       }

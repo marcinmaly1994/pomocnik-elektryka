@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfZawin, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, PDF_LAST_CHAR, PDF_POLISH, PDF_W_BOLD, PDF_W_REG, type CzesciDokumentu, type PdfImage } from "./engine";
+import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfZawin, pdfDopasujRozmiar, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, PDF_LAST_CHAR, PDF_POLISH, PDF_W_BOLD, PDF_W_REG, type CzesciDokumentu, type PdfImage } from "./engine";
 import { parseTtf } from "./ttf";
 import { stubPdfFontFetch } from "./testFontMock";
 
@@ -111,6 +111,36 @@ describe("pdfZawin", () => {
   it("pusty tekst daje pustą listę, a absurdalnie wąska kolumna nie zapętla się", () => {
     expect(pdfZawin("   ", 100, 9, false)).toEqual([]);
     expect(() => pdfZawin("abc def", 0.1, 9, false)).not.toThrow();
+  });
+});
+
+describe("pdfDopasujRozmiar", () => {
+  const nazwa = "Dom jednorodzinny przykładowy, 136 m²";
+
+  it("tekst, który się mieści, zostaje w pełnym rozmiarze", () => {
+    expect(pdfDopasujRozmiar("Krótki", 500, 9, 7, true)).toEqual({ tekst: "Krótki", size: 9 });
+  });
+
+  it("zbyt długi tekst najpierw maleje, zamiast się kończyć wielokropkiem", () => {
+    // Szerokość taka, że przy 9 pt się nie mieści, a przy 7 pt tak.
+    const szer = (pdfTextWidth(nazwa, 9, true) + pdfTextWidth(nazwa, 7, true)) / 2;
+    const w = pdfDopasujRozmiar(nazwa, szer, 9, 7, true);
+    expect(w.tekst).toBe(nazwa);
+    expect(w.size).toBeLessThan(9);
+    expect(w.size).toBeGreaterThanOrEqual(7);
+    expect(pdfTextWidth(w.tekst, w.size, true)).toBeLessThanOrEqual(szer);
+  });
+
+  it("wybiera NAJWIĘKSZY rozmiar, w którym tekst się mieści", () => {
+    const szer = pdfTextWidth(nazwa, 8, true);
+    expect(pdfDopasujRozmiar(nazwa, szer, 9, 7, true).size).toBe(8);
+  });
+
+  it("dopiero gdy nawet najmniejszy rozmiar nie wystarcza, przycina", () => {
+    const w = pdfDopasujRozmiar(nazwa, 40, 9, 7, true);
+    expect(w.size).toBe(7);
+    expect(w.tekst.endsWith("..")).toBe(true);
+    expect(pdfTextWidth(w.tekst, 7, true)).toBeLessThanOrEqual(40);
   });
 });
 
