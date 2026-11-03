@@ -133,6 +133,41 @@ export function pdfFitText(str: string, maxWidth: number, size: number, bold: bo
   return out + ell;
 }
 
+/**
+ * Dzieli tekst na linie nie szersze niż `maxWidth`, łamiąc między słowami.
+ *
+ * `pdfFitText` skraca do jednej linii wielokropkiem — dobre dla komórki tabeli, ale nie
+ * dla zdania, którego koniec niesie treść (lista pozycji bez ceny pod kosztorysem była
+ * ucinana dokładnie w tym miejscu). Słowo szersze niż cała linia tnie się twardo, żeby
+ * nie wyjechało poza kartkę; pusty tekst daje pustą listę.
+ */
+export function pdfZawin(str: string, maxWidth: number, size: number, bold: boolean): string[] {
+  const linie: string[] = [];
+  let biezaca = "";
+  for (const slowo of String(str).split(/\s+/).filter(Boolean)) {
+    const proba = biezaca ? `${biezaca} ${slowo}` : slowo;
+    if (pdfTextWidth(proba, size, bold) <= maxWidth) {
+      biezaca = proba;
+      continue;
+    }
+    if (biezaca) linie.push(biezaca);
+    biezaca = slowo;
+    while (pdfTextWidth(biezaca, size, bold) > maxWidth) {
+      let kawalek = "";
+      for (const ch of biezaca) {
+        if (pdfTextWidth(kawalek + ch, size, bold) > maxWidth) break;
+        kawalek += ch;
+      }
+      // Pojedynczy znak szerszy niż linia (absurdalnie wąska kolumna): nie zapętlaj się.
+      if (!kawalek) break;
+      linie.push(kawalek);
+      biezaca = biezaca.slice(kawalek.length);
+    }
+  }
+  if (biezaca) linie.push(biezaca);
+  return linie;
+}
+
 export function pdfEscape(str: string): string {
   let out = "";
   for (const ch of String(str)) {

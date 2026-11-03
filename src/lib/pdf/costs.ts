@@ -1,7 +1,7 @@
 import type { DocumentHeader } from "@/types";
 import type { CostRow } from "@/lib/costs";
 import { VAT_RATE, podsumowanieKosztorysu, type StawkaVat } from "@/lib/costs";
-import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
+import { createPdfDoc, pdfFitText, pdfTextWidth, pdfZawin, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 
 /**
@@ -125,7 +125,47 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader, stawkaVat
    */
   const prawy = M + W - 10;
   const etykietaPrawy = prawy - KOL_KWOTY;
-  doc.ensure(58);
+
+  /**
+   * Czego ta suma NIE obejmuje — wprost na kartce, pod nią. Zawinięte do pełnej listy,
+   * nie przycięte do jednej linii: ostatnie pozycje tej listy to dokładnie te, o których
+   * czytelnik ma się dowiedzieć, a wielokropek obcinał je jako pierwsze.
+   *
+   * Bez tego dokument wysyłany wykonawcy podawał „RAZEM brutto" bez śladu po tym, że
+   * `robocizna` ma domyślną cenę 0 i do sumy nie weszła. Na ekranie ostrzeżenie było
+   * (choć pod liczbą), w PDF-ie nie było go wcale — czyli akurat tam, gdzie liczba
+   * przestaje mieć obok siebie aplikację, która mogłaby ją wytłumaczyć.
+   */
+  const liniiUwagi =
+    podsumowanie.niewycenione.length > 0
+      ? pdfZawin(
+          (podsumowanie.brakRobocizny
+            ? "UWAGA: to cena materiału, nie cena instalacji. Bez wyceny pozostają: "
+            : "UWAGA: suma nie obejmuje pozycji bez ceny: ") +
+            podsumowanie.niewycenione.join(", ") +
+            ".",
+          W,
+          7.5,
+          false
+        )
+      : [];
+  const WYS_UWAGI = 10;
+
+  /**
+   * Cały blok końcowy — sumy, uwaga o brakach wyceny, objaśnienie gwiazdki i zastrzeżenie —
+   * mieści się na jednej stronie ALBO przechodzi na następną w całości.
+   *
+   * Zastrzeżenie oderwane od sumy to zastrzeżenie, którego nikt nie przeczyta razem z nią
+   * (poprzednio uwaga lądowała sama na stronie „cd." i nakładała się na nagłówek tabeli).
+   * Na takiej stronie nie ma już wierszy, więc nagłówek tabeli zastępuje sam tytuł.
+   */
+  const wysokoscBloku =
+    64 + (liniiUwagi.length > 0 ? liniiUwagi.length * WYS_UWAGI + 4 : 0) + (ryczaltowe > 0 ? 20 : 0) + 30;
+  doc.setNewPageHandler(() => {
+    doc.text("KOSZTORYS (cd.)", M, doc.y - 12, 11, true);
+    doc.y -= 26;
+  });
+  doc.ensure(wysokoscBloku);
   doc.y -= 10;
   const wiersz = (label: string, kwota: number, duzy = false) => {
     const size = duzy ? 11 : 9;
@@ -139,25 +179,15 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader, stawkaVat
   doc.y -= 4;
   wiersz(podsumowanie.etykietaSumy, netto + vat, true);
 
-  /**
-   * Czego ta suma NIE obejmuje — wprost na kartce, pod nią.
-   *
-   * Bez tego dokument wysyłany wykonawcy podawał „RAZEM brutto" bez śladu po tym, że
-   * `robocizna` ma domyślną cenę 0 i do sumy nie weszła. Na ekranie ostrzeżenie było
-   * (choć pod liczbą), w PDF-ie nie było go wcale — czyli akurat tam, gdzie liczba
-   * przestaje mieć obok siebie aplikację, która mogłaby ją wytłumaczyć.
-   */
-  if (podsumowanie.niewycenione.length > 0) {
-    doc.ensure(24);
-    const wstep = podsumowanie.brakRobocizny
-      ? "UWAGA: to cena materiału, nie cena instalacji. Bez wyceny pozostają: "
-      : "UWAGA: suma nie obejmuje pozycji bez ceny: ";
-    doc.text(pdfFitText(wstep + podsumowanie.niewycenione.join(", ") + ".", W, 7.5, false), M, doc.y, 7.5, false, 0.3);
-    doc.y -= 14;
+  if (liniiUwagi.length > 0) {
+    for (const linia of liniiUwagi) {
+      doc.text(linia, M, doc.y, 7.5, false, 0.3);
+      doc.y -= WYS_UWAGI;
+    }
+    doc.y -= 4;
   }
 
   if (ryczaltowe > 0) {
-    doc.ensure(20);
     doc.text(
       "* Wartość pozycji podana ryczałtem — nie wynika z iloczynu ilości i ceny jednostkowej.",
       M,
@@ -169,7 +199,6 @@ export function buildCostsDoc(rows: CostRow[], header: DocumentHeader, stawkaVat
     doc.y -= 14;
   }
 
-  doc.ensure(30);
   doc.text(
     "Kosztorys orientacyjny. Ilości należy zweryfikować na rzucie budynku przed zakupem materiału;",
     M,
