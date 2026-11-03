@@ -3,7 +3,7 @@ import { PRZYKLADY, zbudujPrzyklad } from "./index";
 import { nearestPointOnPolyline, pointInPolygon, polygonAreaM2 } from "@/lib/geometry";
 import { scaleOf, MANUAL_DRAW_SCALE_MPU, guessRoomType, typPomieszczenia } from "@/lib/design";
 import { computeCircuits, computeRcdGroups } from "@/lib/panel/circuits";
-import { buildCableRoutes, findPanel, findPanels, spreadOverlappingRoutes } from "@/lib/panel/loads";
+import { buildCableRoutes, estimateRoutesByFloor, findPanel, findPanels, spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
 import { ODSUNIECIE_TRASY } from "@/lib/panel/routing";
 import { computeCosts } from "@/lib/costs";
@@ -261,6 +261,30 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))('przykład „%s"', (id) =>
       expect(zle, `kondygnacja ${f}`).toEqual([]);
       expect(ukos / dlugosc, `kondygnacja ${f}`).toBeLessThan(0.1);
     }
+  });
+
+  it("żaden obwód nie ma trasy SZACOWANEJ — rozdzielnica nie ostrzega przykładu przed samym sobą", () => {
+    /**
+     * Gdy routing nie znajdzie drogi między dwoma punktami, długość spada do odległości
+     * prostokątnej i dobór dopisuje do obwodu ostrzeżenie "DLUGOSC_SZACOWANA". W przykładzie
+     * to zawsze błąd danych: geometria jest narysowana, więc trasa MUSI się znaleźć. Poprzednio
+     * gniazdko stało na styku dwóch ścian (przyciągnięte do końca jednej, w osi drugiej), tuż
+     * po otwarciu przykładu rozdzielnica pokazywała ostrzeżenie o braku ścian na planie
+     * z ścianami — i nikt tego nie zauważył, bo żaden test nie pytał o szacunek.
+     */
+    const geometria = { walls: payload.draft.walls, roomShapes: payload.draft.roomShapes, openings: payload.draft.openings };
+    const panele = findPanels(payload.draft.elements);
+    const szacowane = computeCircuits(payload.draft.elements, payload.draft.roomShapes)
+      .filter(
+        (c) =>
+          estimateRoutesByFloor(panele, c.elements, payload.scales, undefined, {
+            geometria,
+            kondygnacje: payload.floors,
+            wszystkieElementy: payload.draft.elements,
+          })?.szacunek
+      )
+      .map((c) => c.name);
+    expect(szacowane).toEqual([]);
   });
 
   it("żadne dwa symbole w jednym pomieszczeniu nie NACHODZĄ na siebie", () => {

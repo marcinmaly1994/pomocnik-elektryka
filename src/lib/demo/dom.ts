@@ -218,7 +218,9 @@ function elementy(): InstallationElement[] {
     eP("dom-kor-lampa", "oswietlenie", HOL, 6.5, 4.25),
     eP("dom-hol-sw1", "wlacznikSchodowy", HOL, 3.4, 3.7),
     eP("dom-hol-sw2", "wlacznikSchodowy", HOL, 9.8, 4.25),
-    eP("dom-kor-gn", "gniazdko", HOL, 5.5, 3.7),
+    // x = 6, nie 5,5: przy 5,5 m stoi koniec ściany Kuchnia/Salon, gniazdko przyciągało się do
+    // niej i lądowało w osi ściany Holu — w murze, do którego żaden przewód nie dochodzi.
+    eP("dom-kor-gn", "gniazdko", HOL, 6, 3.7),
     eP("dom-hol-dym", "czujnikDymu", HOL, 7.5, 4.6),
 
     // --- Garaż ---
