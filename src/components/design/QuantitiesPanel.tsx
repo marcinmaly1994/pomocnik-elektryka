@@ -43,15 +43,26 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
           <ChevronRight size={14} className="shrink-0 text-slate-400" />
         )}
         <ListOrdered size={14} className="shrink-0 text-slate-400" />
-        <span className="text-[13px] font-semibold text-ink">Zestawienie elementów</span>
-        <span className="text-[11.5px] text-slate-500">
-          {sztukRazem === 0
-            ? "nic jeszcze nie postawiono"
-            : rozniSie
-              ? `${sztukRazem} szt. osprzętu w ${punktowRazem} punktach`
-              : `${sztukRazem} szt. osprzętu`}
+        {/*
+          Tytuł nad sumą na telefonie, obok siebie od 768 px. W jednym rzędzie oba teksty
+          walczyły o ok. 170 px i łamały się na dwie linie każdy („Zestawienie / elementów\",
+          „50 szt. / osprzętu\"). Każda część sumy jest nierozerwalna, więc przy braku miejsca
+          zawija się cała jej CZĘŚĆ, a nie liczba oderwana od jednostki.
+        */}
+        <span className="flex min-w-0 flex-col md:flex-row md:items-baseline md:gap-2">
+          <span className="whitespace-nowrap text-[13px] font-semibold text-ink">Zestawienie elementów</span>
+          <span className="text-[11.5px] text-slate-500">
+            {sztukRazem === 0 ? (
+              "nic jeszcze nie postawiono"
+            ) : (
+              <>
+                <span className="whitespace-nowrap">{sztukRazem} szt. osprzętu</span>
+                {rozniSie && <span className="whitespace-nowrap"> w {punktowRazem} punktach</span>}
+              </>
+            )}
+          </span>
         </span>
-        <span className="ml-auto text-[11px] text-slate-400">{otwarte ? "zwiń" : "rozwiń"}</span>
+        <span className="ml-auto whitespace-nowrap text-[11px] text-slate-400">{otwarte ? "zwiń" : "rozwiń"}</span>
       </button>
 
       {otwarte && sztukRazem > 0 && (
