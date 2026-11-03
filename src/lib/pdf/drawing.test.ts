@@ -283,6 +283,81 @@ describe("legenda względem rysunku", () => {
 });
 
 /**
+ * Legenda razem z kluczem tras: gdzie stoją i ile zostaje rysunkowi.
+ *
+ * Klucz tras wymuszał pasek pod rysunkiem bez porównania. Przy rzucie domu z legendą
+ * o 23 pozycjach pasek zjadał 332 z 461 pt wysokości pola: rysunek dostawał 117 pt,
+ * czyli około 4,4 cm szerokości na kartce A4 — na głównym dokumencie aplikacji.
+ */
+describe("legenda i klucz tras razem", () => {
+  const poz = (n: number) => Array.from({ length: n }, (_, i) => ({ symbol: obraz(40, 40), opis: `Symbol ${i + 1}` }));
+  const klucz = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ opis: `Oznaczenie ${i + 1}`, rgb: [0.35, 0.35, 0.35] as [number, number, number], grubosc: 1 }));
+
+  const STRONA_H = 595.28;
+  const DOL_POLA = 36 + 48 + 8; // margines + tabliczka
+  const GORA_POLA = STRONA_H - 36;
+
+  type Prost = { x: number; y: number; w: number; h: number };
+  const nachodza = (a: Prost, b: Prost) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
+
+  async function ulozenie(rysW: number, rysH: number, legenda: number, kluczTras: number) {
+    const out = bytesToAscii(
+      await buildDrawingPdf({
+        tytul: "Rzut",
+        header,
+        rysunek: obraz(rysW, rysH),
+        legenda: legenda ? poz(legenda) : undefined,
+        kluczTras: kluczTras ? klucz(kluczTras) : undefined,
+      })
+    );
+    const rys = obrazy(out).find((o) => o.im === 1)!;
+    // Tło legendy i klucza to prostokąty o szarości 0.985; tło tabliczki leży niżej niż pole.
+    const bloki: Prost[] = [...out.matchAll(/0\.985 g ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re f/g)]
+      .map((m) => ({ x: +m[1], y: +m[2], w: +m[3], h: +m[4] }))
+      .filter((r) => r.y >= DOL_POLA - 0.5);
+    return { rys: { x: rys.x, y: rys.y, w: rys.w, h: rys.h }, bloki };
+  }
+
+  it("rzut domu (23 pozycje legendy i klucz) dostaje więcej niż jedną czwartą kartki", async () => {
+    const { rys } = await ulozenie(1300, 1000, 23, 4);
+    // Poprzedni układ: rysunek 152 pt szerokości. Kolumna po prawej daje ponad 400.
+    expect(rys.w).toBeGreaterThan(380);
+  });
+
+  it("legenda i klucz stoją razem w kolumnie, a nie w pasku, który zjadałby wysokość", async () => {
+    const { rys, bloki } = await ulozenie(1300, 1000, 23, 4);
+    expect(bloki).toHaveLength(2);
+    for (const b of bloki) expect(b.x).toBeGreaterThanOrEqual(rys.x + rys.w - 0.5);
+  });
+
+  /**
+   * Własność, nie przykład: przy KAŻDEJ kombinacji rozmiaru legendy, klucza i proporcji
+   * rysunku nic na nic nie nachodzi i wszystko mieści się w polu nad tabliczką.
+   */
+  it("bloki nie nachodzą na rysunek ani na siebie i mieszczą się w polu — przy wielu kombinacjach", async () => {
+    for (const [rysW, rysH] of [[2400, 500], [1300, 1000], [1000, 1000], [400, 1000]]) {
+      for (const legenda of [0, 1, 3, 12, 23, 30]) {
+        for (const kluczTras of [0, 2, 4]) {
+          const { rys, bloki } = await ulozenie(rysW, rysH, legenda, kluczTras);
+          const opis = `rysunek ${rysW}x${rysH}, legenda ${legenda}, klucz ${kluczTras}`;
+          expect(bloki, opis).toHaveLength((legenda ? 1 : 0) + (kluczTras ? 1 : 0));
+          for (const b of bloki) {
+            expect(nachodza(b, rys), `${opis}: blok na rysunku`).toBe(false);
+            expect(b.y, `${opis}: blok pod polem`).toBeGreaterThanOrEqual(DOL_POLA - 0.5);
+            expect(b.y + b.h, `${opis}: blok nad polem`).toBeLessThanOrEqual(GORA_POLA + 0.5);
+            expect(b.x, `${opis}: blok za lewym marginesem`).toBeGreaterThanOrEqual(36 - 0.5);
+            expect(b.x + b.w, `${opis}: blok za prawym marginesem`).toBeLessThanOrEqual(STRONA_W - 36 + 0.5);
+          }
+          if (bloki.length === 2) expect(nachodza(bloki[0], bloki[1]), `${opis}: legenda na kluczu`).toBe(false);
+        }
+      }
+    }
+    // 72 kombinacje, każda to osobny PDF z osadzoną czcionką — domyślne 5 s nie wystarcza.
+  }, 60_000);
+});
+
+/**
  * Klucz oznaczeń i spis obwodów.
  *
  * Legenda objasnia symbole, ale nie trasy — a te niosa trzy rozroznienia naraz:
