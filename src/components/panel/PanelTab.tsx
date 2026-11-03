@@ -28,6 +28,7 @@ import { resolveDocHeader } from "@/lib/docHeader";
 import { Button } from "@/components/ui/button";
 import { PanelRender } from "./PanelRender";
 import { EditDeviceModal } from "./EditDeviceModal";
+import { useSzerokieOkno } from "@/components/design/pasekMenuKontekst";
 import type { PanelDevice } from "@/types";
 
 const SELECTIVITY_STYLE: Record<SelectivityLevel, { bg: string; fg: string; Icon: typeof AlertTriangle }> = {
@@ -64,6 +65,36 @@ function nextManualUid(existing: PanelDevice[]): string {
  * rozdzielnicy, przyciski działają tam, gdzie przeciąganie jest niewygodne —
  * na dotyku i przy obsłudze klawiaturą.
  */
+/**
+ * Objaśnienia kolumn tabeli doboru — JEDNO miejsce dla nagłówka tabeli (dymki
+ * `Podpowiedz`, od 768 px) i dla spisu skrótów pod kartami (telefon).
+ */
+const OBJASNIENIA_DOBORU = {
+  faza: "Do którego przewodu fazowego (L1/L2/L3) podłączony jest obwód — rozkłada obciążenie równomiernie między fazy.",
+  Ib: "Prąd obliczeniowy — ile prądu faktycznie pobiorą odbiorniki podłączone do tego obwodu.",
+  przekroj: "Przekrój żyły przewodu (mm²) — na tyle duży, żeby bezpiecznie przenieść prąd Ib bez przegrzania.",
+  aparat: "Dobrany wyłącznik nadprądowy (bezpiecznik) — jego prąd znamionowy chroni przewód przed przeciążeniem.",
+  Iz: "Obciążalność prądowa przewodu — maksymalny prąd, jaki może bezpiecznie przenieść przy tym sposobie ułożenia.",
+  dU: "Spadek napięcia na trasie od rozdzielnicy do najdalszego punktu obwodu — im dłuższy przewód, tym większy; norma ogranicza go do 3–5%.",
+  Zs: "Maksymalna impedancja pętli zwarcia, przy której zabezpieczenie zdąży zadziałać wystarczająco szybko przy zwarciu.",
+  rcd: "Typ wyłącznika różnicowoprądowego wymagany dla tego obwodu — chroni przed porażeniem prądem w razie uszkodzenia izolacji.",
+} as const;
+
+const OPISY_SKROTOW_DOBORU: [string, string][] = [
+  ["Ib", OBJASNIENIA_DOBORU.Ib],
+  ["Iz", OBJASNIENIA_DOBORU.Iz],
+  ["ΔU", OBJASNIENIA_DOBORU.dU],
+  ["Zs max", OBJASNIENIA_DOBORU.Zs],
+  ["RCD", OBJASNIENIA_DOBORU.rcd],
+];
+
+/**
+ * Komórka karty obwodu na telefonie: podpis z `data-label` nad wartością, wartość nie
+ * łamie się na jednostce ("8,70 A" w jednej linii). Od 768 px zwykła komórka tabeli.
+ */
+const KOMORKA_DOBORU =
+  "whitespace-nowrap before:mb-0.5 before:block before:text-[10px] before:uppercase before:tracking-wide before:text-slate-400 before:content-[attr(data-label)] md:py-1.5 md:pr-3 md:before:hidden";
+
 export function PanelTab() {
   const elements = useProjectStore((s) => s.draft.elements); // cały budynek, nie tylko bieżąca kondygnacja
   const roomShapes = useProjectStore((s) => s.draft.roomShapes);
@@ -73,6 +104,8 @@ export function PanelTab() {
   const walls = useProjectStore((s) => s.draft.walls);
   const openings = useProjectStore((s) => s.draft.openings);
   const geometria = useMemo(() => ({ walls, roomShapes, openings }), [walls, roomShapes, openings]);
+  /** Spis skrótów pod kartami doboru istnieje tylko na wąskim ekranie — patrz `OBJASNIENIA_DOBORU`. */
+  const szerokieOkno = useSzerokieOkno();
 
   // Element bez rozpoznanego pomieszczenia grupuje się do ogólnego kubła zamiast
   // do właściwego obwodu, a łącznik nie połączy się z lampą w grupę sterowania
@@ -867,40 +900,49 @@ export function PanelTab() {
           </label>
         </div>
 
-        <div className="pe-scroll overflow-x-auto">
-          <table className="w-full text-left text-[11.5px]">
-            <thead>
+        {/*
+          Na telefonie każdy obwód to KARTA (nazwa na całą szerokość, pod nią osiem pól
+          w dwóch rzędach po cztery), od 768 px zwykła tabela. Samym CSS-em, na tym samym
+          drzewie — druga kopia z innym układem dałaby dwa zestawy tych samych liczb.
+
+          Tabela miała na telefonie 442 px w okienku 285 px i przewijała się w bok: kolumny
+          ΔU, Zs max i RCD, czyli te, od których zależy bezpieczeństwo, leżały poza ekranem
+          bez żadnego znaku, że tam są, a po przesunięciu nazwa obwodu znikała z widoku
+          i nie było wiadomo, czyja to liczba. Jednostki łamały się na drugą linię
+          („8,70 / A"), więc wiersze miały po trzy–cztery linie.
+        */}
+        <div className="pe-scroll md:overflow-x-auto">
+          <table className="block w-full text-left text-[11.5px] md:table">
+            <thead className="hidden md:table-header-group">
               <tr className="text-slate-400">
                 <th className="py-1 pr-3 font-medium">Obwód</th>
                 <th className="py-1 pr-3 font-medium">
-                  <Podpowiedz tresc="Do którego przewodu fazowego (L1/L2/L3) podłączony jest obwód — rozkłada obciążenie równomiernie między fazy.">
-                    Faza
-                  </Podpowiedz>
+                  <Podpowiedz tresc={OBJASNIENIA_DOBORU.faza}>Faza</Podpowiedz>
                 </th>
                 <th className="py-1 pr-3 text-right font-medium">
-                  <Podpowiedz tresc="Prąd obliczeniowy — ile prądu faktycznie pobiorą odbiorniki podłączone do tego obwodu.">Ib</Podpowiedz>
+                  <Podpowiedz tresc={OBJASNIENIA_DOBORU.Ib}>Ib</Podpowiedz>
                 </th>
                 <th className="py-1 pr-3 text-right font-medium">
-                  <Podpowiedz tresc="Przekrój żyły przewodu (mm²) — na tyle duży, żeby bezpiecznie przenieść prąd Ib bez przegrzania.">Przekrój</Podpowiedz>
+                  <Podpowiedz tresc={OBJASNIENIA_DOBORU.przekroj}>Przekrój</Podpowiedz>
                 </th>
                 <th className="py-1 pr-3 font-medium">
-                  <Podpowiedz tresc="Dobrany wyłącznik nadprądowy (bezpiecznik) — jego prąd znamionowy chroni przewód przed przeciążeniem.">Aparat</Podpowiedz>
+                  <Podpowiedz tresc={OBJASNIENIA_DOBORU.aparat}>Aparat</Podpowiedz>
                 </th>
                 <th className="py-1 pr-3 text-right font-medium">
-                  <Podpowiedz tresc="Obciążalność prądowa przewodu — maksymalny prąd, jaki może bezpiecznie przenieść przy tym sposobie ułożenia.">Iz</Podpowiedz>
+                  <Podpowiedz tresc={OBJASNIENIA_DOBORU.Iz}>Iz</Podpowiedz>
                 </th>
                 <th className="py-1 pr-3 text-right font-medium">
-                  <Podpowiedz tresc="Spadek napięcia na trasie od rozdzielnicy do najdalszego punktu obwodu — im dłuższy przewód, tym większy; norma ogranicza go do 3–5%.">ΔU</Podpowiedz>
+                  <Podpowiedz tresc={OBJASNIENIA_DOBORU.dU}>ΔU</Podpowiedz>
                 </th>
                 <th className="py-1 pr-3 text-right font-medium">
-                  <Podpowiedz tresc="Maksymalna impedancja pętli zwarcia, przy której zabezpieczenie zdąży zadziałać wystarczająco szybko przy zwarciu.">Zs max</Podpowiedz>
+                  <Podpowiedz tresc={OBJASNIENIA_DOBORU.Zs}>Zs max</Podpowiedz>
                 </th>
                 <th className="py-1 pr-3 font-medium">
-                  <Podpowiedz tresc="Typ wyłącznika różnicowoprądowego wymagany dla tego obwodu — chroni przed porażeniem prądem w razie uszkodzenia izolacji.">RCD</Podpowiedz>
+                  <Podpowiedz tresc={OBJASNIENIA_DOBORU.rcd}>RCD</Podpowiedz>
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="block md:table-row-group">
               {/* Pusta tabela pokazywała same nagłówki, bez słowa dlaczego. Dobór liczy
                   się z obwodów rozstawionych na RZUCIE (przewód, długość trasy), więc
                   aparaty dołożone ręcznie — bez rzutu — nie mają tu z czego powstać. */}
@@ -919,11 +961,11 @@ export function PanelTab() {
                 return (
                   <tr
                     key={s.id}
-                    className="border-t"
+                    className="grid grid-cols-4 gap-x-2 gap-y-2 border-t px-1 py-2.5 md:table-row md:p-0"
                     style={{ borderColor: "#EEF1F4", background: bad ? "#C6433A0A" : warn ? "#C1793F0A" : undefined }}
                   >
-                    <td className="py-1.5 pr-3">{s.nazwa}</td>
-                    <td className="py-1.5 pr-3">
+                    <td className="col-span-4 text-[12.5px] font-medium md:py-1.5 md:pr-3 md:text-[11.5px] md:font-normal">{s.nazwa}</td>
+                    <td className={KOMORKA_DOBORU} data-label="Faza">
                       <span
                         className="pe-mono font-semibold"
                         style={{ color: PHASE_COLORS[s.liczba_faz === "3" ? "3F" : s.faza] ?? "#64748B" }}
@@ -931,25 +973,52 @@ export function PanelTab() {
                         {s.liczba_faz === "3" ? "3F" : s.faza}
                       </span>
                     </td>
-                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{formatLiczba(s.Ib_A, 2)} A</td>
-                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">
+                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Ib">
+                      {formatLiczba(s.Ib_A, 2)} A
+                    </td>
+                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Przekrój">
                       {s.przekroj_mm2 ? `${String(s.przekroj_mm2).replace(".", ",")} mm²` : "—"}
                     </td>
-                    <td className="pe-mono py-1.5 pr-3">
+                    <td className={`${KOMORKA_DOBORU} pe-mono`} data-label="Aparat">
                       {s.aparat ? `${s.aparat.charakterystyka}${s.aparat.In_A} ${s.aparat.bieguny}` : "—"}
                     </td>
-                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{formatLiczba(s.Iz_A, 1)} A</td>
-                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">
+                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Iz">
+                      {formatLiczba(s.Iz_A, 1)} A
+                    </td>
+                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="ΔU">
                       {s.spadek_napiecia_pct === null ? "—" : `${zPrzecinkiem(s.spadek_napiecia_pct)}%`}
                     </td>
-                    <td className="pe-mono py-1.5 pr-3 text-right tabular-nums">{zPrzecinkiem(s.Zs_max_Ohm)} Ω</td>
-                    <td className="pe-mono py-1.5 pr-3">typ {s.rcd_typ}</td>
+                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Zs max">
+                      {zPrzecinkiem(s.Zs_max_Ohm)} Ω
+                    </td>
+                    <td className={`${KOMORKA_DOBORU} pe-mono`} data-label="RCD">
+                      typ {s.rcd_typ}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+
+        {/* Na telefonie podpisy kart są gołym tekstem, więc objaśnienia skrótów — jedyne
+            miejsce w aplikacji, które tłumaczy Ib, Iz i Zs max — stoją w jednym spisie pod
+            listą. Nagłówek tabeli z dymkami istnieje tylko od 768 px — i tylko tam spis się nie
+            renderuje, a nie jest schowany CSS-em: ten sam tekst w DOM obok dymka dublowałby
+            go w każdym zapytaniu po treści. */}
+        {sized.length > 0 && !szerokieOkno && (
+          <details className="mt-3 rounded-md border px-3 py-2 text-[11.5px] md:hidden" style={{ borderColor: "#EEF1F4" }}>
+            <summary className="cursor-pointer font-medium text-slate-600">Co oznaczają skróty?</summary>
+            <dl className="mt-2 space-y-1.5 leading-relaxed text-slate-500">
+              {OPISY_SKROTOW_DOBORU.map(([skrot, opis]) => (
+                <div key={skrot}>
+                  <dt className="inline font-semibold text-slate-700">{skrot}</dt>
+                  <dd className="inline"> — {opis}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        )}
 
         {(sizingWarnings.length > 0 || ostrzezeniaReczne.length > 0) && (
           <div className="mt-4 space-y-1.5">
