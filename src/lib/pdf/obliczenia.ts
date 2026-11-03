@@ -40,7 +40,9 @@ const STRONA_H = 595.28;
 const COLS: Kolumna[] = [
   { label: "Obwód", w: 220 },
   { label: "Faza", w: 34 },
-  { label: "Ib", w: 42, right: true },
+  // 56 pt: „10,68 A" (dwie cyfry i dwa miejsca po przecinku — prąd ładowarki EV w przykładzie)
+  // nie mieściło się w 42 i ginęło jako „10,68..". Test sprawdzał tylko „27,4 A".
+  { label: "Ib", w: 56, right: true },
   { label: "Przekrój", w: 52, right: true },
   { label: "Przewód", w: 100 },
   { label: "Aparat", w: 48 },

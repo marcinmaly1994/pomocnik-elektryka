@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { buildDrawingPdf, hexNaRgb } from "./drawing";
+import { pdfEscape } from "./engine";
 import { stubPdfFontFetch } from "./testFontMock";
 import type { PdfImage } from "./engine";
 import type { DocumentHeader } from "@/types";
@@ -202,6 +203,23 @@ describe("tabliczka rysunkowa", () => {
         );
       }
     }
+  });
+
+  /**
+   * Nazwa projektu w tabliczce jest podpisem DOKUMENTU — ucięta („Dom jednorodzinny
+   * przykładowy,..") mówi mniej, niż powinna, a na każdym rysunku w poziomie stała
+   * szerokość rubryki obcinała ją przy 28 znakach, choć trzecia kolumna miała 450 pt
+   * prawie pustego miejsca.
+   */
+  it("pełna nazwa obiektu mieści się w tabliczce na kartce POZIOMEJ", async () => {
+    const nazwa = "Dom jednorodzinny przykładowy, 136 m²";
+    const out = bytesToAscii(
+      await buildDrawingPdf({ tytul: "Rzut - Parter", header: { ...header, obiekt: nazwa }, rysunek: obraz(1000, 600) })
+    );
+    const wartosc = napisy(out).find((n) => n.t === pdfEscape(nazwa));
+    expect(wartosc, "nazwa obiektu przycięta wielokropkiem").toBeDefined();
+    // Na poziomej kartce rubryka jest dość szeroka, więc nazwa idzie pełną czcionką 9 pt.
+    expect(wartosc!.size).toBe(9);
   });
 
   it("rysunek nie wchodzi na tabliczkę", async () => {

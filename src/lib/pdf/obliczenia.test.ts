@@ -175,6 +175,18 @@ describe("szerokości kolumn", () => {
     expect(SZEROKOSC_TABELI).toBeLessThanOrEqual(STRONA.w - 2 * STRONA.margines);
   });
 
+  /**
+   * Prąd obliczeniowy z dwoma miejscami po przecinku („10,68 A" — ładowarka EV w projekcie
+   * przykładowym) ginął jako „10,68..": kolumna Ib miała 42 pt, a test sprawdzał tylko
+   * „27,4 A", czyli o jeden znak mniej.
+   */
+  it("Ib z dwoma miejscami po przecinku i trzema cyframi nie jest ucinane", () => {
+    for (const ib of [10.68, 27.43, 104.55]) {
+      const tekst = komorkiObliczen(obwod({ Ib_A: ib }), 12)[2];
+      expect(pdfFitText(tekst, SZEROKOSCI[2] - WCIECIE_PRAWE, 8.5, false), `Ib = ${ib}`).toBe(tekst);
+    }
+  });
+
   it("najdłuższe realne wartości nie są ucinane przez pdfFitText", () => {
     const najdluzszy = obwod({
       nazwa: "Obwód gniazd kuchnia i jadalnia",

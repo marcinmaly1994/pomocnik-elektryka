@@ -168,6 +168,27 @@ export function pdfZawin(str: string, maxWidth: number, size: number, bold: bool
   return linie;
 }
 
+/**
+ * Dopasowuje tekst do szerokości najpierw ZMNIEJSZAJĄC czcionkę (co pół punktu, do
+ * `minSize`), a dopiero potem przycina wielokropkiem.
+ *
+ * Przycięta nazwa obiektu w tabliczce („Dom jednorodzinny przykładowy,..") mówi mniej
+ * niż ta sama nazwa o punkt mniejszą czcionką. Przycinanie zostaje jako ostatnia deska
+ * ratunku, gdy nawet najmniejszy dopuszczony rozmiar się nie mieści.
+ */
+export function pdfDopasujRozmiar(
+  str: string,
+  maxWidth: number,
+  size: number,
+  minSize: number,
+  bold: boolean
+): { tekst: string; size: number } {
+  for (let s = size; s >= minSize - 1e-9; s -= 0.5) {
+    if (pdfTextWidth(str, s, bold) <= maxWidth) return { tekst: str, size: s };
+  }
+  return { tekst: pdfFitText(str, maxWidth, minSize, bold), size: minSize };
+}
+
 export function pdfEscape(str: string): string {
   let out = "";
   for (const ch of String(str)) {

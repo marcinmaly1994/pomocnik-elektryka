@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { buildLabelStripsPdf } from "./labelStrips";
+import { buildLabelStripsPdf, opisNaPasku } from "./labelStrips";
 import { stubPdfFontFetch } from "./testFontMock";
 import { pdfTextWidth } from "./engine";
 import type { DocumentHeader, PanelDevice } from "@/types";
@@ -52,6 +52,52 @@ const ap = (uid: string, tag: string, caption: string, modules = 1, kind: PanelD
 
 const MM_PER_PT = 25.4 / 72;
 const MODULE_PT = 17.5 / MM_PER_PT;
+
+/**
+ * Opis aparatu na pasku: do trzech linii, a gdy trzeba — mniejszą czcionką. Dwie linie
+ * ucinały nazwy obwodów w wąskim jednomodułowym aparacie („Obwód gnia.. ogólnych 1"),
+ * a tabliczka na froncie aparatu jest tym, po czym elektryk rozpoznaje obwód.
+ */
+describe("opisNaPasku", () => {
+  const MODUL = (17.5 * 72) / 25.4 - 4; // szerokość tekstu w jednomodułowym aparacie
+  const sklej = (linie: string[]) => linie.join(" ");
+
+  it("krótki opis zostaje w dwóch liniach pełną czcionką", () => {
+    const o = opisNaPasku("Gniazda garaż", MODUL);
+    expect(o.size).toBe(6.5);
+    expect(o.linie.length).toBeLessThanOrEqual(2);
+    expect(sklej(o.linie)).toBe("Gniazda garaż");
+  });
+
+  it("nazwy z przykładowego projektu mieszczą się w całości w jednym module", () => {
+    for (const opis of [
+      "Obwód gniazd — pomieszczenia gospodarcze 1",
+      "Wypust AGD — Kuchnia (Zmywarka)",
+      "Wypust AGD — Kotłownia (Kocioł gazowy)",
+      "Obwód gniazd ogólnych 1",
+    ]) {
+      const o = opisNaPasku(opis, MODUL);
+      expect(o.linie.length, opis).toBeLessThanOrEqual(3);
+      // Nic nie zginęło: złożone z powrotem daje ten sam tekst i nie ma wielokropka.
+      expect(sklej(o.linie), opis).toBe(opis);
+      for (const l of o.linie) expect(pdfTextWidth(l, o.size, false), `${opis}: „${l}"`).toBeLessThanOrEqual(MODUL + 0.01);
+    }
+  });
+
+  it("czcionka maleje tylko tyle, ile trzeba, i nie poniżej 5,5 pt", () => {
+    const dlugi = "Obwód gniazd — pomieszczenia gospodarcze 1";
+    expect(opisNaPasku(dlugi, MODUL).size).toBeGreaterThanOrEqual(5.5);
+    expect(opisNaPasku("Krótki", MODUL).size).toBe(6.5);
+  });
+
+  it("opis, który nie zmieści się nawet po zmniejszeniu, kończy się wielokropkiem", () => {
+    const absurd = "Obwód gniazd w pomieszczeniach gospodarczych, technicznych i magazynowych w budynku głównym";
+    const o = opisNaPasku(absurd, MODUL);
+    expect(o.linie).toHaveLength(3);
+    expect(o.size).toBe(5.5);
+    expect(o.linie[2].endsWith("..")).toBe(true);
+  });
+});
 
 describe("buildLabelStripsPdf", () => {
   it("pasek ma REALNĄ szerokość modułu DIN (17,5 mm), nie skalę ekranową", async () => {
