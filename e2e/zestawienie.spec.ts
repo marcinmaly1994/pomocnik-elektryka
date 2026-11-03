@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { otworzMenuPaska } from "./_flow";
+import { otworzMenuPaska, wczytajPrzyklad } from "./_flow";
 
 /**
  * Zestawienie ilosciowe w zakladce Instalacja.
@@ -78,4 +78,61 @@ test("zestawienie dotyczy BIEZACEJ kondygnacji", async ({ page }) => {
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 
   await expect(karta(page)).toContainText("nic jeszcze nie postawiono");
+});
+
+/**
+ * Nagłówek zestawienia na telefonie. Tytuł i suma walczyły o ok. 170 px w jednym rzędzie
+ * i łamały się na dwie linie każde („Zestawienie / elementów", „50 szt. / osprzętu"),
+ * co wyglądało jak błąd układu — a suma, która zmienia się z każdym elementem, jest
+ * pierwszą rzeczą, na którą patrzy się w tym nagłówku.
+ */
+test.describe("telefon", () => {
+  test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+
+  test("tytuł i suma w nagłówku zestawienia nie łamią się wewnątrz — od 320 do 430 px", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await wczytajPrzyklad(page, "dom");
+    await expect(karta(page)).toContainText("szt. osprzętu");
+
+    for (const szerokosc of [320, 375, 430]) {
+      await page.setViewportSize({ width: szerokosc, height: 812 });
+      await page.waitForTimeout(150);
+      const rozbite = await page.evaluate(() => {
+        const naglowek = [...document.querySelectorAll("button[aria-expanded]")].find((b) => b.textContent?.includes("Zestawienie elementów"))!;
+        const wynik: string[] = [];
+        const chodzik = document.createTreeWalker(naglowek, NodeFilter.SHOW_TEXT);
+        for (let w = chodzik.nextNode(); w; w = chodzik.nextNode()) {
+          const tekst = w.textContent?.trim();
+          if (!tekst) continue;
+          const zakres = document.createRange();
+          zakres.selectNodeContents(w);
+          // Węzeł tekstowy w jednej linii ma jeden prostokąt; w dwóch liniach — dwa.
+          if (zakres.getClientRects().length > 1) wynik.push(tekst);
+        }
+        return wynik;
+      });
+      expect(rozbite, `szerokość ${szerokosc} px`).toEqual([]);
+    }
+  });
+
+  test("na komputerze tytuł i suma stoją obok siebie w jednej linii", async ({ browser }) => {
+    const kontekst = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await kontekst.newPage();
+    await page.goto("/");
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await wczytajPrzyklad(page, "dom");
+    await expect(karta(page)).toContainText("szt. osprzętu");
+    const wysokosci = await page.evaluate(() => {
+      const naglowek = [...document.querySelectorAll("button[aria-expanded]")].find((b) => b.textContent?.includes("Zestawienie elementów"))!;
+      const tytul = [...naglowek.querySelectorAll("span")].find((s) => s.textContent === "Zestawienie elementów")!;
+      const suma = [...naglowek.querySelectorAll("span")].find((s) => s.textContent?.includes("szt. osprzętu") && s !== tytul)!;
+      return { tytul: tytul.getBoundingClientRect().top, suma: suma.getBoundingClientRect().top };
+    });
+    // Obok siebie: górne krawędzie różnią się o różnicę rozmiarów czcionek, nie o linię.
+    expect(Math.abs(wysokosci.tytul - wysokosci.suma)).toBeLessThan(8);
+    await kontekst.close();
+  });
 });
