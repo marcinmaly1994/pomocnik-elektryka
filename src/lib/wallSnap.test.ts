@@ -387,3 +387,57 @@ describe("przeliczPrzyscienneDoSkali", () => {
     expect(przeliczPrzyscienneDoSkali(lista, [SCIANA_POZIOMA], [POKOJ], 0.7, 5)).toBe(lista);
   });
 });
+
+/**
+ * Styk T: ściana pionowa KOŃCZY SIĘ na osi ściany poziomej. Układ z projektu
+ * przykładowego — Hol pod ścianą poziomą, Salon i Kuchnia nad nią, a między
+ * Kuchnią i Salonem ściana działowa, która dochodzi do niej od góry.
+ *
+ * Koniec ściany to jej czoło, nie powierzchnia, w której montuje się osprzęt.
+ * Przyciąganie traktowało go jednak jak każdy inny punkt: klik 4 jednostki pod osią
+ * ściany poziomej, tuż pod końcem działowej, remisował między nimi, a remis
+ * rozstrzygała kolejność na liście — wygrywała pionowa, rzut na nią zaciskał się do
+ * jej końca (130, 90) i gniazdko lądowało W OSI ściany poziomej, czyli w murze.
+ * Routing nie umiał potem poprowadzić do niego przewodu i spadał na szacunek.
+ */
+describe("snapElementToWall — styk T", () => {
+  const dzialowa: Wall = { id: "wd", floor: "f1", thickness: 5, points: [{ x: 130, y: 20 }, { x: 130, y: 90 }] };
+  const pozioma: Wall = { id: "wp", floor: "f1", thickness: 5, points: [{ x: 80, y: 90 }, { x: 220, y: 90 }] };
+  const prostokat = (id: string, name: string, x1: number, y1: number, x2: number, y2: number): RoomShape => ({
+    id,
+    floor: "f1",
+    name,
+    color: "#3B8C63",
+    points: [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }],
+  });
+  const pokoje = [
+    prostokat("k", "Kuchnia", 80, 20, 130, 90),
+    prostokat("s", "Salon", 130, 20, 220, 90),
+    prostokat("h", "Hol", 80, 90, 220, 120),
+  ];
+
+  it("klik pod końcem ściany działowej przykleja się do ściany POZIOMEJ, nie do czoła pionowej", () => {
+    // Dla obu wariantów kolejności na liście — wynik nie ma zależeć od tego, co jest pierwsze.
+    for (const sciany of [[dzialowa, pozioma], [pozioma, dzialowa]]) {
+      const w = snapElementToWall({ x: 130, y: 94 }, sciany, pokoje, 8, "gniazdko", 1)!;
+      // Symbol stoi w Holu, przed ścianą poziomą — nie w jej osi i nie w sąsiednim pokoju.
+      expect(w.y).toBeCloseTo(90 + zasiegPrzyscienny("gniazdko"), 6);
+      expect(w.x).toBeCloseTo(130, 6);
+      // Trzonek patrzy w górę, w ścianę poziomą (obrót 0), a nie w bok.
+      expect(w.rotation).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("klik obok ściany działowej, dalej od jej końca, nadal przykleja się do niej", () => {
+    const w = snapElementToWall({ x: 134, y: 60 }, [dzialowa, pozioma], pokoje, 8, "gniazdko", 1)!;
+    // Salon, prawa strona ściany działowej: symbol odsunięty od osi x = 130 w głąb Salonu.
+    expect(w.x).toBeCloseTo(130 + zasiegPrzyscienny("gniazdko"), 6);
+    expect(w.y).toBeCloseTo(60, 6);
+  });
+
+  it("czoło wolnego końca ściany nadal działa, gdy w zasięgu nie ma nic innego", () => {
+    // Ściana bez sąsiadów i bez pomieszczeń: koniec to jedyne, do czego da się przykleić.
+    const w = snapToWall({ x: 134, y: 94 }, [dzialowa], [], 8);
+    expect(w).not.toBeNull();
+  });
+});

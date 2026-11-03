@@ -143,6 +143,24 @@ function obrotDlaKierunku(dx: number, dy: number): number {
 
 
 /**
+ * Czy punkt leży na WOLNYM końcu łamanej, czyli na jej pierwszym albo ostatnim punkcie,
+ * a łamana nie jest zamknięta. Obrys pomieszczenia ani zamknięta ściana wolnych końców
+ * nie mają: ich wierzchołki to narożniki, po obu stronach których biegnie dalszy ciąg.
+ *
+ * Tak oznaczony punkt to wynik zaciśnięcia rzutu do końca odcinka — klik leży poza
+ * zasięgiem boku tej ściany. W styku T to koniec ściany działowej opartej o inną
+ * ścianę, więc leży w osi tamtej; osprzęt postawiony w takim punkcie stoi w murze.
+ */
+function naWolnymKoncu(punkt: Point, linia: Point[]): boolean {
+  if (linia.length < 2) return false;
+  const pierwszy = linia[0];
+  const ostatni = linia[linia.length - 1];
+  if (Math.hypot(pierwszy.x - ostatni.x, pierwszy.y - ostatni.y) < 1e-9) return false;
+  const blisko = (q: Point) => Math.hypot(punkt.x - q.x, punkt.y - q.y) < 1e-9;
+  return blisko(pierwszy) || blisko(ostatni);
+}
+
+/**
  * Przykleja punkt do najbliższej ściany albo krawędzi pomieszczenia i zwraca obrót
  * prostopadły do niej. `null`, gdy nic nie ma w zasięgu — wtedy element zostaje tam,
  * gdzie go postawiono.
@@ -157,21 +175,32 @@ export function snapToWall(
   roomShapes: RoomShape[],
   toleranceUnits: number
 ): WynikPrzyciagania | null {
-  let najlepszy: { point: Point; angle: number; dist: number; pokoj: RoomShape | null } | null = null;
+  type Trafienie = { point: Point; angle: number; dist: number; pokoj: RoomShape | null };
+  /**
+   * Dwa osobne wyniki: BOK ściany (rzut wypada na odcinku) i jej CZOŁO (rzut zaciśnięty do
+   * wolnego końca). Czoło nie jest powierzchnią, w której montuje się osprzęt, więc
+   * wygrywa tylko wtedy, gdy w zasięgu nie ma żadnego boku — patrz `naWolnymKoncu`.
+   */
+  let bok = null as Trafienie | null;
+  let czolo = null as Trafienie | null;
 
   const rozwaz = (linia: Point[], pokoj: RoomShape | null) => {
     const n = nearestPointOnPolyline(p, linia);
     if (!n) return;
     const dist = Math.hypot(p.x - n.point.x, p.y - n.point.y);
-    if (dist <= toleranceUnits && (!najlepszy || dist < najlepszy.dist)) {
-      najlepszy = { point: n.point, angle: n.angle, dist, pokoj };
+    if (dist > toleranceUnits) return;
+    const trafiony: Trafienie = { point: n.point, angle: n.angle, dist, pokoj };
+    if (naWolnymKoncu(n.point, linia)) {
+      if (!czolo || dist < czolo.dist) czolo = trafiony;
+    } else if (!bok || dist < bok.dist) {
+      bok = trafiony;
     }
   };
 
   for (const w of walls) rozwaz(w.points, null);
   for (const r of roomShapes) rozwaz(zamknietyObrys(r), r);
-  if (!najlepszy) return null;
-  const trafienie: { point: Point; angle: number; dist: number; pokoj: RoomShape | null } = najlepszy;
+  const trafienie: Trafienie | null = bok ?? czolo;
+  if (!trafienie) return null;
 
   /**
    * Dwie NORMALNE do ściany — kandydaci na kierunek trzonka. Liczone jako wektory,
