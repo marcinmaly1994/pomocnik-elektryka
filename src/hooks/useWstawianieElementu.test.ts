@@ -78,4 +78,38 @@ describe("useWstawianieElementu", () => {
     act(() => result.current.wstaw({ x: 100, y: 100 }));
     expect(elementy()[0]).toMatchObject({ x: 7, y: 9, rotation: 270 });
   });
+
+  /**
+   * Duch pod kursorem ma pokazywać TO, co postawi klik. Dlatego `podglad` i `wstaw` liczą
+   * z jednej funkcji, a test pilnuje, żeby nie dało się ich rozjechać: ten sam punkt,
+   * ta sama pozycja i obrót — po przyciągnięciu do ściany i po odsunięciu od sąsiada.
+   */
+  describe("podglad", () => {
+    it("niczego nie zapisuje", () => {
+      const { result } = renderHook(() => useWstawianieElementu(opcje));
+      act(() => {
+        result.current.podglad({ x: 40, y: 60 });
+      });
+      expect(elementy()).toHaveLength(0);
+    });
+
+    it("oddaje pozycję i obrót po przyciągnięciu do ściany", () => {
+      const { result } = renderHook(() =>
+        useWstawianieElementu({ skalaSymboli: 1, przyciagnijDoSciany: () => ({ x: 7, y: 9, rotation: 270 }) })
+      );
+      expect(result.current.podglad({ x: 100, y: 100 })).toEqual({ x: 7, y: 9, rotation: 270 });
+    });
+
+    it("zgadza się z tym, co potem postawi wstaw — także przy odsunięciu od sąsiada", () => {
+      const { result } = renderHook(() => useWstawianieElementu(opcje));
+      act(() => result.current.wstaw({ x: 50, y: 50 }));
+      // Drugi element w TYM SAMYM punkcie: rozsuwanie odsuwa go od pierwszego, więc pozycja
+      // różni się od klikniętej — i dokładnie tę ma pokazać duch.
+      const zapowiedz = result.current.podglad({ x: 50, y: 50 });
+      expect(zapowiedz.x !== 50 || zapowiedz.y !== 50).toBe(true);
+      act(() => result.current.wstaw({ x: 50, y: 50 }));
+      expect(elementy()).toHaveLength(2);
+      expect(elementy()[1]).toMatchObject(zapowiedz);
+    });
+  });
 });

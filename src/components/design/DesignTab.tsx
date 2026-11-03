@@ -3629,6 +3629,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setSelected(null);
             }}
             onPlaceElement={wstawianie.wstaw}
+            duchElementu={{
+              type: wstawianie.activeType,
+              gangs: wstawianie.gangsForType(wstawianie.activeType),
+              agdLetter: wstawianie.activeType === "wypustAGD" ? "A" : undefined,
+              podglad: wstawianie.podglad,
+            }}
             /* Przypisanie do pomieszczenia jedzie RAZEM z elementem — patrz
                `roomNameAfterMove`. Bez tego gniazdko przeciągnięte z salonu do
                łazienki nadal raportowało się jako salonowe i po cichu trafiało do

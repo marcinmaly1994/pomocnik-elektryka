@@ -30,6 +30,9 @@ export interface WstawianieElementuApi {
   /** Stawia element w klikniętym miejscu — po przyciągnięciu do ściany i odsunięciu
    *  od sąsiadów. */
   wstaw: (p: Point) => void;
+  /** Pozycja i obrót, w jakich `wstaw` postawi element po kliknięciu w `p` — dla ducha
+   *  pod kursorem. Nic nie zapisuje. */
+  podglad: (p: Point) => { x: number; y: number; rotation: number };
 }
 
 export function useWstawianieElementu(opcje: {
@@ -61,7 +64,13 @@ export function useWstawianieElementu(opcje: {
     setGangsByType((g) => ({ ...g, [t]: gangs }));
   }, []);
 
-  const wstaw = useCallback(
+  /**
+   * Gdzie i w jakim obrocie stanie element po kliknięciu w `p`: najpierw przyklejenie do
+   * ściany, potem odsunięcie od sąsiadów. JEDNA funkcja dla `wstaw` i dla podglądu —
+   * duch pod kursorem ma pokazywać dokładnie to, co postawi klik, a dwie osobne ścieżki
+   * rozjechałyby się przy pierwszej zmianie reguł przyciągania.
+   */
+  const policzWstawienie = useCallback(
     (p: Point) => {
       const m = przyciagnijDoSciany(p, activeType);
       // Kandydat potrzebny w całości, bo rozmiar symbolu zależy od typu (i od wymiarów
@@ -72,6 +81,22 @@ export function useWstawianieElementu(opcje: {
         skalaSymboli,
         mpu
       );
+      return { m, rozstaw };
+    },
+    [przyciagnijDoSciany, activeType, activeFloorId, elements, skalaSymboli, mpu]
+  );
+
+  const podglad = useCallback(
+    (p: Point) => {
+      const { m, rozstaw } = policzWstawienie(p);
+      return { x: rozstaw.x, y: rozstaw.y, rotation: m.rotation };
+    },
+    [policzWstawienie]
+  );
+
+  const wstaw = useCallback(
+    (p: Point) => {
+      const { m, rozstaw } = policzWstawienie(p);
       setDraft((d) => ({
         ...d,
         elements: [
@@ -95,8 +120,8 @@ export function useWstawianieElementu(opcje: {
         ],
       }));
     },
-    [przyciagnijDoSciany, activeType, activeFloorId, elements, skalaSymboli, mpu, roomShapes, dedicated, gangsForType, setDraft]
+    [policzWstawienie, activeType, activeFloorId, mpu, roomShapes, dedicated, gangsForType, setDraft]
   );
 
-  return { activeType, setActiveType, dedicated, setDedicated, gangsForType, ustawGangs, wstaw };
+  return { activeType, setActiveType, dedicated, setDedicated, gangsForType, ustawGangs, wstaw, podglad };
 }
