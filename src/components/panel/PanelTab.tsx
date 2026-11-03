@@ -506,7 +506,7 @@ export function PanelTab() {
             disabled={!panelCanUndo}
             title="Cofnij ostatnią zmianę w rozdzielnicy"
             aria-label="Cofnij"
-            className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30"
+            className="rounded px-1.5 py-1.5 text-slate-500 hover:text-ink disabled:opacity-30"
           >
             <Undo2 size={15} />
           </button>
@@ -515,7 +515,7 @@ export function PanelTab() {
             disabled={!panelCanRedo}
             title="Ponów"
             aria-label="Ponów"
-            className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30"
+            className="rounded px-1.5 py-1.5 text-slate-500 hover:text-ink disabled:opacity-30"
           >
             <Redo2 size={15} />
           </button>
@@ -1008,7 +1008,7 @@ export function PanelTab() {
             go w każdym zapytaniu po treści. */}
         {sized.length > 0 && !szerokieOkno && (
           <details className="mt-3 rounded-md border px-3 py-2 text-[11.5px] md:hidden" style={{ borderColor: "#EEF1F4" }}>
-            <summary className="cursor-pointer font-medium text-slate-600">Co oznaczają skróty?</summary>
+            <summary className="-my-2 cursor-pointer py-2 font-medium text-slate-600">Co oznaczają skróty?</summary>
             <dl className="mt-2 space-y-1.5 leading-relaxed text-slate-500">
               {OPISY_SKROTOW_DOBORU.map(([skrot, opis]) => (
                 <div key={skrot}>

@@ -137,7 +137,7 @@ export function EditorStatusBar({
           // Zaczyna się od widocznego tekstu przycisku (`krotko`), żeby nazwa go zawierała —
           // wcześniej stało tu tylko pełne podsumowanie, a na przycisku widać „bez uwag".
           aria-label={`${sprawdzenie.stan.krotko} — pokaż sprawdzenie rzutu: ${sprawdzenie.stan.tekst}`}
-          className="flex items-center gap-1 font-medium underline-offset-2 hover:underline"
+          className="flex items-center gap-1 font-medium underline-offset-2 hover:underline [@media(pointer:coarse)]:min-h-8"
           style={{ color: KOLOR_SPRAWDZENIA[sprawdzenie.stan.poziom] }}
           data-poziom={sprawdzenie.stan.poziom}
           data-testid="sprawdzenie-w-pasku"

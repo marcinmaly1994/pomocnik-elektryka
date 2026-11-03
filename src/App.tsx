@@ -1359,7 +1359,9 @@ function LinkDokumentu({
         e.preventDefault();
         onOtworz(tab);
       }}
-      className="text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-ink"
+      // Na dotyku cel ma 32 px wysokości zamiast 16: link w stopce to osobny wiersz, nie
+      // fragment zdania, więc WCAG 2.5.8 (min. 24 px) go nie zwalnia.
+      className="text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-ink [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-8 [@media(pointer:coarse)]:items-center"
     >
       {children}
     </a>
