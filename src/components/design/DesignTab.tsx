@@ -2863,7 +2863,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               ręką, ma nad nim kliknąć dalej. */}
           <button
             onClick={() => setWyborPrzykladu(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blueprint underline-offset-2 hover:underline"
+            className="flex items-center gap-1.5 text-sm font-medium text-blueprint underline-offset-2 hover:underline [@media(pointer:coarse)]:min-h-8"
           >
             <Eye size={15} /> Zobacz gotowy przykład
           </button>
@@ -2877,10 +2877,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               w miejscu, w którym to pytanie realnie pada.
               Kolejność: najpierw pomoc (odpowiedź), potem pominięcie (rezygnacja). */}
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
-            <button onClick={onOpenPomoc} className="flex items-center gap-1 text-slate-500 underline hover:text-copper">
+            <button onClick={onOpenPomoc} className="flex items-center gap-1 text-slate-500 underline hover:text-copper [@media(pointer:coarse)]:min-h-8">
               <HelpCircle size={13} /> Nie wiesz, od czego zacząć? Zobacz, jak to działa
             </button>
-            <button onClick={onboarding.dismissEntryScreen} className="text-slate-400 underline hover:text-slate-600">
+            <button onClick={onboarding.dismissEntryScreen} className="text-slate-400 underline hover:text-slate-600 [@media(pointer:coarse)]:min-h-8">
               Pomiń — zacznę na pustym planie
             </button>
           </div>
@@ -3304,7 +3304,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             // na ekranie 375 px, a treść panelu (katalog, opcje, karty) zaczynała się
             // na x=406 — poza ekranem.
             className={`flex shrink-0 items-center justify-center rounded-sm border border-border bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-copper ${
-              pelnyEkran ? "h-14 w-4 self-center" : "h-4 w-full md:h-14 md:w-4 md:self-center"
+              pelnyEkran ? "h-14 w-4 self-center" : "h-6 w-full md:h-14 md:w-4 md:self-center"
             }`}
           >
             {panelZwiniety ? (

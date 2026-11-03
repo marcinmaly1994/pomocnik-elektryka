@@ -41,7 +41,7 @@ export function PasekPrzykladu() {
       </span>
       <Dialog>
         <DialogTrigger asChild>
-          <button className="ml-auto shrink-0 font-semibold underline">Zacznij własny projekt</button>
+          <button className="ml-auto shrink-0 font-semibold underline [@media(pointer:coarse)]:min-h-8">Zacznij własny projekt</button>
         </DialogTrigger>
         <DialogContent title="Zacząć własny projekt?">
           <p className="mb-4 text-sm text-slate-600">
