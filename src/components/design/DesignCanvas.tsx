@@ -317,6 +317,18 @@ interface DesignCanvasProps {
   onClearSelection: () => void;
   onMarqueeSelect: (ids: string[]) => void;
   onPlaceElement: (p: Point) => void;
+  /**
+   * Duch elementu pod kursorem w narzędziu „Wstaw element” — pokazuje, gdzie i w jakim
+   * obrocie stanie element po kliknięciu. `podglad` zwraca pozycję PO przyciągnięciu do
+   * ściany i odsunięciu od sąsiadów, czyli tę samą, którą wstawi `onPlaceElement`.
+   * Brak propa = bez ducha.
+   */
+  duchElementu?: {
+    type: ElementType;
+    gangs: number;
+    agdLetter?: string;
+    podglad: (p: Point) => { x: number; y: number; rotation: number };
+  };
   onMoveElement: (id: string, x: number, y: number) => void;
   onMoveElements: (moves: { id: string; x: number; y: number }[]) => void;
   onAddWallPoint: (p: Point) => void;
@@ -453,6 +465,7 @@ export function DesignCanvas({
   onClearSelection,
   onMarqueeSelect,
   onPlaceElement,
+  duchElementu,
   onMoveElement,
   onMoveElements,
   onAddWallPoint,
@@ -857,6 +870,20 @@ export function DesignCanvas({
   /** Tylko po to, żeby zmienić kursor na „łapkę" — sam gest żyje w refie, bo
    *  przerysowywanie sceny przy każdym pikselu ruchu byłoby marnotrawstwem. */
   const [przesuwa, setPrzesuwa] = useState(false);
+
+  /**
+   * Gdzie jest kursor, gdy duch elementu ma się pokazywać — surowy punkt planu; pozycję
+   * ducha liczy się z niego w renderze, żeby po postawieniu elementu (zmiana listy
+   * sąsiadów) duch sam odsunął się od nowego symbolu, bez czekania na ruch myszy.
+   */
+  const [kursorElementu, setKursorElementu] = useState<Point | null>(null);
+  /** Rodzaj ostatniego wskaźnika (mysz, rysik, palec). Przeglądarka po dotknięciu dorabia
+   *  zdarzenia myszy, więc sam `mousemove` nie odróżnia myszy od palca — a duch ma sens
+   *  tylko tam, gdzie kursor porusza się bez dotykania. */
+  const typWskaznikaRef = useRef<string>("mouse");
+  useEffect(() => {
+    if (toolMode !== "elementy") setKursorElementu(null);
+  }, [toolMode]);
 
   const layerRef = useRef<Konva.Layer>(null);
   /** Warstwa tła z siatką — potrzebna, żeby wymusić jej przerysowanie po zmianie
@@ -1419,6 +1446,15 @@ export function DesignCanvas({
     // `null` poza obszarem planu, żeby nie pokazywać współrzędnych spoza rysunku.
     onPointerMove?.(stage ? planPoint(stage) : null);
 
+    // Duch elementu: tylko mysz i rysik, tylko w narzędziu wstawiania, nigdy w trakcie
+    // przesuwania widoku. Poza obszarem planu `planPoint` daje `null` i duch znika.
+    if (toolMode === "elementy" && duchElementu) {
+      // Palec = bez ducha, i to także wtedy, gdy ten sam ekran dopiero co obsługiwał
+      // mysz: stary duch zostałby wiszeć w ostatnim miejscu, w które mysz dotarła.
+      const bezDucha = typWskaznikaRef.current === "touch" || !!przesuwanieRef.current;
+      setKursorElementu(bezDucha || !stage ? null : planPoint(stage));
+    }
+
     // Bez warunku na `drawingWall.length`: zaczep pokazujemy JUŻ PRZED pierwszym
     // kliknięciem, bo pierwszy punkt ściany też się przyciąga (patrz `punktSciany`).
     // Wcześniej ta gałąź wymagała postawionego punktu, więc najczęstszy start —
@@ -1969,8 +2005,14 @@ export function DesignCanvas({
          */
         touchAction: toolMode === "pan" ? "none" : "pan-y",
       }}
-      onPointerDown={zacznijPrzesuwanie}
-      onPointerMove={przesuwajSrodkowym}
+      onPointerDown={(e) => {
+        typWskaznikaRef.current = e.pointerType;
+        zacznijPrzesuwanie(e);
+      }}
+      onPointerMove={(e) => {
+        typWskaznikaRef.current = e.pointerType;
+        przesuwajSrodkowym(e);
+      }}
       onPointerUp={zakonczPrzesuwanieSrodkowym}
       onPointerCancel={zakonczPrzesuwanieSrodkowym}
       // Środkowy przycisk domyślnie wkleja zaznaczenie (Linux) albo otwiera
@@ -1992,6 +2034,7 @@ export function DesignCanvas({
         onWheel={handleWheel}
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
+        onMouseLeave={() => setKursorElementu(null)}
         onMouseUp={handleStageMouseUp}
         // Scena też musi słuchać dotknięcia: kształt, który wypuszcza zdarzenie dalej
         // (np. krawędź pomieszczenia w trybie rysowania), dobąbelkuje tu jako `tap`,
@@ -3421,6 +3464,28 @@ export function DesignCanvas({
             />
           )}
         </Layer>
+        {/* Duch elementu — OSOBNA warstwa, nie główna: ta idzie do eksportu PDF i na
+            pewno nie ma w nim być półprzezroczystego symbolu, który akurat wisiał pod
+            kursorem. `listening={false}`, więc nie przechwytuje żadnego kliknięcia. */}
+        {toolMode === "elementy" && duchElementu && kursorElementu && !przesuwa && (() => {
+          const poz = duchElementu.podglad(kursorElementu);
+          const def = ELEMENT_TYPES[duchElementu.type];
+          return (
+            <Layer listening={false}>
+              <Group
+                id="duch-elementu"
+                x={poz.x}
+                y={poz.y}
+                rotation={poz.rotation}
+                scaleX={skalaSymbolu(duchElementu.type)}
+                scaleY={skalaSymbolu(duchElementu.type)}
+                opacity={0.55}
+              >
+                <ElementGlyphKonva type={duchElementu.type} color={def.color} gangs={duchElementu.gangs} agdLetter={duchElementu.agdLetter} />
+              </Group>
+            </Layer>
+          );
+        })()}
       </Stage>
     </div>
   );
