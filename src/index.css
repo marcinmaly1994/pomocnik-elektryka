@@ -58,7 +58,7 @@ body {
     cursor: not-allowed;
   }
   .pe-input {
-    @apply rounded-[5px] border border-border bg-white px-2.5 py-1.5;
+    @apply rounded border border-border bg-white px-2.5 py-1.5;
   }
   .pe-input:focus {
     outline: 2px solid #2d5a8c33;

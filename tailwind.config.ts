@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import { KOLORY_TAILWIND } from "./src/lib/tokeny";
+import { KOLORY_TAILWIND, PROMIENIE, CIENIE } from "./src/lib/tokeny";
 
 // Paleta przeniesiona z oryginalnego pliku PomocnikElektryka.jsx ("schemat kreślarski + miedź"),
 // zdefiniowana teraz jako właściwy motyw Tailwind zamiast rozproszonych wartości hex w stylach inline.
@@ -35,8 +35,21 @@ export default {
         mono: ["IBM Plex Mono", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       borderRadius: {
-        DEFAULT: "6px",
-        card: "7px",
+        DEFAULT: PROMIENIE.maly,
+        sm: PROMIENIE.maly,
+        md: PROMIENIE.maly,
+        lg: PROMIENIE.karta,
+        card: PROMIENIE.karta,
+        xl: PROMIENIE.duzy,
+      },
+      boxShadow: {
+        xs: CIENIE.xs,
+        sm: CIENIE.xs,
+        DEFAULT: CIENIE.xs,
+        pop: CIENIE.pop,
+        md: CIENIE.pop,
+        lg: CIENIE.pop,
+        xl: CIENIE.pop,
       },
     },
   },

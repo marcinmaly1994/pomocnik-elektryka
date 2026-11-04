@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { KOLORY } from "./tokeny";
+import { KOLORY, PROMIENIE, CIENIE } from "./tokeny";
 import config from "../../tailwind.config";
 import { kontrast } from "../test/kontrast";
 
@@ -46,5 +46,21 @@ describe("tokeny kolorów", () => {
     expect(c.ok).toBe(KOLORY.successGrafika);
     expect(c.warn).toBe(KOLORY.dangerGrafika);
     expect(c["surface-2"]).toBe(KOLORY.surface2);
+  });
+});
+
+describe("tokeny kształtu", () => {
+  const ext = config.theme?.extend as {
+    borderRadius: Record<string, string>;
+    boxShadow: Record<string, string>;
+  };
+
+  it("w motywie są tylko trzy promienie: 6, 10 i 14 px", () => {
+    const wartosci = new Set(Object.entries(ext.borderRadius).filter(([k]) => k !== "full").map(([, v]) => v));
+    expect([...wartosci].sort()).toEqual([PROMIENIE.maly, PROMIENIE.karta, PROMIENIE.duzy].sort());
+  });
+
+  it("w motywie są tylko dwa cienie", () => {
+    expect(new Set(Object.values(ext.boxShadow))).toEqual(new Set([CIENIE.xs, CIENIE.pop]));
   });
 });

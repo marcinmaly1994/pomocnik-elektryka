@@ -50,3 +50,12 @@ export const KOLORY_TAILWIND = {
   ok: KOLORY.successGrafika,
   warn: KOLORY.dangerGrafika,
 } as const;
+
+/** Trzy promienie: pola, przyciski, znaczniki / karty i panele / dialogi i arkusze. */
+export const PROMIENIE = { maly: "6px", karta: "10px", duzy: "14px" } as const;
+
+/** Dwa poziomy cienia: karta leżąca na tle / coś unoszącego się nad treścią. */
+export const CIENIE = {
+  xs: "0 1px 2px rgb(22 32 43 / 0.06)",
+  pop: "0 8px 24px rgb(22 32 43 / 0.12)",
+} as const;
