@@ -37,6 +37,17 @@ describe("uziom pionowy", () => {
     expect(kontrola.wartosci!.R_pojedynczy_ohm).toBeCloseTo(20, 1);
   });
 
+  it("przy jednym uziomie η nie wchodzi do potrzebnej długości (formularz trzyma je ukryte)", () => {
+    // Regresja z audytu: ρ 100, d 16 mm, 30 Ω — wychodziło 4,7 m przez ukryte η = 0,8.
+    const r = obliczUziom(pionowy({ wymagana_ohm: 30, liczba: 1, wspWykorzystania: 0.8 }));
+    expect(r.wartosci!.potrzebnaDlugosc_m!).toBeCloseTo(3.61, 1);
+    const kontrola = obliczUziom(pionowy({ dlugosc_m: r.wartosci!.potrzebnaDlugosc_m! }));
+    expect(kontrola.wartosci!.R_pojedynczy_ohm).toBeCloseTo(30, 1);
+    // otok tak samo: L = 2ρ/R bez η
+    const otok = obliczUziom({ typ: "otokowy", rho_ohm_m: 100, dlugosc_m: 40, wymagana_ohm: 10, liczba: 1, wspWykorzystania: 0.8 });
+    expect(otok.wartosci!.potrzebnaDlugosc_m).toBeCloseTo(20, 6);
+  });
+
   it("brak średnicy i absurdalna geometria kończą się błędem, nie liczbą", () => {
     expect(obliczUziom({ typ: "pionowy", rho_ohm_m: 100, dlugosc_m: 3 }).bledy.map((b) => b.code)).toContain("SREDNICA");
     // średnica podana w milimetrach zamiast metrach — 4L/d < 1, logarytm ujemny

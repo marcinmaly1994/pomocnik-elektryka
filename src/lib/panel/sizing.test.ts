@@ -437,16 +437,15 @@ describe("spadek napiecia: WLZ i wlasna stacja", () => {
     expect(r.spadek_calkowity_pct).toBeCloseTo(1 + r.spadek_napiecia_pct!, 2);
   });
 
-  /** Transformator na terenie obiektu = brak odcinka od sieci publicznej, wiec norma
-   *  daje dwa punkty procentowe wiecej (5% / 7%). */
-  it("wlasna stacja transformatorowa podnosi limit o 2 p.p.", () => {
+  /** Własne źródło nn (stacja trafo na terenie obiektu) — tabl. G.52.1, typ B: 6% / 8%. */
+  it("wlasna stacja transformatorowa daje limity 6% oswietlenie / 8% pozostale", () => {
     expect(sizeCircuit(spec({ typ: "gniazda", moc_W: 1000, dlugosc_m: 10 })).spadek_napiecia_limit_pct).toBe(5);
     expect(
       sizeCircuit(spec({ typ: "gniazda", moc_W: 1000, dlugosc_m: 10, wlasna_stacja: true })).spadek_napiecia_limit_pct
-    ).toBe(7);
+    ).toBe(8);
     expect(
       sizeCircuit(spec({ typ: "oswietlenie", moc_W: 500, dlugosc_m: 10, wlasna_stacja: true })).spadek_napiecia_limit_pct
-    ).toBe(5);
+    ).toBe(6);
   });
 
   it("bez podanego WLZ nic sie nie zmienia", () => {

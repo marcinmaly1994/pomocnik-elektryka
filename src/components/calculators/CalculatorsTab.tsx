@@ -209,11 +209,14 @@ const MODEL_REZ_OPTIONS =(Object.entries(MODEL_REZYSTYWNOSCI_LABELS) as [ModelRe
 }));
 const TYP_WKLADKI_OPTIONS = (Object.entries(TYP_WKLADKI_LABELS) as [TypWkladkiGG, string][]).map(([value, label]) => ({ value, label }));
 
+// Z `limitSpadkuPct`, tej samej funkcji, którą liczy dobór obwodu i Rozdzielnica — te
+// cztery liczby były tu wpisane ręcznie (6/8%), a dobór dawał 5/7%, więc ta sama
+// instalacja miała dwa różne limity w dwóch kalkulatorach (audyt 2026-11-04, B7).
 const LIMIT_SPADKU_OPCJE = [
-  { value: "3", label: "3% — oświetlenie (sieć publiczna)" },
-  { value: "5", label: "5% — pozostałe odbiorniki (sieć publiczna)" },
-  { value: "6", label: "6% — oświetlenie (własna stacja trafo)" },
-  { value: "8", label: "8% — pozostałe (własna stacja trafo)" },
+  { value: String(limitSpadkuPct(true)), label: `${limitSpadkuPct(true)}% — oświetlenie (sieć publiczna)` },
+  { value: String(limitSpadkuPct(false)), label: `${limitSpadkuPct(false)}% — pozostałe odbiorniki (sieć publiczna)` },
+  { value: String(limitSpadkuPct(true, true)), label: `${limitSpadkuPct(true, true)}% — oświetlenie (własna stacja trafo)` },
+  { value: String(limitSpadkuPct(false, true)), label: `${limitSpadkuPct(false, true)}% — pozostałe (własna stacja trafo)` },
 ];
 
 export function CalculatorsTab() {
@@ -320,6 +323,7 @@ export function CalculatorsTab() {
   const ggObwodOdbiorczy = useCalculatorsStore((s) => s.ggObwodOdbiorczy);
   const ggSprawdzZs = useCalculatorsStore((s) => s.ggSprawdzZs);
   const ggZmierzonaZs = useCalculatorsStore((s) => s.ggZmierzonaZs);
+  const ggIz = useCalculatorsStore((s) => s.ggIz);
   const pvIsc = useCalculatorsStore((s) => s.pvIsc);
   const pvVoc = useCalculatorsStore((s) => s.pvVoc);
   const pvVmpp = useCalculatorsStore((s) => s.pvVmpp);
@@ -770,8 +774,9 @@ export function CalculatorsTab() {
         uklad: ggUklad,
         obwodOdbiorczy: ggObwodOdbiorczy,
         zmierzonaZs_ohm: ggSprawdzZs ? ggZmierzonaZs : undefined,
+        Iz_A: ggIz > 0 ? ggIz : undefined,
       }),
-    [ggTyp, ggIb, ggUklad, ggObwodOdbiorczy, ggSprawdzZs, ggZmierzonaZs]
+    [ggTyp, ggIb, ggUklad, ggObwodOdbiorczy, ggSprawdzZs, ggZmierzonaZs, ggIz]
   );
 
   // --- fotowoltaika ---
@@ -1241,7 +1246,7 @@ export function CalculatorsTab() {
                       onChange={(e) => setWlasnaStacja(e.target.checked)}
                       className="h-4 w-4 rounded border-border"
                     />
-                    Zasilanie z własnej stacji transformatorowej — limit spadku większy o 2 p.p.
+                    Zasilanie z własnej stacji transformatorowej — limit spadku 6% oświetlenie / 8% pozostałe (zamiast 3% / 5%)
                   </label>
 
                 </div>
@@ -1808,6 +1813,14 @@ export function CalculatorsTab() {
                   hint="Wynik pomiaru pętli zwarcia L-PE miernikiem instalacyjnym w danym punkcie obwodu — albo wartość obliczona w kalkulatorze „Impedancja pętli zwarcia”."
                 />
               )}
+              <Field
+                label="Obciążalność przewodu Iz"
+                value={ggIz}
+                onChange={(v) => patch({ ggIz: Number(v) })}
+                unit="A"
+                step="0.5"
+                hint="Obciążalność długotrwała przewodu za wkładką, już po współczynnikach temperatury i grupowania — np. z kalkulatora „Dobór obwodu”. Do warunku przeciążeniowego I₂ ≤ 1,45·Iz. 0 = nie sprawdzaj."
+              />
 
               {ggWkladka.wartosci && (
                 <div className="mt-2 p-3 pe-result">
@@ -1819,6 +1832,7 @@ export function CalculatorsTab() {
                     <span className="pe-chip pe-tag-blue">czas {CZAS_GG_LABELS[ggWkladka.wartosci.czas_s === 0.2 ? "0.2" : ggWkladka.wartosci.czas_s === 0.4 ? "0.4" : "5"]}</span>
                     <span className="pe-chip pe-tag-copper">Imax (Ia) {formatLiczba(ggWkladka.wartosci.Imax_A, 1)} A</span>
                     <span className="pe-chip pe-tag-green">Zs max {formatLiczba(ggWkladka.wartosci.ZsMax_ohm, 3)} Ω</span>
+                    <span className="pe-chip pe-tag-blue">I₂ {formatLiczba(ggWkladka.wartosci.I2_A, 1)} A — wymaga Iz ≥ {formatLiczba(ggWkladka.wartosci.I2_A / 1.45, 1)} A</span>
                   </div>
                 </div>
               )}

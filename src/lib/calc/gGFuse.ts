@@ -14,7 +14,8 @@
  * pośrednią interpolacją.
  */
 
-import { maksCzasWylaczenia_s, type UkladSieci } from "@/lib/norms/conductors";
+import { C_NAPIECIOWE, maksCzasWylaczenia_s, type UkladSieci } from "@/lib/norms/conductors";
+import { zsMaxDlaIa } from "@/lib/panel/sizing";
 import {
   CZAS_GG_LABELS,
   dobierzWkladkeGG,
@@ -23,7 +24,23 @@ import {
   type CzasGG,
   type TypWkladkiGG,
 } from "@/lib/norms/gGFuses";
-import { bladWyniku, formatLiczba, ocenPodLimitem, type CalcError, type CalcResult, type Krok } from "./result";
+import { bladWyniku, formatLiczba, ocenPodLimitem, type CalcError, type CalcResult, type Krok, type Ocena } from "./result";
+
+const KOLEJNOSC_WERDYKTU: Record<string, number> = { niespelniony: 3, graniczny: 2, spelniony: 1 };
+
+/** Jeden werdykt z kilku warunków — decyduje najgorszy, a jego komunikaty idą razem. */
+function najgorszaOcena(oceny: Ocena[]): Ocena | null {
+  if (oceny.length === 0) return null;
+  const waga = (o: Ocena) => KOLEJNOSC_WERDYKTU[o.verdict] ?? 0;
+  const max = Math.max(...oceny.map(waga));
+  const najgorsze = oceny.filter((o) => waga(o) === max);
+  const marginesy = oceny.map((o) => o.margines_pct).filter((m): m is number => typeof m === "number");
+  return {
+    verdict: najgorsze[0].verdict,
+    margines_pct: marginesy.length ? Math.min(...marginesy) : null,
+    komunikat: najgorsze.map((o) => o.komunikat).join(" "),
+  };
+}
 
 export interface WkladkaGGWejscie {
   typ: TypWkladkiGG;
@@ -33,6 +50,12 @@ export interface WkladkaGGWejscie {
   obwodOdbiorczy: boolean;
   /** Zmierzona/obliczona impedancja pętli zwarcia Zs [Ω] — opcjonalnie, do oceny warunku. */
   zmierzonaZs_ohm?: number;
+  /**
+   * Obciążalność długotrwała przewodu Iz [A] po współczynnikach — opcjonalnie, do
+   * warunku przeciążeniowego I₂ ≤ 1,45·Iz (PN-HD 60364-4-43, 433.1). Bez niej warunek
+   * nie jest sprawdzany i wynik mówi o tym wprost.
+   */
+  Iz_A?: number;
 }
 
 export interface WkladkaGGWynik {
@@ -51,6 +74,8 @@ export function dobierzWkladkeGGOchrona(w: WkladkaGGWejscie): CalcResult<Wkladka
   if (!(w.Ib_A > 0)) bledy.push({ code: "IB", pole: "Ib_A", message: "Prąd obliczeniowy musi być większy od zera." });
   if (w.zmierzonaZs_ohm !== undefined && !(w.zmierzonaZs_ohm > 0))
     bledy.push({ code: "ZS", pole: "zmierzonaZs_ohm", message: "Impedancja pętli zwarcia musi być większa od zera." });
+  if (w.Iz_A !== undefined && !(w.Iz_A > 0))
+    bledy.push({ code: "IZ", pole: "Iz_A", message: "Obciążalność przewodu musi być większa od zera." });
   if (bledy.length > 0) return bladWyniku(bledy);
 
   const U0 = 230;
@@ -84,6 +109,11 @@ export function dobierzWkladkeGGOchrona(w: WkladkaGGWejscie): CalcResult<Wkladka
   }
 
   const punkt = punktCzasowy(wiersz, czas);
+  // Zs max z TYM SAMYM współczynnikiem Cmin = 0,95 co dla wyłączników (`zsMaxDlaIa`),
+  // a nie gotowe Zkdop z tablicy (= 230/Imax). Wcześniej wkładka dopuszczała pętlę
+  // o 5% dłuższą niż wyłącznik przy tym samym prądzie zadziałania — dwa różne
+  // założenia o napięciu sieci w jednej aplikacji (audyt 2026-11-04, B8).
+  const ZsMax = zsMaxDlaIa(punkt.Imax_A);
   const kroki: Krok[] = [
     {
       opis: "Dobór najmniejszej wkładki pokrywającej prąd obliczeniowy",
@@ -99,24 +129,46 @@ export function dobierzWkladkeGGOchrona(w: WkladkaGGWejscie): CalcResult<Wkladka
     },
     {
       opis: "Maksymalna dopuszczalna impedancja pętli zwarcia",
-      wzor: "Zs max = U₀ / Imax",
-      podstawienie: `${formatLiczba(U0, 0)} / ${formatLiczba(punkt.Imax_A, 1)}`,
-      wynik: `${formatLiczba(punkt.Zkdop_ohm, 3)} Ω`,
+      wzor: "Zs max = Cmin · U₀ / Imax",
+      podstawienie: `${formatLiczba(C_NAPIECIOWE.min, 2)} · ${formatLiczba(U0, 0)} / ${formatLiczba(punkt.Imax_A, 1)}`,
+      wynik: `${formatLiczba(ZsMax, 3)} Ω`,
     },
   ];
 
-  const ocena =
-    w.zmierzonaZs_ohm !== undefined
-      ? ocenPodLimitem(w.zmierzonaZs_ohm, punkt.Zkdop_ohm, { co: "Impedancja pętli zwarcia Zs", jednostka: "Ω" })
-      : null;
+  const oceny: Ocena[] = [];
   if (w.zmierzonaZs_ohm !== undefined) {
+    const o = ocenPodLimitem(w.zmierzonaZs_ohm, ZsMax, { co: "Impedancja pętli zwarcia Zs", jednostka: "Ω" });
+    oceny.push(o);
     kroki.push({
       opis: "Ocena warunku ochronnego",
       wzor: "Zs (zmierzona) ≤ Zs max",
-      podstawienie: `${formatLiczba(w.zmierzonaZs_ohm, 3)} ≤ ${formatLiczba(punkt.Zkdop_ohm, 3)}`,
-      wynik: ocena!.verdict,
+      podstawienie: `${formatLiczba(w.zmierzonaZs_ohm, 3)} ≤ ${formatLiczba(ZsMax, 3)}`,
+      wynik: o.verdict,
     });
   }
+
+  // Warunek przeciążeniowy. Dla wyłączników I₂ = 1,45·In, więc wystarcza In ≤ Iz; wkładka
+  // gG ma I₂ = 1,6·In (od 16 A), czyli In ≤ ~0,9·Iz. Dobór „In ≥ Ib" sam tego nie pilnuje —
+  // wkładka 25 A na przewodzie o Iz = 24 A przechodziła bez słowa (audyt, B9).
+  if (w.Iz_A !== undefined) {
+    const granica = 1.45 * w.Iz_A;
+    const o = ocenPodLimitem(wiersz.I2_A, granica, { co: "Umowny prąd zadziałania I₂", jednostka: "A" });
+    oceny.push(
+      o.verdict === "niespelniony"
+        ? {
+            ...o,
+            komunikat: `${o.komunikat} Wkładka ${wiersz.In_A} A nie chroni przewodu o Iz ${formatLiczba(w.Iz_A, 1)} A przed przeciążeniem — większa wkładka nie pomoże, potrzebny jest przewód o większej obciążalności.`,
+          }
+        : o
+    );
+    kroki.push({
+      opis: "Warunek przeciążeniowy",
+      wzor: "I₂ ≤ 1,45 · Iz",
+      podstawienie: `${formatLiczba(wiersz.I2_A, 1)} ≤ 1,45 · ${formatLiczba(w.Iz_A, 1)} = ${formatLiczba(granica, 1)}`,
+      wynik: o.verdict,
+    });
+  }
+  const ocena = najgorszaOcena(oceny);
 
   const zalozenia = [
     `Wartości Imax i Zs max pochodzą wprost z tablicy czasowo-prądowej wkładki (nie ze wzoru) — dobór tabelaryczny, zgodnie z zakazem estymacji/interpolacji wartości normatywnych.`,
@@ -124,13 +176,17 @@ export function dobierzWkladkeGGOchrona(w: WkladkaGGWejscie): CalcResult<Wkladka
       U0,
       0
     )} V.`,
-    "Tablica źródłowa podaje Zkdop już przeliczone dla U₀ = 230 V (sieć TN/TT 230/400 V) — kalkulator nie przelicza na inne napięcie względem ziemi.",
+    `Zs max liczone z Cmin = ${formatLiczba(C_NAPIECIOWE.min, 2)} (PN-EN 60909-0) — tak samo jak dla wyłączników nadprądowych, więc oba rodzaje zabezpieczeń ocenia ta sama miara. Gotowe Zkdop z tablicy źródłowej (= 230 V / Imax) jest o 5% łagodniejsze.`,
   ];
   if (w.zmierzonaZs_ohm === undefined)
     zalozenia.push("Nie podano zmierzonej/obliczonej impedancji pętli zwarcia — warunek ochronny NIE został oceniony, podano wyłącznie dane dobranej wkładki.");
+  if (w.Iz_A === undefined)
+    zalozenia.push(
+      `Nie podano obciążalności przewodu Iz — warunek przeciążeniowy I₂ ≤ 1,45·Iz NIE został sprawdzony. Dla tej wkładki wymaga on Iz ≥ ${formatLiczba(wiersz.I2_A / 1.45, 1)} A.`
+    );
 
   return {
-    wartosci: { In_A: wiersz.In_A, I2_A: wiersz.I2_A, czas_s: czasWymagany, Imax_A: punkt.Imax_A, ZsMax_ohm: punkt.Zkdop_ohm },
+    wartosci: { In_A: wiersz.In_A, I2_A: wiersz.I2_A, czas_s: czasWymagany, Imax_A: punkt.Imax_A, ZsMax_ohm: ZsMax },
     kroki,
     ocena,
     zalozenia,

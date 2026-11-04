@@ -82,7 +82,7 @@ export interface CircuitSpec {
    * jako całość limit przekraczają — i to tym bardziej, im dłuższa jest WLZ.
    */
   spadek_wlz_pct?: number;
-  /** Instalacja zasilana z własnej stacji transformatorowej — budżet większy o 2 p.p. */
+  /** Instalacja zasilana z własnej stacji transformatorowej — budżet 6% / 8% zamiast 3% / 5% (tabl. G.52.1). */
   wlasna_stacja?: boolean;
 }
 

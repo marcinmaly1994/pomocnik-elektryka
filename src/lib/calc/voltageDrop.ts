@@ -215,11 +215,15 @@ export function obliczSpadekNapiecia(w: SpadekWejscie): CalcResult<SpadekWynik> 
       `Metoda pełna: uwzględniona reaktancja jednostkowa X' = ${formatLiczba(xJedn_ohm_km, 3)} Ω/km${w.xJednostkowa_ohm_km !== undefined ? " (wartość podana ręcznie)" : ""}.`
     );
   } else {
-    spadek_V = (k * moment) / (gamma * w.przekroj_mm2 * n);
+    // Z cosφ, tak jak w metodzie pełnej z X' = 0 i w doborze minimalnego przekroju niżej.
+    // Bez niego metoda „uproszczona" dawała WIĘKSZY spadek niż pełna: 5,47% „niespełniony"
+    // obok 4,40% „spełniony" dla tych samych danych, a pole cosφ nie zmieniało w niej
+    // niczego. Pomija się reaktancję, a nie przesunięcie fazowe prądu (audyt, B6).
+    spadek_V = (k * moment * w.cosfi) / (gamma * w.przekroj_mm2 * n);
     kroki.push({
       opis: "Spadek napięcia — metoda uproszczona (sama rezystancja)",
-      wzor: w.uklad === "3f" ? "ΔU = √3 · M / (γ · S)" : "ΔU = 2 · M / (γ · S)",
-      podstawienie: `${w.uklad === "3f" ? "√3" : "2"} · ${formatLiczba(moment, 1)} / (${formatLiczba(gamma, 1)} · ${formatLiczba(w.przekroj_mm2, 1)}${n > 1 ? ` · ${n}` : ""})`,
+      wzor: w.uklad === "3f" ? "ΔU = √3 · M · cosφ / (γ · S)" : "ΔU = 2 · M · cosφ / (γ · S)",
+      podstawienie: `${w.uklad === "3f" ? "√3" : "2"} · ${formatLiczba(moment, 1)} · ${formatLiczba(w.cosfi, 2)} / (${formatLiczba(gamma, 1)} · ${formatLiczba(w.przekroj_mm2, 1)}${n > 1 ? ` · ${n}` : ""})`,
       wynik: `${formatLiczba(spadek_V, 2)} V`,
     });
     zalozenia.push("Metoda uproszczona: pominięta reaktancja — dopuszczalna dla małych przekrojów albo cosφ bliskiego 1.");

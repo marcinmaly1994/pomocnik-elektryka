@@ -12,7 +12,8 @@ describe("dobierzWkladkeGGOchrona", () => {
     expect(r.wartosci!.In_A).toBe(16);
     expect(r.wartosci!.czas_s).toBe(0.4);
     expect(r.wartosci!.Imax_A).toBe(120.0);
-    expect(r.wartosci!.ZsMax_ohm).toBeCloseTo(1.92, 2);
+    // Cmin·U₀/Imax = 0,95·230/120 — ta sama miara co dla wyłączników (audyt, B8)
+    expect(r.wartosci!.ZsMax_ohm).toBeCloseTo(1.821, 3);
     expect(r.ocena).toBeNull();
   });
 
@@ -66,5 +67,35 @@ describe("dobierzWkladkeGGOchrona", () => {
     expect(r.kroki.length).toBeGreaterThan(0);
     expect(r.zrodla.some((z) => z.norma.includes("Poradnik"))).toBe(true);
     expect(r.zrodla.some((z) => z.norma.includes("60364-4-41"))).toBe(true);
+  });
+});
+
+describe("dobierzWkladkeGGOchrona — warunek przeciążeniowy I₂ ≤ 1,45·Iz (audyt 2026-11-04, B9)", () => {
+  it("bez Iz warunek nie jest sprawdzany i wynik to mówi, podając wymagane Iz", () => {
+    const r = dobierzWkladkeGGOchrona(wejscie());
+    expect(r.zalozenia.join(" ")).toMatch(/I₂ ≤ 1,45·Iz NIE został sprawdzony/);
+    expect(r.zalozenia.join(" ")).toMatch(/Iz ≥ 17,7 A/); // 25,6 / 1,45
+  });
+
+  it("wkładka 25 A na przewodzie Iz 24 A nie przechodzi: 40 A > 1,45·24 = 34,8 A", () => {
+    const r = dobierzWkladkeGGOchrona(wejscie({ Ib_A: 25, Iz_A: 24 }));
+    expect(r.wartosci!.In_A).toBe(25);
+    expect(r.ocena!.verdict).toBe("niespelniony");
+    expect(r.ocena!.komunikat).toMatch(/przewód o większej obciążalności/);
+  });
+
+  it("wkładka 16 A na 2,5 mm² (Iz 23 A) przechodzi: 25,6 A ≤ 33,35 A", () => {
+    const r = dobierzWkladkeGGOchrona(wejscie({ Iz_A: 23 }));
+    expect(r.ocena!.verdict).toBe("spelniony");
+  });
+
+  it("dwa warunki naraz — decyduje gorszy", () => {
+    const r = dobierzWkladkeGGOchrona(wejscie({ Iz_A: 23, zmierzonaZs_ohm: 3.0 }));
+    expect(r.ocena!.verdict).toBe("niespelniony");
+    expect(r.ocena!.komunikat).toMatch(/Impedancja pętli/);
+  });
+
+  it("Iz ≤ 0 to błąd danych", () => {
+    expect(dobierzWkladkeGGOchrona(wejscie({ Iz_A: 0 })).bledy.map((b) => b.code)).toContain("IZ");
   });
 });

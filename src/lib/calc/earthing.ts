@@ -152,7 +152,11 @@ export function obliczUziom(w: UziomWejscie): CalcResult<UziomWynik> {
   if (bledy.length > 0) return bladWyniku(bledy);
 
   const n = w.liczba ?? 1;
-  const eta = w.wspWykorzystania ?? 1;
+  // η opisuje wzajemne przesłanianie KILKU uziomów — przy jednym nie ma czego przesłaniać.
+  // Formularz trzyma η także wtedy, gdy pole jest ukryte (n = 1), a rezystancja wypadkowa
+  // go wtedy nie brała, za to szukanie długości już tak: dla 30 Ω wychodziło 4,7 m
+  // zamiast ~3,6 m z tego samego wzoru (audyt 2026-11-04, B5).
+  const eta = n > 1 ? (w.wspWykorzystania ?? 1) : 1;
   const { R: R1, krok } = rezystancjaPojedyncza(w);
   const kroki: Krok[] = [krok];
 
