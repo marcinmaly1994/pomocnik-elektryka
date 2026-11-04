@@ -154,12 +154,19 @@ export function pdfZawin(str: string, maxWidth: number, size: number, bold: bool
     biezaca = slowo;
     while (pdfTextWidth(biezaca, size, bold) > maxWidth) {
       let kawalek = "";
+      let ostatniePrzerwanie = 0;
       for (const ch of biezaca) {
         if (pdfTextWidth(kawalek + ch, size, bold) > maxWidth) break;
         kawalek += ch;
+        // Po "/" i "-" wolno przerwać słowo bez szkody dla czytelności: „L1-PE/PEN" idzie
+        // jako „L1-PE/" i „PEN", a nie „L1-PE/P" i „EN".
+        if (ch === "/" || ch === "-") ostatniePrzerwanie = kawalek.length;
       }
       // Pojedynczy znak szerszy niż linia (absurdalnie wąska kolumna): nie zapętlaj się.
       if (!kawalek) break;
+      // Przerwanie w naturalnym miejscu tylko, gdy słowo i tak się nie mieści w całości
+      // (pętla wyżej) i gdy zostaje po nim coś do przeniesienia.
+      if (ostatniePrzerwanie > 0 && ostatniePrzerwanie < biezaca.length) kawalek = kawalek.slice(0, ostatniePrzerwanie);
       linie.push(kawalek);
       biezaca = biezaca.slice(kawalek.length);
     }
@@ -187,6 +194,34 @@ export function pdfDopasujRozmiar(
     if (pdfTextWidth(str, s, bold) <= maxWidth) return { tekst: str, size: s };
   }
   return { tekst: pdfFitText(str, maxWidth, minSize, bold), size: minSize };
+}
+
+/**
+ * Zawija tekst do co najwyżej `maxLinii` linii, próbując kolejnych rozmiarów czcionki
+ * (od największego), i zwraca pierwszy układ, który się mieści. Tekst, który nie mieści
+ * się nawet w najmniejszym, jest skracany wielokropkiem w ostatniej linii — i tylko wtedy
+ * pole `uciety` jest prawdą.
+ *
+ * Wspólne dla pasków opisowych (opis aparatu), nagłówków kolumn i komórek protokołów:
+ * wszędzie tam przycięty wielokropkiem napis ginął razem z treścią, którą miał nieść.
+ */
+export function pdfZawinDoLinii(
+  str: string,
+  maxWidth: number,
+  rozmiary: number[],
+  maxLinii: number,
+  bold = false
+): { linie: string[]; size: number; uciety: boolean } {
+  for (const size of rozmiary) {
+    const linie = pdfZawin(str, maxWidth, size, bold);
+    if (linie.length <= maxLinii) return { linie, size, uciety: false };
+  }
+  const size = rozmiary[rozmiary.length - 1];
+  const wszystkie = pdfZawin(str, maxWidth, size, bold);
+  // Ostatnia linia dostaje CAŁĄ resztę tekstu i jest przycinana wielokropkiem: czytelnik
+  // ma wiedzieć, że napis był dłuższy, a nie że kończy się w tym miejscu.
+  const reszta = wszystkie.slice(maxLinii - 1).join(" ");
+  return { linie: [...wszystkie.slice(0, maxLinii - 1), pdfFitText(reszta, maxWidth, size, bold)], size, uciety: true };
 }
 
 export function pdfEscape(str: string): string {

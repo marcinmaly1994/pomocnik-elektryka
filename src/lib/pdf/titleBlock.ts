@@ -1,5 +1,5 @@
 import type { DocumentHeader } from "@/types";
-import { pdfDopasujRozmiar, pdfFitText, type PdfDoc } from "./engine";
+import { pdfDopasujRozmiar, pdfFitText, pdfZawinDoLinii, type PdfDoc } from "./engine";
 
 /**
  * Tabliczka rysunkowa (metryka) rysowana na dole każdej strony — standard dokumentacji
@@ -62,8 +62,18 @@ export function drawTitleBlock(doc: PdfDoc, header: DocumentHeader, docTitle: st
   doc.text(adres.tekst, M + 6, R2_WARTOSC, adres.size, false, 0.4);
 
   doc.text("RYSUNEK / DOKUMENT", M + c1 + 6, R1_ETYKIETA, 6.5, true, 0.5);
-  const tytul = pdfDopasujRozmiar(docTitle || "—", c2 - 12, 8.5, 7, true);
-  doc.text(tytul.tekst, M + c1 + 6, R1_WARTOSC, tytul.size, true);
+  /**
+   * Tytuł dokumentu: jedna linia, a gdy się nie mieści nawet po zmniejszeniu — DWIE.
+   * Rubryka ma w drugim rzędzie wolne miejsce nad wierszem wykonawcy, a tytuły
+   * protokołów („Badanie wyłączników różnicowoprądowych", „Pomiar impedancji pętli
+   * zwarcia") są dłuższe niż rubryka na kartce pionowej, więc wielokropek obcinał
+   * nazwę dokumentu w jego własnej tabliczce.
+   */
+  const tytulJedna = pdfZawinDoLinii(docTitle || "—", c2 - 12, [8.5, 8, 7.5], 1, true);
+  const tytul = tytulJedna.uciety ? pdfZawinDoLinii(docTitle, c2 - 12, [7.5, 7], 2, true) : tytulJedna;
+  tytul.linie.forEach((linia, n) => {
+    doc.text(linia, M + c1 + 6, R1_WARTOSC - n * (tytul.size + 2), tytul.size, true);
+  });
   const wykonawca = pdfDopasujRozmiar(header.wykonawca ? `Wykonał: ${header.wykonawca}` : "", c2 - 12, 7.5, 6, false);
   doc.text(wykonawca.tekst, M + c1 + 6, R2_WARTOSC, wykonawca.size, false, 0.4);
 

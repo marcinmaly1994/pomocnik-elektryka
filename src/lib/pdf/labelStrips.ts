@@ -1,5 +1,5 @@
 import type { DocumentHeader, PanelDevice } from "@/types";
-import { createPdfDoc, pdfFitText, pdfTextWidth, pdfZawin, type PdfDoc } from "./engine";
+import { createPdfDoc, pdfFitText, pdfTextWidth, pdfZawinDoLinii, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 
 /**
@@ -88,17 +88,8 @@ function naOdcinki(rzad: PanelDevice[], maxSzer: number): PanelDevice[][] {
  * niż brakujące słowa; 5,5 pt to dolna granica czytelności wydruku 1:1.
  */
 export function opisNaPasku(opis: string, szerokosc: number): { linie: string[]; size: number } {
-  const MAKS_LINII = 3;
-  for (const size of [6.5, 6, 5.5]) {
-    const linie = pdfZawin(opis, szerokosc, size, false);
-    if (linie.length <= MAKS_LINII) return { linie, size };
-  }
-  const size = 5.5;
-  const wszystkie = pdfZawin(opis, szerokosc, size, false);
-  // Trzecia linia dostaje CAŁĄ resztę tekstu i jest przycinana wielokropkiem: czytelnik
-  // ma wiedzieć, że opis był dłuższy, a nie że kończy się w tym miejscu.
-  const reszta = wszystkie.slice(MAKS_LINII - 1).join(" ");
-  return { linie: [...wszystkie.slice(0, MAKS_LINII - 1), pdfFitText(reszta, szerokosc, size, false)], size };
+  const { linie, size } = pdfZawinDoLinii(opis, szerokosc, [6.5, 6, 5.5], 3);
+  return { linie, size };
 }
 
 /**

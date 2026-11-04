@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfZawin, pdfDopasujRozmiar, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, PDF_LAST_CHAR, PDF_POLISH, PDF_W_BOLD, PDF_W_REG, type CzesciDokumentu, type PdfImage } from "./engine";
+import { pdfCharCode, pdfCharWidth, pdfTextWidth, pdfFitText, pdfZawin, pdfZawinDoLinii, pdfDopasujRozmiar, pdfEscape, createPdfDoc, assemblePdfBytes, polaczDokumenty, PDF_LAST_CHAR, PDF_POLISH, PDF_W_BOLD, PDF_W_REG, type CzesciDokumentu, type PdfImage } from "./engine";
 import { parseTtf } from "./ttf";
 import { stubPdfFontFetch } from "./testFontMock";
 
@@ -111,6 +111,57 @@ describe("pdfZawin", () => {
   it("pusty tekst daje pustą listę, a absurdalnie wąska kolumna nie zapętla się", () => {
     expect(pdfZawin("   ", 100, 9, false)).toEqual([]);
     expect(() => pdfZawin("abc def", 0.1, 9, false)).not.toThrow();
+  });
+});
+
+describe("pdfZawin — łamanie długich słów", () => {
+  it("słowo szersze niż linia łamie się po ukośniku albo myślniku, nie w środku", () => {
+    // „L1-PE/PEN" w wąskiej kolumnie nagłówka: „L1-PE/" i „PEN", a nie „L1-PE/P" i „EN".
+    const szer = pdfTextWidth("L1-PE/P", 8, true) - 1;
+    expect(pdfZawin("L1-PE/PEN", szer, 8, true)).toEqual(["L1-PE/", "PEN"]);
+  });
+
+  it("bez ukośnika i myślnika tnie twardo, jak dotąd", () => {
+    const linie = pdfZawin("Wypustzasilajacyagd", 40, 9, false);
+    expect(linie.length).toBeGreaterThan(1);
+    expect(linie.join("")).toBe("Wypustzasilajacyagd");
+  });
+});
+
+describe("pdfZawinDoLinii", () => {
+  const nazwa = "Obwód gniazd — pomieszczenia gospodarcze 1";
+
+  it("tekst, który mieści się w limicie linii przy największym rozmiarze, nie maleje", () => {
+    const w = pdfZawinDoLinii("Gniazda garaż", 300, [8.5, 8, 7.5], 2);
+    expect(w).toMatchObject({ size: 8.5, uciety: false });
+    expect(w.linie).toEqual(["Gniazda garaż"]);
+  });
+
+  it("zbyt wiele linii przy dużej czcionce: bierze mniejszą, zamiast ucinać", () => {
+    const szer = 60;
+    const duza = pdfZawin(nazwa, szer, 8.5, false);
+    expect(duza.length).toBeGreaterThan(3);
+    const w = pdfZawinDoLinii(nazwa, szer, [8.5, 7, 6, 5.5], 3);
+    expect(w.size).toBeLessThan(8.5);
+    expect(w.linie.length).toBeLessThanOrEqual(3);
+    // Nic nie zginęło.
+    expect(w.linie.join(" ")).toBe(nazwa);
+    expect(w.uciety).toBe(false);
+  });
+
+  it("wybiera NAJWIĘKSZY rozmiar, w którym tekst się mieści", () => {
+    const szer = 60;
+    const w = pdfZawinDoLinii(nazwa, szer, [8.5, 8, 7.5, 7, 6.5, 6, 5.5], 3);
+    const wiekszy = [8.5, 8, 7.5, 7, 6.5, 6, 5.5].filter((r) => r > w.size);
+    for (const r of wiekszy) expect(pdfZawin(nazwa, szer, r, false).length, `rozmiar ${r}`).toBeGreaterThan(3);
+  });
+
+  it("dopiero gdy nawet najmniejszy rozmiar nie wystarcza, ostatnia linia kończy się wielokropkiem", () => {
+    const absurd = "Obwód gniazd w pomieszczeniach gospodarczych, technicznych i magazynowych w budynku głównym";
+    const w = pdfZawinDoLinii(absurd, 50, [6.5, 5.5], 2);
+    expect(w.uciety).toBe(true);
+    expect(w.linie).toHaveLength(2);
+    expect(w.linie[1].endsWith("..")).toBe(true);
   });
 });
 

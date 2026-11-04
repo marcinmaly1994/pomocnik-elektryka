@@ -127,7 +127,9 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     intro: "Sprawdzenie skuteczności ochrony przeciwporażeniowej przez samoczynne wyłączenie zasilania (układ TN).",
     columns: [
       { key: "obwod", label: "Obwód", w: 106, type: "text" },
-      { key: "uklad", label: "Obwód", w: 50, type: "select", options: ["1-faz", "3-faz"], default: "1-faz" },
+      // „Układ", nie „Obwód": druga kolumna o tej samej nazwie robiła z nagłówka tabeli (i z nazw
+      // pól w formularzu) dwa nierozróżnialne „Obwód".
+      { key: "uklad", label: "Układ", w: 50, type: "select", options: ["1-faz", "3-faz"], default: "1-faz" },
       { key: "curve", label: "Char.", w: 38, type: "select", options: ["B", "C", "D"], default: "B" },
       { key: "in", label: "In [A]", w: 42, type: "number", default: 16 },
       // W obwodzie 3-fazowym mierzy się pętlę L-PE dla KAŻDEJ fazy — o ocenie
