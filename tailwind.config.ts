@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { KOLORY_TAILWIND } from "./src/lib/tokeny";
 
 // Paleta przeniesiona z oryginalnego pliku PomocnikElektryka.jsx ("schemat kreślarski + miedź"),
 // zdefiniowana teraz jako właściwy motyw Tailwind zamiast rozproszonych wartości hex w stylach inline.
@@ -15,19 +16,14 @@ export default {
         // użyć. Kolejność jasności zostaje: 400 jaśniejszy od 500, a 600 bez zmian.
         // Najsłabsze tło w aplikacji (#ECECED) daje po zmianie 4,7:1 i 5,7:1.
         slate: { 400: "#5B6A80", 500: "#4F5D73" },
-        ink: "#16202B",
-        blueprint: "#2D5A8C",
-        // Miedź marki, przyciemniona z #C1793F: biały tekst na niej miał 3,5:1, a ona sama
+        // Miedź marki (wartości są teraz w src/lib/tokeny.ts),
+        // przyciemniona z #C1793F: biały tekst na niej miał 3,5:1, a ona sama
         // na tle `paper` 3,0:1 — oba poniżej progu AA (4,5:1). Teraz 5,4:1 na bieli,
         // 4,8:1 na paper i 4,6:1 na najciemniejszym tle w aplikacji (#ECECED). Dotyczy
         // wyłącznie interfejsu (tekst, przyciski, ramki z tej klasy). Kolory DANYCH rysunku
         // — oprawy oświetlenia, obwody, ostrzeżenia na planie — zostają #C1793F: to
         // grafika, dla której próg to 3:1, a zmiana przestawiałaby też PDF-y i legendy.
-        copper: "#9A5A27",
-        paper: "#EEF1F4",
-        ok: "#3B8C63",
-        warn: "#C6433A",
-        border: "#DFE4E9",
+        ...KOLORY_TAILWIND,
       },
       fontFamily: {
         // „Inter Tight Variable" PRZED „Inter Tight": pierwsza to nazwa, pod którą
