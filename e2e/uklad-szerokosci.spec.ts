@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { wczytajPrzyklad } from "./_flow";
 
 /**
@@ -12,19 +12,27 @@ import { wczytajPrzyklad } from "./_flow";
 const SZEROKOSCI = [360, 390, 430, 768, 1024, 1366, 1920] as const;
 const ZRZUTY = process.env.ZRZUTY;
 
-type Widok = { nazwa: string; wejdz: (page: Page) => Promise<void> };
+/**
+ * `kotwica` to treść unikalna dla widoku i widoczna na KAŻDEJ szerokości. Bez niej
+ * test mógłby zmierzyć pustą stronę (jeszcze nie wczytany leniwy fragment) albo
+ * przekierowanie na ekran startowy — i przejść, bo pusta strona nie przewija się
+ * w poziomie. Mierzymy więc dopiero po tym, jak widok faktycznie się wyrysuje.
+ */
+type Widok = { nazwa: string; wejdz: (page: Page) => Promise<void>; kotwica: (page: Page) => Locator };
 
 const kafel = (page: Page, tytul: string) => page.getByRole("button", { name: tytul, exact: true }).first();
+const naglowek = (page: Page, tytul: string) => page.getByRole("heading", { name: tytul, exact: true }).first();
 
 const WIDOKI: Widok[] = [
-  { nazwa: "start", wejdz: async () => {} },
-  { nazwa: "instalacja", wejdz: (p) => wczytajPrzyklad(p, "mieszkanie") },
-  { nazwa: "rozdzielnica", wejdz: async (p) => { await wczytajPrzyklad(p, "mieszkanie"); await kafel(p, "Rozdzielnica").click(); } },
-  { nazwa: "schemat", wejdz: async (p) => { await wczytajPrzyklad(p, "mieszkanie"); await kafel(p, "Schemat").click(); } },
-  { nazwa: "kosztorys", wejdz: async (p) => { await wczytajPrzyklad(p, "mieszkanie"); await kafel(p, "Kosztorys").click(); } },
-  { nazwa: "kalkulatory", wejdz: (p) => p.goto("/kalkulatory").then(() => undefined) },
-  { nazwa: "dobor-obwodu", wejdz: (p) => p.goto("/kalkulatory/przekroj").then(() => undefined) },
-  { nazwa: "protokoly", wejdz: (p) => p.goto("/protokoly").then(() => undefined) },
+  { nazwa: "start", wejdz: async () => {}, kotwica: (p) => naglowek(p, "Zaprojektuj instalację elektryczną w swoim domu") },
+  { nazwa: "instalacja", wejdz: (p) => wczytajPrzyklad(p, "mieszkanie"), kotwica: (p) => p.getByTestId("plan-okno") },
+  { nazwa: "rozdzielnica", wejdz: async (p) => { await wczytajPrzyklad(p, "mieszkanie"); await kafel(p, "Rozdzielnica").click(); }, kotwica: (p) => naglowek(p, "Rozdzielnica elektryczna") },
+  { nazwa: "schemat", wejdz: async (p) => { await wczytajPrzyklad(p, "mieszkanie"); await kafel(p, "Schemat").click(); }, kotwica: (p) => naglowek(p, "Schemat instalacji (jednokreskowy)") },
+  { nazwa: "kosztorys", wejdz: async (p) => { await wczytajPrzyklad(p, "mieszkanie"); await kafel(p, "Kosztorys").click(); }, kotwica: (p) => naglowek(p, "Kosztorys instalacji elektrycznej") },
+  { nazwa: "kalkulatory", wejdz: (p) => p.goto("/kalkulatory").then(() => undefined), kotwica: (p) => naglowek(p, "Kalkulatory elektryczne") },
+  // Stary adres „/kalkulatory/przekroj" przekierowuje na „/kalkulatory/obwod?tryb=przekroj".
+  { nazwa: "dobor-obwodu", wejdz: (p) => p.goto("/kalkulatory/przekroj").then(() => undefined), kotwica: (p) => naglowek(p, "Dobór obwodu") },
+  { nazwa: "protokoly", wejdz: (p) => p.goto("/protokoly").then(() => undefined), kotwica: (p) => naglowek(p, "Protokoły pomiarowe") },
 ];
 
 for (const szer of SZEROKOSCI) {
@@ -37,7 +45,10 @@ for (const szer of SZEROKOSCI) {
         await page.evaluate(() => localStorage.clear());
         await page.reload();
         await widok.wejdz(page);
-        await page.waitForLoadState("networkidle");
+        await expect(widok.kotwica(page)).toBeVisible();
+
+        // Sprawdzamy tylko przewijanie CAŁEJ strony (documentElement), nie wewnętrzne
+        // kontenery z własnym overflow — te mogą przewijać się celowo.
 
         const { scroll, okno } = await page.evaluate(() => ({
           scroll: document.documentElement.scrollWidth,
