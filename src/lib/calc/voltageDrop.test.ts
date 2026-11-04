@@ -163,3 +163,36 @@ describe("spadek napięcia — koperta wyniku", () => {
     expect(r.zrodla.some((z) => z.norma.includes("60364-5-52"))).toBe(true);
   });
 });
+
+describe("spadek napięcia — metoda uproszczona a pełna (audyt 2026-11-04, B6)", () => {
+  // 16 A, 1F, cosφ 0,8, 44 m, 2,5 mm² Cu, model zał. G: dawniej uproszczona 5,47%
+  // „niespełniony" obok „min. przekrój w limicie 2,5 mm²", a pełna 4,40% „spełniony".
+  const dane = { prad_A: 16, cosfi: 0.8, dlugosc_m: 44, modelRezystywnosci: "annexG" as const, tempZyly_C: undefined };
+
+  it("uproszczona uwzględnia cosφ i nie wychodzi wyżej niż pełna", () => {
+    const upr = obliczSpadekNapiecia(wejscie({ ...dane, zReaktancja: false })).wartosci!;
+    const pel = obliczSpadekNapiecia(wejscie({ ...dane, zReaktancja: true })).wartosci!;
+    expect(upr.spadek_pct).toBeCloseTo(4.37, 2); // 2·704·0,8/(44,8·2,5)/230
+    expect(upr.spadek_pct).toBeLessThanOrEqual(pel.spadek_pct);
+  });
+
+  it("werdykt i minimalny przekrój nie przeczą sobie", () => {
+    for (const cosfi of [1, 0.9, 0.8, 0.6]) {
+      for (const dlugosc_m of [20, 44, 60, 90]) {
+        const r = obliczSpadekNapiecia(wejscie({ ...dane, cosfi, dlugosc_m, zReaktancja: false }));
+        const w = r.wartosci!;
+        const spelniony = w.spadek_pct <= 5;
+        // przy spełnionym limicie min. przekrój nie może przekraczać bieżącego, przy
+        // niespełnionym — musi być większy od bieżącego
+        if (spelniony) expect(w.minPrzekroj_mm2!).toBeLessThanOrEqual(2.5);
+        else expect(w.minPrzekroj_mm2!).toBeGreaterThan(2.5);
+      }
+    }
+  });
+
+  it("zmiana cosφ zmienia wynik metody uproszczonej", () => {
+    const a = obliczSpadekNapiecia(wejscie({ ...dane, cosfi: 1 })).wartosci!.spadek_pct;
+    const b = obliczSpadekNapiecia(wejscie({ ...dane, cosfi: 0.8 })).wartosci!.spadek_pct;
+    expect(b).toBeCloseTo(a * 0.8, 6);
+  });
+});

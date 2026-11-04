@@ -122,7 +122,7 @@ interface CalculatorsState {
    * rozdzielnica i przepuszczal instalacje jako calosc przekraczajace norme.
    */
   spadekWlzPct: number;
-  /** Zasilanie z wlasnej stacji transformatorowej — budzet spadku wiekszy o 2 p.p. */
+  /** Zasilanie z wlasnej stacji transformatorowej — limit spadku 6% / 8% zamiast 3% / 5% (tabl. G.52.1) */
   wlasnaStacja: boolean;
   /** Przekrój ŻYŁY [mm²] — dana wejściowa doboru zabezpieczenia (tam, gdzie
    *  w doborze przekroju jest wynikiem). Patrz `sizeBreakerForSection`. */
@@ -263,6 +263,8 @@ interface CalculatorsState {
   ggObwodOdbiorczy: boolean;
   ggSprawdzZs: boolean;
   ggZmierzonaZs: number;
+  /** Obciążalność przewodu za wkładką [A] — warunek I₂ ≤ 1,45·Iz. 0 = nie sprawdzaj. */
+  ggIz: number;
 
   // --- fotowoltaika: string DC ---
   pvIsc: number;
@@ -495,6 +497,7 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       ggObwodOdbiorczy: true,
       ggSprawdzZs: false,
       ggZmierzonaZs: 1.5,
+      ggIz: 0,
 
       pvIsc: 10.5,
       pvVoc: 41.5,

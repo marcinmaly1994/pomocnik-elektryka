@@ -595,7 +595,7 @@ test("dobór wkładki gG: domyślne dane (D0gG, 16A, TN odbiorczy) — Imax i Zs
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("D0gG (wkładka gwintowa, system D0), In 16 A");
   await expect(result).toContainText("120,0 A");
-  await expect(result).toContainText("1,920 Ω");
+  await expect(result).toContainText("1,821 Ω");
 });
 
 test("dobór wkładki gG: zmiana układu na TT-rozdzielczy zwraca błąd zamiast interpolacji (brak punktu 1s w tablicy)", async ({ page }) => {
