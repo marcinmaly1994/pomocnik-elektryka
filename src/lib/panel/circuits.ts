@@ -161,7 +161,7 @@ export function computeCircuits(wszystkie: InstallationElement[], roomShapes: Ro
   const elements = wszystkie.filter((e) => recznyNumer(e) === undefined);
 
   elements.filter((e) => roleOf(e) === "ev").forEach((e) => {
-    add({ name: `Ładowarka EV — ${e.room}`, type: "gniazdko", elements: [e], cable: "YDYp 5x4 mm²", breaker: "C25 3-faz.", rcd: true });
+    add({ name: `Ładowarka EV — ${e.room}`, type: "gniazdko", elements: [e], cable: "YDYp 5x4 mm²", breaker: "C25 3-faz.", rcd: true, wlasnyRcdTypB: true });
   });
 
   elements.filter((e) => roleOf(e) === "socket3f").forEach((e) => {
@@ -270,10 +270,26 @@ export function computeLowVoltage(elements: InstallationElement[]): LowVoltageSu
 /** Grupuje obwody po maks. 6 na jeden wyłącznik różnicowoprądowy 30 mA.
  *  Prąd ZNAMIONOWY aparatu dobiera `rcdRatingFor` w devices.ts wg rozłącznika
  *  głównego — tu ustalamy tylko czułość (patrz `RcdGroup.rating`). */
+/**
+ * Grupy wyłączników różnicowoprądowych: po 6 obwodów na wspólny RCD typu A, a obwody
+ * z `wlasnyRcdTypB` (punkt ładowania EV) — każdy pod WŁASNYM RCD typu B.
+ *
+ * Wcześniej ładowarka trafiała do pierwszej szóstki jak każdy inny obwód i dzieliła
+ * różnicówkę z gniazdami i AGD, choć tabela doboru wymagała dla niej typu B. Typ A
+ * nie wykrywa prądu upływu gładkiego stałego, a składowa stała powyżej kilku mA potrafi
+ * go nasycić — wtedy nie chroni już żadnego z obwodów, które ma pod sobą.
+ *
+ * Id grup pozostaje kolejnym numerem, więc klucze aparatów (`rcd-<id>`) i ukryte pozycje
+ * w projektach bez ładowarki są takie same jak przed zmianą.
+ */
 export function computeRcdGroups(circuits: Circuit[]): RcdGroup[] {
   const groups: RcdGroup[] = [];
-  for (let i = 0; i < circuits.length; i += 6) {
-    groups.push({ id: "rcd" + (groups.length + 1), rating: "30mA", circuits: circuits.slice(i, i + 6) });
+  const wspolne = circuits.filter((c) => !c.wlasnyRcdTypB);
+  for (let i = 0; i < wspolne.length; i += 6) {
+    groups.push({ id: "rcd" + (groups.length + 1), rating: "30mA", typ: "A", circuits: wspolne.slice(i, i + 6) });
+  }
+  for (const c of circuits.filter((x) => x.wlasnyRcdTypB)) {
+    groups.push({ id: "rcd" + (groups.length + 1), rating: "30mA", typ: "B", circuits: [c] });
   }
   return groups;
 }

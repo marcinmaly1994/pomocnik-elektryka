@@ -225,6 +225,23 @@ describe("computeRcdGroups", () => {
     expect(groups[0].circuits).toHaveLength(6);
     expect(groups[1].circuits).toHaveLength(1);
   });
+
+  it("ładowarka EV dostaje WŁASNY RCD typu B, nie dzieli go z innymi obwodami", () => {
+    // Regresja z audytu: EV siedziała pod FI1 razem z pięcioma innymi obwodami.
+    const zwykly = (i: number) => ({ id: `obw${i}`, name: `Obwód ${i}`, type: "gniazdko" as const, elements: [], cable: "", breaker: "B16", rcd: true });
+    const ev = { ...zwykly(99), name: "Ładowarka EV — Garaż", wlasnyRcdTypB: true };
+    const groups = computeRcdGroups([ev, zwykly(1), zwykly(2), zwykly(3)]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ typ: "A" });
+    expect(groups[0].circuits.map((c) => c.id)).toEqual(["obw1", "obw2", "obw3"]);
+    expect(groups[1]).toMatchObject({ typ: "B", circuits: [ev] });
+  });
+
+  it("obwód ładowarki z rzutu niesie wymóg własnego RCD", () => {
+    const obwody = computeCircuits([el({ type: "ladowarkaEV", room: "Garaż" }), el({ type: "gniazdko", room: "Salon" })]);
+    expect(obwody.find((c) => c.name.startsWith("Ładowarka EV"))?.wlasnyRcdTypB).toBe(true);
+    expect(computeRcdGroups(obwody).find((g) => g.typ === "B")?.circuits).toHaveLength(1);
+  });
 });
 
 describe("mainBreakerFor", () => {

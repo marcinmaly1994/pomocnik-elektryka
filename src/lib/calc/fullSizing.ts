@@ -48,6 +48,7 @@ import {
 import { maksCzasWylaczenia_s, type UkladSieci } from "@/lib/norms/conductors";
 import { CURVE_MULTIPLIER, groupingFactor, temperatureFactor, type Curve } from "@/lib/panel/norms";
 import { bladWyniku, formatLiczba, type CalcError, type CalcResult, type Krok } from "./result";
+import { wStrefieElektromagnetycznej } from "./warunekCieplny";
 
 export type Kryterium = "obciazalnosc" | "spadek_napiecia" | "ochrona_przeciwporazeniowa" | "wytrzymalosc_zwarciowa";
 
@@ -240,7 +241,18 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
   let S4: number | null = null;
   let ocenioneS4 = false;
   let powodPominiecia4: string | undefined;
-  if (w.Ik_A !== undefined && w.Ik_A > 0) {
+  const IaS4 = pradZadzialania(curve, In);
+  if (w.Ik_A !== undefined && w.Ik_A > 0 && wStrefieElektromagnetycznej(w.Ik_A, IaS4)) {
+    // Ik ≥ Ia: wyłącznik zadziała elektromagnetycznie w czasie < 0,1 s. Wzór z czasem
+    // DOPUSZCZALNYM (0,4/5 s) kazałby tu dobierać przekrój kilkukrotnie za duży — przy
+    // 6 kA i B16 wychodziło ponad 30 mm². Norma każe wtedy porównać k²S² z I²t aparatu,
+    // którego ten silnik nie zna, więc kryterium zostaje jawnie nieocenione.
+    const k = K_ZYLA[w.material][w.izolacja];
+    powodPominiecia4 =
+      `Ik ${formatLiczba(w.Ik_A, 0)} A ≥ Ia ${formatLiczba(IaS4, 0)} A — wyłącznik zadziała elektromagnetycznie (< 0,1 s). ` +
+      `Warunek cieplny sprawdź przez I²t aparatu z karty katalogowej: musi być ≤ k²S² (dla k = ${k}: k²S² = ${formatLiczba(k * k, 0)}·S² A²s).`;
+    zalozenia.push(powodPominiecia4);
+  } else if (w.Ik_A !== undefined && w.Ik_A > 0) {
     ocenioneS4 = true;
     const czas = maksCzasWylaczenia_s(w.uklad ?? "TN", w.obwodOdbiorczy ?? true);
     const k = K_ZYLA[w.material][w.izolacja];

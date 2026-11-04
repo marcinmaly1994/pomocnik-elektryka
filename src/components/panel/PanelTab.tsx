@@ -16,7 +16,7 @@ import {
   przeniesAparat,
   type SelectivityLevel,
 } from "@/lib/panel/devices";
-import { assignPhases, computeSizedCircuits, dlugosciDoboru, phaseBalance } from "@/lib/panel/project";
+import { computeSizedCircuits, dlugosciDoboru, fazyZRozdzielnicy, phaseBalance, pradyWgKluczaAparatu } from "@/lib/panel/project";
 import { scaleOf } from "@/lib/design";
 import { buildPanelLegendDoc, buildPanelLegendPdf } from "@/lib/pdf/panelLegend";
 import { buildLabelStripsDoc, buildLabelStripsPdf } from "@/lib/pdf/labelStrips";
@@ -193,7 +193,9 @@ export function PanelTab() {
     [elements, opcjeDoboru, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
-  const sized = useMemo(() => assignPhases(sizedRaw, supply3f), [sizedRaw, supply3f]);
+  const pradyWgKlucza = useMemo(() => pradyWgKluczaAparatu(sizedRaw), [sizedRaw]);
+  // Faza z APARATÓW, nie z osobnego przydziału — patrz `fazyZRozdzielnicy`.
+  const sized = useMemo(() => fazyZRozdzielnicy(sizedRaw, devices, supply3f), [sizedRaw, devices, supply3f]);
   const balance = useMemo(() => phaseBalance(sized), [sized]);
   const sizingWarnings = useMemo(
     () => sized.flatMap((s) => s.ostrzezenia.map((w) => ({ ...w, obwod: s.nazwa }))),
@@ -222,7 +224,7 @@ export function PanelTab() {
     if (trybReczny) return;
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
-      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, mainRating })
+      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, mainRating, pradyWgKlucza })
         .filter((d) => !d.key || !hiddenKeys.includes(d.key))
         // Ręczne poprawki nakładane na świeżo policzony aparat — inaczej zmiana
         // nastawy albo opisu znikałaby po każdym elemencie postawionym na planie.
@@ -230,7 +232,7 @@ export function PanelTab() {
       return [...rebuilt, ...manual];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circuits, rcdGroups, supply3f, mainRating, trybReczny, panelOverrides]);
+  }, [circuits, rcdGroups, supply3f, mainRating, trybReczny, panelOverrides, pradyWgKlucza]);
 
   const rows = useMemo(() => layoutPanel(devices, perRow), [devices, perRow]);
   const usedModules = devices.reduce((a, d) => a + d.modules, 0);
@@ -288,7 +290,7 @@ export function PanelTab() {
 
   function autoBalance() {
     commitPanelSnapshot();
-    setDevices((ds) => balancePhases(ds));
+    setDevices((ds) => balancePhases(ds, pradyWgKlucza));
   }
 
   function removeDevice(uid: string) {

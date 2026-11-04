@@ -112,6 +112,8 @@ interface CalculatorsState {
   /** Spodziewany prad zwarcia [A] i czas wylaczenia [s] — do 4. kryterium. */
   obwodIkA: number;
   obwodCzasS: number;
+  /** Energia przenoszona I²t aparatu z karty katalogowej [A²s] — warunek cieplny przy Ik ≥ Ia. 0 = nie podano. */
+  obwodI2tA2s: number;
   /**
    * Spadek napiecia zuzyty juz na WLZ [%].
    *
@@ -376,6 +378,7 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       obwodZsOhm: 0,
       obwodIkA: 0,
       obwodCzasS: 0.4,
+      obwodI2tA2s: 0,
       spadekWlzPct: 0,
       wlasnaStacja: false,
       breakerSection: 2.5,

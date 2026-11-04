@@ -2,6 +2,7 @@ import { K_ZYLA, type Izolacja, type Material } from "@/lib/norms/conductors";
 import { formatLiczba } from "@/lib/liczby";
 import { KRYTERIUM_LABELS, type Kryterium } from "./fullSizing";
 import { OCENA_GRANICZNA_PCT, type Ocena } from "./result";
+import { ikZImpedancjiPetli, ocenWarunekCieplny, TOLERANCJA_IK_ZS } from "./warunekCieplny";
 
 /**
  * Cztery kryteria doboru obwodu, oceniane na gotowym wyniku doboru.
@@ -42,9 +43,14 @@ export interface WejscieKryteriow {
   przekroj_mm2: number | null;
   material: Material;
   izolacja: Izolacja;
-  /** Spodziewany prąd zwarcia [A] i czas wyłączenia [s] — do warunku cieplnego. */
+  /** Spodziewany prąd zwarcia [A] i czas wyłączenia [s] — do warunku cieplnego.
+   *  Bez Ik, a z podaną Zs, prąd zwarcia liczy się z pętli (`ikZImpedancjiPetli`). */
   Ik_A?: number;
   czas_s?: number;
+  /** Prąd zadziałania wyzwalacza elektromagnetycznego dobranego aparatu [A]. */
+  Ia_A?: number | null;
+  /** Energia przenoszona I²t aparatu z karty katalogowej [A²s] — dla Ik ≥ Ia. */
+  I2t_A2s?: number;
 }
 
 /** Zapas do granicy w procentach: ile jeszcze zostało do wartości granicznej. */
@@ -129,27 +135,71 @@ export function ocenKryteria(w: WejscieKryteriow): OcenaKryterium[] {
     });
   }
 
-  // 4. Wytrzymałość zwarciowa cieplna: S ≥ Ik·√t / k.
-  if (w.przekroj_mm2 !== null && typeof w.Ik_A === "number" && w.Ik_A > 0 && typeof w.czas_s === "number" && w.czas_s > 0) {
-    const minS = minPrzekrojZwarciowy(w.Ik_A, w.czas_s, w.material, w.izolacja);
-    const ok = w.przekroj_mm2 >= minS;
-    oceny.push({
-      kryterium: "wytrzymalosc_zwarciowa",
-      etykieta: KRYTERIUM_LABELS.wytrzymalosc_zwarciowa,
-      stan: ok ? "ok" : "blad",
-      opis: `S ${liczba(w.przekroj_mm2, 1)} mm² ≥ Ik·√t/k ${liczba(minS)} mm²`,
-      margines_pct: minS > 0 ? margines(minS, w.przekroj_mm2) : 0,
-    });
-  } else {
-    oceny.push({
-      kryterium: "wytrzymalosc_zwarciowa",
-      etykieta: KRYTERIUM_LABELS.wytrzymalosc_zwarciowa,
-      stan: "nieoceniono",
-      opis: "Podaj spodziewany prąd zwarcia i czas wyłączenia — bez nich warunku cieplnego nie da się sprawdzić.",
-    });
-  }
+  // 4. Wytrzymałość zwarciowa cieplna — patrz `ocenWarunekCieplny`.
+  oceny.push(ocenKryteriumCieplne(w));
 
   return oceny;
+}
+
+function ocenKryteriumCieplne(w: WejscieKryteriow): OcenaKryterium {
+  const baza = { kryterium: "wytrzymalosc_zwarciowa" as const, etykieta: KRYTERIUM_LABELS.wytrzymalosc_zwarciowa };
+  const zsPodana = typeof w.Zs_Ohm === "number" && w.Zs_Ohm > 0;
+  const ikPodany = typeof w.Ik_A === "number" && w.Ik_A > 0;
+  // Ik i Zs to dwa opisy tej samej pętli. Bez Ik liczymy go z Zs, zamiast żądać
+  // drugiej, niezależnej liczby, którą łatwo wpisać sprzeczną z pierwszą.
+  const ikZZs = zsPodana ? ikZImpedancjiPetli(w.Zs_Ohm!) : null;
+  const Ik = ikPodany ? w.Ik_A! : ikZZs;
+
+  if (w.przekroj_mm2 === null || Ik === null || !(Ik > 0)) {
+    return {
+      ...baza,
+      stan: "nieoceniono",
+      opis: "Podaj impedancję pętli albo spodziewany prąd zwarcia — bez nich warunku cieplnego nie da się sprawdzić.",
+    };
+  }
+
+  const zrodloIk = ikPodany ? "" : ` (z Zs: 0,95·230/${liczba(w.Zs_Ohm!)} Ω)`;
+  const sprzecznosc =
+    ikPodany && ikZZs !== null && Math.abs(Ik - ikZZs) / ikZZs > TOLERANCJA_IK_ZS
+      ? ` Uwaga: podany Ik ${liczba(Ik, 0)} A nie zgadza się z Zs ${liczba(w.Zs_Ohm!)} Ω (z niej wychodzi ${liczba(ikZZs, 0)} A) — sprawdź, czy obie wartości dotyczą tego samego punktu.`
+      : "";
+
+  const wynik = ocenWarunekCieplny({
+    Ik_A: Ik,
+    czas_s: w.czas_s,
+    przekroj_mm2: w.przekroj_mm2,
+    k: K_ZYLA[w.material][w.izolacja],
+    Ia_A: w.Ia_A,
+    I2t_A2s: w.I2t_A2s,
+  });
+
+  switch (wynik.tryb) {
+    case "brak_czasu":
+      return { ...baza, stan: "nieoceniono", opis: `Ik ${liczba(Ik, 0)} A${zrodloIk} — podaj czas wyłączenia z charakterystyki aparatu.${sprzecznosc}` };
+    case "brak_I2t":
+      return {
+        ...baza,
+        stan: "nieoceniono",
+        opis:
+          `Ik ${liczba(Ik, 0)} A${zrodloIk} ≥ Ia ${liczba(w.Ia_A!, 0)} A — wyłącznik zadziała elektromagnetycznie w czasie poniżej 0,1 s, ` +
+          `więc wzór Ik·√t/k z czasem dopuszczalnym nie ma tu zastosowania. Porównaj k²S² = ${liczba(wynik.k2S2_A2s, 0)} A²s ` +
+          `z energią przenoszoną I²t z karty katalogowej aparatu (pole „I²t aparatu").${sprzecznosc}`,
+      };
+    case "energia":
+      return {
+        ...baza,
+        stan: wynik.ok ? "ok" : "blad",
+        opis: `k²S² ${liczba(wynik.k2S2_A2s, 0)} A²s ${wynik.ok ? "≥" : "<"} I²t aparatu ${liczba(wynik.I2t_A2s, 0)} A²s (Ik ${liczba(Ik, 0)} A${zrodloIk} ≥ Ia — wyłączenie elektromagnetyczne).${sprzecznosc}`,
+        margines_pct: margines(wynik.I2t_A2s, wynik.k2S2_A2s),
+      };
+    case "adiabatyczny":
+      return {
+        ...baza,
+        stan: wynik.ok ? "ok" : "blad",
+        opis: `S ${liczba(w.przekroj_mm2, 1)} mm² ${wynik.ok ? "≥" : "<"} Ik·√t/k ${liczba(wynik.minS_mm2)} mm² (Ik ${liczba(Ik, 0)} A${zrodloIk}, t ${liczba(w.czas_s!)} s).${sprzecznosc}`,
+        margines_pct: wynik.minS_mm2 > 0 ? margines(wynik.minS_mm2, w.przekroj_mm2) : 0,
+      };
+  }
 }
 
 /**

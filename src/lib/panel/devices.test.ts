@@ -4,6 +4,7 @@ import {
   buildPanelDevices,
   computePhaseLoad,
   computeSelectivity,
+  czuloscITypRcd,
   daSieSkasowac,
   layoutPanel,
   MANUAL_DEVICE_TYPES,
@@ -40,6 +41,18 @@ describe("ratedCurrent", () => {
   });
 });
 
+describe("czuloscITypRcd", () => {
+  it("czyta czułość i typ z podpisu aparatu z automatu", () => {
+    expect(czuloscITypRcd({ label: "63A", caption: "Wyłącznik różnicowoprądowy 63A/30mA typ B" })).toBe("30 mA · typ B");
+  });
+  it("dla aparatu dołożonego ręcznie bierze czułość z etykiety, bez zgadywania typu", () => {
+    expect(czuloscITypRcd({ label: "40A/300mA", caption: "Wyłącznik różnicowoprądowy" })).toBe("300 mA");
+  });
+  it("bez danych — nic, zamiast pustej linii", () => {
+    expect(czuloscITypRcd({ label: "63A", caption: "" })).toBeNull();
+  });
+});
+
 describe("balancePhases", () => {
   it("rozdziela obwody 1-fazowe na fazę najmniej obciążoną", () => {
     const devices: PanelDevice[] = [
@@ -51,6 +64,19 @@ describe("balancePhases", () => {
     const phases = balanced.map((d) => d.phase);
     // pierwsze dwa idą na różne (najmniej obciążone) fazy, trzeci na najmniej obciążoną z pozostałych
     expect(new Set(phases).size).toBeGreaterThan(1);
+  });
+
+  it("waży prądem obliczeniowym, gdy go zna — dwa B16 po 15 A i 3 A to nie to samo", () => {
+    const mcb = (n: number, label: string): PanelDevice => ({
+      uid: String(n), kind: "mcb", tag: `F${n}`, modules: 1, label, caption: String(n), poles: "1P", key: `mcb-${n}`,
+    });
+    // Po samym In (16/16/16/10) czwarty trafiłby na L1. Po Ib (15/3/3/2) L1 jest
+    // już najcięższa, więc czwarty musi pójść na lżejszą fazę.
+    const prady = new Map([["mcb-1", 15], ["mcb-2", 3], ["mcb-3", 3], ["mcb-4", 2]]);
+    const fazy = balancePhases([mcb(1, "B16"), mcb(2, "B16"), mcb(3, "B16"), mcb(4, "B10")], prady).map((d) => d.phase);
+    expect(fazy).toEqual(["L1", "L2", "L3", "L2"]);
+    // bez mapy — po In, jak dla aparatów dołożonych ręcznie
+    expect(balancePhases([mcb(1, "B16"), mcb(2, "B16"), mcb(3, "B16"), mcb(4, "B10")]).map((d) => d.phase)[3]).toBe("L1");
   });
 
   it("pomija aparaty 3-fazowe i nie-mcb", () => {
@@ -78,11 +104,11 @@ describe("buildPanelDevices", () => {
     // Podpis jest tym, z czym idzie się do sklepu, więc nie może przeczyć etykiecie.
     const rcd = buildPanelDevices(rcdGroups, { supply3f: true, mainRating: 40 }).find((d) => d.kind === "rcd")!;
     expect(rcd.label).toBe("63A");
-    expect(rcd.caption).toBe("Wyłącznik różnicowoprądowy 63A/30mA");
+    expect(rcd.caption).toBe("Wyłącznik różnicowoprądowy 63A/30mA typ A");
 
     // ...i tak samo, gdy rozłącznik główny podnosi dobór wyżej
     const wiekszy = buildPanelDevices(rcdGroups, { supply3f: true, mainRating: 80 }).find((d) => d.kind === "rcd")!;
-    expect(wiekszy.caption).toBe(`Wyłącznik różnicowoprądowy ${wiekszy.label}/30mA`);
+    expect(wiekszy.caption).toBe(`Wyłącznik różnicowoprądowy ${wiekszy.label}/30mA typ A`);
   });
 
   it("NIE dokłada bezpiecznika przedlicznikowego — to szafka operatora, nie rozdzielnica", () => {

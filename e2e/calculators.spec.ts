@@ -555,17 +555,20 @@ test("pełny dobór: domyślne dane — o przekroju decyduje obciążalność, p
   await expect(result).toContainText("wytrzymałość zwarciowa cieplna: nieocenione");
 });
 
-test("pełny dobór: włączenie ochrony i wytrzymałości zwarciowej podnosi przekrój i zmienia decydujące kryterium", async ({ page }) => {
+test("pełny dobór: przy Ik ≥ Ia warunek cieplny NIE podnosi przekroju wzorem z czasem dopuszczalnym", async ({ page }) => {
   await openCalculators(page);
   await otworzObwod(page, "pelny");
 
   await page.getByLabel(/Sprawdź też ochronę przeciwporażeniową/).check();
   await page.getByLabel(/Sprawdź też wytrzymałość zwarciową/).check();
 
+  // Dawniej: 25 mm² „decyduje wytrzymałość zwarciowa" — dla obwodu 40 A, bo prąd
+  // zwarcia liczono z t = 0,4 s, choć wyłącznik przy nim działa elektromagnetycznie
+  // w milisekundach (audyt 2026-11-04, B3). Teraz kryterium mówi, że trzeba I²t aparatu.
   const result = page.locator(".pe-result").first();
-  await expect(result).toContainText("25,0 mm²");
-  await expect(result).toContainText("decyduje: wytrzymałość zwarciowa cieplna");
+  await expect(result).toContainText("10,0 mm²");
   await expect(result).toContainText("ochrona przeciwporażeniowa: 2,5 mm²");
+  await expect(result).toContainText("wytrzymałość zwarciowa cieplna: nieocenione");
 });
 
 test("pełny dobór: obwody 1-fazowe są jawnie odrzucone — brak tablicy dla dwóch żył obciążonych", async ({ page }) => {
@@ -792,14 +795,19 @@ test("cztery kryteria widac zawsze, a te bez danych sa NIEOCENIONE zamiast zielo
   // Bez impedancji petli i pradu zwarcia dwa ostatnie kryteria nie sa ocenione —
   // i mowia, czego im brakuje, zamiast pokazywac ptaszka.
   await expect(karta).toContainText("Podaj impedancję pętli");
-  await expect(karta).toContainText("Podaj spodziewany prąd zwarcia");
+  await expect(karta).toContainText("Podaj impedancję pętli albo spodziewany prąd zwarcia");
 
   await karta.getByLabel("Impedancja pętli Zs").fill("1.5");
   await expect(karta).toContainText("Zs 1,50 Ω ≤ Zs max 2,73 Ω");
 
-  // Warunek cieplny potrafi ODRZUCIC przekroj, ktory przeszedl trzy pozostale kryteria.
-  await karta.getByLabel(/Spodziewany prąd zwarcia/).fill("500");
-  await expect(karta).toContainText("Ik·√t/k");
+  // Ik liczy się z Zs (0,95·230/1,5 ≈ 146 A ≥ Ia 80 A) — strefa elektromagnetyczna,
+  // więc zamiast wzoru z czasem kryterium prosi o I²t aparatu.
+  await expect(karta).toContainText("I²t");
+
+  // Warunek cieplny potrafi ODRZUCIC przekroj, ktory przeszedl trzy pozostale kryteria:
+  // I²t większe niż k²S² (dla 2,5 mm² Cu/PVC: 82 656 A²s).
+  await karta.getByLabel("I²t aparatu").fill("100000");
+  await expect(karta).toContainText("< I²t aparatu");
   await expect(karta).toContainText("przekroczenie");
 });
 

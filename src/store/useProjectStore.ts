@@ -7,11 +7,14 @@ import {
   kluczProjektu,
   migrujStaryAutozapis,
   nowyId,
+  odlozUszkodzony,
+  type OdlozonyZapis,
   ustawBiezacy,
   zapiszIndeks,
   usunProjekt,
   type WpisProjektu,
 } from "@/lib/projektyLokalne";
+import { czytajKopie } from "@/lib/kopiaProjektu";
 import { WARUNKI_DOBORU_DOMYSLNE, type WarunkiDoboru } from "@/lib/panel/norms";
 import type { ProjectSizingOptions } from "@/lib/panel/project";
 import { useMemo } from "react";
@@ -117,14 +120,36 @@ function loadStoredSession(): Session | null {
  * Cały odczyt w jednym `try`: zawartość `localStorage` to dane z zewnątrz, a wyjątek
  * przy starcie zabiłby powłokę aplikacji, zanim cokolwiek się pokaże.
  */
-function loadAutosavedProject(): ProjectPayload | null {
+function loadAutosavedProject(): { id: string; payload: ProjectPayload } | null {
+  let id: string | null = null;
   try {
     migrujStaryAutozapis(localStorage);
-    const id = biezacyId(localStorage) ?? czytajIndeks(localStorage)[0]?.id ?? null;
+    id = biezacyId(localStorage) ?? czytajIndeks(localStorage)[0]?.id ?? null;
     if (!id) return null;
     ustawBiezacy(localStorage, id);
     const raw = localStorage.getItem(kluczProjektu(id));
-    return raw ? (JSON.parse(raw) as ProjectPayload) : null;
+    if (!raw) return null;
+    // To samo sito co przy wczytaniu kopii z pliku. Sam `try` wyżej łapał tylko zepsuty
+    // JSON — poprawny JSON złego KSZTAŁTU (np. bez `floors`) przechodził i wywracał
+    // `loadProjectPayload`, a z nim start CAŁEJ aplikacji: biały ekran bez wyjścia.
+    const odczyt = czytajKopie(raw);
+    if (!odczyt.ok) {
+      zapisUszkodzonyNaStarcie = odlozUszkodzony(localStorage, id);
+      return null;
+    }
+    return { id, payload: odczyt.payload };
+  } catch {
+    if (id) zapisUszkodzonyNaStarcie = bezpiecznieOdloz(id);
+    return null;
+  }
+}
+
+/** Zapis odłożony przy starcie, bo nie dał się wczytać — do komunikatu w aplikacji. */
+let zapisUszkodzonyNaStarcie: OdlozonyZapis | null = null;
+
+function bezpiecznieOdloz(id: string): OdlozonyZapis | null {
+  try {
+    return odlozUszkodzony(localStorage, id);
   } catch {
     return null;
   }
@@ -394,6 +419,13 @@ interface ProjectState {
   roomsFixedOnLoad: number;
   /** Zamyka komunikat o poprawionych przypisaniach — użytkownik go przyjął. */
   dismissRoomsFixedOnLoad: () => void;
+  /**
+   * Zapis projektu, który przy starcie nie dał się wczytać i został odłożony na bok
+   * (`odlozUszkodzony`). Pokazywany jako komunikat z możliwością pobrania surowej
+   * kopii — inaczej projekt po prostu „znikałby" bez słowa.
+   */
+  zapisUszkodzony: OdlozonyZapis | null;
+  zamknijZapisUszkodzony: () => void;
 
   /** Sesja Supabase (konto + zapis w chmurze) — `null`, gdy niezalogowany lub
    *  backend nieskonfigurowany. Utrzymywana też w localStorage, żeby przetrwać
@@ -612,6 +644,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projektPrzykladowy: false,
   roomsFixedOnLoad: 0,
   dismissRoomsFixedOnLoad: () => set({ roomsFixedOnLoad: 0 }),
+  zapisUszkodzony: null,
+  zamknijZapisUszkodzony: () => set({ zapisUszkodzony: null }),
   session: loadStoredSession(),
   cloudId: null,
   protokolyId: null,
@@ -1609,10 +1643,23 @@ export function useOpcjeDoboru(): ProjectSizingOptions {
  *    pętli przez `lastLocalSaveAt`, który też wywołuje subskrybenta) gdy nic w
  *    samych danych projektu faktycznie się nie zmieniło.
  */
-const autosavedProject = loadAutosavedProject();
-if (autosavedProject) {
-  useProjectStore.getState().loadProjectPayload(autosavedProject);
+const odczytAutozapisu = loadAutosavedProject();
+let autosavedProject: ProjectPayload | null = odczytAutozapisu?.payload ?? null;
+if (odczytAutozapisu) {
+  try {
+    useProjectStore.getState().loadProjectPayload(odczytAutozapisu.payload);
+  } catch {
+    // Sito `czytajKopie` sprawdza kształt list, nie każde pole — jeśli mimo to wczytanie
+    // się wywróci, zapis idzie na bok tak samo, a aplikacja startuje z czystym planem
+    // zamiast białego ekranu. Stan po wczytaniu przerwanym w połowie nadpisujemy pustym
+    // projektem przez TĘ SAMĄ funkcję — nie `resetProject`, bo ta domyka autozapis, którego
+    // zmienne są zadeklarowane dopiero niżej, i zapisałaby do slotu stan połowiczny.
+    zapisUszkodzonyNaStarcie = bezpiecznieOdloz(odczytAutozapisu.id);
+    autosavedProject = null;
+    useProjectStore.getState().loadProjectPayload({ draft: emptyDraft, floors: [] } as unknown as ProjectPayload);
+  }
 }
+if (zapisUszkodzonyNaStarcie) useProjectStore.setState({ zapisUszkodzony: zapisUszkodzonyNaStarcie });
 
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 let lastAutosavedJson: string | null = autosavedProject ? JSON.stringify(autosavedProject) : null;

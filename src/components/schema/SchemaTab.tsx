@@ -13,8 +13,8 @@ import { CadGlyph } from "./CadGlyph";
 import { GLYPHS, labelOffset } from "./deviceGlyphs";
 import { LINE_W, STROKE } from "./glyphyOprawa";
 import { computeRcdGroups } from "@/lib/panel/circuits";
-import { computeSizedCircuits } from "@/lib/panel/project";
-import { buildPanelDevices, jestOdplywem, PHASE_COLORS } from "@/lib/panel/devices";
+import { computeSizedCircuits, pradyWgKluczaAparatu } from "@/lib/panel/project";
+import { buildPanelDevices, czuloscITypRcd, jestOdplywem, PHASE_COLORS } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
@@ -236,6 +236,11 @@ function RcdBranch({ col, device }: { col: Column; device: PanelDevice }) {
       <text x={x + dx} y={Y_BUS + 46} fontSize={9} fill={MUTED}>
         {opisZBiegunami(device)}
       </text>
+      {czuloscITypRcd(device) && (
+        <text x={x + dx} y={Y_BUS + 57} fontSize={9} fill={MUTED}>
+          {czuloscITypRcd(device)}
+        </text>
+      )}
     </g>
   );
 }
@@ -554,11 +559,14 @@ export function SchemaTab() {
 
   // Te same obwody co w Rozdzielnicy — z doborem, nie ze stałymi z `computeCircuits`.
   // Inaczej schemat jednokreskowy pokazywałby inny przekrój niż front rozdzielnicy.
-  const { circuits } = useMemo(
+  const { circuits, sized } = useMemo(
     () => computeSizedCircuits(elements, opcjeDoboru, roomShapes),
     [elements, opcjeDoboru, roomShapes]
   );
   const rcdGroups = useMemo(() => computeRcdGroups(circuits), [circuits]);
+  // Ta sama waga bilansu faz co w Rozdzielnicy — inaczej schemat zbudowany przed
+  // pierwszym wejściem do tamtej zakładki rozkładałby fazy inaczej niż ona potem.
+  const pradyWgKlucza = useMemo(() => pradyWgKluczaAparatu(sized), [sized]);
   /**
    * Aparaty bierzemy z ROZDZIELNICY, nie budujemy własnych.
    *
@@ -574,8 +582,8 @@ export function SchemaTab() {
    */
   const panelDevices = useProjectStore((s) => s.panelDevices);
   const devices = useMemo(
-    () => (panelDevices.length ? panelDevices : buildPanelDevices(rcdGroups, panelConfig)),
-    [panelDevices, rcdGroups, panelConfig]
+    () => (panelDevices.length ? panelDevices : buildPanelDevices(rcdGroups, { ...panelConfig, pradyWgKlucza })),
+    [panelDevices, rcdGroups, panelConfig, pradyWgKlucza]
   );
 
   const mainDevice = devices.find((d) => d.kind === "main");

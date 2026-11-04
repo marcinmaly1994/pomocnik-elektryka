@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ElementType, InstallationElement } from "@/types";
-import { computeCircuits } from "./circuits";
-import { applySizing, assignPhases, computeSizedCircuits, dlugosciDoboru, lowVoltageLengths, panelCapacity, phaseBalance, routeLengths, routeSummaries, sizeProjectCircuits } from "./project";
+import { computeCircuits, computeRcdGroups } from "./circuits";
+import { buildPanelDevices } from "./devices";
+import { applySizing, assignPhases, computeSizedCircuits, dlugosciDoboru, fazyZRozdzielnicy, lowVoltageLengths, panelCapacity, phaseBalance, pradyWgKluczaAparatu, routeLengths, routeSummaries, sizeProjectCircuits } from "./project";
 import type { SizedCircuit } from "./sizing";
 import { ZAPAS_MONTAZOWY_M } from "./norms";
 
@@ -157,6 +158,33 @@ describe("assignPhases / phaseBalance", () => {
     expect(balance.amps.L1).toBe(15);
     expect(balance.spreadPct).toBeGreaterThan(0);
     expect(balance.spreadA).toBe(12);
+  });
+
+  it("tabela doboru bierze fazę z aparatu rozdzielnicy, nie z własnego przydziału", () => {
+    // Regresja z audytu: tabela pokazywała F11 na L1, a front i schemat — na L3.
+    const sized = [sizedStub({ id: "a", Ib_A: 15 }), sizedStub({ id: "b", Ib_A: 3 }), sizedStub({ id: "c", Ib_A: 3 })];
+    const devices = [
+      { kind: "mcb", key: "mcb-a", phase: "L3" },
+      { kind: "mcb", key: "mcb-b", phase: "L1" },
+      // obwód „c" nie ma aparatu (skasowany z rozdzielnicy) — zostaje przydział automatu
+    ];
+    const fazy = fazyZRozdzielnicy(sized, devices, true).map((s) => s.faza);
+    expect(fazy.slice(0, 2)).toEqual(["L3", "L1"]);
+    expect(["L1", "L2", "L3"]).toContain(fazy[2]);
+    // bilans faz liczy się z tych samych faz, które widać na froncie
+    expect(phaseBalance(fazyZRozdzielnicy(sized, devices, true)).amps.L3).toBeGreaterThanOrEqual(15);
+  });
+
+  it("buildPanelDevices z prądami z doboru daje te same fazy, które pokaże tabela", () => {
+    const { circuits, sized } = computeSizedCircuits(
+      [el("gniazdko", { room: "Salon" }), el("gniazdko", { room: "Kuchnia" }), el("gniazdko", { room: "Sypialnia" }), el("oswietlenie", { room: "Salon" })],
+      { scales: {} }
+    );
+    const devices = buildPanelDevices(computeRcdGroups(circuits), { supply3f: true, pradyWgKlucza: pradyWgKluczaAparatu(sized) });
+    const tabela = fazyZRozdzielnicy(sized, devices, true);
+    for (const s of tabela.filter((x) => x.liczba_faz === "1")) {
+      expect(devices.find((d) => d.key === `mcb-${s.id}`)?.phase).toBe(s.faza);
+    }
   });
 
   it("pusta rozdzielnica ma rozrzut 0 A, a nie 1 A z progu skali pasków", () => {
