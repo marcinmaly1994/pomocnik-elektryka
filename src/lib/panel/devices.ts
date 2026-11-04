@@ -116,6 +116,22 @@ export function podpisPrzewoduNaFroncie(kabel: string, moduly: number): string {
   return m ? m[1] : bezTypu;
 }
 
+/**
+ * Czułość i typ różnicówki do opisu na schemacie: „30 mA · typ B".
+ *
+ * Z samego „4P · 63A" nie wynika, czy aparat w ogóle chroni obwód, który ma pod sobą —
+ * ładowarka EV wymaga typu B, a ten na rysunku nie różnił się niczym od typu A.
+ * Czyta z etykiety i podpisu, bo aparat z automatu niesie czułość i typ w podpisie,
+ * a dołożony ręcznie — czułość w etykiecie („40A/30mA").
+ */
+export function czuloscITypRcd(d: Pick<PanelDevice, "label" | "caption">): string | null {
+  const tekst = `${d.label ?? ""} ${d.caption ?? ""}`;
+  const idn = tekst.match(/(\d+)\s*mA/i)?.[1];
+  const typ = tekst.match(/\btyp\s+(AC|A|F|B)\b/i)?.[1]?.toUpperCase();
+  const czesci = [idn ? `${idn} mA` : null, typ ? `typ ${typ}` : null].filter(Boolean);
+  return czesci.length ? czesci.join(" · ") : null;
+}
+
 export function daSieSkasowac(d: Pick<PanelDevice, "kind">): boolean {
   return d.kind !== "main" && d.kind !== "blank";
 }
@@ -126,14 +142,27 @@ export function ratedCurrent(label: string): number {
   return m ? Number(m[1]) : 0;
 }
 
-/** Rozdziela obwody 1-fazowe równomiernie na L1/L2/L3, zawsze dokładając do fazy
- *  aktualnie najmniej obciążonej — inaczej rośnie prąd w przewodzie neutralnym. */
-export function balancePhases(devices: PanelDevice[]): PanelDevice[] {
+/**
+ * Rozdziela obwody 1-fazowe równomiernie na L1/L2/L3, zawsze dokładając do fazy
+ * aktualnie najmniej obciążonej — inaczej rośnie prąd w przewodzie neutralnym.
+ *
+ * Waży PRĄDEM OBLICZENIOWYM obwodu (`pradyWgKlucza`, klucz aparatu `mcb-<id obwodu>`),
+ * a prądem znamionowym zabezpieczenia tylko wtedy, gdy obliczeniowego nie ma (aparat
+ * dołożony ręcznie). Dwa B16 wyglądają tak samo „po zabezpieczeniu", a jeden ciągnie
+ * 3 A, drugi 15 A — w przewodzie N płynie obciążenie, nie nastawa.
+ *
+ * Wcześniej ta funkcja ważyła samym In, a tabela doboru w Rozdzielnicy przydzielała
+ * fazy osobnym algorytmem po Ib. Ten sam obwód dostawał przez to dwie różne fazy:
+ * jedną na froncie i schemacie, drugą w tabeli i bilansie. Teraz fazę nadają WYŁĄCZNIE
+ * aparaty, a tabela ją od nich czyta (patrz `fazyZRozdzielnicy`).
+ */
+export function balancePhases(devices: PanelDevice[], pradyWgKlucza?: ReadonlyMap<string, number>): PanelDevice[] {
   const load: Record<"L1" | "L2" | "L3", number> = { L1: 0, L2: 0, L3: 0 };
+  const obciazenie = (d: PanelDevice) => (d.key !== undefined ? pradyWgKlucza?.get(d.key) : undefined) ?? ratedCurrent(d.label);
   return devices.map((d) => {
     if (d.kind !== "mcb" || d.poles !== "1P") return d;
     const target = (["L1", "L2", "L3"] as const).reduce((a, b) => (load[a] <= load[b] ? a : b));
-    load[target] += ratedCurrent(d.label);
+    load[target] += obciazenie(d);
     return { ...d, phase: target };
   });
 }
@@ -141,6 +170,8 @@ export function balancePhases(devices: PanelDevice[]): PanelDevice[] {
 export interface BuildPanelDevicesOptions {
   supply3f?: boolean;
   mainRating?: number;
+  /** Prąd obliczeniowy obwodu wg klucza aparatu (`mcb-<id>`) — waga bilansu faz. */
+  pradyWgKlucza?: ReadonlyMap<string, number>;
 }
 
 /** Szereg prądów znamionowych, w jakich faktycznie produkuje się wyłączniki
@@ -174,7 +205,7 @@ function rcdRatingFor(mainRating: number, supply3f: boolean): number {
  * zabezpieczenie, kiedy jest faktycznie potrzebny. Ostrzeżenie o jego braku
  * (patrz `computeSelectivity`) i tak zostaje, bo dotyczy każdej instalacji. */
 export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevicesOptions = {}): PanelDevice[] {
-  const { supply3f = true, mainRating = 40 } = opts;
+  const { supply3f = true, mainRating = 40, pradyWgKlucza } = opts;
   const devices: PanelDevice[] = [];
   const p = supply3f ? "4P" : "2P";
   const mod = supply3f ? 4 : 2;
@@ -194,7 +225,9 @@ export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevices
       // Pełne oznaczenie składane z JEDNEGO źródła prądu znamionowego (`rcdRating`,
       // ten sam, co trafia na etykietę aparatu) i czułości grupy — inaczej front
       // rozdzielnicy i podpis pod nim podawały dwa różne ampery.
-      caption: `Wyłącznik różnicowoprądowy ${rcdRating}A/${r.rating}`,
+      // Typ w podpisie, bo to on decyduje, czy aparat w ogóle chroni dany obwód —
+      // RCD typu B do ładowarki kosztuje kilka razy więcej i w sklepie trzeba o nim wiedzieć.
+      caption: `Wyłącznik różnicowoprądowy ${rcdRating}A/${r.rating} typ ${r.typ ?? "A"}`,
       phase: supply3f ? "3F" : "L1",
       key: `rcd-${r.id}`,
     });
@@ -219,7 +252,7 @@ export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevices
   });
 
   const withPhases = supply3f
-    ? balancePhases(devices)
+    ? balancePhases(devices, pradyWgKlucza)
     : devices.map((d) => (d.kind === "mcb" && d.poles === "1P" ? { ...d, phase: "L1" as const } : d));
   return withPhases.map((d, i) => ({ ...d, uid: `${d.tag}-${i}` }));
 }

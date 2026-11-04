@@ -207,7 +207,17 @@ export interface Circuit {
   cable: string;
   breaker: string;
   rcd: boolean;
+  /**
+   * Obwód wymaga WŁASNEGO wyłącznika różnicowoprądowego typu B (albo typu A z RDC-DD
+   * w ładowarce) — punkt ładowania pojazdu wg PN-HD 60364-7-722. Nie może dzielić
+   * różnicówki z innymi obwodami: składowa stała z prostownika ładowarki „oślepia"
+   * zwykły RCD typu A, a wtedy przestaje chronić także te pozostałe obwody.
+   */
+  wlasnyRcdTypB?: boolean;
 }
+
+/** Typ wyłącznika różnicowoprądowego wg kształtu prądu, który wykrywa. */
+export type TypRcd = "A" | "B";
 
 export interface RcdGroup {
   id: string;
@@ -222,6 +232,8 @@ export interface RcdGroup {
    * samej wielkości — a podpis jest tym, z czym idzie się do sklepu.
    */
   rating: string;
+  /** Typ aparatu. Brak pola = „A" (zapisy sprzed jego dodania). */
+  typ?: TypRcd;
   circuits: Circuit[];
 }
 

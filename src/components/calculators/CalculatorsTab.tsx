@@ -240,6 +240,7 @@ export function CalculatorsTab() {
   const obwodZsOhm = useCalculatorsStore((s) => s.obwodZsOhm);
   const obwodIkA = useCalculatorsStore((s) => s.obwodIkA);
   const obwodCzasS = useCalculatorsStore((s) => s.obwodCzasS);
+  const obwodI2tA2s = useCalculatorsStore((s) => s.obwodI2tA2s);
   const spadekWlzPct = useCalculatorsStore((s) => s.spadekWlzPct);
   const wlasnaStacja = useCalculatorsStore((s) => s.wlasnaStacja);
   const breakerSection = useCalculatorsStore((s) => s.breakerSection);
@@ -487,6 +488,7 @@ export function CalculatorsTab() {
   const setObwodZsOhm = (v: number) => patch({ obwodZsOhm: v });
   const setObwodIkA = (v: number) => patch({ obwodIkA: v });
   const setObwodCzasS = (v: number) => patch({ obwodCzasS: v });
+  const setObwodI2tA2s = (v: number) => patch({ obwodI2tA2s: v });
   const setSpadekWlzPct = (v: number) => patch({ spadekWlzPct: v });
   const setWlasnaStacja = (v: boolean) => patch({ wlasnaStacja: v });
   const setBreakerSection = (v: number) => patch({ breakerSection: v });
@@ -909,6 +911,7 @@ export function CalculatorsTab() {
       Zs_Ohm: obwodZsOhm > 0 ? obwodZsOhm : undefined,
       Ik_A: obwodIkA > 0 ? obwodIkA : undefined,
       czas_s: obwodCzasS > 0 ? obwodCzasS : undefined,
+      I2t_A2s: obwodI2tA2s > 0 ? obwodI2tA2s : undefined,
       material: "Cu" as const,
       izolacja: "PVC" as const,
     };
@@ -949,6 +952,7 @@ export function CalculatorsTab() {
         spadek_pct: drop,
         spadek_limit_pct: limitSpadkuPct(circuitKind === "oswietlenie", wlasnaStacja),
         Zs_max_Ohm: sizedBreaker.Zs_max_Ohm,
+        Ia_A: sizedBreaker.Ia_A,
         przekroj_mm2: breakerSection,
       });
     }
@@ -974,9 +978,10 @@ export function CalculatorsTab() {
       spadek_pct: sized.spadek_calkowity_pct,
       spadek_limit_pct: sized.spadek_napiecia_limit_pct,
       Zs_max_Ohm: sized.Zs_max_Ohm,
+      Ia_A: sized.Ia_A,
       przekroj_mm2: sized.przekroj_mm2,
     });
-  }, [trybObwodu, sized, sizedBreaker, sizedFeeder, pelnyDobor, breakerSection, length, phase, circuitKind, wlasnaStacja, wlzCurrentA, obwodZsOhm, obwodIkA, obwodCzasS]);
+  }, [trybObwodu, sized, sizedBreaker, sizedFeeder, pelnyDobor, breakerSection, length, phase, circuitKind, wlasnaStacja, wlzCurrentA, obwodZsOhm, obwodIkA, obwodCzasS, obwodI2tA2s]);
 
   // --- 5. rezystancja uziemienia (układ TT) ---
   const groundingCheck = useMemo(() => {
@@ -3037,7 +3042,7 @@ export function CalculatorsTab() {
                   wytrzymałość zwarciową". Ten tryb liczy je z impedancji źródła i prądu zwarcia, a nie z gotowej Zs.
                 </p>
               ) : (
-              <div className="mb-3 grid gap-x-4 sm:grid-cols-3">
+              <div className="mb-3 grid gap-x-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Field
                   label="Impedancja pętli Zs"
                   value={obwodZsOhm}
@@ -3051,7 +3056,7 @@ export function CalculatorsTab() {
                   value={obwodIkA}
                   onChange={(v) => setObwodIkA(Number(v))}
                   unit="A"
-                  hint="Prąd zwarcia w tym punkcie — z kalkulatora „Prądy zwarciowe” albo z danych operatora. Do warunku cieplnego S ≥ Ik·√t / k."
+                  hint="Prąd zwarcia w tym punkcie — z kalkulatora „Prądy zwarciowe” albo z danych operatora. Zostaw 0, a policzy się z impedancji pętli: Ik = 0,95·230 V / Zs."
                 />
                 <Field
                   label="Czas wyłączenia t"
@@ -3059,7 +3064,15 @@ export function CalculatorsTab() {
                   onChange={(v) => setObwodCzasS(Number(v))}
                   unit="s"
                   step="0.05"
-                  hint="Czas zadziałania zabezpieczenia przy zwarciu. Dla obwodów odbiorczych do 32 A w układzie TN wymagane 0,4 s, dla rozdzielczych 5 s."
+                  hint="RZECZYWISTY czas zadziałania zabezpieczenia przy tym prądzie zwarcia, odczytany z jego charakterystyki — nie dopuszczalny czas z tabl. 41.1. Używany tylko, gdy Ik < Ia; przy Ik ≥ Ia wyłącznik działa elektromagnetycznie (< 0,1 s) i liczy się I²t."
+                />
+                <Field
+                  label="I²t aparatu"
+                  value={obwodI2tA2s}
+                  onChange={(v) => setObwodI2tA2s(Number(v))}
+                  unit="A²s"
+                  step="100"
+                  hint="Energia przenoszona przez wyłącznik przy tym prądzie zwarcia — z karty katalogowej (wykres I²t albo klasa ograniczenia energii). Potrzebna, gdy Ik ≥ Ia: warunek to k²S² ≥ I²t. 0 = nie podano."
                 />
               </div>
               )}

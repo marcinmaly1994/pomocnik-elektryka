@@ -33,6 +33,7 @@ import { ProjectsModal } from "@/components/auth/ProjectsModal";
 import { AccountModal, type AccountModalTab } from "@/components/auth/AccountModal";
 import { HelpModal } from "@/components/help/HelpModal";
 import { PasekPrzykladu } from "@/components/onboarding/PasekPrzykladu";
+import { PasekUszkodzonegoZapisu } from "@/components/ui/PasekUszkodzonegoZapisu";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { KompletDialog } from "@/components/ui/KompletDialog";
 import { KopiaZapasowa } from "@/components/ui/KopiaZapasowa";
@@ -963,6 +964,8 @@ export default function App() {
           „Zapisz zestaw" w Protokołach zapisuje do chmury normalnie, bo protokoły nie
           idą przez autozapis projektu (to jego blokuje `projektPrzykladowy`). */}
       {KOLEJNOSC_KROKOW.some((k) => k.id === tab) && <PasekPrzykladu />}
+      {/* Nad KAŻDĄ zakładką — patrz komentarz w komponencie. */}
+      <PasekUszkodzonegoZapisu />
       <ErrorBoundary key={tab} onReset={() => setTab(ZAKLADKA_DOMYSLNA)}>
       {tab === "kalkulatory" && (
         <Suspense fallback={<TabLoading />}>

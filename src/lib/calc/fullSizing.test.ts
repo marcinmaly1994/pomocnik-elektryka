@@ -81,15 +81,21 @@ describe("pełny dobór — kryterium 4 (wytrzymałość zwarciowa), opcjonalne"
     expect(r.wartosci!.kryteria.wytrzymalosc_zwarciowa.powod_pominiecia).toMatch(/NIE zostało sprawdzone/);
   });
 
-  it("duży prąd zwarciowy może wymusić większy przekrój", () => {
+  it("Ik ≥ Ia (wyzwalacz elektromagnetyczny, < 0,1 s) NIE podnosi przekroju wzorem z czasem dopuszczalnym", () => {
+    // Regresja z audytu: 8 kA liczone z t = 0,4 s wymuszało przekrój kilkukrotnie za duży,
+    // choć wyłącznik przy takim prądzie zadziała w milisekundach.
     const bez = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5 }));
     const z = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5, Ik_A: 8000 }));
-    expect(z.wartosci!.kryteria.wytrzymalosc_zwarciowa.ocenione).toBe(true);
-    expect(z.wartosci!.przekroj_mm2).toBeGreaterThanOrEqual(bez.wartosci!.przekroj_mm2);
+    expect(z.wartosci!.kryteria.wytrzymalosc_zwarciowa.ocenione).toBe(false);
+    expect(z.wartosci!.kryteria.wytrzymalosc_zwarciowa.powod_pominiecia).toMatch(/I²t/);
+    expect(z.wartosci!.przekroj_mm2).toBe(bez.wartosci!.przekroj_mm2);
   });
 
-  it("czas przyjęty do sprawdzenia to MAKSYMALNY dopuszczalny czas wg tabl. 41.1, nie realny czas wyłącznika", () => {
-    const r = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5, Ik_A: 3000 }));
+  it("Ik < Ia (strefa przeciążeniowa) liczy się wzorem z MAKSYMALNYM dopuszczalnym czasem wg tabl. 41.1", () => {
+    const bez = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5 }));
+    const Ia = 5 * bez.wartosci!.In_A; // charakterystyka B
+    const r = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5, Ik_A: Ia - 1 }));
+    expect(r.wartosci!.kryteria.wytrzymalosc_zwarciowa.ocenione).toBe(true);
     expect(r.zalozenia.join(" ")).toMatch(/MAKSYMALNY dopuszczalny czas/);
   });
 });

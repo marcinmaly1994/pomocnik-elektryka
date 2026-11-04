@@ -252,6 +252,36 @@ export function assignPhases(sized: SizedCircuit[], supply3f: boolean): SizedCir
   });
 }
 
+/**
+ * Prąd obliczeniowy obwodów wg klucza aparatu, który `buildPanelDevices` nadaje
+ * wyłącznikowi obwodu (`mcb-<id obwodu>`) — waga dla `balancePhases`.
+ */
+export function pradyWgKluczaAparatu(sized: SizedCircuit[]): Map<string, number> {
+  return new Map(sized.map((s) => [`mcb-${s.id}`, s.Ib_A ?? 0]));
+}
+
+/**
+ * Faza obwodu w tabeli doboru — odczytana z APARATU w rozdzielnicy.
+ *
+ * Aparat jest tym, co elektryk podłącza: z niego rysuje się front i schemat, na nim
+ * użytkownik przestawia fazę ręcznie. Tabela miała dotąd własny przydział
+ * (`assignPhases`), liczony niezależnie, więc dla tego samego obwodu potrafiła podać
+ * inną fazę niż schemat. `assignPhases` zostaje wyłącznie zapasem dla obwodów, które
+ * aparatu nie mają (skasowany z rozdzielnicy albo rozdzielnica jeszcze niezbudowana).
+ */
+export function fazyZRozdzielnicy(
+  sized: SizedCircuit[],
+  devices: ReadonlyArray<{ kind: string; key?: string; phase?: string }>,
+  supply3f: boolean
+): SizedCircuit[] {
+  const wgKlucza = new Map(devices.filter((d) => d.kind === "mcb" && d.key).map((d) => [d.key!, d.phase]));
+  return assignPhases(sized, supply3f).map((s) => {
+    if (s.liczba_faz === "3") return s;
+    const faza = wgKlucza.get(`mcb-${s.id}`);
+    return PHASES.includes(faza as Phase) ? { ...s, faza: faza as PhaseAssignment } : s;
+  });
+}
+
 /** Bilans faz w amperach i procentach — obwody 3-fazowe obciążają wszystkie trzy. */
 export function phaseBalance(sized: SizedCircuit[]): PhaseBalance {
   const amps: Record<Phase, number> = { L1: 0, L2: 0, L3: 0 };

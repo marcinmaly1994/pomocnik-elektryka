@@ -71,6 +71,46 @@ describe("ocenKryteria", () => {
     expect(stan(ocenKryteria(wejscie({ Ik_A: 1000, czas_s: 0.1, przekroj_mm2: 4 })), "wytrzymalosc_zwarciowa").stan).toBe("ok");
   });
 
+  it("niespelniony warunek cieplny nie pisze „≥” — znak musi mowic prawde", () => {
+    const o = stan(ocenKryteria(wejscie({ Ik_A: 1000, czas_s: 0.1 })), "wytrzymalosc_zwarciowa");
+    expect(o.opis).toMatch(/2,5 mm² < Ik/);
+  });
+
+  /**
+   * Regresja z audytu: B20, Ik = 1000 A, t = 0,4 s (domyslne) dawalo „2,5 mm² za malo,
+   * obwod nie przejdzie odbioru". Przy Ik >= Ia wylacznik dziala elektromagnetycznie
+   * w milisekundach — wzor z czasem dopuszczalnym nie ma tu zastosowania.
+   */
+  it("Ik >= Ia: nie liczy wzorem z czasem, tylko prosi o I2t aparatu i podaje k2S2", () => {
+    const o = stan(ocenKryteria(wejscie({ Ik_A: 1000, czas_s: 0.4, Ia_A: 100, przekroj_mm2: 2.5 })), "wytrzymalosc_zwarciowa");
+    expect(o.stan).toBe("nieoceniono");
+    expect(o.opis).toMatch(/I²t/);
+    expect(o.opis).toMatch(/82 656 A²s|82656 A²s|82 656/); // (115·2,5)² = 82 656,25
+  });
+
+  it("Ik >= Ia z podanym I2t: k2S2 >= I2t", () => {
+    const ok = stan(ocenKryteria(wejscie({ Ik_A: 1000, Ia_A: 100, I2t_A2s: 20000 })), "wytrzymalosc_zwarciowa");
+    expect(ok.stan).toBe("ok");
+    expect(ok.opis).toMatch(/≥ I²t/);
+    expect(stan(ocenKryteria(wejscie({ Ik_A: 1000, Ia_A: 100, I2t_A2s: 100000 })), "wytrzymalosc_zwarciowa").stan).toBe("blad");
+  });
+
+  it("Ik < Ia: zostaje wzor adiabatyczny z podanym czasem", () => {
+    const o = stan(ocenKryteria(wejscie({ Ik_A: 90, Ia_A: 100, czas_s: 2 })), "wytrzymalosc_zwarciowa");
+    expect(o.stan).toBe("ok"); // 90·√2/115 = 1,11 mm²
+  });
+
+  it("bez Ik, z podana Zs: prad zwarcia liczy sie z petli (0,95·230/Zs)", () => {
+    // Zs 1,5 Ω → Ik = 0,95·230/1,5 = 145,7 A (>= Ia 100 A, czyli strefa elektromagnetyczna)
+    const o = stan(ocenKryteria(wejscie({ Zs_Ohm: 1.5, Ia_A: 100 })), "wytrzymalosc_zwarciowa");
+    expect(o.opis).toMatch(/Ik 146 A \(z Zs/);
+  });
+
+  it("sprzeczne Ik i Zs sa zglaszane", () => {
+    const o = stan(ocenKryteria(wejscie({ Zs_Ohm: 1.5, Ik_A: 1000, Ia_A: 100, I2t_A2s: 20000 })), "wytrzymalosc_zwarciowa");
+    expect(o.opis).toMatch(/nie zgadza się z Zs/);
+  });
+
   /** XLPE znosi wyzsza temperature zwarciowa, wiec ten sam prad wymaga cienszej zyly. */
   it("izolacja wplywa na warunek cieplny", () => {
     expect(minPrzekrojZwarciowy(1000, 0.1, "Cu", "XLPE")).toBeLessThan(minPrzekrojZwarciowy(1000, 0.1, "Cu", "PVC"));

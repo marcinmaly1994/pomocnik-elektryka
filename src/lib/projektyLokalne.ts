@@ -102,6 +102,45 @@ export function usunProjekt(magazyn: Magazyn, id: string): WpisProjektu[] {
   return zostalo;
 }
 
+/** Klucz, pod który odkładamy zapis, którego nie dało się wczytać. */
+export function kluczUszkodzonego(id: string): string {
+  return `pomocnikelektryka_uszkodzony_${id}`;
+}
+
+export interface OdlozonyZapis {
+  nazwa: string;
+  klucz: string;
+}
+
+/**
+ * Odkłada na bok zapis projektu, który nie daje się wczytać, i zdejmuje go z listy.
+ *
+ * Nie kasuje treści — przenosi ją pod osobny klucz. Gdyby uszkodzony slot zostawić
+ * na liście, pierwszy autozapis nadpisałby go pustym projektem i surowe dane
+ * przepadłyby bez śladu; gdyby go wczytywać dalej, każdy start kończyłby się białym
+ * ekranem, także w Kalkulatorach, które z projektu w ogóle nie korzystają.
+ * Odłożona kopia zostaje do pobrania (komunikat po starcie), bo bywa naprawialna ręcznie.
+ *
+ * Gdy zabraknie miejsca na kopię (`setItem` rzuca przy pełnym magazynie), slot zostaje
+ * nietknięty i na liście, a zdejmujemy tylko wskaźnik bieżącego — autozapis założy
+ * wtedy nowy slot, zamiast nadpisać ten. Lepiej nie otworzyć projektu, niż go zniszczyć.
+ */
+export function odlozUszkodzony(magazyn: Magazyn, id: string): OdlozonyZapis | null {
+  const raw = magazyn.getItem(kluczProjektu(id));
+  const nazwa = czytajIndeks(magazyn).find((w) => w.id === id)?.nazwa ?? NAZWA_ZASTEPCZA;
+  const klucz = kluczUszkodzonego(id);
+  if (raw !== null) {
+    try {
+      magazyn.setItem(klucz, raw);
+    } catch {
+      if (biezacyId(magazyn) === id) magazyn.removeItem(KLUCZ_BIEZACEGO);
+      return null;
+    }
+  }
+  usunProjekt(magazyn, id);
+  return { nazwa, klucz };
+}
+
 /**
  * Przenosi projekt sprzed wprowadzenia listy na listę.
  *

@@ -8,6 +8,8 @@ import {
   ustawBiezacy,
   usunProjekt,
   czyJestMiejsce,
+  kluczUszkodzonego,
+  odlozUszkodzony,
   KLUCZ_INDEKSU,
   KLUCZ_BIEZACEGO,
   KLUCZ_STAREGO_AUTOZAPISU,
@@ -146,6 +148,44 @@ describe("usunProjekt", () => {
     zapiszIndeks(m, [wpis("a")]);
     ustawBiezacy(m, "a");
     usunProjekt(m, "a");
+    expect(biezacyId(m)).toBeNull();
+  });
+});
+
+describe("odlozUszkodzony", () => {
+  it("przenosi surowy zapis pod osobny klucz i zdejmuje projekt z listy", () => {
+    const m = magazyn();
+    zapiszIndeks(m, [wpis("a", "Mój dom"), wpis("b")]);
+    ustawBiezacy(m, "a");
+    m.setItem(kluczProjektu("a"), '{"walls":"x"}');
+
+    const odlozony = odlozUszkodzony(m, "a");
+
+    expect(odlozony).toEqual({ nazwa: "Mój dom", klucz: kluczUszkodzonego("a") });
+    // treść nie przepada — tylko zmienia miejsce
+    expect(m.getItem(kluczUszkodzonego("a"))).toBe('{"walls":"x"}');
+    expect(m.getItem(kluczProjektu("a"))).toBeNull();
+    expect(czytajIndeks(m).map((w) => w.id)).toEqual(["b"]);
+    // bez wskaźnika autozapis założy nowy slot, zamiast pisać w odłożony
+    expect(biezacyId(m)).toBeNull();
+  });
+
+  it("gdy brakuje miejsca na kopię, nie kasuje slotu — zdejmuje tylko wskaźnik bieżącego", () => {
+    const m = magazyn();
+    zapiszIndeks(m, [wpis("a")]);
+    ustawBiezacy(m, "a");
+    m.setItem(kluczProjektu("a"), "{}");
+    const pelny: Magazyn = {
+      ...m,
+      setItem: (k, v) => {
+        if (k === kluczUszkodzonego("a")) throw new Error("QuotaExceededError");
+        m.setItem(k, v);
+      },
+    };
+
+    expect(odlozUszkodzony(pelny, "a")).toBeNull();
+    expect(m.getItem(kluczProjektu("a"))).toBe("{}");
+    expect(czytajIndeks(m).map((w) => w.id)).toEqual(["a"]);
     expect(biezacyId(m)).toBeNull();
   });
 });
