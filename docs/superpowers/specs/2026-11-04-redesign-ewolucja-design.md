@@ -28,8 +28,9 @@ bez zmiany tożsamości, logiki obliczeń, modułów ani danych.
 
 ## 1. Tokeny kolorów
 
-Zmienne CSS na `:root` w `src/index.css`, mapowane w `tailwind.config.ts`
-(Tailwind dalej używa nazw klas, wartości idą ze zmiennych).
+Stałe w module `src/lib/tokeny.ts` — jedno źródło dla motywu Tailwinda, arkusza
+(`theme()`), stylów inline i testów kontrastu (test i style inline potrzebują
+wartości, nie odwołania do zmiennej CSS).
 
 | Rola | Token | Wartość |
 |---|---|---|
@@ -51,21 +52,18 @@ Kolory danych rysunku, PDF-ów i legend — **bez zmian**.
 
 ## 2. Typografia
 
-Skala w `tailwind.config.ts` (`fontSize`), nazwy zamiast `text-[11px]`:
+Standardowa skala Tailwinda, bez przedefiniowania — nazwy zamiast `text-[11px]`
+(przedefiniowanie `sm`/`base` zmniejszyłoby tekst w ~160 istniejących miejscach):
 
-| Token | px / line-height | Użycie |
+| Klasa | px / line-height | Użycie |
 |---|---|---|
-| `text-caption` | 12 / 16 | podpisy, znaczniki, stopki — minimum interfejsu |
-| `text-sm` | 13 / 18 | tekst drugorzędny, etykiety pól |
-| `text-base` | 14 / 20 | tekst interfejsu |
-| `text-md` | 16 / 24 | pola formularzy na telefonie, tekst czytany |
-| `text-lg` | 18 / 26 | tytuły kart |
-| `text-xl` | 22 / 28 | tytuły stron |
-| `text-hero` | 30 / 36 | wartość wyniku głównego |
+| `text-xs` | 12 / 16 | podpisy, znaczniki, stopki — minimum interfejsu |
+| `text-sm` | 14 / 20 | tekst interfejsu, etykiety pól |
+| `text-base` | 16 / 24 | pola formularzy na telefonie, tekst czytany |
+| `text-lg` | 18 / 28 | tytuły kart |
+| `text-xl` / `text-2xl` | 20 / 24 px | tytuły stron |
+| `text-3xl` | 30 / 36 | wartość wyniku głównego |
 
-- Uwaga: `text-sm` i `text-base` mają dziś domyślne wartości Tailwinda (14 i 16 px).
-  Przedefiniowanie zmienia je w całej aplikacji — to zamierzone, ale PR 1 przegląda
-  wszystkie widoki przed/po, a miejsca, które mają zostać większe, dostają `text-md`.
 - Nic w interfejsie poniżej 12 px. Wyjątek: napisy na płótnie Konva i w PDF.
 - Pola `input`/`select` mają 16 px poniżej `md` (iOS nie powiększa strony).
 - Liczby: IBM Plex Mono, `tabular-nums` (klasa `pe-mono` zostaje).
@@ -100,7 +98,7 @@ Wszystkie w `src/components/ui/`.
   `pe-select` z własną strzałką; Radix Select bez zmian tam, gdzie już jest.
 - **`Card`**: `rounded-card border bg-surface shadow-xs`, nagłówek `text-lg`.
 - **`Badge`**: zastępuje `pe-chip` + `pe-tag-*` (warianty neutral / info /
-  success / caution / danger / accent), `text-caption`.
+  success / caution / danger / accent), `text-xs`.
 - **`Alert`**: info / success / caution / danger z ikoną, `text-base`;
   zastępuje ręcznie stylowane ramki komunikatów.
 
@@ -124,7 +122,7 @@ Wszystkie w `src/components/ui/`.
 ## 6. Kalkulatory i wyniki
 
 - **`WynikGlowny`** (nowy, `calculators/WynikGlowny.tsx`): etykieta
-  (`text-sm`), wartość (`text-hero`, mono) + jednostka, wartości pomocnicze jako
+  (`text-sm`), wartość (`text-3xl`, mono) + jednostka, wartości pomocnicze jako
   `Badge`, pod spodem `PasekWerdyktu`. Tylko prezentacja — dostaje gotowe
   wartości, zero matematyki (ta sama zasada co `CalcResultView`).
   Wchodzi do wszystkich 19 kalkulatorów w miejsce obecnych ramek wyniku.
