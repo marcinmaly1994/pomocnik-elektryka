@@ -1,5 +1,5 @@
 import type { DocumentHeader } from "@/types";
-import { createPdfDoc, pdfFitText, pdfTextWidth, type PdfDoc } from "./engine";
+import { createPdfDoc, pdfDopasujRozmiar, pdfFitText, pdfTextWidth, pdfZawinDoLinii, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
 import { PROTOCOL_DEFS, limitOceny, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
@@ -74,29 +74,53 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
   // w PDF-ie). Wcześniej dół podawano jako `doc.y - 6`, więc 96-punktowe tło jechało
   // 90 pt ponad bieżącą pozycję — przykrywało tytuł i wychodziło poza krawędź strony.
   // Stąd „szary prostokąt na górze" i wrażenie, że nagłówka nie ma: był, tylko pod spodem.
-  const wysBloku = 6 + (info.length / 2) * 15;
+  // Pierwszy wiersz stał tuż przy górnej krawędzi szarego pola (ascendery dotykały
+  // krawędzi), więc pole dostaje 5 pt zapasu od góry — treść schodzi o tyle niżej.
+  const ZAPAS_GORNY = 5;
+  const wysBloku = 6 + (info.length / 2) * 15 + ZAPAS_GORNY;
   doc.box(M, doc.y + 8 - wysBloku, W, wysBloku, 0.965);
+  // Długi adres albo nazwa obiektu najpierw maleje (do 7 pt), dopiero potem jest przycinana.
+  const wartosc = (tekst: string | undefined, szer: number) => pdfDopasujRozmiar(tekst || "—", szer, 8.5, 7, false);
   for (let i = 0; i < info.length; i += 2) {
-    const yy = doc.y + 2;
+    const yy = doc.y + 2 - ZAPAS_GORNY;
     const label1 = info[i][0] + ":";
     const value1X = M + 6 + pdfTextWidth(label1, 8.5, true) + 6;
     doc.text(label1, M + 6, yy, 8.5, true);
-    doc.text(pdfFitText(info[i][1] || "—", col1End - value1X, 8.5, false), value1X, yy, 8.5);
+    const w1 = wartosc(info[i][1], col1End - value1X);
+    doc.text(w1.tekst, value1X, yy, w1.size);
     if (info[i + 1]) {
       const label2 = info[i + 1][0] + ":";
       const value2X = M + 274 + pdfTextWidth(label2, 8.5, true) + 6;
       doc.text(label2, M + 274, yy, 8.5, true);
-      doc.text(pdfFitText(info[i + 1][1] || "—", col2End - value2X, 8.5, false), value2X, yy, 8.5);
+      const w2 = wartosc(info[i + 1][1], col2End - value2X);
+      doc.text(w2.tekst, value2X, yy, w2.size);
     }
     doc.y -= 15;
   }
-  doc.y -= 12;
+  doc.y -= 12 + ZAPAS_GORNY;
 
   doc.text(def.intro, M, doc.y, 8.5, false, 0.3);
   doc.y -= 18;
 
   // --- tabela wyników ---
+  /**
+   * Wiersze mają ZMIENNĄ wysokość: komórka tekstowa zawija się do trzech linii (w razie
+   * potrzeby mniejszą czcionką), a nie jest przycinana wielokropkiem.
+   *
+   * Protokół jest dokumentem z podpisem, a nazwa obwodu jest jego treścią. Przycięte
+   * „F8 Gniazda kuchn.." czy „FI1 63A/30.." (zamiast „…30mA") to protokół, którego nie
+   * da się zweryfikować przy odbiorze. Ocena — jedyna kolumna, którą czyta się w pierwszej
+   * kolejności — miała szerokość z definicji i bywała ucinana do „NEGATYW.." / „pozytyw..".
+   */
   const ROW_H = 17;
+  const LINIA = 10; // odstęp linii w komórce wielowierszowej
+  const ZAPAS_PION = 7; // góra + dół wiersza wielolinijkowego
+  const ROZMIARY_KOMORKI = [8.5, 8, 7.5];
+
+  /** Baza pierwszej linii komórki o `n` liniach, wyśrodkowanej pionowo w wierszu o wysokości `wys`. */
+  const bazaLinii = (n: number, wys: number, size: number, j: number) =>
+    doc.y + 5 - wys / 2 + ((n - 1) * LINIA) / 2 - 2.5 * (size / 8.5) - j * LINIA;
+
   if (def.checklist) {
     const cols = [
       { label: "Lp.", w: 28 },
@@ -115,13 +139,15 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
     };
     drawHead();
     rows.forEach((r, i) => {
-      if (doc.ensure(ROW_H)) drawHead();
-      if (i % 2 === 1) doc.box(M, doc.y - ROW_H + 5, W, ROW_H, 0.968);
+      const opis = pdfZawinDoLinii(String(r.text ?? ""), cols[1].w - 10, ROZMIARY_KOMORKI, 3);
+      const wys = Math.max(ROW_H, opis.linie.length * LINIA + ZAPAS_PION);
+      if (doc.ensure(wys)) drawHead();
+      if (i % 2 === 1) doc.box(M, doc.y - wys + 5, W, wys, 0.968);
       const label = ({ tak: "zgodne", nie: "NIEZGODNE", nd: "nie dotyczy" } as Record<string, string>)[String(r.status)] || "—";
-      doc.text(String(i + 1), M + 5, doc.y - ROW_H + 11, 8.5);
-      doc.text(pdfFitText(String(r.text ?? ""), cols[1].w - 10, 8.5, false), M + 33, doc.y - ROW_H + 11, 8.5);
-      doc.text(label, M + 28 + cols[1].w + 5, doc.y - ROW_H + 11, 8.5, r.status === "nie");
-      doc.y -= ROW_H;
+      doc.text(String(i + 1), M + 5, bazaLinii(1, wys, 8.5, 0), 8.5);
+      opis.linie.forEach((linia, j) => doc.text(linia, M + 33, bazaLinii(opis.linie.length, wys, opis.size, j), opis.size));
+      doc.text(label, M + 28 + cols[1].w + 5, bazaLinii(1, wys, 8.5, 0), 8.5, r.status === "nie");
+      doc.y -= wys;
       doc.line(M, doc.y + 5, M + W, doc.y + 5, 0.4, 0.86);
     });
   } else {
@@ -132,7 +158,23 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
     ];
     const totalW = baseCols.reduce((a, c) => a + c.w, 0);
     const scale = W / totalW;
-    const cols = baseCols.map((c) => ({ ...c, w: c.w * scale }));
+    let cols = baseCols.map((c) => ({ ...c, w: c.w * scale }));
+
+    // Dwie kolumny mają dolną granicę szerokości, bo ich treść nie może się zawijać ani
+    // ginąć: „Ocena" musi pomieścić najdłuższy werdykt (pogrubione „NEGATYWNA"), a „Lp."
+    // nagłówek bez rozbijania na „L" i „p.". Kolumna węższa od swojej granicy dostaje ją,
+    // a reszta oddaje potrzebne miejsce proporcjonalnie.
+    const minima = new Map<number, number>([
+      [0, pdfTextWidth("Lp.", 8, true) + 8],
+      [cols.length - 1, pdfTextWidth("NEGATYWNA", 8.5, true) + 10],
+    ]);
+    const sztywne = new Set([...minima.keys()].filter((k) => cols[k].w < minima.get(k)!));
+    if (sztywne.size) {
+      const zajete = [...sztywne].reduce((a, k) => a + minima.get(k)!, 0);
+      const innych = cols.filter((_, k) => !sztywne.has(k)).reduce((a, c) => a + c.w, 0);
+      const wspolczynnik = (W - zajete) / innych;
+      cols = cols.map((c, k) => (sztywne.has(k) ? { ...c, w: minima.get(k)! } : { ...c, w: c.w * wspolczynnik }));
+    }
 
     // Kolumny opisowe czytają się od lewej — nazwa obwodu ma zaczynać się w jednym
     // miejscu w każdym wierszu. Wartości (liczby, wybory, ocena) WYŚRODKOWUJEMY.
@@ -148,47 +190,83 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
     const xTekstu = (tekst: string, lewa: number, c: (typeof cols)[number], size: number, bold: boolean) =>
       doSrodka(c) ? lewa + Math.max(3, (c.w - pdfTextWidth(tekst, size, bold)) / 2) : lewa + 4;
 
+    /**
+     * Nagłówki kolumn: do dwóch linii, a gdy trzeba — mniejszą czcionką; trzy linie
+     * dopiero, gdy dwie nie wystarczają. Przycinanie wielokropkiem („Typ przewodu (kab..",
+     * „L1-PE/P..") zostaje ostatnią deską ratunku.
+     */
+    const ROZMIARY_NAGLOWKA = [8, 7.5, 7, 6.5];
+    const naglowki = cols.map((c) => {
+      const dwie = pdfZawinDoLinii(c.label, c.w - 6, ROZMIARY_NAGLOWKA, 2, true);
+      return dwie.uciety ? pdfZawinDoLinii(c.label, c.w - 6, ROZMIARY_NAGLOWKA, 3, true) : dwie;
+    });
+    const liniiNaglowka = Math.max(...naglowki.map((n) => n.linie.length));
+    const HEAD_H = 18 + (liniiNaglowka - 1) * 9;
+
     const drawHead = () => {
-      doc.box(M, doc.y - 12, W, 18, 0.88);
+      doc.box(M, doc.y + 6 - HEAD_H, W, HEAD_H, 0.88);
       let lewa = M;
-      cols.forEach((c) => {
-        const etykieta = pdfFitText(c.label, c.w - 6, 8, true);
-        doc.text(etykieta, xTekstu(etykieta, lewa, c, 8, true), doc.y - 7, 8, true);
+      cols.forEach((c, k) => {
+        // Pierwsze linie wszystkich nagłówków stoją na JEDNEJ linii bazowej, a dalsze pod
+        // nimi — nagłówek jednoliniowy nie skacze w środek wielolinijkowego sąsiada.
+        naglowki[k].linie.forEach((linia, j) => {
+          doc.text(linia, xTekstu(linia, lewa, c, naglowki[k].size, true), doc.y - 7 - j * 9, naglowki[k].size, true);
+        });
         lewa += c.w;
       });
-      doc.y -= 18;
+      doc.y -= HEAD_H;
       doc.line(M, doc.y + 5, M + W, doc.y + 5, 0.8, 0.4);
     };
     drawHead();
 
+    /** Treść komórki wiersza: linie, rozmiar i krój. */
+    const komorka = (r: ProtocolRow, i: number, c: (typeof cols)[number]) => {
+      if (c.key === "__ocena") {
+        const ok = def.evaluate!(r, limit);
+        return { linie: [ok === null ? "—" : ok ? "pozytywna" : "NEGATYWNA"], size: 8.5, bold: true };
+      }
+      let v: string;
+      if (c.key === "__lp") {
+        v = String(i + 1);
+      } else if (c.def?.type === "computed") {
+        v = c.def.compute!(r, limit);
+      } else if (r[c.key] === undefined || r[c.key] === "") {
+        v = "—";
+      } else if (c.def?.type === "number") {
+        // Przecinek dziesiętny: dokument jest po polsku i obok stoją „2,73" i „1,0",
+        // a wpisane „0.4" wyglądało jak literówka.
+        v = String(r[c.key]).replace(".", ",");
+      } else {
+        v = String(r[c.key]);
+      }
+      if (c.def?.type === "text") {
+        const z = pdfZawinDoLinii(v, c.w - 8, ROZMIARY_KOMORKI, 3);
+        return { linie: z.linie, size: z.size, bold: false };
+      }
+      const d = pdfDopasujRozmiar(v, c.w - 6, 8.5, 7, false);
+      return { linie: [d.tekst], size: d.size, bold: false };
+    };
+
     rows.forEach((r, i) => {
-      if (doc.ensure(ROW_H)) drawHead();
-      if (i % 2 === 1) doc.box(M, doc.y - ROW_H + 5, W, ROW_H, 0.968);
+      const komorki = cols.map((c) => komorka(r, i, c));
+      const wys = Math.max(ROW_H, Math.max(...komorki.map((k) => k.linie.length)) * LINIA + ZAPAS_PION);
+      if (doc.ensure(wys)) drawHead();
+      if (i % 2 === 1) doc.box(M, doc.y - wys + 5, W, wys, 0.968);
       let lewa = M;
-      cols.forEach((c) => {
-        let v: string;
-        if (c.key === "__lp") {
-          v = String(i + 1);
-        } else if (c.key === "__ocena") {
-          const ok = def.evaluate!(r, limit);
-          v = ok === null ? "—" : ok ? "pozytywna" : "NEGATYWNA";
-        } else if (c.def?.type === "computed") {
-          v = c.def.compute!(r, limit);
-        } else {
-          v = r[c.key] === undefined || r[c.key] === "" ? "—" : String(r[c.key]);
-        }
-        const pogrubione = c.key === "__ocena";
-        const tekst = pdfFitText(v, c.w - 6, 8.5, pogrubione);
-        doc.text(tekst, xTekstu(tekst, lewa, c, 8.5, pogrubione), doc.y - ROW_H + 11, 8.5, pogrubione);
+      cols.forEach((c, k) => {
+        const kom = komorki[k];
+        kom.linie.forEach((linia, j) => {
+          doc.text(linia, xTekstu(linia, lewa, c, kom.size, kom.bold), bazaLinii(kom.linie.length, wys, kom.size, j), kom.size, kom.bold);
+        });
         lewa += c.w;
       });
-      doc.y -= ROW_H;
+      doc.y -= wys;
       doc.line(M, doc.y + 5, M + W, doc.y + 5, 0.4, 0.86);
     });
 
     doc.y -= 14;
     doc.ensure(20);
-    doc.text(`Kryterium oceny: ${def.limitLabel} = ${limit} ${def.limitUnit}`, M, doc.y, 8.5, false, 0.3);
+    doc.text(`Kryterium oceny: ${def.limitLabel} = ${String(limit).replace(".", ",")} ${def.limitUnit}`, M, doc.y, 8.5, false, 0.3);
     doc.y -= 12;
     // Kryteria niebędące jedną liczbą (czasy RCD zależne od typu, progi izolacji
     // zależne od napięcia próby) muszą stać na WYDRUKU — bez nich czytający protokół
