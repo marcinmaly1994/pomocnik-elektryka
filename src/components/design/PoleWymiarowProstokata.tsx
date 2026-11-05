@@ -58,8 +58,14 @@ export function PoleWymiarowProstokata({
   const pole = "w-16 rounded border border-border px-1.5 py-0.5";
 
   return (
-    <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-slate-500">
-      albo podaj wymiary:
+    // Dwa nierozrywalne kawałki, które ZAWIJAJĄ SIĘ względem siebie: podpis i pola
+    // z przyciskiem. Wcześniej całość była jednym `whitespace-nowrap` + `shrink-0`
+    // i na telefonie (320–390 px) drugie pole, jednostka i „Utwórz" wypadały poza
+    // nakładkę nad rzutem — przycisku nie dało się nacisnąć (audyt 5.11.2026).
+    // Same pola z przyciskiem (ok. 230 px) mieszczą się w nakładce nawet przy 320 px.
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-slate-500">
+      <span className="whitespace-nowrap">albo podaj wymiary:</span>
+      <span className="flex items-center gap-1.5 whitespace-nowrap">
       <input
         data-testid="room-rect-width-input"
         type="text"
@@ -85,6 +91,7 @@ export function PoleWymiarowProstokata({
       <button onClick={utworz} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">
         Utwórz
       </button>
+      </span>
     </span>
   );
 }
