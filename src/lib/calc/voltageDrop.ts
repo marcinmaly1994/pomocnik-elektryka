@@ -104,12 +104,20 @@ function walidacja(w: SpadekWejscie): CalcError[] {
   if (!(w.przekroj_mm2 > 0))
     b.push({ code: "PRZEKROJ", pole: "przekroj_mm2", message: "Przekrój żyły musi być większy od zera." });
 
+  // Wartość ujemna dostaje WŁASNY komunikat: dotąd −5 A kończyło się radą „Podaj prąd",
+  // jakby pola nie wypełniono, choć wpisano coś, czego fizycznie nie ma (audyt, B17).
+  const ujemnyPrad = (w.prad_A ?? 0) < 0;
+  const ujemnaMoc = (w.moc_W ?? 0) < 0;
+  if (ujemnyPrad) b.push({ code: "PRAD_UJEMNY", pole: "prad_A", message: "Prąd obciążenia nie może być ujemny." });
+  if (ujemnaMoc) b.push({ code: "MOC_UJEMNA", pole: "moc_W", message: "Moc odbiornika nie może być ujemna." });
   const maObciazenie = (w.prad_A ?? 0) > 0 || (w.moc_W ?? 0) > 0;
-  if (!maObciazenie && !(w.odbiory && w.odbiory.length > 0))
+  if (!maObciazenie && !ujemnyPrad && !ujemnaMoc && !(w.odbiory && w.odbiory.length > 0))
     b.push({ code: "BRAK_OBCIAZENIA", message: "Podaj prąd obliczeniowy albo moc odbiornika." });
 
+  if ((w.dlugosc_m ?? 0) < 0) b.push({ code: "DLUGOSC_UJEMNA", pole: "dlugosc_m", message: "Długość trasy nie może być ujemna." });
   const maDlugosc = (w.dlugosc_m ?? 0) > 0 || (w.odbiory && w.odbiory.some((o) => o.dlugosc_m > 0));
-  if (!maDlugosc) b.push({ code: "BRAK_DLUGOSCI", pole: "dlugosc_m", message: "Podaj długość trasy — bez niej nie ma czego liczyć." });
+  if (!maDlugosc && !((w.dlugosc_m ?? 0) < 0))
+    b.push({ code: "BRAK_DLUGOSCI", pole: "dlugosc_m", message: "Podaj długość trasy — bez niej nie ma czego liczyć." });
 
   // Spec pkt 7: metoda uproszczona jest ZABRONIONA dla dużych przekrojów.
   if (!w.zReaktancja && w.przekroj_mm2 >= MIN_PRZEKROJ_Z_REAKTANCJA_MM2)
@@ -229,6 +237,17 @@ export function obliczSpadekNapiecia(w: SpadekWejscie): CalcResult<SpadekWynik> 
     zalozenia.push("Metoda uproszczona: pominięta reaktancja — dopuszczalna dla małych przekrojów albo cosφ bliskiego 1.");
   }
 
+  // Spadek równy napięciu zasilania albo większy nie jest wynikiem, tylko znakiem błędnych
+  // danych — dawniej 1 000 000 m dawało „napięcie u odbiornika −285 484 V" (audyt, B15).
+  if (spadek_V >= w.napiecie_V) {
+    return bladWyniku([
+      {
+        code: "SPADEK_PONAD_NAPIECIE",
+        pole: "dlugosc_m",
+        message: `Wyliczony spadek (${formatLiczba(spadek_V, 0)} V) jest nie mniejszy niż napięcie zasilania ${formatLiczba(w.napiecie_V, 0)} V — taki obwód nie zasili odbiornika. Sprawdź dane: długość w metrach, prąd w amperach, przekrój w mm².`,
+      },
+    ]);
+  }
   const spadek_pct = (spadek_V / w.napiecie_V) * 100;
   kroki.push({
     opis: "Spadek względny",

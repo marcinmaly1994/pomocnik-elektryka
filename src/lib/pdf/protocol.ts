@@ -2,7 +2,7 @@ import type { DocumentHeader } from "@/types";
 import { createPdfDoc, pdfDopasujRozmiar, pdfFitText, pdfTextWidth, pdfZawinDoLinii, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
-import { PROTOCOL_DEFS, limitOceny, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
 import type { ProtocolKey } from "@/types";
 
 /** Łamie tekst na linie mieszczące się w `maxWidth`. Wydzielone z bloku „Uwagi",
@@ -222,7 +222,7 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
     /** Treść komórki wiersza: linie, rozmiar i krój. */
     const komorka = (r: ProtocolRow, i: number, c: (typeof cols)[number]) => {
       if (c.key === "__ocena") {
-        const ok = def.evaluate!(r, limit);
+        const ok = ocenWiersz(def, r, limit);
         return { linie: [ok === null ? "—" : ok ? "pozytywna" : "NEGATYWNA"], size: 8.5, bold: true };
       }
       let v: string;

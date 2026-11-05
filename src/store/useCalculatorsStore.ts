@@ -307,6 +307,8 @@ interface CalculatorsState {
   // --- bilans mocy ---
   devices: CalculatorDevice[];
   ks: number;
+  /** cos φ do prądu zapotrzebowanego w bilansie mocy — 1 dla odbiorników rezystancyjnych. */
+  ksCosfi: number;
 
   // --- impedancja pętli zwarcia ---
   zCurve: string;
@@ -535,6 +537,7 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
 
       devices: DEFAULT_DEVICES,
       ks: 0.7,
+      ksCosfi: 1,
 
       zCurve: "B",
       zIn: 16,

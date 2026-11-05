@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PROTOCOL_DEFS, limitOceny, protocolVerdict, wierszeBezOceny, type ProtocolRow } from "./protocols";
+import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, wierszeBezOceny, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
@@ -250,5 +250,31 @@ describe("zapas pomiarowy w protokole pętli zwarcia", () => {
 
   it("werdykt protokołu liczy się z przyciętej wartości, także ze starego zapisu", () => {
     expect(protocolVerdict(def, [zaDuza], limitOceny(def, 2))).toBe(false);
+  });
+});
+
+describe("wartości ujemne w protokołach (audyt 2026-11-04, B12)", () => {
+  const iz = PROTOCOL_DEFS.izolacja;
+
+  it("ujemny pomiar to błąd danych: wiersz bez oceny, a nie „negatywna”", () => {
+    const wiersz: ProtocolRow = { l1n: "0.8", npe: "-3" };
+    expect(ocenWiersz(iz, wiersz, 500)).toBeNull();
+    expect(ujemneWProtokole(iz, [wiersz])).toEqual([{ wiersz: 1, kolumny: ["N-PE"] }]);
+    // werdykt ogólny: brak kompletu, nie negatywny
+    expect(protocolVerdict(iz, [wiersz], 500)).toBeNull();
+  });
+
+  it("bez wartości ujemnych ocena jest taka jak dotąd", () => {
+    expect(ocenWiersz(iz, { l1n: "0.8" }, 500)).toBe(false);
+    expect(ocenWiersz(iz, { l1n: "250" }, 500)).toBe(true);
+    expect(ujemneWProtokole(iz, [{ l1n: "250" }])).toEqual([]);
+  });
+
+  it("puste pola i tekst nie są wartościami ujemnymi", () => {
+    expect(ujemneWProtokole(iz, [{ l1n: "", npe: "abc" }])).toEqual([]);
+  });
+
+  it("dotyczy wszystkich protokołów pomiarowych — np. czas zadziałania RCD", () => {
+    expect(ujemneWProtokole(PROTOCOL_DEFS.rcd, [{ idn: "30", id: "20", t1: "-5" }])[0].kolumny).toEqual(["t przy IΔn [ms]"]);
   });
 });

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { PROTOCOL_DEFS, PROTOCOL_ORDER, limitOceny, protocolVerdict, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_DEFS, PROTOCOL_ORDER, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
 import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
@@ -227,6 +227,9 @@ export function ProtocolsTab() {
 
   const verdict = protocolVerdict(def, rows, limit);
   const headerReady = !!header.obiekt && !!header.wykonawca;
+  // Wartości ujemne blokują PDF: to dokument formalny, a −3 MΩ to błąd wpisu, nie pomiar.
+  const ujemne = ujemneWProtokole(def, rows);
+  const blokadaPdf = !rows.length || ujemne.length > 0;
 
   return (
     // Pola 16 px na wąskim ekranie — Safari na iPhonie przy mniejszej czcionce przybliża
@@ -407,19 +410,32 @@ export function ProtocolsTab() {
                 sprawdzam, czy protokół się zgadza, dopiero potem odkładam plik. */}
             <button
               onClick={() => setPodglad(true)}
-              disabled={!rows.length}
+              disabled={blokadaPdf}
               className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs text-slate-600 hover:text-ink disabled:opacity-50"
             >
               <Eye size={14} /> Podgląd
             </button>
             <button
               onClick={async () => setBlocked(!(await downloadProtocolPdf(active, header, rows, limit)))}
-              disabled={!rows.length}
+              disabled={blokadaPdf}
               className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
             >
               <Download size={14} /> Pobierz protokół (PDF)
             </button>
           </div>
+          {ujemne.length > 0 && (
+            <p role="alert" data-testid="ujemne-wartosci" className="w-full text-xs text-red-700">
+              Popraw wartości ujemne, zanim protokół trafi do PDF:{" "}
+              {ujemne.map((u) => `pozycja ${u.wiersz} (${u.kolumny.join(", ")})`).join("; ")}. Wielkości mierzone nie mogą
+              być ujemne.
+            </p>
+          )}
+          {!headerReady && rows.length > 0 && ujemne.length === 0 && (
+            <p role="status" className="w-full text-xs text-amber-700">
+              Brakuje „Obiektu” albo „Wykonawcy pomiarów” w danych ogólnych — PDF da się pobrać, ale bez nich protokół nie
+              jest kompletnym dokumentem.
+            </p>
+          )}
 
           <PdfPreview
             open={podglad}
@@ -534,7 +550,7 @@ export function ProtocolsTab() {
                 </thead>
                 <tbody className="block lg:table-row-group">
                   {rows.map((r, i) => {
-                    const ok = def.evaluate!(r, limit);
+                    const ok = ocenWiersz(def, r, limit);
                     return (
                       <tr
                         key={i}
@@ -568,16 +584,20 @@ export function ProtocolsTab() {
                               <input
                                 type={c.type === "number" ? "number" : "text"}
                                 step="any"
+                                min={c.type === "number" ? 0 : undefined}
                                 value={String(r[c.key] ?? "")}
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
                                 aria-label={`${c.label}, pozycja ${i + 1}`}
-                                className={`pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm ${c.type === "number" ? "pe-mono" : ""}`}
+                                aria-invalid={c.type === "number" && Number(r[c.key]) < 0 ? true : undefined}
+                                className={`pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm ${c.type === "number" ? "pe-mono" : ""} ${c.type === "number" && Number(r[c.key]) < 0 ? "!border-red-500" : ""}`}
                               />
                             )}
                           </td>
                         ))}
                         <td className="col-span-4 flex items-center sm:col-span-10 lg:table-cell lg:py-1.5">
-                          {ok === null ? (
+                          {ujemne.some((u) => u.wiersz === i + 1) ? (
+                            <span className="text-xs font-medium text-red-700">wartość ujemna</span>
+                          ) : ok === null ? (
                             <span className="text-xs text-slate-400">—</span>
                           ) : (
                             <span

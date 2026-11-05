@@ -196,3 +196,26 @@ describe("spadek napięcia — metoda uproszczona a pełna (audyt 2026-11-04, B6
     expect(b).toBeCloseTo(a * 0.8, 6);
   });
 });
+
+describe("spadek napięcia — dane błędne (audyt 2026-11-04, B15, B17)", () => {
+  it("ujemny prąd, moc i długość mają własne komunikaty, nie „podaj prąd”", () => {
+    const kody = obliczSpadekNapiecia(wejscie({ prad_A: -5, dlugosc_m: -10 })).bledy.map((b) => b.code);
+    expect(kody).toContain("PRAD_UJEMNY");
+    expect(kody).toContain("DLUGOSC_UJEMNA");
+    expect(kody).not.toContain("BRAK_OBCIAZENIA");
+    expect(kody).not.toContain("BRAK_DLUGOSCI");
+    expect(obliczSpadekNapiecia(wejscie({ moc_W: -100, dlugosc_m: 10 })).bledy.map((b) => b.code)).toContain("MOC_UJEMNA");
+  });
+
+  it("spadek ≥ napięcia zasilania to błąd danych, a nie ujemne napięcie u odbiornika", () => {
+    const r = obliczSpadekNapiecia(wejscie({ prad_A: 16, dlugosc_m: 1_000_000 }));
+    expect(r.wartosci).toBeNull();
+    expect(r.bledy.map((b) => b.code)).toEqual(["SPADEK_PONAD_NAPIECIE"]);
+  });
+
+  it("duży, ale możliwy spadek nadal się liczy", () => {
+    const r = obliczSpadekNapiecia(wejscie({ prad_A: 16, dlugosc_m: 200 }));
+    expect(r.wartosci!.spadek_pct).toBeGreaterThan(5);
+    expect(r.wartosci!.napiecieKoncowe_V).toBeGreaterThan(0);
+  });
+});
