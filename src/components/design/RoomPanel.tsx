@@ -91,7 +91,7 @@ export function WierszPomieszczenia({
           }}
         />
         {areaM2 !== null && (
-          <span className="pe-mono shrink-0 text-[11px] text-slate-500" title="Powierzchnia pomieszczenia">
+          <span className="pe-mono shrink-0 text-xs text-slate-500" title="Powierzchnia pomieszczenia">
             {formatLiczba(areaM2, 1)} m²
           </span>
         )}

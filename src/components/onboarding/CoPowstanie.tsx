@@ -113,7 +113,7 @@ const ETAPY: { ikona: () => JSX.Element; tytul: string; opis: string }[] = [
 export function CoPowstanie() {
   return (
     <div className="w-full">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Co z tego powstanie</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Co z tego powstanie</div>
       {/* Przewijanie poziome zamiast zawijania: cztery miniatury w dwóch rzędach po dwie
           gubią kolejność etapów, a to ona jest tu treścią. Ten sam chwyt co w pasku
           etapów w nagłówku (patrz `pe-bez-suwaka` w App.tsx). */}
@@ -127,8 +127,8 @@ export function CoPowstanie() {
           <div key={tytul} className="flex shrink-0 items-start gap-2">
             <div className="w-24 text-center">
               <Ikona />
-              <div className="mt-1.5 text-[11.5px] font-semibold text-ink">{tytul}</div>
-              <div className="text-[10.5px] leading-tight text-slate-400">{opis}</div>
+              <div className="mt-1.5 text-xs font-semibold text-ink">{tytul}</div>
+              <div className="text-xs leading-tight text-slate-400">{opis}</div>
             </div>
             {/* Strzałka między etapami — czysto dekoracyjna, jak w pasku etapów. */}
             {i < ETAPY.length - 1 && (

@@ -33,7 +33,7 @@ export function Sekcja({
 }) {
   return (
     <section>
-      <h3 className="pe-display mb-2 flex items-center gap-2 text-[15px] text-ink">
+      <h3 className="pe-display mb-2 flex items-center gap-2 text-base text-ink">
         <Ikona size={16} className="shrink-0 text-blueprint" />
         {tytul}
       </h3>
@@ -46,7 +46,7 @@ export function Sekcja({
  *  wziąć za treść dokumentu. Po wpisaniu prawdziwej wartości znacznik znika sam. */
 export function DoUzupelnienia({ children }: { children: string }) {
   if (!children.startsWith("[")) return <>{children}</>;
-  return <mark className="rounded bg-[#FDF0E4] px-1 py-0.5 text-[12px] font-semibold text-[#9A5B26]">{children}</mark>;
+  return <mark className="rounded bg-[#FDF0E4] px-1 py-0.5 text-xs font-semibold text-[#9A5B26]">{children}</mark>;
 }
 
 /**
@@ -76,7 +76,7 @@ export function BanerSzkicu({ czego }: { czego: string }) {
   if (!SZKIC) return null;
   return (
     <div
-      className="mb-6 flex gap-2.5 rounded-lg border p-3 text-[13px] leading-relaxed"
+      className="mb-6 flex gap-2.5 rounded-lg border p-3 text-sm leading-relaxed"
       style={{ borderColor: "#F0D9C8", background: "#FDF6F0" }}
     >
       <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warn" />
@@ -92,7 +92,7 @@ export function BanerSzkicu({ czego }: { czego: string }) {
 /** Podtytuł z nazwą serwisu i datą — identyczny w obu dokumentach. */
 export function MetryczkaDokumentu({ nazwa }: { nazwa: string }) {
   return (
-    <p className="mb-6 text-[13px] text-slate-400">
+    <p className="mb-6 text-sm text-slate-400">
       {nazwa} serwisu pomocnikelektryka.pl · ostatnia zmiana: {OSTATNIA_ZMIANA}
     </p>
   );

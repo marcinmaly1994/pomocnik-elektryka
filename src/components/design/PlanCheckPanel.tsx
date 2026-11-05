@@ -64,11 +64,11 @@ export function PlanCheckPanel({ issues, onShowElements, przelaczone: przelaczon
           <ChevronRight size={14} className="shrink-0 text-slate-400" />
         )}
         <Search size={14} className="shrink-0 text-slate-400" />
-        <span className="text-[13px] font-semibold text-ink">Sprawdzenie rzutu</span>
-        <span className="text-[11.5px] font-medium" style={{ color: kolorNaglowka }}>
+        <span className="text-sm font-semibold text-ink">Sprawdzenie rzutu</span>
+        <span className="text-xs font-medium" style={{ color: kolorNaglowka }}>
           {podsumowanieProblemow(issues)}
         </span>
-        <span className="ml-auto text-[11px] text-slate-400">
+        <span className="ml-auto text-xs text-slate-400">
           {otwarte ? "zwiń" : "rozwiń"}
         </span>
       </button>
@@ -85,7 +85,7 @@ export function PlanCheckPanel({ issues, onShowElements, przelaczone: przelaczon
                   <div className="text-xs font-semibold" style={{ color: fg }}>
                     {s.title}
                   </div>
-                  <div className="mt-0.5 text-[11.5px] leading-relaxed" style={{ color: fg }}>
+                  <div className="mt-0.5 text-xs leading-relaxed" style={{ color: fg }}>
                     {s.detail}
                   </div>
                   {/* Skok z listy na rysunek — bez tego „Gniazdo 230 V (Łazienka)" przy
@@ -94,7 +94,7 @@ export function PlanCheckPanel({ issues, onShowElements, przelaczone: przelaczon
                   {doPokazania && (
                     <button
                       onClick={() => onShowElements(s.elementIds)}
-                      className="mt-1.5 text-[11px] font-semibold underline"
+                      className="mt-1.5 text-xs font-semibold underline"
                       style={{ color: fg }}
                     >
                       Pokaż na planie ({s.elementIds.length})

@@ -66,7 +66,7 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
         {wynik.bledy.map((b) => (
           <div
             key={b.code}
-            className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+            className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
             style={{ background: "#C6433A14", color: "#A2352C" }}
           >
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
@@ -91,14 +91,14 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
           <div className="space-y-2 border-t border-border px-3 py-2">
             {wynik.kroki.map((k, i) => (
               <div key={i}>
-                <div className="text-[11px] text-slate-500">{k.opis}</div>
-                <div className="pe-mono text-[11.5px] text-slate-600">{k.wzor}</div>
+                <div className="text-xs text-slate-500">{k.opis}</div>
+                <div className="pe-mono text-xs text-slate-600">{k.wzor}</div>
                 {/* Podstawienie łamie się na wąskim ekranie zamiast rozpychać kartę —
                     to najdłuższa linia w całym widoku. Najpierw na spacjach, w środku
                     słowa dopiero, gdy nie ma innego wyjścia: `break-all` cięło „tablicy"
                     na „tab/licy" nawet tam, gdzie spacja była tuż obok. */}
-                <div className="pe-mono text-[11.5px] text-slate-500 [overflow-wrap:anywhere]">= {k.podstawienie}</div>
-                <div className="pe-mono text-[12.5px] font-semibold text-blueprint">= {k.wynik}</div>
+                <div className="pe-mono text-xs text-slate-500 [overflow-wrap:anywhere]">= {k.podstawienie}</div>
+                <div className="pe-mono text-sm font-semibold text-blueprint">= {k.wynik}</div>
               </div>
             ))}
           </div>
@@ -108,7 +108,7 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
       {wynik.zalozenia.length > 0 && (
         <div className="mt-2 rounded-lg border border-border bg-white/60 px-3 py-2">
           <div className="mb-1 text-xs font-semibold text-slate-600">Przyjęte założenia</div>
-          <ul className="space-y-1 text-[11px] leading-relaxed text-slate-500">
+          <ul className="space-y-1 text-xs leading-relaxed text-slate-500">
             {wynik.zalozenia.map((z, i) => (
               <li key={i} className="flex gap-1.5">
                 <span aria-hidden="true">•</span>
@@ -134,7 +134,7 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
       {/* Stopka merytoryczna wymagana przez specyfikację (pkt 3.7). Stoi przy KAŻDYM
           wyniku, a nie raz na dole zakładki: kalkulatory bywają czytane pojedynczo
           i zrzut ekranu jednego wyniku ma nieść to zastrzeżenie ze sobą. */}
-      <div className="mt-2 text-[11px] leading-relaxed text-slate-400">
+      <div className="mt-2 text-xs leading-relaxed text-slate-400">
         Obliczenie wspomagające. Nie zastępuje projektu ani sprawdzenia wykonanego przez osobę z uprawnieniami — wynik
         jest ważny tylko dla podanych wyżej założeń.
       </div>

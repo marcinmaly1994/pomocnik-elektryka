@@ -112,11 +112,11 @@ export class ErrorBoundary extends Component<Props, State> {
         {/* Treść błędu schowana, ale dostępna — przy zgłoszeniu problemu to jedyna
             konkretna informacja, jaką użytkownik może przekleić. */}
         <details className="mt-4">
-          <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-copper">Szczegóły techniczne</summary>
+          <summary className="cursor-pointer text-xs text-slate-400 hover:text-copper">Szczegóły techniczne</summary>
           {/* Wersja wdrożenia RAZEM z treścią błędu: bez niej zgłoszenie „wyskoczył mi
               taki komunikat" nie mówi, której wersji dotyczy — a to pierwsze pytanie,
               jakie się przy nim zadaje. */}
-          <pre className="pe-mono mt-1.5 whitespace-pre-wrap break-all text-[11px] leading-relaxed text-slate-500">
+          <pre className="pe-mono mt-1.5 whitespace-pre-wrap break-all text-xs leading-relaxed text-slate-500">
             {blad instanceof Error ? `${blad.name}: ${blad.message}` : String(blad)}
             {`\nwersja ${WERSJA_BUILDU}`}
           </pre>

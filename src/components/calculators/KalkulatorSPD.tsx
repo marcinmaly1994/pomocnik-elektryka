@@ -34,7 +34,7 @@ export function KalkulatorSPD({ label }: { label: string }) {
 
   return (
     <Card title={label} tag="koordynacja ochrony">
-      <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+      <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
         Skuteczny poziom ochrony <strong>nie równa się Up z tabliczki</strong> — dochodzi do niego spadek
         indukcyjny na przewodach przyłączeniowych, rzędu 1 kV na metr przy udarze 8/20 µs. Stąd bierze się reguła
         „przewody ≤ 0,5 m”: to wynik rachunku, nie zalecenie montażowe.

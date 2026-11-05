@@ -261,14 +261,14 @@ function FlowCard({
       >
         <span
           aria-hidden="true"
-          className="pe-mono flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold"
+          className="pe-mono flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
           style={isActive ? { background: "#9A5A27", color: "#fff" } : { background: "#EEF1F4", color: "#5B6A80" }}
         >
           {step}
         </span>
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
-            <span className="text-[13px] font-semibold" style={{ color: isActive ? "#16202B" : "#475569" }}>
+            <span className="text-sm font-semibold" style={{ color: isActive ? "#16202B" : "#475569" }}>
               {title}
             </span>
             {/* Kolor niesie stan szybciej niż napis: zielony = jest treść, szary =
@@ -278,7 +278,7 @@ function FlowCard({
                 niesie teraz liczby („8 obw."), a wersaliki robiły z nich krzyk. */}
             <span
               aria-hidden="true"
-              className="pe-mono shrink-0 rounded px-1 py-0.5 text-[8.5px] tracking-wide"
+              className="pe-mono shrink-0 rounded px-1 py-0.5 text-xs tracking-wide"
               style={
                 gotowy
                   ? { background: "#3B8C6318", color: "#2C6B4A", fontWeight: 600 }
@@ -293,7 +293,7 @@ function FlowCard({
               monitorze zostaje — ale na telefonie dokłada każdemu z czterech kafli
               drugą linię, a cały pasek etapów rośnie przez to do 94 px z 812 px
               ekranu. Stan etapu niesie plakietka obok tytułu i ona zostaje wszędzie. */}
-          <span aria-hidden="true" className="hidden text-[10.5px] leading-tight text-slate-400 md:block">
+          <span aria-hidden="true" className="hidden text-xs leading-tight text-slate-400 md:block">
             {subtitle}
           </span>
         </span>
@@ -677,9 +677,9 @@ export default function App() {
             <LogoIcon className="h-8 w-8 shrink-0 sm:h-11 sm:w-11" />
             <span className="min-w-0">
               {/* Napis wraca jako zwykły, widoczny <h1> — ten sam rozmiar co
-                  poprzednie logo (text-[23px] font-bold), tylko obok ikony
+                  poprzednie logo (text-2xl font-bold), tylko obok ikony
                   zamiast bycia częścią jednego złożonego SVG z tekstem. */}
-              <h1 className="font-sans text-[17px] sm:text-[23px] font-bold leading-tight tracking-tight text-ink">
+              <h1 className="font-sans text-lg sm:text-2xl font-bold leading-tight tracking-tight text-ink">
                 pomocnikelektryka<span className="text-copper">.pl</span>
               </h1>
               {/* Spacja między nazwą a hasłem: oba są elementami blokowymi, więc jej NIE widać,
@@ -696,7 +696,7 @@ export default function App() {
                   startowym, w nagłówku karty powitalnej i w większym rozmiarze
                   (patrz `showEntryScreen` w DesignTab.tsx), więc na wejściu nic nie
                   ginie — a na telefonie odzyskujemy wysokość tam, gdzie jej brakuje. */}
-              <span className="hidden max-w-xl sm:block max-w-xl text-[12.5px] leading-snug text-slate-500">
+              <span className="hidden max-w-xl sm:block max-w-xl text-sm leading-snug text-slate-500">
                 Zaprojektuj instalację elektryczną w swoim domu!
               </span>
             </span>
@@ -802,7 +802,7 @@ export default function App() {
                   >
                     <span
                       aria-hidden="true"
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
                       style={{ background: "#2D5A8C" }}
                     >
                       {(session.user.email ?? "?").charAt(0).toUpperCase()}
@@ -1429,7 +1429,7 @@ function SiteFooter({
           {/* Wersja wdrożenia. Przy zgłoszeniu „u mnie nie działa" nie było czym
               ustalić, co ktoś ma właściwie załadowane: aplikacja jest jednostronicowa,
               więc adres tego nie mówi, a przeglądarka potrafi trzymać starą wersję. */}
-          <div className="pe-mono mt-1 text-[10px] text-slate-400" title="Wersja wdrożenia — podaj ją przy zgłaszaniu problemu">
+          <div className="pe-mono mt-1 text-xs text-slate-400" title="Wersja wdrożenia — podaj ją przy zgłaszaniu problemu">
             wersja {WERSJA_BUILDU}
           </div>
         </div>

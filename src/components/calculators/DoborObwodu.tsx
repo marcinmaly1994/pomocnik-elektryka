@@ -44,7 +44,7 @@ export function PrzelacznikTrybu({ tryb, onZmien }: { tryb: TrybObwodu; onZmien:
           );
         })}
       </div>
-      <p className="mt-1.5 text-[11.5px] text-slate-500">{TRYB_OBWODU_OPCJE.find((o) => o.id === tryb)?.opis}</p>
+      <p className="mt-1.5 text-xs text-slate-500">{TRYB_OBWODU_OPCJE.find((o) => o.id === tryb)?.opis}</p>
     </div>
   );
 }
@@ -71,7 +71,7 @@ export function KryteriaObwodu({ oceny }: { oceny: OcenaKryterium[] }) {
         return (
           <div
             key={o.kryterium}
-            className="flex items-start gap-2 rounded-lg p-2.5 text-[12.5px]"
+            className="flex items-start gap-2 rounded-lg p-2.5 text-sm"
             style={{ background: styl.tlo, color: styl.kolor }}
           >
             <Ikona size={14} className="mt-0.5 shrink-0" />
@@ -80,7 +80,7 @@ export function KryteriaObwodu({ oceny }: { oceny: OcenaKryterium[] }) {
               <div className="opacity-90">{o.opis}</div>
             </div>
             {o.stan !== "nieoceniono" && typeof o.margines_pct === "number" && (
-              <span className="pe-mono shrink-0 text-[11px] tabular-nums opacity-80">
+              <span className="pe-mono shrink-0 text-xs tabular-nums opacity-80">
                 {o.margines_pct >= 0 ? "zapas " : "przekroczenie "}
                 {formatLiczba(Math.abs(o.margines_pct), 0)}%
               </span>

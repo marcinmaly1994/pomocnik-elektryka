@@ -27,7 +27,7 @@ export function NaglowekNarzedzia({ narzedzie }: { narzedzie: ToolMode }) {
             nagłówek, a ten jest pierwszym na ekranie edytora — przeskok od zera do h3 psuł
             hierarchię dla czytnika ekranu. */}
         <h2 className="text-sm font-semibold leading-tight text-ink">{t.label}</h2>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{t.hint}</p>
+        <p className="mt-0.5 text-xs leading-snug text-slate-500">{t.hint}</p>
       </div>
     </div>
   );

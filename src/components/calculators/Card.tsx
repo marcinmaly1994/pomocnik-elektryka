@@ -13,7 +13,7 @@ export function Card({ title, icon: Icon, tag, children }: CardProps) {
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {Icon && <Icon size={17} className="text-copper" />}
-          <h3 className="pe-display text-[15px]">{title}</h3>
+          <h3 className="pe-display text-base">{title}</h3>
         </div>
         {tag && <span className="pe-chip pe-tag-blue">{tag}</span>}
       </div>

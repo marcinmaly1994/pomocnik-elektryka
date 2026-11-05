@@ -317,9 +317,9 @@ export function EditorToolbar({
           aria-label="Rozmiar elementów"
           className="w-16 accent-copper"
         />
-        <span className="pe-mono w-8 text-right text-[11px] tabular-nums">{formatLiczba(elementScale, 1)}×</span>
+        <span className="pe-mono w-8 text-right text-xs tabular-nums">{formatLiczba(elementScale, 1)}×</span>
         {elementScale !== defaultElementScale && (
-          <button onClick={() => onElementScaleChange(defaultElementScale)} className="text-[11px] text-blueprint hover:underline">
+          <button onClick={() => onElementScaleChange(defaultElementScale)} className="text-xs text-blueprint hover:underline">
             reset
           </button>
         )}
@@ -473,7 +473,7 @@ export function EditorToolbar({
           onClick={() => onZoomChange(clampZoom(zoomStandardowy))}
           title="Przywróć standardowe powiększenie"
           aria-label={`Powiększenie ${Math.round((zoom / zoomStandardowy) * 100)} procent — kliknij, aby przywrócić 100%`}
-          className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
+          className="pe-mono w-11 text-center text-xs tabular-nums text-slate-600 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
         >
           {Math.round((zoom / zoomStandardowy) * 100)}%
         </button>

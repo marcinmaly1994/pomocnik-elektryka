@@ -61,12 +61,12 @@ export function SzukajkaKalkulatorow({
       <kbd
         aria-hidden="true"
         // Skrót klawiszowy nic nie mówi na ekranie dotykowym bez klawiatury.
-        className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 [@media(pointer:coarse)]:hidden"
+        className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 [@media(pointer:coarse)]:hidden"
       >
         ⌘K
       </kbd>
       {fraza.trim() !== "" && (
-        <p className="mt-1 text-[11px] text-slate-500">
+        <p className="mt-1 text-xs text-slate-500">
           {liczbaWynikow === 0 ? "Nic nie pasuje — spróbuj innego słowa." : `Pasujących: ${liczbaWynikow}`}
         </p>
       )}
@@ -100,10 +100,10 @@ function WierszListy({
       className={`w-full rounded-md px-2.5 py-1 text-left ${aktywny ? "" : "hover:bg-white"}`}
       style={aktywny ? { background: "#2D5A8C14", boxShadow: "inset 2px 0 0 #2D5A8C" } : undefined}
     >
-      <div className="text-[13px] leading-5" style={{ color: aktywny ? "#2D5A8C" : "#16202B", fontWeight: aktywny ? 500 : 400 }}>
+      <div className="text-sm leading-5" style={{ color: aktywny ? "#2D5A8C" : "#16202B", fontWeight: aktywny ? 500 : 400 }}>
         {pozycja.label}
       </div>
-      {aktywny && <div className="pb-0.5 text-[11px] leading-snug text-slate-500">{pozycja.desc}</div>}
+      {aktywny && <div className="pb-0.5 text-xs leading-snug text-slate-500">{pozycja.desc}</div>}
     </button>
   );
 }
@@ -128,10 +128,10 @@ function Kafel({
       }
     >
       <div className="min-w-0">
-        <div className="text-[13px] font-medium" style={{ color: aktywny ? "#2D5A8C" : "#16202B" }}>
+        <div className="text-sm font-medium" style={{ color: aktywny ? "#2D5A8C" : "#16202B" }}>
           {pozycja.label}
         </div>
-        <div className="text-[11px] leading-snug text-slate-500">{pozycja.desc}</div>
+        <div className="text-xs leading-snug text-slate-500">{pozycja.desc}</div>
       </div>
     </button>
   );
@@ -243,8 +243,8 @@ export function WyborKalkulatoraMobile({
         className="pe-card flex w-full items-center gap-2 px-3 py-2 text-left"
       >
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Kalkulator</div>
-          <div className="truncate text-[13px] font-medium text-ink">{biezacy?.label ?? "Wybierz kalkulator"}</div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Kalkulator</div>
+          <div className="truncate text-sm font-medium text-ink">{biezacy?.label ?? "Wybierz kalkulator"}</div>
         </div>
         <ChevronDown
           size={16}
@@ -298,7 +298,7 @@ export function EkranStartowy({
     <div className="space-y-6">
       {ostatnieDoPokazania.length > 0 && (
         <div>
-          <h3 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
             <Clock size={12} /> Ostatnio używane
           </h3>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -312,8 +312,8 @@ export function EkranStartowy({
       {pogrupuj(lista).map(({ grupa, pozycje }) =>
         pozycje.length === 0 ? null : (
           <div key={grupa.id}>
-            <h3 className="mb-0.5 text-[13px] font-semibold text-ink">{grupa.tytul}</h3>
-            <p className="mb-2 text-[11.5px] text-slate-500">{grupa.opis}</p>
+            <h3 className="mb-0.5 text-sm font-semibold text-ink">{grupa.tytul}</h3>
+            <p className="mb-2 text-xs text-slate-500">{grupa.opis}</p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {pozycje.map((p) => (
                 <Kafel key={p.id} pozycja={p} aktywny={false} onWybierz={onWybierz} />

@@ -94,7 +94,7 @@ export function HintButton({ hint }: { hint: string }) {
         <div
           ref={dymekRef}
           role="tooltip"
-          className="pe-card absolute left-1/2 top-full z-20 mt-1.5 w-64 max-w-[calc(100vw-16px)] p-2.5 text-[11.5px] font-normal leading-relaxed text-ink shadow-lg"
+          className="pe-card absolute left-1/2 top-full z-20 mt-1.5 w-64 max-w-[calc(100vw-16px)] p-2.5 text-xs font-normal leading-relaxed text-ink shadow-lg"
           style={{ transform: `translateX(calc(-50% + ${przesuniecie}px))` }}
         >
           {hint}

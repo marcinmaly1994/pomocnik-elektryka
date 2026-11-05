@@ -38,7 +38,7 @@ export function KartaElementu({
     <div className="space-y-2.5" data-testid="karta-elementu">
       <div>
         <div className="text-sm font-semibold text-ink">{def?.label ?? element.type}</div>
-        {wariant && <div className="text-[11px] text-slate-500">{wariant}</div>}
+        {wariant && <div className="text-xs text-slate-500">{wariant}</div>}
       </div>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">

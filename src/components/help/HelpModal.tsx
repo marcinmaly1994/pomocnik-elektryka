@@ -12,7 +12,7 @@ interface HelpModalProps {
 
 function Key({ children }: { children: string }) {
   return (
-    <span className="pe-mono rounded border border-border bg-white px-1.5 py-0.5 text-[11px] text-ink shadow-sm">
+    <span className="pe-mono rounded border border-border bg-white px-1.5 py-0.5 text-xs text-ink shadow-sm">
       {children}
     </span>
   );
@@ -28,7 +28,7 @@ export function HelpModal({ open, onClose, onOtworzPrywatnosc }: HelpModalProps)
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent title="Pomoc" className="max-h-[85vh] max-w-2xl overflow-y-auto">
-        <div className="space-y-6 text-[13px] leading-relaxed text-slate-600">
+        <div className="space-y-6 text-sm leading-relaxed text-slate-600">
           <p>
             <strong className="text-ink">pomocnikelektryka.pl</strong> pomaga zaprojektować
             instalację elektryczną w domu albo mieszkaniu — od rzutu pomieszczeń, przez
@@ -38,13 +38,13 @@ export function HelpModal({ open, onClose, onOtworzPrywatnosc }: HelpModalProps)
           </p>
 
           <section>
-            <h3 className="pe-display mb-3 text-[15px] text-ink">Jak zacząć — krok po kroku</h3>
+            <h3 className="pe-display mb-3 text-base text-ink">Jak zacząć — krok po kroku</h3>
             <ol className="space-y-3">
               {KROKI.map((k, i) => (
                 <li key={k.tytul} className="flex gap-3">
                   <span
                     aria-hidden
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
                     style={{ background: "#9A5A27" }}
                   >
                     {i + 1}
@@ -59,7 +59,7 @@ export function HelpModal({ open, onClose, onOtworzPrywatnosc }: HelpModalProps)
           </section>
 
           <section>
-            <h3 className="pe-display mb-2 text-[15px] text-ink">Dodatkowe narzędzia</h3>
+            <h3 className="pe-display mb-2 text-base text-ink">Dodatkowe narzędzia</h3>
             <div className="space-y-2.5">
               <div className="flex gap-2.5">
                 <Calculator size={16} className="mt-0.5 shrink-0 text-blueprint" />
@@ -81,7 +81,7 @@ export function HelpModal({ open, onClose, onOtworzPrywatnosc }: HelpModalProps)
           </section>
 
           <section>
-            <h3 className="pe-display mb-2 text-[15px] text-ink">Przydatne skróty klawiszowe</h3>
+            <h3 className="pe-display mb-2 text-base text-ink">Przydatne skróty klawiszowe</h3>
             <ul className="space-y-1.5">
               {SKROTY.map((s) => (
                 <li key={s.klawisz} className="flex items-center gap-2">
@@ -98,7 +98,7 @@ export function HelpModal({ open, onClose, onOtworzPrywatnosc }: HelpModalProps)
               zakładać konto. Pełny dokument zostaje jeden (link na końcu), żeby nie
               powstała druga wersja prawdy, która z czasem rozjedzie się z pierwszą. */}
           <section className="rounded-lg border border-border p-3" style={{ background: "#F7F9FB" }}>
-            <h3 className="pe-display mb-2 flex items-center gap-2 text-[15px] text-ink">
+            <h3 className="pe-display mb-2 flex items-center gap-2 text-base text-ink">
               <ShieldCheck size={16} className="shrink-0 text-ok" />
               Twoje dane
             </h3>

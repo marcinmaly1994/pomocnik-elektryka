@@ -26,7 +26,7 @@ export function Regulamin() {
 
       <BanerSzkicu czego="nie wskazuje usługodawcy — czyli nie spełnia jeszcze wymagań art. 8 ustawy o świadczeniu usług drogą elektroniczną." />
 
-      <div className="space-y-7 text-[13px] leading-relaxed text-slate-600">
+      <div className="space-y-7 text-sm leading-relaxed text-slate-600">
         <p>
           Ten dokument opisuje zasady korzystania z serwisu pomocnikelektryka.pl. Najkrócej:{" "}
           <strong className="text-ink">usługa jest bezpłatna, a jej wyniki są pomocą w projektowaniu, nie projektem.</strong>{" "}
@@ -63,7 +63,7 @@ export function Regulamin() {
         <Sekcja ikona={Laptop} tytul="Co jest potrzebne, żeby korzystać">
           <p>
             Wystarczy aktualna przeglądarka internetowa z włączonym JavaScriptem i dostępną pamięcią lokalną
-            (<span className="pe-mono text-[12px]">localStorage</span>). Bez pamięci lokalnej projekt nie ma się gdzie
+            (<span className="pe-mono text-xs">localStorage</span>). Bez pamięci lokalnej projekt nie ma się gdzie
             zapisać i aplikacja nie zadziała poprawnie. Korzystanie z konta wymaga dodatkowo połączenia z internetem
             i czynnego adresu e-mail.
           </p>

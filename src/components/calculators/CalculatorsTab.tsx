@@ -1175,16 +1175,16 @@ export function CalculatorsTab() {
                             style={on ? { background: "#2D5A8C10" } : undefined}
                           >
                             <span
-                              className="pe-mono shrink-0 text-[12px] font-semibold"
+                              className="pe-mono shrink-0 text-xs font-semibold"
                               style={{ color: on ? "#2D5A8C" : "#8A5526" }}
                             >
                               {e.cos.toFixed(2).replace(".", ",")}
                             </span>
-                            <span className="text-[11.5px] leading-snug text-slate-600">{e.odbiorniki}</span>
+                            <span className="text-xs leading-snug text-slate-600">{e.odbiorniki}</span>
                           </button>
                         );
                       })}
-                      <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
+                      <div className="px-2 pb-1 pt-1.5 text-xs leading-relaxed text-slate-500">
                         Wartości orientacyjne, dla pracy przy pełnym obciążeniu — jeśli tabliczka znamionowa albo karta
                         katalogowa podaje cos φ, wpisz TĘ wartość. Silnik obciążony częściowo ma cos φ wyraźnie niższy niż
                         znamionowy (nawet 0,3–0,5 na biegu jałowym), więc dla odbiorników silnikowych pracujących z zapasem
@@ -1221,7 +1221,7 @@ export function CalculatorsTab() {
                       hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy. Więcej przewodów obok siebie gorzej oddaje ciepło, więc obniża dopuszczalną obciążalność każdego z nich."
                     />
                   </div>
-                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={motorStart}
@@ -1244,7 +1244,7 @@ export function CalculatorsTab() {
                       hint="Ile z budżetu spadku zużywa już odcinek od złącza do rozdzielnicy. Typowo 0,5-1%. Limit 3/5% liczy się od ZŁĄCZA, więc obwód odbiorczy ma do dyspozycji resztę — zostaw 0, jeśli liczysz sam obwód."
                     />
                   </div>
-                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={wlasnaStacja}
@@ -1307,16 +1307,16 @@ export function CalculatorsTab() {
                             style={on ? { background: "#2D5A8C10" } : undefined}
                           >
                             <span
-                              className="min-w-0 flex-1 truncate text-[11.5px]"
+                              className="min-w-0 flex-1 truncate text-xs"
                               style={on ? { color: "#2D5A8C", fontWeight: 600 } : { color: "#4F5D73" }}
                             >
                               {row.label}
                             </span>
-                            <span className="pe-mono shrink-0 text-[11.5px] text-slate-500">
+                            <span className="pe-mono shrink-0 text-xs text-slate-500">
                               {row.Iz !== null ? `${formatLiczba(row.Iz, row.Iz % 1 === 0 ? 0 : 1)} A` : "—"}
                             </span>
                             <span
-                              className="pe-mono w-16 shrink-0 text-right text-[12px] font-semibold"
+                              className="pe-mono w-16 shrink-0 text-right text-xs font-semibold"
                               style={{ color: on ? "#2D5A8C" : "#8A5526" }}
                             >
                               {row.przekroj !== null ? `${String(row.przekroj).replace(".", ",")} mm²` : "—"}
@@ -1324,7 +1324,7 @@ export function CalculatorsTab() {
                           </button>
                         );
                       })}
-                      <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
+                      <div className="px-2 pb-1 pt-1.5 text-xs leading-relaxed text-slate-500">
                         Kolumny: obciążalność po współczynnikach i wynikający z niej przekrój. Ciepło musi mieć dokąd uciec —
                         przewód natynkowy chłodzi się powietrzem, a ten w ścianie ocieplonej termicznie praktycznie nie oddaje
                         ciepła, więc uniesie najmniej. Pomylenie tych dwóch przypadków to najczęstszy sposób na przegrzanie
@@ -1338,7 +1338,7 @@ export function CalculatorsTab() {
                       {sized.ostrzezenia.map((w, i) => (
                         <div
                           key={i}
-                          className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                          className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
                           style={{
                             background: w.level === "error" ? "#C6433A14" : "#C1793F14",
                             color: w.level === "error" ? "#A2352C" : "#8A5526",
@@ -1377,7 +1377,7 @@ export function CalculatorsTab() {
             <Card title={active.label} tag="wyłącznik nadprądowy">
               <div className={UKLAD_POLA_WYNIK}>
                 <div className="min-w-0">
-                  <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                  <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                     Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
                     został narzucony projektem. Jeśli dopiero szukasz przekroju, zacznij od „Dobór przekroju przewodu”;
                     oba kalkulatory dzielą te same pola, więc nic nie trzeba przepisywać.
@@ -1439,7 +1439,7 @@ export function CalculatorsTab() {
                       hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy — więcej obok siebie obniża obciążalność każdego z nich."
                     />
                   </div>
-                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={motorStart}
@@ -1509,7 +1509,7 @@ export function CalculatorsTab() {
                       {sizedBreaker.ostrzezenia.map((w, i) => (
                         <div
                           key={i}
-                          className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                          className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
                           style={{
                             background: w.level === "error" ? "#C6433A14" : "#C1793F14",
                             color: w.level === "error" ? "#A2352C" : "#8A5526",
@@ -1562,7 +1562,7 @@ export function CalculatorsTab() {
             <Card title={active.label} tag="4 kryteria naraz">
               <div className={UKLAD_POLA_WYNIK}>
                 <div className="min-w-0">
-                  <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                  <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                     Cztery kryteria liczone NIEZALEŻNIE — obciążalność, spadek napięcia i (opcjonalnie) ochrona
                     przeciwporażeniowa oraz wytrzymałość zwarciowa. Wynikowy przekrój to <strong>maksimum</strong> z nich, nie
                     pierwszy z brzegu. Tylko obwody <strong>3-fazowe</strong> — tablica dla dwóch żył obciążonych (1-fazowe)
@@ -1643,17 +1643,17 @@ export function CalculatorsTab() {
                       />
                     </div>
                   ) : (
-                    <div className="mb-3 text-[11px] leading-relaxed text-slate-500">
+                    <div className="mb-3 text-xs leading-relaxed text-slate-500">
                       Metoda gruntowa — bez korekty temperatury/grupowania (brak tablic dla gruntu). Wynik ważny dla 20°C w
                       gruncie.
                     </div>
                   )}
-                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                     <input type="checkbox" checked={pdRozruch} onChange={(e) => patch({ pdRozruch: e.target.checked })} className="h-4 w-4 rounded border-border" />
                     Odbiornik z rozruchem silnikowym — charakterystyka C
                   </label>
 
-                  <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={pdSprawdzOchrone}
@@ -1682,7 +1682,7 @@ export function CalculatorsTab() {
                     </div>
                   )}
 
-                  <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={pdSprawdzZwarcie}
@@ -1716,7 +1716,7 @@ export function CalculatorsTab() {
                           hint="Prąd zwarcia jednofazowego (L-PE) w tym miejscu instalacji — z pomiaru, z kalkulatora „Prądy zwarciowe” albo z dokumentacji projektowej."
                         />
                       </div>
-                      <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                      <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                         <input
                           type="checkbox"
                           checked={pdObwodOdbiorczy}
@@ -1741,7 +1741,7 @@ export function CalculatorsTab() {
                           decyduje: {pelnyDobor.wartosci.decydujace.map((k) => KRYTERIUM_LABELS[k]).join(" i ")}
                         </span>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-slate-500">
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-500">
                         {(Object.entries(pelnyDobor.wartosci.kryteria) as [string, (typeof pelnyDobor.wartosci.kryteria)[keyof typeof pelnyDobor.wartosci.kryteria]][]).map(
                           ([k, v]) => (
                             <span key={k} className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
@@ -1761,7 +1761,7 @@ export function CalculatorsTab() {
 
           {activeCalc === "gGWkladka" && (
             <Card title={active.label} tag="wkładka topikowa">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Imax i Zs max pochodzą wprost z tablicy czasowo-prądowej wkładki (Poradnik Projektanta Elektryka,
                 tabl. Z.10.3/Z.10.4) — NIE ze wzoru k×In jak dla wyłączników. Tablica pokrywa czasy 0,2 s / 0,4 s / 5 s;
                 nie zawiera 1 s (obwód rozdzielczy w układzie TT) ani 0,1 s.
@@ -1788,7 +1788,7 @@ export function CalculatorsTab() {
                   options={UKLAD_OPTIONS}
                   hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce). TT — własny uziom budynku, niezależny od sieci."
                 />
-                <label className="flex items-center gap-2 text-[13px] text-slate-600 mt-1">
+                <label className="flex items-center gap-2 text-sm text-slate-600 mt-1">
                   <input
                     type="checkbox"
                     checked={ggObwodOdbiorczy}
@@ -1799,7 +1799,7 @@ export function CalculatorsTab() {
                 </label>
               </div>
 
-              <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+              <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={ggSprawdzZs}
@@ -1847,7 +1847,7 @@ export function CalculatorsTab() {
 
           {activeCalc === "spadek" && (
             <Card title={active.label} tag="sprawdzenie trasy">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Ten kalkulator sprawdza trasę o <strong>znanym przekroju</strong> — np. kabel, który już jest ułożony
                 albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór przekroju przewodu”: tam przekrój
                 jest wynikiem, dobieranym pod obciążalność i spadek naraz.
@@ -1930,7 +1930,7 @@ export function CalculatorsTab() {
               {/* Metoda pełna jest OBOWIĄZKOWA od 35 mm² (spec pkt 7) — silnik zwraca
                   wtedy twardy błąd zamiast liczyć dalej, więc checkbox musi być
                   widoczny obok pola przekroju, a nie schowany w opcjach. */}
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={duZReaktancja}
@@ -1973,7 +1973,7 @@ export function CalculatorsTab() {
 
           {activeCalc === "dlugosc" && (
             <Card title={active.label} tag="granica trasy">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Odwrotność „Spadku napięcia": tam podajesz długość i patrzysz na wynik, tutaj dostajesz{" "}
                 <strong>granicę wprost</strong>. Liczone są dwa warunki naraz — spadek napięcia i zadziałanie
                 zabezpieczenia przy zwarciu na końcu trasy — a wiąże ten, który wypada krócej.
@@ -2097,7 +2097,7 @@ export function CalculatorsTab() {
 
           {activeCalc === "zwarcie" && (
             <Card title={active.label} tag="PN-EN 60909">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Współczynnik napięciowy <strong>c wynika z celu obliczenia</strong>, a nie z osobnego pola: do doboru
                 aparatów liczy się najgorszy przypadek największego prądu (c = 1,05), a do ochrony przeciwporażeniowej —
                 najmniejszego (c = 0,95). Pomylenie ich daje wynik pozornie poprawny i całkowicie nieprzydatny.
@@ -2179,7 +2179,7 @@ export function CalculatorsTab() {
                       c = {formatLiczba(zwarcie.wartosci.c, 2)}
                     </span>
                   </div>
-                  <div className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  <div className="mt-2 text-xs leading-relaxed text-slate-500">
                     Wymagana zdolność zwarciowa aparatu w tym miejscu: Icn ≥{" "}
                     <strong>{formatLiczba(zwarcie.wartosci.Ik3_A / 1000, 2)} kA</strong> (dobieraj z c = 1,05).
                   </div>
@@ -2350,7 +2350,7 @@ export function CalculatorsTab() {
 
           {activeCalc === "bilansFaz" && (
             <Card title={active.label} tag="asymetria i przewód N">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Przy odbiorach nieliniowych (zasilacze impulsowe, LED, falowniki) 3. harmoniczna sumuje się w przewodzie
                 neutralnym <strong>arytmetycznie</strong>, zamiast się znosić — prąd w N potrafi wtedy przekroczyć prąd
                 fazowy nawet przy idealnie symetrycznym obciążeniu. W przewodzie N nie ma wyłącznika, więc nic tego
@@ -2618,7 +2618,7 @@ export function CalculatorsTab() {
                 />
               </div>
 
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={pvSprawdzMppt}
@@ -2776,7 +2776,7 @@ export function CalculatorsTab() {
                 />
               </div>
 
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={evWbudowanaOchronaDC}
@@ -2814,7 +2814,7 @@ export function CalculatorsTab() {
                   {obwodEV.wartosci.dobor.ostrzezenia.map((o, i) => (
                     <div
                       key={i}
-                      className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                      className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
                       style={{
                         background: o.level === "error" ? "#C6433A14" : "#C1793F14",
                         color: o.level === "error" ? "#A2352C" : "#8A5526",
@@ -3011,7 +3011,7 @@ export function CalculatorsTab() {
                   {sizedFeeder.ostrzezenia.map((w, i) => (
                     <div
                       key={i}
-                      className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                      className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
                       style={{
                         background: w.level === "error" ? "#C6433A14" : "#C1793F14",
                         color: w.level === "error" ? "#A2352C" : "#8A5526",
@@ -3051,7 +3051,7 @@ export function CalculatorsTab() {
                   silnika. Te trzy poniżej były dla niego martwe: dawało się je
                   wypełnić, a kryteria dalej pokazywały „nie podano". */}
               {trybObwodu === "pelny" ? (
-                <p className="mb-3 text-[11.5px] leading-relaxed text-slate-500">
+                <p className="mb-3 text-xs leading-relaxed text-slate-500">
                   Kryteria 3 i 4 włączasz w karcie wyżej — checkboxami „sprawdź ochronę przeciwporażeniową" i „sprawdź
                   wytrzymałość zwarciową". Ten tryb liczy je z impedancji źródła i prądu zwarcia, a nie z gotowej Zs.
                 </p>
@@ -3295,7 +3295,7 @@ export function CalculatorsTab() {
                   <div className="pe-mono text-lg text-copper">{Math.ceil(lightCalc.fixtureCount) || 0} szt.</div>
                 </div>
               </div>
-              <div className="text-[11px] text-slate-500 mt-2">
+              <div className="text-xs text-slate-500 mt-2">
                 Orientacyjne wymagania: pokój dzienny 150–300 lx, kuchnia (blat) 500 lx, łazienka 200–300 lx, biuro 500 lx, korytarz 100 lx.
               </div>
               <HowItWorks

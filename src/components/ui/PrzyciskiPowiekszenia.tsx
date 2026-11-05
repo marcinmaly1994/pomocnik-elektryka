@@ -40,7 +40,7 @@ export function PrzyciskiPowiekszenia({
           onClick={p.naturalny}
           title="Przywróć naturalny rozmiar"
           aria-label={`Powiększenie ${nazwa.dopelniacz} ${procent} procent — kliknij, aby przywrócić 100%`}
-          className={`pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600 ${DOTYK}`}
+          className={`pe-mono w-11 text-center text-xs tabular-nums text-slate-600 ${DOTYK}`}
         >
           {procent}%
         </button>
