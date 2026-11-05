@@ -129,6 +129,9 @@ export function PasekMenu({
         createPortal(
           <div
             ref={panelRef}
+            // Znacznik dla `klawiszDlaEdytora`: dopóki panel stoi otwarty, Delete i litery
+            // skrótów nie trafiają do planu pod spodem.
+            data-nakladka-edytora=""
             id={panelId}
             // `z-[45]`: nad pełnoekranowym edytorem (`z-40` — w portalu panel nie jest
             // już jego dzieckiem), ale pod oknami dialogowymi (`z-50`), które otwiera
