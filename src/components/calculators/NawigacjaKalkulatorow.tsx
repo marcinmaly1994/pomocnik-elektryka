@@ -13,6 +13,14 @@ import { filtruj, pogrupuj, type GrupaId, type PozycjaKalkulatora } from "@/lib/
  * zamiast wrzucać w przypadkowy kalkulator.
  */
 
+/**
+ * Podpis skrótu w polu wyszukiwania — taki, jaki naciśnie użytkownik TEGO systemu.
+ * „⌘K" na Windowsie (audyt 5.11.2026, B12) podpowiadał klawisz, którego tam nie ma;
+ * sam skrót i tak działa z Ctrl i z Cmd (patrz nasłuch niżej).
+ */
+const SKROT_SZUKANIA =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent) ? "⌘K" : "Ctrl K";
+
 export function SzukajkaKalkulatorow({
   fraza,
   onZmien,
@@ -63,7 +71,7 @@ export function SzukajkaKalkulatorow({
         // Skrót klawiszowy nic nie mówi na ekranie dotykowym bez klawiatury.
         className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 [@media(pointer:coarse)]:hidden"
       >
-        ⌘K
+        {SKROT_SZUKANIA}
       </kbd>
       {fraza.trim() !== "" && (
         <p className="mt-1 text-[11px] text-slate-500">
