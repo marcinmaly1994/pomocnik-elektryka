@@ -16,6 +16,7 @@ import {
   MANUAL_DRAW_SCALE_MPU,
   type PlanSize,
   schodySchemat,
+  pomieszczeniePodPunktem,
 } from "@/lib/design";
 import {
   FALLBACK_FONT_ADNOTACJI,
@@ -1553,7 +1554,17 @@ export function DesignCanvas({
     const rect = marqueeRectRef.current;
     marqueeRectRef.current = null;
     setMarqueeRect(null);
-    if (!rect || (rect.w < 4 && rect.h < 4)) return; // zbyt mały ruch = zwykły klik, nie zaznaczanie
+    if (!rect || (rect.w < 4 && rect.h < 4)) {
+      // Zbyt mały ruch = zwykły klik, nie zaznaczanie obszarem. Klik w puste miejsce
+      // WEWNĄTRZ obrysu zaznacza to pomieszczenie (audyt 5.11.2026, B9): podpowiedź
+      // narzędzia mówi „kliknij pomieszczenie", a zaznaczał dopiero trafiony obrys albo
+      // nazwa. Samo wnętrze na płótnie celowo nie łapie zdarzeń (patrz wypełnienie
+      // niżej), więc trafienie liczymy z geometrii. Poza pokojami — zaznaczenie zostaje
+      // wyczyszczone, jak było (`onClearSelection` w `handleStageMouseDown`).
+      const pokoj = rect && pomieszczeniePodPunktem({ x: rect.x, y: rect.y }, roomShapes);
+      if (pokoj) onSelectRoom(pokoj.id);
+      return;
+    }
     const ids = elements
       .filter((el) => el.x >= rect.x && el.x <= rect.x + rect.w && el.y >= rect.y && el.y <= rect.y + rect.h)
       .map((el) => el.id);

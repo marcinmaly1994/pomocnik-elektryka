@@ -7,6 +7,7 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   nextRoomName,
   unikalnaNazwaPomieszczenia,
   ujednoznacznijNazwyPomieszczen,
+  pomieszczeniePodPunktem,
   nextRoomColor,
   colorForRoomName,
   NO_ROOM_COLOR,
@@ -898,5 +899,28 @@ describe("schemat schodów", () => {
   it("obrys bez pola nie daje schematu", () => {
     expect(schodySchemat([])).toBeNull();
     expect(schodySchemat([{ x: 0, y: 0 }, { x: 10, y: 0 }])).toBeNull();
+  });
+});
+
+/**
+ * Klik we WNĘTRZE pokoju ma go zaznaczać (audyt 5.11.2026, B9) — wcześniej zaznaczał
+ * tylko klik w obrys albo w nazwę, choć podpowiedź narzędzia mówiła „kliknij pomieszczenie".
+ */
+describe("pomieszczeniePodPunktem", () => {
+  const kw = (id: string, x0: number, y0: number, a: number): RoomShape => ({
+    id, floor: "f1", name: id, color: "#000",
+    points: [{ x: x0, y: y0 }, { x: x0 + a, y: y0 }, { x: x0 + a, y: y0 + a }, { x: x0, y: y0 + a }],
+  });
+
+  it("zwraca pokój, w którego obrysie leży punkt", () => {
+    expect(pomieszczeniePodPunktem({ x: 150, y: 50 }, [kw("a", 0, 0, 100), kw("b", 100, 0, 100)])?.id).toBe("b");
+  });
+
+  it("poza wszystkimi obrysami — nic", () => {
+    expect(pomieszczeniePodPunktem({ x: 500, y: 500 }, [kw("a", 0, 0, 100)])).toBeNull();
+  });
+
+  it("przy nakładających się obrysach wygrywa mniejszy (ten „na wierzchu” w odbiorze)", () => {
+    expect(pomieszczeniePodPunktem({ x: 30, y: 30 }, [kw("duzy", 0, 0, 200), kw("maly", 20, 20, 40)])?.id).toBe("maly");
   });
 });
