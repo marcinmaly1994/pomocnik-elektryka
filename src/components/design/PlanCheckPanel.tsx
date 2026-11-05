@@ -26,6 +26,8 @@ export interface PlanCheckPanelProps {
   issues: PlanIssue[];
   /** Pokaż na planie elementy, których dotyczy spostrzeżenie (zaznacza je). */
   onShowElements: (ids: string[]) => void;
+  /** Pokaż na planie pomieszczenie, którego dotyczy spostrzeżenie (zaznacza je). */
+  onShowRoom?: (id: string) => void;
   /**
    * Stan rozwinięcia trzymany przez rodzica — pozycja „Sprawdzenie" w pasku stanu
    * musi móc kartę ROZWINĄĆ, jeśli użytkownik ją wcześniej zwinął. Bez tych dwóch
@@ -35,7 +37,7 @@ export interface PlanCheckPanelProps {
   onPrzelacz?: (otwarte: boolean) => void;
 }
 
-export function PlanCheckPanel({ issues, onShowElements, przelaczone: przelaczoneZ, onPrzelacz }: PlanCheckPanelProps) {
+export function PlanCheckPanel({ issues, onShowElements, onShowRoom, przelaczone: przelaczoneZ, onPrzelacz }: PlanCheckPanelProps) {
   const maProblemy = issues.some((i) => i.level === "error" || i.level === "warn");
   /**
    * `null` = użytkownik jeszcze nie decydował, więc karta sama się otwiera, gdy jest
@@ -78,6 +80,9 @@ export function PlanCheckPanel({ issues, onShowElements, przelaczone: przelaczon
           {issues.map((s) => {
             const { bg, fg, Icon } = STYL[s.level];
             const doPokazania = s.elementIds.length > 0;
+            // Spostrzeżenie o POMIESZCZENIACH (np. nachodzące obrysy) — zaznacza pierwsze
+            // z nich; zaznaczenie pomieszczenia obejmuje jedno naraz.
+            const pokojDoPokazania = !doPokazania && onShowRoom ? s.roomIds?.[0] : undefined;
             return (
               <div key={s.rule} className="flex gap-2.5 rounded-md p-3" style={{ background: bg }}>
                 <Icon size={15} className="mt-0.5 shrink-0" style={{ color: fg }} />
@@ -98,6 +103,15 @@ export function PlanCheckPanel({ issues, onShowElements, przelaczone: przelaczon
                       style={{ color: fg }}
                     >
                       Pokaż na planie ({s.elementIds.length})
+                    </button>
+                  )}
+                  {pokojDoPokazania && (
+                    <button
+                      onClick={() => onShowRoom!(pokojDoPokazania)}
+                      className="mt-1.5 text-[11px] font-semibold underline"
+                      style={{ color: fg }}
+                    >
+                      Pokaż na planie
                     </button>
                   )}
                 </div>
