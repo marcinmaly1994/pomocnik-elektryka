@@ -208,6 +208,52 @@ export function nextRoomName(countOnFloor: number): string {
   return `Pomieszczenie ${countOnFloor + 1}`;
 }
 
+const kluczNazwy = (n: string) => n.trim().toLocaleLowerCase("pl");
+
+/**
+ * Nazwa pomieszczenia, która nie powtarza żadnej z `zajete` (te z tej samej kondygnacji).
+ *
+ * Element wiąże się z pomieszczeniem po NAZWIE (`InstallationElement.room`), więc dwa
+ * obrysy o tej samej nazwie są nie do odróżnienia: zmiana nazwy jednego przepisywała
+ * elementy obu, a „Sprawdzenie rzutu" pisało „Sypialnia, Sypialnia, Kuchnia" (audyt
+ * 5.11.2026, B7). Wolna nazwa wraca bez zmian; zajęta dostaje kolejny numer —
+ * „Sypialnia" → „Sypialnia 2", a „Pomieszczenie 2" → „Pomieszczenie 3" (nie
+ * „Pomieszczenie 2 2"). Porównanie bez wielkości liter: „sypialnia" obok „Sypialnia"
+ * byłaby dla człowieka tym samym pokojem.
+ */
+export function unikalnaNazwaPomieszczenia(nazwa: string, zajete: string[]): string {
+  const czysta = nazwa.trim();
+  const uzyte = new Set(zajete.map(kluczNazwy));
+  if (!uzyte.has(kluczNazwy(czysta))) return czysta;
+  const zNumerem = czysta.match(/^(.*\S)\s+(\d+)$/);
+  const rdzen = zNumerem ? zNumerem[1] : czysta;
+  let numer = zNumerem ? Number(zNumerem[2]) + 1 : 2;
+  while (uzyte.has(kluczNazwy(`${rdzen} ${numer}`))) numer++;
+  return `${rdzen} ${numer}`;
+}
+
+/**
+ * Nadaje numery powtórzonym nazwom pomieszczeń na tej samej kondygnacji — dla projektów
+ * zapisanych, zanim `unikalnaNazwaPomieszczenia` pilnowała tego przy dodawaniu. Pierwszy
+ * obrys zachowuje nazwę, kolejne dostają numer. Elementy NIE są tu ruszane: ich
+ * przypisanie prostuje potem `reconcileRoomsOnLoad`, z geometrii. Zwraca tę samą
+ * tablicę, gdy nie było powtórzeń.
+ */
+export function ujednoznacznijNazwyPomieszczen(roomShapes: RoomShape[]): RoomShape[] {
+  const zajetePietra = new Map<string, string[]>();
+  let zmiana = false;
+  const wynik = roomShapes.map((r) => {
+    const zajete = zajetePietra.get(r.floor) ?? [];
+    zajetePietra.set(r.floor, zajete);
+    const nazwa = unikalnaNazwaPomieszczenia(r.name, zajete);
+    zajete.push(nazwa);
+    if (nazwa === r.name) return r;
+    zmiana = true;
+    return { ...r, name: nazwa };
+  });
+  return zmiana ? wynik : roomShapes;
+}
+
 /** Następny kolor w cyklu — używane przy "przełącz kolor pomieszczenia" (recolorRoomShape). */
 export function nextRoomColor(currentColor: string): string {
   const idx = ROOM_COLORS.indexOf(currentColor as (typeof ROOM_COLORS)[number]);

@@ -155,6 +155,50 @@ describe("useProjectStore", () => {
     expect(state.draft.elements[0].room).toBe("Salon z aneksem");
   });
 
+  /** Audyt 5.11.2026 (B7): dwa pokoje typu Sypialnia dostawały tę samą nazwę, a elementy
+   *  wiążą się z pokojem po nazwie. */
+  it("addRoomShape nie powtarza nazwy na tej samej kondygnacji", () => {
+    const { addRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], "Sypialnia");
+    addRoomShape("f1", [{ x: 20, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 10 }], "Sypialnia");
+    addRoomShape("f2", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], "Sypialnia");
+    expect(useProjectStore.getState().draft.roomShapes.map((r) => r.name)).toEqual(["Sypialnia", "Sypialnia 2", "Sypialnia"]);
+  });
+
+  it("addRoomShape: domyślna nazwa po usunięciu pokoju nie dubluje istniejącej", () => {
+    const { addRoomShape, deleteRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);
+    addRoomShape("f1", [{ x: 20, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 10 }]);
+    deleteRoomShape(useProjectStore.getState().draft.roomShapes[0].id);
+    addRoomShape("f1", [{ x: 40, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 10 }]);
+    expect(useProjectStore.getState().draft.roomShapes.map((r) => r.name)).toEqual(["Pomieszczenie 2", "Pomieszczenie 3"]);
+  });
+
+  it("renameRoomShape na nazwę sąsiada nie skleja pokoi ani ich elementów", () => {
+    const { addRoomShape, setDraft, renameRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], "Sypialnia");
+    addRoomShape("f1", [{ x: 20, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 10 }], "Gabinet");
+    setDraft((d) => ({
+      ...d,
+      elements: [
+        { ...sampleElement, id: "e1", room: "Sypialnia" },
+        { ...sampleElement, id: "e2", room: "Gabinet" },
+      ],
+    }));
+    renameRoomShape(useProjectStore.getState().draft.roomShapes[1].id, "Sypialnia");
+
+    const state = useProjectStore.getState();
+    expect(state.draft.roomShapes.map((r) => r.name)).toEqual(["Sypialnia", "Sypialnia 2"]);
+    expect(state.draft.elements.map((e) => e.room)).toEqual(["Sypialnia", "Sypialnia 2"]);
+  });
+
+  it("renameRoomShape na własną nazwę nie dokleja numeru", () => {
+    const { addRoomShape, renameRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], "Salon");
+    renameRoomShape(useProjectStore.getState().draft.roomShapes[0].id, "Salon");
+    expect(useProjectStore.getState().draft.roomShapes[0].name).toBe("Salon");
+  });
+
   it("recolorRoomShape przechodzi do kolejnego koloru w palecie", () => {
     const { addRoomShape, recolorRoomShape } = useProjectStore.getState();
     addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);
@@ -351,6 +395,31 @@ describe("useProjectStore", () => {
 
       expect(useProjectStore.getState().draft.elements[0].room).toBe("Kuchnia");
       expect(useProjectStore.getState().roomsFixedOnLoad).toBe(0);
+    });
+
+    /** Projekty zapisane przed B7 mogą mieć dwa pokoje o tej samej nazwie. Drugi dostaje
+     *  numer, a jego elementy — przypisanie z geometrii (zwykły remont przy wczytaniu). */
+    it("zapis z dwoma pokojami o tej samej nazwie: drugi dostaje numer, jego elementy idą za nim", () => {
+      const { loadProjectPayload, getProjectPayload } = useProjectStore.getState();
+      const base = getProjectPayload();
+      const druga = { ...kuchnia, id: "r2", points: kuchnia.points.map((p) => ({ x: p.x + 200, y: p.y })) };
+      loadProjectPayload({
+        ...base,
+        scales: { f1: 0.05 },
+        draft: {
+          ...base.draft,
+          roomShapes: [kuchnia, druga],
+          elements: [
+            { ...sampleElement, id: "e1", x: 50, y: 50, room: "Kuchnia" },
+            { ...sampleElement, id: "e2", x: 250, y: 50, room: "Kuchnia" },
+          ],
+        },
+      });
+
+      const state = useProjectStore.getState();
+      expect(state.draft.roomShapes.map((r) => r.name)).toEqual(["Kuchnia", "Kuchnia 2"]);
+      expect(state.draft.elements.map((e) => e.room)).toEqual(["Kuchnia", "Kuchnia 2"]);
+      expect(state.roomsFixedOnLoad).toBe(1);
     });
 
     it("komunikat da się zamknąć i nie wraca do końca sesji", () => {
