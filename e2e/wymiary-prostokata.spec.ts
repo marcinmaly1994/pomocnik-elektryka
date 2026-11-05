@@ -97,3 +97,41 @@ test("puste albo bzdurne wymiary nie tworzą pomieszczenia", async ({ page }) =>
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.getByTestId("room-rect-width-input")).toBeVisible();
 });
+
+/**
+ * Telefon 320 px: pola wymiarów i „Utwórz" muszą zmieścić się w nakładce nad rzutem.
+ *
+ * Audyt 5.11.2026: cały wiersz był jednym nierozrywalnym kawałkiem i przy 320–390 px
+ * drugie pole, jednostka i przycisk wychodziły poza nakładkę (obciętą `overflow`),
+ * więc na telefonie z wpisanych wymiarów nie dało się utworzyć pokoju.
+ * Emulacja dotyku przez `test.use`, nie `setViewportSize` — patrz uwaga w
+ * emulacji dotyku: zmiana rozmiaru po starcie kasuje `pointer: coarse`.
+ */
+test.describe("na wąskim telefonie", () => {
+  test.use({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
+
+  test("pola wymiarów i „Utwórz” mieszczą się w nakładce i działają", async ({ page }) => {
+    await planZeSkala(page);
+    const okno = page.locator("[data-testid=plan-okno]").first();
+    await okno.scrollIntoViewIfNeeded();
+    const box = (await okno.boundingBox())!;
+    await page.touchscreen.tap(box.x + 60, box.y + 40);
+
+    const nakladka = (await page.getByTestId("kontrolki-narzedzia").boundingBox())!;
+    const utworz = page.getByRole("button", { name: "Utwórz" });
+    const przycisk = (await utworz.boundingBox())!;
+    const wysokosc = (await page.getByTestId("room-rect-height-input").boundingBox())!;
+    for (const b of [przycisk, wysokosc]) {
+      expect(b.x).toBeGreaterThanOrEqual(nakladka.x);
+      expect(b.x + b.width).toBeLessThanOrEqual(nakladka.x + nakladka.width);
+      expect(b.x + b.width).toBeLessThanOrEqual(320);
+    }
+
+    await page.getByTestId("room-rect-width-input").fill("4");
+    await page.getByTestId("room-rect-height-input").fill("3");
+    await utworz.click();
+    await page.getByRole("button", { name: "Dodaj pomieszczenie" }).click();
+    await page.waitForTimeout(900);
+    expect(await zapisanePomieszczenia(page)).toHaveLength(1);
+  });
+});

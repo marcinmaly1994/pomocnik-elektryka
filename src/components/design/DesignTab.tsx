@@ -2567,8 +2567,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {zakres !== "zaznaczenie" && (
       <>
       {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
-          poza nim byłby tylko szumem w pasku narzędzi. */}
-      {toolMode === "pomieszczenie" && (
+          poza nim byłby tylko szumem w pasku narzędzi.
+
+          Na telefonie znika też na czas RYSOWANIA (postawiony narożnik albo punkty
+          wieloboku). Nakładka pływa wtedy nad rzutem i każdy jej wiersz zasłania miejsce,
+          w które trzeba kliknąć — z wyborem kształtu, podpowiedzią, komunikatem
+          i polami wymiarów zajmowała 45% płótna (audyt 5.11.2026). Zmiana kształtu
+          w połowie figury i tak zaczyna rysowanie od nowa, a „Anuluj" stoi niżej. */}
+      {toolMode === "pomieszczenie" && (szerokieOkno || pokoje.drawingRoomPoints.length === 0) && (
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
           <span className="font-medium text-slate-600">Kształt:</span>
           <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
@@ -2613,7 +2619,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {pokoje.drawingRoomPoints.length > 0 && (
         // Zawijany — ten sam powód co przy rysowaniu ściany wyżej.
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
-          <span className="whitespace-nowrap font-medium text-slate-600">
+          {/* Bez `whitespace-nowrap`: na 320 px „…kliknij przeciwległy" było ucinane
+              krawędzią nakładki. */}
+          <span className="min-w-0 font-medium text-slate-600">
             {pokoje.roomMode === "prostokat" ? (
               "Narożnik postawiony — kliknij przeciwległy"
             ) : (
