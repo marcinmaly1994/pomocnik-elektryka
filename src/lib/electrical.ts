@@ -27,16 +27,38 @@ export interface PowerBalanceResult {
 }
 
 /** Pz = Pi × ks (współczynnik jednoczesności), następnie prąd zapotrzebowany
- *  liczony osobno dla wariantu 1- i 3-fazowego (do wyboru w UI wg przyłącza). */
-export function calcPowerBalance(devices: PowerDevice[], ks: number): PowerBalanceResult {
+ *  liczony osobno dla wariantu 1- i 3-fazowego (do wyboru w UI wg przyłącza):
+ *  I = Pz / (U·cosφ). Domyślnie cosφ = 1 — tak liczył kalkulator przed dodaniem pola. */
+export function calcPowerBalance(devices: PowerDevice[], ks: number, cosPhi = 1): PowerBalanceResult {
   const sumPower = devices.reduce((a, d) => a + Number(d.power || 0), 0);
   const demandPower = sumPower * ks;
+  const cos = cosPhi > 0 ? cosPhi : 1;
   return {
     sumPower,
     demandPower,
-    demandCurrent1: demandPower / 230,
-    demandCurrent3: demandPower / (Math.sqrt(3) * 400),
+    demandCurrent1: demandPower / (230 * cos),
+    demandCurrent3: demandPower / (Math.sqrt(3) * 400 * cos),
   };
+}
+
+/**
+ * Błędy danych bilansu mocy — każdy jako zdanie dla użytkownika.
+ *
+ * Bez tego kalkulator przyjmował moc ujemną i ks = 3, a wynik wyglądał jak każdy inny:
+ * „moc zapotrzebowana 15 000 W" przy zainstalowanej 5 000 W (audyt 2026-11-04, B10).
+ * Pusta lista = dane poprawne, można pokazać wynik.
+ */
+export function bledyBilansuMocy(devices: PowerDevice[], ks: number, cosPhi: number): string[] {
+  const bledy: string[] = [];
+  for (const d of devices) {
+    const p = Number(d.power);
+    if (!Number.isFinite(p)) bledy.push(`Moc odbiornika „${d.name}” nie jest liczbą.`);
+    else if (p < 0) bledy.push(`Moc odbiornika „${d.name}” nie może być ujemna.`);
+  }
+  if (!(ks > 0 && ks <= 1))
+    bledy.push("Współczynnik jednoczesności ks musi mieścić się w przedziale (0; 1] — odbiorniki nie pobiorą razem więcej, niż wynosi suma ich mocy.");
+  if (!(cosPhi > 0 && cosPhi <= 1)) bledy.push("Współczynnik mocy cos φ musi mieścić się w przedziale (0; 1].");
+  return bledy;
 }
 
 export interface LightingInput {
