@@ -1,5 +1,7 @@
 /**
- * Tokeny wyglądu interfejsu — JEDYNE źródło kolorów, zaokrągleń i cieni.
+ * Tokeny wyglądu interfejsu — docelowo jedyne źródło kolorów, zaokrągleń i cieni
+ * (część komponentów ma jeszcze kolory wpisane na sztywno; przechodzą na tokeny
+ * w kolejnych PR-ach redesignu).
  *
  * Czytają z nich: motyw Tailwinda (`tailwind.config.ts`), arkusz `index.css` (przez
  * `theme()`), style inline w komponentach i testy kontrastu. Dlatego moduł TS, a nie

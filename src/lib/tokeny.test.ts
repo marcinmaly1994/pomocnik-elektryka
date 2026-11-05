@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { KOLORY, PROMIENIE, CIENIE } from "./tokeny";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import config from "../../tailwind.config";
 import { kontrast } from "../test/kontrast";
 
@@ -62,5 +64,14 @@ describe("tokeny kształtu", () => {
 
   it("w motywie są tylko dwa cienie", () => {
     expect(new Set(Object.values(ext.boxShadow))).toEqual(new Set([CIENIE.xs, CIENIE.pop]));
+  });
+
+  it("index.css używa tylko promieni 6, 10 i 14 px (poza suwakiem przeglądarki)", () => {
+    const css = readFileSync(resolve(__dirname, "../index.css"), "utf8")
+      // Suwak to element przeglądarki, poza skalą promieni.
+      .replace(/\.pe-scroll::-webkit-scrollbar-thumb\s*\{[^}]*\}/, "");
+    const px = [...css.matchAll(/border-radius:\s*(\d+)px/g)].map((m) => Number(m[1]));
+    const dozwolone = [PROMIENIE.maly, PROMIENIE.karta, PROMIENIE.duzy].map((v) => parseInt(v, 10));
+    expect(px.filter((v) => !dozwolone.includes(v))).toEqual([]);
   });
 });

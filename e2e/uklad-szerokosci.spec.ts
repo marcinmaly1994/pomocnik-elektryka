@@ -46,6 +46,8 @@ for (const szer of SZEROKOSCI) {
         await page.reload();
         await widok.wejdz(page);
         await expect(widok.kotwica(page)).toBeVisible();
+        // Zamiana fontu zmienia szerokości — mierzymy dopiero po załadowaniu fontów.
+        await page.evaluate(() => document.fonts.ready);
 
         // Sprawdzamy tylko przewijanie CAŁEJ strony (documentElement), nie wewnętrzne
         // kontenery z własnym overflow — te mogą przewijać się celowo.
