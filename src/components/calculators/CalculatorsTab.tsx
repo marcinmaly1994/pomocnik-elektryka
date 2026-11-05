@@ -2892,7 +2892,7 @@ export function CalculatorsTab() {
                 hint="Wypadkowy cos φ instalacji. 1 dla odbiorników grzejnych (bojler, kuchenka, grzałki); przy dużym udziale silników, pomp ciepła i zasilaczy przyjmij niższy — prąd rośnie o 1/cos φ."
               />
               {bledyBilansu.length > 0 ? (
-                <div role="alert" data-testid="bledy-bilansu" className="mt-2 rounded-md p-3 text-[12.5px] leading-relaxed" style={{ background: "#C6433A12", color: "#8C2F28" }}>
+                <div role="alert" data-testid="bledy-bilansu" className="mt-2 rounded-md p-3 text-sm leading-relaxed" style={{ background: "#C6433A12", color: "#8C2F28" }}>
                   <div className="mb-1 font-semibold">Popraw dane — wynik nie jest liczony:</div>
                   <ul className="list-disc pl-5">
                     {bledyBilansu.map((b) => (
