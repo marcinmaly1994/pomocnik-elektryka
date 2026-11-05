@@ -15,9 +15,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        copper: "bg-copper text-white hover:bg-[#A9652F]",
+        copper: "bg-copper text-white hover:bg-copper-hover",
         ghost: "bg-white border border-border hover:border-blueprint hover:text-blueprint",
-        destructive: "bg-warn text-white hover:bg-[#A2352C]",
+        destructive: "bg-danger-grafika text-white hover:bg-danger",
       },
       size: {
         sm: "h-7 px-2.5 text-xs",

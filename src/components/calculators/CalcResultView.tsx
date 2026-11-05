@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, Info, TriangleAlert } from "lucide-react";
 import type { CalcResult, Ocena } from "@/lib/calc/result";
 import { formatLiczba } from "@/lib/calc/result";
+import { KOLORY } from "@/lib/tokeny";
 
 /**
  * Wspólna prezentacja koperty wyniku (`CalcResult`) — rachunek krok po kroku,
@@ -21,10 +22,10 @@ import { formatLiczba } from "@/lib/calc/result";
  * barwy zmieszane z bielą karty (10%), więc wygląd bez przewijania się nie zmienia.
  */
 const WERDYKT_STYL = {
-  spelniony: { bg: "#EBF3EF", fg: "#2C6B4A", Icon: Check, etykieta: "Warunek spełniony" },
-  graniczny: { bg: "#F9F1EB", fg: "#8A5526", Icon: TriangleAlert, etykieta: "Wynik graniczny" },
-  niespelniony: { bg: "#F9ECEB", fg: "#A2352C", Icon: AlertTriangle, etykieta: "Warunek niespełniony" },
-  nieoceniany: { bg: "#EEF1F4", fg: "#475569", Icon: Info, etykieta: "Bez oceny warunku" },
+  spelniony: { bg: KOLORY.successTlo, fg: KOLORY.success, Icon: Check, etykieta: "Warunek spełniony" },
+  graniczny: { bg: KOLORY.cautionTlo, fg: KOLORY.caution, Icon: TriangleAlert, etykieta: "Wynik graniczny" },
+  niespelniony: { bg: KOLORY.dangerTlo, fg: KOLORY.danger, Icon: AlertTriangle, etykieta: "Warunek niespełniony" },
+  nieoceniany: { bg: KOLORY.paper, fg: "#475569", Icon: Info, etykieta: "Bez oceny warunku" },
 } as const;
 
 /**
@@ -66,8 +67,7 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
         {wynik.bledy.map((b) => (
           <div
             key={b.code}
-            className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
-            style={{ background: "#C6433A14", color: "#A2352C" }}
+            className="flex gap-2 rounded-md bg-danger-tlo p-2.5 text-xs leading-relaxed text-danger"
           >
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             <div>{b.message}</div>
@@ -122,7 +122,7 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
       {wynik.zrodla.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {wynik.zrodla.map((z, i) => (
-            <span key={i} className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+            <span key={i} className="pe-chip bg-paper text-slate-600">
               {z.norma}
               {z.miejsce ? ` ${z.miejsce}` : ""}
               {z.czego ? ` — ${z.czego}` : ""}
