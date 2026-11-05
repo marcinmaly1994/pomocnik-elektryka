@@ -105,9 +105,12 @@ export function useWstawianieElementu(opcje: {
             id: crypto.randomUUID(),
             type: activeType,
             ...rozstaw,
-            // Pomieszczenie liczone z pozycji PO przyciągnięciu — element ląduje wtedy
-            // dokładnie na linii obrysu, gdzie decyduje tolerancja z `detectRoomName`.
-            room: detectRoomName(m, roomShapes, mpu),
+            // Pomieszczenie liczone z miejsca, w którym element NAPRAWDĘ stanie: po
+            // przyciągnięciu do ściany (na linii obrysu decyduje tolerancja z
+            // `detectRoomName`) i po odsunięciu od sąsiadów. Liczone z samego punktu
+            // przyciągnięcia, przypisywało pokój, z którego odsunięcie element właśnie
+            // wypchnęło — przy serii gniazd na styku dwóch pokoi (audyt 5.11.2026).
+            room: detectRoomName(rozstaw, roomShapes, mpu),
             floor: activeFloorId,
             dedicated: activeType === "gniazdko" ? dedicated : false,
             note: activeType === "gniazdko" && dedicated ? "AGD" : "",

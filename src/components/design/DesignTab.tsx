@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { formatLiczba } from "@/lib/liczby";
+import { klawiszDlaEdytora } from "@/lib/klawiaturaEdytora";
 import {
   AlertTriangle,
   AlignCenterHorizontal,
@@ -1621,6 +1622,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Klawisz naciśnięty w oknie, menu, panelu paska albo liście rozwijanej nie jest
+      // dla planu — patrz `klawiszDlaEdytora` (Delete pod oknem „Pomoc" kasował
+      // zaznaczony element, litery skrótów blokowały wybór w listach).
+      if (!klawiszDlaEdytora(e.target)) return;
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if ((e.key === "Delete" || e.key === "Backspace") && tag !== "INPUT" && tag !== "TEXTAREA") {
         e.preventDefault();
@@ -1727,6 +1732,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         } else if (canUndo) {
           undo();
         }
+      }
+      // Ctrl+Y — ponów, jak w Wordzie, AutoCAD-zie i przeglądarce. Na Windowsie to
+      // pierwszy skrót, po który sięga ręka; Ctrl+Shift+Z zostaje dla nawyków z Maca.
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "y" && tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        if (canRedo) redo();
       }
     }
     window.addEventListener("keydown", onKey);
