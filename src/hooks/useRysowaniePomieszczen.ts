@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useActiveFloorRoomShapes, useProjectStore } from "@/store/useProjectStore";
-import { guessRoomType, nextRoomName, ROOM_TYPE_LABELS } from "@/lib/design";
+import { guessRoomType, nextRoomName, ROOM_TYPE_LABELS, unikalnaNazwaPomieszczenia } from "@/lib/design";
 import type { RoomDrawMode } from "@/components/design/DesignCanvas";
 import type { Point, RoomType } from "@/types";
 
@@ -74,10 +74,12 @@ export function useRysowaniePomieszczen(): RysowaniePomieszczenApi {
 
   const zaproponuj = useCallback(
     (punkty: Point[]) => {
-      const name = nextRoomName(roomShapes.length);
+      // Okno ma pokazać nazwę, która NAPRAWDĘ trafi do projektu — store i tak nie
+      // dopuści powtórzenia na kondygnacji (patrz `unikalnaNazwaPomieszczenia`).
+      const name = unikalnaNazwaPomieszczenia(nextRoomName(roomShapes.length), roomShapes.map((r) => r.name));
       setPendingRoom({ points: punkty, name, type: guessRoomType(name), typeTouched: false });
     },
-    [roomShapes.length]
+    [roomShapes]
   );
 
   const zamknijPropozycje = useCallback(() => setPendingRoom(null), []);
@@ -95,8 +97,10 @@ export function useRysowaniePomieszczen(): RysowaniePomieszczenApi {
     // tego trzeba było wpisać to samo słowo DWA razy: raz w polu nazwy, raz w tej
     // liście. Kto chce inną nazwę (np. „Łazienka rodziców"), nadal może ją dopisać
     // w polu nazwy PO wybraniu typu — nic mu tego nie zabrania.
-    setPendingRoom((p) => (p ? { ...p, type, typeTouched: true, name: ROOM_TYPE_LABELS[type] } : p));
-  }, []);
+    // Z numerem, gdy taki pokój już jest („Sypialnia 2") — okno pokazuje to, co zapisze.
+    const nazwa = unikalnaNazwaPomieszczenia(ROOM_TYPE_LABELS[type], roomShapes.map((r) => r.name));
+    setPendingRoom((p) => (p ? { ...p, type, typeTouched: true, name: nazwa } : p));
+  }, [roomShapes]);
 
   const zapisz = useCallback(() => {
     if (!pendingRoom) return;

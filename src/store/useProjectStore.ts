@@ -40,6 +40,8 @@ import {
   reassignRoomsOnFloor,
   reconcileRoomsOnLoad,
   roomColorForIndex,
+  ujednoznacznijNazwyPomieszczen,
+  unikalnaNazwaPomieszczenia,
   scaleOf,
   type PlanSize,
 } from "@/lib/design";
@@ -847,7 +849,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...surowy,
       elements: tablicaLubPusta(surowy.elements),
       walls: tablicaLubPusta(surowy.walls),
-      roomShapes: tablicaLubPusta(surowy.roomShapes),
+      // Zapisy sprzed pilnowania unikalnych nazw (audyt 5.11.2026, B7) mogą mieć dwa
+      // pokoje o tej samej nazwie na kondygnacji. Drugi dostaje numer, a elementy, które
+      // w nim stoją, przepisze na niego remont przypisań niżej — z geometrii.
+      roomShapes: ujednoznacznijNazwyPomieszczen(tablicaLubPusta(surowy.roomShapes)),
       openings: tablicaLubPusta(surowy.openings),
       routeOverrides: obiektLubPusty(surowy.routeOverrides),
     };
@@ -1453,11 +1458,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   addRoomShape: (floor, points, name, type) => {
     const { draft, setDraft } = get();
-    const countHere = draft.roomShapes.filter((r) => r.floor === floor).length;
+    const nazwyTutaj = draft.roomShapes.filter((r) => r.floor === floor).map((r) => r.name);
+    const countHere = nazwyTutaj.length;
     const room: RoomShape = {
       id: crypto.randomUUID(),
       floor,
-      name: name?.trim() || nextRoomName(countHere),
+      // Bez powtórzeń na kondygnacji — elementy wiążą się z pokojem po NAZWIE (patrz
+      // `unikalnaNazwaPomieszczenia`). Dotyczy też nazwy domyślnej: po usunięciu
+      // „Pomieszczenia 1" licznik dawał drugi raz „Pomieszczenie 2".
+      name: unikalnaNazwaPomieszczenia(name?.trim() || nextRoomName(countHere), nazwyTutaj),
       color: roomColorForIndex(countHere),
       points,
       type,
@@ -1486,11 +1495,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     setDraft((d) => {
       const room = d.roomShapes.find((r) => r.id === id);
       if (!room) return d;
+      // Nazwa sąsiada dostaje numer — inaczej oba pokoje (i ich elementy) skleiłyby się
+      // pod jedną nazwą i następna zmiana nazwy przepisałaby elementy obu.
+      const nazwa = unikalnaNazwaPomieszczenia(
+        newName,
+        d.roomShapes.filter((r) => r.floor === room.floor && r.id !== id).map((r) => r.name)
+      );
       return {
         ...d,
-        roomShapes: d.roomShapes.map((r) => (r.id === id ? { ...r, name: newName } : r)),
+        roomShapes: d.roomShapes.map((r) => (r.id === id ? { ...r, name: nazwa } : r)),
         elements: d.elements.map((e) =>
-          e.floor === room.floor && e.room === room.name ? { ...e, room: newName } : e
+          e.floor === room.floor && e.room === room.name ? { ...e, room: nazwa } : e
         ),
       };
     });

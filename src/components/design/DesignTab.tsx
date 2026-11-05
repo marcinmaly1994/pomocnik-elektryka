@@ -2742,8 +2742,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <Check size={14} className="shrink-0" />
           <span>
             Poprawiono przypisanie {roomsFixedOnLoad}{" "}
-            {roomsFixedOnLoad === 1 ? "elementu" : "elementów"} do pomieszczeń — po przeniesieniu na planie zostały
-            w starych pokojach. Sprawdź obwody w Rozdzielnicy.
+            {roomsFixedOnLoad === 1 ? "elementu" : "elementów"} do pomieszczeń — zapis nie zgadzał się z tym, gdzie
+            stoją na planie. Sprawdź obwody w Rozdzielnicy.
           </span>
           <button
             onClick={dismissRoomsFixedOnLoad}

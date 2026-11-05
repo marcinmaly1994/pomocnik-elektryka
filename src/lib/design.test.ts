@@ -5,6 +5,8 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   ROOM_COLORS,
   roomColorForIndex,
   nextRoomName,
+  unikalnaNazwaPomieszczenia,
+  ujednoznacznijNazwyPomieszczen,
   nextRoomColor,
   colorForRoomName,
   NO_ROOM_COLOR,
@@ -51,6 +53,52 @@ describe("nextRoomName", () => {
   it("numeruje od 1", () => {
     expect(nextRoomName(0)).toBe("Pomieszczenie 1");
     expect(nextRoomName(4)).toBe("Pomieszczenie 5");
+  });
+});
+
+/**
+ * Element wiąże się z pomieszczeniem po NAZWIE (`InstallationElement.room`), więc dwa
+ * pokoje o tej samej nazwie na jednej kondygnacji to dwa obrysy, których nie da się
+ * odróżnić: zmiana nazwy jednego przepisywała elementy obu, a „Sprawdzenie rzutu"
+ * pisało „Sypialnia, Sypialnia, Kuchnia". Audyt 5.11.2026 (B7).
+ */
+describe("unikalnaNazwaPomieszczenia", () => {
+  it("wolna nazwa zostaje bez zmian", () => {
+    expect(unikalnaNazwaPomieszczenia("Kuchnia", ["Salon"])).toBe("Kuchnia");
+  });
+
+  it("zajęta nazwa dostaje kolejny numer", () => {
+    expect(unikalnaNazwaPomieszczenia("Sypialnia", ["Sypialnia"])).toBe("Sypialnia 2");
+    expect(unikalnaNazwaPomieszczenia("Sypialnia", ["Sypialnia", "Sypialnia 2"])).toBe("Sypialnia 3");
+  });
+
+  it("nazwa zakończona numerem dostaje następny numer, nie doklejony drugi", () => {
+    // „Pomieszczenie 2" po usunięciu „Pomieszczenia 1" — licznik pomieszczeń daje 2,
+    // które już jest zajęte.
+    expect(unikalnaNazwaPomieszczenia("Pomieszczenie 2", ["Pomieszczenie 2"])).toBe("Pomieszczenie 3");
+  });
+
+  it("wielkość liter i spacje na brzegach nie robią różnicy", () => {
+    expect(unikalnaNazwaPomieszczenia("  sypialnia ", ["Sypialnia"])).toBe("sypialnia 2");
+  });
+});
+
+describe("ujednoznacznijNazwyPomieszczen", () => {
+  const pokoj = (id: string, floor: string, name: string): RoomShape => ({ id, floor, name, color: "#000", points: [] });
+
+  it("drugi i kolejny pokój o tej samej nazwie na kondygnacji dostaje numer", () => {
+    const wynik = ujednoznacznijNazwyPomieszczen([pokoj("a", "f1", "Sypialnia"), pokoj("b", "f1", "Sypialnia"), pokoj("c", "f1", "Sypialnia")]);
+    expect(wynik.map((r) => r.name)).toEqual(["Sypialnia", "Sypialnia 2", "Sypialnia 3"]);
+  });
+
+  it("ta sama nazwa na RÓŻNYCH kondygnacjach jest w porządku", () => {
+    const pokoje = [pokoj("a", "f1", "Łazienka"), pokoj("b", "f2", "Łazienka")];
+    expect(ujednoznacznijNazwyPomieszczen(pokoje)).toBe(pokoje);
+  });
+
+  it("bez powtórzeń zwraca tę samą tablicę", () => {
+    const pokoje = [pokoj("a", "f1", "Salon"), pokoj("b", "f1", "Kuchnia")];
+    expect(ujednoznacznijNazwyPomieszczen(pokoje)).toBe(pokoje);
   });
 });
 
