@@ -126,7 +126,7 @@ export function KalkulatorImpedancji({ label }: { label: string }) {
           value={imRownolegleIz}
           onChange={(v) => patch({ imRownolegleIz: Number(v) })}
           unit="A"
-          hint="Dopuszczalny prąd długotrwały POJEDYNCZEJ żyły po współczynnikach korekcyjnych — z kalkulatora „Dobór przekroju przewodu” albo z Rozdzielnicy. Zostaw 0, żeby zobaczyć sam podział prądu bez oceny."
+          hint="Dopuszczalny prąd długotrwały POJEDYNCZEJ żyły po współczynnikach korekcyjnych — z kalkulatora „Dobór obwodu” albo z Rozdzielnicy. Zostaw 0, żeby zobaczyć sam podział prądu bez oceny."
         />
       </div>
       {/* Jawne htmlFor/id z tego samego powodu co w `Field` — przycisk „i" jest
