@@ -111,7 +111,7 @@ const CALC_LIST: { id: CalcId; label: string; desc: string }[] = [
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN" },
   { id: "uziemienieTT", label: "Rezystancja uziemienia", desc: "ochrona przeciwporażeniowa — układ TT" },
   { id: "uziom", label: "Uziom — dobór geometrii", desc: "pręt, bednarka, otok; potrzebna długość" },
-  { id: "rcd", label: "Dobór wyłącznika różnicowoprądowego", desc: "zasady doboru RCD" },
+  { id: "rcd", label: "Dobór wyłącznika różnicowoprądowego", desc: "zasady doboru RCD — lista kontrolna, bez obliczeń" },
   { id: "peN", label: "Dobór przewodu PE i N", desc: "reguła, warunek cieplny, harmoniczne" },
   { id: "bilansFaz", label: "Bilans faz i prąd w N", desc: "asymetria, przewód neutralny, 3. harmoniczna" },
   { id: "kompensacja", label: "Kompensacja mocy biernej", desc: "moc baterii, pojemność, rezonans" },
@@ -1260,12 +1260,35 @@ export function CalculatorsTab() {
 
                 </div>
                 <div className="min-w-0" data-testid="wynik-obok">
-                  <div className="mt-2 p-3 pe-result">
-                    <div className="text-xs text-slate-500 mb-1">Wymagany przekrój żyły</div>
+                  <div className="mt-2 p-3 pe-result" data-testid="wynik-doboru">
                     {sized.przekroj_mm2 ? (
                       <>
-                        <div className="pe-mono text-lg text-blueprint">
-                          {String(sized.przekroj_mm2).replace(".", ",")} mm²
+                        {/* Dwa wyniki na równi: przekrój i aparat. Dotąd karta pokazywała sam
+                            przekrój, a wyłącznik — połowę wyniku tego kalkulatora — trzeba było
+                            wyczytać z kryteriów („In 20 A"), bez charakterystyki i biegunów
+                            (audyt 2026-11-04, B11). */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="text-xs text-slate-500 mb-1">Przekrój żyły</div>
+                            <div className="pe-mono text-lg text-blueprint">{String(sized.przekroj_mm2).replace(".", ",")} mm²</div>
+                          </div>
+                          {sized.aparat && (
+                            <div>
+                              <div className="text-xs text-slate-500 mb-1">Wyłącznik nadprądowy</div>
+                              <div className="pe-mono text-lg text-blueprint">
+                                {sized.aparat.charakterystyka}
+                                {sized.aparat.In_A} {sized.aparat.bieguny}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-2 flex gap-2 flex-wrap">
+                          <span className="pe-chip pe-tag-blue" title="Typ wyłącznika różnicowoprądowego wymagany dla tego odbiornika">
+                            {circuitKind === "gniazda" ? "RCD 30 mA " : "RCD "}typ {sized.rcd_typ}
+                          </span>
+                          {sized.Zs_max_Ohm !== null && (
+                            <span className="pe-chip pe-tag-green">Zs max {formatLiczba(sized.Zs_max_Ohm, 2)} Ω</span>
+                          )}
                         </div>
                         <div className="mt-2 flex gap-2 flex-wrap">
                           <span className="pe-chip pe-tag-copper">{sized.kabel}</span>
@@ -1370,7 +1393,7 @@ export function CalculatorsTab() {
                   "Sposób ułożenia decyduje o tym, ile ciepła przewód może oddać, a więc wprost o obciążalności: ta sama żyła 2,5 mm² uniesie 27 A natynkowo i tylko 19,5 A w ścianie ocieplonej termicznie. Tabelka pod wynikiem pokazuje wszystkie cztery warianty naraz — jeśli nie masz pewności, którym pójdzie trasa, przyjmij ostrzejszy.",
                   "Przekrój bywa podnoszony ponad wynikający z samej obciążalności — decyduje wtedy spadek napięcia na długiej trasie. Kalkulator mówi o tym wprost w ostrzeżeniu.",
                   "Bez podanej długości trasy (albo przy długości = 0) spadek napięcia NIE jest sprawdzany — dobór pokrywa wtedy wyłącznie obciążalność.",
-                  "Dobrany tu przekrój przenieś do kalkulatora „Dobór zabezpieczenia”, żeby zobaczyć sam wyłącznik wraz z warunkiem Ib ≤ In ≤ Iz i wymaganiem na pętlę zwarcia.",
+                  "Wyłącznik i typ RCD stoją w wyniku obok przekroju. Gdy przekrój jest już przesądzony (przewód leży w ścianie), przełącz na tryb „Mam przekrój” — dobierze sam wyłącznik z warunkiem Ib ≤ In ≤ Iz.",
                   "Wynik jest orientacyjny/edukacyjny — dobór do realizacji i odbioru wykonuje osoba z uprawnieniami, z uwzględnieniem rzeczywistej trasy kabla i warunków otoczenia.",
                 ]}
               />
@@ -1383,8 +1406,8 @@ export function CalculatorsTab() {
                 <div className="min-w-0">
                   <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                     Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
-                    został narzucony projektem. Jeśli dopiero szukasz przekroju, zacznij od „Dobór przekroju przewodu”;
-                    oba kalkulatory dzielą te same pola, więc nic nie trzeba przepisywać.
+                    został narzucony projektem. Jeśli dopiero szukasz przekroju, przełącz na tryb „Szukam przekroju”;
+                    oba tryby dzielą te same pola, więc nic nie trzeba przepisywać.
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-x-4">
@@ -1417,7 +1440,7 @@ export function CalculatorsTab() {
                       value={cosphi}
                       onChange={(v) => setCosphi(Number(v))}
                       step="0.05"
-                      hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
+                      hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór obwodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
                     />
                   </div>
 
@@ -1556,7 +1579,7 @@ export function CalculatorsTab() {
                   "Obwód wymiarowany jest pod docelową obsadę, nie tylko pod dzisiejszą moc — obwód gniazd dostaje typowo B16, a oświetlenia B10, nawet jeśli chwilowy pobór jest dużo niższy. Kalkulator schodzi poniżej tej wartości tylko wtedy, gdy obciążalność przewodu na to nie pozwala, i mówi o tym wprost.",
                   "Charakterystyka C (zamiast B) dla odbiorników z rozruchem silnikowym zapobiega wyłączaniu przy prądzie rozruchowym — ale podnosi Ia dwukrotnie, więc ZAOSTRZA wymaganie na impedancję pętli zwarcia.",
                   "Warunek Ib ≤ In ≤ Iz to dopiero połowa ochrony: drugą jest samoczynne wyłączenie w wymaganym czasie, czyli warunek na Zs. Sprawdź go w kalkulatorze „Impedancja pętli zwarcia”, wpisując pokazaną tu Zs max.",
-                  "Ten sam silnik doboru co „Dobór przekroju przewodu” i zakładka Rozdzielnica — dla tych samych danych wszystkie trzy miejsca podadzą ten sam aparat.",
+                  "Ten sam silnik doboru co „Dobór obwodu” i zakładka Rozdzielnica — dla tych samych danych wszystkie trzy miejsca podadzą ten sam aparat.",
                 ]}
               />
             </Card>
@@ -1618,7 +1641,7 @@ export function CalculatorsTab() {
                       value={pdCosfi}
                       onChange={(v) => patch({ pdCosfi: Number(v) })}
                       step="0.01"
-                      hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
+                      hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór obwodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
                     />
                     <Field
                       label="Dopuszczalny spadek napięcia"
@@ -1853,7 +1876,7 @@ export function CalculatorsTab() {
             <Card title={active.label} tag="sprawdzenie trasy">
               <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
                 Ten kalkulator sprawdza trasę o <strong>znanym przekroju</strong> — np. kabel, który już jest ułożony
-                albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór przekroju przewodu”: tam przekrój
+                albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór obwodu”: tam przekrój
                 jest wynikiem, dobieranym pod obciążalność i spadek naraz.
               </div>
 
@@ -1877,7 +1900,7 @@ export function CalculatorsTab() {
                   value={duCosfi}
                   onChange={(v) => patch({ duCosfi: Number(v) })}
                   step="0.05"
-                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór przekroju przewodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
+                  hint="Współczynnik mocy odbiornika — z tabliczki znamionowej. Nie znasz wartości? Zobacz podpowiedź w kalkulatorze „Dobór obwodu”: 1,0 dla grzałek, niżej dla silników i elektroniki."
                 />
                 <Field
                   label="Długość trasy (w jedną stronę)"
@@ -3053,7 +3076,7 @@ export function CalculatorsTab() {
                   { label: "Spadek napięcia — 1-fazowy / 3-fazowy", eq: "ΔU = (2·L·Ib·ρ)/S   |   ΔU = (√3·L·Ib·ρ)/S", where: "ρ = 0,0225 Ω·mm²/m przy 70°C, ten sam wzór co w doborze obwodu odbiorczego" },
                 ]}
                 notes={[
-                  "Ten sam silnik doboru co „Dobór przekroju przewodu” i Rozdzielnica (`sizeCircuit`/`sizeFeeder` w `lib/panel/sizing.ts`) — ta sama tablica obciążalności, te same współczynniki poprawkowe.",
+                  "Ten sam silnik doboru co „Dobór obwodu” i Rozdzielnica (`sizeCircuit`/`sizeFeeder` w `lib/panel/sizing.ts`) — ta sama tablica obciążalności, te same współczynniki poprawkowe.",
                   "Minimalny przekrój WLZ przyjęto na 10 mm² — praktyka projektowa dla domu jednorodzinnego (kabel dźwiga cały budynek), NIE liczba wprost z normy.",
                   "Domyślny limit spadku napięcia na samej WLZ to 2%, węższy niż 3-5% dla obwodu odbiorczego — WLZ to tylko odcinek całej trasy do odbiornika, więc zostawia miejsce na spadek za rozdzielnicą. Można go zmienić powyżej.",
                   "Tablice dotyczą przewodu w budynku (pod tynkiem/w rurce/natynkowo) — NIE kabla ziemnego. Jeśli WLZ biegnie w ziemi od złącza kablowo-pomiarowego, ten kalkulator się nie sprawdzi — potrzebna inna metoda odniesienia.",
@@ -3346,36 +3369,44 @@ export function CalculatorsTab() {
           )}
 
           {activeCalc === "rcd" && (
-            <Card title={active.label} tag="bezpieczeństwo">
+            <Card title={active.label} tag="lista kontrolna">
+              {/* Lista zasad, nie kalkulator — mówimy to wprost, żeby nikt nie szukał tu wyniku.
+                  Treść poprawiona po audycie 2026-11-04 (B14): typ A zamiast „AC/A" (spójnie
+                  z doborem w Rozdzielnicy), SPD nazwany po imieniu, reguła liczby obwodów
+                  oznaczona jako praktyka, a nie wymóg normy. */}
+              <p className="mb-3 text-[12.5px] text-slate-500">
+                Zasady doboru do sprawdzenia przy projekcie — bez obliczeń. Typ RCD dla konkretnego obwodu podaje „Dobór obwodu”
+                i tabela doboru w Rozdzielnicy.
+              </p>
               <ul className="text-sm space-y-2.5 text-slate-700">
                 <li className="flex gap-2">
-                  <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Obwody gniazd wtyczkowych — RCD 30 mA (typ AC/A), obowiązkowo.
+                  <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Obwody gniazd wtyczkowych do 32 A — RCD 30 mA (PN-HD 60364-4-41, ochrona uzupełniająca). Typ A jako minimum: zasilacze impulsowe i elektronika w odbiornikach dają prąd różnicowy pulsujący, na który typ AC nie reaguje.
                 </li>
                 <li className="flex gap-2">
                   <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Łazienka, kuchnia, tarasy — RCD 30 mA, zalecany osobny obwód i osobna ochrona.
                 </li>
                 <li className="flex gap-2">
-                  <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Odbiorniki z elektroniką (np. pompy ciepła, falowniki) — rozważ typ A lub B wg zaleceń producenta.
+                  <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Pralka, pompa ciepła i inne odbiorniki z przemiennikiem częstotliwości — typ F albo wg zaleceń producenta. Ładowarka EV i falownik PV, które mogą wprowadzić gładki prąd stały — typ B (albo A z urządzeniem RDC-DD), pod własnym RCD.
                 </li>
                 <li className="flex gap-2">
-                  <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Maks. 6–8 obwodów na jeden RCD 40A — powyżej dziel na kolejne różnicówki.
+                  <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Praktyka projektowa (nie wymóg normy): kilka obwodów, zwykle do 6–8, na jedną różnicówkę — upływy odbiorników się sumują, a jedno zadziałanie nie powinno odciąć całego domu.
                 </li>
                 <li className="flex gap-2">
-                  <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Rozważ wyłącznik przeciwprzepięciowy (typ 2) na początku instalacji.
+                  <ChevronRight size={15} className="mt-0.5 shrink-0 text-copper" /> Rozważ ogranicznik przepięć (SPD) typu 2 — albo typu 1+2 przy instalacji odgromowej lub zasilaniu napowietrznym — na początku instalacji.
                 </li>
               </ul>
               <HowItWorks
                 formulas={[
                   { label: "Warunek ochrony przy dotyku pośrednim", eq: "RA × IΔn ≤ UL", where: "RA — rezystancja uziemienia [Ω], IΔn — prąd różnicowy znamionowy [A], UL = 50 V" },
                   { label: "Maksymalna rezystancja uziemienia (RCD 30 mA)", eq: "RA ≤ 50 / 0,03 = 1667 Ω", where: "dlatego w układzie TT z RCD 30 mA wymagania wobec uziemienia są łagodne" },
-                  { label: "Dobór prądu znamionowego RCD", eq: "In(RCD) ≥ ΣIn zabezpieczeń za nim", where: "RCD nie ma własnego zabezpieczenia zwarciowego — musi być chroniony nadprądowo" },
+                  { label: "Dobór prądu znamionowego RCD", eq: "In(RCD) ≥ In zabezpieczenia przed nim", where: "RCD nie ma własnego wyzwalacza nadprądowego — przed przeciążeniem i zwarciem chroni go aparat nadrzędny (tak dobiera go Rozdzielnica)" },
                 ]}
                 notes={[
                   "Typ AC reaguje tylko na prąd różnicowy sinusoidalny; typ A dodatkowo na pulsujący stały — dziś to praktyczne minimum przy zasilaczach impulsowych i elektronice.",
                   "Typ B jest wymagany m.in. przy ładowarkach pojazdów elektrycznych i falownikach, gdzie może pojawić się gładki prąd stały.",
                   "Rozdzielenie instalacji na kilka RCD ogranicza skutki zadziałania — awaria w jednym obwodzie nie pozbawia zasilania całego domu.",
                   "Prądy upływowe odbiorników sumują się. Zbyt wiele obwodów za jednym RCD 30 mA prowadzi do przypadkowych wyłączeń bez rzeczywistej usterki.",
-                  "Wyłącznik różnicowoprądowy należy testować przyciskiem TEST co najmniej raz na pół roku — to jedyny sposób sprawdzenia, czy mechanizm nie zastygł.",
+                  "Wyłącznik różnicowoprądowy należy regularnie testować przyciskiem TEST, z częstotliwością podaną przez producenta — sprawdza to mechanizm wyzwalający, ale nie zastępuje pomiaru prądu i czasu zadziałania w protokole.",
                 ]}
               />
             </Card>
