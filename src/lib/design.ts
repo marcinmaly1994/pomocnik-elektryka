@@ -233,6 +233,29 @@ export function unikalnaNazwaPomieszczenia(nazwa: string, zajete: string[]): str
 }
 
 /**
+ * Pomieszczenie, w którego obrysie leży punkt — przy nakładających się obrysach
+ * NAJMNIEJSZE, bo to ono jest w odbiorze „na wierzchu" (wnęka w salonie, łazienka
+ * obrysowana wewnątrz obrysu całego mieszkania). `null`, gdy punkt nie leży w żadnym.
+ *
+ * Dla kliknięcia we wnętrze pokoju (audyt 5.11.2026, B9): samo wnętrze na płótnie
+ * celowo nie łapie zdarzeń (patrz wypełnienie w DesignCanvas — inaczej ramka
+ * zaznaczania nie mogłaby zacząć się w pokoju), więc trafienie liczymy tutaj.
+ */
+export function pomieszczeniePodPunktem(p: Point, roomShapes: RoomShape[]): RoomShape | null {
+  let najlepszy: RoomShape | null = null;
+  let najmniejsze = Infinity;
+  for (const r of roomShapes) {
+    if (!pointInPolygon(p, r.points)) continue;
+    const pole = polygonArea(r.points);
+    if (pole < najmniejsze) {
+      najmniejsze = pole;
+      najlepszy = r;
+    }
+  }
+  return najlepszy;
+}
+
+/**
  * Nadaje numery powtórzonym nazwom pomieszczeń na tej samej kondygnacji — dla projektów
  * zapisanych, zanim `unikalnaNazwaPomieszczenia` pilnowała tego przy dodawaniu. Pierwszy
  * obrys zachowuje nazwę, kolejne dostają numer. Elementy NIE są tu ruszane: ich
