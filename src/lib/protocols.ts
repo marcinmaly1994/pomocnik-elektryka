@@ -345,6 +345,42 @@ export function limitOceny(def: ProtocolDef, limit: number): number {
   return Math.min(max, Math.max(min, limit));
 }
 
+/**
+ * Kolumny liczbowe wiersza z wartością UJEMNĄ — nazwy kolumn.
+ *
+ * Wszystkie liczbowe kolumny protokołów to wielkości fizycznie nieujemne (rezystancja,
+ * impedancja, prąd, czas, napięcie). Ujemna wartość to błąd wpisu, a nie pomiar — tymczasem
+ * protokół izolacji dawał przy −3 MΩ ocenę „negatywna" i drukował −3 w PDF, czyli
+ * w dokumencie formalnym (audyt 2026-11-04, B12).
+ */
+export function ujemneWWierszu(def: ProtocolDef, row: ProtocolRow): string[] {
+  return (def.columns ?? [])
+    .filter((c) => c.type === "number")
+    .filter((c) => {
+      const v = row[c.key];
+      if (v === undefined || v === null || v === "") return false;
+      const n = Number(v);
+      return Number.isFinite(n) && n < 0;
+    })
+    .map((c) => c.label);
+}
+
+/** Wiersze z wartościami ujemnymi: numer wiersza (od 1) i kolumny. Pusta = dane do druku. */
+export function ujemneWProtokole(def: ProtocolDef, rows: ProtocolRow[]): { wiersz: number; kolumny: string[] }[] {
+  if (def.checklist) return [];
+  return rows.map((r, i) => ({ wiersz: i + 1, kolumny: ujemneWWierszu(def, r) })).filter((x) => x.kolumny.length > 0);
+}
+
+/**
+ * Ocena jednego wiersza — JEDYNE wejście do `def.evaluate`, żeby ekran, PDF i werdykt
+ * ogólny oceniały tak samo. Wiersz z wartością ujemną jest „bez oceny", nie „negatywny":
+ * to błąd danych do poprawienia, nie wynik pomiaru.
+ */
+export function ocenWiersz(def: ProtocolDef, row: ProtocolRow, limit: number): boolean | null {
+  if (ujemneWWierszu(def, row).length > 0) return null;
+  return def.evaluate!(row, limit);
+}
+
 export function protocolVerdict(def: ProtocolDef, rows: ProtocolRow[], limit: number): boolean | null {
   if (def.checklist) {
     if (rows.some((r) => r.status === "nie")) return false;
@@ -352,7 +388,7 @@ export function protocolVerdict(def: ProtocolDef, rows: ProtocolRow[], limit: nu
     // Same „n/d" to jeszcze nie ocena — nic nie zostało sprawdzone jako zgodne.
     return rows.some((r) => r.status === "tak") ? true : null;
   }
-  const evals = rows.map((r) => def.evaluate!(r, limit));
+  const evals = rows.map((r) => ocenWiersz(def, r, limit));
   if (evals.some((v) => v === false)) return false;
   if (!evals.length || evals.some((v) => v === null)) return null;
   return true;
@@ -361,5 +397,5 @@ export function protocolVerdict(def: ProtocolDef, rows: ProtocolRow[], limit: nu
 /** Ile wierszy protokołu nie ma jeszcze oceny — do komunikatu „niekompletny". */
 export function wierszeBezOceny(def: ProtocolDef, rows: ProtocolRow[], limit: number): number {
   if (def.checklist) return rows.filter((r) => !r.status).length;
-  return rows.filter((r) => def.evaluate!(r, limit) === null).length;
+  return rows.filter((r) => ocenWiersz(def, r, limit) === null).length;
 }

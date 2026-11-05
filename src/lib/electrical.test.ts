@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcPowerBalance, calcLighting, maxGroundingResistance } from "./electrical";
+import { bledyBilansuMocy, calcPowerBalance, calcLighting, maxGroundingResistance } from "./electrical";
 
 describe("calcPowerBalance", () => {
   it("domyślne odbiorniki z CalculatorsTab (6000+7000+3000 W, ks=0,7)", () => {
@@ -47,5 +47,30 @@ describe("maxGroundingResistance", () => {
 
   it("brak prądu różnicowego -> zero, nie dzielenie przez zero", () => {
     expect(maxGroundingResistance(0)).toBe(0);
+  });
+});
+
+describe("calcPowerBalance — cos φ i walidacja (audyt 2026-11-04, B10)", () => {
+  const dev = [{ name: "A", power: 9200 }];
+
+  it("cos φ podnosi prąd o 1/cos φ, a domyślne 1 nie zmienia dawnych wyników", () => {
+    expect(calcPowerBalance(dev, 1).demandCurrent1).toBeCloseTo(40, 6);
+    expect(calcPowerBalance(dev, 1, 0.8).demandCurrent1).toBeCloseTo(50, 6);
+  });
+
+  it("dane poprawne — brak błędów", () => {
+    expect(bledyBilansuMocy(dev, 0.7, 1)).toEqual([]);
+  });
+
+  it("moc ujemna, ks > 1 i cos φ poza (0; 1] są zgłaszane po imieniu", () => {
+    const b = bledyBilansuMocy([{ name: "Kuchenka", power: -5000 }], 3, 1.2);
+    expect(b).toHaveLength(3);
+    expect(b[0]).toMatch(/„Kuchenka” nie może być ujemna/);
+    expect(b[1]).toMatch(/ks musi mieścić się/);
+    expect(b[2]).toMatch(/cos φ/);
+  });
+
+  it("ks = 0 też jest błędem (nic by nie pracowało)", () => {
+    expect(bledyBilansuMocy(dev, 0, 1)).toHaveLength(1);
   });
 });

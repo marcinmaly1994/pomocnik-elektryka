@@ -29,8 +29,8 @@ import {
 } from "@/lib/norms/conductors";
 import { limitSpadkuPct } from "@/lib/panel/norms";
 import { formatLiczba } from "@/lib/calc/result";
-import { calcLighting, calcPowerBalance, maxGroundingResistance, UL } from "@/lib/electrical";
-import { LAYING_METHOD_LABELS, SECTIONS, U0, type LayingMethod } from "@/lib/panel/norms";
+import { bledyBilansuMocy, calcLighting, calcPowerBalance, maxGroundingResistance, UL } from "@/lib/electrical";
+import { BREAKER_RATINGS, LAYING_METHOD_LABELS, SECTIONS, U0, type LayingMethod } from "@/lib/panel/norms";
 import {
   sizeBreakerForSection,
   voltageDropPct,
@@ -101,7 +101,7 @@ const STARE_ADRESY: Record<string, TrybObwodu> = {
 const UKLAD_POLA_WYNIK = "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,21rem)] xl:items-start xl:gap-x-6";
 
 const CALC_LIST: { id: CalcId; label: string; desc: string }[] = [
-  { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza" },
+  { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana i prąd do wniosku o przyłączenie" },
   { id: "obwod", label: "Dobór obwodu", desc: "przekrój, zabezpieczenie, WLZ i cztery kryteria w jednym" },
   { id: "gGWkladka", label: "Dobór wkładki gG", desc: "ochrona przeciwporażeniowa — zabezpieczenie topikowe" },
   { id: "spadek", label: "Spadek napięcia", desc: "sprawdzenie trasy o znanym przekroju" },
@@ -352,9 +352,12 @@ export function CalculatorsTab() {
   const evWbudowanaOchronaDC = useCalculatorsStore((s) => s.evWbudowanaOchronaDC);
   const devices = useCalculatorsStore((s) => s.devices);
   const ks = useCalculatorsStore((s) => s.ks);
+  const ksCosfi = useCalculatorsStore((s) => s.ksCosfi);
   const zCurve = useCalculatorsStore((s) => s.zCurve);
   const zIn = useCalculatorsStore((s) => s.zIn);
   const zMeasured = useCalculatorsStore((s) => s.zMeasured);
+  // Zapis sprzed listy mógł mieć wartość spoza szeregu (np. 17) — liczymy i pokazujemy tę samą.
+  const zInSzereg: number = (BREAKER_RATINGS as readonly number[]).includes(zIn) ? zIn : 16;
   const wlzCurrentA = useCalculatorsStore((s) => s.wlzCurrentA);
   const wlzPhase = useCalculatorsStore((s) => s.wlzPhase);
   const wlzLength = useCalculatorsStore((s) => s.wlzLength);
@@ -845,7 +848,8 @@ export function CalculatorsTab() {
   );
 
   // --- 3. bilans mocy ---
-  const balance = useMemo(() => calcPowerBalance(devices, ks), [devices, ks]);
+  const balance = useMemo(() => calcPowerBalance(devices, ks, ksCosfi), [devices, ks, ksCosfi]);
+  const bledyBilansu = useMemo(() => bledyBilansuMocy(devices, ks, ksCosfi), [devices, ks, ksCosfi]);
 
   // Ta zakładka NIE czyta projektowanej instalacji — świadomie. Kalkulatory (tak samo
   // jak Protokoły pomiarowe) są narzędziem OBOK przepływu 1→2→3→4, a nie jego krokiem:
@@ -858,7 +862,7 @@ export function CalculatorsTab() {
 
   // --- 3. impedancja pętli zwarcia ---
   const zCalc = useMemo(() => {
-    const { ia, zsMax } = zsMaxForBreaker(zCurve, zIn);
+    const { ia, zsMax } = zsMaxForBreaker(zCurve, zInSzereg);
     /**
      * Prąd zwarcia liczony z Cmin = 0,95, nie z pełnego U0.
      *
@@ -881,7 +885,7 @@ export function CalculatorsTab() {
       okZalecany: zmierzona ? zMeasured <= zsZalecana : null,
       margines: zmierzona ? (1 - zMeasured / zsMax) * 100 : null,
     };
-  }, [zCurve, zIn, zMeasured]);
+  }, [zCurve, zInSzereg, zMeasured]);
 
   // --- 4. WLZ (linia zasilająca) ---
   const sizedFeeder = useMemo(
@@ -2880,6 +2884,23 @@ export function CalculatorsTab() {
                 step="0.05"
                 hint="Odzwierciedla, że nie wszystkie odbiorniki pracują naraz z pełną mocą. Orientacyjnie 0,6–0,8 dla domu jednorodzinnego — im więcej odbiorników, tym niższy. Podnieś go, jeśli masz pompę ciepła, ładowarkę EV albo kuchenkę indukcyjną (te potrafią pracować długo i równocześnie)."
               />
+              <Field
+                label="Współczynnik mocy cos φ"
+                value={ksCosfi}
+                onChange={(v) => patch({ ksCosfi: Number(v) })}
+                step="0.05"
+                hint="Wypadkowy cos φ instalacji. 1 dla odbiorników grzejnych (bojler, kuchenka, grzałki); przy dużym udziale silników, pomp ciepła i zasilaczy przyjmij niższy — prąd rośnie o 1/cos φ."
+              />
+              {bledyBilansu.length > 0 ? (
+                <div role="alert" data-testid="bledy-bilansu" className="mt-2 rounded-md p-3 text-[12.5px] leading-relaxed" style={{ background: "#C6433A12", color: "#8C2F28" }}>
+                  <div className="mb-1 font-semibold">Popraw dane — wynik nie jest liczony:</div>
+                  <ul className="list-disc pl-5">
+                    {bledyBilansu.map((b) => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
               <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-xs text-slate-500">Moc zainstalowana</div>
@@ -2898,11 +2919,12 @@ export function CalculatorsTab() {
                   <div className="pe-mono">{formatLiczba(balance.demandCurrent3, 1)} A</div>
                 </div>
               </div>
+              )}
               <HowItWorks
                 formulas={[
                   { label: "Moc zainstalowana", eq: "Pi = ΣP", where: "suma mocy znamionowych wszystkich odbiorników" },
                   { label: "Moc zapotrzebowana (szczytowa)", eq: "Pz = Pi × ks", where: "ks — współczynnik jednoczesności (0 < ks ≤ 1)" },
-                  { label: "Prąd zapotrzebowany", eq: "I₁f = Pz / U   |   I₃f = Pz / (√3 × U)", where: "U = 230 V dla 1 fazy, 400 V dla 3 faz" },
+                  { label: "Prąd zapotrzebowany", eq: "I₁f = Pz / (U · cos φ)   |   I₃f = Pz / (√3 · U · cos φ)", where: "U = 230 V dla 1 fazy, 400 V dla 3 faz" },
                 ]}
                 notes={[
                   "Lista odbiorników jest wyłącznie Twoja — kalkulator nie zagląda do rysowanego rzutu. Wpisz odbiorniki tej instalacji, którą właśnie liczysz, łącznie z tymi bez widocznego gniazda (np. piekarnik podłączony na stałe).",
@@ -2910,7 +2932,8 @@ export function CalculatorsTab() {
                   "Wartości orientacyjne ks dla domu jednorodzinnego: 0,6–0,8. Im więcej odbiorników, tym niższy współczynnik.",
                   "Moc zapotrzebowana służy do doboru mocy przyłączeniowej we wniosku do operatora sieci oraz zabezpieczenia przedlicznikowego.",
                   "Dla instalacji z pompą ciepła, ładowarką EV lub kuchenką indukcyjną warto przyjąć wyższy ks — te odbiorniki potrafią pracować równocześnie i długotrwale.",
-                  "Kalkulator zakłada cos φ = 1. Przy dużym udziale silników rzeczywisty prąd będzie wyższy o 1/cos φ.",
+                  "Domyślnie cos φ = 1 (odbiorniki grzejne). Przy dużym udziale silników, pomp ciepła i zasilaczy wpisz niższy — rzeczywisty prąd jest wyższy o 1/cos φ.",
+                  "Kalkulator nie dobiera zabezpieczenia przedlicznikowego ani mocy przyłączeniowej — te ustala operator sieci w warunkach przyłączenia. Podaje moc i prąd, z którymi idzie się do wniosku.",
                 ]}
               />
             </Card>
@@ -3114,11 +3137,14 @@ export function CalculatorsTab() {
                   ]}
                   hint="Litera wydrukowana na wyłączniku obok prądu znamionowego (np. „B16”, „C16”) — B do zwykłych obwodów, C dla odbiorników z rozruchem silnikowym (pompy, lodówki), D dla silników o dużym prądzie rozruchowym."
                 />
+                {/* Lista szeregu znamionowego zamiast wolnej liczby: pole przyjmowało 17 A
+                    albo 0 A, a przy 0 wynik po prostu znikał bez słowa (audyt, B16). */}
                 <Field
                   label="Prąd znamionowy In"
-                  value={zIn}
+                  value={zInSzereg}
                   onChange={(v) => setZIn(Number(v))}
                   unit="A"
+                  options={BREAKER_RATINGS.map((r) => ({ value: String(r), label: `${r} A` }))}
                 />
                 <Field
                   label="Zmierzona Zs"
@@ -3150,6 +3176,12 @@ export function CalculatorsTab() {
                   <div className="pe-mono">{zCalc.ik ? formatLiczba(zCalc.ik, 0) : "—"} A</div>
                 </div>
               </div>
+              {zMeasured < 0 && (
+                <div role="alert" className="mt-2 rounded-lg p-3 text-sm" style={{ background: "#C6433A1A", color: "#A2352C" }}>
+                  Impedancja pętli zwarcia nie może być ujemna — sprawdź wpisaną wartość. Zostaw 0, żeby zobaczyć samo Zs max
+                  bez oceny.
+                </div>
+              )}
               {zCalc.ok !== null && (
                 <div
                   className="mt-2 flex items-start gap-2 rounded-lg p-3 text-sm"
@@ -3178,9 +3210,9 @@ export function CalculatorsTab() {
               <HowItWorks
                 formulas={[
                   { label: "Warunek samoczynnego wyłączenia zasilania", eq: "Zs × Ia ≤ U₀", where: "Zs — impedancja pętli zwarcia [Ω], Ia — prąd zadziałania [A], U₀ = 230 V" },
-                  { label: "Maksymalna dopuszczalna impedancja", eq: "Zs max = U₀ / Ia", where: "wartość, której zmierzona Zs nie może przekroczyć" },
+                  { label: "Maksymalna dopuszczalna impedancja", eq: "Zs max = Cmin × U₀ / Ia", where: "Cmin = 0,95 (PN-EN 60909-0) — wartość, której zmierzona Zs nie może przekroczyć" },
                   { label: "Prąd zadziałania wyzwalacza magnetycznego", eq: "Ia = k × In", where: "k = 5 dla char. B, 10 dla C, 20 dla D (górna granica pasma)" },
-                  { label: "Spodziewany prąd zwarcia", eq: "Ik = U₀ / Zs", where: "prąd, jaki popłynie przy zwarciu L-PE" },
+                  { label: "Spodziewany prąd zwarcia", eq: "Ik = Cmin × U₀ / Zs", where: "najmniejszy prąd, jaki popłynie przy zwarciu L-PE" },
                 ]}
                 notes={[
                   "Wymagany czas wyłączenia w układzie TN dla obwodów odbiorczych do 32 A wynosi 0,4 s, a dla obwodów rozdzielczych — 5 s.",

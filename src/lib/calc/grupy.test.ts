@@ -3,7 +3,7 @@ import { filtruj, GRUPY, normalizuj, pogrupuj, type PozycjaKalkulatora } from ".
 import type { CalcId } from "@/store/useCalculatorsStore";
 
 const lista: PozycjaKalkulatora[] = [
-  { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana, dobór przyłącza" },
+  { id: "moc", label: "Bilans mocy budynku", desc: "moc zapotrzebowana i prąd do wniosku o przyłączenie" },
   { id: "obwod", label: "Dobór obwodu", desc: "przekrój, zabezpieczenie, WLZ i cztery kryteria w jednym" },
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN" },
   { id: "uziemienieTT", label: "Rezystancja uziemienia", desc: "ochrona przeciwporażeniowa — układ TT" },
@@ -71,7 +71,7 @@ describe("filtruj", () => {
   it("ignoruje wielkosc liter i polskie ogonki", () => {
     expect(filtruj(lista, "PETLI").map((p) => p.id)).toEqual(["petla"]);
     expect(filtruj(lista, "wylacznika").map((p) => p.id)).toEqual(["rcd"]);
-    expect(filtruj(lista, "przylacza").map((p) => p.id)).toEqual(["moc"]);
+    expect(filtruj(lista, "przylacz").map((p) => p.id)).toEqual(["moc"]);
   });
 
   it("fraza bez trafien daje pusta liste, a nie cala", () => {
