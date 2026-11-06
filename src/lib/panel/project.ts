@@ -13,7 +13,7 @@ import { computeCircuits } from "./circuits";
 import { circuitDemand, estimateGwiazdaByFloor, estimateRoutesByFloor, findPanels, findPunktyZbiorcze, kindForElements, type GeometriaKondygnacji } from "./loads";
 import { sizeCircuit, type PhaseAssignment, type SizedCircuit } from "./sizing";
 import type { LayingMethod } from "./norms";
-import { isWetRoomName } from "@/lib/design";
+import { elementWMokrym } from "@/lib/design";
 
 export interface ProjectSizingOptions {
   /**
@@ -75,7 +75,9 @@ export function sizeProjectCircuits(
       nazwa: c.name,
       typ: kind,
       pomieszczenie: c.elements[0]?.room,
-      strefa_mokra: isWetRoomName(c.elements[0]?.room ?? "", roomShapes),
+      // Pokój PIERWSZEGO elementu, na jego kondygnacji (F1) — nie pierwszy obrys o tej
+      // nazwie w budynku.
+      strefa_mokra: c.elements[0] ? elementWMokrym(c.elements[0], roomShapes) : false,
       moc_W: demand.powerW,
       liczba_faz: phases,
       dlugosc_m: routes?.worstCaseM,

@@ -593,6 +593,42 @@ export function zastosowaniePokoju(roomName: string, roomShapes: RoomShape[]): Z
   return ZASTOSOWANIE[typPomieszczenia(roomName, roomShapes)];
 }
 
+/**
+ * Pomieszczenia ELEMENTU — warianty powyższych funkcji, które patrzą tylko na obrysy
+ * z kondygnacji elementu (F1 z audytu 5.11.2026). Obwody liczą się z elementów całego
+ * budynku, a szukanie po samej nazwie brało typ z pierwszego obrysu o tej nazwie
+ * w budynku: „Pracownia" na piętrze dostawała typ „Pracowni" z parteru.
+ */
+function obrysyPietra(e: InstallationElement, roomShapes: RoomShape[]): RoomShape[] {
+  return roomShapes.filter((r) => r.floor === e.floor);
+}
+
+/** Typ pomieszczenia elementu: z jego obrysu (po `roomId`, a bez niego po nazwie na tej
+ *  kondygnacji), a w braku obrysu — zgadnięty z nazwy. */
+export function typPokojuElementu(e: InstallationElement, roomShapes: RoomShape[]): RoomType {
+  const obrys = (e.roomId && roomShapes.find((r) => r.id === e.roomId)) || undefined;
+  return obrys?.type ?? typPomieszczenia(e.room, obrysyPietra(e, roomShapes));
+}
+
+/** Czy element stoi w pomieszczeniu „mokrym" — patrz `isWetRoomName`. */
+export function elementWMokrym(e: InstallationElement, roomShapes: RoomShape[]): boolean {
+  return WET_ROOM_TYPES.includes(typPokojuElementu(e, roomShapes));
+}
+
+/** Zastosowanie pomieszczenia elementu — patrz `zastosowaniePokoju`. */
+export function zastosowanieElementu(e: InstallationElement, roomShapes: RoomShape[]): ZastosowaniePokoju {
+  return ZASTOSOWANIE[typPokojuElementu(e, roomShapes)];
+}
+
+/**
+ * Klucz pomieszczenia elementu do GRUPOWANIA (obwody, grupy światła, zestawienia): id
+ * obrysu, a dla nazw bez obrysu — kondygnacja z nazwą. Dwie „Łazienki" na dwóch piętrach
+ * to dwa klucze, nie jeden.
+ */
+export function kluczPokoju(e: InstallationElement): string {
+  return e.roomId ?? `${e.floor}/${e.room}`;
+}
+
 /** Skala kondygnacji (metrów na jednostkę planu) albo `null`, jeśli nie skalibrowana. */
 export function scaleOf(scales: Record<string, number>, floorId: string): number | null {
   const v = scales[floorId];
