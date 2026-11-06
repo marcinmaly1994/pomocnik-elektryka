@@ -160,3 +160,180 @@ export function parseTtf(bytes: Uint8Array): ParsedTtf {
     },
   };
 }
+
+/** Tablice, które zostają w odchudzonym foncie: wszystko, czego czytnik PDF potrzebuje do
+ *  narysowania glifu (kontury, metryki, hinting) i do znalezienia go po nazwie z
+ *  /Differences (`post`) albo po Unicode (`cmap`). `name` zostaje z noticą licencyjną. */
+const TABELE_DO_OSADZENIA = new Set(["cmap", "cvt ", "fpgm", "gasp", "glyf", "head", "hhea", "hmtx", "loca", "maxp", "name", "OS/2", "post", "prep"]);
+
+function sumaKontrolnaTabeli(b: Uint8Array): number {
+  let suma = 0;
+  for (let i = 0; i < b.length; i += 4) {
+    const slowo = ((b[i] << 24) | ((b[i + 1] ?? 0) << 16) | ((b[i + 2] ?? 0) << 8) | (b[i + 3] ?? 0)) >>> 0;
+    suma = (suma + slowo) >>> 0;
+  }
+  return suma;
+}
+
+/**
+ * Font TrueType do osadzenia w PDF, z konturami TYLKO dla `kodyZnakow` — reszta glifów
+ * zostaje, ale pusta.
+ *
+ * Audyt 5.11.2026 (B12): każdy PDF ważył ok. 1,4 MB, nawet jednostronicowa legenda, bo oba
+ * pliki DejaVu (740 i 690 kB) szły do niego w całości — choć dokument używa stałego zestawu
+ * ok. 120 znaków (ASCII, polskie litery, kilka jednostek; patrz `PDF_POLISH` w engine.ts).
+ *
+ * Celowo NIE jest to pełny subsetting z przenumerowaniem glifów: numery glifów, `cmap`
+ * i `post` zostają nietknięte, więc /Differences z nazwami glifów i szerokości działają
+ * dokładnie tak samo jak na pełnym foncie. Zmienia się tylko `glyf` (kontury niepotrzebnych
+ * glifów wycięte) i `loca` (zawsze format długi), a znikają tablice, których PDF z prostym
+ * fontem TrueType nie czyta (GSUB/GPOS/kern/GDEF…). Kontury złożone ciągną za sobą swoje
+ * składowe — „ą" w wielu fontach to „a" + ogonek.
+ */
+export function odchudzTtf(bytes: Uint8Array, kodyZnakow: number[], nazwyGlifow: string[] = []): Uint8Array {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tables = readTableDirectory(view);
+  const head = tables.get("head"), maxp = tables.get("maxp"), loca = tables.get("loca"), glyf = tables.get("glyf"), cmapT = tables.get("cmap");
+  if (!head || !maxp || !loca || !glyf || !cmapT) return bytes; // nie TrueType z konturami glyf — osadzamy jak jest
+
+  const liczbaGlifow = view.getUint16(maxp.offset + 4);
+  const dlugaLoca = view.getInt16(head.offset + 50) === 1;
+  const poczatek = (gid: number) => (dlugaLoca ? view.getUint32(loca.offset + gid * 4) : view.getUint16(loca.offset + gid * 2) * 2);
+
+  // Potrzebne glify: .notdef + glify znaków + (rekurencyjnie) składowe glifów złożonych.
+  const cmap = parseCmap(view, cmapT);
+  const potrzebne = new Set<number>([0]);
+  const kolejka: number[] = [];
+  const dodaj = (gid: number | undefined) => {
+    if (gid !== undefined && gid < liczbaGlifow && !potrzebne.has(gid)) {
+      potrzebne.add(gid);
+      kolejka.push(gid);
+    }
+  };
+  for (const cp of kodyZnakow) dodaj(cmap.get(cp));
+  // Glify wskazane NAZWĄ (/Differences) — nazwa nie musi trafiać w ten sam glif co Unicode
+  // (w DejaVu „Delta" to U+2206, nie U+0394), a czytnik PDF szuka właśnie po nazwie.
+  for (const gid of glifyPoNazwach(bytes, nazwyGlifow).values()) dodaj(gid);
+  while (kolejka.length > 0) {
+    const gid = kolejka.pop()!;
+    const od = poczatek(gid), dlugosc = poczatek(gid + 1) - od;
+    if (dlugosc <= 0 || view.getInt16(glyf.offset + od) >= 0) continue; // pusty albo prosty
+    let p = glyf.offset + od + 10;
+    for (;;) {
+      const flagi = view.getUint16(p);
+      const skladowa = view.getUint16(p + 2);
+      if (skladowa < liczbaGlifow && !potrzebne.has(skladowa)) {
+        potrzebne.add(skladowa);
+        kolejka.push(skladowa);
+      }
+      p += 4 + (flagi & 0x0001 ? 4 : 2);
+      if (flagi & 0x0008) p += 2;
+      else if (flagi & 0x0040) p += 4;
+      else if (flagi & 0x0080) p += 8;
+      if (!(flagi & 0x0020)) break;
+    }
+  }
+
+  // Nowe glyf + loca (format długi).
+  const kawalki: Uint8Array[] = [];
+  const nowaLoca = new Uint8Array((liczbaGlifow + 1) * 4);
+  const lv = new DataView(nowaLoca.buffer);
+  let przesuniecie = 0;
+  for (let gid = 0; gid < liczbaGlifow; gid++) {
+    lv.setUint32(gid * 4, przesuniecie);
+    if (!potrzebne.has(gid)) continue;
+    const od = poczatek(gid), dlugosc = poczatek(gid + 1) - od;
+    if (dlugosc <= 0) continue;
+    const z4 = (dlugosc + 3) & ~3;
+    const kawalek = new Uint8Array(z4);
+    kawalek.set(bytes.subarray(glyf.offset + od, glyf.offset + od + dlugosc));
+    kawalki.push(kawalek);
+    przesuniecie += z4;
+  }
+  lv.setUint32(liczbaGlifow * 4, przesuniecie);
+  const nowyGlyf = new Uint8Array(przesuniecie);
+  let w = 0;
+  for (const k of kawalki) {
+    nowyGlyf.set(k, w);
+    w += k.length;
+  }
+
+  const nowyHead = bytes.slice(head.offset, head.offset + head.length);
+  const hv = new DataView(nowyHead.buffer);
+  hv.setInt16(50, 1); // indexToLocFormat: długi
+  hv.setUint32(8, 0); // checkSumAdjustment liczony na końcu, z całego pliku
+
+  // Złożenie pliku SFNT: katalog tablic posortowany po tagu, tablice wyrównane do 4 bajtów.
+  const tagi = [...tables.keys()].filter((t) => TABELE_DO_OSADZENIA.has(t)).sort();
+  const dane = new Map<string, Uint8Array>();
+  for (const tag of tagi) {
+    const e = tables.get(tag)!;
+    dane.set(tag, tag === "glyf" ? nowyGlyf : tag === "loca" ? nowaLoca : tag === "head" ? nowyHead : bytes.slice(e.offset, e.offset + e.length));
+  }
+  const n = tagi.length;
+  const naglowek = 12 + n * 16;
+  const rozmiar = naglowek + tagi.reduce((s, t) => s + ((dane.get(t)!.length + 3) & ~3), 0);
+  const wynik = new Uint8Array(rozmiar);
+  const ov = new DataView(wynik.buffer);
+  ov.setUint32(0, view.getUint32(0)); // sfntVersion
+  ov.setUint16(4, n);
+  const potega = 2 ** Math.floor(Math.log2(n));
+  ov.setUint16(6, potega * 16);
+  ov.setUint16(8, Math.log2(potega));
+  ov.setUint16(10, n * 16 - potega * 16);
+  let pozycja = naglowek;
+  let offsetHead = 0;
+  tagi.forEach((tag, i) => {
+    const d = dane.get(tag)!;
+    const r = 12 + i * 16;
+    for (let k = 0; k < 4; k++) ov.setUint8(r + k, tag.charCodeAt(k));
+    ov.setUint32(r + 4, sumaKontrolnaTabeli(d));
+    ov.setUint32(r + 8, pozycja);
+    ov.setUint32(r + 12, d.length);
+    wynik.set(d, pozycja);
+    if (tag === "head") offsetHead = pozycja;
+    pozycja += (d.length + 3) & ~3;
+  });
+  ov.setUint32(offsetHead + 8, (0xb1b0afba - sumaKontrolnaTabeli(wynik)) >>> 0);
+  return wynik;
+}
+
+/** Standardowe nazwy glifów Macintosha (258) — tablica `post` w formacie 2.0 wskazuje na nie
+ *  indeksami 0..257, a dopiero dalsze indeksy na własne nazwy fontu. */
+const NAZWY_MAC =
+  ".notdef .null nonmarkingreturn space exclam quotedbl numbersign dollar percent ampersand quotesingle parenleft parenright asterisk plus comma hyphen period slash zero one two three four five six seven eight nine colon semicolon less equal greater question at A B C D E F G H I J K L M N O P Q R S T U V W X Y Z bracketleft backslash bracketright asciicircum underscore grave a b c d e f g h i j k l m n o p q r s t u v w x y z braceleft bar braceright asciitilde Adieresis Aring Ccedilla Eacute Ntilde Odieresis Udieresis aacute agrave acircumflex adieresis atilde aring ccedilla eacute egrave ecircumflex edieresis iacute igrave icircumflex idieresis ntilde oacute ograve ocircumflex odieresis otilde uacute ugrave ucircumflex udieresis dagger degree cent sterling section bullet paragraph germandbls registered copyright trademark acute dieresis notequal AE Oslash infinity plusminus lessequal greaterequal yen mu partialdiff summation product pi integral ordfeminine ordmasculine Omega ae oslash questiondown exclamdown logicalnot radical florin approxequal Delta guillemotleft guillemotright ellipsis nonbreakingspace Agrave Atilde Otilde OE oe endash emdash quotedblleft quotedblright quoteleft quoteright divide lozenge ydieresis Ydieresis fraction currency guilsinglleft guilsinglright fi fl daggerdbl periodcentered quotesinglbase quotedblbase perthousand Acircumflex Ecircumflex Aacute Edieresis Egrave Iacute Icircumflex Idieresis Igrave Oacute Ocircumflex apple Ograve Uacute Ucircumflex Ugrave dotlessi circumflex tilde macron breve dotaccent ring cedilla hungarumlaut ogonek caron Lslash lslash Scaron scaron Zcaron zcaron brokenbar Eth eth Yacute yacute Thorn thorn minus multiply onesuperior twosuperior threesuperior onehalf onequarter threequarters franc Gbreve gbreve Idotaccent Scedilla scedilla Cacute cacute Ccaron ccaron dcroat".split(
+    " "
+  );
+
+/**
+ * Numery glifów o podanych NAZWACH, z tablicy `post` (format 2.0). Pusta mapa dla innych
+ * formatów — wtedy czytnik i tak nie znajdzie glifu po nazwie w samym foncie.
+ *
+ * Potrzebne, bo PDF z /Differences szuka glifu po nazwie, a nazwa nie musi wskazywać tego
+ * samego glifu co Unicode w `cmap`: w DejaVu „Delta" to glif U+2206 (przyrost), nie U+0394.
+ */
+export function glifyPoNazwach(bytes: Uint8Array, nazwy: string[]): Map<string, number> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const post = readTableDirectory(view).get("post");
+  const wynik = new Map<string, number>();
+  if (!post || view.getUint32(post.offset) !== 0x00020000) return wynik;
+  const liczba = view.getUint16(post.offset + 32);
+  const indeksy: number[] = [];
+  for (let g = 0; g < liczba; g++) indeksy.push(view.getUint16(post.offset + 34 + g * 2));
+  const wlasne: string[] = [];
+  let p = post.offset + 34 + liczba * 2;
+  const koniec = post.offset + post.length;
+  while (p < koniec) {
+    const dl = view.getUint8(p);
+    let s = "";
+    for (let k = 0; k < dl; k++) s += String.fromCharCode(view.getUint8(p + 1 + k));
+    wlasne.push(s);
+    p += 1 + dl;
+  }
+  const szukane = new Set(nazwy);
+  indeksy.forEach((idx, gid) => {
+    const nazwa = idx < 258 ? NAZWY_MAC[idx] : wlasne[idx - 258];
+    if (nazwa && szukane.has(nazwa) && !wynik.has(nazwa)) wynik.set(nazwa, gid);
+  });
+  return wynik;
+}

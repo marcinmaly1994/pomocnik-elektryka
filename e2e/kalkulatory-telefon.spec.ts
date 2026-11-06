@@ -103,10 +103,19 @@ test.describe("na telefonie", () => {
     await wybierz(page, "Dobór oświetlenia");
     await page.getByRole("button", { name: "Zmień kalkulator" }).click();
     // Wyszukiwarka stoi i na ekranie startowym, i w rozwijanej liście — obie bez skrótu.
-    const skroty = await page.getByText("⌘K").all();
+    const skroty = await page.getByText(/^(⌘K|Ctrl K)$/).all();
     expect(skroty.length).toBeGreaterThan(0);
     for (const s of skroty) await expect(s).toBeHidden();
   });
+});
+
+/** Podpis skrótu zgodny z systemem: poza Makiem „Ctrl K", nie „⌘K" (audyt 5.11.2026, B12).
+ *  Testy jadą w Chromium na Windowsie i Linuksie, więc tu zawsze oczekujemy „Ctrl K". */
+test("na komputerze bez Maca wyszukiwarka podpowiada Ctrl K", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Kalkulatory", exact: true }).first().click();
+  await expect(page.getByText("Ctrl K").first()).toBeVisible();
+  await expect(page.getByText("⌘K")).toHaveCount(0);
 });
 
 test("na komputerze wiersz bilansu mocy zostaje w jednej linii", async ({ page }) => {
