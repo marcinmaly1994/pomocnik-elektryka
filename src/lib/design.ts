@@ -256,6 +256,39 @@ export function pomieszczeniePodPunktem(p: Point, roomShapes: RoomShape[]): Room
 }
 
 /**
+ * Uzupełnia `roomId` elementów: id obrysu o nazwie `room` na TEJ SAMEJ kondygnacji, albo
+ * nic, gdy takiego obrysu nie ma (nazwa wpisana ręcznie, „Bez pomieszczenia").
+ *
+ * Źródłem przypisania zostaje nazwa: ustawia ją kilkanaście dróg (wstawianie,
+ * przeciąganie, dorysowanie i edycja obrysu, wczytanie), a id wylicza się z niej w jednym
+ * miejscu, więc żadna droga nie może zapomnieć go poprawić. Jednoznaczne, bo nazwy są
+ * unikalne na kondygnacji (`unikalnaNazwaPomieszczenia`). W drugą stronę — zmiana nazwy
+ * pokoju — store przepisuje elementy PO ID (`renameRoomShape`).
+ *
+ * Zwraca tę samą tablicę, gdy nic się nie zmieniło.
+ */
+export function synchronizujRoomId(elements: InstallationElement[], roomShapes: RoomShape[]): InstallationElement[] {
+  // kondygnacja → nazwa → id (pierwszy obrys o tej nazwie, gdyby zapis miał jeszcze duplikaty)
+  const poNazwie = new Map<string, Map<string, string>>();
+  for (const r of roomShapes) {
+    const pietro = poNazwie.get(r.floor) ?? new Map<string, string>();
+    poNazwie.set(r.floor, pietro);
+    if (!pietro.has(r.name)) pietro.set(r.name, r.id);
+  }
+  let zmiana = false;
+  const wynik = elements.map((e) => {
+    const id = poNazwie.get(e.floor)?.get(e.room);
+    if (id === e.roomId) return e;
+    zmiana = true;
+    if (id) return { ...e, roomId: id };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { roomId: _bezId, ...bez } = e;
+    return bez;
+  });
+  return zmiana ? wynik : elements;
+}
+
+/**
  * Nadaje numery powtórzonym nazwom pomieszczeń na tej samej kondygnacji — dla projektów
  * zapisanych, zanim `unikalnaNazwaPomieszczenia` pilnowała tego przy dodawaniu. Pierwszy
  * obrys zachowuje nazwę, kolejne dostają numer. Elementy NIE są tu ruszane: ich

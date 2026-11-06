@@ -616,3 +616,62 @@ describe("wczytanie projektu z niepełnym nagłówkiem dokumentów", () => {
     expect(useProjectStore.getState().docHeader.uklad).toBe("TN-S");
   });
 });
+
+describe("roomId elementów (F1, audyt 5.11.2026)", () => {
+  beforeEach(() => useProjectStore.getState().resetProject());
+  const kw = (x: number) => [{ x, y: 0 }, { x: x + 100, y: 0 }, { x: x + 100, y: 100 }, { x, y: 100 }];
+
+  it("element postawiony w pokoju ma jego id, także po każdej zmianie przez setDraft", () => {
+    const { addRoomShape, setDraft } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Salon");
+    const id = useProjectStore.getState().draft.roomShapes[0].id;
+    setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1", floor: "f1", room: "Salon" }] }));
+    expect(useProjectStore.getState().draft.elements[0].roomId).toBe(id);
+  });
+
+  it("zmiana nazwy pokoju przepisuje elementy po id — nazwa i id idą razem", () => {
+    const { addRoomShape, setDraft, renameRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Salon");
+    const id = useProjectStore.getState().draft.roomShapes[0].id;
+    setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1", floor: "f1", room: "Salon" }] }));
+    renameRoomShape(id, "Salon z aneksem");
+    const el = useProjectStore.getState().draft.elements[0];
+    expect(el.room).toBe("Salon z aneksem");
+    expect(el.roomId).toBe(id);
+  });
+
+  it("usunięcie pokoju zdejmuje id z jego elementów", () => {
+    const { addRoomShape, setDraft, deleteRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Salon");
+    const id = useProjectStore.getState().draft.roomShapes[0].id;
+    setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1", floor: "f1", x: 50, y: 50, room: "Salon" }] }));
+    deleteRoomShape(id);
+    expect(useProjectStore.getState().draft.elements[0].roomId).toBeUndefined();
+  });
+
+  it("powielona kondygnacja: elementy kopii wskazują pokoje KOPII, nie oryginału", () => {
+    const { addRoomShape, setDraft, duplicateFloor } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Łazienka");
+    setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1", floor: "f1", x: 50, y: 50, room: "Łazienka" }] }));
+    duplicateFloor("f1", "Piętro");
+    const s = useProjectStore.getState();
+    const kopia = s.draft.elements.find((e) => e.floor !== "f1")!;
+    const pokojKopii = s.draft.roomShapes.find((r) => r.floor === kopia.floor)!;
+    expect(kopia.roomId).toBe(pokojKopii.id);
+  });
+
+  it("wczytanie starego projektu (bez roomId) uzupełnia id", () => {
+    const { loadProjectPayload, getProjectPayload } = useProjectStore.getState();
+    const base = getProjectPayload();
+    loadProjectPayload({
+      ...base,
+      scales: { f1: 0.05 },
+      draft: {
+        ...base.draft,
+        roomShapes: [{ id: "r1", floor: "f1", name: "Kuchnia", color: "#000", points: kw(0) }],
+        elements: [{ ...sampleElement, id: "e1", floor: "f1", x: 50, y: 50, room: "Kuchnia" }],
+      },
+    });
+    expect(useProjectStore.getState().draft.elements[0].roomId).toBe("r1");
+  });
+});

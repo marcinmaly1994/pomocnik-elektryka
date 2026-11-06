@@ -8,6 +8,7 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   unikalnaNazwaPomieszczenia,
   ujednoznacznijNazwyPomieszczen,
   pomieszczeniePodPunktem,
+  synchronizujRoomId,
   nextRoomColor,
   colorForRoomName,
   NO_ROOM_COLOR,
@@ -922,5 +923,43 @@ describe("pomieszczeniePodPunktem", () => {
 
   it("przy nakładających się obrysach wygrywa mniejszy (ten „na wierzchu” w odbiorze)", () => {
     expect(pomieszczeniePodPunktem({ x: 30, y: 30 }, [kw("duzy", 0, 0, 200), kw("maly", 20, 20, 40)])?.id).toBe("maly");
+  });
+});
+
+/**
+ * `roomId` elementu wyliczany z nazwy pokoju i kondygnacji (F1 z audytu 5.11.2026).
+ * Nazwy są unikalne na kondygnacji (`unikalnaNazwaPomieszczenia`), więc to przyporządkowanie
+ * jest jednoznaczne; identyfikator pozwala grupować i szukać typu pokoju bez sklejania
+ * pokoi o tej samej nazwie z różnych pięter.
+ */
+describe("synchronizujRoomId", () => {
+  const pokoj = (id: string, floor: string, name: string): RoomShape => ({ id, floor, name, color: "#000", points: [] });
+  const el = (id: string, floor: string, room: string, roomId?: string): InstallationElement => ({
+    id, type: "gniazdko", x: 0, y: 0, room, floor, dedicated: false, note: "", gangs: 1, ...(roomId ? { roomId } : {}),
+  });
+  const pokoje = [pokoj("p1", "f1", "Łazienka"), pokoj("p2", "f2", "Łazienka"), pokoj("p3", "f1", "Salon")];
+
+  it("element dostaje id pokoju o swojej nazwie na SWOJEJ kondygnacji", () => {
+    const wynik = synchronizujRoomId([el("a", "f1", "Łazienka"), el("b", "f2", "Łazienka"), el("c", "f1", "Salon")], pokoje);
+    expect(wynik.map((e) => e.roomId)).toEqual(["p1", "p2", "p3"]);
+  });
+
+  it("nazwa bez obrysu (wpisana ręcznie) i „Bez pomieszczenia” — bez id", () => {
+    const wynik = synchronizujRoomId([el("a", "f1", "Garderoba"), el("b", "f1", NO_ROOM)], pokoje);
+    expect(wynik.map((e) => e.roomId)).toEqual([undefined, undefined]);
+    expect(wynik.every((e) => !("roomId" in e))).toBe(true);
+  });
+
+  it("nieaktualne id (pokój usunięty, inna kondygnacja, inna nazwa) zostaje poprawione albo zdjęte", () => {
+    const wynik = synchronizujRoomId(
+      [el("a", "f1", "Salon", "nieistnieje"), el("b", "f1", "Łazienka", "p2"), el("c", "f1", "Garderoba", "p3")],
+      pokoje
+    );
+    expect(wynik.map((e) => e.roomId)).toEqual(["p3", "p1", undefined]);
+  });
+
+  it("spójna lista wraca jako ta sama tablica (bez zbędnych renderów)", () => {
+    const lista = [el("a", "f1", "Salon", "p3"), el("b", "f1", "Garderoba")];
+    expect(synchronizujRoomId(lista, pokoje)).toBe(lista);
   });
 });
