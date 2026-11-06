@@ -46,7 +46,15 @@ export interface InstallationElement {
   type: ElementType;
   x: number;
   y: number;
+  /** Nazwa pomieszczenia — narysowanego obrysu albo wpisana ręcznie (np. „Garderoba"
+   *  bez obrysu), albo „Bez pomieszczenia". */
   room: string;
+  /** Id obrysu pomieszczenia (`RoomShape.id`) o nazwie `room` na tej samej kondygnacji;
+   *  brak, gdy takiego obrysu nie ma. Pole WYLICZANE — store uzupełnia je po każdej zmianie
+   *  (patrz `synchronizujRoomId`), więc kod przypisujący pokój ustawia tylko `room`.
+   *  Służy do grupowania i szukania typu pokoju bez sklejania pokoi o tej samej nazwie
+   *  z różnych pięter (F1 z audytu 5.11.2026). */
+  roomId?: string;
   floor: string;
   dedicated: boolean;
   note: string;

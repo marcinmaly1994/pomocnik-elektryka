@@ -40,6 +40,7 @@ import {
   reassignRoomsOnFloor,
   reconcileRoomsOnLoad,
   roomColorForIndex,
+  synchronizujRoomId,
   ujednoznacznijNazwyPomieszczen,
   unikalnaNazwaPomieszczenia,
   scaleOf,
@@ -672,7 +673,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setDraft: (updater, opts) => {
     const commit = opts?.commit !== false;
     set((state) => {
-      const next = updater(state.draft);
+      const zmieniony = updater(state.draft);
+      // `roomId` elementów nadąża za nazwami pokoi po KAŻDEJ zmianie planu — patrz
+      // `synchronizujRoomId`. Tańsze niż pilnowanie go w każdej z kilkunastu dróg, które
+      // przypisują pokój, i odporne na to, że któraś o nim zapomni.
+      const elements = synchronizujRoomId(zmieniony.elements, zmieniony.roomShapes);
+      const next = elements === zmieniony.elements ? zmieniony : { ...zmieniony, elements };
       return {
         draft: next,
         past: commit ? [...state.past, state.draft] : state.past,
@@ -865,7 +871,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     // projektu — nie stanem pośrednim, który dałoby się przypadkiem cofnąć.
     const { elements, poprawione } = reconcileRoomsOnLoad(draft.elements, draft.roomShapes, scales);
     set({
-      draft: { ...draft, elements },
+      // Projekty sprzed F1 nie mają `roomId` — uzupełniane tu, po remoncie przypisań.
+      draft: { ...draft, elements: synchronizujRoomId(elements, draft.roomShapes) },
       roomsFixedOnLoad: poprawione,
       floors: payload.floors.length ? payload.floors : [{ id: "f1", name: "Parter" }],
       activeFloorId: payload.activeFloorId || payload.floors[0]?.id || "f1",
@@ -1024,6 +1031,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           wallId: o.wallId ? mapaScian.get(o.wallId) : undefined,
           roomId: o.roomId ? mapaPokoi.get(o.roomId) : undefined,
         }));
+      // `roomId` kopii wskazywałby pokoje ORYGINAŁU — przeliczany niżej, z nazw na nowej
+      // kondygnacji (`synchronizujRoomId`).
       const elements = state.draft.elements
         .filter((e) => e.floor === id)
         .map((e) => ({ ...e, id: crypto.randomUUID(), floor: nowaId }));
@@ -1042,7 +1051,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           walls: [...state.draft.walls, ...walls],
           roomShapes: [...state.draft.roomShapes, ...roomShapes],
           openings: [...state.draft.openings, ...openings],
-          elements: [...state.draft.elements, ...elements],
+          elements: synchronizujRoomId([...state.draft.elements, ...elements], [...state.draft.roomShapes, ...roomShapes]),
         },
         past: [...state.past, state.draft],
         future: [],
@@ -1495,6 +1504,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     setDraft((d) => {
       const room = d.roomShapes.find((r) => r.id === id);
       if (!room) return d;
+      // Elementy przepisywane PO ID (F1) — nazwa w elemencie może być jeszcze nieaktualna,
+      // ale id wskazuje ten obrys jednoznacznie. Po nazwie zostaje zapas dla elementów,
+      // które id jeszcze nie mają.
       // Nazwa sąsiada dostaje numer — inaczej oba pokoje (i ich elementy) skleiłyby się
       // pod jedną nazwą i następna zmiana nazwy przepisałaby elementy obu.
       const nazwa = unikalnaNazwaPomieszczenia(
@@ -1505,7 +1517,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         ...d,
         roomShapes: d.roomShapes.map((r) => (r.id === id ? { ...r, name: nazwa } : r)),
         elements: d.elements.map((e) =>
-          e.floor === room.floor && e.room === room.name ? { ...e, room: nazwa } : e
+          e.roomId === id || (!e.roomId && e.floor === room.floor && e.room === room.name) ? { ...e, room: nazwa } : e
         ),
       };
     });
