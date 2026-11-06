@@ -70,6 +70,98 @@ export function pointInPolygon(pt: Point, points: Point[]): boolean {
   return inside;
 }
 
+/** Punkt leży WEWNĄTRZ wielokąta dalej niż `tol` od jego obrysu (punkt na obrysie
+ *  albo tuż przy nim się nie liczy). */
+function scisleWewnatrz(p: Point, poly: Point[], tol: number): boolean {
+  if (!pointInPolygon(p, poly)) return false;
+  const n = nearestPointOnPolyline(p, [...poly, poly[0]]);
+  return !n || Math.hypot(p.x - n.point.x, p.y - n.point.y) > tol;
+}
+
+/** Odcinki ab i cd przecinają się WEWNĄTRZ obu (nie końcem, nie wzdłuż wspólnej linii). */
+function przecinajaSieWewnatrz(a: Point, b: Point, c: Point, d: Point, tol: number): boolean {
+  const rx = b.x - a.x, ry = b.y - a.y, sx = d.x - c.x, sy = d.y - c.y;
+  const mian = rx * sy - ry * sx;
+  const dlR = Math.hypot(rx, ry), dlS = Math.hypot(sx, sy);
+  if (dlR === 0 || dlS === 0 || Math.abs(mian) < 1e-9 * dlR * dlS) return false; // równoległe
+  const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / mian;
+  const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / mian;
+  const mt = tol / dlR, mu = tol / dlS;
+  return t > mt && t < 1 - mt && u > mu && u < 1 - mu;
+}
+
+/** Czy jakiś kawałek krawędzi `poly` (podzielonej w punktach styku z `inny`) leży ściśle
+ *  wewnątrz `inny`. */
+function kawalekKrawedziWewnatrz(poly: Point[], inny: Point[], tol: number): boolean {
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length];
+    const dx = q.x - p.x, dy = q.y - p.y;
+    const dl2 = dx * dx + dy * dy;
+    if (dl2 === 0) continue;
+    const ts = [0, 1];
+    for (let j = 0; j < inny.length; j++) {
+      const c = inny[j], d = inny[(j + 1) % inny.length];
+      // Wierzchołek drugiego obrysu leżący na krawędzi — rzut na nią.
+      const t = ((c.x - p.x) * dx + (c.y - p.y) * dy) / dl2;
+      if (t > 0 && t < 1 && Math.hypot(p.x + t * dx - c.x, p.y + t * dy - c.y) <= tol) ts.push(t);
+      // Przecięcie z krawędzią drugiego obrysu.
+      const sx = d.x - c.x, sy = d.y - c.y;
+      const mian = dx * sy - dy * sx;
+      if (Math.abs(mian) < 1e-12) continue;
+      const tt = ((c.x - p.x) * sy - (c.y - p.y) * sx) / mian;
+      const uu = ((c.x - p.x) * dy - (c.y - p.y) * dx) / mian;
+      if (tt > 0 && tt < 1 && uu >= 0 && uu <= 1) ts.push(tt);
+    }
+    ts.sort((x, y) => x - y);
+    for (let k = 0; k < ts.length - 1; k++) {
+      const m = (ts[k] + ts[k + 1]) / 2;
+      if (scisleWewnatrz({ x: p.x + m * dx, y: p.y + m * dy }, inny, tol)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Czy dwa obrysy (pomieszczeń) ZACHODZĄ na siebie — mają wspólne wnętrze.
+ *
+ * Wspólna ściana sąsiednich pokoi, styk narożnikiem albo fragmentem ściany to NIE jest
+ * zachodzenie: tak rysuje się każde mieszkanie. `tol` (jednostki planu) połyka szum
+ * przyciągania — obrys przesunięty o ułamek jednostki nad sąsiada to nie drugi pokój.
+ *
+ * Trzy sprawdzenia, bo każde łapie inny układ: narożnik jednego ściśle w drugim
+ * (częściowe zachodzenie, pokój w pokoju), krawędzie przecinające się w środku
+ * (krzyż — żaden narożnik nie jest w środku drugiego) i środek ciężkości narożników
+ * ściśle w obu (ten sam obrys dwa razy albo połowa pokoju obrysowana drugi raz —
+ * tam wszystkie narożniki i krawędzie leżą NA obrysie drugiego).
+ *
+ * Audyt 5.11.2026 (B8): zachodzące obrysy przechodziły „Sprawdzenie rzutu" bez
+ * słowa, a powierzchnia w pasku stanu liczyła część wspólną dwa razy.
+ */
+export function obrysyNachodza(a: Point[], b: Point[], tol = 1): boolean {
+  if (a.length < 3 || b.length < 3) return false;
+  if (a.some((p) => scisleWewnatrz(p, b, tol)) || b.some((p) => scisleWewnatrz(p, a, tol))) return true;
+  // Kawałki krawędzi: krawędź dzielona w miejscach, gdzie dotyka drugiego obrysu, i środek
+  // każdego kawałka sprawdzany ściśle w drugim. Łapie pasy na wspólnych liniach — dwa
+  // prostokąty o tych samych górnych i dolnych ścianach zachodzące bokiem: żaden narożnik
+  // nie jest wtedy w środku drugiego, a krawędzie stykają się tylko końcami.
+  if (kawalekKrawedziWewnatrz(a, b, tol) || kawalekKrawedziWewnatrz(b, a, tol)) return true;
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i], a2 = a[(i + 1) % a.length];
+    for (let j = 0; j < b.length; j++) {
+      if (przecinajaSieWewnatrz(a1, a2, b[j], b[(j + 1) % b.length], tol)) return true;
+    }
+  }
+  const srodek = (poly: Point[]) => ({
+    x: poly.reduce((s, p) => s + p.x, 0) / poly.length,
+    y: poly.reduce((s, p) => s + p.y, 0) / poly.length,
+  });
+  const sa = srodek(a), sb = srodek(b);
+  return (
+    (scisleWewnatrz(sa, a, tol) && scisleWewnatrz(sa, b, tol)) ||
+    (scisleWewnatrz(sb, b, tol) && scisleWewnatrz(sb, a, tol))
+  );
+}
+
 /**
  * Odległość punktu od PROSTOKĄTA obróconego o `rotationDeg` (środek w `cx`/`cy`).
  * `0`, gdy punkt leży wewnątrz prostokąta.

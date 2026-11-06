@@ -2062,6 +2062,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     },
     [toolMode, setSelected, setMultiSelected]
   );
+  /** To samo dla spostrzeżeń o pomieszczeniach (nachodzące obrysy) — zaznacza pokój,
+   *  więc od razu widać jego narożniki do przeciągnięcia. */
+  const pokazPomieszczenieNaPlanie = useCallback(
+    (id: string) => {
+      if (toolMode !== "zaznacz") zaznaczenieZeSkokuRef.current = true;
+      setToolMode("zaznacz");
+      setMultiSelected([]);
+      setSelected({ kind: "room", id });
+    },
+    [toolMode, setSelected, setMultiSelected]
+  );
   // Trasy przewodów — WYŁĄCZNIE z elementów/ścian/pomieszczeń TEJ kondygnacji
   // (wszystkie trzy już przefiltrowane przez `useActiveFloor*`), więc rozdzielnica,
   // punkty i sieć, po której routuje `buildCableRoutes`, zawsze mieszkają w tym samym
@@ -3758,6 +3769,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <PlanCheckPanel
                 issues={planIssues}
                 onShowElements={pokazElementyNaPlanie}
+                onShowRoom={pokazPomieszczenieNaPlanie}
                 przelaczone={kartaSprawdzeniaOtwarta}
                 onPrzelacz={setKartaSprawdzeniaOtwarta}
               />

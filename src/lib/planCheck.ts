@@ -1,7 +1,7 @@
 import type { InstallationElement, RoomShape, RoomType } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, NO_ROOM, SANITARY_FIXTURES } from "@/lib/elements";
 import { guessRoomType, ROOM_TYPE_LABELS } from "@/lib/design";
-import { distanceToRect } from "@/lib/geometry";
+import { distanceToRect, obrysyNachodza } from "@/lib/geometry";
 import { isLightControl, isLightPoint } from "@/lib/lightGroups";
 
 /**
@@ -39,6 +39,9 @@ export interface PlanIssue {
   /** Elementy, których spostrzeżenie dotyczy — klik w nie zaznacza je na planie.
    *  Puste dla regul mowiacych o BRAKU czegos (nie ma czego pokazać). */
   elementIds: string[];
+  /** Pomieszczenia, których spostrzeżenie dotyczy — „Pokaż na planie" zaznacza
+   *  pierwsze z nich (zaznaczenie obejmuje jedno pomieszczenie naraz). */
+  roomIds?: string[];
 }
 
 /** Role osprzętu, który w strefie ochronnej jest problemem. Rozbite na dwie listy,
@@ -314,6 +317,31 @@ export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInpu
       title: "Łącznik bez oprawy do sterowania",
       detail: `${lista(lacznikBezLampy)} — stoi tam łącznik, ale nie ma punktu świetlnego, którym mógłby sterować. Albo brakuje oprawy, albo łącznik jest w złym pomieszczeniu.`,
       elementIds: [],
+    });
+  }
+
+  // --- nachodzące pomieszczenia -------------------------------------------------
+  /**
+   * Obrysy, które zachodzą na siebie (audyt 5.11.2026, B8). Wspólna ściana sąsiadów się
+   * nie liczy — patrz `obrysyNachodza`. Skutki są dwa i oba ciche: element w części
+   * wspólnej należy do jednego z pokoi według kolejności rysowania (nie wiadomo
+   * którego), a powierzchnia kondygnacji liczy część wspólną podwójnie.
+   */
+  const pary: [RoomShape, RoomShape][] = [];
+  for (let i = 0; i < roomShapes.length; i++) {
+    for (let j = i + 1; j < roomShapes.length; j++) {
+      if (obrysyNachodza(roomShapes[i].points, roomShapes[j].points)) pary.push([roomShapes[i], roomShapes[j]]);
+    }
+  }
+  if (pary.length > 0) {
+    const pokoje = [...new Set(pary.flat())];
+    out.push({
+      rule: "pomieszczenia-nachodza",
+      level: "warn",
+      title: pary.length === 1 ? "Pomieszczenia nachodzą na siebie" : `Pomieszczenia nachodzą na siebie (${pary.length} pary)`,
+      detail: `${lista(pary.map(([a, b]) => `${a.name} i ${b.name}`), 3)} — obrysy zachodzą na siebie. Osprzęt w części wspólnej trafi tylko do jednego z nich, a powierzchnia kondygnacji policzy tę część dwa razy. Przeciągnij narożniki tak, żeby pokoje stykały się ścianą.`,
+      elementIds: [],
+      roomIds: pokoje.map((r) => r.id),
     });
   }
 

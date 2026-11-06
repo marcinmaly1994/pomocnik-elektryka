@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata, przesunNaDlugosc, prostokatOdKotwicy } from "./geometry";
+import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata, przesunNaDlugosc, prostokatOdKotwicy, obrysyNachodza } from "./geometry";
 
 describe("snap", () => {
   it("zaokrągla do siatki 20", () => {
@@ -422,5 +422,57 @@ describe("prostokatOdKotwicy", () => {
     expect(prostokatOdKotwicy(k, 200, -5, plan)).toBeNull();
     expect(prostokatOdKotwicy(k, Number.NaN, 150, plan)).toBeNull();
     expect(prostokatOdKotwicy(k, 200, Number.POSITIVE_INFINITY, plan)).toBeNull();
+  });
+});
+
+/**
+ * Czy dwa obrysy pomieszczeń zachodzą na siebie (audyt 5.11.2026, B8). Wspólna ściana
+ * sąsiednich pokoi to NIE jest nakładanie — tak rysuje się każde mieszkanie.
+ */
+describe("obrysyNachodza", () => {
+  const pr = (x0: number, y0: number, x1: number, y1: number) => [
+    { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 },
+  ];
+
+  it("sąsiedzi ze wspólną ścianą — nie", () => {
+    expect(obrysyNachodza(pr(0, 0, 100, 100), pr(100, 0, 200, 100))).toBe(false);
+  });
+
+  it("sąsiad dotykający tylko narożnikiem albo fragmentem ściany — nie", () => {
+    expect(obrysyNachodza(pr(0, 0, 100, 100), pr(100, 100, 200, 200))).toBe(false);
+    expect(obrysyNachodza(pr(0, 0, 100, 100), pr(100, 40, 200, 60))).toBe(false);
+  });
+
+  it("rozłączne — nie", () => {
+    expect(obrysyNachodza(pr(0, 0, 100, 100), pr(300, 0, 400, 100))).toBe(false);
+  });
+
+  it("częściowe zachodzenie — tak", () => {
+    expect(obrysyNachodza(pr(0, 0, 100, 100), pr(60, 30, 160, 130))).toBe(true);
+  });
+
+  it("krzyż (żaden narożnik w środku drugiego) — tak", () => {
+    expect(obrysyNachodza(pr(0, 40, 200, 60), pr(90, 0, 110, 100))).toBe(true);
+  });
+
+  it("jeden w środku drugiego — tak, w obie strony", () => {
+    expect(obrysyNachodza(pr(0, 0, 200, 200), pr(50, 50, 80, 80))).toBe(true);
+    expect(obrysyNachodza(pr(50, 50, 80, 80), pr(0, 0, 200, 200))).toBe(true);
+  });
+
+  it("połowa pokoju obrysowana drugi raz (wspólne narożniki i ściany) — tak", () => {
+    expect(obrysyNachodza(pr(0, 0, 200, 100), pr(0, 0, 100, 100))).toBe(true);
+  });
+
+  it("ten sam obrys dwa razy — tak", () => {
+    expect(obrysyNachodza(pr(0, 0, 100, 100), pr(0, 0, 100, 100))).toBe(true);
+  });
+
+  it("pasy na tych samych liniach zachodzące bokiem — tak", () => {
+    expect(obrysyNachodza(pr(0, 0, 200, 200), pr(150, 0, 300, 200))).toBe(true);
+  });
+
+  it("zachodzenie o włos (mniej niż tolerancja) — nie, to szum przyciągania", () => {
+    expect(obrysyNachodza(pr(0, 0, 100, 100), pr(99.8, 0, 200, 100))).toBe(false);
   });
 });
