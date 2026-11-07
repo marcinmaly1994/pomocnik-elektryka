@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { wczytajPrzyklad } from "./_flow";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./_konto";
 
 /**
  * Udostępnianie linkiem tylko do odczytu (F14 z audytu 5.11.2026).
@@ -62,6 +63,12 @@ test("zalogowany: komplet dokumentacji → „Udostępnij linkiem” wgrywa PDF 
   // Komplet przełącza zakładki i rasteryzuje rzuty — na runnerze CI trwa to dłużej
   // niż domyślne 30 s na cały test.
   test.setTimeout(120_000);
+  // Przycisk istnieje tylko w aplikacji z konfiguracją Supabase — ten sam warunek co
+  // `isSupabaseConfigured` w src/lib/supabase.ts. Storage i tak jest tu podstawiony.
+  test.skip(
+    !(SUPABASE_URL.startsWith("https://") && SUPABASE_ANON_KEY.length > 0 && !SUPABASE_ANON_KEY.includes("YOUR-ANON")),
+    "brak adresu/klucza Supabase w .env — przycisk udostępniania się nie pokazuje"
+  );
   const wgrane: { url: string; typ: string | null; rozmiar: number }[] = [];
   // Chmura projektu (autozapis z podstawioną sesją) — cisza zamiast prawdziwych 401.
   await page.route("**/rest/v1/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
