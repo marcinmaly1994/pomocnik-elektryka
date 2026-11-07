@@ -59,6 +59,9 @@ test("wyłączony link mówi wprost, że dokumentu już nie ma", async ({ page }
 });
 
 test("zalogowany: komplet dokumentacji → „Udostępnij linkiem” wgrywa PDF i daje link do podglądu", async ({ page }) => {
+  // Komplet przełącza zakładki i rasteryzuje rzuty — na runnerze CI trwa to dłużej
+  // niż domyślne 30 s na cały test.
+  test.setTimeout(120_000);
   const wgrane: { url: string; typ: string | null; rozmiar: number }[] = [];
   // Chmura projektu (autozapis z podstawioną sesją) — cisza zamiast prawdziwych 401.
   await page.route("**/rest/v1/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
