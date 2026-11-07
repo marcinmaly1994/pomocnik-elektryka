@@ -7,7 +7,7 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { DD } from "konva/lib/DragAndDrop";
-import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
+import type { CableRoute, ElementType, InstallationElement, NotatkaPlanu, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import {
   DEFAULT_WALL_THICKNESS,
@@ -22,6 +22,7 @@ import {
   FALLBACK_FONT_ADNOTACJI,
   FALLBACK_FONT_NAZWY,
   fontOpisuPokoju,
+  wymiaryNotatki,
   miejsceNaOpis,
   przesunieciaWokol,
   type ZajeteMiejsce,
@@ -46,8 +47,8 @@ import { clampNum, nearestPointOnPolyline, pointInPolygon, polygonAreaM2, rectan
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { glyphBoxSize, groupLabelAnchors, groupLabelCandidates } from "@/lib/glyphs";
 
-export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "pan" | "skala";
-export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route"; id: string } | null;
+export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "notatka" | "pan" | "skala";
+export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route" | "note"; id: string } | null;
 
 /** Sposób rysowania pomieszczenia: prostokąt przeciągnięciem albo wielobok klikaniem. */
 export type RoomDrawMode = "prostokat" | "wielobok";
@@ -164,6 +165,14 @@ interface DesignCanvasProps {
   elements: InstallationElement[];
   walls: Wall[];
   roomShapes: RoomShape[];
+  /** Notatki tekstowe tej kondygnacji (F6) — patrz `NotatkaPlanu`. */
+  notatki?: NotatkaPlanu[];
+  /** Klik w narzędziu „Notatka" — rodzic pyta o treść i stawia notatkę w tym punkcie. */
+  onPlaceNote?: (p: Point) => void;
+  onSelectNote?: (id: string) => void;
+  onMoveNote?: (id: string, p: Point) => void;
+  /** Dwuklik w notatkę — edycja treści. */
+  onEditNote?: (id: string) => void;
   openings: Opening[];
   toolMode: ToolMode;
   roomMode: RoomDrawMode;
@@ -417,6 +426,11 @@ export function DesignCanvas({
   elements,
   walls,
   roomShapes,
+  notatki = [],
+  onPlaceNote,
+  onSelectNote,
+  onMoveNote,
+  onEditNote,
   openings,
   toolMode,
   roomMode,
@@ -1691,6 +1705,10 @@ export function DesignCanvas({
     }
     if (toolMode === "skala") {
       onAddCalibPoint(p);
+      return;
+    }
+    if (toolMode === "notatka") {
+      onPlaceNote?.(p);
       return;
     }
     if (toolMode === "elementy") {
@@ -3504,6 +3522,55 @@ export function DesignCanvas({
                     </Fragment>
                   );
                 })}
+              </Group>
+            );
+          })}
+
+          {/* Notatki dla montera (F6) — NAD osprzętem, żeby symbol nie przykrył tekstu; w białej ramce, rozmiar w jednostkach PLANU,
+              jak opisy pomieszczeń: na wydruku (rasteryzowanym z tej sceny) mają być
+              czytelne w skali rysunku, a nie w pikselach ekranu. Przeciągalne tylko
+              w „Zaznacz", żeby w narzędziach rysujących klik w notatkę nie ruszał jej
+              zamiast stawiać punkt. */}
+          {notatki.map((n) => {
+            const { font, szer, wys } = wymiaryNotatki(n.tekst, metersPerUnit);
+            const zazn = selected?.kind === "note" && selected.id === n.id;
+            return (
+              <Group
+                key={n.id}
+                x={n.x}
+                y={n.y}
+                data-testid="notatka"
+                draggable={toolMode === "zaznacz" && !szczypie}
+                listening={toolMode === "zaznacz" || toolMode === "notatka"}
+                onDragEnd={(e) => onMoveNote?.(n.id, { x: e.target.x(), y: e.target.y() })}
+                {...klikAlboDotyk((e) => {
+                  e.cancelBubble = true;
+                  onSelectNote?.(n.id);
+                })}
+                {...dwuklikAlboDotyk((e) => {
+                  e.cancelBubble = true;
+                  onEditNote?.(n.id);
+                })}
+              >
+                <Rect
+                  width={szer}
+                  height={wys}
+                  fill="#FFFDF5"
+                  stroke={zazn ? "#C1793F" : "#8A5526"}
+                  strokeWidth={zazn ? px(2) : px(1)}
+                  dash={zazn ? undefined : [px(4), px(3)]}
+                  cornerRadius={font * 0.25}
+                  opacity={0.95}
+                />
+                <Text
+                  x={font * 0.6}
+                  y={font * 0.3}
+                  text={n.tekst}
+                  fontSize={font}
+                  lineHeight={1.25}
+                  fill="#5B3A1A"
+                  listening={false}
+                />
               </Group>
             );
           })}

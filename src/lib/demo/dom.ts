@@ -349,7 +349,7 @@ export function zbudujProjektDom(): ProjectPayload {
     )
   );
   return bazaPayloadu({
-    draft: { elements, walls, roomShapes, openings: otwory(), routeOverrides: {} },
+    draft: { elements, walls, roomShapes, openings: otwory(), routeOverrides: {}, notatki: [] },
     floors: [
       { id: PARTER, name: "Parter", heightM: 2.8 },
       { id: PIETRO, name: "Piętro", heightM: 2.6 },

@@ -125,6 +125,8 @@ export function useZaznaczenie(): ZaznaczenieApi {
       deleteRoomShape(selected.id);
     } else if (selected.kind === "route") {
       clearRouteOverride(selected.id);
+    } else if (selected.kind === "note") {
+      setDraft((d) => ({ ...d, notatki: (d.notatki ?? []).filter((n) => n.id !== selected.id) }));
     }
     setSelected(null);
   }, [multiSelected, selected, removeElements, setDraft, deleteRoomShape, clearRouteOverride]);

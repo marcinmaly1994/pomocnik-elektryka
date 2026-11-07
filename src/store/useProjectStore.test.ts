@@ -743,3 +743,51 @@ describe("przesunPomieszczenie", () => {
     expect(useProjectStore.getState().draft.elements.find((e) => e.id === "luz")?.room).toBe("Salon");
   });
 });
+
+/** Notatki tekstowe na rzucie (F6 z audytu 5.11.2026). */
+describe("notatki na rzucie", () => {
+  beforeEach(() => useProjectStore.getState().resetProject());
+  const notatki = () => useProjectStore.getState().draft.notatki;
+
+  it("dodanie, zmiana treści i przesunięcie", () => {
+    const { dodajNotatke, zmienNotatke, przesunNotatke } = useProjectStore.getState();
+    const id = dodajNotatke("f1", { x: 10, y: 20 }, "  puszka pod blatem 105 cm  ")!;
+    expect(notatki()).toEqual([{ id, floor: "f1", x: 10, y: 20, tekst: "puszka pod blatem 105 cm" }]);
+    zmienNotatke(id, "puszka 110 cm");
+    przesunNotatke(id, { x: 30, y: 40 });
+    expect(notatki()[0]).toMatchObject({ x: 30, y: 40, tekst: "puszka 110 cm" });
+  });
+
+  it("pusta treść nie tworzy notatki, a zmiana na pustą ją usuwa", () => {
+    const { dodajNotatke, zmienNotatke } = useProjectStore.getState();
+    expect(dodajNotatke("f1", { x: 0, y: 0 }, "   ")).toBeNull();
+    const id = dodajNotatke("f1", { x: 0, y: 0 }, "x")!;
+    zmienNotatke(id, "  ");
+    expect(notatki()).toEqual([]);
+  });
+
+  it("cofnięcie dodania usuwa notatkę", () => {
+    useProjectStore.getState().dodajNotatke("f1", { x: 0, y: 0 }, "x");
+    useProjectStore.getState().undo();
+    expect(notatki()).toEqual([]);
+  });
+
+  it("kopia kondygnacji kopiuje notatki, usunięcie kondygnacji je kasuje", () => {
+    const { dodajNotatke, duplicateFloor, removeFloor } = useProjectStore.getState();
+    dodajNotatke("f1", { x: 5, y: 5 }, "peszel");
+    duplicateFloor("f1", "Piętro");
+    const pietro = useProjectStore.getState().activeFloorId;
+    expect(notatki().map((n) => n.floor).sort()).toEqual(["f1", pietro].sort());
+    removeFloor(pietro);
+    expect(notatki().map((n) => n.floor)).toEqual(["f1"]);
+  });
+
+  it("zapis sprzed notatek wczytuje się z pustą listą", () => {
+    const { loadProjectPayload, getProjectPayload } = useProjectStore.getState();
+    const base = getProjectPayload();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { notatki: _brak, ...staryDraft } = base.draft;
+    loadProjectPayload({ ...base, draft: staryDraft as typeof base.draft });
+    expect(notatki()).toEqual([]);
+  });
+});
