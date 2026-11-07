@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/useProjectStore";
 import {
   supaDeleteAccount,
+  supaListaUdostepnien,
+  supaUsunUdostepnienie,
   supaDeleteProject,
   supaListProjects,
   supaSignIn,
@@ -189,6 +191,16 @@ function UsunKontoDialog({ open, session, onClose, onUsuniete }: {
       // Token z sesji mógł już wygasnąć, a wtedy kasowanie odbiłoby się o 401
       // dopiero po potwierdzeniu — w najgorszym możliwym momencie.
       const swieza = await supaSignIn(email, haslo);
+      // Najpierw linki udostępnień (F14): pliki w Storage są publiczne po ścieżce, więc
+      // po skasowaniu konta zostałyby dostępne bez właściciela, który mógłby je wyłączyć.
+      // Kasowanie z SQL-a nie wchodzi w grę — Storage nie pozwala ruszać plików
+      // z poziomu tabel. Nieskonfigurowany koszyk to brak udostępnień, nie przeszkoda.
+      try {
+        const pliki = await supaListaUdostepnien(swieza.access_token, swieza.user.id);
+        for (const p of pliki) await supaUsunUdostepnienie(swieza.access_token, `${swieza.user.id}/${p.name}`);
+      } catch (blad) {
+        if (!/nie jest jeszcze skonfigurowane/.test(String((blad as Error).message))) throw blad;
+      }
       await supaDeleteAccount(swieza.access_token);
       onUsuniete();
     } catch (e) {
