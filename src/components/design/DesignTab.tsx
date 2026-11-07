@@ -311,6 +311,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const dodajPrzewod = useProjectStore((s) => s.dodajPrzewod);
   const zmienPrzewod = useProjectStore((s) => s.zmienPrzewod);
   const [przewodStart, setPrzewodStart] = useState<string | null>(null);
+  /** Dolna szuflada z kartą zaznaczenia na telefonie (F7) — zwinięta do jednego wiersza
+   *  odsłania rzut. Każde NOWE zaznaczenie rozwija ją z powrotem: dotknięcie elementu
+   *  to pytanie o niego, a zwinięta karta na nie nie odpowiada. */
+  const [szufladaZwinieta, setSzufladaZwinieta] = useState(false);
   const commitSnapshot = useProjectStore((s) => s.commitSnapshot);
   /** Plan sprzed przeciągania pokoju — po puszczeniu idzie do historii jako JEDEN krok. */
   const planPrzedRuchemPokojuRef = useRef<ReturnType<typeof useProjectStore.getState>["draft"] | null>(null);
@@ -2972,6 +2976,90 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   );
   const kontekstoweTresc = trescKontekstu("wszystko");
 
+
+  /**
+   * Na TELEFONIE karta zaznaczonego elementu i pomieszczenia mieszka w dolnej
+   * szufladzie nad rzutem, a nie w panelu (F7 z audytu 5.11.2026). Panel stoi tam NAD
+   * rzutem i po wybraniu elementu z biblioteki zwija się sam — karta w nim była więc
+   * albo niewidoczna (panel zwinięty: dotknięcie gniazdka nie pokazywało niczego),
+   * albo przewinięta poza ekran razem z górą strony.
+   */
+  const kartyWSzufladzie = !szerokieOkno && !pelnyEkran;
+  const kartaElementuZaznaczonego =
+    toolMode === "zaznacz" && selected?.kind === "el" && multiSelected.length === 0
+      ? (() => {
+      const el = elements.find((e) => e.id === selected.id);
+      if (!el) return null;
+      return (
+        <KartaElementu
+          element={el}
+          uzyteNumery={uzyteNumeryObwodow}
+          onEdytuj={() => setEditingId(el.id)}
+          onObroc={() => rotateElements([el.id])}
+          onUsun={() => {
+            removeElements([el.id]);
+            setSelected(null);
+          }}
+          onObwod={(n) => przypiszObwod([el.id], n)}
+        />
+      );
+    })()
+      : null;
+  const kartaPomieszczeniaZaznaczonego =
+    toolMode === "zaznacz" && selected?.kind === "room" && multiSelected.length === 0
+      ? (() => {
+      const pokoj = roomShapes.find((r) => r.id === selected.id);
+      if (!pokoj) return null;
+      // Karta zaznaczonego pomieszczenia — ten sam wiersz co na liście w
+      // „Narysuj pomieszczenie", tu z podpisanymi akcjami (patrz `WierszPomieszczenia`).
+      return (
+        <div className="space-y-1.5" data-testid="karta-pomieszczenia">
+          <div className="text-sm font-semibold text-ink">Pomieszczenie</div>
+          <WierszPomieszczenia
+            key={pokoj.id}
+            room={pokoj}
+            metersPerUnit={mpu}
+            onCreateWall={sciany.createWallFromRoom}
+            podpisy
+            onUsuniete={() => setSelected(null)}
+          />
+          <SzablonPomieszczenia
+            key={`szablon-${pokoj.id}`}
+            typ={pokoj.type ?? guessRoomType(pokoj.name)}
+            elementowWPokoju={elements.filter((e) => e.roomId === pokoj.id).length}
+            onWstaw={() => {
+              const nowe = elementySzablonu(pokoj.type ?? guessRoomType(pokoj.name), {
+                room: pokoj,
+                elements,
+                walls,
+                roomShapes,
+                openings,
+                mpu,
+                skalaSymboli: skalaOsprzetu,
+              });
+              // Jeden wpis w historii — jedno Ctrl+Z zdejmuje cały szablon.
+              if (nowe.length) setDraft((d) => ({ ...d, elements: [...d.elements, ...nowe] }));
+              return nowe.length;
+            }}
+          />
+        </div>
+      );
+    })()
+      : null;
+  const tytulSzuflady =
+    kartaElementuZaznaczonego && selected?.kind === "el"
+      ? ELEMENT_TYPES[elements.find((e) => e.id === selected.id)?.type ?? "gniazdko"].label
+      : kartaPomieszczeniaZaznaczonego && selected?.kind === "room"
+        ? `Pomieszczenie: ${roomShapes.find((r) => r.id === selected.id)?.name ?? ""}`
+        : null;
+  const kartaSzuflady = kartyWSzufladzie ? (kartaElementuZaznaczonego ?? kartaPomieszczeniaZaznaczonego) : null;
+  const kluczZaznaczenia = selected ? `${selected.kind}:${selected.id}` : "";
+  const [zaznaczenieSzuflady, setZaznaczenieSzuflady] = useState(kluczZaznaczenia);
+  if (zaznaczenieSzuflady !== kluczZaznaczenia) {
+    setZaznaczenieSzuflady(kluczZaznaczenia);
+    if (szufladaZwinieta) setSzufladaZwinieta(false);
+  }
+
   return (
     // Na ekranie startowym zakładka sięga po CAŁĄ wolną wysokość okna (rodzic jest
     // rozciągliwą kolumną — patrz App.tsx), żeby powitanie wypełniło ekran zamiast
@@ -3710,65 +3798,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               naDotyku={naDotyku}
               onWybierz={selectTool}
             />
-          ) : toolMode === "zaznacz" && selected?.kind === "el" && multiSelected.length === 0 ? (
-            (() => {
-              const el = elements.find((e) => e.id === selected.id);
-              if (!el) return null;
-              return (
-                <KartaElementu
-                  element={el}
-                  uzyteNumery={uzyteNumeryObwodow}
-                  onEdytuj={() => setEditingId(el.id)}
-                  onObroc={() => rotateElements([el.id])}
-                  onUsun={() => {
-                    removeElements([el.id]);
-                    setSelected(null);
-                  }}
-                  onObwod={(n) => przypiszObwod([el.id], n)}
-                />
-              );
-            })()
+          ) : kartaElementuZaznaczonego && !kartyWSzufladzie ? (
+            kartaElementuZaznaczonego
           ) : kartaSciany && szerokieOkno && !pelnyEkran ? (
             kartaSciany
-          ) : toolMode === "zaznacz" && selected?.kind === "room" && multiSelected.length === 0 ? (
-            (() => {
-              const pokoj = roomShapes.find((r) => r.id === selected.id);
-              if (!pokoj) return null;
-              // Karta zaznaczonego pomieszczenia — ten sam wiersz co na liście w
-              // „Narysuj pomieszczenie", tu z podpisanymi akcjami (patrz `WierszPomieszczenia`).
-              return (
-                <div className="space-y-1.5" data-testid="karta-pomieszczenia">
-                  <div className="text-sm font-semibold text-ink">Pomieszczenie</div>
-                  <WierszPomieszczenia
-                    key={pokoj.id}
-                    room={pokoj}
-                    metersPerUnit={mpu}
-                    onCreateWall={sciany.createWallFromRoom}
-                    podpisy
-                    onUsuniete={() => setSelected(null)}
-                  />
-                  <SzablonPomieszczenia
-                    key={`szablon-${pokoj.id}`}
-                    typ={pokoj.type ?? guessRoomType(pokoj.name)}
-                    elementowWPokoju={elements.filter((e) => e.roomId === pokoj.id).length}
-                    onWstaw={() => {
-                      const nowe = elementySzablonu(pokoj.type ?? guessRoomType(pokoj.name), {
-                        room: pokoj,
-                        elements,
-                        walls,
-                        roomShapes,
-                        openings,
-                        mpu,
-                        skalaSymboli: skalaOsprzetu,
-                      });
-                      // Jeden wpis w historii — jedno Ctrl+Z zdejmuje cały szablon.
-                      if (nowe.length) setDraft((d) => ({ ...d, elements: [...d.elements, ...nowe] }));
-                      return nowe.length;
-                    }}
-                  />
-                </div>
-              );
-            })()
+          ) : kartaPomieszczeniaZaznaczonego && !kartyWSzufladzie ? (
+            kartaPomieszczeniaZaznaczonego
           ) : null}
           </div>
           )}
@@ -3815,12 +3850,36 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               rzutu, nie treść nad nim. Każda treść nad płótnem, która pojawia się
               w trakcie rysowania, przesuwa płótno pod palcem — a na telefonie panel
               stoi właśnie nad płótnem. Na monitorze kontrolki są w panelu obok rzutu. */}
-          {!pelnyEkran && !szerokieOkno && (kontekstoweAktywne || pigulkaWstawiania) && (
+          {!pelnyEkran && !szerokieOkno && (kontekstoweAktywne || pigulkaWstawiania || kartaSzuflady) && (
             <div
               data-testid="kontrolki-narzedzia"
-              className="pe-bez-suwaka absolute inset-x-2 bottom-2 z-20 flex max-h-[45%] min-w-0 flex-wrap items-center gap-2 overflow-y-auto rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-2 text-left shadow-lg empty:hidden"
+              // Rozwinięta karta zaznaczenia dostaje więcej wysokości (60%) — reszta
+              // kontrolek mieści się w 45%, a karta elementu ma kilka wierszy akcji.
+              className={`pe-bez-suwaka absolute inset-x-2 bottom-2 z-20 flex ${kartaSzuflady && !szufladaZwinieta ? "max-h-[60%]" : "max-h-[45%]"} min-w-0 flex-wrap items-center gap-2 overflow-y-auto rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-2 text-left shadow-lg empty:hidden`}
             >
-              {kontekstoweAktywne && kontekstoweTresc}
+              {kartaSzuflady && (
+                // Szuflada: karta zaznaczenia NAD dolną krawędzią rzutu, z uchwytem do
+                // zwinięcia, kiedy zasłania to, co chce się zobaczyć pod nią.
+                <div className="w-full min-w-0" data-testid="szuflada-karty">
+                  <button
+                    type="button"
+                    aria-expanded={!szufladaZwinieta}
+                    onClick={() => setSzufladaZwinieta((z) => !z)}
+                    className="flex min-h-8 w-full items-center justify-between gap-2 text-left text-sm font-semibold text-ink"
+                  >
+                    {/* Rozwinięta karta ma własny nagłówek z nazwą — tu wtedy tylko podpis
+                        uchwytu, żeby nazwa nie stała dwa razy jedna pod drugą. */}
+                    {szufladaZwinieta ? (
+                      <span className="truncate">{tytulSzuflady}</span>
+                    ) : (
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Zaznaczenie</span>
+                    )}
+                    {szufladaZwinieta ? <ChevronUp size={16} aria-label="Rozwiń kartę" /> : <ChevronDown size={16} aria-label="Zwiń kartę" />}
+                  </button>
+                  {!szufladaZwinieta && <div className="mt-1">{kartaSzuflady}</div>}
+                </div>
+              )}
+              {kontekstoweAktywne && !(kartaSzuflady && szufladaZwinieta) && kontekstoweTresc}
               {pigulkaWstawiania}
             </div>
           )}
