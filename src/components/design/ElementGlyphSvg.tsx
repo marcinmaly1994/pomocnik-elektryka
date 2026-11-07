@@ -1,6 +1,7 @@
 import type { ElementType } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
 import { glyphBoxSize, SOCKET_GLYPH, switchGlyph } from "@/lib/glyphs";
+import { symbolNormowy, type PrymitywSymbolu } from "@/lib/symboleNormowe";
 
 interface GlyphProps {
   type: ElementType;
@@ -58,9 +59,43 @@ function CodeBadge({ color, code, w = 26, h = 24 }: { color: string; code: strin
   );
 }
 
+/** Rysuje symbol z `symboleNormowe` — ta sama lista prymitywów co w `ElementGlyphKonva`. */
+function SymbolNormowy({ prymitywy, color, w, h }: { prymitywy: PrymitywSymbolu[]; color: string; w: number; h: number }) {
+  return (
+    <>
+      {/* Niewidoczny cel trafień: symbol jest w większości kreską. */}
+      <rect x={-w / 2} y={-h / 2} width={w} height={h} fill="transparent" />
+      {prymitywy.map((p, i) => {
+        const sw = p.k === "tekst" ? 0 : p.w ?? 1.8;
+        switch (p.k) {
+          case "linia":
+            return <polyline key={i} points={p.p.join(" ")} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />;
+          case "wielokat":
+            return <polygon key={i} points={p.p.join(" ")} fill="#fff" stroke={color} strokeWidth={sw} strokeLinejoin="round" />;
+          case "kolo":
+            return <circle key={i} cx={p.x} cy={p.y} r={p.r} fill={p.pelne ? "#fff" : "none"} stroke={color} strokeWidth={sw} />;
+          case "sciezka":
+            return <path key={i} d={p.d} fill={p.tlo ? "#fff" : "none"} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />;
+          case "tekst":
+            return (
+              <text key={i} x={p.x} y={p.y} fontSize={p.size} fontWeight={700} fill={color} textAnchor="middle" dominantBaseline="central">
+                {p.t}
+              </text>
+            );
+        }
+      })}
+    </>
+  );
+}
+
 /** Symbole zbliżone do konwencji rysunku instalacyjnego (SVG) — do użycia w bibliotece
  *  elementów i modalu edycji, poza płótnem Konva. Przeniesione z `ElementGlyph` w wersji JS. */
 export function ElementGlyphSvg({ type, color, gangs, agdLetter, wymiaryM }: GlyphProps) {
+  const normowy = symbolNormowy(type);
+  if (normowy) {
+    const { w, h } = glyphBoxSize(type, wymiaryM);
+    return <SymbolNormowy prymitywy={normowy} color={color} w={w} h={h} />;
+  }
   switch (type) {
     case "gniazdko":
     case "gniazdkoHerm": {
