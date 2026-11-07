@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { PodgladUdostepnienia } from "./components/PodgladUdostepnienia";
+import { udostepnienieZAdresu } from "./lib/udostepnianie";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { zarejestrujServiceWorker } from "./lib/rejestracjaSW";
 /**
@@ -47,11 +49,17 @@ import "./index.css";
  *
  * Bez `onReset`: skoro padła powłoka, nie ma dokąd „wrócić" — zostaje odświeżenie.
  */
+/**
+ * Link do udostępnionej dokumentacji (F14) otwiera SAMĄ stronę podglądu, a nie
+ * aplikację — patrz `PodgladUdostepnienia`. Rozstrzygane tutaj, przed pierwszym
+ * renderem, żeby edytor (autozapis, wczytanie projektu z przeglądarki) w ogóle nie
+ * wystartował.
+ */
+const udostepnienie = udostepnienieZAdresu(window.location.pathname);
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+    <ErrorBoundary>{udostepnienie ? <PodgladUdostepnienia udostepnienie={udostepnienie} /> : <App />}</ErrorBoundary>
   </React.StrictMode>
 );
 
