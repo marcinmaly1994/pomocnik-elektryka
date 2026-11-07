@@ -791,3 +791,65 @@ describe("notatki na rzucie", () => {
     expect(notatki()).toEqual([]);
   });
 });
+
+describe("ręczne przewody (F11)", () => {
+  beforeEach(() => useProjectStore.getState().resetProject());
+
+  const dwaElementy = () => {
+    useProjectStore.getState().setDraft((d) => ({
+      ...d,
+      elements: [
+        { ...sampleElement, id: "w", type: "wlacznik" },
+        { ...sampleElement, id: "l", type: "oswietlenie", x: 200 },
+        { ...sampleElement, id: "g", x: 300 },
+      ],
+    }));
+  };
+  const opis = { rodzaj: "sterowanie" as const, kabel: "YDYp 3×1,5" };
+
+  it("łączy dwa elementy i nie dubluje tej samej pary w żadną stronę", () => {
+    dwaElementy();
+    const { dodajPrzewod } = useProjectStore.getState();
+    expect(dodajPrzewod("w", "l", opis)).not.toBeNull();
+    expect(dodajPrzewod("l", "w", opis)).toBeNull();
+    expect(dodajPrzewod("w", "w", opis)).toBeNull();
+    expect(useProjectStore.getState().draft.przewody).toHaveLength(1);
+  });
+
+  it("usunięcie elementu usuwa jego przewody, a cofnięcie przywraca oba", () => {
+    dwaElementy();
+    const { dodajPrzewod } = useProjectStore.getState();
+    dodajPrzewod("w", "l", opis);
+    dodajPrzewod("g", "l", { rodzaj: "zasilanie", kabel: "YDYp 3×2,5" });
+    useProjectStore.getState().removeElements(["w"]);
+    expect(useProjectStore.getState().draft.przewody.map((p) => p.od)).toEqual(["g"]);
+    useProjectStore.getState().undo();
+    expect(useProjectStore.getState().draft.przewody).toHaveLength(2);
+  });
+
+  it("zmiana opisu kabla i rodzaju", () => {
+    dwaElementy();
+    const id = useProjectStore.getState().dodajPrzewod("w", "l", opis)!;
+    useProjectStore.getState().zmienPrzewod(id, { kabel: "YDYp 4×1,5", rodzaj: "zasilanie" });
+    expect(useProjectStore.getState().draft.przewody[0]).toMatchObject({ kabel: "YDYp 4×1,5", rodzaj: "zasilanie" });
+  });
+
+  it("kopia piętra łączy KOPIE elementów, nie oryginały", () => {
+    dwaElementy();
+    useProjectStore.getState().dodajPrzewod("w", "l", opis);
+    useProjectStore.getState().duplicateFloor("f1", "Piętro");
+    const { draft, activeFloorId } = useProjectStore.getState();
+    const kopia = draft.przewody.find((p) => p.floor === activeFloorId)!;
+    const ids = new Set(draft.elements.filter((e) => e.floor === activeFloorId).map((e) => e.id));
+    expect(ids.has(kopia.od) && ids.has(kopia.do)).toBe(true);
+    expect(draft.przewody).toHaveLength(2);
+  });
+
+  it("stary zapis bez pola `przewody` wczytuje się z pustą listą", () => {
+    const { draft, floors, scales } = useProjectStore.getState();
+    const { przewody: _pomijane, ...bez } = draft;
+    void _pomijane;
+    useProjectStore.getState().loadProjectPayload({ draft: bez, floors, scales } as unknown as ProjectPayload);
+    expect(useProjectStore.getState().draft.przewody).toEqual([]);
+  });
+});
