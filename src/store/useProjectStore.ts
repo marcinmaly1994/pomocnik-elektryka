@@ -384,11 +384,18 @@ function pruneRouteOverrides(overrides: Record<string, Point[]>, elements: Insta
 
 /** Migawka do historii cofnij/ponów rozdzielnicy — trzy pola, które razem opisują to,
  *  co użytkownik faktycznie edytuje ręcznie. Bez `panelTryb`/`panelConfig`: zmiana
- *  trybu albo zasilania to przełącznik, nie edycja do cofnięcia. */
+ *  trybu albo zasilania to przełącznik, nie edycja do cofnięcia.
+ *
+ *  WYJĄTEK: wczytanie gotowego układu (F17) zmienia aparaty RAZEM z ustawieniami
+ *  i trybem — cofnięcie samych aparatów zostawiłoby rozłącznik 40 A z mieszkania pod
+ *  aparatami domu na 63 A. Wtedy migawka niesie też `ustawienia` (patrz
+ *  `commitPanelSnapshot({ zUstawieniami: true })`); zwykła edycja aparatu ich nie
+ *  zapisuje, żeby jej cofnięcie nie odkręcało przy okazji późniejszej zmiany zasilania. */
 interface PanelSnapshot {
   devices: PanelDevice[];
   hidden: string[];
   overrides: Record<string, Partial<PanelDevice>>;
+  ustawienia?: { config: PanelConfig; tryb: "zRzutu" | "reczny" };
 }
 
 interface ProjectState {
@@ -557,7 +564,7 @@ interface ProjectState {
    */
   panelPast: PanelSnapshot[];
   panelFuture: PanelSnapshot[];
-  commitPanelSnapshot: () => void;
+  commitPanelSnapshot: (opcje?: { zUstawieniami?: boolean }) => void;
   panelUndo: () => void;
   panelRedo: () => void;
   panelCanUndo: () => boolean;
@@ -1201,37 +1208,44 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   // tuż PRZED ręczną zmianą — ten sam wzorzec co `commit: true` w `setDraft`, tylko
   // bez automatycznego wyzwalania przy każdym zapisie (bo tu „każdy zapis" obejmuje
   // też przeliczenia automatyczne z planu, których cofać nie wolno).
-  commitPanelSnapshot: () => {
-    const { panelDevices, panelHidden, panelOverrides } = get();
+  commitPanelSnapshot: (opcje) => {
+    const { panelDevices, panelHidden, panelOverrides, panelConfig, panelTryb } = get();
+    const ustawienia = opcje?.zUstawieniami ? { ustawienia: { config: panelConfig, tryb: panelTryb } } : {};
     set((state) => ({
-      panelPast: [...state.panelPast, { devices: panelDevices, hidden: panelHidden, overrides: panelOverrides }],
+      panelPast: [...state.panelPast, { devices: panelDevices, hidden: panelHidden, overrides: panelOverrides, ...ustawienia }],
       panelFuture: [],
     }));
   },
 
   panelUndo: () => {
-    const { panelPast, panelDevices, panelHidden, panelOverrides, panelFuture } = get();
+    const { panelPast, panelDevices, panelHidden, panelOverrides, panelFuture, panelConfig, panelTryb } = get();
     if (panelPast.length === 0) return;
     const prev = panelPast[panelPast.length - 1];
+    // Ustawienia wracają tylko z migawki, która je niesie — i tylko wtedy odkładamy
+    // bieżące do „Ponów", żeby ponowienie przywróciło je z powrotem.
+    const biezace = prev.ustawienia ? { ustawienia: { config: panelConfig, tryb: panelTryb } } : {};
     set({
       panelDevices: prev.devices,
       panelHidden: prev.hidden,
       panelOverrides: prev.overrides,
+      ...(prev.ustawienia ? { panelConfig: prev.ustawienia.config, panelTryb: prev.ustawienia.tryb } : {}),
       panelPast: panelPast.slice(0, -1),
-      panelFuture: [{ devices: panelDevices, hidden: panelHidden, overrides: panelOverrides }, ...panelFuture],
+      panelFuture: [{ devices: panelDevices, hidden: panelHidden, overrides: panelOverrides, ...biezace }, ...panelFuture],
     });
   },
 
   panelRedo: () => {
-    const { panelFuture, panelDevices, panelHidden, panelOverrides, panelPast } = get();
+    const { panelFuture, panelDevices, panelHidden, panelOverrides, panelPast, panelConfig, panelTryb } = get();
     if (panelFuture.length === 0) return;
     const next = panelFuture[0];
+    const biezace = next.ustawienia ? { ustawienia: { config: panelConfig, tryb: panelTryb } } : {};
     set({
       panelDevices: next.devices,
       panelHidden: next.hidden,
       panelOverrides: next.overrides,
+      ...(next.ustawienia ? { panelConfig: next.ustawienia.config, panelTryb: next.ustawienia.tryb } : {}),
       panelFuture: panelFuture.slice(1),
-      panelPast: [...panelPast, { devices: panelDevices, hidden: panelHidden, overrides: panelOverrides }],
+      panelPast: [...panelPast, { devices: panelDevices, hidden: panelHidden, overrides: panelOverrides, ...biezace }],
     });
   },
 

@@ -853,3 +853,41 @@ describe("ręczne przewody (F11)", () => {
     expect(useProjectStore.getState().draft.przewody).toEqual([]);
   });
 });
+
+describe("historia rozdzielnicy z ustawieniami (F17)", () => {
+  beforeEach(() => useProjectStore.getState().resetProject());
+  const aparat = (uid: string) => ({ uid, kind: "mcb", tag: uid, modules: 1, label: "B16", caption: uid, poles: "1P" });
+
+  it("migawka z ustawieniami cofa aparaty, zasilanie i tryb razem — a ponów je przywraca", () => {
+    const s = useProjectStore.getState();
+    s.setPanelDevices([aparat("A")]);
+    s.setPanelConfig({ mainRating: 40 });
+    s.commitPanelSnapshot({ zUstawieniami: true });
+    s.setPanelDevices([aparat("B")]);
+    s.setPanelConfig({ mainRating: 63 });
+    s.setPanelTryb("reczny");
+
+    useProjectStore.getState().panelUndo();
+    let st = useProjectStore.getState();
+    expect(st.panelDevices.map((d) => d.uid)).toEqual(["A"]);
+    expect(st.panelConfig.mainRating).toBe(40);
+    expect(st.panelTryb).toBe("zRzutu");
+
+    useProjectStore.getState().panelRedo();
+    st = useProjectStore.getState();
+    expect(st.panelDevices.map((d) => d.uid)).toEqual(["B"]);
+    expect(st.panelConfig.mainRating).toBe(63);
+    expect(st.panelTryb).toBe("reczny");
+  });
+
+  it("zwykła migawka nie rusza ustawień zmienionych po niej", () => {
+    const s = useProjectStore.getState();
+    s.setPanelDevices([aparat("A")]);
+    s.commitPanelSnapshot();
+    s.setPanelDevices([aparat("B")]);
+    s.setPanelConfig({ mainRating: 80 });
+    useProjectStore.getState().panelUndo();
+    expect(useProjectStore.getState().panelDevices.map((d) => d.uid)).toEqual(["A"]);
+    expect(useProjectStore.getState().panelConfig.mainRating).toBe(80);
+  });
+});
