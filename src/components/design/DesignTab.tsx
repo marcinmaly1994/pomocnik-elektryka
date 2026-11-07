@@ -134,7 +134,7 @@ import { ELEMENT_TYPES, kategoriaElementu, libSubtitle, VARIANTS_FOR, widoczneEl
 import { nearestRouteSegmentIndex, zalamaniaZNowymPunktem } from "@/lib/punktTrasy";
 import { InfoTrasy } from "./InfoTrasy";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
-import { buildDrawingDoc, hexNaRgb, KLUCZ_TRAS } from "@/lib/pdf/drawing";
+import { ARKUSZE, buildDrawingDoc, hexNaRgb, KLUCZ_TRAS, type FormatArkusza } from "@/lib/pdf/drawing";
 import type { PdfDoc } from "@/lib/pdf/engine";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { bialePlotno, plotnoDoPdf, rysujPodzialke, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
@@ -443,9 +443,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     pomocnicze.forEach((n) => n.visible(false));
 
     let naBieli: HTMLCanvasElement;
+    let pikseliNaMetr: number | undefined;
     try {
       // Pole rysunku obok legendy, przeliczone na piksele druku.
-      const docelowaSzer = Math.round(600 * PIKSELI_NA_PUNKT);
+      // Na A3 pole jest o tyle szersze, o ile szerszy arkusz — raster rośnie razem z nim,
+      // żeby rysunek nie stracił ostrości po wydrukowaniu w większej skali.
+      const docelowaSzer = Math.round(600 * (ARKUSZE[formatPdf].w / ARKUSZE.A4.w) * PIKSELI_NA_PUNKT);
       /**
        * Wycinek liczony we WSPÓŁRZĘDNYCH SCENY, więc musi uwzględnić jej przesunięcie.
        * Scena stoi przesunięta o kadr ekranu (patrz stan `widok` w DesignCanvas), a
@@ -467,7 +470,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // Podziałka DOKŁADANA DO RASTRA, więc skaluje się razem z rysunkiem przy
       // wpasowywaniu go w kartkę — patrz `rysujPodzialke`. Bez skali nie ma czego
       // odmierzać, więc jej po prostu nie ma.
-      if (mpu !== null && mpu > 0) rysujPodzialke(naBieli, (zoom * pixelRatio) / mpu);
+      if (mpu !== null && mpu > 0) {
+        pikseliNaMetr = (zoom * pixelRatio) / mpu;
+        rysujPodzialke(naBieli, pikseliNaMetr);
+      }
     } finally {
       pomocnicze.forEach((n) => n.visible(true));
       stage.batchDraw();
@@ -511,6 +517,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // według sumy, ale montuje pokój po pokoju i to jemu potrzebny jest podział.
       zestawienie: pozycjeZestawieniaDoPdf(elementyWidoczne),
       obwody: obwodyPdf.length ? obwodyPdf : undefined,
+      format: formatPdf,
+      // Bez kalibracji nie wiadomo, ile metrów ma rysunek — wtedy bez skali liczbowej.
+      pikseliNaMetr,
     });
   }
   /**
@@ -637,6 +646,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * cichu zależał od tego, co akurat było włączone na ekranie.
    */
   const [trasyWPdf, setTrasyWPdf] = useState(true);
+  /** Arkusz rzutu w PDF (F10). A3 dla domu, na którym A4 wymuszało 1:150 i drobne opisy. */
+  const [formatPdf, setFormatPdf] = useState<FormatArkusza>("A4");
   /** Tryb wymiarowania — domyslnie WYLACZONY: przy rysowaniu wymiary przeszkadzaja,
    *  a potrzebne sa przy sprawdzaniu i przed wydrukiem. */
   const [showDimensions, setShowDimensions] = useState(false);
@@ -3237,17 +3248,30 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         title={`Rzut — ${floorName}`}
         filename={projectFileName(`rzut-${floorName}`, projectName, "pdf")}
         build={async () => (await zbudujDokumentRzutu()).finish()}
-        wariant={trasyWPdf ? "z-trasami" : "bez-tras"}
+        wariant={`${trasyWPdf ? "z-trasami" : "bez-tras"}:${formatPdf}`}
         opcje={
-          <label className="flex items-center gap-2 text-[13px] text-slate-600">
-            <input
-              type="checkbox"
-              checked={trasyWPdf}
-              onChange={(e) => setTrasyWPdf(e.target.checked)}
-              className="h-4 w-4 rounded border-border"
-            />
-            Trasy przewodów na rysunku
-          </label>
+          <>
+            <label className="flex items-center gap-2 text-[13px] text-slate-600">
+              <input
+                type="checkbox"
+                checked={trasyWPdf}
+                onChange={(e) => setTrasyWPdf(e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              Trasy przewodów na rysunku
+            </label>
+            <label className="flex items-center gap-2 text-[13px] text-slate-600">
+              Arkusz
+              <select
+                value={formatPdf}
+                onChange={(e) => setFormatPdf(e.target.value as FormatArkusza)}
+                className="h-8 rounded-md border border-border bg-white px-2 text-[13px]"
+              >
+                <option value="A4">A4 poziomo</option>
+                <option value="A3">A3 poziomo</option>
+              </select>
+            </label>
+          </>
         }
       />
 

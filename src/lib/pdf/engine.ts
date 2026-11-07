@@ -261,6 +261,7 @@ export interface PdfImage {
 export interface PdfDoc {
   y: number;
   readonly pageW: number;
+  readonly pageH: number;
   readonly margin: number;
   readonly innerW: number;
   setNewPageHandler(fn: (doc: PdfDoc) => void): void;
@@ -357,6 +358,9 @@ export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, foot
     },
     get pageW() {
       return pageW;
+    },
+    get pageH() {
+      return pageH;
     },
     get margin() {
       return margin;
