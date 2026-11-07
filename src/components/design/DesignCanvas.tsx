@@ -2220,7 +2220,7 @@ export function DesignCanvas({
             ))}
             {podklad.elements.map((el) => (
               <Group key={el.id} x={el.x} y={el.y} rotation={el.rotation ?? 0} scaleX={skalaSymbolu(el.type)} scaleY={skalaSymbolu(el.type)}>
-                <ElementGlyphKonva type={el.type} color="#64748B" gangs={el.gangs} agdLetter={el.agdLetter} wymiaryM={fixtureSizeM(el) ?? undefined} />
+                <ElementGlyphKonva type={el.type} color="#64748B" gangs={el.gangs} agdLetter={el.agdLetter} wymiaryM={fixtureSizeM(el) ?? undefined} obrot={el.rotation ?? 0} />
               </Group>
             ))}
           </Layer>
@@ -3418,6 +3418,7 @@ export function DesignCanvas({
                   gangs={el.gangs}
                   agdLetter={el.agdLetter}
                   wymiaryM={fixtureSizeM(el) ?? undefined}
+                  obrot={el.rotation ?? 0}
                 />
                 {/* Obszar trafienia — patrz komentarz przy `skalaSymbolu`. Rysowany po
                     glifie, więc leży NA nim w kolejności rysowania, ale będąc
@@ -3606,7 +3607,7 @@ export function DesignCanvas({
                 scaleY={skalaSymbolu(duchElementu.type)}
                 opacity={0.55}
               >
-                <ElementGlyphKonva type={duchElementu.type} color={def.color} gangs={duchElementu.gangs} agdLetter={duchElementu.agdLetter} />
+                <ElementGlyphKonva type={duchElementu.type} color={def.color} gangs={duchElementu.gangs} agdLetter={duchElementu.agdLetter} obrot={poz.rotation} />
               </Group>
             </Layer>
           );

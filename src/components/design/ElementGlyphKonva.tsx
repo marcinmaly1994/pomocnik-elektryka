@@ -2,6 +2,7 @@ import { Circle, Line, Path, Rect, Text } from "react-konva";
 import type { ElementType } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
 import { glyphBoxSize, SOCKET_GLYPH, switchGlyph } from "@/lib/glyphs";
+import { symbolNormowy, type PrymitywSymbolu } from "@/lib/symboleNormowe";
 
 interface GlyphProps {
   type: ElementType;
@@ -13,6 +14,9 @@ interface GlyphProps {
    *  (patrz `fixtureSizeM`). Bez nich rysują się wymiary typowe, co jest właściwe
    *  w legendzie i w podglądzie biblioteki, gdzie nie ma konkretnego elementu. */
   wymiaryM?: { widthM: number; depthM: number };
+  /** Obrót grupy, w której stoi symbol [stopnie] — napisy symboli normowych obracają się
+   *  o tyle wstecz, żeby „M" czy „TV" na pionowej ścianie nie leżały na boku. */
+  obrot?: number;
 }
 
 /** Konvowy odpowiednik `SocketArc` z `ElementGlyphSvg.tsx` — ta sama geometria, ten sam
@@ -76,11 +80,63 @@ function CodeBadgeKonva({ color, code, w, h }: { color: string; code: string; w:
   );
 }
 
+/** Konvowy odpowiednik `SymbolNormowy` z `ElementGlyphSvg.tsx` — te same prymitywy. */
+function SymbolNormowyKonva({ prymitywy, color, w, h, obrot }: { prymitywy: PrymitywSymbolu[]; color: string; w: number; h: number; obrot: number }) {
+  return (
+    <>
+      {/* Niewidoczny cel trafień: bez wypełnienia Konva łapie klik tylko na kresce. */}
+      <Rect x={-w / 2} y={-h / 2} width={w} height={h} fill="transparent" />
+      {prymitywy.map((p, i) => {
+        const sw = p.k === "tekst" ? 0 : p.w ?? 1.8;
+        switch (p.k) {
+          case "linia":
+            return <Line key={i} points={p.p} stroke={color} strokeWidth={sw} lineCap="round" lineJoin="round" />;
+          case "wielokat":
+            return <Line key={i} points={p.p} closed fill="#fff" stroke={color} strokeWidth={sw} lineJoin="round" />;
+          case "kolo":
+            return <Circle key={i} x={p.x} y={p.y} radius={p.r} fill={p.pelne ? "#fff" : undefined} stroke={color} strokeWidth={sw} />;
+          case "sciezka":
+            return <Path key={i} data={p.d} fill={p.tlo ? "#fff" : undefined} stroke={color} strokeWidth={sw} lineCap="round" lineJoin="round" />;
+          case "tekst": {
+            // Konva nie ma kotwicy środka tekstu — pudełko o stałym rozmiarze,
+            // wyśrodkowane w punkcie i z wyrównaniem do środka w obu osiach.
+            const bw = 24;
+            const bh = p.size * 1.4;
+            return (
+              <Text
+                key={i}
+                text={p.t}
+                x={p.x}
+                y={p.y}
+                offsetX={bw / 2}
+                offsetY={bh / 2}
+                rotation={-obrot}
+                width={bw}
+                height={bh}
+                fontSize={p.size}
+                fontStyle="700"
+                fill={color}
+                align="center"
+                verticalAlign="middle"
+              />
+            );
+          }
+        }
+      })}
+    </>
+  );
+}
+
 /** Symbole zbliżone do konwencji rysunku instalacyjnego, jako prymitywy Konvy — do
  *  rysowania na płótnie projektowania (`DesignCanvas`). Ten sam zestaw kształtów co
  *  `ElementGlyphSvg`, przepisany na `react-konva` zamiast surowego SVG (Stage/Layer w
  *  Konvie nie renderuje węzłów DOM, więc symboli nie da się użyć 1:1). */
-export function ElementGlyphKonva({ type, color, gangs, agdLetter, wymiaryM }: GlyphProps) {
+export function ElementGlyphKonva({ type, color, gangs, agdLetter, wymiaryM, obrot = 0 }: GlyphProps) {
+  const normowy = symbolNormowy(type);
+  if (normowy) {
+    const { w, h } = glyphBoxSize(type, wymiaryM);
+    return <SymbolNormowyKonva prymitywy={normowy} color={color} w={w} h={h} obrot={obrot} />;
+  }
   switch (type) {
     case "gniazdko":
     case "gniazdkoHerm": {
