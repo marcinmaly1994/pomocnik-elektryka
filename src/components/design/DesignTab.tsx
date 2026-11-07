@@ -88,6 +88,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SzablonPomieszczenia } from "@/components/design/SzablonPomieszczenia";
 import { elementySzablonu } from "@/lib/szablonyPomieszczen";
+import { domyslnyPrzewod, RODZAJE_PRZEWODU } from "@/lib/przewodyReczne";
+import type { RodzajPrzewodu } from "@/types";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
 import { NaglowekNarzedzia, PodpowiedzPrzesun, PodpowiedzZaznacz } from "./PanelNarzedzia";
@@ -302,6 +304,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const zmienNotatke = useProjectStore((s) => s.zmienNotatke);
   const przesunNotatke = useProjectStore((s) => s.przesunNotatke);
   const [edycjaNotatki, setEdycjaNotatki] = useState<{ id?: string; p?: Point; tekst: string } | null>(null);
+  // Ręczne przewody (F11) — tylko tej kondygnacji; `przewodStart` to pierwszy koniec
+  // zaczętego przewodu, czekający na kliknięcie drugiego elementu.
+  const wszystkiePrzewody = useProjectStore((s) => s.draft.przewody);
+  const przewodyPietra = useMemo(() => (wszystkiePrzewody ?? []).filter((p) => p.floor === activeFloorId), [wszystkiePrzewody, activeFloorId]);
+  const dodajPrzewod = useProjectStore((s) => s.dodajPrzewod);
+  const zmienPrzewod = useProjectStore((s) => s.zmienPrzewod);
+  const [przewodStart, setPrzewodStart] = useState<string | null>(null);
   const commitSnapshot = useProjectStore((s) => s.commitSnapshot);
   /** Plan sprzed przeciągania pokoju — po puszczeniu idzie do historii jako JEDEN krok. */
   const planPrzedRuchemPokojuRef = useRef<ReturnType<typeof useProjectStore.getState>["draft"] | null>(null);
@@ -553,6 +562,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
 
   const [toolMode, setToolMode] = useState<ToolMode>("zaznacz");
+  // Zaczęty przewód należy do narzędzia „Przewód" — po zmianie narzędzia przepada,
+  // żeby powrót do niego nie podsuwał końca wybranego kiedyś dawno temu.
+  const [narzedziePrzewodu, setNarzedziePrzewodu] = useState(toolMode);
+  if (narzedziePrzewodu !== toolMode) {
+    setNarzedziePrzewodu(toolMode);
+    if (przewodStart !== null) setPrzewodStart(null);
+  }
   /**
    * Zatrzaśnięty Shift: każde kliknięcie DOKŁADA element do zaznaczenia zamiast
    * zaczynać nowe.
@@ -1583,6 +1599,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     w: "sciany",
     d: "otwory",
     n: "notatka",
+    k: "przewod",
     h: "pan",
     s: "skala",
   };
@@ -1763,9 +1780,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         const porzuconyPodglad = anulujPodgladRef.current?.() ?? false;
         const bylCosDoPorzucenia =
           porzuconyPodglad ||
+          przewodStart !== null ||
           sciany.drawingWall.length > 0 || pokoje.drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
         sciany.setDrawingWall([]);
         pokoje.setDrawingRoomPoints([]);
+        setPrzewodStart(null);
         setMultiSelected([]);
         setCalibPoints([]);
         zaznaczenie.zamknijMenu();
@@ -2318,6 +2337,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // Zaznaczona notatka (F6) — karta z treścią i „Edytuj"/„Usuń" także w narzędziu
     // „Notatka", w którym właśnie powstała.
     selected?.kind === "note" ||
+    // Przewód ręczny (F11): karta zaznaczonego przewodu i podpowiedź narzędzia.
+    selected?.kind === "wire" ||
+    toolMode === "przewod" ||
     !!skalaPotwierdzenie;
 
   /**
@@ -2696,6 +2718,64 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {/* Szerokość ZAZNACZONEGO otworu — ten sam wzorzec co grubość zaznaczonej ściany
           wyżej. Wcześniej każdy otwór miał na sztywno 90 cm i nie było jak tego zmienić,
           więc drzwi balkonowe i okno tarasowe rysowały się jak zwykłe drzwi wewnętrzne. */}
+      {/* Narzędzie „Przewód" (F11) — co kliknąć teraz. */}
+      {toolMode === "przewod" && selected?.kind !== "wire" && (
+        <div className="flex min-w-0 flex-col gap-1.5 text-xs text-slate-600" data-testid="podpowiedz-przewodu">
+          <span>
+            {przewodStart
+              ? "Kliknij drugi element — przewód połączy oba. Esc albo klik obok przerywa."
+              : "Kliknij pierwszy element przewodu (łącznik, gniazdo, szafkę…)."}
+          </span>
+          {przewodStart && (
+            <button className="pe-btn-ghost self-start px-2.5 py-1 text-xs" onClick={() => setPrzewodStart(null)}>
+              Anuluj
+            </button>
+          )}
+        </div>
+      )}
+      {/* Zaznaczony PRZEWÓD RĘCZNY (F11) — rodzaj (kreska na rysunku) i opis kabla. */}
+      {selected?.kind === "wire" && (() => {
+        const w = przewodyPietra.find((x) => x.id === selected.id);
+        if (!w) return null;
+        const nazwa = (id: string) => {
+          const e = elements.find((x) => x.id === id);
+          return e ? `${ELEMENT_TYPES[e.type].label} (${e.room})` : "—";
+        };
+        return (
+          <div className="flex min-w-0 flex-col gap-1.5 text-xs" data-testid="karta-przewodu">
+            <span className="font-medium text-slate-600">Przewód</span>
+            <span className="text-slate-500">
+              {nazwa(w.od)} → {nazwa(w.do)}
+            </span>
+            <label className="flex items-center gap-2 text-slate-600">
+              Rodzaj
+              <select
+                value={w.rodzaj}
+                onChange={(e) => zmienPrzewod(w.id, { rodzaj: e.target.value as RodzajPrzewodu })}
+                className="rounded border border-border bg-white px-1.5 py-0.5"
+              >
+                {(Object.keys(RODZAJE_PRZEWODU) as RodzajPrzewodu[]).map((r) => (
+                  <option key={r} value={r}>
+                    {RODZAJE_PRZEWODU[r].etykieta}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-slate-600">
+              Kabel
+              <input
+                aria-label="Typ i przekrój kabla"
+                value={w.kabel}
+                onChange={(e) => zmienPrzewod(w.id, { kabel: e.target.value })}
+                className="min-w-0 flex-1 rounded border border-border px-1.5 py-0.5"
+              />
+            </label>
+            <button className="pe-btn-ghost self-start px-2.5 py-1 text-xs text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
+              Usuń przewód
+            </button>
+          </div>
+        );
+      })()}
       {/* Zaznaczona NOTATKA (F6) — treść i akcje; edycja tym samym oknem co przy dodawaniu. */}
       {selected?.kind === "note" && (() => {
         const n = notatkiPietra.find((x) => x.id === selected.id);
@@ -3758,6 +3838,27 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             }}
             onMoveNote={(id, p) => przesunNotatke(id, p)}
             onEditNote={(id) => setEdycjaNotatki({ id, tekst: notatkiPietra.find((n) => n.id === id)?.tekst ?? "" })}
+            przewody={przewodyPietra}
+            przewodStart={przewodStart}
+            onWireElement={(id) => {
+              if (id === null || id === przewodStart) {
+                setPrzewodStart(null);
+                return;
+              }
+              if (!przewodStart) {
+                setPrzewodStart(id);
+                return;
+              }
+              const a = elements.find((e) => e.id === przewodStart);
+              const b = elements.find((e) => e.id === id);
+              setPrzewodStart(null);
+              if (!a || !b) return;
+              const nowy = dodajPrzewod(a.id, b.id, domyslnyPrzewod(a.type, b.type));
+              // Karta nowego przewodu od razu — żeby poprawić opis kabla, póki pamięta się,
+              // co to za przewód.
+              if (nowy) setSelected({ kind: "wire", id: nowy });
+            }}
+            onSelectWire={(id) => setSelected({ kind: "wire", id })}
             openings={openings}
             toolMode={toolMode}
             roomMode={pokoje.roomMode}

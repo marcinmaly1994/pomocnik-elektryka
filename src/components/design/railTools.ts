@@ -1,4 +1,4 @@
-import { DoorOpen, Hand, Layers, MousePointer2, PenLine, Plus, Ruler, StickyNote } from "lucide-react";
+import { Cable, DoorOpen, Hand, Layers, MousePointer2, PenLine, Plus, Ruler, StickyNote } from "lucide-react";
 import type { ToolMode } from "./DesignCanvas";
 
 export interface RailTool {
@@ -22,6 +22,8 @@ export const RAIL_TOOLS: RailTool[] = [
   { id: "otwory", label: "Drzwi i okna", icon: DoorOpen, hint: "Kliknij ścianę albo krawędź pomieszczenia, żeby wstawić drzwi albo okno", shortcut: "D" },
   // Notatki dla montera (F6 z audytu 5.11.2026) — trafiają też na rzut w PDF.
   { id: "notatka", label: "Notatka", icon: StickyNote, hint: "Kliknij na planie, żeby dodać notatkę — trafi też na wydruk", shortcut: "N" },
+  // Przewód poprowadzony ręcznie między dwoma elementami (F11 z audytu 5.11.2026).
+  { id: "przewod", label: "Przewód", icon: Cable, hint: "Kliknij dwa elementy, żeby poprowadzić między nimi przewód z opisem kabla", shortcut: "K" },
   // Podpowiedź mówi też o rolce, bo inaczej ten skrót jest nie do odkrycia: nikt
   // nie wciska środkowego przycisku „na próbę", żeby sprawdzić, czy coś zrobi.
   { id: "pan", label: "Przesuń widok", icon: Hand, hint: "Przeciągaj widok planu — albo przytrzymaj rolkę myszy w dowolnym narzędziu", shortcut: "H" },

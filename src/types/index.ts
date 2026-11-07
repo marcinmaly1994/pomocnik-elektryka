@@ -131,6 +131,25 @@ export interface NotatkaPlanu {
   tekst: string;
 }
 
+/** Rodzaj ręcznego przewodu — decyduje o kresce na rysunku. */
+export type RodzajPrzewodu = "zasilanie" | "sterowanie" | "teletechnika";
+
+/**
+ * Przewód poprowadzony ręcznie między dwoma elementami (F11 z audytu 5.11.2026):
+ * sterowanie łącznik → oprawa w układzie, którego automat nie zgadnie, magistrala LAN
+ * od szafki do gniazd, przewód do napędu bramy. Końce wskazują elementy po `id`, więc
+ * przewód idzie za nimi przy przesuwaniu; usunięcie elementu usuwa jego przewody.
+ */
+export interface PrzewodReczny {
+  id: string;
+  floor: string;
+  od: string;
+  do: string;
+  rodzaj: RodzajPrzewodu;
+  /** Typ i przekrój, np. „YDYp 3×1,5" albo „U/UTP kat. 6" — opis na rysunku. */
+  kabel: string;
+}
+
 /**
  * Otwór (drzwi, dawniej też okno) wycięty w konkretnej ścianie ALBO w krawędzi narysowanego
  * pomieszczenia — dokładnie jedno z `wallId`/`roomId` jest ustawione, zależnie od

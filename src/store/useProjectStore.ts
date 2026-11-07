@@ -33,6 +33,8 @@ import type {
   PanelConfig,
   PanelDevice,
   NotatkaPlanu,
+  PrzewodReczny,
+  RodzajPrzewodu,
 } from "@/types";
 import {
   DEFAULT_PLAN_SIZE,
@@ -335,6 +337,8 @@ interface Draft {
   /** Notatki tekstowe na rzucie (F6) — patrz `NotatkaPlanu`. W zapisach sprzed nich brak
    *  pola; wczytanie uzupełnia pustą listą. */
   notatki: NotatkaPlanu[];
+  /** Przewody poprowadzone ręcznie (F11) — patrz `PrzewodReczny`. W starszych zapisach brak. */
+  przewody: PrzewodReczny[];
 }
 
 /** Wartość z wczytywanego zapisu jako tablica; cokolwiek innego to pusta lista.
@@ -348,7 +352,21 @@ function obiektLubPusty<T extends object>(v: T): T {
   return typeof v === "object" && v !== null && !Array.isArray(v) ? v : ({} as T);
 }
 
-const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [], routeOverrides: {}, notatki: [] };
+const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [], routeOverrides: {}, notatki: [], przewody: [] };
+
+/**
+ * Przewody, których oba końce wciąż istnieją. Ta sama zasada co `synchronizujRoomId`:
+ * pilnowana w `setDraft` po KAŻDEJ zmianie, więc żadna z kilkunastu dróg usuwania
+ * elementów (Delete, wycięcie, usunięcie pokoju, wklejenie z cofnięciem…) nie zostawi
+ * przewodu wiszącego w powietrzu. Zwraca tę samą tablicę, gdy nic nie odpadło.
+ */
+export function przewodyZIstniejacymiKoncami(przewody: PrzewodReczny[] | undefined, elements: InstallationElement[]): PrzewodReczny[] {
+  const lista = przewody ?? [];
+  if (lista.length === 0) return lista;
+  const ids = new Set(elements.map((e) => e.id));
+  const zostaja = lista.filter((p) => ids.has(p.od) && ids.has(p.do));
+  return zostaja.length === lista.length ? lista : zostaja;
+}
 
 /** Usuwa poprawki tras, których id odwołuje się do elementu, którego już nie ma
  *  (element skasowany albo cała kondygnacja usunięta) — inaczej `routeOverrides`
@@ -630,6 +648,11 @@ interface ProjectState {
   zmienNotatke: (id: string, tekst: string) => void;
   przesunNotatke: (id: string, p: Point) => void;
   usunNotatke: (id: string) => void;
+  /** Ręczny przewód między dwoma elementami (F11). Zwraca id albo `null`, gdy końce są
+   *  tym samym elementem, leżą na różnych kondygnacjach albo taki przewód już jest. */
+  dodajPrzewod: (od: string, doId: string, opis: { rodzaj: RodzajPrzewodu; kabel: string }) => string | null;
+  zmienPrzewod: (id: string, zmiana: Partial<Pick<PrzewodReczny, "rodzaj" | "kabel">>) => void;
+  usunPrzewod: (id: string) => void;
   removeElements: (ids: string[]) => void;
 
   /** Zapisuje/nadpisuje ręczną poprawkę trasy — patrz `Draft.routeOverrides`. */
@@ -692,7 +715,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // `synchronizujRoomId`. Tańsze niż pilnowanie go w każdej z kilkunastu dróg, które
       // przypisują pokój, i odporne na to, że któraś o nim zapomni.
       const elements = synchronizujRoomId(zmieniony.elements, zmieniony.roomShapes);
-      const next = elements === zmieniony.elements ? zmieniony : { ...zmieniony, elements };
+      const przewody = przewodyZIstniejacymiKoncami(zmieniony.przewody, elements);
+      const next =
+        elements === zmieniony.elements && przewody === zmieniony.przewody ? zmieniony : { ...zmieniony, elements, przewody };
       return {
         draft: next,
         past: commit ? [...state.past, state.draft] : state.past,
@@ -875,6 +900,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       roomShapes: ujednoznacznijNazwyPomieszczen(tablicaLubPusta(surowy.roomShapes)),
       openings: tablicaLubPusta(surowy.openings),
       notatki: tablicaLubPusta(surowy.notatki),
+      przewody: tablicaLubPusta(surowy.przewody),
       routeOverrides: obiektLubPusty(surowy.routeOverrides),
     };
     const scales = obiektLubPusty(payload.scales);
@@ -1048,9 +1074,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }));
       // `roomId` kopii wskazywałby pokoje ORYGINAŁU — przeliczany niżej, z nazw na nowej
       // kondygnacji (`synchronizujRoomId`).
+      const mapaElementow = new Map<string, string>();
       const elements = state.draft.elements
         .filter((e) => e.floor === id)
-        .map((e) => ({ ...e, id: crypto.randomUUID(), floor: nowaId }));
+        .map((e) => {
+          const noweId = crypto.randomUUID();
+          mapaElementow.set(e.id, noweId);
+          return { ...e, id: noweId, floor: nowaId };
+        });
+      // Ręczne przewody kopii łączą KOPIE elementów — po mapie identyfikatorów.
+      const przewody = (state.draft.przewody ?? [])
+        .filter((p) => p.floor === id && mapaElementow.has(p.od) && mapaElementow.has(p.do))
+        .map((p) => ({ ...p, id: crypto.randomUUID(), floor: nowaId, od: mapaElementow.get(p.od)!, do: mapaElementow.get(p.do)! }));
 
       const skala = state.scales[id];
       return {
@@ -1072,6 +1107,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             ...(state.draft.notatki ?? []),
             ...(state.draft.notatki ?? []).filter((n) => n.floor === id).map((n) => ({ ...n, id: crypto.randomUUID(), floor: nowaId })),
           ],
+          przewody: [...(state.draft.przewody ?? []), ...przewody],
           elements: synchronizujRoomId([...state.draft.elements, ...elements], [...state.draft.roomShapes, ...roomShapes]),
         },
         past: [...state.past, state.draft],
@@ -1090,6 +1126,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         roomShapes: state.draft.roomShapes.filter((r) => r.floor !== id),
         openings: state.draft.openings.filter((o) => o.floor !== id),
         notatki: (state.draft.notatki ?? []).filter((n) => n.floor !== id),
+        przewody: (state.draft.przewody ?? []).filter((p) => p.floor !== id),
         routeOverrides: pruneRouteOverrides(state.draft.routeOverrides, remainingElements),
       };
       const bgImages = { ...state.bgImages };
@@ -1646,6 +1683,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   usunNotatke: (id) => {
     get().setDraft((d) => ({ ...d, notatki: (d.notatki ?? []).filter((n) => n.id !== id) }));
+  },
+
+  dodajPrzewod: (od, doId, opis) => {
+    const { draft } = get();
+    const a = draft.elements.find((e) => e.id === od);
+    const b = draft.elements.find((e) => e.id === doId);
+    if (!a || !b || a.id === b.id || a.floor !== b.floor) return null;
+    const juzJest = (draft.przewody ?? []).some((p) => (p.od === od && p.do === doId) || (p.od === doId && p.do === od));
+    if (juzJest) return null;
+    const id = crypto.randomUUID();
+    get().setDraft((d) => ({ ...d, przewody: [...(d.przewody ?? []), { id, floor: a.floor, od, do: doId, ...opis }] }));
+    return id;
+  },
+
+  zmienPrzewod: (id, zmiana) => {
+    get().setDraft((d) => ({ ...d, przewody: (d.przewody ?? []).map((p) => (p.id === id ? { ...p, ...zmiana } : p)) }));
+  },
+
+  usunPrzewod: (id) => {
+    get().setDraft((d) => ({ ...d, przewody: (d.przewody ?? []).filter((p) => p.id !== id) }));
   },
 
   removeElements: (ids) => {

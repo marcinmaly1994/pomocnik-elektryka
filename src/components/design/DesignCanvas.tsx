@@ -7,7 +7,8 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { DD } from "konva/lib/DragAndDrop";
-import type { CableRoute, ElementType, InstallationElement, NotatkaPlanu, Opening, Point, RoomShape, Wall } from "@/types";
+import type { CableRoute, ElementType, InstallationElement, NotatkaPlanu, Opening, Point, PrzewodReczny, RoomShape, Wall } from "@/types";
+import { RODZAJE_PRZEWODU } from "@/lib/przewodyReczne";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import {
   DEFAULT_WALL_THICKNESS,
@@ -47,8 +48,8 @@ import { clampNum, nearestPointOnPolyline, pointInPolygon, polygonAreaM2, rectan
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { glyphBoxSize, groupLabelAnchors, groupLabelCandidates } from "@/lib/glyphs";
 
-export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "notatka" | "pan" | "skala";
-export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route" | "note"; id: string } | null;
+export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "notatka" | "przewod" | "pan" | "skala";
+export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route" | "note" | "wire"; id: string } | null;
 
 /** Sposób rysowania pomieszczenia: prostokąt przeciągnięciem albo wielobok klikaniem. */
 export type RoomDrawMode = "prostokat" | "wielobok";
@@ -173,6 +174,13 @@ interface DesignCanvasProps {
   onMoveNote?: (id: string, p: Point) => void;
   /** Dwuklik w notatkę — edycja treści. */
   onEditNote?: (id: string) => void;
+  /** Ręczne przewody tej kondygnacji (F11) — patrz `PrzewodReczny`. */
+  przewody?: PrzewodReczny[];
+  /** Element klikniety jako pierwszy koniec przewodu, czekający na drugi. */
+  przewodStart?: string | null;
+  /** Klik w element w narzędziu „Przewód" — `null`: klik w puste miejsce (anuluje). */
+  onWireElement?: (id: string | null) => void;
+  onSelectWire?: (id: string) => void;
   openings: Opening[];
   toolMode: ToolMode;
   roomMode: RoomDrawMode;
@@ -431,6 +439,10 @@ export function DesignCanvas({
   onSelectNote,
   onMoveNote,
   onEditNote,
+  przewody = [],
+  przewodStart = null,
+  onWireElement,
+  onSelectWire,
   openings,
   toolMode,
   roomMode,
@@ -1709,6 +1721,11 @@ export function DesignCanvas({
     }
     if (toolMode === "notatka") {
       onPlaceNote?.(p);
+      return;
+    }
+    if (toolMode === "przewod") {
+      // Klik obok elementów porzuca zaczęty przewód — tak jak Esc.
+      onWireElement?.(null);
       return;
     }
     if (toolMode === "elementy") {
@@ -3295,6 +3312,60 @@ export function DesignCanvas({
             <Circle key={i} x={p.x} y={p.y} radius={px(5)} fill="#3B8C63" listening={false} />
           ))}
 
+          {/* Ręczne przewody (F11) — POD osprzętem, od środka do środka symbolu: koniec
+              chowa się pod symbolem, więc nie trzeba liczyć, gdzie kończy się jego obrys.
+              Opis kabla w połowie, w skali rysunku jak notatki, żeby był czytelny na PDF. */}
+          {przewody.map((w) => {
+            const a = elements.find((e) => e.id === w.od);
+            const b = elements.find((e) => e.id === w.do);
+            if (!a || !b) return null;
+            const styl = RODZAJE_PRZEWODU[w.rodzaj];
+            const zazn = selected?.kind === "wire" && selected.id === w.id;
+            const { font } = wymiaryNotatki("x", metersPerUnit);
+            const f = font * 0.8;
+            const kat = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+            // Napis zawsze czytany od lewej — przy przewodzie „wstecz" obrót o 180°.
+            const katNapisu = kat > 90 || kat < -90 ? kat + 180 : kat;
+            const sx = (a.x + b.x) / 2;
+            const sy = (a.y + b.y) / 2;
+            const dl = Math.hypot(b.x - a.x, b.y - a.y);
+            return (
+              <Group
+                key={w.id}
+                data-testid="przewod-reczny"
+                listening={toolMode === "zaznacz"}
+                {...klikAlboDotyk((e) => {
+                  e.cancelBubble = true;
+                  onSelectWire?.(w.id);
+                })}
+              >
+                <Line
+                  points={[a.x, a.y, b.x, b.y]}
+                  stroke={zazn ? "#C1793F" : styl.kolor}
+                  strokeWidth={px(zazn ? 3 : 2)}
+                  dash={styl.kreska.map((d) => px(d))}
+                  hitStrokeWidth={px(12)}
+                  lineCap="round"
+                />
+                {w.kabel && dl > f * 4 && (
+                  <Text
+                    x={sx}
+                    y={sy}
+                    rotation={katNapisu}
+                    text={w.kabel}
+                    fontSize={f}
+                    fill={styl.kolor}
+                    width={dl * 0.8}
+                    offsetX={dl * 0.4}
+                    offsetY={f * 1.3}
+                    align="center"
+                    listening={false}
+                  />
+                )}
+              </Group>
+            );
+          })}
+
           {elements.map((el) => {
             const def = ELEMENT_TYPES[el.type];
             const isSel = (selected?.kind === "el" && selected.id === el.id) || multiSelected.includes(el.id);
@@ -3341,6 +3412,11 @@ export function DesignCanvas({
                    * który postawiłby nowy element pod zaznaczonym.
                    */
                   e.cancelBubble = true;
+                  // W narzędziu „Przewód" klik w element to koniec przewodu, nie zaznaczenie.
+                  if (toolMode === "przewod") {
+                    onWireElement?.(el.id);
+                    return;
+                  }
                   // Shift istnieje tylko przy myszy; na dotyku dokładanie do zaznaczenia
                   // idzie przełącznikiem „Zaznacz kilka" (patrz DesignTab.tsx).
                   onSelectElement(el.id, "shiftKey" in e.evt ? e.evt.shiftKey : false);
@@ -3532,6 +3608,18 @@ export function DesignCanvas({
               czytelne w skali rysunku, a nie w pikselach ekranu. Przeciągalne tylko
               w „Zaznacz", żeby w narzędziach rysujących klik w notatkę nie ruszał jej
               zamiast stawiać punkt. */}
+          {/* Pierwszy koniec zaczętego przewodu (F11) — pierścień, żeby było widać, od czego
+              przewód pójdzie, zanim kliknie się drugi element. */}
+          {toolMode === "przewod" &&
+            przewodStart &&
+            (() => {
+              const s = elements.find((e) => e.id === przewodStart);
+              if (!s) return null;
+              const { w, h } = glyphBoxSize(s.type);
+              const r = (Math.max(w, h) / 2) * skalaSymbolu(s.type) + px(6);
+              return <Circle x={s.x} y={s.y} radius={r} stroke="#C1793F" strokeWidth={px(2)} dash={[px(4), px(3)]} listening={false} data-testid="przewod-start" />;
+            })()}
+
           {notatki.map((n) => {
             const { font, szer, wys } = wymiaryNotatki(n.tekst, metersPerUnit);
             const zazn = selected?.kind === "note" && selected.id === n.id;
