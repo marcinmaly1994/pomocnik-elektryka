@@ -298,6 +298,12 @@ interface DesignCanvasProps {
   /** Koniec przeciągania narożnika — pojedynczy wpis do historii cofania na CAŁY
    *  ruch, nie na każdą klatkę (patrz onDragMove elementów, ten sam wzorzec). */
   onMoveRoomPoint: (id: string, index: number, point: Point) => void;
+  /** Przeciąganie CAŁEGO zaznaczonego pomieszczenia za jego wnętrze (F5): początek ruchu,
+   *  kolejne przyrosty (już przyciągnięte do siatki) i koniec — rodzic robi z tego jeden
+   *  wpis do historii, ten sam wzorzec co przy narożniku. */
+  onRoomMoveStart?: () => void;
+  onMoveRoom?: (id: string, dx: number, dy: number) => void;
+  onRoomMoveEnd?: (przesunieto: boolean) => void;
   /** Koniec przeciągania narożnika ściany — jeden wpis do historii cofania na
    *  cały ruch, ten sam wzorzec co `onMoveRoomPoint`. */
   onMoveWallPoint: (id: string, index: number, point: Point) => void;
@@ -457,6 +463,9 @@ export function DesignCanvas({
   onRoomContextMenu,
   onRoomNameDblClick,
   onMoveRoomPoint,
+  onRoomMoveStart,
+  onMoveRoom,
+  onRoomMoveEnd,
   onMoveWallPoint,
   onSelectRoute,
   onSetRoutePoints,
@@ -903,6 +912,8 @@ export function DesignCanvas({
   // store'a dopiero na onDragEnd — jeden wpis w historii na cały ruch.
   const routeLineNodesRef = useRef<Map<string, Konva.Line>>(new Map());
   const marqueeStartRef = useRef<Point | null>(null);
+  /** Trwające przeciąganie całego pomieszczenia — patrz `handleStageMouseDown`. */
+  const przesuwaniePokojuRef = useRef<{ id: string; start: Point; przesuniete: Point } | null>(null);
   // Źródło prawdy dla bieżącego prostokąta zaznaczania to ref, nie tylko stan —
   // przy szybkich zdarzeniach mousemove+mouseup w jednej turze React batchuje
   // aktualizacje stanu, więc odczyt samego stanu w handlerze mouseup potrafił
@@ -1430,6 +1441,18 @@ export function DesignCanvas({
     }
 
     if (e.target !== stage) return;
+    // Wnętrze ZAZNACZONEGO pomieszczenia chwyta cały pokój (F5 z audytu 5.11.2026) —
+    // zamiast czyścić zaznaczenie i zaczynać ramkę. Niezaznaczony pokój działa po
+    // staremu: klik go zaznacza (B9), przeciągnięcie rysuje ramkę.
+    if (toolMode === "zaznacz" && selected?.kind === "room" && onMoveRoom && stage) {
+      const p0 = planPoint(stage);
+      const pokoj = roomShapes.find((r) => r.id === selected.id);
+      if (p0 && pokoj && pointInPolygon(p0, pokoj.points)) {
+        przesuwaniePokojuRef.current = { id: pokoj.id, start: p0, przesuniete: { x: 0, y: 0 } };
+        onRoomMoveStart?.();
+        return;
+      }
+    }
     onClearSelection();
     if (toolMode !== "zaznacz") return;
     const p = stage && planPoint(stage);
@@ -1442,6 +1465,24 @@ export function DesignCanvas({
 
   function handleStageMouseMove(e: KonvaEventObject<MouseEvent>) {
     const stage = e.target.getStage();
+
+    const ruchPokoju = przesuwaniePokojuRef.current;
+    if (ruchPokoju && stage) {
+      const p = planPoint(stage);
+      if (p) {
+        // Całkowite przesunięcie od chwycenia, przyciągnięte do kroku siatki — pokój
+        // skacze o oczko, jak narożnik; do rodzica idzie tylko PRZYROST.
+        const dx = snapOn ? snap(p.x - ruchPokoju.start.x, krok) : p.x - ruchPokoju.start.x;
+        const dy = snapOn ? snap(p.y - ruchPokoju.start.y, krok) : p.y - ruchPokoju.start.y;
+        const ix = dx - ruchPokoju.przesuniete.x;
+        const iy = dy - ruchPokoju.przesuniete.y;
+        if (ix !== 0 || iy !== 0) {
+          ruchPokoju.przesuniete = { x: dx, y: dy };
+          onMoveRoom?.(ruchPokoju.id, ix, iy);
+        }
+      }
+      return;
+    }
 
     // Pozycja kursora w jednostkach planu — pasek stanu przelicza ją na metry.
     // `null` poza obszarem planu, żeby nie pokazywać współrzędnych spoza rysunku.
@@ -1529,6 +1570,12 @@ export function DesignCanvas({
   }
 
   function handleStageMouseUp() {
+    const ruchPokoju = przesuwaniePokojuRef.current;
+    if (ruchPokoju) {
+      przesuwaniePokojuRef.current = null;
+      onRoomMoveEnd?.(ruchPokoju.przesuniete.x !== 0 || ruchPokoju.przesuniete.y !== 0);
+      return;
+    }
     if (roomRectStartRef.current) {
       roomRectStartRef.current = null;
       const rect = roomRectRef.current;

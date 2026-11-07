@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useProjectStore, useActiveFloorWalls, useActiveFloorElements, type ProjectPayload } from "./useProjectStore";
+import { NO_ROOM } from "@/lib/elements";
 
 const sampleElement = {
   id: "e1", type: "gniazdko" as const, x: 100, y: 100, room: "Salon", floor: "f1",
@@ -673,5 +674,72 @@ describe("roomId elementów (F1, audyt 5.11.2026)", () => {
       },
     });
     expect(useProjectStore.getState().draft.elements[0].roomId).toBe("r1");
+  });
+});
+
+/**
+ * Przesuwanie CAŁEGO pomieszczenia razem z osprzętem i otworami na jego krawędziach
+ * (F5 z audytu 5.11.2026). Wcześniej dało się ruszać tylko narożnikami, po jednym.
+ */
+describe("przesunPomieszczenie", () => {
+  beforeEach(() => useProjectStore.getState().resetProject());
+  const kw = (x: number) => [{ x, y: 0 }, { x: x + 100, y: 0 }, { x: x + 100, y: 100 }, { x, y: 100 }];
+
+  function planZDwomaPokojami() {
+    const { addRoomShape, setDraft } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Salon");
+    addRoomShape("f1", kw(300), "Kuchnia");
+    const [salon, kuchnia] = useProjectStore.getState().draft.roomShapes;
+    setDraft((d) => ({
+      ...d,
+      elements: [
+        { ...sampleElement, id: "s1", floor: "f1", x: 50, y: 50, room: "Salon" },
+        { ...sampleElement, id: "k1", floor: "f1", x: 350, y: 50, room: "Kuchnia" },
+      ],
+      openings: [
+        { id: "o1", floor: "f1", roomId: salon.id, x: 50, y: 0, angle: 0, width: 18, kind: "drzwi" as const },
+        { id: "o2", floor: "f1", roomId: kuchnia.id, x: 350, y: 0, angle: 0, width: 18, kind: "okno" as const },
+      ],
+    }));
+    return { salon, kuchnia };
+  }
+
+  it("przesuwa obrys, jego osprzęt i jego otwory — i nic poza nimi", () => {
+    const { salon } = planZDwomaPokojami();
+    useProjectStore.getState().przesunPomieszczenie(salon.id, 40, 20);
+    const d = useProjectStore.getState().draft;
+    expect(d.roomShapes[0].points[0]).toEqual({ x: 40, y: 20 });
+    expect(d.roomShapes[1].points[0]).toEqual({ x: 300, y: 0 });
+    expect(d.elements.find((e) => e.id === "s1")).toMatchObject({ x: 90, y: 70, room: "Salon" });
+    expect(d.elements.find((e) => e.id === "k1")).toMatchObject({ x: 350, y: 50 });
+    expect(d.openings.find((o) => o.id === "o1")).toMatchObject({ x: 90, y: 20 });
+    expect(d.openings.find((o) => o.id === "o2")).toMatchObject({ x: 350, y: 0 });
+  });
+
+  it("jeden ruch = jeden krok cofania", () => {
+    const { salon } = planZDwomaPokojami();
+    const przed = useProjectStore.getState().past.length;
+    useProjectStore.getState().przesunPomieszczenie(salon.id, 40, 20);
+    expect(useProjectStore.getState().past.length).toBe(przed + 1);
+    useProjectStore.getState().undo();
+    expect(useProjectStore.getState().draft.roomShapes[0].points[0]).toEqual({ x: 0, y: 0 });
+    expect(useProjectStore.getState().draft.elements.find((e) => e.id === "s1")).toMatchObject({ x: 50, y: 50 });
+  });
+
+  it("bez zapisu w historii (przeciąganie na żywo) — historia się nie zmienia", () => {
+    const { salon } = planZDwomaPokojami();
+    const przed = useProjectStore.getState().past.length;
+    useProjectStore.getState().przesunPomieszczenie(salon.id, 10, 0, { commit: false });
+    expect(useProjectStore.getState().past.length).toBe(przed);
+  });
+
+  it("pokój przeciągnięty nad osprzęt bez pomieszczenia przygarnia go", () => {
+    const { salon } = planZDwomaPokojami();
+    useProjectStore.getState().setDraft((d) => ({
+      ...d,
+      elements: [...d.elements, { ...sampleElement, id: "luz", floor: "f1", x: 250, y: 50, room: NO_ROOM }],
+    }));
+    useProjectStore.getState().przesunPomieszczenie(salon.id, 180, 0);
+    expect(useProjectStore.getState().draft.elements.find((e) => e.id === "luz")?.room).toBe("Salon");
   });
 });

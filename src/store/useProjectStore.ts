@@ -614,6 +614,10 @@ interface ProjectState {
   setRoomShapeType: (id: string, type: RoomType) => void;
   /** Przesuwa JEDEN narożnik obrysu — do edycji kształtu przeciąganiem na planie. */
   moveRoomShapePoint: (id: string, index: number, point: Point) => void;
+  /** Przesuwa CAŁE pomieszczenie o (dx, dy) razem z jego osprzętem i otworami na jego
+   *  krawędziach (F5 z audytu 5.11.2026). `commit: false` — krok przeciągania na żywo,
+   *  bez wpisu do historii (patrz `commitSnapshot`). */
+  przesunPomieszczenie: (id: string, dx: number, dy: number, opts?: { commit?: boolean }) => void;
   recolorRoomShape: (id: string) => void;
   deleteRoomShape: (id: string) => void;
   removeElements: (ids: string[]) => void;
@@ -1541,6 +1545,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         elements: reassignRoomsOnFloor(d.elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
       };
     });
+  },
+
+  przesunPomieszczenie: (id, dx, dy, opts) => {
+    if (dx === 0 && dy === 0) return;
+    const { setDraft, scales } = get();
+    setDraft((d) => {
+      const room = d.roomShapes.find((r) => r.id === id);
+      if (!room) return d;
+      const roomShapes = d.roomShapes.map((r) =>
+        r.id === id ? { ...r, points: r.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) } : r
+      );
+      // Osprzęt POKOJU to elementy z jego `roomId` (F1) — nie wszystko, co akurat leży
+      // w obrysie: element sąsiada przy wspólnej ścianie zostaje na miejscu.
+      const elements = d.elements.map((e) => (e.roomId === id ? { ...e, x: e.x + dx, y: e.y + dy } : e));
+      const openings = d.openings.map((o) => (o.roomId === id ? { ...o, x: o.x + dx, y: o.y + dy } : o));
+      return {
+        ...d,
+        roomShapes,
+        openings,
+        // Pokój nasunięty na osprzęt „Bez pomieszczenia" przygarnia go, a ten, który z
+        // niego wyjechał, wraca do tego, co pod nim jest — ta sama reguła co przy
+        // przesuwaniu narożnika (`moveRoomShapePoint`).
+        elements: reassignRoomsOnFloor(elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
+      };
+    }, opts);
   },
 
   recolorRoomShape: (id) => {

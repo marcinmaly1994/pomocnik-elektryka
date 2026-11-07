@@ -289,6 +289,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const renameRoomShape = useProjectStore((s) => s.renameRoomShape);
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
   const moveRoomShapePoint = useProjectStore((s) => s.moveRoomShapePoint);
+  const przesunPomieszczenie = useProjectStore((s) => s.przesunPomieszczenie);
+  const commitSnapshot = useProjectStore((s) => s.commitSnapshot);
+  /** Plan sprzed przeciągania pokoju — po puszczeniu idzie do historii jako JEDEN krok. */
+  const planPrzedRuchemPokojuRef = useRef<ReturnType<typeof useProjectStore.getState>["draft"] | null>(null);
   const removeElements = useProjectStore((s) => s.removeElements);
   const routeOverrides = useProjectStore((s) => s.draft.routeOverrides);
   // Pełne listy (wszystkie kondygnacje) — potrzebne WYŁĄCZNIE do podkładu z piętra
@@ -1664,6 +1668,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         e.preventDefault();
         const krok = e.shiftKey ? GRID : 1;
         przesunElementy(offsetMoves(elements, zaznaczoneElementy, kierunek.x * krok, kierunek.y * krok));
+      } else if (kierunek && tag !== "INPUT" && tag !== "TEXTAREA" && selected?.kind === "room") {
+        // Zaznaczony POKÓJ jedzie strzałkami razem z osprzętem (F5) — te same kroki co
+        // elementy: jednostka planu, a z Shiftem oczko siatki.
+        e.preventDefault();
+        const krok = e.shiftKey ? GRID : 1;
+        przesunPomieszczenie(selected.id, kierunek.x * krok, kierunek.y * krok);
       }
 
       // Ctrl/Cmd+D — duplikuj zaznaczenie. Odsunięte o pół oczka siatki, żeby kopia
@@ -3711,6 +3721,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setRoomNameEdit({ x: clientX, y: clientY, id, value: room.name });
             }}
             onMoveRoomPoint={(id, index, point) => moveRoomShapePoint(id, index, point)}
+            onRoomMoveStart={() => {
+              planPrzedRuchemPokojuRef.current = useProjectStore.getState().draft;
+            }}
+            onMoveRoom={(id, dx, dy) => przesunPomieszczenie(id, dx, dy, { commit: false })}
+            onRoomMoveEnd={(przesunieto) => {
+              const przed = planPrzedRuchemPokojuRef.current;
+              planPrzedRuchemPokojuRef.current = null;
+              if (przesunieto && przed) commitSnapshot(przed);
+            }}
             onMoveWallPoint={moveWallPoint}
             onSelectRoute={(id) => {
               setSelected({ kind: "route", id });
