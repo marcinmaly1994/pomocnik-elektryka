@@ -75,8 +75,19 @@ test("zwiniecie karty oddaje liscie odzyskana wysokosc", async ({ page }) => {
 
   // Zostaje sam dyskretny przycisk „?", wiec lista ma odzyskac miejsce — inaczej
   // karta zabieralaby je takze wtedy, gdy jej nie ma.
-  const pelna = (await lista(page).boundingBox())!.height;
-  expect(pelna).toBeGreaterThan(skrocona + 80);
+  //
+  // Czekamy na wysokosc (`expect.poll`), a nie mierzymy raz zaraz po zniknieciu karty.
+  // Zwiniecie idzie w DWOCH renderach: pierwszy (synchroniczny, od klikniecia) zdejmuje
+  // karte z DOM, a dopiero jego efekt pasywny w OnboardingChecklist zglasza
+  // `onGora(null)`. Ten setState z efektu React 18 planuje z priorytetem domyslnym,
+  // czyli w OSOBNYM zadaniu Schedulera — i dopiero ten drugi render DesignTab oddaje
+  // ElementLibrary `goraKarty = null`, a ta zdejmuje limit wysokosci. Miedzy nimi jest
+  // stan „karty nie ma, lista wciaz skrocona" (sprawdzone MutationObserverem: 366 px
+  // tuz po zdjeciu karty, 560 px renderem pozniej). Na wolnym runnerze CI pomiar
+  // potrafil trafic wlasnie w te szczeline — stad flake z `Received: 366.0625`.
+  await expect
+    .poll(async () => (await lista(page).boundingBox())!.height)
+    .toBeGreaterThan(skrocona + 80);
 });
 
 test("przycisk pomocy otwiera karte z powrotem na ukonczonym projekcie", async ({ page }) => {
