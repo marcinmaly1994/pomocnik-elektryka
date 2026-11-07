@@ -20,7 +20,7 @@
  * w tej samej sesji nie pobierają ich ponownie.
  */
 
-import { parseTtf, type ParsedTtf } from "./ttf";
+import { odchudzTtf, parseTtf, type ParsedTtf } from "./ttf";
 import regularFontUrl from "@/assets/fonts/DejaVuSans.ttf?url";
 import boldFontUrl from "@/assets/fonts/DejaVuSans-Bold.ttf?url";
 
@@ -261,6 +261,7 @@ export interface PdfImage {
 export interface PdfDoc {
   y: number;
   readonly pageW: number;
+  readonly pageH: number;
   readonly margin: number;
   readonly innerW: number;
   setNewPageHandler(fn: (doc: PdfDoc) => void): void;
@@ -357,6 +358,9 @@ export function createPdfDoc({ pageW = 595.28, pageH = 841.89, margin = 42, foot
     },
     get pageW() {
       return pageW;
+    },
+    get pageH() {
+      return pageH;
     },
     get margin() {
       return margin;
@@ -504,6 +508,28 @@ function widthsForFont(font: ParsedTtf, fallback: number[]): number[] {
   return widths;
 }
 
+/**
+ * Znaki, które dokument w ogóle potrafi zapisać: ASCII 32..126 i znaki z /Differences
+ * (`PDF_POLISH`). Wszystko inne idzie przez `PDF_FALLBACK` albo wypada, więc tylko te
+ * glify muszą mieć kontury w osadzonym foncie — patrz `odchudzTtf`.
+ */
+const ZNAKI_DOKUMENTU = [
+  ...Array.from({ length: 95 }, (_, i) => 32 + i),
+  ...Object.keys(PDF_POLISH).map((z) => z.codePointAt(0)!),
+];
+
+/** Bajty fontu do /FontFile2 — odchudzone raz na font i zapamiętane (audyt 5.11.2026,
+ *  B12: każdy PDF ważył ok. 1,4 MB, bo oba pliki DejaVu szły do niego w całości). */
+const odchudzone = new WeakMap<ParsedTtf, Uint8Array>();
+function bajtyDoOsadzenia(font: ParsedTtf): Uint8Array {
+  let b = odchudzone.get(font);
+  if (!b) {
+    b = odchudzTtf(font.bytes, ZNAKI_DOKUMENTU, PDF_DIFF_NAMES);
+    odchudzone.set(font, b);
+  }
+  return b;
+}
+
 let cachedFonts: Promise<{ regular: ParsedTtf; bold: ParsedTtf }> | null = null;
 
 /** Pobiera i parsuje pliki fontów DejaVu Sans (regular + bold) — raz na sesję, wynik
@@ -540,7 +566,8 @@ export function assemblePdfBytes(
   const encId = push(`<< /Type /Encoding /BaseEncoding /WinAnsiEncoding /Differences [128 ${PDF_DIFF_NAMES.map((n) => "/" + n).join(" ")}] >>`);
 
   function pushFont(font: ParsedTtf, baseFontName: string, fallbackWidths: number[], stemV: number): number {
-    const fontFileId = push(`<< /Length ${font.bytes.length} /Length1 ${font.bytes.length} >>\nstream\n${bytesToBinaryString(font.bytes)}\nendstream`);
+    const plik = bajtyDoOsadzenia(font);
+    const fontFileId = push(`<< /Length ${plik.length} /Length1 ${plik.length} >>\nstream\n${bytesToBinaryString(plik)}\nendstream`);
     const descId = push(
       `<< /Type /FontDescriptor /FontName /${baseFontName} /Flags 32 ` +
         `/FontBBox [${font.bbox.join(" ")}] /ItalicAngle ${font.italicAngle} ` +

@@ -51,6 +51,36 @@ describe("useRysowaniePomieszczen", () => {
     expect(result.current.pendingRoom).toMatchObject({ name: "Kuchnia", type: "kuchnia" });
   });
 
+  /** Wpisana nazwa przetrwa wybór typu z listy (audyt 5.11.2026, B6) — wcześniej
+   *  „Łazienka dzieci" + typ „Łazienka / WC" zapisywało się jako „Łazienka / WC". */
+  it("wybór typu nie nadpisuje nazwy wpisanej ręcznie", () => {
+    const { result } = renderHook(() => useRysowaniePomieszczen());
+    act(() => result.current.zaproponuj(trojkat));
+    act(() => result.current.zmienNazwe("Łazienka dzieci"));
+    act(() => result.current.zmienTyp("lazienka"));
+    expect(result.current.pendingRoom).toMatchObject({ name: "Łazienka dzieci", type: "lazienka" });
+  });
+
+  it("wyczyszczona nazwa znów podąża za wyborem typu", () => {
+    const { result } = renderHook(() => useRysowaniePomieszczen());
+    act(() => result.current.zaproponuj(trojkat));
+    act(() => result.current.zmienNazwe(""));
+    act(() => result.current.zmienTyp("kuchnia"));
+    expect(result.current.pendingRoom).toMatchObject({ name: "Kuchnia", type: "kuchnia" });
+  });
+
+  /** Okno pokazuje nazwę, która naprawdę trafi do projektu — z numerem, gdy taki pokój
+   *  już jest na kondygnacji (audyt 5.11.2026, B7). */
+  it("wybór typu, którego pokój już jest, podstawia nazwę z numerem", () => {
+    useProjectStore.getState().addRoomShape(useProjectStore.getState().activeFloorId, trojkat, "Sypialnia");
+    const { result } = renderHook(() => useRysowaniePomieszczen());
+    act(() => result.current.zaproponuj(trojkat));
+    act(() => result.current.zmienTyp("sypialnia"));
+    expect(result.current.pendingRoom).toMatchObject({ name: "Sypialnia 2", type: "sypialnia" });
+    act(() => result.current.zapisz());
+    expect(useProjectStore.getState().draft.roomShapes.map((r) => r.name)).toEqual(["Sypialnia", "Sypialnia 2"]);
+  });
+
   it("zapis dodaje pomieszczenie na aktywnej kondygnacji i zamyka propozycję", () => {
     const { result } = renderHook(() => useRysowaniePomieszczen());
     act(() => result.current.zaproponuj(trojkat));

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { buildDrawingPdf, hexNaRgb } from "./drawing";
+import { ARKUSZE, buildDrawingPdf, dobierzSkale, hexNaRgb, SKALE_NORMOWE } from "./drawing";
 import { pdfEscape } from "./engine";
 import { stubPdfFontFetch } from "./testFontMock";
 import type { PdfImage } from "./engine";
@@ -447,5 +447,65 @@ describe("hexNaRgb", () => {
     for (const zly of ["", "czerwony", "#12", "#gggggg"]) {
       expect(hexNaRgb(zly)).toEqual([0, 0, 0]);
     }
+  });
+});
+
+/**
+ * Skala liczbowa i arkusz A3 (F10 z audytu 5.11.2026). Rysunek ma 2500 px szerokości
+ * i przedstawia budynek szeroki na 18 m — na A4 mieści się w 1:66, na A3 w 1:46.
+ */
+describe("skala liczbowa i format arkusza", () => {
+  const PT_NA_MM = 72 / 25.4;
+  const pxNaM = 2500 / 18;
+  const rzut = () => obraz(2500, 1500);
+  const zbuduj = async (format?: "A4" | "A3", pikseliNaMetr: number | null = pxNaM) =>
+    bytesToAscii(await buildDrawingPdf({ tytul: "Rzut", header, rysunek: rzut(), format, pikseliNaMetr: pikseliNaMetr ?? undefined }));
+  const mianownik = (rys: { w: number }) => (18000 * PT_NA_MM) / rys.w;
+
+  it("dobierzSkale bierze najbliższą normową skalę, w której rysunek jeszcze się mieści", () => {
+    // 1 px = 1 cm w naturze, 1 px = 1/2 pt → 1 cm natury to 0,176 mm papieru, czyli 1:56,7
+    const s = dobierzSkale(0.5, 100)!;
+    expect(s.mianownik).toBe(75);
+    expect(s.ptNaPx).toBeLessThan(0.5);
+    expect((1000 * PT_NA_MM) / (100 * s.ptNaPx)).toBeCloseTo(75, 6);
+    // dokładnie trafiona skala nie spada o stopień przez błąd zaokrąglenia
+    expect(dobierzSkale((1000 * PT_NA_MM) / (100 * 50), 100)!.mianownik).toBe(50);
+  });
+
+  it("bez kalibracji albo poza 1:1000 nie ma skali", () => {
+    expect(dobierzSkale(0.5, 0)).toBeNull();
+    expect(dobierzSkale(1e-6, 100)).toBeNull();
+    expect(SKALE_NORMOWE).toContain(50);
+    expect(SKALE_NORMOWE).toContain(100);
+  });
+
+  it("na A4 rysunek drukuje się w 1:75 i tabliczka to mówi", async () => {
+    const out = await zbuduj("A4");
+    expect(out).toContain(`/MediaBox [0 0 ${ARKUSZE.A4.w.toFixed(2)} ${ARKUSZE.A4.h.toFixed(2)}]`);
+    const [rys] = obrazy(out);
+    expect(mianownik(rys)).toBeCloseTo(75, 1);
+    const t = napisy(out).map((n) => n.t);
+    expect(t).toContain(String.raw`SKALA \(A4\)`);
+    expect(t).toContain("1:75");
+  });
+
+  it("A3 to większa kartka i dokładniejsza skala — 1:50", async () => {
+    const out = await zbuduj("A3");
+    expect(out).toContain(`/MediaBox [0 0 ${ARKUSZE.A3.w.toFixed(2)} ${ARKUSZE.A3.h.toFixed(2)}]`);
+    const [rys] = obrazy(out);
+    expect(mianownik(rys)).toBeCloseTo(50, 1);
+    expect(napisy(out).map((n) => n.t)).toContain("1:50");
+    // i nadal mieści się w polu nad tabliczką
+    expect(rys.x + rys.w).toBeLessThanOrEqual(ARKUSZE.A3.w - 36 + 0.01);
+    expect(rys.y + rys.h).toBeLessThanOrEqual(ARKUSZE.A3.h - 36 + 0.01);
+  });
+
+  it("bez kalibracji rysunek wypełnia pole jak dotąd i tabliczka nie ma rubryki skali", async () => {
+    const out = await zbuduj("A4", null);
+    const [rys] = obrazy(out);
+    // ten rysunek ogranicza szerokość pola — wypełnia ją całą, od marginesu do marginesu
+    expect(rys.w).toBeCloseTo(ARKUSZE.A4.w - 2 * 36, 0);
+    expect(rys.w).toBeGreaterThan(obrazy(await zbuduj("A4"))[0].w);
+    expect(napisy(out).some((n) => n.t.startsWith("SKALA"))).toBe(false);
   });
 });

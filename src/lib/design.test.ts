@@ -5,6 +5,10 @@ import { gruboscObrysuPokoju, MANUAL_DRAW_SCALE_MPU, rozpietoscRysunku,
   ROOM_COLORS,
   roomColorForIndex,
   nextRoomName,
+  unikalnaNazwaPomieszczenia,
+  ujednoznacznijNazwyPomieszczen,
+  pomieszczeniePodPunktem,
+  synchronizujRoomId,
   nextRoomColor,
   colorForRoomName,
   NO_ROOM_COLOR,
@@ -51,6 +55,52 @@ describe("nextRoomName", () => {
   it("numeruje od 1", () => {
     expect(nextRoomName(0)).toBe("Pomieszczenie 1");
     expect(nextRoomName(4)).toBe("Pomieszczenie 5");
+  });
+});
+
+/**
+ * Element wiąże się z pomieszczeniem po NAZWIE (`InstallationElement.room`), więc dwa
+ * pokoje o tej samej nazwie na jednej kondygnacji to dwa obrysy, których nie da się
+ * odróżnić: zmiana nazwy jednego przepisywała elementy obu, a „Sprawdzenie rzutu"
+ * pisało „Sypialnia, Sypialnia, Kuchnia". Audyt 5.11.2026 (B7).
+ */
+describe("unikalnaNazwaPomieszczenia", () => {
+  it("wolna nazwa zostaje bez zmian", () => {
+    expect(unikalnaNazwaPomieszczenia("Kuchnia", ["Salon"])).toBe("Kuchnia");
+  });
+
+  it("zajęta nazwa dostaje kolejny numer", () => {
+    expect(unikalnaNazwaPomieszczenia("Sypialnia", ["Sypialnia"])).toBe("Sypialnia 2");
+    expect(unikalnaNazwaPomieszczenia("Sypialnia", ["Sypialnia", "Sypialnia 2"])).toBe("Sypialnia 3");
+  });
+
+  it("nazwa zakończona numerem dostaje następny numer, nie doklejony drugi", () => {
+    // „Pomieszczenie 2" po usunięciu „Pomieszczenia 1" — licznik pomieszczeń daje 2,
+    // które już jest zajęte.
+    expect(unikalnaNazwaPomieszczenia("Pomieszczenie 2", ["Pomieszczenie 2"])).toBe("Pomieszczenie 3");
+  });
+
+  it("wielkość liter i spacje na brzegach nie robią różnicy", () => {
+    expect(unikalnaNazwaPomieszczenia("  sypialnia ", ["Sypialnia"])).toBe("sypialnia 2");
+  });
+});
+
+describe("ujednoznacznijNazwyPomieszczen", () => {
+  const pokoj = (id: string, floor: string, name: string): RoomShape => ({ id, floor, name, color: "#000", points: [] });
+
+  it("drugi i kolejny pokój o tej samej nazwie na kondygnacji dostaje numer", () => {
+    const wynik = ujednoznacznijNazwyPomieszczen([pokoj("a", "f1", "Sypialnia"), pokoj("b", "f1", "Sypialnia"), pokoj("c", "f1", "Sypialnia")]);
+    expect(wynik.map((r) => r.name)).toEqual(["Sypialnia", "Sypialnia 2", "Sypialnia 3"]);
+  });
+
+  it("ta sama nazwa na RÓŻNYCH kondygnacjach jest w porządku", () => {
+    const pokoje = [pokoj("a", "f1", "Łazienka"), pokoj("b", "f2", "Łazienka")];
+    expect(ujednoznacznijNazwyPomieszczen(pokoje)).toBe(pokoje);
+  });
+
+  it("bez powtórzeń zwraca tę samą tablicę", () => {
+    const pokoje = [pokoj("a", "f1", "Salon"), pokoj("b", "f1", "Kuchnia")];
+    expect(ujednoznacznijNazwyPomieszczen(pokoje)).toBe(pokoje);
   });
 });
 
@@ -850,5 +900,66 @@ describe("schemat schodów", () => {
   it("obrys bez pola nie daje schematu", () => {
     expect(schodySchemat([])).toBeNull();
     expect(schodySchemat([{ x: 0, y: 0 }, { x: 10, y: 0 }])).toBeNull();
+  });
+});
+
+/**
+ * Klik we WNĘTRZE pokoju ma go zaznaczać (audyt 5.11.2026, B9) — wcześniej zaznaczał
+ * tylko klik w obrys albo w nazwę, choć podpowiedź narzędzia mówiła „kliknij pomieszczenie".
+ */
+describe("pomieszczeniePodPunktem", () => {
+  const kw = (id: string, x0: number, y0: number, a: number): RoomShape => ({
+    id, floor: "f1", name: id, color: "#000",
+    points: [{ x: x0, y: y0 }, { x: x0 + a, y: y0 }, { x: x0 + a, y: y0 + a }, { x: x0, y: y0 + a }],
+  });
+
+  it("zwraca pokój, w którego obrysie leży punkt", () => {
+    expect(pomieszczeniePodPunktem({ x: 150, y: 50 }, [kw("a", 0, 0, 100), kw("b", 100, 0, 100)])?.id).toBe("b");
+  });
+
+  it("poza wszystkimi obrysami — nic", () => {
+    expect(pomieszczeniePodPunktem({ x: 500, y: 500 }, [kw("a", 0, 0, 100)])).toBeNull();
+  });
+
+  it("przy nakładających się obrysach wygrywa mniejszy (ten „na wierzchu” w odbiorze)", () => {
+    expect(pomieszczeniePodPunktem({ x: 30, y: 30 }, [kw("duzy", 0, 0, 200), kw("maly", 20, 20, 40)])?.id).toBe("maly");
+  });
+});
+
+/**
+ * `roomId` elementu wyliczany z nazwy pokoju i kondygnacji (F1 z audytu 5.11.2026).
+ * Nazwy są unikalne na kondygnacji (`unikalnaNazwaPomieszczenia`), więc to przyporządkowanie
+ * jest jednoznaczne; identyfikator pozwala grupować i szukać typu pokoju bez sklejania
+ * pokoi o tej samej nazwie z różnych pięter.
+ */
+describe("synchronizujRoomId", () => {
+  const pokoj = (id: string, floor: string, name: string): RoomShape => ({ id, floor, name, color: "#000", points: [] });
+  const el = (id: string, floor: string, room: string, roomId?: string): InstallationElement => ({
+    id, type: "gniazdko", x: 0, y: 0, room, floor, dedicated: false, note: "", gangs: 1, ...(roomId ? { roomId } : {}),
+  });
+  const pokoje = [pokoj("p1", "f1", "Łazienka"), pokoj("p2", "f2", "Łazienka"), pokoj("p3", "f1", "Salon")];
+
+  it("element dostaje id pokoju o swojej nazwie na SWOJEJ kondygnacji", () => {
+    const wynik = synchronizujRoomId([el("a", "f1", "Łazienka"), el("b", "f2", "Łazienka"), el("c", "f1", "Salon")], pokoje);
+    expect(wynik.map((e) => e.roomId)).toEqual(["p1", "p2", "p3"]);
+  });
+
+  it("nazwa bez obrysu (wpisana ręcznie) i „Bez pomieszczenia” — bez id", () => {
+    const wynik = synchronizujRoomId([el("a", "f1", "Garderoba"), el("b", "f1", NO_ROOM)], pokoje);
+    expect(wynik.map((e) => e.roomId)).toEqual([undefined, undefined]);
+    expect(wynik.every((e) => !("roomId" in e))).toBe(true);
+  });
+
+  it("nieaktualne id (pokój usunięty, inna kondygnacja, inna nazwa) zostaje poprawione albo zdjęte", () => {
+    const wynik = synchronizujRoomId(
+      [el("a", "f1", "Salon", "nieistnieje"), el("b", "f1", "Łazienka", "p2"), el("c", "f1", "Garderoba", "p3")],
+      pokoje
+    );
+    expect(wynik.map((e) => e.roomId)).toEqual(["p3", "p1", undefined]);
+  });
+
+  it("spójna lista wraca jako ta sama tablica (bez zbędnych renderów)", () => {
+    const lista = [el("a", "f1", "Salon", "p3"), el("b", "f1", "Garderoba")];
+    expect(synchronizujRoomId(lista, pokoje)).toBe(lista);
   });
 });

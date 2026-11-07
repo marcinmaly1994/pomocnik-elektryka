@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useProjectStore, useActiveFloorWalls, useActiveFloorElements, type ProjectPayload } from "./useProjectStore";
+import { NO_ROOM } from "@/lib/elements";
 
 const sampleElement = {
   id: "e1", type: "gniazdko" as const, x: 100, y: 100, room: "Salon", floor: "f1",
@@ -153,6 +154,50 @@ describe("useProjectStore", () => {
     const state = useProjectStore.getState();
     expect(state.draft.roomShapes[0].name).toBe("Salon z aneksem");
     expect(state.draft.elements[0].room).toBe("Salon z aneksem");
+  });
+
+  /** Audyt 5.11.2026 (B7): dwa pokoje typu Sypialnia dostawały tę samą nazwę, a elementy
+   *  wiążą się z pokojem po nazwie. */
+  it("addRoomShape nie powtarza nazwy na tej samej kondygnacji", () => {
+    const { addRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], "Sypialnia");
+    addRoomShape("f1", [{ x: 20, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 10 }], "Sypialnia");
+    addRoomShape("f2", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], "Sypialnia");
+    expect(useProjectStore.getState().draft.roomShapes.map((r) => r.name)).toEqual(["Sypialnia", "Sypialnia 2", "Sypialnia"]);
+  });
+
+  it("addRoomShape: domyślna nazwa po usunięciu pokoju nie dubluje istniejącej", () => {
+    const { addRoomShape, deleteRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);
+    addRoomShape("f1", [{ x: 20, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 10 }]);
+    deleteRoomShape(useProjectStore.getState().draft.roomShapes[0].id);
+    addRoomShape("f1", [{ x: 40, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 10 }]);
+    expect(useProjectStore.getState().draft.roomShapes.map((r) => r.name)).toEqual(["Pomieszczenie 2", "Pomieszczenie 3"]);
+  });
+
+  it("renameRoomShape na nazwę sąsiada nie skleja pokoi ani ich elementów", () => {
+    const { addRoomShape, setDraft, renameRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], "Sypialnia");
+    addRoomShape("f1", [{ x: 20, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 10 }], "Gabinet");
+    setDraft((d) => ({
+      ...d,
+      elements: [
+        { ...sampleElement, id: "e1", room: "Sypialnia" },
+        { ...sampleElement, id: "e2", room: "Gabinet" },
+      ],
+    }));
+    renameRoomShape(useProjectStore.getState().draft.roomShapes[1].id, "Sypialnia");
+
+    const state = useProjectStore.getState();
+    expect(state.draft.roomShapes.map((r) => r.name)).toEqual(["Sypialnia", "Sypialnia 2"]);
+    expect(state.draft.elements.map((e) => e.room)).toEqual(["Sypialnia", "Sypialnia 2"]);
+  });
+
+  it("renameRoomShape na własną nazwę nie dokleja numeru", () => {
+    const { addRoomShape, renameRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], "Salon");
+    renameRoomShape(useProjectStore.getState().draft.roomShapes[0].id, "Salon");
+    expect(useProjectStore.getState().draft.roomShapes[0].name).toBe("Salon");
   });
 
   it("recolorRoomShape przechodzi do kolejnego koloru w palecie", () => {
@@ -353,6 +398,31 @@ describe("useProjectStore", () => {
       expect(useProjectStore.getState().roomsFixedOnLoad).toBe(0);
     });
 
+    /** Projekty zapisane przed B7 mogą mieć dwa pokoje o tej samej nazwie. Drugi dostaje
+     *  numer, a jego elementy — przypisanie z geometrii (zwykły remont przy wczytaniu). */
+    it("zapis z dwoma pokojami o tej samej nazwie: drugi dostaje numer, jego elementy idą za nim", () => {
+      const { loadProjectPayload, getProjectPayload } = useProjectStore.getState();
+      const base = getProjectPayload();
+      const druga = { ...kuchnia, id: "r2", points: kuchnia.points.map((p) => ({ x: p.x + 200, y: p.y })) };
+      loadProjectPayload({
+        ...base,
+        scales: { f1: 0.05 },
+        draft: {
+          ...base.draft,
+          roomShapes: [kuchnia, druga],
+          elements: [
+            { ...sampleElement, id: "e1", x: 50, y: 50, room: "Kuchnia" },
+            { ...sampleElement, id: "e2", x: 250, y: 50, room: "Kuchnia" },
+          ],
+        },
+      });
+
+      const state = useProjectStore.getState();
+      expect(state.draft.roomShapes.map((r) => r.name)).toEqual(["Kuchnia", "Kuchnia 2"]);
+      expect(state.draft.elements.map((e) => e.room)).toEqual(["Kuchnia", "Kuchnia 2"]);
+      expect(state.roomsFixedOnLoad).toBe(1);
+    });
+
     it("komunikat da się zamknąć i nie wraca do końca sesji", () => {
       const { loadProjectPayload } = useProjectStore.getState();
       loadProjectPayload(payloadZ([{ ...sampleElement, x: 50, y: 50, room: "Salon" }]));
@@ -545,5 +615,179 @@ describe("wczytanie projektu z niepełnym nagłówkiem dokumentów", () => {
 
     expect(() => loadProjectPayload(bezNaglowka)).not.toThrow();
     expect(useProjectStore.getState().docHeader.uklad).toBe("TN-S");
+  });
+});
+
+describe("roomId elementów (F1, audyt 5.11.2026)", () => {
+  beforeEach(() => useProjectStore.getState().resetProject());
+  const kw = (x: number) => [{ x, y: 0 }, { x: x + 100, y: 0 }, { x: x + 100, y: 100 }, { x, y: 100 }];
+
+  it("element postawiony w pokoju ma jego id, także po każdej zmianie przez setDraft", () => {
+    const { addRoomShape, setDraft } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Salon");
+    const id = useProjectStore.getState().draft.roomShapes[0].id;
+    setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1", floor: "f1", room: "Salon" }] }));
+    expect(useProjectStore.getState().draft.elements[0].roomId).toBe(id);
+  });
+
+  it("zmiana nazwy pokoju przepisuje elementy po id — nazwa i id idą razem", () => {
+    const { addRoomShape, setDraft, renameRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Salon");
+    const id = useProjectStore.getState().draft.roomShapes[0].id;
+    setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1", floor: "f1", room: "Salon" }] }));
+    renameRoomShape(id, "Salon z aneksem");
+    const el = useProjectStore.getState().draft.elements[0];
+    expect(el.room).toBe("Salon z aneksem");
+    expect(el.roomId).toBe(id);
+  });
+
+  it("usunięcie pokoju zdejmuje id z jego elementów", () => {
+    const { addRoomShape, setDraft, deleteRoomShape } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Salon");
+    const id = useProjectStore.getState().draft.roomShapes[0].id;
+    setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1", floor: "f1", x: 50, y: 50, room: "Salon" }] }));
+    deleteRoomShape(id);
+    expect(useProjectStore.getState().draft.elements[0].roomId).toBeUndefined();
+  });
+
+  it("powielona kondygnacja: elementy kopii wskazują pokoje KOPII, nie oryginału", () => {
+    const { addRoomShape, setDraft, duplicateFloor } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Łazienka");
+    setDraft((d) => ({ ...d, elements: [{ ...sampleElement, id: "e1", floor: "f1", x: 50, y: 50, room: "Łazienka" }] }));
+    duplicateFloor("f1", "Piętro");
+    const s = useProjectStore.getState();
+    const kopia = s.draft.elements.find((e) => e.floor !== "f1")!;
+    const pokojKopii = s.draft.roomShapes.find((r) => r.floor === kopia.floor)!;
+    expect(kopia.roomId).toBe(pokojKopii.id);
+  });
+
+  it("wczytanie starego projektu (bez roomId) uzupełnia id", () => {
+    const { loadProjectPayload, getProjectPayload } = useProjectStore.getState();
+    const base = getProjectPayload();
+    loadProjectPayload({
+      ...base,
+      scales: { f1: 0.05 },
+      draft: {
+        ...base.draft,
+        roomShapes: [{ id: "r1", floor: "f1", name: "Kuchnia", color: "#000", points: kw(0) }],
+        elements: [{ ...sampleElement, id: "e1", floor: "f1", x: 50, y: 50, room: "Kuchnia" }],
+      },
+    });
+    expect(useProjectStore.getState().draft.elements[0].roomId).toBe("r1");
+  });
+});
+
+/**
+ * Przesuwanie CAŁEGO pomieszczenia razem z osprzętem i otworami na jego krawędziach
+ * (F5 z audytu 5.11.2026). Wcześniej dało się ruszać tylko narożnikami, po jednym.
+ */
+describe("przesunPomieszczenie", () => {
+  beforeEach(() => useProjectStore.getState().resetProject());
+  const kw = (x: number) => [{ x, y: 0 }, { x: x + 100, y: 0 }, { x: x + 100, y: 100 }, { x, y: 100 }];
+
+  function planZDwomaPokojami() {
+    const { addRoomShape, setDraft } = useProjectStore.getState();
+    addRoomShape("f1", kw(0), "Salon");
+    addRoomShape("f1", kw(300), "Kuchnia");
+    const [salon, kuchnia] = useProjectStore.getState().draft.roomShapes;
+    setDraft((d) => ({
+      ...d,
+      elements: [
+        { ...sampleElement, id: "s1", floor: "f1", x: 50, y: 50, room: "Salon" },
+        { ...sampleElement, id: "k1", floor: "f1", x: 350, y: 50, room: "Kuchnia" },
+      ],
+      openings: [
+        { id: "o1", floor: "f1", roomId: salon.id, x: 50, y: 0, angle: 0, width: 18, kind: "drzwi" as const },
+        { id: "o2", floor: "f1", roomId: kuchnia.id, x: 350, y: 0, angle: 0, width: 18, kind: "okno" as const },
+      ],
+    }));
+    return { salon, kuchnia };
+  }
+
+  it("przesuwa obrys, jego osprzęt i jego otwory — i nic poza nimi", () => {
+    const { salon } = planZDwomaPokojami();
+    useProjectStore.getState().przesunPomieszczenie(salon.id, 40, 20);
+    const d = useProjectStore.getState().draft;
+    expect(d.roomShapes[0].points[0]).toEqual({ x: 40, y: 20 });
+    expect(d.roomShapes[1].points[0]).toEqual({ x: 300, y: 0 });
+    expect(d.elements.find((e) => e.id === "s1")).toMatchObject({ x: 90, y: 70, room: "Salon" });
+    expect(d.elements.find((e) => e.id === "k1")).toMatchObject({ x: 350, y: 50 });
+    expect(d.openings.find((o) => o.id === "o1")).toMatchObject({ x: 90, y: 20 });
+    expect(d.openings.find((o) => o.id === "o2")).toMatchObject({ x: 350, y: 0 });
+  });
+
+  it("jeden ruch = jeden krok cofania", () => {
+    const { salon } = planZDwomaPokojami();
+    const przed = useProjectStore.getState().past.length;
+    useProjectStore.getState().przesunPomieszczenie(salon.id, 40, 20);
+    expect(useProjectStore.getState().past.length).toBe(przed + 1);
+    useProjectStore.getState().undo();
+    expect(useProjectStore.getState().draft.roomShapes[0].points[0]).toEqual({ x: 0, y: 0 });
+    expect(useProjectStore.getState().draft.elements.find((e) => e.id === "s1")).toMatchObject({ x: 50, y: 50 });
+  });
+
+  it("bez zapisu w historii (przeciąganie na żywo) — historia się nie zmienia", () => {
+    const { salon } = planZDwomaPokojami();
+    const przed = useProjectStore.getState().past.length;
+    useProjectStore.getState().przesunPomieszczenie(salon.id, 10, 0, { commit: false });
+    expect(useProjectStore.getState().past.length).toBe(przed);
+  });
+
+  it("pokój przeciągnięty nad osprzęt bez pomieszczenia przygarnia go", () => {
+    const { salon } = planZDwomaPokojami();
+    useProjectStore.getState().setDraft((d) => ({
+      ...d,
+      elements: [...d.elements, { ...sampleElement, id: "luz", floor: "f1", x: 250, y: 50, room: NO_ROOM }],
+    }));
+    useProjectStore.getState().przesunPomieszczenie(salon.id, 180, 0);
+    expect(useProjectStore.getState().draft.elements.find((e) => e.id === "luz")?.room).toBe("Salon");
+  });
+});
+
+/** Notatki tekstowe na rzucie (F6 z audytu 5.11.2026). */
+describe("notatki na rzucie", () => {
+  beforeEach(() => useProjectStore.getState().resetProject());
+  const notatki = () => useProjectStore.getState().draft.notatki;
+
+  it("dodanie, zmiana treści i przesunięcie", () => {
+    const { dodajNotatke, zmienNotatke, przesunNotatke } = useProjectStore.getState();
+    const id = dodajNotatke("f1", { x: 10, y: 20 }, "  puszka pod blatem 105 cm  ")!;
+    expect(notatki()).toEqual([{ id, floor: "f1", x: 10, y: 20, tekst: "puszka pod blatem 105 cm" }]);
+    zmienNotatke(id, "puszka 110 cm");
+    przesunNotatke(id, { x: 30, y: 40 });
+    expect(notatki()[0]).toMatchObject({ x: 30, y: 40, tekst: "puszka 110 cm" });
+  });
+
+  it("pusta treść nie tworzy notatki, a zmiana na pustą ją usuwa", () => {
+    const { dodajNotatke, zmienNotatke } = useProjectStore.getState();
+    expect(dodajNotatke("f1", { x: 0, y: 0 }, "   ")).toBeNull();
+    const id = dodajNotatke("f1", { x: 0, y: 0 }, "x")!;
+    zmienNotatke(id, "  ");
+    expect(notatki()).toEqual([]);
+  });
+
+  it("cofnięcie dodania usuwa notatkę", () => {
+    useProjectStore.getState().dodajNotatke("f1", { x: 0, y: 0 }, "x");
+    useProjectStore.getState().undo();
+    expect(notatki()).toEqual([]);
+  });
+
+  it("kopia kondygnacji kopiuje notatki, usunięcie kondygnacji je kasuje", () => {
+    const { dodajNotatke, duplicateFloor, removeFloor } = useProjectStore.getState();
+    dodajNotatke("f1", { x: 5, y: 5 }, "peszel");
+    duplicateFloor("f1", "Piętro");
+    const pietro = useProjectStore.getState().activeFloorId;
+    expect(notatki().map((n) => n.floor).sort()).toEqual(["f1", pietro].sort());
+    removeFloor(pietro);
+    expect(notatki().map((n) => n.floor)).toEqual(["f1"]);
+  });
+
+  it("zapis sprzed notatek wczytuje się z pustą listą", () => {
+    const { loadProjectPayload, getProjectPayload } = useProjectStore.getState();
+    const base = getProjectPayload();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { notatki: _brak, ...staryDraft } = base.draft;
+    loadProjectPayload({ ...base, draft: staryDraft as typeof base.draft });
+    expect(notatki()).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeSanitaryZones, fixtureSizeM, MAX_WYMIAR_PRZYBORU_M, mountingHeightM, mountingLabel } from "./elements";
+import { computeSanitaryZones, ELEMENT_SECTIONS, fixtureSizeM, kategoriaElementu, KATEGORIE_OSPRZETU, MAX_WYMIAR_PRZYBORU_M, mountingHeightM, mountingLabel, widoczneElementy } from "./elements";
 import type { ElementType, InstallationElement } from "@/types";
 
 const wanna: InstallationElement = {
@@ -170,5 +170,30 @@ describe("mountingHeightM — typy przy stropie", () => {
   it("bez wysokosci kondygnacji zostaje wartosc typowa", () => {
     expect(mountingHeightM(el("oswietlenie"))).toBe(2.8);
     expect(mountingHeightM(el("oswietlenie"), 0)).toBe(2.8);
+  });
+});
+
+describe("filtry widoku osprzętu (F8)", () => {
+  const el = (type: ElementType) => ({ id: type, type });
+
+  it("kategorie to sekcje katalogu", () => {
+    expect(KATEGORIE_OSPRZETU).toContain("Teletechnika");
+    expect(kategoriaElementu("rj45")).toBe("Teletechnika");
+    expect(kategoriaElementu("oswietlenie")).toBe("Oświetlenie");
+    expect(kategoriaElementu("gniazdko")).toBe("Gniazda i zasilanie");
+  });
+
+  it("każdy typ z katalogu ma kategorię", () => {
+    for (const s of ELEMENT_SECTIONS) for (const i of s.items) expect(kategoriaElementu(i.key)).toBe(s.title);
+  });
+
+  it("ukrycie kategorii zdejmuje tylko jej elementy", () => {
+    const lista = [el("gniazdko"), el("rj45"), el("oswietlenie")];
+    expect(widoczneElementy(lista, ["Teletechnika"]).map((e) => e.type)).toEqual(["gniazdko", "oswietlenie"]);
+  });
+
+  it("bez ukrytych — ta sama tablica", () => {
+    const lista = [el("gniazdko")];
+    expect(widoczneElementy(lista, [])).toBe(lista);
   });
 });

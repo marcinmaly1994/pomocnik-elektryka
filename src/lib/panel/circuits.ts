@@ -1,7 +1,7 @@
 import type { Circuit, InstallationElement, RcdGroup, RoomShape } from "@/types";
 import { ELEMENT_TYPES } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
-import { isWetRoomName, zastosowaniePokoju, ZASTOSOWANIE_OPIS, type ZastosowaniePokoju } from "@/lib/design";
+import { elementWMokrym, kluczPokoju, zastosowanieElementu, ZASTOSOWANIE_OPIS, type ZastosowaniePokoju } from "@/lib/design";
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -184,15 +184,26 @@ export function computeCircuits(wszystkie: InstallationElement[], roomShapes: Ro
   });
 
   const regular = elements.filter((e) => roleOf(e) === "socket" && !e.dedicated);
-  const byRoom: Record<string, InstallationElement[]> = {};
-  regular.filter((e) => isWetRoomName(e.room, roomShapes)).forEach((e) => {
-    (byRoom[e.room] ??= []).push(e);
+  // Grupowanie po POKOJU (`kluczPokoju`: id obrysu), nie po nazwie — dwie „Łazienki" na
+  // dwóch kondygnacjach to dwa pokoje i dwa obwody (F1 z audytu 5.11.2026). Nazwa obwodu
+  // zostaje nazwą pokoju; gdy powtarza się w budynku, kolejny pokój dostaje numer w nawiasie,
+  // żeby w rozdzielnicy nie stały dwa identyczne opisy.
+  const byRoom = new Map<string, InstallationElement[]>();
+  regular.filter((e) => elementWMokrym(e, roomShapes)).forEach((e) => {
+    const k = kluczPokoju(e);
+    if (!byRoom.has(k)) byRoom.set(k, []);
+    byRoom.get(k)!.push(e);
   });
-  Object.entries(byRoom).forEach(([room, list]) => {
+  const ileRazyNazwa = new Map<string, number>();
+  for (const list of byRoom.values()) {
+    const room = list[0].room;
+    const ktory = (ileRazyNazwa.get(room) ?? 0) + 1;
+    ileRazyNazwa.set(room, ktory);
+    const opis = ktory > 1 ? `${room} (${ktory})` : room;
     chunk(list, 6).forEach((g, i) => {
-      add({ name: `Obwód gniazd — ${room}${i ? " " + (i + 1) : ""}`, type: "gniazdko", elements: g, cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true });
+      add({ name: `Obwód gniazd — ${opis}${i ? " " + (i + 1) : ""}`, type: "gniazdko", elements: g, cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true });
     });
-  });
+  }
   /**
    * Pomieszczenia SUCHE — wspólny obwód wolno dzielić tylko tym o tym samym
    * ZASTOSOWANIU (patrz `zastosowaniePokoju`).
@@ -205,9 +216,9 @@ export function computeCircuits(wszystkie: InstallationElement[], roomShapes: Ro
    */
   const sucheWgZastosowania = new Map<ZastosowaniePokoju, InstallationElement[]>();
   regular
-    .filter((e) => !isWetRoomName(e.room, roomShapes))
+    .filter((e) => !elementWMokrym(e, roomShapes))
     .forEach((e) => {
-      const z = zastosowaniePokoju(e.room, roomShapes);
+      const z = zastosowanieElementu(e, roomShapes);
       if (!sucheWgZastosowania.has(z)) sucheWgZastosowania.set(z, []);
       sucheWgZastosowania.get(z)!.push(e);
     });
@@ -435,7 +446,7 @@ export function ostrzezeniaObwodow(
      * oba. Punkty bez rozpoznanego pomieszczenia (`nieznane`) nie liczą się do
      * różnicy: nie wiadomo, do czego służą, więc nie ma czego zgłaszać.
      */
-    const zastosowania = [...new Set(elementy.map((e) => zastosowaniePokoju(e.room, roomShapes)))].filter(
+    const zastosowania = [...new Set(elementy.map((e) => zastosowanieElementu(e, roomShapes)))].filter(
       (z) => z !== "nieznane"
     );
     if (zastosowania.length > 1) {
@@ -447,7 +458,7 @@ export function ostrzezeniaObwodow(
       });
     }
 
-    const mokre = elementy.filter((e) => roleOf(e) === "socketWet" || isWetRoomName(e.room, roomShapes)).length;
+    const mokre = elementy.filter((e) => roleOf(e) === "socketWet" || elementWMokrym(e, roomShapes)).length;
     const limit =
       oprawy > 0 && gniazda === 0
         ? ZALECANE_MAKS.oswietlenie

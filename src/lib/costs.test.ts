@@ -90,6 +90,16 @@ describe("computeCosts", () => {
     expect(quantities.puszkaRozgalezna).toBeGreaterThanOrEqual(2);
   });
 
+  /** Dwie „Łazienki" na dwóch piętrach to dwa pomieszczenia, nie jedno (F1, audyt 5.11.2026). */
+  it("pokoje o tej samej nazwie na dwóch kondygnacjach liczą się osobno", () => {
+    const elements = [
+      el({ type: "gniazdko", room: "Łazienka", roomId: "p1", floor: "f1" }),
+      el({ type: "gniazdko", room: "Łazienka", roomId: "p2", floor: "f2" }),
+    ];
+    const { quantities } = computeCosts(elements, [], []);
+    expect(quantities.puszkaRozgalezna).toBeGreaterThanOrEqual(2);
+  });
+
   it("długość kabla szacowana z liczby punktów w obwodzie (5 mb/pkt + 10 mb)", () => {
     const circuits: Circuit[] = [
       { id: "obw1", name: "Gniazda", type: "gniazdko", elements: [el({ type: "gniazdko" }), el({ type: "gniazdko" })], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true },

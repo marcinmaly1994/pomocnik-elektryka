@@ -16,7 +16,16 @@ import { pdfDopasujRozmiar, pdfFitText, pdfZawinDoLinii, type PdfDoc } from "./e
 /** Wysokość paska. Musi zmieścić dwa wiersze etykieta+wartość, nie trzy „na wyczucie". */
 export const TITLE_BLOCK_H = 48;
 
-export function drawTitleBlock(doc: PdfDoc, header: DocumentHeader, docTitle: string): void {
+/**
+ * Skala liczbowa rysunku i arkusz, dla którego jest prawdziwa. Format stoi obok, bo
+ * „1:50" na A3 wydrukowanym na A4 to już 1:71 — bez niego wpis w tabliczce kłamie.
+ */
+export interface SkalaTabliczki {
+  skala: string;
+  format: string;
+}
+
+export function drawTitleBlock(doc: PdfDoc, header: DocumentHeader, docTitle: string, skala?: SkalaTabliczki): void {
   const M = doc.margin;
   const W = doc.innerW;
   const H = TITLE_BLOCK_H;
@@ -52,7 +61,16 @@ export function drawTitleBlock(doc: PdfDoc, header: DocumentHeader, docTitle: st
   // Trzecia kolumna to pełna krata 2×2 — bez tych kresek numer, rewizja i data
   // czytały się jak jeden ciąg napisów, a nie jak osobne rubryki metryki.
   doc.line(x3, PODZIAL, M + W, PODZIAL, 0.4, 0.75);
-  doc.line(x3 + polowa, y0, x3 + polowa, y0 + H, 0.4, 0.75);
+  // Z rubryką skali górny wiersz dzieli się na trzy (numer, rewizja, skala); dolny
+  // zostaje w dwóch, więc kreski pionowe idą osobno dla każdego wiersza.
+  const trzecia = w3 / 3;
+  if (skala) {
+    doc.line(x3 + trzecia, PODZIAL, x3 + trzecia, y0 + H, 0.4, 0.75);
+    doc.line(x3 + 2 * trzecia, PODZIAL, x3 + 2 * trzecia, y0 + H, 0.4, 0.75);
+    doc.line(x3 + polowa, y0, x3 + polowa, PODZIAL, 0.4, 0.75);
+  } else {
+    doc.line(x3 + polowa, y0, x3 + polowa, y0 + H, 0.4, 0.75);
+  }
 
   doc.text("OBIEKT", M + 6, R1_ETYKIETA, 6.5, true, 0.5);
   // Najpierw mniejsza czcionka, dopiero potem wielokropek — patrz `pdfDopasujRozmiar`.
@@ -83,10 +101,21 @@ export function drawTitleBlock(doc: PdfDoc, header: DocumentHeader, docTitle: st
   const xA = x3 + 6;
   const xB = x3 + polowa + 6;
 
-  doc.text("NR RYS.", xA, R1_ETYKIETA, 6.5, true, 0.5);
-  doc.text(pdfFitText(header.drawingNo || "—", komorkaW, 9, true), xA, R1_WARTOSC, 9, true);
-  doc.text("REW.", xB, R1_ETYKIETA, 6.5, true, 0.5);
-  doc.text(pdfFitText(header.revision || "—", komorkaW, 9, true), xB, R1_WARTOSC, 9, true);
+  if (skala) {
+    const kW = trzecia - 12;
+    const xC = x3 + 2 * trzecia + 6;
+    doc.text("NR RYS.", xA, R1_ETYKIETA, 6.5, true, 0.5);
+    doc.text(pdfFitText(header.drawingNo || "—", kW, 9, true), xA, R1_WARTOSC, 9, true);
+    doc.text("REW.", x3 + trzecia + 6, R1_ETYKIETA, 6.5, true, 0.5);
+    doc.text(pdfFitText(header.revision || "—", kW, 9, true), x3 + trzecia + 6, R1_WARTOSC, 9, true);
+    doc.text(`SKALA (${skala.format})`, xC, R1_ETYKIETA, 6.5, true, 0.5);
+    doc.text(pdfFitText(skala.skala, kW, 9, true), xC, R1_WARTOSC, 9, true);
+  } else {
+    doc.text("NR RYS.", xA, R1_ETYKIETA, 6.5, true, 0.5);
+    doc.text(pdfFitText(header.drawingNo || "—", komorkaW, 9, true), xA, R1_WARTOSC, 9, true);
+    doc.text("REW.", xB, R1_ETYKIETA, 6.5, true, 0.5);
+    doc.text(pdfFitText(header.revision || "—", komorkaW, 9, true), xB, R1_WARTOSC, 9, true);
+  }
 
   doc.text("DATA", xA, R2_ETYKIETA, 6.5, true, 0.5);
   doc.text(pdfFitText(header.data || "—", komorkaW, 8, false), xA, R2_WARTOSC, 8);

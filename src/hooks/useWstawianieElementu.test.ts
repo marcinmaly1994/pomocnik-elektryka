@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useWstawianieElementu } from "./useWstawianieElementu";
 import { useProjectStore } from "@/store/useProjectStore";
+import { NO_ROOM } from "@/lib/elements";
 
 /**
  * Czwarte skupisko z `DesignTab`: co właśnie stawiamy i z jakimi ustawieniami.
@@ -77,6 +78,40 @@ describe("useWstawianieElementu", () => {
     );
     act(() => result.current.wstaw({ x: 100, y: 100 }));
     expect(elementy()[0]).toMatchObject({ x: 7, y: 9, rotation: 270 });
+  });
+
+  /**
+   * Pomieszczenie liczy się z MIEJSCA, W KTÓRYM ELEMENT STANĄŁ — po odsunięciu od
+   * sąsiadów, nie z punktu przyciągnięcia. Audyt 5.11.2026: seria gniazd przy styku
+   * dwóch pokoi zapisywała część z nich w pokoju, z którego odsunięcie je wypchnęło,
+   * więc rozdzielnica i strefa mokra liczyły się z błędnych danych aż do ponownego
+   * wczytania, a wtedy wyskakiwał baner „Poprawiono przypisanie…".
+   *
+   * Pokój celowo maleńki: odsunięcie w KAŻDĄ stronę wyprowadza drugi element poza
+   * obrys, więc test nie zależy od tego, w którą stronę rozsuwanie go popchnie.
+   * Skala ustawiona jawnie: bez niej tolerancja „przy obrysie" w `detectRoomName` to
+   * całe oczko siatki i odsunięty element nadal liczyłby się jako stojący przy pokoju.
+   */
+  it("pomieszczenie liczy się z pozycji po odsunięciu od sąsiada", () => {
+    const pietro = useProjectStore.getState().activeFloorId;
+    useProjectStore.setState({ scales: { [pietro]: 0.05 } });
+    useProjectStore.getState().addRoomShape(
+      pietro,
+      [
+        { x: 47, y: 47 },
+        { x: 53, y: 47 },
+        { x: 53, y: 53 },
+        { x: 47, y: 53 },
+      ],
+      "Schowek"
+    );
+    const { result } = renderHook(() => useWstawianieElementu(opcje));
+    act(() => result.current.wstaw({ x: 50, y: 50 }));
+    act(() => result.current.wstaw({ x: 50, y: 50 }));
+    const [pierwszy, drugi] = elementy();
+    expect(pierwszy.room).toBe("Schowek");
+    expect(drugi.x !== 50 || drugi.y !== 50).toBe(true);
+    expect(drugi.room).toBe(NO_ROOM);
   });
 
   /**

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { formatLiczba } from "@/lib/liczby";
+import { klawiszDlaEdytora } from "@/lib/klawiaturaEdytora";
+import { wymiaryNotatki } from "@/lib/opisPomieszczenia";
 import {
   AlertTriangle,
   AlignCenterHorizontal,
@@ -40,7 +42,7 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, OpeningKind, Point, RoomType, Wall } from "@/types";
+import type { ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { computeSanitaryZones } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
@@ -67,6 +69,7 @@ import {
   oczkoSiatkiM,
   planSizeForImage,
   roomNameAfterMove,
+  detectRoomName,
   scaleOf,
   wierzcholkiZamknietejSciany,
   wysokoscPlotna,
@@ -127,11 +130,11 @@ import { PlanCheckPanel } from "./PlanCheckPanel";
 import { QuantitiesPanel } from "./QuantitiesPanel";
 import { EditElementModal } from "./EditElementModal";
 import type Konva from "konva";
-import { ELEMENT_TYPES, libSubtitle, VARIANTS_FOR } from "@/lib/elements";
+import { ELEMENT_TYPES, kategoriaElementu, libSubtitle, VARIANTS_FOR, widoczneElementy } from "@/lib/elements";
 import { nearestRouteSegmentIndex, zalamaniaZNowymPunktem } from "@/lib/punktTrasy";
 import { InfoTrasy } from "./InfoTrasy";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
-import { buildDrawingDoc, hexNaRgb, KLUCZ_TRAS } from "@/lib/pdf/drawing";
+import { ARKUSZE, buildDrawingDoc, hexNaRgb, KLUCZ_TRAS, type FormatArkusza } from "@/lib/pdf/drawing";
 import type { PdfDoc } from "@/lib/pdf/engine";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { bialePlotno, plotnoDoPdf, rysujPodzialke, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
@@ -287,6 +290,18 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const renameRoomShape = useProjectStore((s) => s.renameRoomShape);
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
   const moveRoomShapePoint = useProjectStore((s) => s.moveRoomShapePoint);
+  const przesunPomieszczenie = useProjectStore((s) => s.przesunPomieszczenie);
+  // Notatki na rzucie (F6) — tylko tej kondygnacji; okno treści dla nowej (`p`) albo
+  // edytowanej (`id`) notatki.
+  const wszystkieNotatki = useProjectStore((s) => s.draft.notatki);
+  const notatkiPietra = useMemo(() => (wszystkieNotatki ?? []).filter((n) => n.floor === activeFloorId), [wszystkieNotatki, activeFloorId]);
+  const dodajNotatke = useProjectStore((s) => s.dodajNotatke);
+  const zmienNotatke = useProjectStore((s) => s.zmienNotatke);
+  const przesunNotatke = useProjectStore((s) => s.przesunNotatke);
+  const [edycjaNotatki, setEdycjaNotatki] = useState<{ id?: string; p?: Point; tekst: string } | null>(null);
+  const commitSnapshot = useProjectStore((s) => s.commitSnapshot);
+  /** Plan sprzed przeciągania pokoju — po puszczeniu idzie do historii jako JEDEN krok. */
+  const planPrzedRuchemPokojuRef = useRef<ReturnType<typeof useProjectStore.getState>["draft"] | null>(null);
   const removeElements = useProjectStore((s) => s.removeElements);
   const routeOverrides = useProjectStore((s) => s.draft.routeOverrides);
   // Pełne listy (wszystkie kondygnacje) — potrzebne WYŁĄCZNIE do podkładu z piętra
@@ -331,6 +346,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const floorName = floors.find((f) => f.id === activeFloorId)?.name ?? "Kondygnacja";
 
   const elements = useActiveFloorElements();
+  /**
+   * Filtry widoku osprzętu (F8 z audytu 5.11.2026) — ukryte kategorie katalogu znikają
+   * z płótna, a że rzut PDF rasteryzuje się z płótna, także z wydruku (razem z legendą
+   * i zestawieniem). Stan widoku, nie projektu: nie zmienia obliczeń, rozdzielnicy ani
+   * kosztorysu. `elements` zostaje pełne dla wszystkiego poza rysunkiem.
+   */
+  const [ukryteKategorie, setUkryteKategorie] = useState<string[]>([]);
+  const elementyWidoczne = useMemo(() => widoczneElementy(elements, ukryteKategorie), [elements, ukryteKategorie]);
   const rawDocHeader = useProjectStore((st) => st.docHeader);
   const projectName = useProjectStore((st) => st.projectName);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -357,14 +380,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // literami (np. „L" lodówka, „Z" zmywarka) to WIZUALNIE różne symbole, więc
     // dostają osobne wpisy w legendzie, tak jak różna liczba gniazd w ramce.
     const wpisy = new Map<string, { type: ElementType; gangs: number; agdLetter?: string }>();
-    for (const el of elements) {
+    // Legenda opisuje to, co NA RYSUNKU — bez ukrytych kategorii (F8).
+    for (const el of elementyWidoczne) {
       const litera = el.type === "wypustAGD" ? el.agdLetter || "A" : undefined;
       wpisy.set(`${el.type}:${el.gangs || 1}:${litera ?? ""}`, { type: el.type, gangs: el.gangs || 1, agdLetter: litera });
     }
     return [...wpisy.values()].sort((a, b) =>
       ELEMENT_TYPES[a.type].label.localeCompare(ELEMENT_TYPES[b.type].label, "pl") || (a.agdLetter || "").localeCompare(b.agdLetter || "")
     );
-  }, [elements]);
+  }, [elementyWidoczne]);
 
   /**
    * Rzut do PDF-a: rysunek rasteryzowany ze sceny Konvy + legenda złożona z glifów
@@ -394,7 +418,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
      */
     // Symbole, strefy przyborów i otwory z łukiem skrzydła — to samo źródło co kadr
     // na ekranie (patrz `punktyZajeteRysunkiem`).
-    const rogi = punktyZajeteRysunkiem(elements, openings, walls, skalaOsprzetu, activeFloorId, mpu);
+    // Notatki (F6) też należą do rysunku — notatka przy krawędzi nie może wypaść z kadru.
+    const rogi = [
+      ...punktyZajeteRysunkiem(elements, openings, walls, skalaOsprzetu, activeFloorId, mpu),
+      ...notatkiPietra.flatMap((n) => {
+        const { szer, wys } = wymiaryNotatki(n.tekst, mpu);
+        return [{ x: n.x, y: n.y }, { x: n.x + szer, y: n.y + wys }];
+      }),
+    ];
     const kadr = contentBounds(walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
       x: 0,
       y: 0,
@@ -412,9 +443,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     pomocnicze.forEach((n) => n.visible(false));
 
     let naBieli: HTMLCanvasElement;
+    let pikseliNaMetr: number | undefined;
     try {
       // Pole rysunku obok legendy, przeliczone na piksele druku.
-      const docelowaSzer = Math.round(600 * PIKSELI_NA_PUNKT);
+      // Na A3 pole jest o tyle szersze, o ile szerszy arkusz — raster rośnie razem z nim,
+      // żeby rysunek nie stracił ostrości po wydrukowaniu w większej skali.
+      const docelowaSzer = Math.round(600 * (ARKUSZE[formatPdf].w / ARKUSZE.A4.w) * PIKSELI_NA_PUNKT);
       /**
        * Wycinek liczony we WSPÓŁRZĘDNYCH SCENY, więc musi uwzględnić jej przesunięcie.
        * Scena stoi przesunięta o kadr ekranu (patrz stan `widok` w DesignCanvas), a
@@ -436,7 +470,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // Podziałka DOKŁADANA DO RASTRA, więc skaluje się razem z rysunkiem przy
       // wpasowywaniu go w kartkę — patrz `rysujPodzialke`. Bez skali nie ma czego
       // odmierzać, więc jej po prostu nie ma.
-      if (mpu !== null && mpu > 0) rysujPodzialke(naBieli, (zoom * pixelRatio) / mpu);
+      if (mpu !== null && mpu > 0) {
+        pikseliNaMetr = (zoom * pixelRatio) / mpu;
+        rysujPodzialke(naBieli, pikseliNaMetr);
+      }
     } finally {
       pomocnicze.forEach((n) => n.visible(true));
       stage.batchDraw();
@@ -478,8 +515,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       kluczTras: trasyNaRysunku.length ? KLUCZ_TRAS : undefined,
       // Rozbicie „rodzaj × pomieszczenie", nie sama suma per rodzaj: monter kupuje
       // według sumy, ale montuje pokój po pokoju i to jemu potrzebny jest podział.
-      zestawienie: pozycjeZestawieniaDoPdf(elements),
+      zestawienie: pozycjeZestawieniaDoPdf(elementyWidoczne),
       obwody: obwodyPdf.length ? obwodyPdf : undefined,
+      format: formatPdf,
+      // Bez kalibracji nie wiadomo, ile metrów ma rysunek — wtedy bez skali liczbowej.
+      pikseliNaMetr,
     });
   }
   /**
@@ -606,6 +646,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * cichu zależał od tego, co akurat było włączone na ekranie.
    */
   const [trasyWPdf, setTrasyWPdf] = useState(true);
+  /** Arkusz rzutu w PDF (F10). A3 dla domu, na którym A4 wymuszało 1:150 i drobne opisy. */
+  const [formatPdf, setFormatPdf] = useState<FormatArkusza>("A4");
   /** Tryb wymiarowania — domyslnie WYLACZONY: przy rysowaniu wymiary przeszkadzaja,
    *  a potrzebne sa przy sprawdzaniu i przed wydrukiem. */
   const [showDimensions, setShowDimensions] = useState(false);
@@ -1537,6 +1579,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     p: "pomieszczenie",
     w: "sciany",
     d: "otwory",
+    n: "notatka",
     h: "pan",
     s: "skala",
   };
@@ -1621,6 +1664,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Klawisz naciśnięty w oknie, menu, panelu paska albo liście rozwijanej nie jest
+      // dla planu — patrz `klawiszDlaEdytora` (Delete pod oknem „Pomoc" kasował
+      // zaznaczony element, litery skrótów blokowały wybór w listach).
+      if (!klawiszDlaEdytora(e.target)) return;
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if ((e.key === "Delete" || e.key === "Backspace") && tag !== "INPUT" && tag !== "TEXTAREA") {
         e.preventDefault();
@@ -1658,6 +1705,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         e.preventDefault();
         const krok = e.shiftKey ? GRID : 1;
         przesunElementy(offsetMoves(elements, zaznaczoneElementy, kierunek.x * krok, kierunek.y * krok));
+      } else if (kierunek && tag !== "INPUT" && tag !== "TEXTAREA" && selected?.kind === "room") {
+        // Zaznaczony POKÓJ jedzie strzałkami razem z osprzętem (F5) — te same kroki co
+        // elementy: jednostka planu, a z Shiftem oczko siatki.
+        e.preventDefault();
+        const krok = e.shiftKey ? GRID : 1;
+        przesunPomieszczenie(selected.id, kierunek.x * krok, kierunek.y * krok);
       }
 
       // Ctrl/Cmd+D — duplikuj zaznaczenie. Odsunięte o pół oczka siatki, żeby kopia
@@ -1665,6 +1718,24 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d" && tag !== "INPUT" && tag !== "TEXTAREA") {
         e.preventDefault();
         if (zaznaczoneElementy.length > 0) duplikujZaznaczenie();
+      }
+
+      // Ctrl+A / Ctrl+C / Ctrl+V — zaznacz wszystko, kopiuj, wklej (F2/F4 z audytu
+      // 5.11.2026). Filtr `klawiszDlaEdytora` na początku już odsiał pola tekstowe i okna,
+      // więc tu klawisze należą do planu; `preventDefault` tylko, gdy coś faktycznie robimy,
+      // żeby Ctrl+C na pustym zaznaczeniu nie zabierał przeglądarce zwykłego kopiowania.
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && tag !== "INPUT" && tag !== "TEXTAREA") {
+        const klawisz = e.key.toLowerCase();
+        if (klawisz === "a" && elements.length > 0) {
+          e.preventDefault();
+          zaznaczWszystko();
+        } else if (klawisz === "c" && zaznaczoneElementy.length > 0) {
+          e.preventDefault();
+          kopiujZaznaczenie();
+        } else if (klawisz === "v" && schowekRef.current.length > 0) {
+          e.preventDefault();
+          wklejSchowek();
+        }
       }
 
       if ((e.key === "r" || e.key === "R") && tag !== "INPUT" && tag !== "TEXTAREA") {
@@ -1727,6 +1798,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         } else if (canUndo) {
           undo();
         }
+      }
+      // Ctrl+Y — ponów, jak w Wordzie, AutoCAD-zie i przeglądarce. Na Windowsie to
+      // pierwszy skrót, po który sięga ręka; Ctrl+Shift+Z zostaje dla nawyków z Maca.
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "y" && tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        if (canRedo) redo();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -1807,6 +1884,62 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       });
     if (kopie.length === 0) return;
     setDraft((d) => ({ ...d, elements: [...d.elements, ...kopie] }));
+    setSelected(null);
+    setMultiSelected(kopie.map((k) => k.id));
+  }
+
+  /**
+   * Schowek planu — skopiowane elementy (Ctrl+C), wklejane Ctrl+V (F4 z audytu 5.11.2026).
+   *
+   * Trzymany w pamięci zakładki, nie w schowku systemowym: to dane planu, nie tekst, a
+   * zakładka zostaje zamontowana przy przełączaniu kondygnacji — o to właśnie chodzi,
+   * bo główny powód istnienia schowka to te same gniazda nad sobą na parterze i piętrze.
+   * Licznik wklejeń odsuwa każdą kolejną kopię na tej samej kondygnacji, żeby nie
+   * lądowały jedna na drugiej.
+   */
+  const schowekRef = useRef<InstallationElement[]>([]);
+  const wklejenRef = useRef(0);
+
+  function zaznaczWszystko() {
+    setToolMode("zaznacz");
+    setSelected(null);
+    // Tylko to, co widać — ukryta kategoria (F8) nie może pojechać razem z Delete.
+    setMultiSelected(elementyWidoczne.map((e) => e.id));
+  }
+
+  function kopiujZaznaczenie() {
+    const ids = zaznaczoneElementy;
+    schowekRef.current = elements.filter((e) => ids.includes(e.id)).map((e) => ({ ...e }));
+    wklejenRef.current = 0;
+  }
+
+  function wklejSchowek() {
+    const zrodlo = schowekRef.current;
+    if (zrodlo.length === 0) return;
+    const naTejSamej = zrodlo.every((e) => e.floor === activeFloorId);
+    const odsuniecie = naTejSamej ? (GRID / 2) * ++wklejenRef.current : 0;
+    const kopie = zrodlo.map((e) => {
+      const x = e.x + odsuniecie;
+      const y = e.y + odsuniecie;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { roomId: _id, obwod, lightGroup, ...reszta } = e;
+      return {
+        ...reszta,
+        // Na tej samej kondygnacji kopia zachowuje ręczny numer obwodu i grupy, tak jak
+        // Ctrl+D. Na INNEJ — nie: numer obwodu znaczy to samo w całym budynku, więc
+        // gniazdo z piętra dołączyłoby do obwodu z parteru.
+        ...(naTejSamej ? { obwod, lightGroup } : {}),
+        id: crypto.randomUUID(),
+        floor: activeFloorId,
+        x,
+        y,
+        // Pokój z położenia na DOCELOWEJ kondygnacji; nazwa pokoju z innego piętra nie
+        // jest tu „nazwą wpisaną ręcznie", którą trzeba chronić.
+        room: naTejSamej ? roomNameAfterMove({ x, y }, e.room, roomShapes, mpu) : detectRoomName({ x, y }, roomShapes, mpu),
+      };
+    });
+    setDraft((d) => ({ ...d, elements: [...d.elements, ...kopie] }));
+    setToolMode("zaznacz");
     setSelected(null);
     setMultiSelected(kopie.map((k) => k.id));
   }
@@ -2051,6 +2184,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     },
     [toolMode, setSelected, setMultiSelected]
   );
+  /** To samo dla spostrzeżeń o pomieszczeniach (nachodzące obrysy) — zaznacza pokój,
+   *  więc od razu widać jego narożniki do przeciągnięcia. */
+  const pokazPomieszczenieNaPlanie = useCallback(
+    (id: string) => {
+      if (toolMode !== "zaznacz") zaznaczenieZeSkokuRef.current = true;
+      setToolMode("zaznacz");
+      setMultiSelected([]);
+      setSelected({ kind: "room", id });
+    },
+    [toolMode, setSelected, setMultiSelected]
+  );
   // Trasy przewodów — WYŁĄCZNIE z elementów/ścian/pomieszczeń TEJ kondygnacji
   // (wszystkie trzy już przefiltrowane przez `useActiveFloor*`), więc rozdzielnica,
   // punkty i sieć, po której routuje `buildCableRoutes`, zawsze mieszkają w tym samym
@@ -2136,6 +2280,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
   // z aktualnej pozycji elementu, więc jego przesunięcie nie gubi ręcznego układu.
   const cableRoutes = useMemo(() => applyRouteOverrides(rawCableRoutes, routeOverrides), [rawCableRoutes, routeOverrides]);
+  // Trasy do ukrytego osprzętu też schodzą z rysunku (F8): id trasy zasilania to id
+  // elementu, a sterowania — „łącznik->oprawa".
+  const trasyWidoczne = useMemo(() => {
+    if (ukryteKategorie.length === 0) return cableRoutes;
+    const widoczne = new Set(elementyWidoczne.map((e) => e.id));
+    return cableRoutes.filter((r) => r.id.split("->").every((id) => widoczne.has(id)));
+  }, [cableRoutes, elementyWidoczne, ukryteKategorie]);
 
   /**
    * Czy pigułka kontrolek kontekstowych ma w tej chwili jakąkolwiek treść — TE SAME
@@ -2161,6 +2312,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
      * własnymi warunkami. Slot nie świeci już pustką, bo zawsze ma co najmniej przełącznik.
      */
     toolMode === "zaznacz" ||
+    // Zaznaczona notatka (F6) — karta z treścią i „Edytuj"/„Usuń" także w narzędziu
+    // „Notatka", w którym właśnie powstała.
+    selected?.kind === "note" ||
     !!skalaPotwierdzenie;
 
   /**
@@ -2539,6 +2693,25 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {/* Szerokość ZAZNACZONEGO otworu — ten sam wzorzec co grubość zaznaczonej ściany
           wyżej. Wcześniej każdy otwór miał na sztywno 90 cm i nie było jak tego zmienić,
           więc drzwi balkonowe i okno tarasowe rysowały się jak zwykłe drzwi wewnętrzne. */}
+      {/* Zaznaczona NOTATKA (F6) — treść i akcje; edycja tym samym oknem co przy dodawaniu. */}
+      {selected?.kind === "note" && (() => {
+        const n = notatkiPietra.find((x) => x.id === selected.id);
+        if (!n) return null;
+        return (
+          <div className="flex min-w-0 flex-col gap-1.5 text-xs" data-testid="karta-notatki">
+            <span className="font-medium text-slate-600">Notatka</span>
+            <p className="whitespace-pre-wrap break-words text-slate-600">{n.tekst}</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button className="pe-btn-ghost px-2.5 py-1 text-xs" onClick={() => setEdycjaNotatki({ id: n.id, tekst: n.tekst })}>
+                Edytuj
+              </button>
+              <button className="pe-btn-ghost px-2.5 py-1 text-xs text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
+                Usuń
+              </button>
+            </div>
+          </div>
+        );
+      })()}
       {selected?.kind === "opening" && toolMode === "zaznacz" && (() => {
         const o = openings.find((x) => x.id === selected.id);
         if (!o) return null;
@@ -2567,8 +2740,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {zakres !== "zaznaczenie" && (
       <>
       {/* Wybór sposobu rysowania pojawia się dopiero po wejściu w tryb „Pomieszczenie" —
-          poza nim byłby tylko szumem w pasku narzędzi. */}
-      {toolMode === "pomieszczenie" && (
+          poza nim byłby tylko szumem w pasku narzędzi.
+
+          Na telefonie znika też na czas RYSOWANIA (postawiony narożnik albo punkty
+          wieloboku). Nakładka pływa wtedy nad rzutem i każdy jej wiersz zasłania miejsce,
+          w które trzeba kliknąć — z wyborem kształtu, podpowiedzią, komunikatem
+          i polami wymiarów zajmowała 45% płótna (audyt 5.11.2026). Zmiana kształtu
+          w połowie figury i tak zaczyna rysowanie od nowa, a „Anuluj" stoi niżej. */}
+      {toolMode === "pomieszczenie" && (szerokieOkno || pokoje.drawingRoomPoints.length === 0) && (
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
           <span className="font-medium text-slate-600">Kształt:</span>
           <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
@@ -2613,7 +2792,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {pokoje.drawingRoomPoints.length > 0 && (
         // Zawijany — ten sam powód co przy rysowaniu ściany wyżej.
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
-          <span className="whitespace-nowrap font-medium text-slate-600">
+          {/* Bez `whitespace-nowrap`: na 320 px „…kliknij przeciwległy" było ucinane
+              krawędzią nakładki. */}
+          <span className="min-w-0 font-medium text-slate-600">
             {pokoje.roomMode === "prostokat" ? (
               "Narożnik postawiony — kliknij przeciwległy"
             ) : (
@@ -2742,8 +2923,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <Check size={14} className="shrink-0" />
           <span>
             Poprawiono przypisanie {roomsFixedOnLoad}{" "}
-            {roomsFixedOnLoad === 1 ? "elementu" : "elementów"} do pomieszczeń — po przeniesieniu na planie zostały
-            w starych pokojach. Sprawdź obwody w Rozdzielnicy.
+            {roomsFixedOnLoad === 1 ? "elementu" : "elementów"} do pomieszczeń — zapis nie zgadzał się z tym, gdzie
+            stoją na planie. Sprawdź obwody w Rozdzielnicy.
           </span>
           <button
             onClick={dismissRoomsFixedOnLoad}
@@ -3067,17 +3248,30 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         title={`Rzut — ${floorName}`}
         filename={projectFileName(`rzut-${floorName}`, projectName, "pdf")}
         build={async () => (await zbudujDokumentRzutu()).finish()}
-        wariant={trasyWPdf ? "z-trasami" : "bez-tras"}
+        wariant={`${trasyWPdf ? "z-trasami" : "bez-tras"}:${formatPdf}`}
         opcje={
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={trasyWPdf}
-              onChange={(e) => setTrasyWPdf(e.target.checked)}
-              className="h-4 w-4 rounded border-border"
-            />
-            Trasy przewodów na rysunku
-          </label>
+          <>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={trasyWPdf}
+                onChange={(e) => setTrasyWPdf(e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              Trasy przewodów na rysunku
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              Arkusz
+              <select
+                value={formatPdf}
+                onChange={(e) => setFormatPdf(e.target.value as FormatArkusza)}
+                className="h-8 rounded-md border border-border bg-white px-2 text-sm"
+              >
+                <option value="A4">A4 poziomo</option>
+                <option value="A3">A3 poziomo</option>
+              </select>
+            </label>
+          </>
         }
       />
 
@@ -3110,6 +3304,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         onToggleDimensions={() => setShowDimensions((d) => !d)}
         showAreas={showAreas}
         onToggleAreas={() => setShowAreas((a) => !a)}
+        ukryteKategorie={ukryteKategorie}
+        onPrzelaczKategorie={(k) => setUkryteKategorie((u) => (u.includes(k) ? u.filter((x) => x !== k) : [...u, k]))}
         showHeights={showHeights}
         onToggleHeights={() => setShowHeights((h) => !h)}
         showUnderlay={showUnderlay}
@@ -3500,6 +3696,19 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           {/* `relative` dla nakładki kontrolek na telefonie — liczy się od PŁÓTNA, nie od
               całej kolumny (pod płótnem stoi jeszcze pasek stanu). */}
           <div className="relative">
+          {/* Ukryte kategorie osprzętu (F8) — widoczne wprost nad rzutem, bo brakujące
+              gniazda bez tej informacji wyglądałyby jak utracone dane. */}
+          {ukryteKategorie.length > 0 && (
+            <div
+              data-testid="ukryte-kategorie"
+              className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-x-2 gap-y-1 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-1 text-xs text-[#8A5526] shadow-sm"
+            >
+              <span>Ukryte na rzucie: {ukryteKategorie.join(", ")}</span>
+              <button className="font-semibold underline" onClick={() => setUkryteKategorie([])}>
+                Pokaż wszystko
+              </button>
+            </div>
+          )}
           {/* Kontrolki bieżącego narzędzia na TELEFONIE: nakładka przy dolnej krawędzi
               rzutu, nie treść nad nim. Każda treść nad płótnem, która pojawia się
               w trakcie rysowania, przesuwa płótno pod palcem — a na telefonie panel
@@ -3516,9 +3725,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <DesignCanvas
             stageRef={stageRef}
             anulujPodgladRef={anulujPodgladRef}
-            elements={elements}
+            elements={elementyWidoczne}
             walls={walls}
             roomShapes={roomShapes}
+            notatki={notatkiPietra}
+            onPlaceNote={(p) => setEdycjaNotatki({ p, tekst: "" })}
+            onSelectNote={(id) => {
+              setMultiSelected([]);
+              setSelected({ kind: "note", id });
+            }}
+            onMoveNote={(id, p) => przesunNotatke(id, p)}
+            onEditNote={(id) => setEdycjaNotatki({ id, tekst: notatkiPietra.find((n) => n.id === id)?.tekst ?? "" })}
             openings={openings}
             toolMode={toolMode}
             roomMode={pokoje.roomMode}
@@ -3537,7 +3754,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             pokazWymiary={showDimensions}
             pokazPowierzchnie={showAreas}
             pokazWysokosci={showHeights}
-            cableRoutes={cableRoutes}
+            cableRoutes={trasyWidoczne}
             routeOverrides={routeOverrides}
             lightGroups={lightGroups}
             elementScale={skalaOsprzetu}
@@ -3607,6 +3824,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setRoomNameEdit({ x: clientX, y: clientY, id, value: room.name });
             }}
             onMoveRoomPoint={(id, index, point) => moveRoomShapePoint(id, index, point)}
+            onRoomMoveStart={() => {
+              planPrzedRuchemPokojuRef.current = useProjectStore.getState().draft;
+            }}
+            onMoveRoom={(id, dx, dy) => przesunPomieszczenie(id, dx, dy, { commit: false })}
+            onRoomMoveEnd={(przesunieto) => {
+              const przed = planPrzedRuchemPokojuRef.current;
+              planPrzedRuchemPokojuRef.current = null;
+              if (przesunieto && przed) commitSnapshot(przed);
+            }}
             onMoveWallPoint={moveWallPoint}
             onSelectRoute={(id) => {
               setSelected({ kind: "route", id });
@@ -3628,7 +3854,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setMultiSelected(ids);
               setSelected(null);
             }}
-            onPlaceElement={wstawianie.wstaw}
+            onPlaceElement={(p) => {
+              // Stawiany element ukrytej kategorii zniknąłby spod kursora — kategoria
+              // wraca na rzut, zanim element powstanie (F8).
+              const k = kategoriaElementu(wstawianie.activeType);
+              if (k && ukryteKategorie.includes(k)) setUkryteKategorie((u) => u.filter((x) => x !== k));
+              wstawianie.wstaw(p);
+            }}
             duchElementu={{
               type: wstawianie.activeType,
               gangs: wstawianie.gangsForType(wstawianie.activeType),
@@ -3739,6 +3971,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <PlanCheckPanel
                 issues={planIssues}
                 onShowElements={pokazElementyNaPlanie}
+                onShowRoom={pokazPomieszczenieNaPlanie}
                 przelaczone={kartaSprawdzeniaOtwarta}
                 onPrzelacz={setKartaSprawdzeniaOtwarta}
               />
@@ -3774,6 +4007,51 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           stałe, a wyjście z trybu siedzi w samym pasku (przycisk pełnego ekranu). */}
         </div>
       )}
+
+      {/* Treść notatki (F6) — nowej albo edytowanej. Ctrl+Enter zapisuje, bo Enter sam
+          łamie wiersz: notatka bywa dwuwierszowa („puszka pod blatem / 105 cm"). */}
+      <Dialog open={!!edycjaNotatki} onOpenChange={(open) => !open && setEdycjaNotatki(null)}>
+        <DialogContent title={edycjaNotatki?.id ? "Edytuj notatkę" : "Nowa notatka"}>
+          {(() => {
+            const zapisz = () => {
+              const e = edycjaNotatki;
+              if (!e) return;
+              if (e.id) zmienNotatke(e.id, e.tekst);
+              else if (e.p) {
+                const id = dodajNotatke(activeFloorId, e.p, e.tekst);
+                if (id) {
+                  setMultiSelected([]);
+                  setSelected({ kind: "note", id });
+                }
+              }
+              setEdycjaNotatki(null);
+            };
+            return (
+              <>
+                <textarea
+                  autoFocus
+                  rows={3}
+                  aria-label="Treść notatki"
+                  placeholder="np. puszka pod blatem 105 cm"
+                  value={edycjaNotatki?.tekst ?? ""}
+                  onChange={(ev) => setEdycjaNotatki((s) => (s ? { ...s, tekst: ev.target.value } : s))}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+                      ev.preventDefault();
+                      zapisz();
+                    }
+                  }}
+                  className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
+                />
+                <p className="mb-3 text-xs text-slate-400">Notatka trafi też na rzut w PDF. Ctrl+Enter zapisuje.</p>
+                <Button variant="copper" className="w-full" onClick={zapisz}>
+                  {edycjaNotatki?.id ? "Zapisz" : "Dodaj notatkę"}
+                </Button>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!pokoje.pendingRoom} onOpenChange={(open) => !open && pokoje.zamknijPropozycje()}>
         <DialogContent title="Nazwij pomieszczenie">

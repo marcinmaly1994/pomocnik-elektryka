@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { chunkLightsByGroup, colorForCircuit, kolorObwodu, KOLORY_OBWODOW, computeCircuits, computeLowVoltage, computeRcdGroups, mainBreakerFor, ostrzezeniaObwodow, wchodziDoObwodu, ZALECANE_MAKS } from "./circuits";
-import type { InstallationElement } from "@/types";
+import type { InstallationElement, RoomShape } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
   return {
@@ -561,5 +561,37 @@ describe("ostrzezeniaObwodow — różne przeznaczenie na jednym obwodzie", () =
       el({ type: "gniazdko", room: "Bez pomieszczenia", obwod: 3 }),
     ]);
     expect(out).toEqual([]);
+  });
+});
+
+/**
+ * Pokoje o tej samej nazwie na RÓŻNYCH kondygnacjach to różne pokoje (F1 z audytu
+ * 5.11.2026). Obwody liczą się z elementów całego budynku, a grupowały po samej nazwie,
+ * więc łazienka na parterze i łazienka na piętrze trafiały na jeden obwód, a typ pokoju
+ * brany był z pierwszego obrysu o tej nazwie w budynku.
+ */
+describe("computeCircuits — pokoje o tej samej nazwie na dwóch kondygnacjach", () => {
+  const pokoj = (id: string, floor: string, name: string, type: RoomShape["type"]): RoomShape => ({
+    id, floor, name, type, color: "#000", points: [],
+  });
+
+  it("dwie łazienki na dwóch piętrach dostają osobne obwody", () => {
+    const roomShapes = [pokoj("p1", "f1", "Łazienka", "lazienka"), pokoj("p2", "f2", "Łazienka", "lazienka")];
+    const elements = [
+      el({ id: "a", type: "gniazdko", room: "Łazienka", roomId: "p1", floor: "f1" }),
+      el({ id: "b", type: "gniazdko", room: "Łazienka", roomId: "p2", floor: "f2" }),
+    ];
+    const lazienkowe = computeCircuits(elements, roomShapes).filter((c) => c.elements.some((e) => e.room === "Łazienka"));
+    expect(lazienkowe).toHaveLength(2);
+    expect(lazienkowe.map((c) => c.elements.map((e) => e.id))).toEqual([["a"], ["b"]]);
+    expect(new Set(lazienkowe.map((c) => c.name)).size).toBe(2);
+  });
+
+  it("typ pokoju bierze się z obrysu NA TEJ kondygnacji", () => {
+    // Na parterze „Pracownia” to warsztat-kotłownia (mokre), na piętrze — zwykły pokój.
+    const roomShapes = [pokoj("p1", "f1", "Pracownia", "kotlownia"), pokoj("p2", "f2", "Pracownia", "pokoj")];
+    const elements = [el({ id: "b", type: "gniazdko", room: "Pracownia", roomId: "p2", floor: "f2" })];
+    const obwod = computeCircuits(elements, roomShapes).find((c) => c.elements.some((e) => e.id === "b"))!;
+    expect(obwod.name).not.toMatch(/Pracownia/); // suchy pokój → obwód wg zastosowania, nie „mokry” obwód pokoju
   });
 });

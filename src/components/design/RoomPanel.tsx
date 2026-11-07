@@ -144,6 +144,12 @@ export function WierszPomieszczenia({
           >
             <Trash2 size={13} /> Usuń pomieszczenie
           </button>
+          {/* Przesuwanie całego pokoju (F5) nie ma przycisku — chwyta się wnętrze — więc
+              bez tej linijki nikt by o nim nie wiedział. Na dotyku przeciąganie wnętrza
+              należy do przesuwania widoku, stąd ukryte. */}
+          <p className="w-full text-xs leading-snug text-slate-500 [@media(pointer:coarse)]:hidden">
+            Przeciągnij wnętrze pokoju albo użyj strzałek, żeby przesunąć go razem z osprzętem.
+          </p>
         </div>
       )}
     </div>

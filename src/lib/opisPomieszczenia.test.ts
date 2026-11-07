@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  wymiaryNotatki,
   FALLBACK_FONT_ADNOTACJI,
   FALLBACK_FONT_NAZWY,
   MIN_FONT_OPISU,
@@ -368,5 +369,16 @@ describe("miejsce na opis — ściany", () => {
     });
     // Róg daleko od skosu jest wolny — kotwica zostaje.
     expect(p).toEqual({ x: 80, y: 10 });
+  });
+});
+
+describe("wymiaryNotatki", () => {
+  it("rośnie z najdłuższym wierszem i z liczbą wierszy", () => {
+    const jeden = wymiaryNotatki("puszka", 0.05);
+    const dluzszy = wymiaryNotatki("puszka pod blatem 105 cm", 0.05);
+    const dwaWiersze = wymiaryNotatki("puszka\npod blatem", 0.05);
+    expect(dluzszy.szer).toBeGreaterThan(jeden.szer);
+    expect(dwaWiersze.wys).toBeGreaterThan(jeden.wys);
+    expect(dwaWiersze.font).toBe(jeden.font);
   });
 });

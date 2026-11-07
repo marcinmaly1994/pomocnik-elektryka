@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useActiveFloorRoomShapes, useProjectStore } from "@/store/useProjectStore";
-import { guessRoomType, nextRoomName, ROOM_TYPE_LABELS } from "@/lib/design";
+import { guessRoomType, nextRoomName, ROOM_TYPE_LABELS, unikalnaNazwaPomieszczenia } from "@/lib/design";
 import type { RoomDrawMode } from "@/components/design/DesignCanvas";
 import type { Point, RoomType } from "@/types";
 
@@ -14,6 +14,9 @@ export interface PropozycjaPomieszczenia {
    *  wpisywaną nazwę; po ręcznym wyborze przestaje, żeby kolejna litera w nazwie nie
    *  nadpisała cicho decyzji użytkownika. */
   typeTouched: boolean;
+  /** Czy nazwę WPISANO ręcznie (i nie wyczyszczono). Dopóki nie — wybór typu z listy
+   *  podstawia jego etykietę; potem już nie, żeby nie skasować „Łazienki dzieci". */
+  nameTouched?: boolean;
 }
 
 /**
@@ -74,10 +77,12 @@ export function useRysowaniePomieszczen(): RysowaniePomieszczenApi {
 
   const zaproponuj = useCallback(
     (punkty: Point[]) => {
-      const name = nextRoomName(roomShapes.length);
+      // Okno ma pokazać nazwę, która NAPRAWDĘ trafi do projektu — store i tak nie
+      // dopuści powtórzenia na kondygnacji (patrz `unikalnaNazwaPomieszczenia`).
+      const name = unikalnaNazwaPomieszczenia(nextRoomName(roomShapes.length), roomShapes.map((r) => r.name));
       setPendingRoom({ points: punkty, name, type: guessRoomType(name), typeTouched: false });
     },
-    [roomShapes.length]
+    [roomShapes]
   );
 
   const zamknijPropozycje = useCallback(() => setPendingRoom(null), []);
@@ -86,17 +91,24 @@ export function useRysowaniePomieszczen(): RysowaniePomieszczenApi {
     // Podpowiedź typu śledzi nazwę tylko dopóki użytkownik sam niczego nie wybrał
     // z listy — inaczej ręczny wybór zostałby cicho nadpisany przy kolejnej literze
     // wpisywanej w polu nazwy.
-    setPendingRoom((p) => (p ? { ...p, name, type: p.typeTouched ? p.type : guessRoomType(name) } : p));
+    setPendingRoom((p) =>
+      p ? { ...p, name, nameTouched: name.trim() !== "", type: p.typeTouched ? p.type : guessRoomType(name) } : p
+    );
   }, []);
 
   const zmienTyp = useCallback((type: RoomType) => {
     // Wybór z listy ustawia też nazwę na etykietę tego typu — dla zdecydowanej
     // większości pomieszczeń to i tak docelowa nazwa („Kuchnia", „Łazienka"…), więc bez
     // tego trzeba było wpisać to samo słowo DWA razy: raz w polu nazwy, raz w tej
-    // liście. Kto chce inną nazwę (np. „Łazienka rodziców"), nadal może ją dopisać
-    // w polu nazwy PO wybraniu typu — nic mu tego nie zabrania.
-    setPendingRoom((p) => (p ? { ...p, type, typeTouched: true, name: ROOM_TYPE_LABELS[type] } : p));
-  }, []);
+    // liście.
+    //
+    // Ale TYLKO gdy nazwy nikt nie wpisał. Wcześniej podstawienie działało zawsze, więc
+    // „Łazienka dzieci" + typ „Łazienka / WC" zapisywało się jako „Łazienka / WC" —
+    // ręcznie wpisana nazwa znikała bez śladu (audyt 5.11.2026, B6).
+    // Z numerem, gdy taki pokój już jest („Sypialnia 2") — okno pokazuje to, co zapisze.
+    const nazwa = unikalnaNazwaPomieszczenia(ROOM_TYPE_LABELS[type], roomShapes.map((r) => r.name));
+    setPendingRoom((p) => (p ? { ...p, type, typeTouched: true, name: p.nameTouched ? p.name : nazwa } : p));
+  }, [roomShapes]);
 
   const zapisz = useCallback(() => {
     if (!pendingRoom) return;

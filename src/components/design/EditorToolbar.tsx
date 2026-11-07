@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { formatLiczba } from "@/lib/liczby";
+import { KATEGORIE_OSPRZETU } from "@/lib/elements";
 import { ArrowUpFromLine, Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, minZoom } from "./zoomPlanu";
@@ -51,6 +52,9 @@ export interface EditorToolbarProps {
    *  wymiary służą do wytyczenia ścian, powierzchnia do sprawdzenia metrażu. */
   showAreas: boolean;
   onToggleAreas: () => void;
+  /** Ukryte kategorie osprzętu (F8) — patrz `KATEGORIE_OSPRZETU`. */
+  ukryteKategorie?: string[];
+  onPrzelaczKategorie?: (kategoria: string) => void;
   showHeights: boolean;
   onToggleHeights: () => void;
   /** Podgląd kondygnacji poniżej. `null` na najniższej — nie ma czego pokazać, więc
@@ -143,6 +147,8 @@ export function EditorToolbar({
   showDimensions,
   onToggleDimensions,
   showAreas,
+  ukryteKategorie = [],
+  onPrzelaczKategorie,
   onToggleAreas,
   showHeights,
   onToggleHeights,
@@ -397,6 +403,27 @@ export function EditorToolbar({
           />
           Powierzchnia pomieszczeń
         </label>
+
+        {/* Filtry widoku osprzętu (F8 z audytu 5.11.2026) — w tym samym menu, bo to ta
+            sama kategoria pytania: co ma być na rysunku i na wydruku. Nazwy jak sekcje
+            katalogu przy wstawianiu. */}
+        {onPrzelaczKategorie && (
+          <fieldset className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
+            <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Osprzęt na rzucie</legend>
+            {KATEGORIE_OSPRZETU.map((k) => (
+              <label key={k} className="flex items-center gap-1.5 text-xs text-slate-500">
+                <input
+                  type="checkbox"
+                  checked={!ukryteKategorie.includes(k)}
+                  onChange={() => onPrzelaczKategorie(k)}
+                  aria-label={k}
+                  className="accent-copper"
+                />
+                {k}
+              </label>
+            ))}
+          </fieldset>
+        )}
       </PasekMenu>
 
       {/* Wysokości montażu przy osprzęcie. Osobny przełącznik od wymiarów ścian: tamte

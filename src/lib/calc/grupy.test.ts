@@ -7,7 +7,7 @@ const lista: PozycjaKalkulatora[] = [
   { id: "obwod", label: "Dobór obwodu", desc: "przekrój, zabezpieczenie, WLZ i cztery kryteria w jednym" },
   { id: "petla", label: "Impedancja pętli zwarcia", desc: "ochrona przeciwporażeniowa — układ TN" },
   { id: "uziemienieTT", label: "Rezystancja uziemienia", desc: "ochrona przeciwporażeniowa — układ TT" },
-  { id: "rcd", label: "Dobór wyłącznika różnicowoprądowego", desc: "zasady doboru RCD" },
+  { id: "rcd", label: "Dobór wyłącznika różnicowoprądowego", desc: "zasady doboru RCD — lista kontrolna, bez obliczeń" },
   { id: "kompensacja", label: "Kompensacja mocy biernej", desc: "moc baterii, pojemność, rezonans" },
 ];
 

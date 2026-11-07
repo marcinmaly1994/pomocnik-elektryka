@@ -46,7 +46,15 @@ export interface InstallationElement {
   type: ElementType;
   x: number;
   y: number;
+  /** Nazwa pomieszczenia — narysowanego obrysu albo wpisana ręcznie (np. „Garderoba"
+   *  bez obrysu), albo „Bez pomieszczenia". */
   room: string;
+  /** Id obrysu pomieszczenia (`RoomShape.id`) o nazwie `room` na tej samej kondygnacji;
+   *  brak, gdy takiego obrysu nie ma. Pole WYLICZANE — store uzupełnia je po każdej zmianie
+   *  (patrz `synchronizujRoomId`), więc kod przypisujący pokój ustawia tylko `room`.
+   *  Służy do grupowania i szukania typu pokoju bez sklejania pokoi o tej samej nazwie
+   *  z różnych pięter (F1 z audytu 5.11.2026). */
+  roomId?: string;
   floor: string;
   dedicated: boolean;
   note: string;
@@ -108,6 +116,20 @@ export interface Wall {
  *  projekt zapisany przed tą zmianą może mieć otwory tego rodzaju i mają nadal
  *  wyglądać tak jak wcześniej (patrz gałąź renderowania w DesignCanvas.tsx). */
 export type OpeningKind = "drzwi" | "okno";
+
+/**
+ * Notatka tekstowa na rzucie (F6 z audytu 5.11.2026) — uwaga dla montera, która ma
+ * wylądować na wydruku obok tego, czego dotyczy: „puszka pod blatem 105 cm",
+ * „kabel do bramy w peszlu". Punkt (`x`, `y`) to lewy górny róg napisu, w jednostkach
+ * planu; tekst może mieć kilka wierszy.
+ */
+export interface NotatkaPlanu {
+  id: string;
+  floor: string;
+  x: number;
+  y: number;
+  tekst: string;
+}
 
 /**
  * Otwór (drzwi, dawniej też okno) wycięty w konkretnej ścianie ALBO w krawędzi narysowanego

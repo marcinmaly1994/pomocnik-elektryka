@@ -74,6 +74,11 @@ export function PodpowiedzZaznacz({
       <li>{naDotyku ? "Stuknij" : "Kliknij"} element, ścianę, pomieszczenie albo trasę, żeby ją zaznaczyć — tu pojawią się jej opcje.</li>
       <li>{naDotyku ? "Przytrzymaj palec na obiekcie" : "Prawy przycisk myszy na obiekcie"}, żeby otworzyć menu z akcjami.</li>
       {!naDotyku && <li>Przeciągnij ramkę po pustym miejscu, żeby zaznaczyć kilka elementów naraz.</li>}
+      {/* Skróty schowka (F2/F4 z audytu 5.11.2026) — bez tej linijki nikt by ich nie
+          odkrył; tylko na klawiaturze, bo na dotyku nie ma czym ich nacisnąć. */}
+      {!naDotyku && (
+        <li>Ctrl+A zaznacza wszystko, Ctrl+C i Ctrl+V kopiują i wklejają — także na inną kondygnację.</li>
+      )}
     </ul>
   );
 }

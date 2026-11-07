@@ -460,3 +460,28 @@ export function etykietaOsprzetu(e: Pick<InstallationElement, "type" | "gangs">)
 export function kluczOsprzetu(e: Pick<InstallationElement, "type" | "gangs">): string {
   return gniazdoPodwojne(e) ? `${e.type}:podwojne` : e.type;
 }
+
+/**
+ * Filtry widoku osprzętu (F8 z audytu 5.11.2026): te same kategorie co sekcje katalogu
+ * („Gniazda i zasilanie", „Oświetlenie", „Teletechnika"…), bo to nazwy, które użytkownik
+ * już zna z wstawiania. Ukrycie kategorii zdejmuje ją z rzutu i z rzutu w PDF — np. osobny
+ * wydruk instalacji niskoprądowej dla montera teletechniki.
+ */
+export const KATEGORIE_OSPRZETU: readonly string[] = ELEMENT_SECTIONS.map((s) => s.title);
+
+const KATEGORIA_TYPU = new Map<ElementType, string>();
+ELEMENT_SECTIONS.forEach((s) => s.items.forEach((i) => KATEGORIA_TYPU.set(i.key, s.title)));
+
+/** Kategoria (sekcja katalogu) typu elementu; `undefined` dla typu spoza katalogu. */
+export function kategoriaElementu(type: ElementType): string | undefined {
+  return KATEGORIA_TYPU.get(type);
+}
+
+/** Elementy, których kategoria nie jest ukryta. Bez ukrytych — ta sama tablica. */
+export function widoczneElementy<T extends { type: ElementType }>(elements: T[], ukryte: readonly string[]): T[] {
+  if (ukryte.length === 0) return elements;
+  return elements.filter((e) => {
+    const k = kategoriaElementu(e.type);
+    return !k || !ukryte.includes(k);
+  });
+}

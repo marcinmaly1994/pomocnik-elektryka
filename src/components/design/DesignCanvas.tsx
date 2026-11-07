@@ -7,7 +7,7 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { DD } from "konva/lib/DragAndDrop";
-import type { CableRoute, ElementType, InstallationElement, Opening, Point, RoomShape, Wall } from "@/types";
+import type { CableRoute, ElementType, InstallationElement, NotatkaPlanu, Opening, Point, RoomShape, Wall } from "@/types";
 import { ELEMENT_TYPES, fixtureSizeM, mountingLabel, SANITARY_FIXTURES, type SanitaryZone } from "@/lib/elements";
 import {
   DEFAULT_WALL_THICKNESS,
@@ -16,11 +16,13 @@ import {
   MANUAL_DRAW_SCALE_MPU,
   type PlanSize,
   schodySchemat,
+  pomieszczeniePodPunktem,
 } from "@/lib/design";
 import {
   FALLBACK_FONT_ADNOTACJI,
   FALLBACK_FONT_NAZWY,
   fontOpisuPokoju,
+  wymiaryNotatki,
   miejsceNaOpis,
   przesunieciaWokol,
   type ZajeteMiejsce,
@@ -45,8 +47,8 @@ import { clampNum, nearestPointOnPolyline, pointInPolygon, polygonAreaM2, rectan
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { glyphBoxSize, groupLabelAnchors, groupLabelCandidates } from "@/lib/glyphs";
 
-export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "pan" | "skala";
-export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route"; id: string } | null;
+export type ToolMode = "zaznacz" | "elementy" | "sciany" | "pomieszczenie" | "otwory" | "notatka" | "pan" | "skala";
+export type Selection = { kind: "el" | "wall" | "room" | "opening" | "route" | "note"; id: string } | null;
 
 /** Sposób rysowania pomieszczenia: prostokąt przeciągnięciem albo wielobok klikaniem. */
 export type RoomDrawMode = "prostokat" | "wielobok";
@@ -163,6 +165,14 @@ interface DesignCanvasProps {
   elements: InstallationElement[];
   walls: Wall[];
   roomShapes: RoomShape[];
+  /** Notatki tekstowe tej kondygnacji (F6) — patrz `NotatkaPlanu`. */
+  notatki?: NotatkaPlanu[];
+  /** Klik w narzędziu „Notatka" — rodzic pyta o treść i stawia notatkę w tym punkcie. */
+  onPlaceNote?: (p: Point) => void;
+  onSelectNote?: (id: string) => void;
+  onMoveNote?: (id: string, p: Point) => void;
+  /** Dwuklik w notatkę — edycja treści. */
+  onEditNote?: (id: string) => void;
   openings: Opening[];
   toolMode: ToolMode;
   roomMode: RoomDrawMode;
@@ -297,6 +307,12 @@ interface DesignCanvasProps {
   /** Koniec przeciągania narożnika — pojedynczy wpis do historii cofania na CAŁY
    *  ruch, nie na każdą klatkę (patrz onDragMove elementów, ten sam wzorzec). */
   onMoveRoomPoint: (id: string, index: number, point: Point) => void;
+  /** Przeciąganie CAŁEGO zaznaczonego pomieszczenia za jego wnętrze (F5): początek ruchu,
+   *  kolejne przyrosty (już przyciągnięte do siatki) i koniec — rodzic robi z tego jeden
+   *  wpis do historii, ten sam wzorzec co przy narożniku. */
+  onRoomMoveStart?: () => void;
+  onMoveRoom?: (id: string, dx: number, dy: number) => void;
+  onRoomMoveEnd?: (przesunieto: boolean) => void;
   /** Koniec przeciągania narożnika ściany — jeden wpis do historii cofania na
    *  cały ruch, ten sam wzorzec co `onMoveRoomPoint`. */
   onMoveWallPoint: (id: string, index: number, point: Point) => void;
@@ -410,6 +426,11 @@ export function DesignCanvas({
   elements,
   walls,
   roomShapes,
+  notatki = [],
+  onPlaceNote,
+  onSelectNote,
+  onMoveNote,
+  onEditNote,
   openings,
   toolMode,
   roomMode,
@@ -456,6 +477,9 @@ export function DesignCanvas({
   onRoomContextMenu,
   onRoomNameDblClick,
   onMoveRoomPoint,
+  onRoomMoveStart,
+  onMoveRoom,
+  onRoomMoveEnd,
   onMoveWallPoint,
   onSelectRoute,
   onSetRoutePoints,
@@ -902,6 +926,8 @@ export function DesignCanvas({
   // store'a dopiero na onDragEnd — jeden wpis w historii na cały ruch.
   const routeLineNodesRef = useRef<Map<string, Konva.Line>>(new Map());
   const marqueeStartRef = useRef<Point | null>(null);
+  /** Trwające przeciąganie całego pomieszczenia — patrz `handleStageMouseDown`. */
+  const przesuwaniePokojuRef = useRef<{ id: string; start: Point; przesuniete: Point } | null>(null);
   // Źródło prawdy dla bieżącego prostokąta zaznaczania to ref, nie tylko stan —
   // przy szybkich zdarzeniach mousemove+mouseup w jednej turze React batchuje
   // aktualizacje stanu, więc odczyt samego stanu w handlerze mouseup potrafił
@@ -1429,6 +1455,18 @@ export function DesignCanvas({
     }
 
     if (e.target !== stage) return;
+    // Wnętrze ZAZNACZONEGO pomieszczenia chwyta cały pokój (F5 z audytu 5.11.2026) —
+    // zamiast czyścić zaznaczenie i zaczynać ramkę. Niezaznaczony pokój działa po
+    // staremu: klik go zaznacza (B9), przeciągnięcie rysuje ramkę.
+    if (toolMode === "zaznacz" && selected?.kind === "room" && onMoveRoom && stage) {
+      const p0 = planPoint(stage);
+      const pokoj = roomShapes.find((r) => r.id === selected.id);
+      if (p0 && pokoj && pointInPolygon(p0, pokoj.points)) {
+        przesuwaniePokojuRef.current = { id: pokoj.id, start: p0, przesuniete: { x: 0, y: 0 } };
+        onRoomMoveStart?.();
+        return;
+      }
+    }
     onClearSelection();
     if (toolMode !== "zaznacz") return;
     const p = stage && planPoint(stage);
@@ -1441,6 +1479,24 @@ export function DesignCanvas({
 
   function handleStageMouseMove(e: KonvaEventObject<MouseEvent>) {
     const stage = e.target.getStage();
+
+    const ruchPokoju = przesuwaniePokojuRef.current;
+    if (ruchPokoju && stage) {
+      const p = planPoint(stage);
+      if (p) {
+        // Całkowite przesunięcie od chwycenia, przyciągnięte do kroku siatki — pokój
+        // skacze o oczko, jak narożnik; do rodzica idzie tylko PRZYROST.
+        const dx = snapOn ? snap(p.x - ruchPokoju.start.x, krok) : p.x - ruchPokoju.start.x;
+        const dy = snapOn ? snap(p.y - ruchPokoju.start.y, krok) : p.y - ruchPokoju.start.y;
+        const ix = dx - ruchPokoju.przesuniete.x;
+        const iy = dy - ruchPokoju.przesuniete.y;
+        if (ix !== 0 || iy !== 0) {
+          ruchPokoju.przesuniete = { x: dx, y: dy };
+          onMoveRoom?.(ruchPokoju.id, ix, iy);
+        }
+      }
+      return;
+    }
 
     // Pozycja kursora w jednostkach planu — pasek stanu przelicza ją na metry.
     // `null` poza obszarem planu, żeby nie pokazywać współrzędnych spoza rysunku.
@@ -1528,6 +1584,12 @@ export function DesignCanvas({
   }
 
   function handleStageMouseUp() {
+    const ruchPokoju = przesuwaniePokojuRef.current;
+    if (ruchPokoju) {
+      przesuwaniePokojuRef.current = null;
+      onRoomMoveEnd?.(ruchPokoju.przesuniete.x !== 0 || ruchPokoju.przesuniete.y !== 0);
+      return;
+    }
     if (roomRectStartRef.current) {
       roomRectStartRef.current = null;
       const rect = roomRectRef.current;
@@ -1553,7 +1615,17 @@ export function DesignCanvas({
     const rect = marqueeRectRef.current;
     marqueeRectRef.current = null;
     setMarqueeRect(null);
-    if (!rect || (rect.w < 4 && rect.h < 4)) return; // zbyt mały ruch = zwykły klik, nie zaznaczanie
+    if (!rect || (rect.w < 4 && rect.h < 4)) {
+      // Zbyt mały ruch = zwykły klik, nie zaznaczanie obszarem. Klik w puste miejsce
+      // WEWNĄTRZ obrysu zaznacza to pomieszczenie (audyt 5.11.2026, B9): podpowiedź
+      // narzędzia mówi „kliknij pomieszczenie", a zaznaczał dopiero trafiony obrys albo
+      // nazwa. Samo wnętrze na płótnie celowo nie łapie zdarzeń (patrz wypełnienie
+      // niżej), więc trafienie liczymy z geometrii. Poza pokojami — zaznaczenie zostaje
+      // wyczyszczone, jak było (`onClearSelection` w `handleStageMouseDown`).
+      const pokoj = rect && pomieszczeniePodPunktem({ x: rect.x, y: rect.y }, roomShapes);
+      if (pokoj) onSelectRoom(pokoj.id);
+      return;
+    }
     const ids = elements
       .filter((el) => el.x >= rect.x && el.x <= rect.x + rect.w && el.y >= rect.y && el.y <= rect.y + rect.h)
       .map((el) => el.id);
@@ -1633,6 +1705,10 @@ export function DesignCanvas({
     }
     if (toolMode === "skala") {
       onAddCalibPoint(p);
+      return;
+    }
+    if (toolMode === "notatka") {
+      onPlaceNote?.(p);
       return;
     }
     if (toolMode === "elementy") {
@@ -2144,7 +2220,7 @@ export function DesignCanvas({
             ))}
             {podklad.elements.map((el) => (
               <Group key={el.id} x={el.x} y={el.y} rotation={el.rotation ?? 0} scaleX={skalaSymbolu(el.type)} scaleY={skalaSymbolu(el.type)}>
-                <ElementGlyphKonva type={el.type} color="#64748B" gangs={el.gangs} agdLetter={el.agdLetter} wymiaryM={fixtureSizeM(el) ?? undefined} />
+                <ElementGlyphKonva type={el.type} color="#64748B" gangs={el.gangs} agdLetter={el.agdLetter} wymiaryM={fixtureSizeM(el) ?? undefined} obrot={el.rotation ?? 0} />
               </Group>
             ))}
           </Layer>
@@ -3342,6 +3418,7 @@ export function DesignCanvas({
                   gangs={el.gangs}
                   agdLetter={el.agdLetter}
                   wymiaryM={fixtureSizeM(el) ?? undefined}
+                  obrot={el.rotation ?? 0}
                 />
                 {/* Obszar trafienia — patrz komentarz przy `skalaSymbolu`. Rysowany po
                     glifie, więc leży NA nim w kolejności rysowania, ale będąc
@@ -3450,6 +3527,55 @@ export function DesignCanvas({
             );
           })}
 
+          {/* Notatki dla montera (F6) — NAD osprzętem, żeby symbol nie przykrył tekstu; w białej ramce, rozmiar w jednostkach PLANU,
+              jak opisy pomieszczeń: na wydruku (rasteryzowanym z tej sceny) mają być
+              czytelne w skali rysunku, a nie w pikselach ekranu. Przeciągalne tylko
+              w „Zaznacz", żeby w narzędziach rysujących klik w notatkę nie ruszał jej
+              zamiast stawiać punkt. */}
+          {notatki.map((n) => {
+            const { font, szer, wys } = wymiaryNotatki(n.tekst, metersPerUnit);
+            const zazn = selected?.kind === "note" && selected.id === n.id;
+            return (
+              <Group
+                key={n.id}
+                x={n.x}
+                y={n.y}
+                data-testid="notatka"
+                draggable={toolMode === "zaznacz" && !szczypie}
+                listening={toolMode === "zaznacz" || toolMode === "notatka"}
+                onDragEnd={(e) => onMoveNote?.(n.id, { x: e.target.x(), y: e.target.y() })}
+                {...klikAlboDotyk((e) => {
+                  e.cancelBubble = true;
+                  onSelectNote?.(n.id);
+                })}
+                {...dwuklikAlboDotyk((e) => {
+                  e.cancelBubble = true;
+                  onEditNote?.(n.id);
+                })}
+              >
+                <Rect
+                  width={szer}
+                  height={wys}
+                  fill="#FFFDF5"
+                  stroke={zazn ? "#C1793F" : "#8A5526"}
+                  strokeWidth={zazn ? px(2) : px(1)}
+                  dash={zazn ? undefined : [px(4), px(3)]}
+                  cornerRadius={font * 0.25}
+                  opacity={0.95}
+                />
+                <Text
+                  x={font * 0.6}
+                  y={font * 0.3}
+                  text={n.tekst}
+                  fontSize={font}
+                  lineHeight={1.25}
+                  fill="#5B3A1A"
+                  listening={false}
+                />
+              </Group>
+            );
+          })}
+
           {marqueeRect && (
             <Rect
               x={marqueeRect.x}
@@ -3481,7 +3607,7 @@ export function DesignCanvas({
                 scaleY={skalaSymbolu(duchElementu.type)}
                 opacity={0.55}
               >
-                <ElementGlyphKonva type={duchElementu.type} color={def.color} gangs={duchElementu.gangs} agdLetter={duchElementu.agdLetter} />
+                <ElementGlyphKonva type={duchElementu.type} color={def.color} gangs={duchElementu.gangs} agdLetter={duchElementu.agdLetter} obrot={poz.rotation} />
               </Group>
             </Layer>
           );

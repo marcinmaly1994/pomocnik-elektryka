@@ -208,6 +208,108 @@ export function nextRoomName(countOnFloor: number): string {
   return `Pomieszczenie ${countOnFloor + 1}`;
 }
 
+const kluczNazwy = (n: string) => n.trim().toLocaleLowerCase("pl");
+
+/**
+ * Nazwa pomieszczenia, która nie powtarza żadnej z `zajete` (te z tej samej kondygnacji).
+ *
+ * Element wiąże się z pomieszczeniem po NAZWIE (`InstallationElement.room`), więc dwa
+ * obrysy o tej samej nazwie są nie do odróżnienia: zmiana nazwy jednego przepisywała
+ * elementy obu, a „Sprawdzenie rzutu" pisało „Sypialnia, Sypialnia, Kuchnia" (audyt
+ * 5.11.2026, B7). Wolna nazwa wraca bez zmian; zajęta dostaje kolejny numer —
+ * „Sypialnia" → „Sypialnia 2", a „Pomieszczenie 2" → „Pomieszczenie 3" (nie
+ * „Pomieszczenie 2 2"). Porównanie bez wielkości liter: „sypialnia" obok „Sypialnia"
+ * byłaby dla człowieka tym samym pokojem.
+ */
+export function unikalnaNazwaPomieszczenia(nazwa: string, zajete: string[]): string {
+  const czysta = nazwa.trim();
+  const uzyte = new Set(zajete.map(kluczNazwy));
+  if (!uzyte.has(kluczNazwy(czysta))) return czysta;
+  const zNumerem = czysta.match(/^(.*\S)\s+(\d+)$/);
+  const rdzen = zNumerem ? zNumerem[1] : czysta;
+  let numer = zNumerem ? Number(zNumerem[2]) + 1 : 2;
+  while (uzyte.has(kluczNazwy(`${rdzen} ${numer}`))) numer++;
+  return `${rdzen} ${numer}`;
+}
+
+/**
+ * Pomieszczenie, w którego obrysie leży punkt — przy nakładających się obrysach
+ * NAJMNIEJSZE, bo to ono jest w odbiorze „na wierzchu" (wnęka w salonie, łazienka
+ * obrysowana wewnątrz obrysu całego mieszkania). `null`, gdy punkt nie leży w żadnym.
+ *
+ * Dla kliknięcia we wnętrze pokoju (audyt 5.11.2026, B9): samo wnętrze na płótnie
+ * celowo nie łapie zdarzeń (patrz wypełnienie w DesignCanvas — inaczej ramka
+ * zaznaczania nie mogłaby zacząć się w pokoju), więc trafienie liczymy tutaj.
+ */
+export function pomieszczeniePodPunktem(p: Point, roomShapes: RoomShape[]): RoomShape | null {
+  let najlepszy: RoomShape | null = null;
+  let najmniejsze = Infinity;
+  for (const r of roomShapes) {
+    if (!pointInPolygon(p, r.points)) continue;
+    const pole = polygonArea(r.points);
+    if (pole < najmniejsze) {
+      najmniejsze = pole;
+      najlepszy = r;
+    }
+  }
+  return najlepszy;
+}
+
+/**
+ * Uzupełnia `roomId` elementów: id obrysu o nazwie `room` na TEJ SAMEJ kondygnacji, albo
+ * nic, gdy takiego obrysu nie ma (nazwa wpisana ręcznie, „Bez pomieszczenia").
+ *
+ * Źródłem przypisania zostaje nazwa: ustawia ją kilkanaście dróg (wstawianie,
+ * przeciąganie, dorysowanie i edycja obrysu, wczytanie), a id wylicza się z niej w jednym
+ * miejscu, więc żadna droga nie może zapomnieć go poprawić. Jednoznaczne, bo nazwy są
+ * unikalne na kondygnacji (`unikalnaNazwaPomieszczenia`). W drugą stronę — zmiana nazwy
+ * pokoju — store przepisuje elementy PO ID (`renameRoomShape`).
+ *
+ * Zwraca tę samą tablicę, gdy nic się nie zmieniło.
+ */
+export function synchronizujRoomId(elements: InstallationElement[], roomShapes: RoomShape[]): InstallationElement[] {
+  // kondygnacja → nazwa → id (pierwszy obrys o tej nazwie, gdyby zapis miał jeszcze duplikaty)
+  const poNazwie = new Map<string, Map<string, string>>();
+  for (const r of roomShapes) {
+    const pietro = poNazwie.get(r.floor) ?? new Map<string, string>();
+    poNazwie.set(r.floor, pietro);
+    if (!pietro.has(r.name)) pietro.set(r.name, r.id);
+  }
+  let zmiana = false;
+  const wynik = elements.map((e) => {
+    const id = poNazwie.get(e.floor)?.get(e.room);
+    if (id === e.roomId) return e;
+    zmiana = true;
+    if (id) return { ...e, roomId: id };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { roomId: _bezId, ...bez } = e;
+    return bez;
+  });
+  return zmiana ? wynik : elements;
+}
+
+/**
+ * Nadaje numery powtórzonym nazwom pomieszczeń na tej samej kondygnacji — dla projektów
+ * zapisanych, zanim `unikalnaNazwaPomieszczenia` pilnowała tego przy dodawaniu. Pierwszy
+ * obrys zachowuje nazwę, kolejne dostają numer. Elementy NIE są tu ruszane: ich
+ * przypisanie prostuje potem `reconcileRoomsOnLoad`, z geometrii. Zwraca tę samą
+ * tablicę, gdy nie było powtórzeń.
+ */
+export function ujednoznacznijNazwyPomieszczen(roomShapes: RoomShape[]): RoomShape[] {
+  const zajetePietra = new Map<string, string[]>();
+  let zmiana = false;
+  const wynik = roomShapes.map((r) => {
+    const zajete = zajetePietra.get(r.floor) ?? [];
+    zajetePietra.set(r.floor, zajete);
+    const nazwa = unikalnaNazwaPomieszczenia(r.name, zajete);
+    zajete.push(nazwa);
+    if (nazwa === r.name) return r;
+    zmiana = true;
+    return { ...r, name: nazwa };
+  });
+  return zmiana ? wynik : roomShapes;
+}
+
 /** Następny kolor w cyklu — używane przy "przełącz kolor pomieszczenia" (recolorRoomShape). */
 export function nextRoomColor(currentColor: string): string {
   const idx = ROOM_COLORS.indexOf(currentColor as (typeof ROOM_COLORS)[number]);
@@ -489,6 +591,42 @@ export const ZASTOSOWANIE_OPIS: Record<ZastosowaniePokoju, string> = {
 
 export function zastosowaniePokoju(roomName: string, roomShapes: RoomShape[]): ZastosowaniePokoju {
   return ZASTOSOWANIE[typPomieszczenia(roomName, roomShapes)];
+}
+
+/**
+ * Pomieszczenia ELEMENTU — warianty powyższych funkcji, które patrzą tylko na obrysy
+ * z kondygnacji elementu (F1 z audytu 5.11.2026). Obwody liczą się z elementów całego
+ * budynku, a szukanie po samej nazwie brało typ z pierwszego obrysu o tej nazwie
+ * w budynku: „Pracownia" na piętrze dostawała typ „Pracowni" z parteru.
+ */
+function obrysyPietra(e: InstallationElement, roomShapes: RoomShape[]): RoomShape[] {
+  return roomShapes.filter((r) => r.floor === e.floor);
+}
+
+/** Typ pomieszczenia elementu: z jego obrysu (po `roomId`, a bez niego po nazwie na tej
+ *  kondygnacji), a w braku obrysu — zgadnięty z nazwy. */
+export function typPokojuElementu(e: InstallationElement, roomShapes: RoomShape[]): RoomType {
+  const obrys = (e.roomId && roomShapes.find((r) => r.id === e.roomId)) || undefined;
+  return obrys?.type ?? typPomieszczenia(e.room, obrysyPietra(e, roomShapes));
+}
+
+/** Czy element stoi w pomieszczeniu „mokrym" — patrz `isWetRoomName`. */
+export function elementWMokrym(e: InstallationElement, roomShapes: RoomShape[]): boolean {
+  return WET_ROOM_TYPES.includes(typPokojuElementu(e, roomShapes));
+}
+
+/** Zastosowanie pomieszczenia elementu — patrz `zastosowaniePokoju`. */
+export function zastosowanieElementu(e: InstallationElement, roomShapes: RoomShape[]): ZastosowaniePokoju {
+  return ZASTOSOWANIE[typPokojuElementu(e, roomShapes)];
+}
+
+/**
+ * Klucz pomieszczenia elementu do GRUPOWANIA (obwody, grupy światła, zestawienia): id
+ * obrysu, a dla nazw bez obrysu — kondygnacja z nazwą. Dwie „Łazienki" na dwóch piętrach
+ * to dwa klucze, nie jeden.
+ */
+export function kluczPokoju(e: InstallationElement): string {
+  return e.roomId ?? `${e.floor}/${e.room}`;
 }
 
 /** Skala kondygnacji (metrów na jednostkę planu) albo `null`, jeśli nie skalibrowana. */

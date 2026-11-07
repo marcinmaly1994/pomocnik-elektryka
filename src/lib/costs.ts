@@ -1,5 +1,6 @@
 import type { Circuit, ElementType, InstallationElement, PanelDevice, PriceTable, RcdGroup } from "@/types";
 import { ELEMENT_TYPES, gniazdoPodwojne, mechanizmowWElemencie } from "@/lib/elements";
+import { kluczPokoju } from "@/lib/design";
 
 export const DEFAULT_PRICES: PriceTable = {
   gniazdko: 15, gniazdkoPodwojne: 22, gniazdkoHerm: 25, gniazdko400: 45, wypustAGD: 8, ladowarkaEV: 0,
@@ -237,7 +238,8 @@ export function computeCosts(
   // którego nie ma: jedna puszka, 6,15 zł brutto i pełna tabela kosztorysu u kogoś,
   // kto dopiero wszedł na stronę i niczego jeszcze nie narysował. Stąd warunek na
   // `elements.length` — zero elementów to zero pomieszczeń, nie „co najmniej jedno".
-  const rooms = elements.length ? new Set(elements.map((e) => e.room)).size || 1 : 0;
+  // Po POKOJU, nie po nazwie: dwie „Łazienki" na dwóch piętrach to dwa pomieszczenia (F1).
+  const rooms = elements.length ? new Set(elements.map(kluczPokoju)).size || 1 : 0;
   q.puszkaPodtynkowa = pointElements.length;
   q.puszkaRozgalezna = Math.max(q.puszkaRozgalezna, rooms);
   q.robocizna = pointElements.length;

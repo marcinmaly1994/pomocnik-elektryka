@@ -48,12 +48,58 @@ export interface RysunekPdfOpcje {
   /** Zestawienie ilościowe na osobnej stronie za rysunkiem. Pominięte, gdy puste —
    *  pusta strona z samym nagłówkiem to gorszy dokument niż jego brak. */
   zestawienie?: PozycjaZestawienia[];
+  /** Format arkusza (zawsze w poziomie). Domyślnie A4. */
+  format?: FormatArkusza;
+  /**
+   * Ile pikseli rastra `rysunek` przypada na metr w naturze. Podany — rysunek drukuje się
+   * w NORMOWEJ skali liczbowej (patrz `dobierzSkale`), a skala trafia do tabliczki.
+   * Pominięty (schemat, rzut bez kalibracji) — rysunek wypełnia pole jak dotąd.
+   */
+  pikseliNaMetr?: number;
 }
 
-// A4 poziomo. Rysunki są szersze niż wyższe — i schemat jednokreskowy, i rzut
-// kondygnacji — więc pionowa kartka marnowałaby połowę arkusza.
-const STRONA_W = 841.89;
-const STRONA_H = 595.28;
+export type FormatArkusza = "A4" | "A3";
+
+/** Wymiary arkusza w poziomie [pt]. */
+export const ARKUSZE: Record<FormatArkusza, { w: number; h: number }> = {
+  A4: { w: 841.89, h: 595.28 },
+  A3: { w: 1190.55, h: 841.89 },
+};
+
+/**
+ * Skale rysunku budowlanego, od najdokładniejszej. Rzut instalacji rysuje się zwykle
+ * w 1:50 albo 1:100; mniejsze skale są dla dużych budynków na małej kartce.
+ */
+export const SKALE_NORMOWE = [20, 25, 50, 75, 100, 150, 200, 250, 500, 1000] as const;
+
+/** Punkty typograficzne na milimetr papieru. */
+const PT_NA_MM = 72 / 25.4;
+
+/**
+ * Skala liczbowa wydruku (F10 z audytu 5.11.2026).
+ *
+ * Rysunek wpasowany w pole wychodził w skali przypadkowej, np. 1:63,7 — podziałka
+ * pozwalała coś odmierzyć, ale nie dało się napisać skali w tabliczce, a monter
+ * przykładający linijkę do kartki nie miał na co przeliczać. Bierzemy więc NAJBLIŻSZĄ
+ * normową skalę, w której rysunek jeszcze się mieści (czyli mianownik nie mniejszy
+ * od dopasowanego), i pomniejszamy rysunek dokładnie do niej.
+ *
+ * `ptNaPx` to powiększenie, z jakim rysunek mieści się w polu. Zwraca mianownik skali
+ * i powiększenie, które go realizuje (nigdy większe od `ptNaPx`). Gdy rysunek nie
+ * mieści się nawet w 1:1000, zwraca `null` — wtedy zostaje dopasowanie bez skali.
+ */
+export function dobierzSkale(ptNaPx: number, pikseliNaMetr: number): { mianownik: number; ptNaPx: number } | null {
+  if (!(ptNaPx > 0) || !(pikseliNaMetr > 0)) return null;
+  // milimetry w naturze na milimetr papieru przy dopasowaniu
+  const dopasowany = (1000 * PT_NA_MM) / (pikseliNaMetr * ptNaPx);
+  // tolerancja na błąd zaokrąglenia: 1:50,0000001 to wciąż 1:50
+  const mianownik = SKALE_NORMOWE.find((n) => n >= dopasowany * (1 - 1e-9));
+  if (!mianownik) return null;
+  return { mianownik, ptNaPx: (1000 * PT_NA_MM) / (pikseliNaMetr * mianownik) };
+}
+
+// Kartka zawsze pozioma (A4 albo A3 — patrz `ARKUSZE`). Rysunki są szersze niż wyższe —
+// i schemat jednokreskowy, i rzut kondygnacji — więc pionowa marnowałaby pół arkusza.
 const MARGINES = 36;
 
 /** Szerokość kolumny legendy. Na tyle wąska, żeby rysunek dostał resztę kartki,
@@ -234,20 +280,34 @@ function wybierzUklad({ rysW, rysH, pelnaW, poleH, legendaPozycji, kluczPozycji 
   };
 }
 
-export function buildDrawingDoc({ tytul, header, rysunek, legenda, kluczTras, zestawienie, obwody }: RysunekPdfOpcje): PdfDoc {
+export function buildDrawingDoc({
+  tytul,
+  header,
+  rysunek,
+  legenda,
+  kluczTras,
+  zestawienie,
+  obwody,
+  format = "A4",
+  pikseliNaMetr,
+}: RysunekPdfOpcje): PdfDoc {
+  const arkusz = ARKUSZE[format];
+  // Skala jest cechą RYSUNKU, a tabliczka powtarza się na każdej stronie — także na
+  // zestawieniu. Liczona niżej, przed pierwszym narysowaniem stopki.
+  let skalaRysunku: number | undefined;
   const doc = createPdfDoc({
-    pageW: STRONA_W,
-    pageH: STRONA_H,
+    pageW: arkusz.w,
+    pageH: arkusz.h,
     margin: MARGINES,
-    footer: (d) => drawTitleBlock(d, header, tytul),
+    footer: (d) => drawTitleBlock(d, header, tytul, skalaRysunku !== undefined ? { skala: `1:${skalaRysunku}`, format } : undefined),
   });
 
   const maLegende = !!legenda?.length;
   const maKlucz = !!kluczTras?.length;
   const poleX = MARGINES;
   const poleY = MARGINES + TABLICZKA_H;
-  const pelnaW = STRONA_W - MARGINES * 2;
-  const poleH = STRONA_H - poleY - MARGINES;
+  const pelnaW = doc.pageW - MARGINES * 2;
+  const poleH = arkusz.h - poleY - MARGINES;
 
   const uklad = wybierzUklad({
     rysW: rysunek.width,
@@ -257,7 +317,13 @@ export function buildDrawingDoc({ tytul, header, rysunek, legenda, kluczTras, ze
     legendaPozycji: legenda?.length ?? 0,
     kluczPozycji: kluczTras?.length ?? 0,
   });
-  const { podSpodem, kolumnyLegendy, blokW, blokH, poleW, dostepnaH, skala } = uklad;
+  const { podSpodem, kolumnyLegendy, blokW, blokH, poleW, dostepnaH } = uklad;
+  let skala = uklad.skala;
+  const normowa = pikseliNaMetr ? dobierzSkale(skala, pikseliNaMetr) : null;
+  if (normowa) {
+    skala = normowa.ptNaPx;
+    skalaRysunku = normowa.mianownik;
+  }
 
   // Rysunek wpisany w pole Z ZACHOWANIEM PROPORCJI i wyśrodkowany. Rozciągnięcie do
   // pełnego pola zniekształciłoby symbole — a na rzucie instalacji proporcje niosą
@@ -285,7 +351,7 @@ export function buildDrawingDoc({ tytul, header, rysunek, legenda, kluczTras, ze
      * się w polu, więc wyrównanie do rysunku nigdy nie wypycha go poza kartkę.
      */
     const gora = Math.min(poleY + poleH, Math.max(rysDol + rysH, poleY + blokH));
-    const lewy = STRONA_W - MARGINES - blokW;
+    const lewy = doc.pageW - MARGINES - blokW;
     let dol = gora;
     if (maLegende) {
       const h = wymiarLegendy(legenda!.length, kolumnyLegendy).h;
@@ -369,11 +435,11 @@ function rysujKlucz(doc: PdfDoc, pozycje: PozycjaKlucza[], x: number, dol: numbe
  * rzucie jest którym obwodem w rozdzielnicy. Bez niego kolor jest ładny, ale niemy.
  */
 function rysujSpisObwodow(doc: PdfDoc, obwody: PozycjaObwodu[]): void {
-  doc.ensure(STRONA_H);
+  doc.ensure(doc.pageH);
   doc.text("SPIS OBWODÓW", MARGINES, doc.y - 12, 11, true);
   doc.y -= 30;
 
-  const kolZabezp = STRONA_W - MARGINES - 90;
+  const kolZabezp = doc.pageW - MARGINES - 90;
   const kolKabel = kolZabezp - 150;
   const kolNazwa = MARGINES + 40;
 
@@ -383,7 +449,7 @@ function rysujSpisObwodow(doc: PdfDoc, obwody: PozycjaObwodu[]): void {
     doc.text("Przewód", kolKabel, doc.y, 8, true, 0.35);
     doc.text("Zabezpieczenie", kolZabezp, doc.y, 8, true, 0.35);
     doc.y -= 6;
-    doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.6, 0.55);
+    doc.line(MARGINES, doc.y, doc.pageW - MARGINES, doc.y, 0.6, 0.55);
     doc.y -= 12;
   };
   naglowek();
@@ -399,7 +465,7 @@ function rysujSpisObwodow(doc: PdfDoc, obwody: PozycjaObwodu[]): void {
     doc.text(pdfFitText(o.kabel, kolZabezp - kolKabel - 10, 8.5, false), kolKabel, doc.y, 8.5);
     doc.text(pdfFitText(o.zabezpieczenie, 84, 8.5, false), kolZabezp, doc.y, 8.5);
     doc.y -= 8;
-    doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.3, 0.9);
+    doc.line(MARGINES, doc.y, doc.pageW - MARGINES, doc.y, 0.3, 0.9);
     doc.y -= 8;
   }
 }
@@ -421,19 +487,19 @@ function rysujSpisObwodow(doc: PdfDoc, obwody: PozycjaObwodu[]): void {
 function rysujZestawienie(doc: PdfDoc, pozycje: PozycjaZestawienia[]): void {
   // Wymuszenie nowej strony: `ensure` z wysokością większą niż cała kartka nie ma
   // szans się zmieścić, więc zamyka bieżącą stronę (razem z tabliczką) i otwiera nową.
-  doc.ensure(STRONA_H);
+  doc.ensure(doc.pageH);
 
   doc.text("ZESTAWIENIE ELEMENTÓW", MARGINES, doc.y - 12, 11, true);
   doc.y -= 30;
 
-  const kolIlosc = STRONA_W - MARGINES - 60;
+  const kolIlosc = doc.pageW - MARGINES - 60;
   const kolPokoj = kolIlosc - 150;
 
   doc.text("Element", MARGINES, doc.y, 8, true, 0.35);
   doc.text("Pomieszczenie", kolPokoj, doc.y, 8, true, 0.35);
   doc.text("Ilość", kolIlosc, doc.y, 8, true, 0.35);
   doc.y -= 6;
-  doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.6, 0.55);
+  doc.line(MARGINES, doc.y, doc.pageW - MARGINES, doc.y, 0.6, 0.55);
   doc.y -= 12;
 
   for (const p of pozycje) {
@@ -445,14 +511,14 @@ function rysujZestawienie(doc: PdfDoc, pozycje: PozycjaZestawienia[]): void {
       doc.text("Pomieszczenie", kolPokoj, doc.y, 8, true, 0.35);
       doc.text("Ilość", kolIlosc, doc.y, 8, true, 0.35);
       doc.y -= 6;
-      doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.6, 0.55);
+      doc.line(MARGINES, doc.y, doc.pageW - MARGINES, doc.y, 0.6, 0.55);
       doc.y -= 12;
     }
     doc.text(pdfFitText(p.element, kolPokoj - MARGINES - 10, 8.5, false), MARGINES, doc.y, 8.5);
     doc.text(pdfFitText(p.pomieszczenie, kolIlosc - kolPokoj - 10, 8.5, false), kolPokoj, doc.y, 8.5);
     doc.text(`${p.ilosc} szt.`, kolIlosc, doc.y, 8.5);
     doc.y -= 8;
-    doc.line(MARGINES, doc.y, STRONA_W - MARGINES, doc.y, 0.3, 0.9);
+    doc.line(MARGINES, doc.y, doc.pageW - MARGINES, doc.y, 0.3, 0.9);
     doc.y -= 8;
   }
 

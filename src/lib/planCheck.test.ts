@@ -311,3 +311,32 @@ describe("wlasne wymiary przyboru", () => {
     expect(checkPlan(wejscie(2.2)).some((i) => i.rule === "strefa2")).toBe(true);
   });
 });
+
+describe("nachodzące pomieszczenia (audyt 5.11.2026, B8)", () => {
+  const prostokat = (name: string, x0: number, y0: number, x1: number, y1: number): RoomShape => ({
+    id: `r-${name}`, floor: "f1", name, color: "#2D5A8C", type: "pokoj",
+    points: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }],
+  });
+
+  it("zachodzące obrysy dają ostrzeżenie z nazwami i pokojami do pokazania", () => {
+    const issues = checkPlan({
+      elements: [],
+      roomShapes: [prostokat("Salon", 0, 0, 200, 200), prostokat("Kuchnia", 150, 0, 300, 200)],
+      metersPerUnit: MPU,
+    });
+    const i = issues.find((x) => x.rule === "pomieszczenia-nachodza");
+    expect(i).toBeDefined();
+    expect(i!.level).toBe("warn");
+    expect(i!.detail).toContain("Salon i Kuchnia");
+    expect(i!.roomIds).toEqual(["r-Salon", "r-Kuchnia"]);
+  });
+
+  it("sąsiednie pokoje ze wspólną ścianą nie dają ostrzeżenia", () => {
+    const issues = checkPlan({
+      elements: [],
+      roomShapes: [prostokat("Salon", 0, 0, 200, 200), prostokat("Kuchnia", 200, 0, 300, 200)],
+      metersPerUnit: MPU,
+    });
+    expect(issues.find((x) => x.rule === "pomieszczenia-nachodza")).toBeUndefined();
+  });
+});

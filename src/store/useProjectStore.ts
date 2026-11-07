@@ -32,6 +32,7 @@ import type {
   ProtocolKey,
   PanelConfig,
   PanelDevice,
+  NotatkaPlanu,
 } from "@/types";
 import {
   DEFAULT_PLAN_SIZE,
@@ -40,6 +41,9 @@ import {
   reassignRoomsOnFloor,
   reconcileRoomsOnLoad,
   roomColorForIndex,
+  synchronizujRoomId,
+  ujednoznacznijNazwyPomieszczen,
+  unikalnaNazwaPomieszczenia,
   scaleOf,
   type PlanSize,
 } from "@/lib/design";
@@ -328,6 +332,9 @@ interface Draft {
    * elementu nie gubiło ręcznie ułożonych zagięć (patrz `applyRouteOverrides`).
    */
   routeOverrides: Record<string, Point[]>;
+  /** Notatki tekstowe na rzucie (F6) — patrz `NotatkaPlanu`. W zapisach sprzed nich brak
+   *  pola; wczytanie uzupełnia pustą listą. */
+  notatki: NotatkaPlanu[];
 }
 
 /** Wartość z wczytywanego zapisu jako tablica; cokolwiek innego to pusta lista.
@@ -341,7 +348,7 @@ function obiektLubPusty<T extends object>(v: T): T {
   return typeof v === "object" && v !== null && !Array.isArray(v) ? v : ({} as T);
 }
 
-const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [], routeOverrides: {} };
+const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [], routeOverrides: {}, notatki: [] };
 
 /** Usuwa poprawki tras, których id odwołuje się do elementu, którego już nie ma
  *  (element skasowany albo cała kondygnacja usunięta) — inaczej `routeOverrides`
@@ -611,8 +618,18 @@ interface ProjectState {
   setRoomShapeType: (id: string, type: RoomType) => void;
   /** Przesuwa JEDEN narożnik obrysu — do edycji kształtu przeciąganiem na planie. */
   moveRoomShapePoint: (id: string, index: number, point: Point) => void;
+  /** Przesuwa CAŁE pomieszczenie o (dx, dy) razem z jego osprzętem i otworami na jego
+   *  krawędziach (F5 z audytu 5.11.2026). `commit: false` — krok przeciągania na żywo,
+   *  bez wpisu do historii (patrz `commitSnapshot`). */
+  przesunPomieszczenie: (id: string, dx: number, dy: number, opts?: { commit?: boolean }) => void;
   recolorRoomShape: (id: string) => void;
   deleteRoomShape: (id: string) => void;
+  /** Notatki na rzucie (F6) — dodanie zwraca id nowej notatki. Pusty tekst nie tworzy
+   *  notatki, a zmiana na pusty ją usuwa: notatka bez treści to niewidoczny śmieć. */
+  dodajNotatke: (floor: string, p: Point, tekst: string) => string | null;
+  zmienNotatke: (id: string, tekst: string) => void;
+  przesunNotatke: (id: string, p: Point) => void;
+  usunNotatke: (id: string) => void;
   removeElements: (ids: string[]) => void;
 
   /** Zapisuje/nadpisuje ręczną poprawkę trasy — patrz `Draft.routeOverrides`. */
@@ -670,7 +687,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setDraft: (updater, opts) => {
     const commit = opts?.commit !== false;
     set((state) => {
-      const next = updater(state.draft);
+      const zmieniony = updater(state.draft);
+      // `roomId` elementów nadąża za nazwami pokoi po KAŻDEJ zmianie planu — patrz
+      // `synchronizujRoomId`. Tańsze niż pilnowanie go w każdej z kilkunastu dróg, które
+      // przypisują pokój, i odporne na to, że któraś o nim zapomni.
+      const elements = synchronizujRoomId(zmieniony.elements, zmieniony.roomShapes);
+      const next = elements === zmieniony.elements ? zmieniony : { ...zmieniony, elements };
       return {
         draft: next,
         past: commit ? [...state.past, state.draft] : state.past,
@@ -847,8 +869,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...surowy,
       elements: tablicaLubPusta(surowy.elements),
       walls: tablicaLubPusta(surowy.walls),
-      roomShapes: tablicaLubPusta(surowy.roomShapes),
+      // Zapisy sprzed pilnowania unikalnych nazw (audyt 5.11.2026, B7) mogą mieć dwa
+      // pokoje o tej samej nazwie na kondygnacji. Drugi dostaje numer, a elementy, które
+      // w nim stoją, przepisze na niego remont przypisań niżej — z geometrii.
+      roomShapes: ujednoznacznijNazwyPomieszczen(tablicaLubPusta(surowy.roomShapes)),
       openings: tablicaLubPusta(surowy.openings),
+      notatki: tablicaLubPusta(surowy.notatki),
       routeOverrides: obiektLubPusty(surowy.routeOverrides),
     };
     const scales = obiektLubPusty(payload.scales);
@@ -860,7 +886,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     // projektu — nie stanem pośrednim, który dałoby się przypadkiem cofnąć.
     const { elements, poprawione } = reconcileRoomsOnLoad(draft.elements, draft.roomShapes, scales);
     set({
-      draft: { ...draft, elements },
+      // Projekty sprzed F1 nie mają `roomId` — uzupełniane tu, po remoncie przypisań.
+      draft: { ...draft, elements: synchronizujRoomId(elements, draft.roomShapes) },
       roomsFixedOnLoad: poprawione,
       floors: payload.floors.length ? payload.floors : [{ id: "f1", name: "Parter" }],
       activeFloorId: payload.activeFloorId || payload.floors[0]?.id || "f1",
@@ -1019,6 +1046,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           wallId: o.wallId ? mapaScian.get(o.wallId) : undefined,
           roomId: o.roomId ? mapaPokoi.get(o.roomId) : undefined,
         }));
+      // `roomId` kopii wskazywałby pokoje ORYGINAŁU — przeliczany niżej, z nazw na nowej
+      // kondygnacji (`synchronizujRoomId`).
       const elements = state.draft.elements
         .filter((e) => e.floor === id)
         .map((e) => ({ ...e, id: crypto.randomUUID(), floor: nowaId }));
@@ -1037,7 +1066,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           walls: [...state.draft.walls, ...walls],
           roomShapes: [...state.draft.roomShapes, ...roomShapes],
           openings: [...state.draft.openings, ...openings],
-          elements: [...state.draft.elements, ...elements],
+          // Notatki też idą z kopią piętra — „kabel w peszlu" dotyczy zwykle obu kondygnacji
+          // tak samo jak ściany, które kopia powiela.
+          notatki: [
+            ...(state.draft.notatki ?? []),
+            ...(state.draft.notatki ?? []).filter((n) => n.floor === id).map((n) => ({ ...n, id: crypto.randomUUID(), floor: nowaId })),
+          ],
+          elements: synchronizujRoomId([...state.draft.elements, ...elements], [...state.draft.roomShapes, ...roomShapes]),
         },
         past: [...state.past, state.draft],
         future: [],
@@ -1054,6 +1089,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         walls: state.draft.walls.filter((w) => w.floor !== id),
         roomShapes: state.draft.roomShapes.filter((r) => r.floor !== id),
         openings: state.draft.openings.filter((o) => o.floor !== id),
+        notatki: (state.draft.notatki ?? []).filter((n) => n.floor !== id),
         routeOverrides: pruneRouteOverrides(state.draft.routeOverrides, remainingElements),
       };
       const bgImages = { ...state.bgImages };
@@ -1453,11 +1489,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   addRoomShape: (floor, points, name, type) => {
     const { draft, setDraft } = get();
-    const countHere = draft.roomShapes.filter((r) => r.floor === floor).length;
+    const nazwyTutaj = draft.roomShapes.filter((r) => r.floor === floor).map((r) => r.name);
+    const countHere = nazwyTutaj.length;
     const room: RoomShape = {
       id: crypto.randomUUID(),
       floor,
-      name: name?.trim() || nextRoomName(countHere),
+      // Bez powtórzeń na kondygnacji — elementy wiążą się z pokojem po NAZWIE (patrz
+      // `unikalnaNazwaPomieszczenia`). Dotyczy też nazwy domyślnej: po usunięciu
+      // „Pomieszczenia 1" licznik dawał drugi raz „Pomieszczenie 2".
+      name: unikalnaNazwaPomieszczenia(name?.trim() || nextRoomName(countHere), nazwyTutaj),
       color: roomColorForIndex(countHere),
       points,
       type,
@@ -1486,11 +1526,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     setDraft((d) => {
       const room = d.roomShapes.find((r) => r.id === id);
       if (!room) return d;
+      // Elementy przepisywane PO ID (F1) — nazwa w elemencie może być jeszcze nieaktualna,
+      // ale id wskazuje ten obrys jednoznacznie. Po nazwie zostaje zapas dla elementów,
+      // które id jeszcze nie mają.
+      // Nazwa sąsiada dostaje numer — inaczej oba pokoje (i ich elementy) skleiłyby się
+      // pod jedną nazwą i następna zmiana nazwy przepisałaby elementy obu.
+      const nazwa = unikalnaNazwaPomieszczenia(
+        newName,
+        d.roomShapes.filter((r) => r.floor === room.floor && r.id !== id).map((r) => r.name)
+      );
       return {
         ...d,
-        roomShapes: d.roomShapes.map((r) => (r.id === id ? { ...r, name: newName } : r)),
+        roomShapes: d.roomShapes.map((r) => (r.id === id ? { ...r, name: nazwa } : r)),
         elements: d.elements.map((e) =>
-          e.floor === room.floor && e.room === room.name ? { ...e, room: newName } : e
+          e.roomId === id || (!e.roomId && e.floor === room.floor && e.room === room.name) ? { ...e, room: nazwa } : e
         ),
       };
     });
@@ -1514,6 +1563,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         elements: reassignRoomsOnFloor(d.elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
       };
     });
+  },
+
+  przesunPomieszczenie: (id, dx, dy, opts) => {
+    if (dx === 0 && dy === 0) return;
+    const { setDraft, scales } = get();
+    setDraft((d) => {
+      const room = d.roomShapes.find((r) => r.id === id);
+      if (!room) return d;
+      const roomShapes = d.roomShapes.map((r) =>
+        r.id === id ? { ...r, points: r.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) } : r
+      );
+      // Osprzęt POKOJU to elementy z jego `roomId` (F1) — nie wszystko, co akurat leży
+      // w obrysie: element sąsiada przy wspólnej ścianie zostaje na miejscu.
+      const elements = d.elements.map((e) => (e.roomId === id ? { ...e, x: e.x + dx, y: e.y + dy } : e));
+      const openings = d.openings.map((o) => (o.roomId === id ? { ...o, x: o.x + dx, y: o.y + dy } : o));
+      return {
+        ...d,
+        roomShapes,
+        openings,
+        // Pokój nasunięty na osprzęt „Bez pomieszczenia" przygarnia go, a ten, który z
+        // niego wyjechał, wraca do tego, co pod nim jest — ta sama reguła co przy
+        // przesuwaniu narożnika (`moveRoomShapePoint`).
+        elements: reassignRoomsOnFloor(elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
+      };
+    }, opts);
   },
 
   recolorRoomShape: (id) => {
@@ -1546,6 +1620,32 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         elements: reassignRoomsOnFloor(d.elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
       };
     });
+  },
+
+  dodajNotatke: (floor, p, tekst) => {
+    const czysty = tekst.trim();
+    if (!czysty) return null;
+    const id = crypto.randomUUID();
+    get().setDraft((d) => ({ ...d, notatki: [...(d.notatki ?? []), { id, floor, x: p.x, y: p.y, tekst: czysty }] }));
+    return id;
+  },
+
+  zmienNotatke: (id, tekst) => {
+    const czysty = tekst.trim();
+    get().setDraft((d) => ({
+      ...d,
+      notatki: czysty
+        ? (d.notatki ?? []).map((n) => (n.id === id ? { ...n, tekst: czysty } : n))
+        : (d.notatki ?? []).filter((n) => n.id !== id),
+    }));
+  },
+
+  przesunNotatke: (id, p) => {
+    get().setDraft((d) => ({ ...d, notatki: (d.notatki ?? []).map((n) => (n.id === id ? { ...n, x: p.x, y: p.y } : n)) }));
+  },
+
+  usunNotatke: (id) => {
+    get().setDraft((d) => ({ ...d, notatki: (d.notatki ?? []).filter((n) => n.id !== id) }));
   },
 
   removeElements: (ids) => {
