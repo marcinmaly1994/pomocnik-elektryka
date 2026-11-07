@@ -130,7 +130,7 @@ import { PlanCheckPanel } from "./PlanCheckPanel";
 import { QuantitiesPanel } from "./QuantitiesPanel";
 import { EditElementModal } from "./EditElementModal";
 import type Konva from "konva";
-import { ELEMENT_TYPES, libSubtitle, VARIANTS_FOR } from "@/lib/elements";
+import { ELEMENT_TYPES, kategoriaElementu, libSubtitle, VARIANTS_FOR, widoczneElementy } from "@/lib/elements";
 import { nearestRouteSegmentIndex, zalamaniaZNowymPunktem } from "@/lib/punktTrasy";
 import { InfoTrasy } from "./InfoTrasy";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
@@ -346,6 +346,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const floorName = floors.find((f) => f.id === activeFloorId)?.name ?? "Kondygnacja";
 
   const elements = useActiveFloorElements();
+  /**
+   * Filtry widoku osprzętu (F8 z audytu 5.11.2026) — ukryte kategorie katalogu znikają
+   * z płótna, a że rzut PDF rasteryzuje się z płótna, także z wydruku (razem z legendą
+   * i zestawieniem). Stan widoku, nie projektu: nie zmienia obliczeń, rozdzielnicy ani
+   * kosztorysu. `elements` zostaje pełne dla wszystkiego poza rysunkiem.
+   */
+  const [ukryteKategorie, setUkryteKategorie] = useState<string[]>([]);
+  const elementyWidoczne = useMemo(() => widoczneElementy(elements, ukryteKategorie), [elements, ukryteKategorie]);
   const rawDocHeader = useProjectStore((st) => st.docHeader);
   const projectName = useProjectStore((st) => st.projectName);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -372,14 +380,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // literami (np. „L" lodówka, „Z" zmywarka) to WIZUALNIE różne symbole, więc
     // dostają osobne wpisy w legendzie, tak jak różna liczba gniazd w ramce.
     const wpisy = new Map<string, { type: ElementType; gangs: number; agdLetter?: string }>();
-    for (const el of elements) {
+    // Legenda opisuje to, co NA RYSUNKU — bez ukrytych kategorii (F8).
+    for (const el of elementyWidoczne) {
       const litera = el.type === "wypustAGD" ? el.agdLetter || "A" : undefined;
       wpisy.set(`${el.type}:${el.gangs || 1}:${litera ?? ""}`, { type: el.type, gangs: el.gangs || 1, agdLetter: litera });
     }
     return [...wpisy.values()].sort((a, b) =>
       ELEMENT_TYPES[a.type].label.localeCompare(ELEMENT_TYPES[b.type].label, "pl") || (a.agdLetter || "").localeCompare(b.agdLetter || "")
     );
-  }, [elements]);
+  }, [elementyWidoczne]);
 
   /**
    * Rzut do PDF-a: rysunek rasteryzowany ze sceny Konvy + legenda złożona z glifów
@@ -500,7 +509,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       kluczTras: trasyNaRysunku.length ? KLUCZ_TRAS : undefined,
       // Rozbicie „rodzaj × pomieszczenie", nie sama suma per rodzaj: monter kupuje
       // według sumy, ale montuje pokój po pokoju i to jemu potrzebny jest podział.
-      zestawienie: pozycjeZestawieniaDoPdf(elements),
+      zestawienie: pozycjeZestawieniaDoPdf(elementyWidoczne),
       obwody: obwodyPdf.length ? obwodyPdf : undefined,
     });
   }
@@ -1883,7 +1892,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   function zaznaczWszystko() {
     setToolMode("zaznacz");
     setSelected(null);
-    setMultiSelected(elements.map((e) => e.id));
+    // Tylko to, co widać — ukryta kategoria (F8) nie może pojechać razem z Delete.
+    setMultiSelected(elementyWidoczne.map((e) => e.id));
   }
 
   function kopiujZaznaczenie() {
@@ -2259,6 +2269,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
   // z aktualnej pozycji elementu, więc jego przesunięcie nie gubi ręcznego układu.
   const cableRoutes = useMemo(() => applyRouteOverrides(rawCableRoutes, routeOverrides), [rawCableRoutes, routeOverrides]);
+  // Trasy do ukrytego osprzętu też schodzą z rysunku (F8): id trasy zasilania to id
+  // elementu, a sterowania — „łącznik->oprawa".
+  const trasyWidoczne = useMemo(() => {
+    if (ukryteKategorie.length === 0) return cableRoutes;
+    const widoczne = new Set(elementyWidoczne.map((e) => e.id));
+    return cableRoutes.filter((r) => r.id.split("->").every((id) => widoczne.has(id)));
+  }, [cableRoutes, elementyWidoczne, ukryteKategorie]);
 
   /**
    * Czy pigułka kontrolek kontekstowych ma w tej chwili jakąkolwiek treść — TE SAME
@@ -3263,6 +3280,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         onToggleDimensions={() => setShowDimensions((d) => !d)}
         showAreas={showAreas}
         onToggleAreas={() => setShowAreas((a) => !a)}
+        ukryteKategorie={ukryteKategorie}
+        onPrzelaczKategorie={(k) => setUkryteKategorie((u) => (u.includes(k) ? u.filter((x) => x !== k) : [...u, k]))}
         showHeights={showHeights}
         onToggleHeights={() => setShowHeights((h) => !h)}
         showUnderlay={showUnderlay}
@@ -3653,6 +3672,19 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           {/* `relative` dla nakładki kontrolek na telefonie — liczy się od PŁÓTNA, nie od
               całej kolumny (pod płótnem stoi jeszcze pasek stanu). */}
           <div className="relative">
+          {/* Ukryte kategorie osprzętu (F8) — widoczne wprost nad rzutem, bo brakujące
+              gniazda bez tej informacji wyglądałyby jak utracone dane. */}
+          {ukryteKategorie.length > 0 && (
+            <div
+              data-testid="ukryte-kategorie"
+              className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-x-2 gap-y-1 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-1 text-xs text-[#8A5526] shadow-sm"
+            >
+              <span>Ukryte na rzucie: {ukryteKategorie.join(", ")}</span>
+              <button className="font-semibold underline" onClick={() => setUkryteKategorie([])}>
+                Pokaż wszystko
+              </button>
+            </div>
+          )}
           {/* Kontrolki bieżącego narzędzia na TELEFONIE: nakładka przy dolnej krawędzi
               rzutu, nie treść nad nim. Każda treść nad płótnem, która pojawia się
               w trakcie rysowania, przesuwa płótno pod palcem — a na telefonie panel
@@ -3669,7 +3701,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <DesignCanvas
             stageRef={stageRef}
             anulujPodgladRef={anulujPodgladRef}
-            elements={elements}
+            elements={elementyWidoczne}
             walls={walls}
             roomShapes={roomShapes}
             notatki={notatkiPietra}
@@ -3698,7 +3730,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             pokazWymiary={showDimensions}
             pokazPowierzchnie={showAreas}
             pokazWysokosci={showHeights}
-            cableRoutes={cableRoutes}
+            cableRoutes={trasyWidoczne}
             routeOverrides={routeOverrides}
             lightGroups={lightGroups}
             elementScale={skalaOsprzetu}
@@ -3798,7 +3830,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               setMultiSelected(ids);
               setSelected(null);
             }}
-            onPlaceElement={wstawianie.wstaw}
+            onPlaceElement={(p) => {
+              // Stawiany element ukrytej kategorii zniknąłby spod kursora — kategoria
+              // wraca na rzut, zanim element powstanie (F8).
+              const k = kategoriaElementu(wstawianie.activeType);
+              if (k && ukryteKategorie.includes(k)) setUkryteKategorie((u) => u.filter((x) => x !== k));
+              wstawianie.wstaw(p);
+            }}
             duchElementu={{
               type: wstawianie.activeType,
               gangs: wstawianie.gangsForType(wstawianie.activeType),
