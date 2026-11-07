@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Archive, Download, FolderOpen, Upload } from "lucide-react";
+import { Archive, Download, FolderOpen, History, Upload } from "lucide-react";
+import { HistoriaWersji } from "@/components/ui/HistoriaWersji";
 import { useProjectStore, type ProjectPayload } from "@/store/useProjectStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
@@ -36,6 +37,8 @@ export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void })
   const [doWczytania, setDoWczytania] = useState<ProjectPayload | null>(null);
   /** Powód odrzucenia wskazanego pliku. */
   const [blad, setBlad] = useState<string | null>(null);
+  /** Okno „Wersje projektu" (F15). */
+  const [wersjeOtwarte, setWersjeOtwarte] = useState(false);
 
   async function obsluzPlik(e: React.ChangeEvent<HTMLInputElement>) {
     const plik = e.target.files?.[0];
@@ -96,6 +99,10 @@ export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void })
               <DropdownMenuSeparator />
             </>
           )}
+          <DropdownMenuItem onSelect={() => setWersjeOtwarte(true)}>
+            <History size={14} /> Wersje projektu…
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => zapiszKopie(getProjectPayload(), projectName)}>
             <Download size={14} /> Zapisz kopię do pliku
           </DropdownMenuItem>
@@ -107,6 +114,8 @@ export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void })
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <HistoriaWersji open={wersjeOtwarte} onOpenChange={setWersjeOtwarte} />
 
       <input
         ref={wejscieRef}

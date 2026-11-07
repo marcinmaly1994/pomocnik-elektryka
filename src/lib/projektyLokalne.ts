@@ -98,6 +98,9 @@ export function usunProjekt(magazyn: Magazyn, id: string): WpisProjektu[] {
   const zostalo = czytajIndeks(magazyn).filter((w) => w.id !== id);
   zapiszIndeks(magazyn, zostalo);
   magazyn.removeItem(kluczProjektu(id));
+  // Razem z projektem jego historia wersji (F15) — patrz `wersjeProjektu.ts`. Klucz
+  // wpisany wprost, bo tamten moduł importuje stąd `Magazyn`.
+  magazyn.removeItem(`pomocnikelektryka_wersje_${id}`);
   if (biezacyId(magazyn) === id) magazyn.removeItem(KLUCZ_BIEZACEGO);
   return zostalo;
 }
