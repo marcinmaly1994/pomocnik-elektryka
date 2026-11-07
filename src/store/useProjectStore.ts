@@ -32,6 +32,7 @@ import type {
   ProtocolKey,
   PanelConfig,
   PanelDevice,
+  NotatkaPlanu,
 } from "@/types";
 import {
   DEFAULT_PLAN_SIZE,
@@ -331,6 +332,9 @@ interface Draft {
    * elementu nie gubiło ręcznie ułożonych zagięć (patrz `applyRouteOverrides`).
    */
   routeOverrides: Record<string, Point[]>;
+  /** Notatki tekstowe na rzucie (F6) — patrz `NotatkaPlanu`. W zapisach sprzed nich brak
+   *  pola; wczytanie uzupełnia pustą listą. */
+  notatki: NotatkaPlanu[];
 }
 
 /** Wartość z wczytywanego zapisu jako tablica; cokolwiek innego to pusta lista.
@@ -344,7 +348,7 @@ function obiektLubPusty<T extends object>(v: T): T {
   return typeof v === "object" && v !== null && !Array.isArray(v) ? v : ({} as T);
 }
 
-const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [], routeOverrides: {} };
+const emptyDraft: Draft = { elements: [], walls: [], roomShapes: [], openings: [], routeOverrides: {}, notatki: [] };
 
 /** Usuwa poprawki tras, których id odwołuje się do elementu, którego już nie ma
  *  (element skasowany albo cała kondygnacja usunięta) — inaczej `routeOverrides`
@@ -620,6 +624,12 @@ interface ProjectState {
   przesunPomieszczenie: (id: string, dx: number, dy: number, opts?: { commit?: boolean }) => void;
   recolorRoomShape: (id: string) => void;
   deleteRoomShape: (id: string) => void;
+  /** Notatki na rzucie (F6) — dodanie zwraca id nowej notatki. Pusty tekst nie tworzy
+   *  notatki, a zmiana na pusty ją usuwa: notatka bez treści to niewidoczny śmieć. */
+  dodajNotatke: (floor: string, p: Point, tekst: string) => string | null;
+  zmienNotatke: (id: string, tekst: string) => void;
+  przesunNotatke: (id: string, p: Point) => void;
+  usunNotatke: (id: string) => void;
   removeElements: (ids: string[]) => void;
 
   /** Zapisuje/nadpisuje ręczną poprawkę trasy — patrz `Draft.routeOverrides`. */
@@ -864,6 +874,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // w nim stoją, przepisze na niego remont przypisań niżej — z geometrii.
       roomShapes: ujednoznacznijNazwyPomieszczen(tablicaLubPusta(surowy.roomShapes)),
       openings: tablicaLubPusta(surowy.openings),
+      notatki: tablicaLubPusta(surowy.notatki),
       routeOverrides: obiektLubPusty(surowy.routeOverrides),
     };
     const scales = obiektLubPusty(payload.scales);
@@ -1055,6 +1066,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           walls: [...state.draft.walls, ...walls],
           roomShapes: [...state.draft.roomShapes, ...roomShapes],
           openings: [...state.draft.openings, ...openings],
+          // Notatki też idą z kopią piętra — „kabel w peszlu" dotyczy zwykle obu kondygnacji
+          // tak samo jak ściany, które kopia powiela.
+          notatki: [
+            ...(state.draft.notatki ?? []),
+            ...(state.draft.notatki ?? []).filter((n) => n.floor === id).map((n) => ({ ...n, id: crypto.randomUUID(), floor: nowaId })),
+          ],
           elements: synchronizujRoomId([...state.draft.elements, ...elements], [...state.draft.roomShapes, ...roomShapes]),
         },
         past: [...state.past, state.draft],
@@ -1072,6 +1089,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         walls: state.draft.walls.filter((w) => w.floor !== id),
         roomShapes: state.draft.roomShapes.filter((r) => r.floor !== id),
         openings: state.draft.openings.filter((o) => o.floor !== id),
+        notatki: (state.draft.notatki ?? []).filter((n) => n.floor !== id),
         routeOverrides: pruneRouteOverrides(state.draft.routeOverrides, remainingElements),
       };
       const bgImages = { ...state.bgImages };
@@ -1602,6 +1620,32 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         elements: reassignRoomsOnFloor(d.elements, roomShapes, room.floor, scaleOf(scales, room.floor), [room.name]),
       };
     });
+  },
+
+  dodajNotatke: (floor, p, tekst) => {
+    const czysty = tekst.trim();
+    if (!czysty) return null;
+    const id = crypto.randomUUID();
+    get().setDraft((d) => ({ ...d, notatki: [...(d.notatki ?? []), { id, floor, x: p.x, y: p.y, tekst: czysty }] }));
+    return id;
+  },
+
+  zmienNotatke: (id, tekst) => {
+    const czysty = tekst.trim();
+    get().setDraft((d) => ({
+      ...d,
+      notatki: czysty
+        ? (d.notatki ?? []).map((n) => (n.id === id ? { ...n, tekst: czysty } : n))
+        : (d.notatki ?? []).filter((n) => n.id !== id),
+    }));
+  },
+
+  przesunNotatke: (id, p) => {
+    get().setDraft((d) => ({ ...d, notatki: (d.notatki ?? []).map((n) => (n.id === id ? { ...n, x: p.x, y: p.y } : n)) }));
+  },
+
+  usunNotatke: (id) => {
+    get().setDraft((d) => ({ ...d, notatki: (d.notatki ?? []).filter((n) => n.id !== id) }));
   },
 
   removeElements: (ids) => {

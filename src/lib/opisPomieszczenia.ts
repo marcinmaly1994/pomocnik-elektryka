@@ -294,3 +294,16 @@ function odcinekPrzecinaProstokat(
   }
   return true;
 }
+
+/**
+ * Wymiary notatki na rzucie (F6) w jednostkach planu: czcionka adnotacji w skali rysunku,
+ * ramka z marginesem wokół najdłuższego wiersza. JEDNO źródło dla płótna (rysuje ramkę)
+ * i kadru wydruku (notatka przy krawędzi rysunku nie może zostać ucięta).
+ */
+export function wymiaryNotatki(tekst: string, mpu: number | null): { font: number; szer: number; wys: number } {
+  const font = fontRzutu(mpu, FALLBACK_FONT_ADNOTACJI);
+  const wiersze = tekst.split("\n");
+  const szer = Math.max(...wiersze.map((w) => szerokoscTekstu(w, font))) + font * 1.2;
+  const wys = wiersze.length * font * 1.25 + font * 0.6;
+  return { font, szer, wys };
+}

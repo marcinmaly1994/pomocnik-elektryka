@@ -312,6 +312,7 @@ export function zbudujProjektPrzykladowy(): ProjectPayload {
       roomShapes,
       openings: otwory(),
       routeOverrides: {},
+      notatki: [],
     },
     floors: [{ id: FLOOR, name: "Parter" }],
     projectName: "Przykład: mieszkanie 70 m²",

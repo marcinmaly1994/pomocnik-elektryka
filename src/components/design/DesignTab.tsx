@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { klawiszDlaEdytora } from "@/lib/klawiaturaEdytora";
+import { wymiaryNotatki } from "@/lib/opisPomieszczenia";
 import {
   AlertTriangle,
   AlignCenterHorizontal,
@@ -290,6 +291,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
   const moveRoomShapePoint = useProjectStore((s) => s.moveRoomShapePoint);
   const przesunPomieszczenie = useProjectStore((s) => s.przesunPomieszczenie);
+  // Notatki na rzucie (F6) — tylko tej kondygnacji; okno treści dla nowej (`p`) albo
+  // edytowanej (`id`) notatki.
+  const wszystkieNotatki = useProjectStore((s) => s.draft.notatki);
+  const notatkiPietra = useMemo(() => (wszystkieNotatki ?? []).filter((n) => n.floor === activeFloorId), [wszystkieNotatki, activeFloorId]);
+  const dodajNotatke = useProjectStore((s) => s.dodajNotatke);
+  const zmienNotatke = useProjectStore((s) => s.zmienNotatke);
+  const przesunNotatke = useProjectStore((s) => s.przesunNotatke);
+  const [edycjaNotatki, setEdycjaNotatki] = useState<{ id?: string; p?: Point; tekst: string } | null>(null);
   const commitSnapshot = useProjectStore((s) => s.commitSnapshot);
   /** Plan sprzed przeciągania pokoju — po puszczeniu idzie do historii jako JEDEN krok. */
   const planPrzedRuchemPokojuRef = useRef<ReturnType<typeof useProjectStore.getState>["draft"] | null>(null);
@@ -400,7 +409,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
      */
     // Symbole, strefy przyborów i otwory z łukiem skrzydła — to samo źródło co kadr
     // na ekranie (patrz `punktyZajeteRysunkiem`).
-    const rogi = punktyZajeteRysunkiem(elements, openings, walls, skalaOsprzetu, activeFloorId, mpu);
+    // Notatki (F6) też należą do rysunku — notatka przy krawędzi nie może wypaść z kadru.
+    const rogi = [
+      ...punktyZajeteRysunkiem(elements, openings, walls, skalaOsprzetu, activeFloorId, mpu),
+      ...notatkiPietra.flatMap((n) => {
+        const { szer, wys } = wymiaryNotatki(n.tekst, mpu);
+        return [{ x: n.x, y: n.y }, { x: n.x + szer, y: n.y + wys }];
+      }),
+    ];
     const kadr = contentBounds(walls, roomShapes, rogi, openings, ZAPAS_ETYKIET * autoSymbolScale(mpu, skalaBezKalibracji)) ?? {
       x: 0,
       y: 0,
@@ -1543,6 +1559,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     p: "pomieszczenie",
     w: "sciany",
     d: "otwory",
+    n: "notatka",
     h: "pan",
     s: "skala",
   };
@@ -2267,6 +2284,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
      * własnymi warunkami. Slot nie świeci już pustką, bo zawsze ma co najmniej przełącznik.
      */
     toolMode === "zaznacz" ||
+    // Zaznaczona notatka (F6) — karta z treścią i „Edytuj"/„Usuń" także w narzędziu
+    // „Notatka", w którym właśnie powstała.
+    selected?.kind === "note" ||
     !!skalaPotwierdzenie;
 
   /**
@@ -2645,6 +2665,25 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {/* Szerokość ZAZNACZONEGO otworu — ten sam wzorzec co grubość zaznaczonej ściany
           wyżej. Wcześniej każdy otwór miał na sztywno 90 cm i nie było jak tego zmienić,
           więc drzwi balkonowe i okno tarasowe rysowały się jak zwykłe drzwi wewnętrzne. */}
+      {/* Zaznaczona NOTATKA (F6) — treść i akcje; edycja tym samym oknem co przy dodawaniu. */}
+      {selected?.kind === "note" && (() => {
+        const n = notatkiPietra.find((x) => x.id === selected.id);
+        if (!n) return null;
+        return (
+          <div className="flex min-w-0 flex-col gap-1.5 text-xs" data-testid="karta-notatki">
+            <span className="font-medium text-slate-600">Notatka</span>
+            <p className="whitespace-pre-wrap break-words text-slate-600">{n.tekst}</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button className="pe-btn-ghost px-2.5 py-1 text-xs" onClick={() => setEdycjaNotatki({ id: n.id, tekst: n.tekst })}>
+                Edytuj
+              </button>
+              <button className="pe-btn-ghost px-2.5 py-1 text-xs text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
+                Usuń
+              </button>
+            </div>
+          </div>
+        );
+      })()}
       {selected?.kind === "opening" && toolMode === "zaznacz" && (() => {
         const o = openings.find((x) => x.id === selected.id);
         if (!o) return null;
@@ -3633,6 +3672,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             elements={elements}
             walls={walls}
             roomShapes={roomShapes}
+            notatki={notatkiPietra}
+            onPlaceNote={(p) => setEdycjaNotatki({ p, tekst: "" })}
+            onSelectNote={(id) => {
+              setMultiSelected([]);
+              setSelected({ kind: "note", id });
+            }}
+            onMoveNote={(id, p) => przesunNotatke(id, p)}
+            onEditNote={(id) => setEdycjaNotatki({ id, tekst: notatkiPietra.find((n) => n.id === id)?.tekst ?? "" })}
             openings={openings}
             toolMode={toolMode}
             roomMode={pokoje.roomMode}
@@ -3898,6 +3945,51 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           stałe, a wyjście z trybu siedzi w samym pasku (przycisk pełnego ekranu). */}
         </div>
       )}
+
+      {/* Treść notatki (F6) — nowej albo edytowanej. Ctrl+Enter zapisuje, bo Enter sam
+          łamie wiersz: notatka bywa dwuwierszowa („puszka pod blatem / 105 cm"). */}
+      <Dialog open={!!edycjaNotatki} onOpenChange={(open) => !open && setEdycjaNotatki(null)}>
+        <DialogContent title={edycjaNotatki?.id ? "Edytuj notatkę" : "Nowa notatka"}>
+          {(() => {
+            const zapisz = () => {
+              const e = edycjaNotatki;
+              if (!e) return;
+              if (e.id) zmienNotatke(e.id, e.tekst);
+              else if (e.p) {
+                const id = dodajNotatke(activeFloorId, e.p, e.tekst);
+                if (id) {
+                  setMultiSelected([]);
+                  setSelected({ kind: "note", id });
+                }
+              }
+              setEdycjaNotatki(null);
+            };
+            return (
+              <>
+                <textarea
+                  autoFocus
+                  rows={3}
+                  aria-label="Treść notatki"
+                  placeholder="np. puszka pod blatem 105 cm"
+                  value={edycjaNotatki?.tekst ?? ""}
+                  onChange={(ev) => setEdycjaNotatki((s) => (s ? { ...s, tekst: ev.target.value } : s))}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+                      ev.preventDefault();
+                      zapisz();
+                    }
+                  }}
+                  className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
+                />
+                <p className="mb-3 text-xs text-slate-400">Notatka trafi też na rzut w PDF. Ctrl+Enter zapisuje.</p>
+                <Button variant="copper" className="w-full" onClick={zapisz}>
+                  {edycjaNotatki?.id ? "Zapisz" : "Dodaj notatkę"}
+                </Button>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!pokoje.pendingRoom} onOpenChange={(open) => !open && pokoje.zamknijPropozycje()}>
         <DialogContent title="Nazwij pomieszczenie">

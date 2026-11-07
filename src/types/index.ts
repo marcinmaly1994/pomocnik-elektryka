@@ -118,6 +118,20 @@ export interface Wall {
 export type OpeningKind = "drzwi" | "okno";
 
 /**
+ * Notatka tekstowa na rzucie (F6 z audytu 5.11.2026) — uwaga dla montera, która ma
+ * wylądować na wydruku obok tego, czego dotyczy: „puszka pod blatem 105 cm",
+ * „kabel do bramy w peszlu". Punkt (`x`, `y`) to lewy górny róg napisu, w jednostkach
+ * planu; tekst może mieć kilka wierszy.
+ */
+export interface NotatkaPlanu {
+  id: string;
+  floor: string;
+  x: number;
+  y: number;
+  tekst: string;
+}
+
+/**
  * Otwór (drzwi, dawniej też okno) wycięty w konkretnej ścianie ALBO w krawędzi narysowanego
  * pomieszczenia — dokładnie jedno z `wallId`/`roomId` jest ustawione, zależnie od
  * tego, w co użytkownik kliknął w trybie „otwory" (pomieszczenia często nie mają
