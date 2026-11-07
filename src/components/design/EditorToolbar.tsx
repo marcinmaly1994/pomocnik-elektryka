@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { KATEGORIE_OSPRZETU } from "@/lib/elements";
-import { ArrowUpFromLine, Cable, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
+import { ArrowUpFromLine, Cable, DraftingCompass, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { FloorManagement, FloorTabs } from "./FloorBar";
@@ -106,6 +106,8 @@ export interface EditorToolbarProps {
    *  użytych symboli. Pobranie pliku dzieje się z poziomu podglądu, żeby nikt nie
    *  wysyłał klientowi rysunku, na który sam nie spojrzał. */
   onPdf?: () => void;
+  /** Pobiera rzut kondygnacji jako DXF z warstwami (F13) — dla CAD-a architekta. */
+  onDxf?: () => void;
   zapisTrwa?: boolean;
   /** Miejsce na pinezkę przypinającą pasek w trybie pełnoekranowym. Wstawiane
    *  przez rodzica jako gniazdo, bo sam pasek nic nie wie o chowaniu się za
@@ -136,6 +138,7 @@ export function EditorToolbar({
   onGridChange,
   onZapisz,
   onPdf,
+  onDxf,
   zapisTrwa,
   elementScale,
   onElementScaleChange,
@@ -544,6 +547,17 @@ export function EditorToolbar({
       {onPdf && (
         <Button variant="ghost" size="icon" onClick={onPdf} title="Rzut do PDF — z tabliczką rysunkową i legendą symboli" aria-label="Rzut do PDF">
           <FileText size={15} />
+        </Button>
+      )}
+      {onDxf && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onDxf}
+          title="Rzut do DXF — ściany, pomieszczenia, osprzęt i trasy na osobnych warstwach, w metrach (AutoCAD, DraftSight, LibreCAD)"
+          aria-label="Rzut do DXF"
+        >
+          <DraftingCompass size={15} />
         </Button>
       )}
 
