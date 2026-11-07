@@ -33,7 +33,7 @@ describe("symbole normowe zamiast plakietek z kodem", () => {
   it("gniazdo RTV i RJ45 różnią się oznaczeniem systemu", () => {
     const napis = (t: "rtvsat" | "rj45") => symbolNormowy(t)!.find((p) => p.k === "tekst");
     expect(napis("rtvsat")).toMatchObject({ t: "TV" });
-    expect(napis("rj45")).toMatchObject({ t: "TD" });
+    expect(napis("rj45")).toMatchObject({ t: "LAN" });
   });
 
   it.each(TYPY_Z_SYMBOLEM_NORMOWYM)("%s dotyka ściany krawędzią pudełka i z niego nie wystaje", (t) => {

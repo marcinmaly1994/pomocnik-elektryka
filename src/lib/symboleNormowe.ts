@@ -36,7 +36,7 @@ const SCIANA = -12;
  * Gniazdo teletechniczne: trzonek od ściany, poprzeczka i prosta „szczęka" otwarta
  * od strony pomieszczenia. Gniazdo wtykowe 230 V ma w tym miejscu łuk; proste boki
  * odróżniają gniazdo słaboprądowe na pierwszy rzut oka, a litery mówią, jakiego
- * systemu (TV — antenowe RTV/SAT, TD — teleinformatyczne/RJ45).
+ * systemu (TV — antenowe RTV/SAT, LAN — gniazdo sieci komputerowej RJ45).
  */
 function gniazdoTeletechniczne(oznaczenie: string): PrymitywSymbolu[] {
   const bar = -4;
@@ -45,7 +45,8 @@ function gniazdoTeletechniczne(oznaczenie: string): PrymitywSymbolu[] {
     { k: "linia", p: [-10, bar, 10, bar] },
     { k: "linia", p: [-8, bar, -8, 9] },
     { k: "linia", p: [8, bar, 8, 9] },
-    { k: "tekst", x: 0, y: 3.5, t: oznaczenie, size: 8 },
+    // trzy litery („LAN") mniejszym stopniem — szczęka ma 16 jednostek szerokości
+    { k: "tekst", x: 0, y: 3.5, t: oznaczenie, size: oznaczenie.length > 2 ? 6 : 8 },
   ];
 }
 
@@ -119,7 +120,7 @@ function domofon(): PrymitywSymbolu[] {
 
 const SYMBOLE: Partial<Record<ElementType, () => PrymitywSymbolu[]>> = {
   rtvsat: () => gniazdoTeletechniczne("TV"),
-  rj45: () => gniazdoTeletechniczne("TD"),
+  rj45: () => gniazdoTeletechniczne("LAN"),
   ladowarkaEV: () => gniazdoWtykowe("EV"),
   sciemniacz,
   dzwonek,
