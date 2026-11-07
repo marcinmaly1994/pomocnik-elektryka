@@ -89,6 +89,7 @@ import { Button } from "@/components/ui/button";
 import { SzablonPomieszczenia } from "@/components/design/SzablonPomieszczenia";
 import { elementySzablonu } from "@/lib/szablonyPomieszczen";
 import { domyslnyPrzewod, RODZAJE_PRZEWODU } from "@/lib/przewodyReczne";
+import { rzutDoDxf } from "@/lib/dxf";
 import type { RodzajPrzewodu } from "@/types";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
@@ -143,7 +144,7 @@ import { ARKUSZE, buildDrawingDoc, hexNaRgb, KLUCZ_TRAS, type FormatArkusza } fr
 import type { PdfDoc } from "@/lib/pdf/engine";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { bialePlotno, plotnoDoPdf, rysujPodzialke, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
-import { projectFileName } from "@/lib/pdf/download";
+import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 
@@ -2306,6 +2307,27 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
   // z aktualnej pozycji elementu, więc jego przesunięcie nie gubi ręcznego układu.
   const cableRoutes = useMemo(() => applyRouteOverrides(rawCableRoutes, routeOverrides), [rawCableRoutes, routeOverrides]);
+
+  /**
+   * Rzut bieżącej kondygnacji do DXF (F13). To samo, co widać na rzucie: osprzęt po
+   * filtrach widoku (F8), trasy tej kondygnacji, ręczne przewody i notatki. Bez
+   * kalibracji skali jednostki przelicza się zastępczą skalą rysowania od zera
+   * (`MANUAL_DRAW_SCALE_MPU`) — tak samo jak wymiary na ekranie.
+   */
+  function pobierzDxf() {
+    const bajty = rzutDoDxf({
+      walls,
+      roomShapes,
+      openings,
+      elements: elementyWidoczne,
+      trasy: cableRoutes.filter((t) => t.floor === activeFloorId),
+      przewody: przewodyPietra,
+      notatki: notatkiPietra,
+      mpu: mpu ?? MANUAL_DRAW_SCALE_MPU,
+      skalaSymboli: skalaOsprzetu,
+    });
+    downloadBlob(new Blob([bajty], { type: "application/dxf" }), projectFileName(`rzut-${floorName}`, projectName, "dxf"));
+  }
   // Trasy do ukrytego osprzętu też schodzą z rysunku (F8): id trasy zasilania to id
   // elementu, a sterowania — „łącznik->oprawa".
   const trasyWidoczne = useMemo(() => {
@@ -3449,6 +3471,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       <EditorToolbar
         zoomStandardowy={zoomSkaliRysowania(mpu)}
         onPdf={() => setPodgladPdf(true)}
+        onDxf={pobierzDxf}
         pelnyEkran={pelnyEkran}
         onTogglePelnyEkran={przelaczPelnyEkran}
         bgImageUrl={bgImageUrl}
