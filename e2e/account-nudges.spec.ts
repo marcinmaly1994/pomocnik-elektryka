@@ -5,11 +5,10 @@ import { skipEntryScreen, otworzKatalogElementow } from "./_flow";
  * Zachęty do założenia konta — projekt bez konta żyje WYŁĄCZNIE w localStorage
  * tej przeglądarki, a apka wcześniej milczała na ten temat.
  *
- * Dwa oddzielne komunikaty, każdy z innym powodem:
- * - trwały baner ryzyka: widoczny cały czas, gdy jest coś do stracenia i nikt
- *   nie jest zalogowany — nie da się go wyciszyć, bo ryzyko nie znika.
- * - jednorazowy prompt po >10 elementach: da się odrzucić na stałe, żeby nie
- *   nagabywać w kółko o to samo.
+ * JEDEN komunikat: trwały baner ryzyka, widoczny cały czas, gdy jest coś do
+ * stracenia i nikt nie jest zalogowany — nie da się go wyciszyć, bo ryzyko nie
+ * znika. Obok stał kiedyś drugi („Włożyłeś już sporo pracy…") z tą samą prośbą;
+ * od 7.11.2026 baner ryzyka sam podaje liczbę elementów, a drugiego paska nie ma.
  */
 
 async function wejdz(page: import("@playwright/test").Page) {
@@ -45,28 +44,13 @@ test("baner ryzyka pojawia się po dodaniu pierwszego elementu i otwiera logowan
   await expect(page.getByRole("heading", { name: "Zaloguj się" })).toBeVisible();
 });
 
-test("prompt „sporo pracy” nie pojawia się poniżej progu elementów", async ({ page }) => {
-  await wejdz(page);
-  await otworzKatalogElementow(page);
-  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
-  await page.evaluate(() => window.scrollTo(0, 0));
-  const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
-  await page.mouse.click(box.x + 150, box.y + 130);
-  await page.waitForTimeout(900);
-
-  await expect(page.getByText(PROMPT_KONTO)).toBeHidden();
-});
-
-test("prompt „sporo pracy” pojawia się po przekroczeniu progu i da się odrzucić na stałe", async ({ page }) => {
+test("przy wielu elementach jest JEDEN pasek o koncie — z ich liczbą, bez drugiego", async ({ page }) => {
   await wejdz(page);
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   // Box mierzony na nowo PRZED KAŻDYM kliknięciem, ze scrollTo(0,0) tuż przedtem:
-  // postawienie PIERWSZEGO elementu odsłania trwały baner ryzyka nad płótnem, co
-  // przesuwa je w dół — box zmierzony wcześniej staje się nieaktualny dla
-  // kolejnych kliknięć w tej samej pętli (ten sam wzorzec co `zoomAndBox` w
-  // room-editing.spec.ts).
-  // próg to >10 — 11 kliknięć w różne miejsca płótna
+  // postawienie PIERWSZEGO elementu odsłania baner ryzyka nad płótnem, co przesuwa
+  // je w dół (ten sam wzorzec co `zoomAndBox` w room-editing.spec.ts).
   for (let i = 0; i < 11; i++) {
     await page.evaluate(() => window.scrollTo(0, 0));
     const box = (await page.locator("[data-testid=plan-okno]").first().boundingBox())!;
@@ -74,15 +58,6 @@ test("prompt „sporo pracy” pojawia się po przekroczeniu progu i da się odr
   }
   await page.waitForTimeout(900);
 
-  await expect(page.getByText(PROMPT_KONTO)).toBeVisible();
-
-  await page.getByRole("button", { name: "Zamknij przypomnienie o koncie" }).click();
-  await expect(page.getByText(PROMPT_KONTO)).toBeHidden();
-
-  // odrzucenie jest trwałe — przetrwa odświeżenie, w przeciwieństwie do banera ryzyka
-  await page.reload();
-  await page.getByRole("button", { name: "Instalacja" }).click();
-  await skipEntryScreen(page);
-  await expect(page.getByText(BANER_RYZYKA)).toBeVisible();
-  await expect(page.getByText(PROMPT_KONTO)).toBeHidden();
+  await expect(page.getByText(BANER_RYZYKA)).toContainText("(11 elementów)");
+  await expect(page.getByText(PROMPT_KONTO)).toHaveCount(0);
 });
