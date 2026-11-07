@@ -41,7 +41,7 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, OpeningKind, Point, RoomType, Wall } from "@/types";
+import type { ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { computeSanitaryZones } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
@@ -68,6 +68,7 @@ import {
   oczkoSiatkiM,
   planSizeForImage,
   roomNameAfterMove,
+  detectRoomName,
   scaleOf,
   wierzcholkiZamknietejSciany,
   wysokoscPlotna,
@@ -1672,6 +1673,24 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         if (zaznaczoneElementy.length > 0) duplikujZaznaczenie();
       }
 
+      // Ctrl+A / Ctrl+C / Ctrl+V — zaznacz wszystko, kopiuj, wklej (F2/F4 z audytu
+      // 5.11.2026). Filtr `klawiszDlaEdytora` na początku już odsiał pola tekstowe i okna,
+      // więc tu klawisze należą do planu; `preventDefault` tylko, gdy coś faktycznie robimy,
+      // żeby Ctrl+C na pustym zaznaczeniu nie zabierał przeglądarce zwykłego kopiowania.
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && tag !== "INPUT" && tag !== "TEXTAREA") {
+        const klawisz = e.key.toLowerCase();
+        if (klawisz === "a" && elements.length > 0) {
+          e.preventDefault();
+          zaznaczWszystko();
+        } else if (klawisz === "c" && zaznaczoneElementy.length > 0) {
+          e.preventDefault();
+          kopiujZaznaczenie();
+        } else if (klawisz === "v" && schowekRef.current.length > 0) {
+          e.preventDefault();
+          wklejSchowek();
+        }
+      }
+
       if ((e.key === "r" || e.key === "R") && tag !== "INPUT" && tag !== "TEXTAREA") {
         const ids = multiSelected.length > 0 ? multiSelected : selected?.kind === "el" ? [selected.id] : [];
         if (ids.length) {
@@ -1818,6 +1837,61 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       });
     if (kopie.length === 0) return;
     setDraft((d) => ({ ...d, elements: [...d.elements, ...kopie] }));
+    setSelected(null);
+    setMultiSelected(kopie.map((k) => k.id));
+  }
+
+  /**
+   * Schowek planu — skopiowane elementy (Ctrl+C), wklejane Ctrl+V (F4 z audytu 5.11.2026).
+   *
+   * Trzymany w pamięci zakładki, nie w schowku systemowym: to dane planu, nie tekst, a
+   * zakładka zostaje zamontowana przy przełączaniu kondygnacji — o to właśnie chodzi,
+   * bo główny powód istnienia schowka to te same gniazda nad sobą na parterze i piętrze.
+   * Licznik wklejeń odsuwa każdą kolejną kopię na tej samej kondygnacji, żeby nie
+   * lądowały jedna na drugiej.
+   */
+  const schowekRef = useRef<InstallationElement[]>([]);
+  const wklejenRef = useRef(0);
+
+  function zaznaczWszystko() {
+    setToolMode("zaznacz");
+    setSelected(null);
+    setMultiSelected(elements.map((e) => e.id));
+  }
+
+  function kopiujZaznaczenie() {
+    const ids = zaznaczoneElementy;
+    schowekRef.current = elements.filter((e) => ids.includes(e.id)).map((e) => ({ ...e }));
+    wklejenRef.current = 0;
+  }
+
+  function wklejSchowek() {
+    const zrodlo = schowekRef.current;
+    if (zrodlo.length === 0) return;
+    const naTejSamej = zrodlo.every((e) => e.floor === activeFloorId);
+    const odsuniecie = naTejSamej ? (GRID / 2) * ++wklejenRef.current : 0;
+    const kopie = zrodlo.map((e) => {
+      const x = e.x + odsuniecie;
+      const y = e.y + odsuniecie;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { roomId: _id, obwod, lightGroup, ...reszta } = e;
+      return {
+        ...reszta,
+        // Na tej samej kondygnacji kopia zachowuje ręczny numer obwodu i grupy, tak jak
+        // Ctrl+D. Na INNEJ — nie: numer obwodu znaczy to samo w całym budynku, więc
+        // gniazdo z piętra dołączyłoby do obwodu z parteru.
+        ...(naTejSamej ? { obwod, lightGroup } : {}),
+        id: crypto.randomUUID(),
+        floor: activeFloorId,
+        x,
+        y,
+        // Pokój z położenia na DOCELOWEJ kondygnacji; nazwa pokoju z innego piętra nie
+        // jest tu „nazwą wpisaną ręcznie", którą trzeba chronić.
+        room: naTejSamej ? roomNameAfterMove({ x, y }, e.room, roomShapes, mpu) : detectRoomName({ x, y }, roomShapes, mpu),
+      };
+    });
+    setDraft((d) => ({ ...d, elements: [...d.elements, ...kopie] }));
+    setToolMode("zaznacz");
     setSelected(null);
     setMultiSelected(kopie.map((k) => k.id));
   }
