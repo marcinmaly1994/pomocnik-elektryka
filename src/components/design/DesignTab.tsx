@@ -70,6 +70,7 @@ import {
   planSizeForImage,
   roomNameAfterMove,
   detectRoomName,
+  guessRoomType,
   scaleOf,
   wierzcholkiZamknietejSciany,
   wysokoscPlotna,
@@ -85,6 +86,8 @@ import {
 } from "@/lib/symbolScale";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SzablonPomieszczenia } from "@/components/design/SzablonPomieszczenia";
+import { elementySzablonu } from "@/lib/szablonyPomieszczen";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
 import { NaglowekNarzedzia, PodpowiedzPrzesun, PodpowiedzZaznacz } from "./PanelNarzedzia";
@@ -3663,6 +3666,25 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                     onCreateWall={sciany.createWallFromRoom}
                     podpisy
                     onUsuniete={() => setSelected(null)}
+                  />
+                  <SzablonPomieszczenia
+                    key={`szablon-${pokoj.id}`}
+                    typ={pokoj.type ?? guessRoomType(pokoj.name)}
+                    elementowWPokoju={elements.filter((e) => e.roomId === pokoj.id).length}
+                    onWstaw={() => {
+                      const nowe = elementySzablonu(pokoj.type ?? guessRoomType(pokoj.name), {
+                        room: pokoj,
+                        elements,
+                        walls,
+                        roomShapes,
+                        openings,
+                        mpu,
+                        skalaSymboli: skalaOsprzetu,
+                      });
+                      // Jeden wpis w historii — jedno Ctrl+Z zdejmuje cały szablon.
+                      if (nowe.length) setDraft((d) => ({ ...d, elements: [...d.elements, ...nowe] }));
+                      return nowe.length;
+                    }}
                   />
                 </div>
               );
