@@ -25,7 +25,11 @@ export function PodgladUdostepnienia({ udostepnienie }: { udostepnienie: Udostep
     (async () => {
       let odp: Response;
       try {
-        odp = await fetch(adresPlikuUdostepnienia(sciezkaPliku(udostepnienie)));
+        // Parametr omija pamięć CDN-u Supabase: Cloudflare trzyma tam kopię pliku po
+        // pierwszym otwarciu i podawał ją dalej także PO wyłączeniu linku (sprawdzone na
+        // żywo 7.11.2026: usunięty plik — „cf-cache-status: HIT", 200), mimo nagłówka
+        // no-cache. Z unikalnym adresem wyłączenie działa od razu.
+        odp = await fetch(`${adresPlikuUdostepnienia(sciezkaPliku(udostepnienie))}?v=${Date.now()}`, { cache: "no-store" });
       } catch {
         if (aktualne) setStan("blad");
         return;

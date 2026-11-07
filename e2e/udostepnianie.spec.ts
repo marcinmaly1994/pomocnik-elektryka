@@ -38,7 +38,8 @@ const kluczeProjektu = (page: Page) =>
   page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("pomocnikelektryka_projekt")));
 
 test("strona udostępnienia pokazuje dokument tylko do odczytu i nie rusza projektów w przeglądarce", async ({ page }) => {
-  await page.route(`**/storage/v1/object/public/udostepnienia/${UID}/${ID}.pdf`, (r) =>
+  // `*` na końcu: strona dokłada parametr omijający pamięć CDN-u (`?v=…`).
+  await page.route(`**/storage/v1/object/public/udostepnienia/${UID}/${ID}.pdf*`, (r) =>
     r.fulfill({ status: 200, contentType: "application/pdf", body: malyPdf() })
   );
   await page.goto(`/udostepnione/${UID}/${ID}`);
