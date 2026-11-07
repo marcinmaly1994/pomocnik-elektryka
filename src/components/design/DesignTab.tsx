@@ -29,7 +29,6 @@ import {
   Plus,
   FlipHorizontal,
   RotateCw,
-  ShieldAlert,
   Trash2,
   Undo2,
   Upload,
@@ -87,7 +86,7 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SzablonPomieszczenia } from "@/components/design/SzablonPomieszczenia";
-import { elementySzablonu } from "@/lib/szablonyPomieszczen";
+import { elementySzablonu, odmianaElementu } from "@/lib/szablonyPomieszczen";
 import { domyslnyPrzewod, RODZAJE_PRZEWODU } from "@/lib/przewodyReczne";
 import { rzutDoDxf } from "@/lib/dxf";
 import type { RodzajPrzewodu } from "@/types";
@@ -190,23 +189,7 @@ const ROOM_MODES: { id: RoomDrawMode; label: string; hint: string }[] = [
   { id: "wielobok", label: "Wielobok", hint: "klikaj kolejne narożniki, na koniec kliknij w pierwszy" },
 ];
 
-/** Klucz w localStorage: użytkownik już raz odrzucił prompt „zabezpiecz kontem"
- *  po włożeniu sporo pracy — nie wracamy do niego po każdym odświeżeniu, bo
- *  stały baner o ryzyku (patrz niżej) i tak zostaje widoczny cały czas. */
-const KONTO_PROMPT_ODRZUCONY_KEY = "pomocnikelektryka_konto_prompt_odrzucony";
-/** Próg „sporo pracy": tyle elementów na planie uznajemy za projekt, którego
- *  szkoda by było stracić przez wyczyszczenie danych przeglądarki. */
-const KONTO_PROMPT_PROG_ELEMENTOW = 10;
 
-function odczytajOdrzuconyPrompt(): boolean {
-  try {
-    return localStorage.getItem(KONTO_PROMPT_ODRZUCONY_KEY) === "1";
-  } catch {
-    // prywatny tryb przeglądarki potrafi rzucać przy dostępie do localStorage —
-    // brak tej flagi jest nieszkodliwy, prompt po prostu pokaże się ponownie
-    return false;
-  }
-}
 
 /** Zwinięcie panelu bocznego to preferencja widoku, nie część projektu — stąd
  *  localStorage, a nie zapisywany dokument. Kto raz zwinie, ma zwinięty na stałe. */
@@ -242,7 +225,8 @@ function odczytajPanelZwiniety(): boolean {
     const zapisane = localStorage.getItem(PANEL_ZWINIETY_KEY);
     if (zapisane !== null) return zapisane === "1";
   } catch {
-    // patrz odczytajOdrzuconyPrompt — brak dostępu do pamięci nie może wywrócić edytora
+    // prywatny tryb przeglądarki potrafi rzucać przy dostępie do localStorage —
+    // brak dostępu do pamięci nie może wywrócić edytora
   }
   return waskiEkran();
 }
@@ -751,7 +735,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [cursor, setCursor] = useState<Point | null>(null);
   /** Nazwa pliku podkładu — sam „wgrany" nie mówi, KTÓRY rzut leży pod spodem. */
   const [bgName, setBgName] = useState<string | null>(null);
-  const [kontoPromptOdrzucony, setKontoPromptOdrzucony] = useState(odczytajOdrzuconyPrompt);
 
   /**
    * Pinezka przypinająca pasek w pełnym ekranie. Renderowana wewnątrz samego paska,
@@ -3136,6 +3119,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           Widoczny cały czas, dopóki jest cokolwiek do stracenia (pusty projekt nie
           jest jeszcze problemem) i użytkownik nie jest zalogowany — bez opcji
           trwałego wyciszenia, bo ryzyko nie znika, dopóki nie założy konta.
+          Od 7.11.2026 JEDYNY pasek o koncie: obok stał drugi, pomarańczowy („Włożyłeś już
+          sporo pracy… załóż konto"), który prosił o to samo — po odświeżeniu oba naraz
+          zajmowały pół paska nad rzutem (audyt 5.11.2026). Liczba elementów, którą
+          tamten podawał, przeszła tutaj.
           NIE dotyczy projektu PRZYKŁADOWEGO: nie ma tam czego stracić (dane siedzą
           w kodzie aplikacji i wczytują się jednym kliknięciem z powrotem), a ostrzeżenie
           o utracie pracy pod cudzym mieszkaniem jest po prostu nieprawdziwe. */}
@@ -3147,8 +3134,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         >
           <AlertTriangle size={14} className="shrink-0" />
           <span>
-            Ten projekt istnieje tylko w tej przeglądarce — wyczyszczenie danych albo otwarcie na innym urządzeniu
-            oznacza jego utratę.
+            Ten projekt istnieje tylko w tej przeglądarce{elements.length > 0 ? ` (${elements.length} ${odmianaElementu(elements.length)})` : ""} —
+            wyczyszczenie danych albo otwarcie na innym urządzeniu oznacza jego utratę.
           </span>
           <button onClick={onOpenAuth} className="font-semibold underline">
             Zabezpiecz kontem
@@ -3156,41 +3143,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         </div>
       )}
 
-      {/* Delikatny, JEDNORAZOWY prompt po włożeniu realnej pracy (>10 elementów) —
-          w odróżnieniu od banera wyżej, ten da się odrzucić na stałe (patrz
-          `kontoPromptOdrzucony`), żeby nie przypominać o tym samym w kółko.
-          Na przykładzie zgaszony z tego samego powodu co baner wyżej — a do tego
-          jego próg (>10 elementów) przykład przekracza od pierwszej sekundy, więc
-          bez tej straży „włożyłeś już sporo pracy" witałoby kogoś, kto nie włożył
-          w ten projekt ani jednego kliknięcia. */}
-      {!session && !kontoPromptOdrzucony && !projektPrzykladowy && elements.length > KONTO_PROMPT_PROG_ELEMENTOW && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C1793F14", color: "#8A5526" }}
-        >
-          <ShieldAlert size={14} className="shrink-0" />
-          <span>Włożyłeś już sporo pracy w ten projekt ({elements.length} elementów) — zabezpiecz go kontem, żeby go nie stracić.</span>
-          <button onClick={onOpenAuth} className="font-semibold underline">
-            Załóż konto / zaloguj się
-          </button>
-          <button
-            onClick={() => {
-              setKontoPromptOdrzucony(true);
-              try {
-                localStorage.setItem(KONTO_PROMPT_ODRZUCONY_KEY, "1");
-              } catch {
-                /* patrz odczytajOdrzuconyPrompt */
-              }
-            }}
-            className="ml-auto shrink-0 opacity-60 hover:opacity-100"
-            title="Nie przypominaj więcej"
-            aria-label="Zamknij przypomnienie o koncie"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
 
       {/* Pierwszy ekran zupełnie świeżego projektu — JEDEN wybór zamiast banera +
           karty onboardingu + pustego edytora naraz (patrz `showEntryScreen` wyżej).
