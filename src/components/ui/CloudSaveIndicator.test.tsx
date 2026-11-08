@@ -22,15 +22,29 @@ describe("CloudSaveIndicator na wąskim ekranie", () => {
     expect(napis.className).toContain("max-sm:sr-only");
   });
 
-  it("tryb compact chowa napis zawsze", () => {
-    render(<CloudSaveIndicator compact />);
-    expect(screen.getByText(/^Zapisano \d/).className).toContain("sr-only");
-    expect(screen.getByText(/^Zapisano \d/).className).not.toContain("max-sm");
+  it("zapisywanie też jest samą ikoną na telefonie", () => {
+    useProjectStore.setState({ cloudBusy: true } as never);
+    render(<CloudSaveIndicator />);
+    expect(screen.getByText("Zapisywanie w chmurze…").className).toContain("max-sm:sr-only");
   });
 
-  it("błąd zapisu też jest samą ikoną na telefonie, z pełnym opisem", () => {
+  it("błąd zapisu zostaje WIDOCZNYM słowem na telefonie, a czytnik dostaje pełne zdanie", () => {
     useProjectStore.setState({ cloudSaveError: "boom" } as never);
     render(<CloudSaveIndicator />);
+    const krotko = screen.getByText("Błąd zapisu");
+    expect(krotko.className).toContain("sm:hidden");
+    expect(krotko.className).not.toContain("sr-only");
+    expect(krotko.getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByText("Nie udało się zapisać w chmurze").className).toContain("max-sm:sr-only");
+  });
+
+  it("konflikt zostaje WIDOCZNYM słowem na telefonie, a czytnik dostaje pełne zdanie", () => {
+    useProjectStore.setState({ konfliktChmury: { rodzaj: "projekt" } } as never);
+    render(<CloudSaveIndicator />);
+    const krotko = screen.getByText("Konflikt");
+    expect(krotko.className).toContain("sm:hidden");
+    expect(krotko.className).not.toContain("sr-only");
+    expect(krotko.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByText("Zmiany niezapisane — konflikt").className).toContain("max-sm:sr-only");
   });
 });

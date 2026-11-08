@@ -4,11 +4,24 @@ import { useProjectStore } from "@/store/useProjectStore";
 /** Odpowiednik `SaveIndicator` (autozapis lokalny), ale dla zapisu W CHMURZE —
  *  widoczny tylko po zalogowaniu, bo to jest właśnie ta różnica konta: bez
  *  sesji nie ma czego pokazywać, projekt i tak zapisuje się tylko lokalnie. */
-export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
-  // Napis jest schowany wizualnie (nie usunięty) poniżej 640 px albo zawsze w trybie
-  // `compact`: przy 375 px „Zapisano 10:42” obok logo, konta i „Menu” zawijało nagłówek
-  // na drugi rząd. Zostaje ikona w kolorze stanu, a pełny opis w `title` i dla czytników.
-  const etykieta = (tekst: string) => <span className={compact ? "sr-only" : "max-sm:sr-only"}>{tekst}</span>;
+export function CloudSaveIndicator() {
+  // RUTYNOWY napis („Zapisano 10:42”, „Zapisywanie…”) jest poniżej 640 px schowany
+  // wizualnie (nie usunięty): obok logo, konta i „Menu” zawijał nagłówek na drugi rząd,
+  // a to stan, o którym nie trzeba co chwilę czytać. Zostaje ikona w kolorze stanu,
+  // a pełny opis w `title` i dla czytników.
+  const etykieta = (tekst: string) => <span className="max-sm:sr-only">{tekst}</span>;
+  // BŁĄD i KONFLIKT to co innego: tu praca NIE jest w chmurze, a sama ikonka 12 px łatwo
+  // umyka. Na telefonie zostaje więc krótkie, widoczne słowo (nagłówek może się wtedy
+  // zawinąć — to rzadki stan, w którym właśnie trzeba zwrócić uwagę), a czytnik dostaje
+  // pełne zdanie zamiast skrótu.
+  const etykietaPilna = (krotko: string, pelny: string) => (
+    <>
+      <span aria-hidden="true" className="sm:hidden">
+        {krotko}
+      </span>
+      <span className="max-sm:sr-only">{pelny}</span>
+    </>
+  );
   const session = useProjectStore((s) => s.session);
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const lastCloudSaveAt = useProjectStore((s) => s.lastCloudSaveAt);
@@ -26,7 +39,7 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
   if (cloudSaveError) {
     return (
       <span className="flex items-center gap-1 text-xs text-red-600" title={cloudSaveError}>
-        <CloudOff size={12} /> {etykieta("Nie udało się zapisać w chmurze")}
+        <CloudOff size={12} /> {etykietaPilna("Błąd zapisu", "Nie udało się zapisać w chmurze")}
       </span>
     );
   }
@@ -46,7 +59,7 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
             : "W chmurze jest nowsza wersja tego projektu. Autozapis wstrzymany do czasu rozstrzygnięcia."
         }
       >
-        <AlertTriangle size={12} /> {etykieta("Zmiany niezapisane — konflikt")}
+        <AlertTriangle size={12} /> {etykietaPilna("Konflikt", "Zmiany niezapisane — konflikt")}
       </span>
     );
   }
