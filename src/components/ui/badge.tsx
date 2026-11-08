@@ -10,7 +10,9 @@ import { cn } from "@/lib/utils";
  * (miedziany — wyróżnienie bez oceny), `caution`, `danger`.
  */
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 text-xs font-semibold leading-4",
+  // Bez `whitespace-nowrap`: dawny znacznik zawijał tekst, a długie wartości (np. „I₂ … — wymaga Iz ≥ …”)
+  // na telefonie bez zawijania rozpychały stronę ponad 375 px.
+  "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-semibold leading-4",
   {
     variants: {
       variant: {
