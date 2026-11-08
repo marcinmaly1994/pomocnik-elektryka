@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Check, Info, TriangleAlert } from "lucide-react";
 import type { CalcResult, Ocena } from "@/lib/calc/result";
 import { formatLiczba } from "@/lib/calc/result";
@@ -122,11 +123,11 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
       {wynik.zrodla.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {wynik.zrodla.map((z, i) => (
-            <span key={i} className="pe-chip bg-paper text-slate-600">
+            <Badge key={i}>
               {z.norma}
               {z.miejsce ? ` ${z.miejsce}` : ""}
               {z.czego ? ` — ${z.czego}` : ""}
-            </span>
+            </Badge>
           ))}
         </div>
       )}

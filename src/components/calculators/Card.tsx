@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import type { LucideIcon } from "lucide-react";
 
 interface CardProps {
@@ -15,7 +16,7 @@ export function Card({ title, icon: Icon, tag, children }: CardProps) {
           {Icon && <Icon size={17} className="text-copper" />}
           <h3 className="pe-display text-base">{title}</h3>
         </div>
-        {tag && <span className="pe-chip pe-tag-blue">{tag}</span>}
+        {tag && <Badge variant="info">{tag}</Badge>}
       </div>
       {children}
     </div>

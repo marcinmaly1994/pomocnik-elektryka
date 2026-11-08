@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
 import { obliczImpedancjePrzewodu, obliczPrzewodyRownolegle } from "@/lib/calc/conductorImpedance";
 import { formatLiczba } from "@/lib/calc/result";
@@ -95,14 +96,14 @@ export function KalkulatorImpedancji({ label }: { label: string }) {
           <div className="text-xs text-slate-500 mb-1">Impedancja przewodu</div>
           <div className="pe-mono text-lg text-blueprint">{formatLiczba(impedancja.wartosci.Z_ohm, 4)} Ω</div>
           <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">R {formatLiczba(impedancja.wartosci.R_ohm, 4)} Ω</span>
-            <span className="pe-chip pe-tag-blue">X {formatLiczba(impedancja.wartosci.X_ohm, 4)} Ω</span>
+            <Badge variant="accent">R {formatLiczba(impedancja.wartosci.R_ohm, 4)} Ω</Badge>
+            <Badge variant="info">X {formatLiczba(impedancja.wartosci.X_ohm, 4)} Ω</Badge>
             {impedancja.wartosci.R_do_X !== null && (
-              <span className="pe-chip pe-tag-green">R/X {formatLiczba(impedancja.wartosci.R_do_X, 2)}</span>
+              <Badge variant="success">R/X {formatLiczba(impedancja.wartosci.R_do_X, 2)}</Badge>
             )}
-            <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+            <Badge>
               γ {formatLiczba(impedancja.wartosci.gamma, 1)} przy {formatLiczba(impedancja.wartosci.tempZyly_C, 0)} °C
-            </span>
+            </Badge>
           </div>
         </div>
       )}
@@ -151,13 +152,13 @@ export function KalkulatorImpedancji({ label }: { label: string }) {
           <div className="text-xs text-slate-500 mb-1">Najbardziej obciążona żyła</div>
           <div className="pe-mono text-lg text-blueprint">{formatLiczba(rownolegle.wartosci.Imax_A, 1)} A</div>
           <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">
+            <Badge variant="accent">
               podział {rownolegle.wartosci.prady_A.map((I) => formatLiczba(I, 1)).join(" / ")} A
-            </span>
-            <span className="pe-chip pe-tag-blue">
+            </Badge>
+            <Badge variant="info">
               przy równym podziale {formatLiczba(rownolegle.wartosci.pradRowny_A, 1)} A
-            </span>
-            <span className="pe-chip pe-tag-green">odchylenie {formatLiczba(rownolegle.wartosci.odchylenie_pct, 1)}%</span>
+            </Badge>
+            <Badge variant="success">odchylenie {formatLiczba(rownolegle.wartosci.odchylenie_pct, 1)}%</Badge>
           </div>
         </div>
       )}

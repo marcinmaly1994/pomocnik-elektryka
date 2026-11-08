@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
@@ -1284,25 +1285,25 @@ export function CalculatorsTab() {
                           )}
                         </div>
                         <div className="mt-2 flex gap-2 flex-wrap">
-                          <span className="pe-chip pe-tag-blue" title="Typ wyłącznika różnicowoprądowego wymagany dla tego odbiornika">
+                          <Badge variant="info"  title="Typ wyłącznika różnicowoprądowego wymagany dla tego odbiornika">
                             {circuitKind === "gniazda" ? "RCD 30 mA " : "RCD "}typ {sized.rcd_typ}
-                          </span>
+                          </Badge>
                           {sized.Zs_max_Ohm !== null && (
-                            <span className="pe-chip pe-tag-green">Zs max {formatLiczba(sized.Zs_max_Ohm, 2)} Ω</span>
+                            <Badge variant="success">Zs max {formatLiczba(sized.Zs_max_Ohm, 2)} Ω</Badge>
                           )}
                         </div>
                         <div className="mt-2 flex gap-2 flex-wrap">
-                          <span className="pe-chip pe-tag-copper">{sized.kabel}</span>
-                          <span className="pe-chip pe-tag-blue">Ib {formatLiczba((sized.Ib_A ?? 0), 2)} A</span>
-                          <span className="pe-chip pe-tag-green">obc. dop. {sized.Iz_A} A</span>
+                          <Badge variant="accent">{sized.kabel}</Badge>
+                          <Badge variant="info">Ib {formatLiczba((sized.Ib_A ?? 0), 2)} A</Badge>
+                          <Badge variant="success">obc. dop. {sized.Iz_A} A</Badge>
                           {sized.spadek_napiecia_pct !== null && (
                             // Z podanym spadkiem na WLZ pokazujemy SUMĘ — bo to ona jest
                             // porównywana z limitem — i rozbicie, żeby było widać, skąd wyszła.
-                            <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                            <Badge>
                               {sized.spadek_wlz_pct > 0
                                 ? `ΔU ${formatLiczba(sized.spadek_calkowity_pct, 2)}% = WLZ ${formatLiczba(sized.spadek_wlz_pct, 2)}% + obwód ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`
                                 : `ΔU ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`}
-                            </span>
+                            </Badge>
                           )}
                         </div>
                       </>
@@ -1488,12 +1489,12 @@ export function CalculatorsTab() {
                           {sizedBreaker.aparat.In_A} {sizedBreaker.aparat.bieguny}
                         </div>
                         <div className="mt-2 flex gap-2 flex-wrap">
-                          <span className="pe-chip pe-tag-blue">Ib {formatLiczba(sizedBreaker.Ib_A, 2)} A</span>
-                          <span className="pe-chip pe-tag-green">Iz {sizedBreaker.Iz_A} A</span>
-                          <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                          <Badge variant="info">Ib {formatLiczba(sizedBreaker.Ib_A, 2)} A</Badge>
+                          <Badge variant="success">Iz {sizedBreaker.Iz_A} A</Badge>
+                          <Badge>
                             metoda {sizedBreaker.metoda_odniesienia} · k1 {sizedBreaker.wspolczynniki.k1_temperatura} · k2{" "}
                             {sizedBreaker.wspolczynniki.k2_grupowanie}
-                          </span>
+                          </Badge>
                         </div>
                       </>
                     ) : (
@@ -1763,19 +1764,19 @@ export function CalculatorsTab() {
                       <div className="text-xs text-slate-500 mb-1">Przekrój wynikowy</div>
                       <div className="pe-mono text-lg text-blueprint">{formatLiczba(pelnyDobor.wartosci.przekroj_mm2, 1)} mm²</div>
                       <div className="mt-2 flex gap-2 flex-wrap">
-                        <span className="pe-chip pe-tag-copper">{pelnyDobor.wartosci.kabel}</span>
-                        <span className="pe-chip pe-tag-blue">In {pelnyDobor.wartosci.In_A} A</span>
-                        <span className="pe-chip pe-tag-green">
+                        <Badge variant="accent">{pelnyDobor.wartosci.kabel}</Badge>
+                        <Badge variant="info">In {pelnyDobor.wartosci.In_A} A</Badge>
+                        <Badge variant="success">
                           decyduje: {pelnyDobor.wartosci.decydujace.map((k) => KRYTERIUM_LABELS[k]).join(" i ")}
-                        </span>
+                        </Badge>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-500">
                         {(Object.entries(pelnyDobor.wartosci.kryteria) as [string, (typeof pelnyDobor.wartosci.kryteria)[keyof typeof pelnyDobor.wartosci.kryteria]][]).map(
                           ([k, v]) => (
-                            <span key={k} className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                            <Badge key={k}>
                               {KRYTERIUM_LABELS[k as keyof typeof KRYTERIUM_LABELS]}:{" "}
                               {v.ocenione ? `${formatLiczba(v.minPrzekroj_mm2!, 1)} mm²` : "nieocenione"}
-                            </span>
+                            </Badge>
                           )
                         )}
                       </div>
@@ -1862,10 +1863,10 @@ export function CalculatorsTab() {
                     {TYP_WKLADKI_LABELS[ggTyp]}, In {ggWkladka.wartosci.In_A} A
                   </div>
                   <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-blue">czas {CZAS_GG_LABELS[ggWkladka.wartosci.czas_s === 0.2 ? "0.2" : ggWkladka.wartosci.czas_s === 0.4 ? "0.4" : "5"]}</span>
-                    <span className="pe-chip pe-tag-copper">Imax (Ia) {formatLiczba(ggWkladka.wartosci.Imax_A, 1)} A</span>
-                    <span className="pe-chip pe-tag-green">Zs max {formatLiczba(ggWkladka.wartosci.ZsMax_ohm, 3)} Ω</span>
-                    <span className="pe-chip pe-tag-blue">I₂ {formatLiczba(ggWkladka.wartosci.I2_A, 1)} A — wymaga Iz ≥ {formatLiczba(ggWkladka.wartosci.I2_A / 1.45, 1)} A</span>
+                    <Badge variant="info">czas {CZAS_GG_LABELS[ggWkladka.wartosci.czas_s === 0.2 ? "0.2" : ggWkladka.wartosci.czas_s === 0.4 ? "0.4" : "5"]}</Badge>
+                    <Badge variant="accent">Imax (Ia) {formatLiczba(ggWkladka.wartosci.Imax_A, 1)} A</Badge>
+                    <Badge variant="success">Zs max {formatLiczba(ggWkladka.wartosci.ZsMax_ohm, 3)} Ω</Badge>
+                    <Badge variant="info">I₂ {formatLiczba(ggWkladka.wartosci.I2_A, 1)} A — wymaga Iz ≥ {formatLiczba(ggWkladka.wartosci.I2_A / 1.45, 1)} A</Badge>
                   </div>
                 </div>
               )}
@@ -1982,14 +1983,14 @@ export function CalculatorsTab() {
                   <div className="text-xs text-slate-500 mb-1">Spadek napięcia na trasie</div>
                   <div className="pe-mono text-lg text-blueprint">{formatLiczba(spadekPelny.wartosci.spadek_pct, 2)} %</div>
                   <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">ΔU {formatLiczba(spadekPelny.wartosci.spadek_V, 2)} V</span>
-                    <span className="pe-chip pe-tag-blue">
+                    <Badge variant="accent">ΔU {formatLiczba(spadekPelny.wartosci.spadek_V, 2)} V</Badge>
+                    <Badge variant="info">
                       napięcie u odbiornika {formatLiczba(spadekPelny.wartosci.napiecieKoncowe_V, 1)} V
-                    </span>
+                    </Badge>
                     {spadekPelny.wartosci.minPrzekroj_mm2 !== null && (
-                      <span className="pe-chip pe-tag-green">
+                      <Badge variant="success">
                         min. przekrój w limicie {String(spadekPelny.wartosci.minPrzekroj_mm2).replace(".", ",")} mm²
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 </div>
@@ -2085,15 +2086,15 @@ export function CalculatorsTab() {
                   <div className="mt-2 flex flex-wrap gap-2">
                     {/* Obie granice OBOK siebie, nie tylko ta wiążąca: dopiero z nich
                         widać, co poprawić — grubszą żyłę czy inne zabezpieczenie. */}
-                    <span className={`pe-chip ${maksDlugosc.wartosci.wiazace === "spadek" ? "pe-tag-copper" : "pe-tag-blue"}`}>
+                    <Badge variant={maksDlugosc.wartosci.wiazace === "spadek" ? "accent" : "info"}>
                       spadek napięcia {formatLiczba(maksDlugosc.wartosci.L_spadek_m, 1)} m
-                    </span>
-                    <span className={`pe-chip ${maksDlugosc.wartosci.wiazace === "ochrona" ? "pe-tag-copper" : "pe-tag-blue"}`}>
+                    </Badge>
+                    <Badge variant={maksDlugosc.wartosci.wiazace === "ochrona" ? "accent" : "info"}>
                       samoczynne wyłączenie {formatLiczba(maksDlugosc.wartosci.L_ochrona_m, 1)} m
-                    </span>
-                    <span className="pe-chip pe-tag-green">
+                    </Badge>
+                    <Badge variant="success">
                       Zs max {formatLiczba(maksDlugosc.wartosci.Zs_max_Ohm, 2)} Ω przy Ia {formatLiczba(maksDlugosc.wartosci.Ia_A, 0)} A
-                    </span>
+                    </Badge>
                   </div>
                 </div>
               )}
@@ -2195,17 +2196,17 @@ export function CalculatorsTab() {
                   <div className="text-xs text-slate-500 mb-1">Prąd zwarcia trójfazowego</div>
                   <div className="pe-mono text-lg text-blueprint">{formatLiczba(zwarcie.wartosci.Ik3_A / 1000, 2)} kA</div>
                   <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">Zt {formatLiczba(trafo.wartosci.Zt_ohm * 1000, 2)} mΩ</span>
-                    <span className="pe-chip pe-tag-blue">Ik2 {formatLiczba(zwarcie.wartosci.Ik2_A / 1000, 2)} kA</span>
+                    <Badge variant="accent">Zt {formatLiczba(trafo.wartosci.Zt_ohm * 1000, 2)} mΩ</Badge>
+                    <Badge variant="info">Ik2 {formatLiczba(zwarcie.wartosci.Ik2_A / 1000, 2)} kA</Badge>
                     {zwarcie.wartosci.Ik1_A !== null && (
-                      <span className="pe-chip pe-tag-blue">Ik1 {formatLiczba(zwarcie.wartosci.Ik1_A, 0)} A</span>
+                      <Badge variant="info">Ik1 {formatLiczba(zwarcie.wartosci.Ik1_A, 0)} A</Badge>
                     )}
                     {zwarcie.wartosci.ip_A !== null && (
-                      <span className="pe-chip pe-tag-green">ip {formatLiczba(zwarcie.wartosci.ip_A / 1000, 2)} kA</span>
+                      <Badge variant="success">ip {formatLiczba(zwarcie.wartosci.ip_A / 1000, 2)} kA</Badge>
                     )}
-                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                    <Badge>
                       c = {formatLiczba(zwarcie.wartosci.c, 2)}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="mt-2 text-xs leading-relaxed text-slate-500">
                     Wymagana zdolność zwarciowa aparatu w tym miejscu: Icn ≥{" "}
@@ -2258,11 +2259,11 @@ export function CalculatorsTab() {
                     {formatLiczba(wytrzymalosc.wartosci.minPrzekroj_mm2, 2)} mm²
                   </div>
                   <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">k = {wytrzymalosc.wartosci.k}</span>
+                    <Badge variant="accent">k = {wytrzymalosc.wartosci.k}</Badge>
                     {wytrzymalosc.wartosci.maksCzas_s !== null && (
-                      <span className="pe-chip pe-tag-blue">
+                      <Badge variant="info">
                         t max dla {String(zwPrzekroj).replace(".", ",")} mm² = {formatLiczba(wytrzymalosc.wartosci.maksCzas_s, 3)} s
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 </div>
@@ -2360,14 +2361,14 @@ export function CalculatorsTab() {
                   <div className="pe-mono text-lg text-blueprint">{formatLiczba(uziom.wartosci.R_wypadkowa_ohm, 2)} Ω</div>
                   <div className="mt-2 flex gap-2 flex-wrap">
                     {uzLiczba > 1 && (
-                      <span className="pe-chip pe-tag-copper">
+                      <Badge variant="accent">
                         pojedynczy {formatLiczba(uziom.wartosci.R_pojedynczy_ohm, 2)} Ω
-                      </span>
+                      </Badge>
                     )}
                     {uziom.wartosci.potrzebnaDlugosc_m !== null && (
-                      <span className="pe-chip pe-tag-green">
+                      <Badge variant="success">
                         długość dla {formatLiczba(uzWymagana, 0)} Ω: {formatLiczba(uziom.wartosci.potrzebnaDlugosc_m, 1)} m
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 </div>
@@ -2470,15 +2471,15 @@ export function CalculatorsTab() {
                   <div className="text-xs text-slate-500 mb-1">Prąd w przewodzie neutralnym</div>
                   <div className="pe-mono text-lg text-blueprint">{formatLiczba(bilansFaz.wartosci.IN_calkowity_A, 2)} A</div>
                   <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">
+                    <Badge variant="accent">
                       L1 {formatLiczba(bilansFaz.wartosci.prady.L1, 1)} A · L2 {formatLiczba(bilansFaz.wartosci.prady.L2, 1)} A · L3{" "}
                       {formatLiczba(bilansFaz.wartosci.prady.L3, 1)} A
-                    </span>
-                    <span className="pe-chip pe-tag-blue">asymetria {formatLiczba(bilansFaz.wartosci.asymetria_pct, 1)}%</span>
-                    <span className="pe-chip pe-tag-green">S {formatLiczba(bilansFaz.wartosci.S_VA / 1000, 2)} kVA</span>
-                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                    </Badge>
+                    <Badge variant="info">asymetria {formatLiczba(bilansFaz.wartosci.asymetria_pct, 1)}%</Badge>
+                    <Badge variant="success">S {formatLiczba(bilansFaz.wartosci.S_VA / 1000, 2)} kVA</Badge>
+                    <Badge>
                       cosφ {formatLiczba(bilansFaz.wartosci.cosfi, 3)}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
               )}
@@ -2555,19 +2556,19 @@ export function CalculatorsTab() {
                   <div className="text-xs text-slate-500 mb-1">Prąd znamionowy silnika</div>
                   <div className="pe-mono text-lg text-blueprint">{formatLiczba(silnik.wartosci.In_A, 2)} A</div>
                   <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">prąd rozruchowy {formatLiczba(silnik.wartosci.Ir_A, 1)} A</span>
+                    <Badge variant="accent">prąd rozruchowy {formatLiczba(silnik.wartosci.Ir_A, 1)} A</Badge>
                     {slRozruch === "gwiazda_trojkat" && (
-                      <span className="pe-chip pe-tag-blue">
+                      <Badge variant="info">
                         przy DOL byłoby {formatLiczba(silnik.wartosci.Ir_bezposredni_A, 1)} A
-                      </span>
+                      </Badge>
                     )}
-                    <span className="pe-chip pe-tag-blue">stycznik AC-3 ≥ {formatLiczba(silnik.wartosci.stycznikAC3_A, 1)} A</span>
+                    <Badge variant="info">stycznik AC-3 ≥ {formatLiczba(silnik.wartosci.stycznikAC3_A, 1)} A</Badge>
                     {silnik.wartosci.klasaWyzwalania && (
-                      <span className="pe-chip pe-tag-green">przekaźnik klasy {silnik.wartosci.klasaWyzwalania}</span>
+                      <Badge variant="success">przekaźnik klasy {silnik.wartosci.klasaWyzwalania}</Badge>
                     )}
-                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                    <Badge>
                       moment {formatLiczba(silnik.wartosci.momentWzgledny * 100, 0)}% momentu przy DOL
-                    </span>
+                    </Badge>
                   </div>
                 </div>
               )}
@@ -2712,10 +2713,10 @@ export function CalculatorsTab() {
                   <div className="text-xs text-slate-500 mb-1">Napięcie stringu w zimnie</div>
                   <div className="pe-mono text-lg text-blueprint">{formatLiczba(stringPV.wartosci.VocZimny_V, 1)} V</div>
                   <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">I projektowy (1,25×Isc) {formatLiczba(stringPV.wartosci.IprojektowyA, 2)} A</span>
-                    <span className="pe-chip pe-tag-blue">spadek DC {formatLiczba(stringPV.wartosci.spadekDC_pct, 2)}%</span>
+                    <Badge variant="accent">I projektowy (1,25×Isc) {formatLiczba(stringPV.wartosci.IprojektowyA, 2)} A</Badge>
+                    <Badge variant="info">spadek DC {formatLiczba(stringPV.wartosci.spadekDC_pct, 2)}%</Badge>
                     {stringPV.wartosci.VmppGoracy_V !== null && (
-                      <span className="pe-chip pe-tag-green">Vmpp w upale {formatLiczba(stringPV.wartosci.VmppGoracy_V, 1)} V</span>
+                      <Badge variant="success">Vmpp w upale {formatLiczba(stringPV.wartosci.VmppGoracy_V, 1)} V</Badge>
                     )}
                   </div>
                 </div>
@@ -2753,11 +2754,11 @@ export function CalculatorsTab() {
                 <div className="mt-2 p-3 pe-result">
                   <div className="text-xs text-slate-500 mb-1">Przewód i zabezpieczenie AC</div>
                   <div className="mt-1 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">{falownikAC.kabel}</span>
-                    <span className="pe-chip pe-tag-blue">
+                    <Badge variant="accent">{falownikAC.kabel}</Badge>
+                    <Badge variant="info">
                       wyłącznik {falownikAC.aparat.charakterystyka}
                       {falownikAC.aparat.In_A} {falownikAC.aparat.bieguny}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
               )}
@@ -2822,14 +2823,14 @@ export function CalculatorsTab() {
                   <div className="pe-mono text-lg text-blueprint">{formatLiczba(obwodEV.wartosci.Ib_A, 2)} A</div>
                   {obwodEV.wartosci.dobor.kabel && obwodEV.wartosci.dobor.aparat ? (
                     <div className="mt-2 flex gap-2 flex-wrap">
-                      <span className="pe-chip pe-tag-copper">{obwodEV.wartosci.dobor.kabel}</span>
-                      <span className="pe-chip pe-tag-blue">
+                      <Badge variant="accent">{obwodEV.wartosci.dobor.kabel}</Badge>
+                      <Badge variant="info">
                         wyłącznik {obwodEV.wartosci.dobor.aparat.charakterystyka}
                         {obwodEV.wartosci.dobor.aparat.In_A} {obwodEV.wartosci.dobor.aparat.bieguny}
-                      </span>
-                      <span className="pe-chip pe-tag-green">
+                      </Badge>
+                      <Badge variant="success">
                         {obwodEV.wartosci.wymaganyRCD === "typA_wystarczy" ? "RCD typu A wystarczy" : "wymagany RCD typu B / A+RDC-DD"}
-                      </span>
+                      </Badge>
                     </div>
                   ) : (
                     <div className="mt-2 flex items-center gap-1 text-sm" style={{ color: "#A2352C" }}>
@@ -3035,16 +3036,16 @@ export function CalculatorsTab() {
               <div className="mt-2 p-3 pe-result">
                 {sizedFeeder.przekroj_mm2 && sizedFeeder.aparat ? (
                   <div className="flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">{sizedFeeder.kabel}</span>
-                    <span className="pe-chip pe-tag-blue">
+                    <Badge variant="accent">{sizedFeeder.kabel}</Badge>
+                    <Badge variant="info">
                       wyłącznik {sizedFeeder.aparat.charakterystyka}
                       {sizedFeeder.aparat.In_A} {sizedFeeder.aparat.bieguny}
-                    </span>
-                    <span className="pe-chip pe-tag-green">obc. dop. {sizedFeeder.Iz_A} A</span>
+                    </Badge>
+                    <Badge variant="success">obc. dop. {sizedFeeder.Iz_A} A</Badge>
                     {sizedFeeder.spadek_napiecia_pct !== null && (
-                      <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                      <Badge>
                         ΔU {sizedFeeder.spadek_napiecia_pct}% (limit {sizedFeeder.spadek_napiecia_limit_pct}%)
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 ) : (

@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -598,12 +599,7 @@ export function ProtocolsTab() {
                           ) : ok === null ? (
                             <span className="text-xs text-slate-400">—</span>
                           ) : (
-                            <span
-                              className="pe-chip"
-                              style={ok ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
-                            >
-                              {ok ? "pozytywna" : "negatywna"}
-                            </span>
+                            <Badge variant={ok ? "success" : "danger"}>{ok ? "pozytywna" : "negatywna"}</Badge>
                           )}
                         </td>
                         <td className="col-span-2 flex justify-end lg:table-cell lg:py-1.5">

@@ -23,6 +23,8 @@ import { biezacyId, type WpisProjektu } from "@/lib/projektyLokalne";
 import { useRoute } from "@/hooks/useRoute";
 import { ZAKLADKA_DOMYSLNA, type AppTab as AppTabRoute } from "@/lib/routing";
 import { Button } from "@/components/ui/button";
+import { badgeVariants } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CloudSaveIndicator } from "@/components/ui/CloudSaveIndicator";
@@ -768,9 +770,11 @@ export default function App() {
               type="button"
               onClick={SUPABASE_CONFIGURED ? () => setAuthOpen(true) : undefined}
               disabled={!SUPABASE_CONFIGURED}
-              className={`pe-chip hidden items-center gap-1 transition-colors enabled:hover:border-copper enabled:hover:text-copper lg:flex disabled:cursor-default ${
+              className={cn(
+                badgeVariants(),
+                "hidden items-center gap-1 transition-colors enabled:hover:border-copper enabled:hover:text-copper lg:flex disabled:cursor-default",
                 localSaveError ? "font-medium text-warn" : "text-slate-400"
-              }`}
+              )}
               title={
                 localSaveError
                   ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tytul

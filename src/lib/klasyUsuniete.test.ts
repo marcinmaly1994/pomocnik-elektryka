@@ -12,6 +12,8 @@ import { join } from "node:path";
  */
 const USUNIETE: Record<string, RegExp> = {
   "pe-btn-*": /\bpe-btn-(copper|ghost)\b/,
+  "pe-chip": /\bpe-chip\b/,
+  "pe-tag-*": /\bpe-tag-(blue|green|copper)\b/,
 };
 
 function pliki(katalog: string, rozszerzenia: string[]): string[] {

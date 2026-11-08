@@ -54,31 +54,6 @@ body {
     background-position: right 0.5rem center;
     padding-right: 2rem;
   }
-  .pe-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: theme('borderRadius.sm');
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-  }
-  .pe-tag-blue {
-    background: theme('colors.blueprint.tlo');
-    color: theme('colors.blueprint.DEFAULT');
-    border: 1px solid theme('colors.border-strong');
-  }
-  .pe-tag-copper {
-    background: theme('colors.copper.tlo');
-    color: theme('colors.caution.DEFAULT');
-    border: 1px solid theme('colors.border-strong');
-  }
-  .pe-tag-green {
-    background: theme('colors.success.tlo');
-    color: theme('colors.success.DEFAULT');
-    border: 1px solid theme('colors.border-strong');
-  }
   .pe-result {
     @apply rounded border border-border bg-white;
     border-top: 2px solid theme('colors.blueprint.DEFAULT');
