@@ -1,8 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
   ChevronDown,
   ChevronRight,
   ClipboardList,
@@ -41,7 +39,6 @@ import { KompletDialog } from "@/components/ui/KompletDialog";
 import { KopiaZapasowa } from "@/components/ui/KopiaZapasowa";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { UdostepnijLinkiem } from "@/components/ui/UdostepnijLinkiem";
-import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 import { odczytajFragmentAuth } from "@/lib/fragmentAuth";
@@ -62,7 +59,7 @@ import { etapy, type Etap, type StanEtapu } from "@/lib/postepKrokow";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { jestOdplywem } from "@/lib/panel/devices";
 import { useWygaszenieKrawedzi } from "@/hooks/useWygaszenieKrawedzi";
-import { useChowanieNaPrzewijaniu } from "@/hooks/useChowanieNaPrzewijaniu";
+import { PasekKroku } from "@/components/nawigacja/PasekKroku";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
 
 /**
@@ -336,16 +333,6 @@ type AppTab = AppTabRoute;
  *  „Kalkulatory”/„Protokoły pomiarowe”, które są narzędziami OBOK przepływu, nie jego
  *  krokami. Używana przez przycisk „Dalej”, żeby wiedzieć, dokąd prowadzi kolejny krok,
  *  bez zgadywania po całej liście zakładek. */
-/**
- * Schowana pigułka zjeżdża pod dolną krawędź i przestaje łapać kliknięcia, ale
- * zostaje w DOM i w kolejności Tab: fokus z klawiatury wyciąga ją z powrotem.
- */
-function klasySchowanejPigulki(schowana: boolean): string {
-  return schowana
-    ? "pointer-events-none translate-y-24 opacity-0 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100"
-    : "";
-}
-
 const KOLEJNOSC_KROKOW: { id: AppTab; tytul: string }[] = [
   { id: "projekt", tytul: "Instalacja" },
   { id: "rozdzielnica", tytul: "Rozdzielnica" },
@@ -464,8 +451,6 @@ export default function App() {
   // go używają: kalkulatory i protokoły.
   const [route, nawiguj] = useRoute();
   const tab = route.tab;
-  // Pigułki „Cofnij/Dalej" chowają się przy czytaniu w dół — patrz hook.
-  const pigulkiSchowane = useChowanieNaPrzewijaniu(tab);
   const setTab = (t: AppTab) => nawiguj(t);
 
   // Adres, którego nie dało się rozpoznać, pokazuje stronę startową — więc niech i
@@ -529,7 +514,7 @@ export default function App() {
    * Dotyczy WYŁĄCZNIE tej jednej zakładki, bo tylko o nią chodziło: świecąca zachęta
    * do przejścia dalej, zanim cokolwiek powstało, wysyłała nowego użytkownika w trzy
    * puste ekrany zamiast do rysowania. Na dalszych krokach ten sam próg byłby FAŁSZYWY
-   * — rozdzielnicę da się złożyć ręcznie, bez rzutu (patrz pigułka niżej).
+   * — rozdzielnicę da się złożyć ręcznie, bez rzutu (patrz pasek kroku na końcu `<main>`).
    */
   const projektPusty = useProjectStore(
     (s) => s.draft.elements.length === 0 && s.draft.walls.length === 0 && s.draft.roomShapes.length === 0
@@ -1017,12 +1002,11 @@ export default function App() {
       {tab === "projekt" && (
         <>
           <Suspense fallback={<TabLoading />}>
-            {/* Przejście do kolejnego kroku wędruje TUTAJ, zamiast pływać pigułką
-                w rogu okna — na tej jednej zakładce, bo na tej jednej pigułka leżała
-                na powierzchni roboczej (patrz `NAWIGACJA_ODSTEP_PX` w lib/design.ts
-                i `nastepnyKrok` w EditorStatusBar). `undefined` na pustym projekcie:
-                ten sam próg co przy pigułce na pozostałych zakładkach, liczony w tym
-                samym miejscu, żeby obie drogi nie mogły się rozjechać. */}
+            {/* Przejście do kolejnego kroku wędruje TUTAJ, a nie do paska kroku pod treścią:
+                tu rolę paska pełni pasek stanu pod rysunkiem (patrz `nastepnyKrok`
+                w EditorStatusBar), bo nawigacja nie ma prawa stać na płótnie.
+                `undefined` na pustym projekcie — ten próg działa tylko na Instalacji,
+                na dalszych krokach pasek kroku jest zawsze. */}
             <DesignTab
               onOpenAuth={() => setAuthOpen(true)}
               onOpenPomoc={() => setHelpOpen(true)}
@@ -1040,92 +1024,23 @@ export default function App() {
         </>
       )}
       </ErrorBoundary>
+      {/* Pasek kroku tylko na 02–04: na Instalacji tę rolę ma pasek stanu pod rysunkiem
+          (z progiem pustego projektu), a Kalkulatory i Protokoły nie są krokami.
+          Na dalszych krokach NIE gasimy go pustym rzutem: Rozdzielnicę da się złożyć
+          ręcznie, bez rysowania, a schemat powstaje właśnie z niej. */}
+      {(() => {
+        const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
+        if (idx < 1) return null;
+        return (
+          <PasekKroku
+            poprzedni={KOLEJNOSC_KROKOW[idx - 1]}
+            nastepny={KOLEJNOSC_KROKOW[idx + 1]}
+            onPick={setTab}
+            onPrefetch={pobierzZawczasu}
+          />
+        );
+      })()}
       </main>
-
-      {/*
-        Duży, zawsze widoczny przycisk „Dalej” — bez niego jedyną drogą do kolejnego
-        kroku były małe kafle przepływu na samej górze strony, poza kadrem po
-        przewinięciu w dół do treści. Kto nie skojarzył kafli z nawigacją, nie miał
-        skąd wiedzieć, co robić dalej.
-
-        `position: fixed` w rogu, więc nie zależy od długości treści ani pozycji
-        przewijania — zawsze w tym samym miejscu, niezależnie od zakładki. Pokazuje
-        się TYLKO na krokach głównego przepływu (nie na „Kalkulatory”/„Protokoły
-        pomiarowe”, które są narzędziami obok przepływu) i znika na ostatnim kroku —
-        nie ma dokąd iść dalej z Kosztorysu.
-
-        `z-30`: CELOWO niżej niż nakładka pełnoekranowego projektowania (`z-40` w
-        DesignTab) — w pełnym ekranie chowa się razem z resztą chrome'u, zgodnie
-        z sensem tego trybu (skupienie na rysunku, bez elementów nawigacji).
-      */}
-      {/*
-        „Cofnij” — lustrzane odbicie przycisku „Dalej” (ten sam styl, przeciwny róg,
-        ta sama logika widoczności): powrót do POPRZEDNIEGO kroku głównego przepływu,
-        bez konieczności sięgania po kafle na górze strony. Nie pokazuje się na
-        pierwszym kroku („Instalacja") — nie ma dokąd się cofnąć.
-      */}
-      {(() => {
-        const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
-        const poprzedni = idx > 0 ? KOLEJNOSC_KROKOW[idx - 1] : undefined;
-        if (!poprzedni) return null;
-        return (
-          <button
-            onClick={() => setTab(poprzedni.id)}
-            onPointerEnter={() => pobierzZawczasu(poprzedni.id)}
-            onFocus={() => pobierzZawczasu(poprzedni.id)}
-            // Ukryty poniżej `md`: to `position: fixed` w rogu OKNA, obojętne na
-            // przewijanie i długość treści pod spodem — na wąskich/niskich oknach
-            // (kolumna narzędzi + panel Instalacji już same potrzebują sporo
-            // szerokości) potrafił więc wylądować DOKŁADNIE na polu wyszukiwania
-            // elementów albo zakładkach panelu, zasłaniając je. Kafle „01/02/03/04”
-            // u góry dają dokładnie tę samą nawigację, więc chowamy tu tylko wygodny
-            // skrót, nie funkcję.
-            //
-            // Odstęp od dolnej krawędzi ze wspólnej stałej, nie z klasy `bottom-5` —
-            // patrz `NAWIGACJA_ODSTEP_PX`, gdzie stoi też historia pigułki na płótnie.
-            style={{ bottom: NAWIGACJA_ODSTEP_PX }}
-            data-schowana={pigulkiSchowane || undefined}
-            className={`fixed left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-[transform,opacity] duration-200 hover:scale-105 hover:bg-copper/90 md:flex ${klasySchowanejPigulki(pigulkiSchowane)}`}
-          >
-            <ArrowLeft size={15} />
-            Cofnij: {poprzedni.tytul}
-          </button>
-        );
-      })()}
-
-      {(() => {
-        const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
-        const nastepny = idx >= 0 ? KOLEJNOSC_KROKOW[idx + 1] : undefined;
-        if (!nastepny) return null;
-        // Na Instalacji tego przycisku tu NIE MA — przenosi się do paska stanu pod
-        // rysunkiem, bo pływając w rogu okna leżał na płótnie i zjadał tam kliknięcia
-        // (patrz `nastepnyKrok` przekazywane do `DesignTab` wyżej). Tam też, i TYLKO
-        // tam, działa próg pustego projektu.
-        //
-        // Świadomie NIE gasimy pigułki na dalszych krokach pustym rzutem, choć
-        // pierwsza wersja tak robiła. Rozdzielnicę da się złożyć RĘCZNIE, bez
-        // rysowania czegokolwiek („Zbuduj rozdzielnicę bez rzutu" — aparaty żyją
-        // w `panelDevices`, nie w `draft`), a schemat powstaje właśnie z niej. Próg
-        // liczony z zawartości rzutu zabierałby wtedy „Dalej: Schemat" komuś, kto ma
-        // pełną rozdzielnicę — czyli gasiłby skrót dokładnie tam, gdzie jest dokąd iść.
-        // Na dalszych krokach użytkownik i tak już świadomie tam wszedł.
-        if (tab === "projekt") return null;
-        return (
-          <button
-            onClick={() => setTab(nastepny.id)}
-            onPointerEnter={() => pobierzZawczasu(nastepny.id)}
-            onFocus={() => pobierzZawczasu(nastepny.id)}
-            // Patrz komentarz przy „Cofnij" wyżej — ten sam powód, ten sam próg,
-            // ten sam odstęp ze wspólnej stałej.
-            style={{ bottom: NAWIGACJA_ODSTEP_PX }}
-            data-schowana={pigulkiSchowane || undefined}
-            className={`fixed right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-[transform,opacity] duration-200 hover:scale-105 hover:bg-copper/90 md:flex ${klasySchowanejPigulki(pigulkiSchowane)}`}
-          >
-            Dalej: {nastepny.tytul}
-            <ArrowRight size={15} />
-          </button>
-        );
-      })()}
 
       {resetToken && (
         <NoweHasloDialog
@@ -1335,12 +1250,7 @@ export default function App() {
         opcje={<UdostepnijLinkiem bajty={kompletBajty} />}
       />
 
-      {/* Zapas pod pigułki TYLKO tam, gdzie one są: na ekranie startowym i w zakładkach
-          spoza przepływu (Kalkulatory, Protokoły) nie ma ani „Cofnij", ani „Dalej",
-          a pusty pas pod stopką to dokładnie ten pas gołego tła, który już raz
-          z tego ekranu usuwano. Ten sam warunek co przy samych pigułkach wyżej. */}
       <SiteFooter
-        rezerwaNaNawigacje={KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab) > 0}
         onOtworzDokument={setTab}
       />
     </div>
@@ -1383,30 +1293,13 @@ function LinkDokumentu({
  * zastrzeżenie musi być widoczne, a nie schowane w „warunkach użytkowania".
  */
 function SiteFooter({
-  rezerwaNaNawigacje,
   onOtworzDokument,
 }: {
-  rezerwaNaNawigacje: boolean;
   onOtworzDokument: (tab: "prywatnosc" | "regulamin") => void;
 }) {
-  /*
-   * `md:pb-16` to ZAPAS pod pływające pigułki „Cofnij/Dalej".
-   *
-   * Są `position: fixed` w rogach OKNA, więc po przewinięciu na sam dół leżały na
-   * stopce — akurat na zdaniu o tym, że wyniki nie zastępują odbioru przez osobę
-   * z uprawnieniami SEP/budowlanymi. 64 px to wysokość pigułki (36) plus jej odstęp
-   * od krawędzi (`NAWIGACJA_ODSTEP_PX` = 20) plus luz.
-   *
-   * Świadomie ZAMIAST chowania pigułek przy dojechaniu do stopki: gaszenie skrótu
-   * „Dalej" dokładnie wtedy, gdy ktoś doczytał stronę do końca i chce przejść dalej,
-   * zabierałoby go w jedynym momencie, w którym jest naprawdę potrzebny.
-   *
-   * Dopiero od `md`, bo poniżej pigułek w ogóle nie ma (patrz ich `hidden md:flex`)
-   * i pusty pas byłby marnotrawstwem na najciaśniejszym ekranie.
-   */
   return (
     <footer
-      className={`mt-10 border-t border-border pt-5 text-xs text-slate-500 ${rezerwaNaNawigacje ? "md:pb-16" : ""}`}
+      className="mt-10 border-t border-border pt-5 text-xs text-slate-500"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
