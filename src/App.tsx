@@ -38,6 +38,7 @@ import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { KompletDialog } from "@/components/ui/KompletDialog";
 import { KopiaZapasowa } from "@/components/ui/KopiaZapasowa";
 import { PdfPreview } from "@/components/ui/PdfPreview";
+import { UdostepnijLinkiem } from "@/components/ui/UdostepnijLinkiem";
 import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
@@ -1329,6 +1330,7 @@ export default function App() {
         title="Komplet dokumentacji"
         filename={projectFileName("dokumentacja", projectName, "pdf")}
         build={async () => kompletBajty!}
+        opcje={<UdostepnijLinkiem bajty={kompletBajty} />}
       />
 
       {/* Zapas pod pigułki TYLKO tam, gdzie one są: na ekranie startowym i w zakładkach

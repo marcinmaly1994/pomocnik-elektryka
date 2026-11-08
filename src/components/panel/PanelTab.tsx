@@ -30,6 +30,8 @@ import { PanelRender } from "./PanelRender";
 import { EditDeviceModal } from "./EditDeviceModal";
 import { useSzerokieOkno } from "@/components/design/pasekMenuKontekst";
 import type { PanelDevice } from "@/types";
+import { GotoweUkladyPrzycisk, ListaUkladow } from "@/components/panel/GotoweUklady";
+import { useWczytajUklad } from "@/hooks/useWczytajUklad";
 
 const SELECTIVITY_STYLE: Record<SelectivityLevel, { bg: string; fg: string; Icon: typeof AlertTriangle }> = {
   error: { bg: "#C6433A14", fg: "#A2352C", Icon: AlertTriangle },
@@ -388,6 +390,8 @@ export function PanelTab() {
    *  wymagałaby od użytkownika odgadnięcia, od czego zacząć. Nic ponad to: SPD
    *  i reszta zabezpieczeń to teraz zwykłe pozycje katalogu, dokładane świadomie
    *  przez „Dodaj aparat ręcznie", a nie coś, co pojawia się z automatu. */
+  const wczytajUklad = useWczytajUklad();
+
   function zacznijRecznie() {
     if (devices.length === 0) setDevices(buildPanelDevices([], { supply3f, mainRating }));
     setPanelTryb("reczny");
@@ -414,6 +418,11 @@ export function PanelTab() {
         <Button variant="copper" size="sm" onClick={zacznijRecznie} className="mt-4">
           <Plus size={14} /> Zbuduj rozdzielnicę bez rzutu
         </Button>
+        {/* Albo od gotowego układu (F17) — typowa rozdzielnica w jednym kliknięciu. */}
+        <div className="mx-auto mt-6 max-w-2xl text-left">
+          <div className="mb-2 text-center text-xs font-semibold uppercase tracking-wider text-slate-400">albo zacznij od gotowego układu</div>
+          <ListaUkladow onWybierz={wczytajUklad} />
+        </div>
       </div>
     );
   }
@@ -502,6 +511,7 @@ export function PanelTab() {
             więc cofnięcie jednego kasowania kosztowało utratę reszty pracy. Ta para
             ma WŁASNĄ, mniejszą historię (patrz `commitPanelSnapshot` w store) —
             niezależną od cofania na planie w zakładce Instalacja. */}
+        <GotoweUkladyPrzycisk maAparaty={devices.length > 1} />
         <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-border p-0.5">
           <button
             onClick={panelUndo}

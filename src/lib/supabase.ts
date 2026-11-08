@@ -52,6 +52,28 @@
  *    Bez tego kroku reszta aplikacji działa normalnie — nie działa jedynie
  *    przycisk „Usuń konto" w panelu konta.
  *
+ * 5) Udostępnianie linkiem tylko do odczytu (F14 z audytu 5.11.2026) — koszyk
+ *    w Storage na migawki kompletu dokumentacji w PDF (SQL Editor):
+ *
+ *    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+ *    values (udostepnienia, udostepnienia, true, 20971520, array[application/pdf]);
+ *
+ *    create policy "udostepnienia: wlasciciel wgrywa" on storage.objects
+ *      for insert to authenticated
+ *      with check (bucket_id = udostepnienia and (storage.foldername(name))[1] = auth.uid()::text);
+ *    create policy "udostepnienia: wlasciciel widzi swoje" on storage.objects
+ *      for select to authenticated
+ *      using (bucket_id = udostepnienia and (storage.foldername(name))[1] = auth.uid()::text);
+ *    create policy "udostepnienia: wlasciciel usuwa" on storage.objects
+ *      for delete to authenticated
+ *      using (bucket_id = udostepnienia and (storage.foldername(name))[1] = auth.uid()::text);
+ *
+ *    Koszyk jest PUBLICZNY tylko do odczytu POJEDYNCZEGO pliku po pełnej ścieżce —
+ *    tak działa „public" w Supabase Storage. Listowania nikt obcy nie dostaje (nie ma
+ *    reguły select dla anon), a nazwa pliku to losowy UUID, więc link da się tylko
+ *    dostać od właściciela, nie zgadnąć. Bez tego kroku przycisk „Udostępnij linkiem"
+ *    zgłasza, że udostępnianie nie jest skonfigurowane; reszta działa normalnie.
+ *
  * Bez konfiguracji aplikacja działa w pełni lokalnie — logowanie i zapis
  * w chmurze są po prostu niedostępne (`SUPABASE_CONFIGURED` = false).
  */
@@ -314,6 +336,78 @@ export function supaDeleteProject(token: string, id: string) {
  * Wymaga jednorazowego wklejenia definicji funkcji w SQL Editor — patrz
  * instrukcja konfiguracji na górze tego pliku.
  */
+/** Koszyk Storage z migawkami udostępnionej dokumentacji — patrz krok 5 konfiguracji. */
+const KOSZYK_UDOSTEPNIEN = "udostepnienia";
+
+/** Publiczny adres pliku udostępnienia (`<uid>/<id>.pdf`). */
+export function adresPlikuUdostepnienia(sciezka: string): string {
+  return `${SUPABASE_URL}/storage/v1/object/public/${KOSZYK_UDOSTEPNIEN}/${sciezka}`;
+}
+
+/** Błąd Storage po polsku — z osobnym komunikatem dla nieskonfigurowanego koszyka. */
+async function bladStorage(res: Response): Promise<SupaError> {
+  const tekst = await res.text().catch(() => "");
+  let komunikat: string;
+  if (/bucket not found/i.test(tekst)) {
+    komunikat = "Udostępnianie linkiem nie jest jeszcze skonfigurowane w Supabase (brak koszyka „udostepnienia”).";
+  } else if (res.status === 403 || /row-level security|unauthorized/i.test(tekst)) {
+    komunikat = "Brak uprawnień do udostępniania — sprawdź reguły koszyka „udostepnienia” w Supabase.";
+  } else if (res.status === 413 || /too large|exceeded/i.test(tekst)) {
+    komunikat = "Plik jest za duży do udostępnienia (limit 20 MB).";
+  } else {
+    komunikat = polskiKomunikatBledu(res.status, tekst);
+  }
+  const err = new Error(komunikat) as SupaError;
+  err.status = res.status;
+  return err;
+}
+
+async function storageFetch(path: string, init: RequestInit & { token: string }): Promise<Response> {
+  const { token, headers, ...reszta } = init;
+  let res: Response;
+  try {
+    res = await fetch(`${SUPABASE_URL}/storage/v1${path}`, {
+      ...reszta,
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, ...(headers ?? {}) },
+    });
+  } catch {
+    throw new Error(BRAK_SIECI);
+  }
+  if (!res.ok) throw await bladStorage(res);
+  return res;
+}
+
+/** Wgrywa migawkę PDF pod `<uid>/<id>.pdf`. */
+export async function supaWgrajUdostepnienie(token: string, sciezka: string, pdf: Uint8Array<ArrayBuffer>): Promise<void> {
+  await storageFetch(`/object/${KOSZYK_UDOSTEPNIEN}/${sciezka}`, {
+    method: "POST",
+    token,
+    headers: { "Content-Type": "application/pdf", "x-upsert": "false" },
+    body: new Blob([pdf], { type: "application/pdf" }),
+  });
+}
+
+export interface PlikUdostepnienia {
+  name: string;
+  created_at: string;
+}
+
+/** Udostępnienia właściciela, od najnowszego. */
+export async function supaListaUdostepnien(token: string, userId: string): Promise<PlikUdostepnienia[]> {
+  const res = await storageFetch(`/object/list/${KOSZYK_UDOSTEPNIEN}`, {
+    method: "POST",
+    token,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prefix: `${userId}/`, limit: 100, sortBy: { column: "created_at", order: "desc" } }),
+  });
+  return (await res.json()) as PlikUdostepnienia[];
+}
+
+/** Wyłącza link — kasuje plik migawki. */
+export async function supaUsunUdostepnienie(token: string, sciezka: string): Promise<void> {
+  await storageFetch(`/object/${KOSZYK_UDOSTEPNIEN}/${sciezka}`, { method: "DELETE", token });
+}
+
 export function supaDeleteAccount(token: string) {
   return sbFetch<void>("/rest/v1/rpc/usun_moje_konto", { method: "POST", body: {}, token });
 }

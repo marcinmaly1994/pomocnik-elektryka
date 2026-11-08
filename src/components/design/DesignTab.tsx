@@ -29,7 +29,6 @@ import {
   Plus,
   FlipHorizontal,
   RotateCw,
-  ShieldAlert,
   Trash2,
   Undo2,
   Upload,
@@ -70,6 +69,7 @@ import {
   planSizeForImage,
   roomNameAfterMove,
   detectRoomName,
+  guessRoomType,
   scaleOf,
   wierzcholkiZamknietejSciany,
   wysokoscPlotna,
@@ -85,6 +85,11 @@ import {
 } from "@/lib/symbolScale";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SzablonPomieszczenia } from "@/components/design/SzablonPomieszczenia";
+import { elementySzablonu, odmianaElementu } from "@/lib/szablonyPomieszczen";
+import { domyslnyPrzewod, RODZAJE_PRZEWODU } from "@/lib/przewodyReczne";
+import { rzutDoDxf } from "@/lib/dxf";
+import type { RodzajPrzewodu } from "@/types";
 import { hasSeenOnboarding, markOnboardingSeen, useOnboardingProgress } from "@/hooks/useOnboardingProgress";
 import { shouldShowCompact, planWidthMeters } from "@/lib/onboarding";
 import { NaglowekNarzedzia, PodpowiedzPrzesun, PodpowiedzZaznacz } from "./PanelNarzedzia";
@@ -138,7 +143,7 @@ import { ARKUSZE, buildDrawingDoc, hexNaRgb, KLUCZ_TRAS, type FormatArkusza } fr
 import type { PdfDoc } from "@/lib/pdf/engine";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { bialePlotno, plotnoDoPdf, rysujPodzialke, svgDoPlotna, PIKSELI_NA_PUNKT } from "@/lib/pdf/raster";
-import { projectFileName } from "@/lib/pdf/download";
+import { downloadBlob, projectFileName } from "@/lib/pdf/download";
 import { resolveDocHeader } from "@/lib/docHeader";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 
@@ -184,23 +189,7 @@ const ROOM_MODES: { id: RoomDrawMode; label: string; hint: string }[] = [
   { id: "wielobok", label: "Wielobok", hint: "klikaj kolejne narożniki, na koniec kliknij w pierwszy" },
 ];
 
-/** Klucz w localStorage: użytkownik już raz odrzucił prompt „zabezpiecz kontem"
- *  po włożeniu sporo pracy — nie wracamy do niego po każdym odświeżeniu, bo
- *  stały baner o ryzyku (patrz niżej) i tak zostaje widoczny cały czas. */
-const KONTO_PROMPT_ODRZUCONY_KEY = "pomocnikelektryka_konto_prompt_odrzucony";
-/** Próg „sporo pracy": tyle elementów na planie uznajemy za projekt, którego
- *  szkoda by było stracić przez wyczyszczenie danych przeglądarki. */
-const KONTO_PROMPT_PROG_ELEMENTOW = 10;
 
-function odczytajOdrzuconyPrompt(): boolean {
-  try {
-    return localStorage.getItem(KONTO_PROMPT_ODRZUCONY_KEY) === "1";
-  } catch {
-    // prywatny tryb przeglądarki potrafi rzucać przy dostępie do localStorage —
-    // brak tej flagi jest nieszkodliwy, prompt po prostu pokaże się ponownie
-    return false;
-  }
-}
 
 /** Zwinięcie panelu bocznego to preferencja widoku, nie część projektu — stąd
  *  localStorage, a nie zapisywany dokument. Kto raz zwinie, ma zwinięty na stałe. */
@@ -236,7 +225,8 @@ function odczytajPanelZwiniety(): boolean {
     const zapisane = localStorage.getItem(PANEL_ZWINIETY_KEY);
     if (zapisane !== null) return zapisane === "1";
   } catch {
-    // patrz odczytajOdrzuconyPrompt — brak dostępu do pamięci nie może wywrócić edytora
+    // prywatny tryb przeglądarki potrafi rzucać przy dostępie do localStorage —
+    // brak dostępu do pamięci nie może wywrócić edytora
   }
   return waskiEkran();
 }
@@ -299,6 +289,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const zmienNotatke = useProjectStore((s) => s.zmienNotatke);
   const przesunNotatke = useProjectStore((s) => s.przesunNotatke);
   const [edycjaNotatki, setEdycjaNotatki] = useState<{ id?: string; p?: Point; tekst: string } | null>(null);
+  // Ręczne przewody (F11) — tylko tej kondygnacji; `przewodStart` to pierwszy koniec
+  // zaczętego przewodu, czekający na kliknięcie drugiego elementu.
+  const wszystkiePrzewody = useProjectStore((s) => s.draft.przewody);
+  const przewodyPietra = useMemo(() => (wszystkiePrzewody ?? []).filter((p) => p.floor === activeFloorId), [wszystkiePrzewody, activeFloorId]);
+  const dodajPrzewod = useProjectStore((s) => s.dodajPrzewod);
+  const zmienPrzewod = useProjectStore((s) => s.zmienPrzewod);
+  const [przewodStart, setPrzewodStart] = useState<string | null>(null);
+  /** Dolna szuflada z kartą zaznaczenia na telefonie (F7) — zwinięta do jednego wiersza
+   *  odsłania rzut. Każde NOWE zaznaczenie rozwija ją z powrotem: dotknięcie elementu
+   *  to pytanie o niego, a zwinięta karta na nie nie odpowiada. */
+  const [szufladaZwinieta, setSzufladaZwinieta] = useState(false);
   const commitSnapshot = useProjectStore((s) => s.commitSnapshot);
   /** Plan sprzed przeciągania pokoju — po puszczeniu idzie do historii jako JEDEN krok. */
   const planPrzedRuchemPokojuRef = useRef<ReturnType<typeof useProjectStore.getState>["draft"] | null>(null);
@@ -550,6 +551,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [panelZwiniety, setPanelZwiniety] = useState(odczytajPanelZwiniety);
 
   const [toolMode, setToolMode] = useState<ToolMode>("zaznacz");
+  // Zaczęty przewód należy do narzędzia „Przewód" — po zmianie narzędzia przepada,
+  // żeby powrót do niego nie podsuwał końca wybranego kiedyś dawno temu.
+  const [narzedziePrzewodu, setNarzedziePrzewodu] = useState(toolMode);
+  if (narzedziePrzewodu !== toolMode) {
+    setNarzedziePrzewodu(toolMode);
+    if (przewodStart !== null) setPrzewodStart(null);
+  }
   /**
    * Zatrzaśnięty Shift: każde kliknięcie DOKŁADA element do zaznaczenia zamiast
    * zaczynać nowe.
@@ -727,7 +735,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [cursor, setCursor] = useState<Point | null>(null);
   /** Nazwa pliku podkładu — sam „wgrany" nie mówi, KTÓRY rzut leży pod spodem. */
   const [bgName, setBgName] = useState<string | null>(null);
-  const [kontoPromptOdrzucony, setKontoPromptOdrzucony] = useState(odczytajOdrzuconyPrompt);
 
   /**
    * Pinezka przypinająca pasek w pełnym ekranie. Renderowana wewnątrz samego paska,
@@ -1580,6 +1587,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     w: "sciany",
     d: "otwory",
     n: "notatka",
+    k: "przewod",
     h: "pan",
     s: "skala",
   };
@@ -1760,9 +1768,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         const porzuconyPodglad = anulujPodgladRef.current?.() ?? false;
         const bylCosDoPorzucenia =
           porzuconyPodglad ||
+          przewodStart !== null ||
           sciany.drawingWall.length > 0 || pokoje.drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
         sciany.setDrawingWall([]);
         pokoje.setDrawingRoomPoints([]);
+        setPrzewodStart(null);
         setMultiSelected([]);
         setCalibPoints([]);
         zaznaczenie.zamknijMenu();
@@ -2280,6 +2290,27 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   // nakładane NA WIERZCHU świeżo policzonych tras — początek/koniec zawsze biorą się
   // z aktualnej pozycji elementu, więc jego przesunięcie nie gubi ręcznego układu.
   const cableRoutes = useMemo(() => applyRouteOverrides(rawCableRoutes, routeOverrides), [rawCableRoutes, routeOverrides]);
+
+  /**
+   * Rzut bieżącej kondygnacji do DXF (F13). To samo, co widać na rzucie: osprzęt po
+   * filtrach widoku (F8), trasy tej kondygnacji, ręczne przewody i notatki. Bez
+   * kalibracji skali jednostki przelicza się zastępczą skalą rysowania od zera
+   * (`MANUAL_DRAW_SCALE_MPU`) — tak samo jak wymiary na ekranie.
+   */
+  function pobierzDxf() {
+    const bajty = rzutDoDxf({
+      walls,
+      roomShapes,
+      openings,
+      elements: elementyWidoczne,
+      trasy: cableRoutes.filter((t) => t.floor === activeFloorId),
+      przewody: przewodyPietra,
+      notatki: notatkiPietra,
+      mpu: mpu ?? MANUAL_DRAW_SCALE_MPU,
+      skalaSymboli: skalaOsprzetu,
+    });
+    downloadBlob(new Blob([bajty], { type: "application/dxf" }), projectFileName(`rzut-${floorName}`, projectName, "dxf"));
+  }
   // Trasy do ukrytego osprzętu też schodzą z rysunku (F8): id trasy zasilania to id
   // elementu, a sterowania — „łącznik->oprawa".
   const trasyWidoczne = useMemo(() => {
@@ -2315,6 +2346,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // Zaznaczona notatka (F6) — karta z treścią i „Edytuj"/„Usuń" także w narzędziu
     // „Notatka", w którym właśnie powstała.
     selected?.kind === "note" ||
+    // Przewód ręczny (F11): karta zaznaczonego przewodu i podpowiedź narzędzia.
+    selected?.kind === "wire" ||
+    toolMode === "przewod" ||
     !!skalaPotwierdzenie;
 
   /**
@@ -2693,6 +2727,64 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {/* Szerokość ZAZNACZONEGO otworu — ten sam wzorzec co grubość zaznaczonej ściany
           wyżej. Wcześniej każdy otwór miał na sztywno 90 cm i nie było jak tego zmienić,
           więc drzwi balkonowe i okno tarasowe rysowały się jak zwykłe drzwi wewnętrzne. */}
+      {/* Narzędzie „Przewód" (F11) — co kliknąć teraz. */}
+      {toolMode === "przewod" && selected?.kind !== "wire" && (
+        <div className="flex min-w-0 flex-col gap-1.5 text-xs text-slate-600" data-testid="podpowiedz-przewodu">
+          <span>
+            {przewodStart
+              ? "Kliknij drugi element — przewód połączy oba. Esc albo klik obok przerywa."
+              : "Kliknij pierwszy element przewodu (łącznik, gniazdo, szafkę…)."}
+          </span>
+          {przewodStart && (
+            <button className="pe-btn-ghost self-start px-2.5 py-1 text-xs" onClick={() => setPrzewodStart(null)}>
+              Anuluj
+            </button>
+          )}
+        </div>
+      )}
+      {/* Zaznaczony PRZEWÓD RĘCZNY (F11) — rodzaj (kreska na rysunku) i opis kabla. */}
+      {selected?.kind === "wire" && (() => {
+        const w = przewodyPietra.find((x) => x.id === selected.id);
+        if (!w) return null;
+        const nazwa = (id: string) => {
+          const e = elements.find((x) => x.id === id);
+          return e ? `${ELEMENT_TYPES[e.type].label} (${e.room})` : "—";
+        };
+        return (
+          <div className="flex min-w-0 flex-col gap-1.5 text-xs" data-testid="karta-przewodu">
+            <span className="font-medium text-slate-600">Przewód</span>
+            <span className="text-slate-500">
+              {nazwa(w.od)} → {nazwa(w.do)}
+            </span>
+            <label className="flex items-center gap-2 text-slate-600">
+              Rodzaj
+              <select
+                value={w.rodzaj}
+                onChange={(e) => zmienPrzewod(w.id, { rodzaj: e.target.value as RodzajPrzewodu })}
+                className="rounded border border-border bg-white px-1.5 py-0.5"
+              >
+                {(Object.keys(RODZAJE_PRZEWODU) as RodzajPrzewodu[]).map((r) => (
+                  <option key={r} value={r}>
+                    {RODZAJE_PRZEWODU[r].etykieta}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-slate-600">
+              Kabel
+              <input
+                aria-label="Typ i przekrój kabla"
+                value={w.kabel}
+                onChange={(e) => zmienPrzewod(w.id, { kabel: e.target.value })}
+                className="min-w-0 flex-1 rounded border border-border px-1.5 py-0.5"
+              />
+            </label>
+            <button className="pe-btn-ghost self-start px-2.5 py-1 text-xs text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
+              Usuń przewód
+            </button>
+          </div>
+        );
+      })()}
       {/* Zaznaczona NOTATKA (F6) — treść i akcje; edycja tym samym oknem co przy dodawaniu. */}
       {selected?.kind === "note" && (() => {
         const n = notatkiPietra.find((x) => x.id === selected.id);
@@ -2889,6 +2981,90 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   );
   const kontekstoweTresc = trescKontekstu("wszystko");
 
+
+  /**
+   * Na TELEFONIE karta zaznaczonego elementu i pomieszczenia mieszka w dolnej
+   * szufladzie nad rzutem, a nie w panelu (F7 z audytu 5.11.2026). Panel stoi tam NAD
+   * rzutem i po wybraniu elementu z biblioteki zwija się sam — karta w nim była więc
+   * albo niewidoczna (panel zwinięty: dotknięcie gniazdka nie pokazywało niczego),
+   * albo przewinięta poza ekran razem z górą strony.
+   */
+  const kartyWSzufladzie = !szerokieOkno && !pelnyEkran;
+  const kartaElementuZaznaczonego =
+    toolMode === "zaznacz" && selected?.kind === "el" && multiSelected.length === 0
+      ? (() => {
+      const el = elements.find((e) => e.id === selected.id);
+      if (!el) return null;
+      return (
+        <KartaElementu
+          element={el}
+          uzyteNumery={uzyteNumeryObwodow}
+          onEdytuj={() => setEditingId(el.id)}
+          onObroc={() => rotateElements([el.id])}
+          onUsun={() => {
+            removeElements([el.id]);
+            setSelected(null);
+          }}
+          onObwod={(n) => przypiszObwod([el.id], n)}
+        />
+      );
+    })()
+      : null;
+  const kartaPomieszczeniaZaznaczonego =
+    toolMode === "zaznacz" && selected?.kind === "room" && multiSelected.length === 0
+      ? (() => {
+      const pokoj = roomShapes.find((r) => r.id === selected.id);
+      if (!pokoj) return null;
+      // Karta zaznaczonego pomieszczenia — ten sam wiersz co na liście w
+      // „Narysuj pomieszczenie", tu z podpisanymi akcjami (patrz `WierszPomieszczenia`).
+      return (
+        <div className="space-y-1.5" data-testid="karta-pomieszczenia">
+          <div className="text-sm font-semibold text-ink">Pomieszczenie</div>
+          <WierszPomieszczenia
+            key={pokoj.id}
+            room={pokoj}
+            metersPerUnit={mpu}
+            onCreateWall={sciany.createWallFromRoom}
+            podpisy
+            onUsuniete={() => setSelected(null)}
+          />
+          <SzablonPomieszczenia
+            key={`szablon-${pokoj.id}`}
+            typ={pokoj.type ?? guessRoomType(pokoj.name)}
+            elementowWPokoju={elements.filter((e) => e.roomId === pokoj.id).length}
+            onWstaw={() => {
+              const nowe = elementySzablonu(pokoj.type ?? guessRoomType(pokoj.name), {
+                room: pokoj,
+                elements,
+                walls,
+                roomShapes,
+                openings,
+                mpu,
+                skalaSymboli: skalaOsprzetu,
+              });
+              // Jeden wpis w historii — jedno Ctrl+Z zdejmuje cały szablon.
+              if (nowe.length) setDraft((d) => ({ ...d, elements: [...d.elements, ...nowe] }));
+              return nowe.length;
+            }}
+          />
+        </div>
+      );
+    })()
+      : null;
+  const tytulSzuflady =
+    kartaElementuZaznaczonego && selected?.kind === "el"
+      ? ELEMENT_TYPES[elements.find((e) => e.id === selected.id)?.type ?? "gniazdko"].label
+      : kartaPomieszczeniaZaznaczonego && selected?.kind === "room"
+        ? `Pomieszczenie: ${roomShapes.find((r) => r.id === selected.id)?.name ?? ""}`
+        : null;
+  const kartaSzuflady = kartyWSzufladzie ? (kartaElementuZaznaczonego ?? kartaPomieszczeniaZaznaczonego) : null;
+  const kluczZaznaczenia = selected ? `${selected.kind}:${selected.id}` : "";
+  const [zaznaczenieSzuflady, setZaznaczenieSzuflady] = useState(kluczZaznaczenia);
+  if (zaznaczenieSzuflady !== kluczZaznaczenia) {
+    setZaznaczenieSzuflady(kluczZaznaczenia);
+    if (szufladaZwinieta) setSzufladaZwinieta(false);
+  }
+
   return (
     // Na ekranie startowym zakładka sięga po CAŁĄ wolną wysokość okna (rodzic jest
     // rozciągliwą kolumną — patrz App.tsx), żeby powitanie wypełniło ekran zamiast
@@ -2943,6 +3119,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           Widoczny cały czas, dopóki jest cokolwiek do stracenia (pusty projekt nie
           jest jeszcze problemem) i użytkownik nie jest zalogowany — bez opcji
           trwałego wyciszenia, bo ryzyko nie znika, dopóki nie założy konta.
+          Od 7.11.2026 JEDYNY pasek o koncie: obok stał drugi, pomarańczowy („Włożyłeś już
+          sporo pracy… załóż konto"), który prosił o to samo — po odświeżeniu oba naraz
+          zajmowały pół paska nad rzutem (audyt 5.11.2026). Liczba elementów, którą
+          tamten podawał, przeszła tutaj.
           NIE dotyczy projektu PRZYKŁADOWEGO: nie ma tam czego stracić (dane siedzą
           w kodzie aplikacji i wczytują się jednym kliknięciem z powrotem), a ostrzeżenie
           o utracie pracy pod cudzym mieszkaniem jest po prostu nieprawdziwe. */}
@@ -2954,8 +3134,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         >
           <AlertTriangle size={14} className="shrink-0" />
           <span>
-            Ten projekt istnieje tylko w tej przeglądarce — wyczyszczenie danych albo otwarcie na innym urządzeniu
-            oznacza jego utratę.
+            Ten projekt istnieje tylko w tej przeglądarce{elements.length > 0 ? ` (${elements.length} ${odmianaElementu(elements.length)})` : ""} —
+            wyczyszczenie danych albo otwarcie na innym urządzeniu oznacza jego utratę.
           </span>
           <button onClick={onOpenAuth} className="font-semibold underline">
             Zabezpiecz kontem
@@ -2963,41 +3143,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         </div>
       )}
 
-      {/* Delikatny, JEDNORAZOWY prompt po włożeniu realnej pracy (>10 elementów) —
-          w odróżnieniu od banera wyżej, ten da się odrzucić na stałe (patrz
-          `kontoPromptOdrzucony`), żeby nie przypominać o tym samym w kółko.
-          Na przykładzie zgaszony z tego samego powodu co baner wyżej — a do tego
-          jego próg (>10 elementów) przykład przekracza od pierwszej sekundy, więc
-          bez tej straży „włożyłeś już sporo pracy" witałoby kogoś, kto nie włożył
-          w ten projekt ani jednego kliknięcia. */}
-      {!session && !kontoPromptOdrzucony && !projektPrzykladowy && elements.length > KONTO_PROMPT_PROG_ELEMENTOW && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C1793F14", color: "#8A5526" }}
-        >
-          <ShieldAlert size={14} className="shrink-0" />
-          <span>Włożyłeś już sporo pracy w ten projekt ({elements.length} elementów) — zabezpiecz go kontem, żeby go nie stracić.</span>
-          <button onClick={onOpenAuth} className="font-semibold underline">
-            Załóż konto / zaloguj się
-          </button>
-          <button
-            onClick={() => {
-              setKontoPromptOdrzucony(true);
-              try {
-                localStorage.setItem(KONTO_PROMPT_ODRZUCONY_KEY, "1");
-              } catch {
-                /* patrz odczytajOdrzuconyPrompt */
-              }
-            }}
-            className="ml-auto shrink-0 opacity-60 hover:opacity-100"
-            title="Nie przypominaj więcej"
-            aria-label="Zamknij przypomnienie o koncie"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
 
       {/* Pierwszy ekran zupełnie świeżego projektu — JEDEN wybór zamiast banera +
           karty onboardingu + pustego edytora naraz (patrz `showEntryScreen` wyżej).
@@ -3278,6 +3423,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       <EditorToolbar
         zoomStandardowy={zoomSkaliRysowania(mpu)}
         onPdf={() => setPodgladPdf(true)}
+        onDxf={pobierzDxf}
         pelnyEkran={pelnyEkran}
         onTogglePelnyEkran={przelaczPelnyEkran}
         bgImageUrl={bgImageUrl}
@@ -3627,46 +3773,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               naDotyku={naDotyku}
               onWybierz={selectTool}
             />
-          ) : toolMode === "zaznacz" && selected?.kind === "el" && multiSelected.length === 0 ? (
-            (() => {
-              const el = elements.find((e) => e.id === selected.id);
-              if (!el) return null;
-              return (
-                <KartaElementu
-                  element={el}
-                  uzyteNumery={uzyteNumeryObwodow}
-                  onEdytuj={() => setEditingId(el.id)}
-                  onObroc={() => rotateElements([el.id])}
-                  onUsun={() => {
-                    removeElements([el.id]);
-                    setSelected(null);
-                  }}
-                  onObwod={(n) => przypiszObwod([el.id], n)}
-                />
-              );
-            })()
+          ) : kartaElementuZaznaczonego && !kartyWSzufladzie ? (
+            kartaElementuZaznaczonego
           ) : kartaSciany && szerokieOkno && !pelnyEkran ? (
             kartaSciany
-          ) : toolMode === "zaznacz" && selected?.kind === "room" && multiSelected.length === 0 ? (
-            (() => {
-              const pokoj = roomShapes.find((r) => r.id === selected.id);
-              if (!pokoj) return null;
-              // Karta zaznaczonego pomieszczenia — ten sam wiersz co na liście w
-              // „Narysuj pomieszczenie", tu z podpisanymi akcjami (patrz `WierszPomieszczenia`).
-              return (
-                <div className="space-y-1.5" data-testid="karta-pomieszczenia">
-                  <div className="text-sm font-semibold text-ink">Pomieszczenie</div>
-                  <WierszPomieszczenia
-                    key={pokoj.id}
-                    room={pokoj}
-                    metersPerUnit={mpu}
-                    onCreateWall={sciany.createWallFromRoom}
-                    podpisy
-                    onUsuniete={() => setSelected(null)}
-                  />
-                </div>
-              );
-            })()
+          ) : kartaPomieszczeniaZaznaczonego && !kartyWSzufladzie ? (
+            kartaPomieszczeniaZaznaczonego
           ) : null}
           </div>
           )}
@@ -3713,12 +3825,36 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               rzutu, nie treść nad nim. Każda treść nad płótnem, która pojawia się
               w trakcie rysowania, przesuwa płótno pod palcem — a na telefonie panel
               stoi właśnie nad płótnem. Na monitorze kontrolki są w panelu obok rzutu. */}
-          {!pelnyEkran && !szerokieOkno && (kontekstoweAktywne || pigulkaWstawiania) && (
+          {!pelnyEkran && !szerokieOkno && (kontekstoweAktywne || pigulkaWstawiania || kartaSzuflady) && (
             <div
               data-testid="kontrolki-narzedzia"
-              className="pe-bez-suwaka absolute inset-x-2 bottom-2 z-20 flex max-h-[45%] min-w-0 flex-wrap items-center gap-2 overflow-y-auto rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-2 text-left shadow-lg empty:hidden"
+              // Rozwinięta karta zaznaczenia dostaje więcej wysokości (60%) — reszta
+              // kontrolek mieści się w 45%, a karta elementu ma kilka wierszy akcji.
+              className={`pe-bez-suwaka absolute inset-x-2 bottom-2 z-20 flex ${kartaSzuflady && !szufladaZwinieta ? "max-h-[60%]" : "max-h-[45%]"} min-w-0 flex-wrap items-center gap-2 overflow-y-auto rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-2 text-left shadow-lg empty:hidden`}
             >
-              {kontekstoweAktywne && kontekstoweTresc}
+              {kartaSzuflady && (
+                // Szuflada: karta zaznaczenia NAD dolną krawędzią rzutu, z uchwytem do
+                // zwinięcia, kiedy zasłania to, co chce się zobaczyć pod nią.
+                <div className="w-full min-w-0" data-testid="szuflada-karty">
+                  <button
+                    type="button"
+                    aria-expanded={!szufladaZwinieta}
+                    onClick={() => setSzufladaZwinieta((z) => !z)}
+                    className="flex min-h-8 w-full items-center justify-between gap-2 text-left text-sm font-semibold text-ink"
+                  >
+                    {/* Rozwinięta karta ma własny nagłówek z nazwą — tu wtedy tylko podpis
+                        uchwytu, żeby nazwa nie stała dwa razy jedna pod drugą. */}
+                    {szufladaZwinieta ? (
+                      <span className="truncate">{tytulSzuflady}</span>
+                    ) : (
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Zaznaczenie</span>
+                    )}
+                    {szufladaZwinieta ? <ChevronUp size={16} aria-label="Rozwiń kartę" /> : <ChevronDown size={16} aria-label="Zwiń kartę" />}
+                  </button>
+                  {!szufladaZwinieta && <div className="mt-1">{kartaSzuflady}</div>}
+                </div>
+              )}
+              {kontekstoweAktywne && !(kartaSzuflady && szufladaZwinieta) && kontekstoweTresc}
               {pigulkaWstawiania}
             </div>
           )}
@@ -3736,6 +3872,27 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             }}
             onMoveNote={(id, p) => przesunNotatke(id, p)}
             onEditNote={(id) => setEdycjaNotatki({ id, tekst: notatkiPietra.find((n) => n.id === id)?.tekst ?? "" })}
+            przewody={przewodyPietra}
+            przewodStart={przewodStart}
+            onWireElement={(id) => {
+              if (id === null || id === przewodStart) {
+                setPrzewodStart(null);
+                return;
+              }
+              if (!przewodStart) {
+                setPrzewodStart(id);
+                return;
+              }
+              const a = elements.find((e) => e.id === przewodStart);
+              const b = elements.find((e) => e.id === id);
+              setPrzewodStart(null);
+              if (!a || !b) return;
+              const nowy = dodajPrzewod(a.id, b.id, domyslnyPrzewod(a.type, b.type));
+              // Karta nowego przewodu od razu — żeby poprawić opis kabla, póki pamięta się,
+              // co to za przewód.
+              if (nowy) setSelected({ kind: "wire", id: nowy });
+            }}
+            onSelectWire={(id) => setSelected({ kind: "wire", id })}
             openings={openings}
             toolMode={toolMode}
             roomMode={pokoje.roomMode}

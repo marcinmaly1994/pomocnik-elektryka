@@ -87,7 +87,13 @@ jobs:
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: |
-          if [ -n "$VITE_SUPABASE_URL" ]; then
+          # Sekrety biorą się tylko w KOMPLECIE (adres i klucz). Do 8.11.2026 wystarczał sam
+          # adres — a w repozytorium był sekret adresu bez sekretu klucza, więc CI pisało
+          # do .env pusty klucz i aplikacja w testach uważała Supabase za nieskonfigurowany
+          # (bez logowania i udostępniania; test udostępniania był pomijany). Adres i klucz
+          # z dwóch różnych źródeł mogłyby też wskazywać dwa różne projekty — stąd albo oba
+          # z sekretów, albo oba z .env.example.
+          if [ -n "$VITE_SUPABASE_URL" ] && [ -n "$VITE_SUPABASE_ANON_KEY" ]; then
             {
               echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL"
               echo "VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY"
@@ -95,7 +101,16 @@ jobs:
             echo "Adres i klucz Supabase: z sekretów repozytorium."
           else
             grep -E '^VITE_SUPABASE_' .env.example > .env
+            if [ -n "$VITE_SUPABASE_URL" ]; then
+              echo "::warning::Jest sekret VITE_SUPABASE_URL, ale brak VITE_SUPABASE_ANON_KEY — adres i klucz biorę z .env.example."
+            fi
             echo "Adres i klucz Supabase: z .env.example."
+          fi
+          # Pusty klucz = aplikacja bez chmury i po cichu pominięte testy. Lepiej, żeby
+          # krok padł, niż żeby zestaw zielenił się bez połowy funkcji.
+          if ! grep -qE '^VITE_SUPABASE_ANON_KEY=.+' .env; then
+            echo "::error::Brak klucza Supabase w .env — sprawdź sekrety albo .env.example."
+            exit 1
           fi
           if [ -n "$E2E_TEST_EMAIL" ] && [ -n "$E2E_TEST_PASSWORD" ]; then
             {
