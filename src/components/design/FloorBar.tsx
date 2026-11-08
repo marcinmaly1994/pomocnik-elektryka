@@ -146,7 +146,7 @@ export function FloorManagement() {
             value={nazwaKopii}
             onChange={(e) => setNazwaKopii(e.target.value)}
             aria-label="Nazwa kopii kondygnacji"
-            className="mb-3 w-full rounded border border-border px-3 py-1.5 text-sm"
+            className="pe-input mb-3 w-full"
           />
           <p className="mb-4 text-xs text-slate-400">
             Kopia dostaje wszystkie ściany, pomieszczenia, drzwi, okna i elementy z „{aktywna?.name}", a także
@@ -192,7 +192,7 @@ export function FloorManagement() {
           }}
           placeholder="2,8"
           aria-label="Wysokość kondygnacji w metrach"
-          className="w-14 rounded border border-border px-1.5 py-1 text-xs tabular-nums"
+          className="pe-input w-14 px-1.5 py-1 text-xs tabular-nums"
         />
         <span aria-hidden="true">m</span>
       </label>
@@ -209,7 +209,7 @@ export function FloorManagement() {
             value={newFloorName}
             onChange={(e) => setNewFloorName(e.target.value)}
             aria-label="Nazwa kondygnacji"
-            className="mb-4 w-full rounded border border-border px-3 py-1.5 text-sm"
+            className="pe-input mb-4 w-full"
           />
           <DialogTrigger asChild>
             <Button

@@ -1,4 +1,15 @@
 @tailwind base;
+
+@layer base {
+  /* Jeden wskaźnik fokusu dla całej aplikacji (WCAG 2.4.7 / 2.4.11): 2 px w kolorze
+     głównym, 3:1 i więcej na każdym tle interfejsu. Tylko z klawiatury
+     (`:focus-visible`) — klik myszą nie zostawia obwódki. Komponenty z własnym
+     pierścieniem (Button: `ring-2`) nadpisują go `outline-none`, więc nic się nie dubluje. */
+  :focus-visible {
+    outline: 2px solid theme('colors.blueprint.DEFAULT');
+    outline-offset: 2px;
+  }
+}
 @tailwind components;
 @tailwind utilities;
 

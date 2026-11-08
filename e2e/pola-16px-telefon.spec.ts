@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { wczytajPrzyklad } from "./_flow";
+import { wczytajPrzyklad, otworzMenuPaska } from "./_flow";
 
 /**
  * Pola formularzy na telefonie mają co najmniej 16 px.
@@ -58,5 +58,43 @@ test("Kosztorys przykładowego projektu: pola mają 16 px", async ({ page }) => 
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole("button", { name: "Kosztorys", exact: true }).click();
   await expect(page.getByLabel(/^Wartość pozycji: Gniazdo RJ45/)).toBeVisible();
+  await sprawdz(page);
+});
+
+test("edytor przykładu: pole grubości ściany i pasek kondygnacji mają 16 px", async ({ page }) => {
+  await wczytajPrzyklad(page, "mieszkanie");
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  await expect(page.getByTestId("wall-thickness-input")).toBeVisible();
+  await sprawdz(page);
+  // Wysokość kondygnacji siedzi w rozwijanym „Plan”, więc sprawdzana osobno, po jego otwarciu.
+  await otworzMenuPaska(page, "Plan");
+  await expect(page.getByLabel("Wysokość kondygnacji w metrach")).toBeVisible();
+  await sprawdz(page);
+  const px = (etykieta: string) => page.getByLabel(etykieta).evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+  expect(await px("Wysokość kondygnacji w metrach")).toBeGreaterThanOrEqual(16);
+  expect(await page.getByTestId("wall-thickness-input").evaluate((e) => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
+});
+
+test("okno kondygnacji: pole nazwy ma 16 px", async ({ page }) => {
+  await wczytajPrzyklad(page, "mieszkanie");
+  await otworzMenuPaska(page, "Plan");
+  await page.getByRole("button", { name: "+ Dodaj kondygnację" }).click();
+  await expect(page.getByLabel("Nazwa kondygnacji")).toBeVisible();
+  await sprawdz(page);
+});
+
+test("okno historii wersji: pole nazwy wersji ma 16 px", async ({ page }) => {
+  await wczytajPrzyklad(page, "mieszkanie");
+  // Po wczytaniu przykładu strona bywa przewinięta, a menu wyskakuje względem przycisku —
+  // bez powrotu na górę pozycja menu raz na jakiś czas ląduje poza ekranem telefonu.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole("button", { name: "Projekty", exact: true }).click();
+  const pozycja = page.getByRole("menuitem", { name: /Wersje projektu/ });
+  // Menu ustawia się dopiero po pomiarze; pod obciążeniem (równoległe testy) kliknięcie
+  // w pierwszej chwili trafiało w pozycję jeszcze poza ekranem telefonu.
+  await expect(pozycja).toBeInViewport();
+  await pozycja.click();
+  await expect(page.getByTestId("historia-wersji")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Nazwa wersji" })).toBeVisible();
   await sprawdz(page);
 });

@@ -105,7 +105,7 @@ function TrescPozycji({ value, onChange, etykieta }: { value: string; onChange: 
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label={etykieta}
-      className="min-w-0 flex-1 basis-[calc(100%-2rem)] resize-none overflow-hidden bg-transparent text-sm leading-snug outline-none md:basis-auto"
+      className="min-w-0 flex-1 basis-[calc(100%-2rem)] resize-none overflow-hidden bg-transparent text-base leading-snug md:basis-auto md:text-sm"
     />
   );
 }

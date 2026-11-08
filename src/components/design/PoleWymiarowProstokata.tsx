@@ -56,7 +56,7 @@ export function PoleWymiarowProstokata({
     utworz();
   }
 
-  const pole = "w-16 rounded border border-border px-1.5 py-0.5";
+  const pole = "pe-input w-16 px-1.5 py-0.5";
 
   return (
     // Dwa nierozrywalne kawałki, które ZAWIJAJĄ SIĘ względem siebie: podpis i pola

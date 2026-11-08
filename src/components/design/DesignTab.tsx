@@ -2485,7 +2485,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               const v = Number(e.target.value);
               if (Number.isFinite(v) && v > 0) setWallThicknessOf(w.id, thicknessFromDisplay(v));
             }}
-            className="w-16 rounded border border-border px-1.5 py-0.5"
+            className="pe-input w-16 px-1.5 py-0.5"
           />
           {mpu !== null ? "cm" : "jedn."}
         </div>
@@ -2616,7 +2616,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 const v = Number(e.target.value);
                 if (Number.isFinite(v) && v > 0) sciany.setWallThickness(thicknessFromDisplay(v));
               }}
-              className="w-16 rounded border border-border px-1.5 py-0.5"
+              className="pe-input w-16 px-1.5 py-0.5"
             />
             {mpu !== null ? "cm" : "jedn."}
           </label>
@@ -2772,7 +2772,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 aria-label="Typ i przekrój kabla"
                 value={w.kabel}
                 onChange={(e) => zmienPrzewod(w.id, { kabel: e.target.value })}
-                className="min-w-0 flex-1 rounded border border-border px-1.5 py-0.5"
+                className="pe-input min-w-0 flex-1 px-1.5 py-0.5"
               />
             </label>
             <Button variant="secondary" size="sm" className="self-start text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
@@ -2816,7 +2816,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 const v = Number(e.target.value);
                 if (Number.isFinite(v) && v > 0) otwory.ustawSzerokosc(o.id, thicknessFromDisplay(v));
               }}
-              className="w-16 rounded border border-border px-1.5 py-0.5"
+              className="pe-input w-16 px-1.5 py-0.5"
             />
             {mpu !== null ? "cm" : "jedn."}
           </div>
@@ -4191,7 +4191,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                       zapisz();
                     }
                   }}
-                  className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
+                  className="pe-input mb-1 w-full"
                 />
                 <p className="mb-3 text-xs text-slate-400">Notatka trafi też na rzut w PDF. Ctrl+Enter zapisuje.</p>
                 <Button variant="copper" className="w-full" onClick={zapisz}>
@@ -4223,7 +4223,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 pokoje.zapisz();
               }
             }}
-            className="mb-3 w-full rounded border border-border px-3 py-1.5 text-sm"
+            className="pe-input mb-3 w-full"
           />
           <label className="mb-1 block text-xs font-medium text-slate-500">Typ pomieszczenia</label>
           <select
@@ -4629,7 +4629,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               if (name) renameRoomShape(roomNameEdit.id, name);
               setRoomNameEdit(null);
             }}
-            className="pe-card fixed z-50 px-2 py-1 text-sm outline-none"
+            className="pe-card fixed z-50 px-2 py-1 text-base md:text-sm"
             style={{ left: roomNameEdit.x - 60, top: roomNameEdit.y - 12, width: 120 }}
           />
         </>

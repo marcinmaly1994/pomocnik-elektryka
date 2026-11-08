@@ -389,7 +389,7 @@ function ProjectNameField() {
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="rounded border border-copper/40 bg-white px-2 py-0.5 text-base font-semibold text-ink outline-none focus:border-copper"
+        className="rounded border border-copper/40 bg-white px-2 py-0.5 text-base font-semibold text-ink focus:border-copper"
         style={{ width: "18ch" }}
         aria-label="Nazwa projektu"
       />

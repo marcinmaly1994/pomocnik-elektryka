@@ -78,7 +78,7 @@ function WierszOdcinka({
           }
         }}
         onBlur={zatwierdz}
-        className="w-20 rounded border border-border px-1.5 py-0.5"
+        className="pe-input w-20 px-1.5 py-0.5"
       />
       {mpu !== null ? "m" : "jedn."}
     </label>
