@@ -175,11 +175,14 @@ test("telefon: po wybraniu drogi startu rysunek jest w kadrze, razem z paskiem n
     .poll(async () => Math.round(await page.evaluate(() => window.scrollY)), { timeout: 3000 })
     .toBeGreaterThan(200);
 
-  const rail = (await page.locator('nav[aria-label="Narzędzia rysowania"]').boundingBox())!;
+  const pasekNarzedzi = page.locator('nav[aria-label="Narzędzia rysowania"]');
+  // Płynny ruch może na chwilę minąć cel (układ nad edytorem jeszcze się układa), a
+  // `dosun` w DesignTab cofa go dopiero po `scrollend` — mierzymy więc stan końcowy,
+  // nie pierwszą klatkę po przekroczeniu 200 px.
+  await expect.poll(async () => (await pasekNarzedzi.boundingBox())!.y, { timeout: 3000 }).toBeGreaterThanOrEqual(0);
   const box = (await plotno.boundingBox())!;
   // Pasek narzedzi na gorze kadru, plotno tuz pod nim — jedno i drugie widoczne
   // bez dalszego przewijania.
-  expect(rail.y).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(TELEFON.height);
 });
 
