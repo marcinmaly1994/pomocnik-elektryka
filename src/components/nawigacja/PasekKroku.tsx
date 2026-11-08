@@ -30,6 +30,8 @@ export function PasekKroku({
   if (!poprzedni && !nastepny) return null;
   const pobierz = (id: AppTab) => () => onPrefetch?.(id);
   return (
+    <>
+    <div aria-hidden="true" className="h-6 shrink-0" />
     <nav
       aria-label="Kroki projektu"
       // Na telefonie pasek ma być JEDNYM rzędem (sticky zjada ekran): przedrostki
@@ -37,10 +39,11 @@ export function PasekKroku({
       // nazwę kroku. Nazwa dostępna i textContent zostają pełne (label-in-name).
       // Przyciski mają `min-w-0`, a nazwa `truncate`, więc przy 345 px pasek się
       // skraca zamiast zawijać.
-      // `-mx-6 px-6`: pasek na telefonie sięga krawędzi ekranu, bo strona ma teraz
-      // `p-6` na każdej szerokości. Task 5 zmienia odstęp strony i dopasuje te klasy
-      // razem z nim (wtedy `-mx-4 px-4 sm:-mx-6 sm:px-6`).
-      className="sticky bottom-0 z-20 -mx-6 mt-6 flex items-center justify-between gap-3 border-t border-border bg-surface/95 px-6 py-3 shadow-pop backdrop-blur-sm md:mx-0 md:rounded-card md:border md:px-4"
+      // `-mx-4 px-4 sm:-mx-6 sm:px-6`: pasek sięga krawędzi ekranu, więc ujemny margines
+      // równa się odstępowi strony (`p-4 sm:p-6` w App.tsx). `mt-auto`: na krótkiej
+      // zakładce pasek ląduje tuż nad stopką, nie w środku pustego ekranu (minimalny
+      // odstęp od treści daje osobny `h-6` wyżej).
+      className="sticky bottom-0 z-20 -mx-4 mt-auto flex items-center justify-between gap-3 border-t border-border bg-surface/95 px-4 py-3 shadow-pop backdrop-blur-sm sm:-mx-6 sm:px-6 md:mx-0 md:rounded-card md:border md:px-4"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
       {poprzedni ? (
@@ -72,5 +75,6 @@ export function PasekKroku({
         </Button>
       )}
     </nav>
+    </>
   );
 }

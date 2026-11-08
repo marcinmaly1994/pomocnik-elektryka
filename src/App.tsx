@@ -243,12 +243,12 @@ function FlowCard({
   const gotowy = stan === "gotowy";
   return (
     <div
-      className="flex shrink-0 items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors"
-      style={
-        isActive
-          ? { borderColor: "#C1793F", background: "#C1793F0A" }
-          : { borderColor: "#E6EAEF", background: "#fff" }
-      }
+      // Poniżej `sm` karta jest kolumną siatki 4 × 1 (patrz `pasek-etapow`): `min-w-0`
+      // i ciasny odstęp; od `sm` wraca dawny kafel w rzędzie. Kolory z tokenów, nie z hex.
+      className={cn(
+        "min-w-0 rounded-xl border px-1.5 py-1.5 transition-colors sm:flex sm:shrink-0 sm:items-center sm:gap-2.5 sm:px-3 sm:py-2",
+        isActive ? "border-copper bg-copper-tlo" : "border-border bg-surface",
+      )}
     >
       {/* Numer, plakietka i podtytuł są `aria-hidden`, żeby nazwą dostępnościową
           przycisku został sam tytuł etapu („Rozdzielnica", nie „02 Rozdzielnica 8 obw.
@@ -259,18 +259,32 @@ function FlowCard({
         onPointerEnter={() => pobierzZawczasu(tab)}
         onFocus={() => pobierzZawczasu(tab)}
         title={opis}
-        className="flex items-center gap-2.5 text-left"
+        aria-current={isActive ? "step" : undefined}
+        // Poniżej `sm`: numer nad tytułem, cały kafel jest celem dotyku (min. 44 px).
+        className="flex min-h-11 w-full min-w-0 flex-col items-center justify-center gap-0.5 sm:min-h-0 sm:w-auto sm:flex-row sm:justify-start sm:gap-2.5 sm:text-left"
       >
-        <span
-          aria-hidden="true"
-          className="pe-mono flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
-          style={isActive ? { background: "#9A5A27", color: "#fff" } : { background: "#EEF1F4", color: "#5B6A80" }}
-        >
-          {step}
+        <span className="relative shrink-0">
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pe-mono flex h-6 w-6 items-center justify-center rounded-lg text-xs font-bold sm:h-7 sm:w-7",
+              isActive ? "bg-copper text-white" : "bg-paper text-slate-400",
+            )}
+          >
+            {step}
+          </span>
+          {/* Poniżej `sm` nie ma plakietki („8 obw."), więc stan „gotowy" niesie zielona
+              kropka przy numerze — ta sama zieleń co grafika danych. */}
+          {gotowy && (
+            <span
+              aria-hidden="true"
+              className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-success-grafika sm:hidden"
+            />
+          )}
         </span>
-        <span className="min-w-0">
-          <span className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold" style={{ color: isActive ? "#16202B" : "#475569" }}>
+        <span className="min-w-0 max-w-full">
+          <span className="flex items-center justify-center gap-1.5 sm:justify-start">
+            <span className={cn("truncate text-xs font-semibold sm:text-sm", isActive ? "text-ink" : "text-slate-500")}>
               {title}
             </span>
             {/* Kolor niesie stan szybciej niż napis: zielony = jest treść, szary =
@@ -280,9 +294,10 @@ function FlowCard({
                 niesie teraz liczby („8 obw."), a wersaliki robiły z nich krzyk. */}
             <span
               aria-hidden="true"
-              className={`pe-mono shrink-0 rounded px-1 py-0.5 text-xs tracking-wide ${
-                gotowy ? "bg-success-tlo font-semibold text-success" : "bg-[#EEF1F4] text-[#5B6A80]"
-              }`}
+              className={cn(
+                "pe-mono hidden shrink-0 rounded px-1 py-0.5 text-xs tracking-wide sm:inline-flex",
+                gotowy ? "bg-success-tlo font-semibold text-success" : "bg-paper text-slate-400",
+              )}
             >
               {plakietka}
             </span>
@@ -304,7 +319,8 @@ function FlowCard({
 
 /** Strzałka między etapami — czysto dekoracyjna, ukryta przed czytnikami ekranu. */
 function FlowArrow() {
-  return <ChevronRight aria-hidden="true" size={16} className="shrink-0 text-slate-300" />;
+  // Poniżej `sm` cztery kafle stoją w siatce bez przerw na strzałki.
+  return <ChevronRight aria-hidden="true" size={16} className="hidden shrink-0 text-slate-300 sm:block" />;
 }
 
 /** Narzędzie pomocnicze poza głównym przepływem (Kalkulatory, Protokoły). */
@@ -392,11 +408,15 @@ function ProjectNameField() {
     // to ta sama waga, jaką dostają nagłówki sekcji (`pe-display`) w reszcie apki.
     <button
       onClick={() => setEditing(true)}
-      className="group flex items-center gap-1.5 rounded px-2 py-0.5 text-base font-semibold text-ink hover:bg-slate-100"
+      className="group flex min-w-0 items-center gap-1.5 rounded px-2 py-0.5 text-base font-semibold text-ink hover:bg-slate-100"
       title="Zmień nazwę projektu"
     >
-      {projectName}
-      <Pencil size={13} className="text-slate-400 group-hover:text-slate-600" />
+      {/* Jedna linia z wielokropkiem; pełna nazwa w dymku (`title` przycisku zostaje
+          bez zmian — stoją na nim testy e2e). */}
+      <span className="min-w-0 truncate" title={projectName}>
+        {projectName}
+      </span>
+      <Pencil size={13} className="shrink-0 text-slate-400 group-hover:text-slate-600" />
     </button>
   );
 }
@@ -756,7 +776,9 @@ export default function App() {
     // gołego tła POD stopką przy oknie 1440×900 — najważniejsza strona wyglądała na
     // uciętą w połowie. `min-h-screen` samo tego nie robiło: rozciągało tło, ale nie
     // rozdzielało wysokości między dzieci.
-    <div className="flex min-h-screen flex-col p-6">
+    // `p-4` na telefonie: przy 360 px `p-6` zabierało 48 px, więc treść dostaje 16 px
+    // więcej szerokości. Od `sm` zostaje dawne `p-6` (pasek kroku liczy się z tym samym).
+    <div className="flex min-h-screen flex-col p-4 sm:p-6">
       {/* Nagłówek niesie jedyną informację o tym, CZYM jest ta strona, więc logo i hasło
           dostają realną wagę: znak graficzny jako punkt zaczepienia dla oka, nazwa w
           rozmiarze tytułu i hasło w kolorze tekstu, a nie wyszarzonym. Wcześniej logo
@@ -913,7 +935,9 @@ export default function App() {
           bo to landmark: bez niego nazwa projektu i kafle etapów zostawały jedynym
           fragmentem strony poza wszystkimi landmarkami. */}
       <section aria-label="Projekt i etapy pracy" className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        {/* `min-w-0 max-w-full`: długa nazwa projektu ma się skracać wielokropkiem w tym
+            rzędzie, a nie rozpychać strony ani spychać etapów (patrz `ProjectNameField`). */}
+        <div className="flex min-w-0 max-w-full items-center gap-2">
           <Folder size={15} className="text-slate-400" aria-hidden="true" />
           <span className="text-sm text-slate-400">Projekt:</span>
           <ProjectNameField />
@@ -934,7 +958,7 @@ export default function App() {
           ref={pasekEtapow.ref}
           style={pasekEtapow.styl}
           data-testid="pasek-etapow"
-          className="pe-bez-suwaka -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-0.5"
+          className="pe-bez-suwaka grid min-w-0 grid-cols-4 gap-1.5 sm:-mx-1 sm:flex sm:items-center sm:gap-2 sm:overflow-x-auto sm:px-1 sm:py-0.5"
         >
           <FlowCard
             step="01"
@@ -989,6 +1013,16 @@ export default function App() {
             tab="kosztorys"
             onPick={setTab}
           />
+          {/* Postęp przez cztery etapy — tylko na telefonie, gdzie nie ma strzałek między
+              kaflami. Na Kalkulatorach i Protokołach żaden etap nie jest aktywny. */}
+          {KOLEJNOSC_KROKOW.some((k) => k.id === tab) && (
+            <div aria-hidden="true" className="col-span-4 h-0.5 rounded-full bg-paper sm:hidden">
+              <div
+                className="h-full rounded-full bg-copper"
+                style={{ width: `${((KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab) + 1) / 4) * 100}%` }}
+              />
+            </div>
+          )}
         </div>
       </section>
 
@@ -1056,7 +1090,7 @@ export default function App() {
       )}
 
       {/* Strona towarzysząca, nie krok przepływu — stąd brak kafla, paska przykładu
-          i pigułek nawigacji (patrz komentarz przy `AppTab` w lib/routing.ts). */}
+          i dolnego paska kroku (patrz komentarz przy `AppTab` w lib/routing.ts). */}
       {tab === "prywatnosc" && (
         <Suspense fallback={<TabLoading />}>
           <PolitykaPrywatnosci />
@@ -1380,7 +1414,8 @@ function SiteFooter({
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
-          <Logo className="mb-1.5 h-5 w-auto" />
+          {/* `h-10`: napis w logo ma przy tej wysokości ok. 16 px (zmierzone bbox; przy `h-5` było ok. 8 px). */}
+          <Logo className="mb-1.5 h-10 w-auto" />
           <p className="leading-relaxed">
             Wyniki obliczeń — dobór zabezpieczeń, przekrojów przewodów, długości tras i kosztorys — są{" "}
             <strong className="font-semibold text-slate-600">orientacyjne</strong>. Nie zastępują projektu instalacji

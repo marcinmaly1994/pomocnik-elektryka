@@ -1,6 +1,11 @@
 @tailwind base;
 
 @layer base {
+  /* Dolny pasek kroku (PasekKroku, ok. 5 rem) jest `sticky`: bez tego fokus z klawiatury
+     i przewinięcie do kotwicy lądowały POD nim (WCAG 2.4.11). */
+  html {
+    scroll-padding-bottom: 5rem;
+  }
   /* Jeden wskaźnik fokusu dla całej aplikacji (WCAG 2.4.7 / 2.4.11): 2 px w kolorze
      głównym, 3:1 i więcej na każdym tle interfejsu. Tylko z klawiatury
      (`:focus-visible`) — klik myszą nie zostawia obwódki. Komponenty z własnym

@@ -264,7 +264,7 @@ export interface DesignTabProps {
   /**
    * Kolejny krok przepływu — ląduje jako przycisk na prawym końcu paska stanu
    * (patrz `nastepnyKrok` w EditorStatusBar). Na pozostałych zakładkach tę rolę
-   * pełni pływająca pigułka w rogu okna; tutaj nie może, bo leżałaby na rysunku.
+   * pełni dolny pasek kroku (`PasekKroku`); tutaj się nie mieści, bo zabierałby miejsce rysunkowi.
    * `undefined`, gdy nie ma dokąd iść — projekt jest jeszcze pusty.
    */
   nastepnyKrok?: { tytul: string; przejdz: () => void; pobierz: () => void };
@@ -1156,7 +1156,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // zakładki był zwykłym blokiem, margines schodził na zewnątrz i suma się zgadzała;
       // po zmianie strony na kolumnę flexową (stopka przy dole okna) marginesy przestały
       // się scalać i rachunek zaniżał się o równe 16 px — akurat tyle, żeby płótno znów
-      // sięgnęło pod pigułkę „Dalej". Odejmowanie MIERZONYCH banerów jest odporne na
+      // sięgnęło pod przycisk „Dalej" w pasku stanu. Odejmowanie MIERZONYCH banerów jest odporne na
       // każdy taki odstęp, bo nie zakłada o nim niczego.
       const kolumna = kolumnaPlotnaRef.current;
       const korzenEdytora = pelnyEkranRef.current;
