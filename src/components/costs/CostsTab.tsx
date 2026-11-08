@@ -200,7 +200,9 @@ export function CostsTab() {
             gotową wartość pozycji, jeśli masz ją z oferty ryczałtem.
           </p>
         </div>
-        <div className="flex gap-2">
+        {/* flex-wrap: trzy przyciski rozmiaru md (text-sm, nowrap) mają razem ok. 520 px —
+            na 360–430 px bez zawijania wypychały całą stronę poza ekran. */}
+        <div className="flex flex-wrap gap-2">
           {/* Format pliku i to, że ceny NIE pobierają się ze sklepów, siedzą w dymku
               przycisku, a nie w akapicie nad tabelą. Stały tam jako trwały baner —
               instrukcja obsługi funkcji, której większość użytkowników nigdy nie użyje,
