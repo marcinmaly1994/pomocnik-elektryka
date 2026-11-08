@@ -2418,7 +2418,10 @@ export function CalculatorsTab() {
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, cosfi: Number(e.target.value) } : x)))}
                     />
                     <select
-                      className="pe-input pe-select order-2 w-28 sm:order-none sm:w-24 text-base md:text-sm"
+                      // Stałe w-28: pole z własną strzałką (padding-right 2rem) potrzebuje ok. 112 px,
+                      // żeby najdłuższa opcja („3-fazowy”) się mieściła — i przy 16 px (telefon), i
+                      // przy 14 px (od md); węższe w-24 ucinało napis (zmierzone: 57 px tekstu na 52 px).
+                      className="pe-input pe-select order-2 w-28 sm:order-none text-base md:text-sm"
                       aria-label={`Faza: ${o.nazwa}`}
                       title="Do której fazy podłączony jest ten odbiór — albo „3-fazowy”, jeśli obciąża wszystkie trzy równo."
                       value={o.faza ?? "3f"}
