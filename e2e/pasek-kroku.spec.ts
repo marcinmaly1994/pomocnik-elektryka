@@ -53,10 +53,17 @@ for (const okno of [
       const pasek = page.getByRole("navigation", { name: "Kroki projektu" });
       await expect(pasek.getByRole("button", { name: "Cofnij: Schemat" })).toBeVisible();
       await expect(pasek.getByRole("button", { name: /^Dalej:/ })).toHaveCount(0);
-      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-      const p = (await pasek.boundingBox())!;
-      const stopka = (await page.locator("footer").boundingBox())!;
-      expect(p.y + p.height).toBeLessThanOrEqual(stopka.y + 1);
+      // Sondowanie, jak w teście Rozdzielnicy: treść kroku dociąga się jeszcze chwilę,
+      // więc „koniec strony” przesuwa się po pierwszym `scrollTo`. Każda próba przewija
+      // na aktualny koniec i dopiero wtedy porównuje pasek ze stopką.
+      await expect
+        .poll(async () => {
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+          const p = (await pasek.boundingBox())!;
+          const stopka = (await page.locator("footer").boundingBox())!;
+          return p.y + p.height - (stopka.y + 1);
+        })
+        .toBeLessThanOrEqual(0);
     });
 
     test("klik prowadzi do sąsiedniego kroku", async ({ page }) => {

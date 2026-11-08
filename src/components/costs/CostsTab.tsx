@@ -562,7 +562,10 @@ export function CostsTab() {
               {unpriced.length > 0 && (
                 <tr>
                   <td colSpan={4} className="px-3 pb-2 pt-2">
-                    <Alert variant="caution" className="gap-2.5 text-xs">
+                    {/* `role="note"`, nie domyślny `status`: lista pozycji bez ceny zmienia się
+                        przy każdym wpisanym znaku, a region `status` kazałby czytnikowi
+                        odczytywać całe zdanie od nowa w trakcie pisania. */}
+                    <Alert variant="caution" role="note" className="gap-2.5 text-xs">
                       <div>
                         <strong>
                           {podsumowanie.brakRobocizny
