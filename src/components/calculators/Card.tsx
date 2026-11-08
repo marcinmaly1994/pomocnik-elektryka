@@ -13,8 +13,8 @@ export function Card({ title, icon: Icon, tag, children }: CardProps) {
     <div className="pe-card p-5">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {Icon && <Icon size={17} className="text-copper" />}
-          <h3 className="pe-display text-base">{title}</h3>
+          {Icon && <Icon size={18} className="text-copper" />}
+          <h3 className="pe-display text-lg">{title}</h3>
         </div>
         {tag && <Badge variant="info">{tag}</Badge>}
       </div>

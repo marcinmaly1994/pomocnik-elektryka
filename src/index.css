@@ -23,7 +23,7 @@ body {
     letter-spacing: -0.01em;
   }
   .pe-card {
-    @apply rounded-card border border-border bg-white;
+    @apply rounded-card border border-border bg-surface shadow-xs;
   }
   .pe-nav-btn {
     border-bottom: 2px solid transparent;

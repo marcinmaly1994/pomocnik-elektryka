@@ -1,5 +1,6 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { AlertTriangle, LogIn, Loader2, Send } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { LogIn, Loader2, Send } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SUPABASE_CONFIGURED, sesjaZOdpowiedzi, supaRecover, supaSignIn, supaSignUp } from "@/lib/supabase";
@@ -97,12 +98,11 @@ export function AuthModal({ open, komunikat, onClose, onSignedIn }: AuthModalPro
     >
       <DialogContent title={TITLES[mode]}>
         {!SUPABASE_CONFIGURED && (
-          <div className="mb-3 flex gap-2 rounded-md p-2.5 text-xs" style={{ background: "#C6433A1A", color: "#A2352C" }}>
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <Alert variant="danger" className="mb-3">
             Backend nie jest jeszcze skonfigurowany (uzupełnij <span className="pe-mono">VITE_SUPABASE_URL</span> i{" "}
             <span className="pe-mono">VITE_SUPABASE_ANON_KEY</span> w pliku <span className="pe-mono">.env</span>), więc
             logowanie się nie powiedzie.
-          </div>
+          </Alert>
         )}
         <div className="space-y-3">
           <label className="block">

@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Check, Info, TriangleAlert } from "lucide-react";
 import type { CalcResult, Ocena } from "@/lib/calc/result";
@@ -66,13 +67,9 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
     return (
       <div className="mt-2 space-y-1.5">
         {wynik.bledy.map((b) => (
-          <div
-            key={b.code}
-            className="flex gap-2 rounded-md bg-danger-tlo p-2.5 text-xs leading-relaxed text-danger"
-          >
-            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-            <div>{b.message}</div>
-          </div>
+          <Alert key={b.code} variant="danger">
+            {b.message}
+          </Alert>
         ))}
       </div>
     );

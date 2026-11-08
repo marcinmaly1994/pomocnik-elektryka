@@ -3124,8 +3124,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {!session && !projektPrzykladowy && (elements.length > 0 || walls.length > 0 || roomShapes.length > 0 || !!bgImageUrl) && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C6433A14", color: "#A2352C" }}
+          className="flex flex-wrap items-center gap-2 rounded-lg bg-danger-tlo px-3 py-2 text-xs text-danger"
         >
           <AlertTriangle size={14} className="shrink-0" />
           <span>
@@ -3281,8 +3280,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {onboarding.scaleStale && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C6433A14", color: "#A2352C" }}
+          className="flex flex-wrap items-center gap-2 rounded-lg bg-danger-tlo px-3 py-2 text-xs text-danger"
         >
           <span>Podkład się zmienił, więc skala może już nie pasować do tego rzutu.</span>
           <button onClick={() => handleStepAction("skala")} className="font-semibold underline">

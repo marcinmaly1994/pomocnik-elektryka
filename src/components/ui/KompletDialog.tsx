@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -163,10 +164,9 @@ export function KompletDialog({
         )}
 
         {blad && (
-          <div className="mt-3 flex gap-2 rounded-lg p-2.5 text-xs" style={{ background: "#C6433A14", color: "#A2352C" }}>
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            <span>{blad}</span>
-          </div>
+          <Alert variant="danger" className="mt-3">
+            {blad}
+          </Alert>
         )}
 
         <div className="mt-4 flex items-center gap-2">

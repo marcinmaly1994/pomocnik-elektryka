@@ -1,4 +1,5 @@
 import { AlertTriangle, Check, HelpCircle } from "lucide-react";
+import { KOLORY } from "@/lib/tokeny";
 import { formatLiczba } from "@/lib/liczby";
 import type { TrybObwodu } from "@/store/useCalculatorsStore";
 import type { OcenaKryterium, StanKryterium } from "@/lib/calc/kryteriaObwodu";
@@ -50,8 +51,8 @@ export function PrzelacznikTrybu({ tryb, onZmien }: { tryb: TrybObwodu; onZmien:
 }
 
 const STYL_STANU: Record<StanKryterium, { tlo: string; kolor: string }> = {
-  ok: { tlo: "#3B8C631A", kolor: "#2C6B4A" },
-  blad: { tlo: "#C6433A1A", kolor: "#A2352C" },
+  ok: { tlo: KOLORY.successTlo, kolor: KOLORY.success },
+  blad: { tlo: KOLORY.dangerTlo, kolor: KOLORY.danger },
   nieoceniono: { tlo: "#EEF1F4", kolor: "#4F5D73" },
 };
 

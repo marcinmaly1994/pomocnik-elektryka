@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { KOLORY } from "@/lib/tokeny";
 import { formatLiczba, zPrzecinkiem } from "@/lib/liczby";
 import { Podpowiedz } from "@/components/ui/tooltip";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
@@ -34,10 +36,10 @@ import { GotoweUkladyPrzycisk, ListaUkladow } from "@/components/panel/GotoweUkl
 import { useWczytajUklad } from "@/hooks/useWczytajUklad";
 
 const SELECTIVITY_STYLE: Record<SelectivityLevel, { bg: string; fg: string; Icon: typeof AlertTriangle }> = {
-  error: { bg: "#C6433A14", fg: "#A2352C", Icon: AlertTriangle },
-  warn: { bg: "#C1793F14", fg: "#8A5526", Icon: AlertTriangle },
-  ok: { bg: "#3B8C631A", fg: "#2C6B4A", Icon: Check },
-  info: { bg: "#2D5A8C12", fg: "#2D5A8C", Icon: Info },
+  error: { bg: KOLORY.dangerTlo, fg: KOLORY.danger, Icon: AlertTriangle },
+  warn: { bg: KOLORY.cautionTlo, fg: KOLORY.caution, Icon: AlertTriangle },
+  ok: { bg: KOLORY.successTlo, fg: KOLORY.success, Icon: Check },
+  info: { bg: KOLORY.blueprintTlo, fg: KOLORY.blueprint, Icon: Info },
 };
 
 const PER_ROW_OPTIONS = [8, 12, 18, 24];
@@ -1035,26 +1037,14 @@ export function PanelTab() {
         {(sizingWarnings.length > 0 || ostrzezeniaReczne.length > 0) && (
           <div className="mt-4 space-y-1.5">
             {sizingWarnings.map((w, i) => (
-              <div
-                key={i}
-                className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
-                style={{ background: w.level === "error" ? "#C6433A14" : "#C1793F14", color: w.level === "error" ? "#A2352C" : "#8A5526" }}
-              >
-                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                <div>
-                  <span className="font-semibold">{w.obwod}</span> — {w.message}
-                </div>
-              </div>
+              <Alert key={i} variant={w.level === "error" ? "danger" : "caution"}>
+                <span className="font-semibold">{w.obwod}</span> — {w.message}
+              </Alert>
             ))}
             {ostrzezeniaReczne.map((o, i) => (
-              <div
-                key={`reczne-${i}`}
-                className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
-                style={{ background: "#C1793F14", color: "#8A5526" }}
-              >
-                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                <div>{o.tresc}</div>
-              </div>
+              <Alert key={`reczne-${i}`} variant="caution">
+                {o.tresc}
+              </Alert>
             ))}
           </div>
         )}

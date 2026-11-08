@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
@@ -1365,17 +1366,9 @@ export function CalculatorsTab() {
                   {sized.ostrzezenia.length > 0 && (
                     <div className="mt-2 space-y-1.5">
                       {sized.ostrzezenia.map((w, i) => (
-                        <div
-                          key={i}
-                          className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
-                          style={{
-                            background: w.level === "error" ? "#C6433A14" : "#C1793F14",
-                            color: w.level === "error" ? "#A2352C" : "#8A5526",
-                          }}
-                        >
-                          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                          <div>{w.message}</div>
-                        </div>
+                        <Alert key={i} variant={w.level === "error" ? "danger" : "caution"}>
+                          {w.message}
+                        </Alert>
                       ))}
                     </div>
                   )}
@@ -1536,17 +1529,9 @@ export function CalculatorsTab() {
                   {sizedBreaker.ostrzezenia.length > 0 && (
                     <div className="mt-2 space-y-1.5">
                       {sizedBreaker.ostrzezenia.map((w, i) => (
-                        <div
-                          key={i}
-                          className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
-                          style={{
-                            background: w.level === "error" ? "#C6433A14" : "#C1793F14",
-                            color: w.level === "error" ? "#A2352C" : "#8A5526",
-                          }}
-                        >
-                          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                          <div>{w.message}</div>
-                        </div>
+                        <Alert key={i} variant={w.level === "error" ? "danger" : "caution"}>
+                          {w.message}
+                        </Alert>
                       ))}
                     </div>
                   )}
@@ -2843,17 +2828,9 @@ export function CalculatorsTab() {
               {obwodEV.wartosci?.dobor.ostrzezenia && obwodEV.wartosci.dobor.ostrzezenia.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {obwodEV.wartosci.dobor.ostrzezenia.map((o, i) => (
-                    <div
-                      key={i}
-                      className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
-                      style={{
-                        background: o.level === "error" ? "#C6433A14" : "#C1793F14",
-                        color: o.level === "error" ? "#A2352C" : "#8A5526",
-                      }}
-                    >
-                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                      <div>{o.message}</div>
-                    </div>
+                    <Alert key={i} variant={o.level === "error" ? "danger" : "caution"}>
+                      {o.message}
+                    </Alert>
                   ))}
                 </div>
               )}
@@ -2918,14 +2895,14 @@ export function CalculatorsTab() {
                 hint="Wypadkowy cos φ instalacji. 1 dla odbiorników grzejnych (bojler, kuchenka, grzałki); przy dużym udziale silników, pomp ciepła i zasilaczy przyjmij niższy — prąd rośnie o 1/cos φ."
               />
               {bledyBilansu.length > 0 ? (
-                <div role="alert" data-testid="bledy-bilansu" className="mt-2 rounded-md p-3 text-sm leading-relaxed" style={{ background: "#C6433A12", color: "#8C2F28" }}>
+                <Alert variant="danger" role="alert" data-testid="bledy-bilansu" className="mt-2">
                   <div className="mb-1 font-semibold">Popraw dane — wynik nie jest liczony:</div>
                   <ul className="list-disc pl-5">
                     {bledyBilansu.map((b) => (
                       <li key={b}>{b}</li>
                     ))}
                   </ul>
-                </div>
+                </Alert>
               ) : (
               <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
                 <div>
@@ -3058,17 +3035,9 @@ export function CalculatorsTab() {
               {sizedFeeder.ostrzezenia.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {sizedFeeder.ostrzezenia.map((w, i) => (
-                    <div
-                      key={i}
-                      className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
-                      style={{
-                        background: w.level === "error" ? "#C6433A14" : "#C1793F14",
-                        color: w.level === "error" ? "#A2352C" : "#8A5526",
-                      }}
-                    >
-                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                      <div>{w.message}</div>
-                    </div>
+                    <Alert key={i} variant={w.level === "error" ? "danger" : "caution"}>
+                      {w.message}
+                    </Alert>
                   ))}
                 </div>
               )}
@@ -3203,27 +3172,13 @@ export function CalculatorsTab() {
                 </div>
               </div>
               {zMeasured < 0 && (
-                <div role="alert" className="mt-2 rounded-lg p-3 text-sm" style={{ background: "#C6433A1A", color: "#A2352C" }}>
+                <Alert variant="danger" role="alert" className="mt-2">
                   Impedancja pętli zwarcia nie może być ujemna — sprawdź wpisaną wartość. Zostaw 0, żeby zobaczyć samo Zs max
                   bez oceny.
-                </div>
+                </Alert>
               )}
               {zCalc.ok !== null && (
-                <div
-                  className="mt-2 flex items-start gap-2 rounded-lg p-3 text-sm"
-                  style={
-                    !zCalc.ok
-                      ? { background: "#C6433A1A", color: "#A2352C" }
-                      : zCalc.okZalecany
-                        ? { background: "#3B8C631A", color: "#2C6B4A" }
-                        : { background: "#C1793F1A", color: "#8A5526" }
-                  }
-                >
-                  {zCalc.ok && zCalc.okZalecany ? (
-                    <Check size={16} className="mt-0.5 shrink-0" />
-                  ) : (
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                  )}
+                <Alert variant={!zCalc.ok ? "danger" : zCalc.okZalecany ? "success" : "caution"} className="mt-2 items-start">
                   <span>
                     {!zCalc.ok
                       ? "Warunek niespełniony — zmierzona Zs przekracza limit normy. Skróć obwód, zwiększ przekrój lub zmień charakterystykę zabezpieczenia."
@@ -3231,7 +3186,7 @@ export function CalculatorsTab() {
                         ? `Warunek spełniony z zapasem ${formatLiczba(zCalc.margines!, 0)}% — zabezpieczenie zadziała w wymaganym czasie.`
                         : `Mieści się w normie, ale bez zapasu (do limitu ${formatLiczba(zCalc.margines!, 0)}%). Pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję — po obciążeniu obwód może wypaść poza limit.`}
                   </span>
-                </div>
+                </Alert>
               )}
               <HowItWorks
                 formulas={[
@@ -3280,15 +3235,11 @@ export function CalculatorsTab() {
                 <div className="pe-mono text-lg text-copper">{formatLiczba(groundingCheck.raMax, 0)} Ω</div>
               </div>
               {groundingCheck.ok !== null && (
-                <div
-                  className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2"
-                  style={groundingCheck.ok ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
-                >
-                  {groundingCheck.ok ? <Check size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+                <Alert variant={groundingCheck.ok ? "success" : "danger"} className="mt-2">
                   {groundingCheck.ok
                     ? "Warunek spełniony — RCD zadziała, zanim napięcie dotykowe przekroczy 50 V."
                     : "Warunek niespełniony — zmierzona RA przekracza wartość dopuszczalną. Popraw uziom (dodatkowy uziomik, głębsze wbicie) albo zastosuj RCD o niższym IΔn."}
-                </div>
+                </Alert>
               )}
               <HowItWorks
                 formulas={[

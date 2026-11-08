@@ -631,7 +631,7 @@ export function ProtocolsTab() {
         {verdict === null && rows.length > 0 && (() => {
           const brak = wierszeBezOceny(def, rows, limit);
           return (
-            <div className="mt-4 rounded-md p-3 text-sm" style={{ background: "#C1793F14", color: "#8A5526" }} data-testid="protokol-niekompletny">
+            <div className="mt-4 rounded-md bg-caution-tlo p-3 text-sm text-caution" data-testid="protokol-niekompletny">
               Niekompletny — {brakOpis(brak, !!def.checklist)}.
               {def.checklist ? " Oceń każdą pozycję albo usuń te, które nie dotyczą obiektu." : " Uzupełnij pomiary albo usuń puste wiersze."}
             </div>
@@ -639,8 +639,7 @@ export function ProtocolsTab() {
         })()}
         {verdict !== null && (
           <div
-            className="mt-4 rounded-md p-3 text-sm"
-            style={verdict ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
+            className={`mt-4 rounded-md p-3 text-sm ${verdict ? "bg-success-tlo text-success" : "bg-danger-tlo text-danger"}`}
           >
             {verdict ? "Wynik pozytywny — instalacja w badanym zakresie spełnia wymagania." : "Wynik negatywny — stwierdzono niezgodności wymagające usunięcia."}
           </div>
