@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
 import { obliczKoordynacjeSPD, KATEGORIE_PRZEPIECIOWE, TYP_SPD_LABELS, type TypSPD } from "@/lib/calc/spd";
@@ -35,11 +36,11 @@ export function KalkulatorSPD({ label }: { label: string }) {
 
   return (
     <Card title={label} tag="koordynacja ochrony">
-      <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+      <Alert variant="info" role="note" className="mb-3 text-xs">
         Skuteczny poziom ochrony <strong>nie równa się Up z tabliczki</strong> — dochodzi do niego spadek
         indukcyjny na przewodach przyłączeniowych, rzędu 1 kV na metr przy udarze 8/20 µs. Stąd bierze się reguła
         „przewody ≤ 0,5 m”: to wynik rachunku, nie zalecenie montażowe.
-      </div>
+      </Alert>
 
       <div className="grid sm:grid-cols-2 gap-x-4">
         <Field

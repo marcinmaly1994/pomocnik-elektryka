@@ -1,6 +1,8 @@
+import { cn } from "@/lib/utils";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
 import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
@@ -380,12 +382,10 @@ export function ProtocolsTab() {
                 // a formularz zostawał poza ekranem.
                 if (waskiEkran()) requestAnimationFrame(() => kartaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
               }}
-              className="rounded-lg px-3 py-2 text-left text-xs"
-              style={
-                active === k
-                  ? { background: "#2D5A8C12", border: "1px solid #2D5A8C", color: "#2D5A8C" }
-                  : { background: "#fff", border: "1px solid #DCE2E8", color: "#4F5D73" }
-              }
+              className={cn(
+                "rounded-lg border px-3 py-2 text-left text-xs",
+                active === k ? "border-blueprint bg-blueprint-tlo text-blueprint" : "border-[#DCE2E8] bg-white text-[#4F5D73]",
+              )}
             >
               <div className="font-semibold">{d.title}</div>
               <div className="mt-0.5 flex items-center gap-1 text-xs">
@@ -445,10 +445,9 @@ export function ProtocolsTab() {
         </div>
 
         {blocked && (
-          <div className="mb-3 flex gap-2 rounded-md p-2.5 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <Alert variant="caution" className="mb-3 text-xs">
             Przeglądarka zablokowała pobieranie w tym widoku. Spróbuj ponownie lub otwórz aplikację w osobnej karcie.
-          </div>
+          </Alert>
         )}
 
         {def.checklist ? (

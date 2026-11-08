@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { AlertTriangle, ArrowLeft, Download, FileText, Info, Upload, X } from "lucide-react";
@@ -561,8 +562,7 @@ export function CostsTab() {
               {unpriced.length > 0 && (
                 <tr>
                   <td colSpan={4} className="px-3 pb-2 pt-2">
-                    <div className="flex gap-2.5 rounded-md p-3 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
-                      <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                    <Alert variant="caution" className="gap-2.5 text-xs">
                       <div>
                         <strong>
                           {podsumowanie.brakRobocizny
@@ -575,7 +575,7 @@ export function CostsTab() {
                           ? " — robocizna potrafi być większą częścią kosztu niż cały materiał."
                           : "."}
                       </div>
-                    </div>
+                    </Alert>
                   </td>
                 </tr>
               )}

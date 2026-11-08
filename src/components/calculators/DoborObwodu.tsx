@@ -33,12 +33,9 @@ export function PrzelacznikTrybu({ tryb, onZmien }: { tryb: TrybObwodu; onZmien:
               aria-selected={aktywny}
               onClick={() => onZmien(o.id)}
               title={o.opis}
-              className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-              style={
-                aktywny
-                  ? { borderColor: "#C1793F", background: "#C1793F14", color: "#8A5526" }
-                  : { borderColor: "#E6EAEF", background: "#fff", color: "#4F5D73" }
-              }
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                aktywny ? "border-copper bg-copper-tlo text-caution" : "border-[#E6EAEF] bg-white text-[#4F5D73]"
+              }`}
             >
               {o.label}
             </button>

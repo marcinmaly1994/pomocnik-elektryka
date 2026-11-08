@@ -281,12 +281,9 @@ function FlowCard({
                 niesie teraz liczby („8 obw."), a wersaliki robiły z nich krzyk. */}
             <span
               aria-hidden="true"
-              className="pe-mono shrink-0 rounded px-1 py-0.5 text-xs tracking-wide"
-              style={
-                gotowy
-                  ? { background: "#3B8C6318", color: "#2C6B4A", fontWeight: 600 }
-                  : { background: "#EEF1F4", color: "#5B6A80" }
-              }
+              className={`pe-mono shrink-0 rounded px-1 py-0.5 text-xs tracking-wide ${
+                gotowy ? "bg-success-tlo font-semibold text-success" : "bg-[#EEF1F4] text-[#5B6A80]"
+              }`}
             >
               {plakietka}
             </span>
@@ -321,8 +318,9 @@ function ToolTab({ id, label, active, onPick }: TabButtonProps) {
       // przyłożenia palca, czyli i tak przed `click`); `focus` — nawigację klawiaturą.
       onPointerEnter={() => pobierzZawczasu(id)}
       onFocus={() => pobierzZawczasu(id)}
-      className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors"
-      style={isActive ? { color: "#8A5526", background: "#C1793F14", fontWeight: 600 } : { color: "#4F5D73" }}
+      className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors ${
+        isActive ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"
+      }`}
     >
       {label}
     </button>

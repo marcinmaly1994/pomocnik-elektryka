@@ -1178,8 +1178,7 @@ export function CalculatorsTab() {
                             type="button"
                             onClick={() => setCosphi(e.cos)}
                             title={`Wpisz cos φ = ${String(e.cos).replace(".", ",")}`}
-                            className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
-                            style={on ? { background: "#2D5A8C10" } : undefined}
+                            className={`flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left ${on ? "bg-blueprint-tlo" : "hover:bg-slate-50"}`}
                           >
                             <span
                               className="pe-mono shrink-0 text-xs font-semibold"
@@ -1333,8 +1332,7 @@ export function CalculatorsTab() {
                             type="button"
                             onClick={() => setLayingMethod(row.value)}
                             title={`Przyjmij ułożenie: ${row.label}`}
-                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
-                            style={on ? { background: "#2D5A8C10" } : undefined}
+                            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${on ? "bg-blueprint-tlo" : "hover:bg-slate-50"}`}
                           >
                             <span
                               className="min-w-0 flex-1 truncate text-xs"
@@ -1400,11 +1398,11 @@ export function CalculatorsTab() {
             <Card title={active.label} tag="wyłącznik nadprądowy">
               <div className={UKLAD_POLA_WYNIK}>
                 <div className="min-w-0">
-                  <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                  <Alert variant="info" role="note" className="mb-3 text-xs">
                     Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
                     został narzucony projektem. Jeśli dopiero szukasz przekroju, przełącz na tryb „Szukam przekroju”;
                     oba tryby dzielą te same pola, więc nic nie trzeba przepisywać.
-                  </div>
+                  </Alert>
 
                   <div className="grid sm:grid-cols-2 gap-x-4">
                     <Field
@@ -1576,12 +1574,12 @@ export function CalculatorsTab() {
             <Card title={active.label} tag="4 kryteria naraz">
               <div className={UKLAD_POLA_WYNIK}>
                 <div className="min-w-0">
-                  <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                  <Alert variant="info" role="note" className="mb-3 text-xs">
                     Cztery kryteria liczone NIEZALEŻNIE — obciążalność, spadek napięcia i (opcjonalnie) ochrona
                     przeciwporażeniowa oraz wytrzymałość zwarciowa. Wynikowy przekrój to <strong>maksimum</strong> z nich, nie
                     pierwszy z brzegu. Tylko obwody <strong>3-fazowe</strong> — tablica dla dwóch żył obciążonych (1-fazowe)
                     nie została jeszcze dostarczona.
-                  </div>
+                  </Alert>
 
                   <div className="grid sm:grid-cols-2 gap-x-4">
                     <Field
@@ -1775,11 +1773,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "gGWkladka" && (
             <Card title={active.label} tag="wkładka topikowa">
-              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Imax i Zs max pochodzą wprost z tablicy czasowo-prądowej wkładki (Poradnik Projektanta Elektryka,
                 tabl. Z.10.3/Z.10.4) — NIE ze wzoru k×In jak dla wyłączników. Tablica pokrywa czasy 0,2 s / 0,4 s / 5 s;
                 nie zawiera 1 s (obwód rozdzielczy w układzie TT) ani 0,1 s.
-              </div>
+              </Alert>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
@@ -1861,11 +1859,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "spadek" && (
             <Card title={active.label} tag="sprawdzenie trasy">
-              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Ten kalkulator sprawdza trasę o <strong>znanym przekroju</strong> — np. kabel, który już jest ułożony
                 albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór obwodu”: tam przekrój
                 jest wynikiem, dobieranym pod obciążalność i spadek naraz.
-              </div>
+              </Alert>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
@@ -1987,11 +1985,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "dlugosc" && (
             <Card title={active.label} tag="granica trasy">
-              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Odwrotność „Spadku napięcia": tam podajesz długość i patrzysz na wynik, tutaj dostajesz{" "}
                 <strong>granicę wprost</strong>. Liczone są dwa warunki naraz — spadek napięcia i zadziałanie
                 zabezpieczenia przy zwarciu na końcu trasy — a wiąże ten, który wypada krócej.
-              </div>
+              </Alert>
 
               <div className="grid gap-x-4 sm:grid-cols-2">
                 <Field label="Zasilanie" value={mdPhase} onChange={(v) => patch({ mdPhase: v as "1" | "3" })} options={PHASE_OPTIONS} />
@@ -2111,11 +2109,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "zwarcie" && (
             <Card title={active.label} tag="PN-EN 60909">
-              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Współczynnik napięciowy <strong>c wynika z celu obliczenia</strong>, a nie z osobnego pola: do doboru
                 aparatów liczy się najgorszy przypadek największego prądu (c = 1,05), a do ochrony przeciwporażeniowej —
                 najmniejszego (c = 0,95). Pomylenie ich daje wynik pozornie poprawny i całkowicie nieprzydatny.
-              </div>
+              </Alert>
 
               <Field
                 label="Cel obliczenia"
@@ -2364,12 +2362,12 @@ export function CalculatorsTab() {
 
           {activeCalc === "bilansFaz" && (
             <Card title={active.label} tag="asymetria i przewód N">
-              <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Przy odbiorach nieliniowych (zasilacze impulsowe, LED, falowniki) 3. harmoniczna sumuje się w przewodzie
                 neutralnym <strong>arytmetycznie</strong>, zamiast się znosić — prąd w N potrafi wtedy przekroczyć prąd
                 fazowy nawet przy idealnie symetrycznym obciążeniu. W przewodzie N nie ma wyłącznika, więc nic tego
                 przeciążenia nie wyłapie.
-              </div>
+              </Alert>
 
               <div className="space-y-2 mb-3">
                 {/* Na wąskim ekranie wiersz łamie się na dwa: nazwa i faza, pod nimi moc,

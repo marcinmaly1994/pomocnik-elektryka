@@ -126,9 +126,9 @@ export function KompletDialog({
         </p>
 
         {pozycje.length === 0 ? (
-          <p className="rounded-lg p-3 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
+          <Alert variant="caution" className="text-xs">
             Nie ma jeszcze czego złożyć — narysuj instalację albo wypełnij protokół.
-          </p>
+          </Alert>
         ) : (
           <>
             <div className="pe-scroll max-h-[46vh] space-y-1 overflow-y-auto pr-1">

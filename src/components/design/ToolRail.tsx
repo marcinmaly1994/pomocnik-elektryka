@@ -68,8 +68,7 @@ export function ToolRail({
             title={`${label} — ${hint} (${shortcut})`}
             aria-label={label}
             aria-pressed={active}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors"
-            style={active ? { background: "#C1793F14", color: "#8A5526" } : { color: "#4F5D73" }}
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors ${active ? "bg-copper-tlo text-caution" : "text-[#4F5D73]"}`}
           >
             <Icon size={19} strokeWidth={active ? 2.2 : 1.8} />
           </button>

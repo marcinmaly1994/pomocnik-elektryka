@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { klawiszDlaEdytora } from "@/lib/klawiaturaEdytora";
@@ -2533,7 +2534,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           onClick={() => setZaznaczanieWielokrotne((v) => !v)}
           aria-pressed={zaznaczanieWielokrotne}
           title="Kolejne kliknięcia dokładają elementy do zaznaczenia — to samo co Shift z kliknięciem"
-          style={zaznaczanieWielokrotne ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : undefined}
+          className={zaznaczanieWielokrotne ? "bg-copper-tlo font-semibold text-caution" : undefined}
         >
           <CopyCheck size={13} /> Zaznacz kilka
         </Button>
@@ -2697,8 +2698,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <button
                 key={id}
                 onClick={() => otwory.setOpeningKind(id)}
-                className="rounded-md px-2.5 py-1 text-xs"
-                style={otwory.openingKind === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#4F5D73" }}
+                className={`rounded-md px-2.5 py-1 text-xs ${otwory.openingKind === id ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"}`}
               >
                 {label}
               </button>
@@ -2846,8 +2846,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   pokoje.ustawTryb(id);
                 }}
                 title={hint}
-                className="rounded-md px-2.5 py-1 text-sm"
-                style={pokoje.roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#4F5D73" }}
+                className={`rounded-md px-2.5 py-1 text-sm ${pokoje.roomMode === id ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"}`}
               >
                 {label}
               </button>
@@ -3086,12 +3085,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           się to, do jakiego obwodu trafią w rozdzielnicy). Do zamknięcia i bez powrotu:
           po poprawieniu danych następne wczytanie i tak naliczy zero. */}
       {roomsFixedOnLoad > 0 && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#2D5A8C12", color: "#2D5A8C" }}
-        >
-          <Check size={14} className="shrink-0" />
+        <Alert variant="info" role="status" className="text-xs [&>div:last-child]:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
           <span>
             Poprawiono przypisanie {roomsFixedOnLoad}{" "}
             {roomsFixedOnLoad === 1 ? "elementu" : "elementów"} do pomieszczeń — zapis nie zgadzał się z tym, gdzie
@@ -3105,7 +3100,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           >
             <X size={14} />
           </button>
-        </div>
+          </div>
+        </Alert>
       )}
 
       {/* Trwały baner ryzyka: projekt bez konta żyje WYŁĄCZNIE w localStorage tej
@@ -3225,12 +3221,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           właśnie odpowiedział. „Wgraj podkład" zostaje w pasku narzędzi, więc nikomu
           niczego to nie zamyka. */}
       {!bgImageUrl && !showEntryScreen && kondygnacjaPusta && !onboarding.manualDrawingChosen && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C1793F14", color: "#8A5526" }}
-        >
-          <Upload size={14} className="shrink-0" />
+        <Alert variant="caution" role="status" className="text-xs [&>div:last-child]:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
           <span>Zacznij od wgrania rzutu mieszkania albo odręcznego szkicu — posłuży za podkład, na którym rozmieścisz elementy.</span>
           <button onClick={() => fileRef.current?.click()} className="font-semibold underline">
             Wgraj rzut / zdjęcie
@@ -3241,22 +3233,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <button onClick={startManualDrawing} className="font-semibold underline">
             Narysuj dom samodzielnie
           </button>
-        </div>
+          </div>
+        </Alert>
       )}
 
       {/* Trwały, nieinwazyjny baner: praca bez skali jest DOZWOLONA, ale jej skutek
           (nieprecyzyjne długości i kosztorys) musi być widoczny cały czas, a nie raz. */}
       {onboarding.missingScaleWarning && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C1793F14", color: "#8A5526" }}
-        >
+        <Alert variant="caution" role="status" className="text-xs [&>div:last-child]:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
           <span>Skala nieustawiona — długości przewodów i kosztorys mogą być niedokładne.</span>
           <button onClick={() => handleStepAction("skala")} className="font-semibold underline">
             Ustaw skalę
           </button>
-        </div>
+          </div>
+        </Alert>
       )}
 
       {/* Kolejna kondygnacja: skalę odziedziczyła po parterze, ale pomieszczenia są
@@ -3264,16 +3255,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           i obwody kuchenne nie zadziałają. Przewodnik prowadzi tylko parter, więc
           tutaj wystarczy krótka prośba (przypadek brzegowy 4). */}
       {onboarding.needsRoomConfirmation && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#2D5A8C12", color: "#2D5A8C" }}
-        >
+        <Alert variant="info" role="status" className="text-xs [&>div:last-child]:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
           <span>Ta kondygnacja ma już skalę z parteru, ale nie ma jeszcze pomieszczeń.</span>
           <button onClick={() => handleStepAction("pomieszczenia")} className="font-semibold underline">
             Obrysuj pomieszczenia
           </button>
-        </div>
+          </div>
+        </Alert>
       )}
 
       {/* Podmiana podkładu unieważniła kalibrację — proponujemy poprawkę, nie kasujemy. */}

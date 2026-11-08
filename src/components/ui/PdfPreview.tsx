@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Download, ExternalLink, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -168,10 +169,9 @@ export function PdfPreview({ open, onOpenChange, title, filename, build, wariant
         </div>
 
         {zablokowane && (
-          <div className="mt-3 flex gap-2 rounded-md p-2.5 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <Alert variant="caution" className="mt-3 text-xs">
             Przeglądarka zablokowała pobieranie w tym widoku. Spróbuj ponownie lub otwórz plik w nowej karcie.
-          </div>
+          </Alert>
         )}
 
         <div className="mt-3 flex flex-wrap items-center justify-end gap-2">

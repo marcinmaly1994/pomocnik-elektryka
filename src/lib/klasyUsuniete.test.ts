@@ -37,4 +37,11 @@ describe("usunięte klasy interfejsu", () => {
       expect(trafienia).toEqual([]);
     });
   }
+
+  it("tła komunikatów biorą kolor z tokenów, nie z hex z kanałem alfa", () => {
+    const RYSUNEK = /DesignCanvas|ElementGlyph|PanelRender|SchemaTab|pdf/i;
+    const wzor = /#(C1793F|2D5A8C|3B8C63|C6433A)1[0-9A-Fa-f]\b/;
+    const trafienia = zrodla.filter((p) => !RYSUNEK.test(p) && wzor.test(readFileSync(p, "utf8")));
+    expect(trafienia).toEqual([]);
+  });
 });

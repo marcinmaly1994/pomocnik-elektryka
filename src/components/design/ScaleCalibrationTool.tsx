@@ -77,8 +77,7 @@ export function ScaleCalibrationTool({
               setMode(m);
               setError(null);
             }}
-            className="rounded-md px-2 py-1 text-xs"
-            style={mode === m ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#4F5D73" }}
+            className={`rounded-md px-2 py-1 text-xs ${mode === m ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"}`}
           >
             {m === "pomiar" ? "Zmierzę na rzucie" : "Rzut jest w skali"}
           </button>

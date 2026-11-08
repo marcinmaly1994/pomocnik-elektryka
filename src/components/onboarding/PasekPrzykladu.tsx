@@ -1,4 +1,4 @@
-import { FlaskConical } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
 import { useProjectStore } from "@/store/useProjectStore";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,8 @@ export function PasekPrzykladu() {
   if (!projektPrzykladowy) return null;
 
   return (
-    <div
-      role="status"
-      className="mb-4 flex flex-wrap items-center gap-2.5 rounded-lg px-3 py-2 text-xs"
-      style={{ background: "#2D5A8C12", color: "#2D5A8C" }}
-    >
-      <FlaskConical size={15} className="shrink-0" aria-hidden="true" />
+    <Alert variant="info" role="status" className="mb-4 text-xs [&>div:last-child]:flex-1">
+      <div className="flex flex-wrap items-center gap-2.5">
       {/* „Ten projekt", nie „nic z tego": pasek wisi nad czterema krokami przepływu
           i mówi wyłącznie o PROJEKCIE. Szersza obietnica była nieprawdziwa — protokoły
           mają własny, ręczny zapis do chmury i on działa normalnie także wtedy, gdy
@@ -66,6 +62,7 @@ export function PasekPrzykladu() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </Alert>
   );
 }
