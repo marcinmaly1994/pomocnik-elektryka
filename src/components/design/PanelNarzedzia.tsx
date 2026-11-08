@@ -1,6 +1,7 @@
 import { Layers, Plus } from "lucide-react";
 import type { ToolMode } from "./DesignCanvas";
 import { RAIL_TOOLS } from "./railTools";
+import { Button } from "@/components/ui/button";
 
 /**
  * Nagłówek panelu obok paska narzędzi: nazwa wybranego narzędzia i jedno zdanie, co
@@ -57,15 +58,15 @@ export function PodpowiedzZaznacz({
           Na tej kondygnacji nic jeszcze nie ma. Zacznij od obrysowania pomieszczeń — od nich zależy podział na
           obwody, a w kuchni i łazience także strefy ochronne. Osprzęt możesz też stawiać od razu.
         </p>
-        <button
+        <Button variant="primary" size="sm"
           onClick={() => onWybierz("pomieszczenie")}
-          className="pe-btn-copper flex w-full items-center justify-center gap-1.5 py-1.5 text-xs"
+          className="w-full justify-center"
         >
           <Layers size={13} /> Obrysuj pierwsze pomieszczenie
-        </button>
-        <button onClick={() => onWybierz("elementy")} className="pe-btn-ghost flex w-full items-center justify-center gap-1.5 py-1.5 text-xs">
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => onWybierz("elementy")} className="w-full justify-center">
           <Plus size={13} /> Postaw pierwszy element
-        </button>
+        </Button>
       </div>
     );
   }

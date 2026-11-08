@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { prostokatOdKotwicy } from "@/lib/geometry";
 import type { Point } from "@/types";
+import { Button } from "@/components/ui/button";
 
 /**
  * Wymiary prostokątnego pomieszczenia wpisane z klawiatury, zamiast rysowane myszą.
@@ -88,9 +89,9 @@ export function PoleWymiarowProstokata({
         className={pole}
       />
       {mpu !== null ? "m" : "jedn."}
-      <button onClick={utworz} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">
+      <Button variant="secondary" size="sm" onClick={utworz} className="shrink-0 text-sm">
         Utwórz
-      </button>
+      </Button>
       </span>
     </span>
   );

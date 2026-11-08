@@ -33,30 +33,6 @@ body {
   .pe-nav-btn:hover {
     @apply text-blueprint;
   }
-  .pe-btn-ghost {
-    @apply rounded-md border border-border bg-white font-medium transition-all;
-  }
-  .pe-btn-ghost:hover {
-    @apply border-blueprint text-blueprint;
-  }
-  .pe-btn-ghost:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  /* Przycisk akcji głównej. Klasa zniknęła z arkusza przy migracji na komponent
-     `Button` (patrz komentarz w ui/button.tsx), ale osiem surowych <button> w
-     aplikacji nadal się do niej odwoływało — renderowały się jako goły tekst bez
-     tła i obramowania, m.in. „Zatwierdź skalę" i „Eksportuj CSV". */
-  .pe-btn-copper {
-    @apply rounded-md bg-copper font-medium text-white transition-colors;
-  }
-  .pe-btn-copper:hover:not(:disabled) {
-    background: theme('colors.copper.hover');
-  }
-  .pe-btn-copper:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
   .pe-input {
     @apply rounded border border-border bg-white px-2.5 py-1.5;
   }

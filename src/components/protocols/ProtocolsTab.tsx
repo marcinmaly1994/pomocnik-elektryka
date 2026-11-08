@@ -12,6 +12,7 @@ import type { ProtocolKey } from "@/types";
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { waskiEkran } from "@/lib/design";
+import { Button } from "@/components/ui/button";
 
 /**
  * Pola danych ogólnych w kolejności i szerokości układu od `xl` (siatka 12 kolumn,
@@ -258,26 +259,24 @@ export function ProtocolsTab() {
             className="pe-input min-w-0 flex-1 text-sm"
             style={{ maxWidth: 320 }}
           />
-          <button
+          <Button variant="primary" size="md"
             onClick={() => saveProtokolyToCloud(nazwaZestawu)}
             disabled={cloudBusy}
-            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
           >
             <Save size={14} /> {protokolyId ? "Zapisz zmiany" : "Zapisz na koncie"}
-          </button>
-          <button onClick={() => setOknoZestawow(true)} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+          </Button>
+          <Button variant="secondary" size="md" onClick={() => setOknoZestawow(true)}>
             <FolderOpen size={14} /> Moje zestawy
-          </button>
+          </Button>
           {protokolyId && (
-            <button
+            <Button variant="secondary" size="md"
               onClick={() => {
                 if (confirm("Zacząć nowy, pusty zestaw protokołów? Bieżący zostaje zapisany na koncie.")) nowyZestawProtokolow();
                 setNazwaZestawu("");
               }}
-              className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs"
             >
               <FilePlus2 size={14} /> Nowy zestaw
-            </button>
+            </Button>
           )}
           {cloudSaveError && <span className="text-xs text-red-600">{cloudSaveError}</span>}
           <p className="w-full text-xs text-slate-400">
@@ -415,13 +414,12 @@ export function ProtocolsTab() {
             >
               <Eye size={14} /> Podgląd
             </button>
-            <button
+            <Button variant="primary" size="md"
               onClick={async () => setBlocked(!(await downloadProtocolPdf(active, header, rows, limit)))}
               disabled={blokadaPdf}
-              className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
             >
               <Download size={14} /> Pobierz protokół (PDF)
-            </button>
+            </Button>
           </div>
           {ujemne.length > 0 && (
             <p role="alert" data-testid="ujemne-wartosci" className="w-full text-xs text-red-700">
@@ -455,9 +453,9 @@ export function ProtocolsTab() {
 
         {def.checklist ? (
           rows.length === 0 ? (
-            <button onClick={initChecklist} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-sm">
+            <Button variant="secondary" size="md" onClick={initChecklist}>
               <Plus size={14} /> Wczytaj listę kontrolną oględzin
-            </button>
+            </Button>
           ) : (
             // Najwyżej 56rem: przy 1920 px treść pozycji stała przy lewej krawędzi,
             // a „zgodne / niezgodne / n/d" ok. 1600 px dalej.
@@ -498,12 +496,12 @@ export function ProtocolsTab() {
                   </button>
                 </div>
               ))}
-              <button
+              <Button variant="secondary" size="sm"
                 onClick={() => update({ rows: [...rows, { text: "", status: "" }] })}
-                className="pe-btn-ghost mt-2 flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                className="mt-2"
               >
                 <Plus size={13} /> Dodaj pozycję
-              </button>
+              </Button>
             </div>
           )
         ) : (
@@ -624,9 +622,9 @@ export function ProtocolsTab() {
               </table>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button onClick={addRow} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs">
+              <Button variant="secondary" size="sm" onClick={addRow}>
                 <Plus size={13} /> Dodaj wiersz
-              </button>
+              </Button>
             </div>
           </>
         )}

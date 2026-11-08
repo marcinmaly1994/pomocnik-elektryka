@@ -773,9 +773,9 @@ export function PanelTab() {
                 className="pe-input text-xs"
               />
             </div>
-            <button onClick={addManualDevice} className="pe-btn-ghost mt-2 flex w-full items-center justify-center gap-1.5 py-1.5 text-xs">
+            <Button variant="secondary" size="sm" onClick={addManualDevice} className="mt-2 w-full justify-center">
               <Plus size={13} /> Dodaj
-            </button>
+            </Button>
           </div>
         </div>
       </div>

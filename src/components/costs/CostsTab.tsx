@@ -206,27 +206,25 @@ export function CostsTab() {
               instrukcja obsługi funkcji, której większość użytkowników nigdy nie użyje,
               czytana za każdym razem przed pierwszą pozycją kosztorysu. Sam fakt, że
               cennik da się zaimportować, mówi zdanie wprowadzające obok. */}
-          <button
+          <Button variant="secondary" size="md"
             onClick={() => fileRef.current?.click()}
             title="Wgraj plik CSV w formacie nazwa;cena — aplikacja dopasuje pozycje po słowach kluczowych. Ceny nie pobierają się automatycznie ze stron sklepów."
-            className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs"
           >
             <Upload size={14} /> Importuj cennik CSV
-          </button>
+          </Button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvImport} />
           {/* CSV zostaje dla tych, którzy liczą dalej w arkuszu; PDF jest tym, co wysyła
               się klientowi — stąd on dostaje przycisk główny. Pobranie dzieje się
               z poziomu PODGLĄDU, tak jak przy pozostałych eksportach: nikt nie ma wysłać
               dokumentu, na który sam nie spojrzał. */}
-          <button onClick={exportCsv} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+          <Button variant="secondary" size="md" onClick={exportCsv}>
             <Download size={14} /> Eksportuj CSV
-          </button>
-          <button
+          </Button>
+          <Button variant="primary" size="md"
             onClick={() => setPodgladPdf(true)}
-            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs"
           >
             <FileText size={14} /> Kosztorys do PDF
-          </button>
+          </Button>
         </div>
       </div>
       {/*

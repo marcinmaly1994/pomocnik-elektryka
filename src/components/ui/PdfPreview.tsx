@@ -3,6 +3,7 @@ import { AlertTriangle, Download, ExternalLink, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { downloadPdfBytes } from "@/lib/pdf/download";
 import { zaladujPdfjs } from "@/lib/pdf/pdfjs";
+import { Button } from "@/components/ui/button";
 
 /**
  * Podgląd gotowego PDF-a przed pobraniem — wspólny dla wszystkich eksportów.
@@ -187,13 +188,12 @@ export function PdfPreview({ open, onOpenChange, title, filename, build, wariant
           <button onClick={() => onOpenChange(false)} className="rounded-md px-3 py-2 text-xs text-slate-500 hover:text-ink">
             Zamknij
           </button>
-          <button
+          <Button variant="primary" size="md"
             onClick={pobierz}
             disabled={!gotowe}
-            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
           >
             <Download size={14} /> Pobierz PDF
-          </button>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

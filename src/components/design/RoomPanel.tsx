@@ -4,6 +4,7 @@ import type { RoomShape, RoomType } from "@/types";
 import { ROOM_TYPE_LABELS } from "@/lib/design";
 import { polygonAreaM2 } from "@/lib/geometry";
 import { useProjectStore } from "@/store/useProjectStore";
+import { Button } from "@/components/ui/button";
 
 interface RoomPanelProps {
   roomShapes: RoomShape[];
@@ -72,7 +73,7 @@ export function WierszPomieszczenia({
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
   const areaM2 = polygonAreaM2(r.points, metersPerUnit);
   const ikona = "text-slate-400 hover:text-blueprint [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-9 flex items-center justify-center";
-  const przycisk = "pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs [@media(pointer:coarse)]:min-h-11";
+  const przycisk = "[@media(pointer:coarse)]:min-h-11";
   const tytulSciany =
     "Utwórz ścianę z obrysu — przyda się, jeśli to pomieszczenie nie ma jeszcze osobno narysowanej ściany. Jeśli już ma, doda drugą, nachodzącą.";
 
@@ -129,13 +130,13 @@ export function WierszPomieszczenia({
       </select>
       {podpisy && (
         <div className="flex flex-wrap gap-1.5 pt-0.5">
-          <button onClick={() => onCreateWall(r.id)} className={przycisk} title={tytulSciany}>
+          <Button variant="secondary" size="sm" onClick={() => onCreateWall(r.id)} className={przycisk} title={tytulSciany}>
             <PenLine size={13} /> Utwórz ścianę z obrysu
-          </button>
-          <button onClick={() => recolorRoomShape(r.id)} className={przycisk}>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => recolorRoomShape(r.id)} className={przycisk}>
             <Palette size={13} /> Zmień kolor
-          </button>
-          <button
+          </Button>
+          <Button variant="secondary" size="sm"
             onClick={() => {
               deleteRoomShape(r.id);
               onUsuniete?.();
@@ -143,7 +144,7 @@ export function WierszPomieszczenia({
             className={`${przycisk} text-red-600`}
           >
             <Trash2 size={13} /> Usuń pomieszczenie
-          </button>
+          </Button>
           {/* Przesuwanie całego pokoju (F5) nie ma przycisku — chwyta się wnętrze — więc
               bez tej linijki nikt by o nim nie wiedział. Na dotyku przeciąganie wnętrza
               należy do przesuwania widoku, stąd ukryte. */}

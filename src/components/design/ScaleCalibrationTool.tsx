@@ -2,6 +2,7 @@ import { useState } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { Ruler } from "lucide-react";
 import type { Point } from "@/types";
+import { Button } from "@/components/ui/button";
 import {
   PAPER_WIDTHS_MM,
   SCALE_DENOMINATORS,
@@ -112,9 +113,9 @@ export function ScaleCalibrationTool({
                 className="pe-input w-20 py-1 text-xs"
               />
             </label>
-            <button onClick={applyMeasured} className="pe-btn-copper px-2 py-1 text-xs">
+            <Button variant="primary" size="sm" onClick={applyMeasured}>
               Zatwierdź skalę
-            </button>
+            </Button>
           </>
         )
       ) : (
@@ -152,23 +153,22 @@ export function ScaleCalibrationTool({
           {presetWidth !== null && (
             <span className="text-slate-400">rzut ma wtedy ok. {formatLiczba(presetWidth, 1)} m szerokości</span>
           )}
-          <button
+          <Button variant="primary" size="sm"
             onClick={() => presetMpu && onApply(presetMpu)}
             disabled={!presetMpu}
-            className="pe-btn-copper px-2 py-1 text-xs"
           >
             Zatwierdź skalę
-          </button>
+          </Button>
         </>
       )}
 
-      <button onClick={onCancel} disabled={mode === "pomiar" && !calibPoints.length} className="pe-btn-ghost px-2 py-1">
+      <Button variant="secondary" size="sm" onClick={onCancel} disabled={mode === "pomiar" && !calibPoints.length}>
         Anuluj
-      </button>
+      </Button>
       {metersPerUnit && (
-        <button onClick={onClear} className="pe-btn-ghost px-2 py-1 text-red-600">
+        <Button variant="secondary" size="sm" onClick={onClear} className="text-red-600">
           Usuń kalibrację
-        </button>
+        </Button>
       )}
 
       {error && (

@@ -55,6 +55,7 @@ import { KryteriaObwodu, PrzelacznikTrybu } from "./DoborObwodu";
 import { ocenKryteria, podsumowanieObwodu, type OcenaKryterium } from "@/lib/calc/kryteriaObwodu";
 import { Field } from "./Field";
 import { HowItWorks } from "./HowItWorks";
+import { Button } from "@/components/ui/button";
 
 /**
  * Kolejność grupowana wg fazy pracy elektryka, nie wg tego, kiedy który kalkulator
@@ -2444,14 +2445,13 @@ export function CalculatorsTab() {
                 ))}
               </div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <button
+                <Button variant="secondary" size="sm"
                   onClick={() =>
                     setOdbioryFazowe((ds) => [...ds, { id: crypto.randomUUID(), nazwa: "Nowy odbiór", mocW: 1000, cosfi: 1, faza: "L1" }])
                   }
-                  className="pe-btn-ghost text-xs px-2.5 py-1.5 flex items-center gap-1"
                 >
                   <Plus size={13} /> Dodaj odbiór
-                </button>
+                </Button>
               </div>
               <Field
                 label="Udział 3. harmonicznej w prądzie fazowym"
@@ -2893,12 +2893,11 @@ export function CalculatorsTab() {
                 ))}
               </div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <button
+                <Button variant="secondary" size="sm"
                   onClick={() => setDevices((ds) => [...ds, { id: crypto.randomUUID(), name: "Nowy odbiornik", power: 1000 }])}
-                  className="pe-btn-ghost text-xs px-2.5 py-1.5 flex items-center gap-1"
                 >
                   <Plus size={13} /> Dodaj odbiornik
-                </button>
+                </Button>
               </div>
               <Field
                 label="Współczynnik jednoczesności (ks)"
@@ -2973,13 +2972,13 @@ export function CalculatorsTab() {
                     unit="A"
                     hint="Prąd zapotrzebowany całego budynku (nie suma mocy zainstalowanej!) — wczytaj go przyciskiem poniżej z kalkulatora „Bilans mocy budynku” albo wpisz wartość z wniosku o przyłączenie."
                   />
-                  <button
+                  <Button variant="secondary" size="sm"
                     type="button"
                     onClick={loadWlzCurrentFromBalance}
-                    className="pe-btn-ghost -mt-2 mb-3 text-xs px-2.5 py-1.5 flex items-center gap-1"
+                    className="-mt-2 mb-3"
                   >
                     <Download size={13} /> Wczytaj z bilansu mocy
-                  </button>
+                  </Button>
                 </div>
                 <Field
                   label="Zasilanie"

@@ -4,6 +4,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supaDeleteProject, supaListProjects, type CloudProjectListItem, type Session } from "@/lib/supabase";
 import { filtrujPoRodzaju, LIMIT_ZAPISOW, type RodzajDokumentu } from "@/lib/dokumenty";
 import type { WpisProjektu } from "@/lib/projektyLokalne";
+import { Button } from "@/components/ui/button";
 
 interface ProjectsModalProps {
   open: boolean;
@@ -144,12 +145,11 @@ export function ProjectsModal({
                       {/* Otwarty projekt nie dostaje „Wczytaj": kliknięcie nie zrobiłoby
                           nic widocznego, a przycisk, który nic nie robi, uczy nieufności. */}
                       {!otwarty && (
-                        <button
+                        <Button variant="secondary" size="sm"
                           onClick={() => onOtworzLokalny?.(p.id)}
-                          className="pe-btn-ghost px-2.5 py-1 text-xs"
                         >
                           Otwórz
-                        </button>
+                        </Button>
                       )}
                       <button
                         onClick={() => {
@@ -206,9 +206,9 @@ export function ProjectsModal({
                       <div className="text-xs text-slate-400">{new Date(p.updated_at).toLocaleString("pl-PL")}</div>
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      <button onClick={() => onLoad(p.id)} className="pe-btn-ghost px-2.5 py-1 text-xs">
+                      <Button variant="secondary" size="sm" onClick={() => onLoad(p.id)}>
                         Wczytaj
-                      </button>
+                      </Button>
                       <button
                         onClick={() => handleDelete(p.id)}
                         aria-label={`Usuń ${p.name}`}

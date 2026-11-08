@@ -173,11 +173,11 @@ export function EditElementModal({
                       const def = ELEMENT_TYPES[item.key];
                       const active = type === item.key;
                       return (
-                        <button
+                        <Button variant="secondary" size="sm"
                           type="button"
                           key={item.key}
                           onClick={() => setType(item.key)}
-                          className="pe-btn-ghost flex items-center gap-2 p-2 text-left text-xs"
+                          className="h-auto justify-start gap-2 p-2 text-left"
                           style={active ? { borderColor: def.color, background: `${def.color}14`, color: def.color } : undefined}
                         >
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center">
@@ -190,7 +190,7 @@ export function EditElementModal({
                             />
                           </span>
                           <span className="truncate">{def.label}</span>
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>
@@ -206,15 +206,15 @@ export function EditElementModal({
               </div>
               <div className={`grid gap-1 ${variants.length > 2 ? "grid-cols-6" : "grid-cols-2"}`}>
                 {variants.map((n) => (
-                  <button
+                  <Button variant="secondary" size="sm"
                     key={n}
+                    className="px-0"
                     type="button"
                     onClick={() => setGangs(n)}
-                    className="pe-btn-ghost py-1.5 text-xs"
                     style={gangs === n ? { borderColor: "#C1793F", color: "#9A5A27", background: "#C1793F0D" } : undefined}
                   >
                     {n}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
