@@ -67,6 +67,19 @@ for (const okno of [
   });
 }
 
+test.describe("telefon 360 px", () => {
+  test.use({ viewport: { width: 360, height: 780 } });
+  test("pasek to jeden rząd (≤ 72 px), a dokument nie jest szerszy od okna", async ({ page }) => {
+    await naKroku(page, "Schemat");
+    const pasek = page.getByRole("navigation", { name: "Kroki projektu" });
+    await expect(pasek.getByRole("button", { name: "Dalej: Kosztorys" })).toBeVisible();
+    const r = (await pasek.boundingBox())!;
+    expect(r.height).toBeLessThanOrEqual(72);
+    const szer = await page.evaluate(() => ({ dok: document.documentElement.scrollWidth, okno: window.innerWidth }));
+    expect(szer.dok).toBeLessThanOrEqual(szer.okno);
+  });
+});
+
 test.describe("telefon", () => {
   test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
   test("przyciski paska mają co najmniej 44 px wysokości", async ({ page }) => {

@@ -38,6 +38,12 @@ describe("PasekKroku", () => {
     expect(onPrefetch).toHaveBeenCalledWith("kosztorys");
   });
 
+  it("przedrostek leży W przycisku: nazwa i tekst zostają pełne, także gdy na telefonie jest ukryty", () => {
+    render(<PasekKroku poprzedni={{ id: "projekt", tytul: "Instalacja" }} onPick={vi.fn()} />);
+    const b = screen.getByRole("button", { name: "Cofnij: Instalacja" });
+    expect(b.textContent).toBe("Cofnij: Instalacja");
+  });
+
   it("bez kroków nie renderuje niczego", () => {
     const { container } = render(<PasekKroku onPick={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();

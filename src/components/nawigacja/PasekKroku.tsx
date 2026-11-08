@@ -32,25 +32,28 @@ export function PasekKroku({
   return (
     <nav
       aria-label="Kroki projektu"
-      // `flex-wrap`: na 360 px dwa długie podpisy („Cofnij: Rozdzielnica” + „Dalej:
-      // Kosztorys”) nie mieszczą się w jednym rzędzie i poszerzały dokument; wtedy
-      // „Dalej” schodzi niżej (`ml-auto` trzyma je po prawej).
+      // Na telefonie pasek ma być JEDNYM rzędem (sticky zjada ekran): przedrostki
+      // „Cofnij: ” / „Dalej: ” są tam tylko dla czytnika (`max-sm:sr-only`), widać samą
+      // nazwę kroku. Nazwa dostępna i textContent zostają pełne (label-in-name).
+      // Przyciski mają `min-w-0`, a nazwa `truncate`, więc przy 345 px pasek się
+      // skraca zamiast zawijać.
       // `-mx-6 px-6`: pasek na telefonie sięga krawędzi ekranu, bo strona ma teraz
       // `p-6` na każdej szerokości. Task 5 zmienia odstęp strony i dopasuje te klasy
       // razem z nim (wtedy `-mx-4 px-4 sm:-mx-6 sm:px-6`).
-      className="sticky bottom-0 z-20 -mx-6 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface/95 px-6 py-3 shadow-pop backdrop-blur-sm md:mx-0 md:rounded-card md:border md:px-4"
+      className="sticky bottom-0 z-20 -mx-6 mt-6 flex items-center justify-between gap-3 border-t border-border bg-surface/95 px-6 py-3 shadow-pop backdrop-blur-sm md:mx-0 md:rounded-card md:border md:px-4"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
       {poprzedni ? (
         <Button
           variant="secondary"
-          className="max-md:min-h-11"
+          className="min-w-0 max-md:min-h-11"
           onClick={() => onPick(poprzedni.id)}
           onPointerEnter={pobierz(poprzedni.id)}
           onFocus={pobierz(poprzedni.id)}
         >
           <ArrowLeft size={16} aria-hidden="true" />
-          Cofnij: {poprzedni.tytul}
+          <span className="max-sm:sr-only">Cofnij:</span>{" "}
+          <span className="truncate">{poprzedni.tytul}</span>
         </Button>
       ) : (
         <span />
@@ -58,12 +61,13 @@ export function PasekKroku({
       {nastepny && (
         <Button
           variant="primary"
-          className="ml-auto"
+          className="ml-auto min-w-0"
           onClick={() => onPick(nastepny.id)}
           onPointerEnter={pobierz(nastepny.id)}
           onFocus={pobierz(nastepny.id)}
         >
-          Dalej: {nastepny.tytul}
+          <span className="max-sm:sr-only">Dalej:</span>{" "}
+          <span className="truncate">{nastepny.tytul}</span>
           <ArrowRight size={16} aria-hidden="true" />
         </Button>
       )}
