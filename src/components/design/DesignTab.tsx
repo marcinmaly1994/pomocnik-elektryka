@@ -1288,10 +1288,19 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // edytor lądował tyle niżej i pasek stanu z „Dalej" wypadał za dolną krawędź).
     // Po zakończeniu ruchu dosuwamy więc edytor do góry jednym skokiem. `scrollend`
     // tam, gdzie jest; zegar jako zapas dla przeglądarek, które go nie znają.
+    //
+    // Na czas całego ruchu (płynny przejazd + dosunięcie) `<html>` niesie
+    // `data-przewijanie-do-edytora`: inaczej z zewnątrz nie da się odróżnić „przewijanie
+    // się skończyło” od „jeszcze nie ruszyło” albo „czeka na dosunięcie” — a ruch zrobiony
+    // w tym czasie (np. `scrollTo(0, 0)`) `dosun` zaraz cofa. Czytają to testy e2e
+    // (`poczekajNaKoniecPrzewijania` w e2e/_flow.ts).
+    const html = document.documentElement;
+    html.dataset.przewijanieDoEdytora = "";
     let zegar = 0;
     const dosun = () => {
       window.removeEventListener("scrollend", dosun);
       window.clearTimeout(zegar);
+      delete html.dataset.przewijanieDoEdytora;
       const el = pelnyEkranRef.current;
       if (el && Math.abs(el.getBoundingClientRect().top) > 2) el.scrollIntoView({ block: "start" });
     };
@@ -1304,6 +1313,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       window.cancelAnimationFrame(id);
       window.removeEventListener("scrollend", dosun);
       window.clearTimeout(zegar);
+      delete html.dataset.przewijanieDoEdytora;
     };
   }, [showEntryScreen, wgrywanie.stan]);
 

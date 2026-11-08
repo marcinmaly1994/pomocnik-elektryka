@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 /**
  * Pomija EKRAN STARTOWY (patrz `showEntryScreen` w DesignTab.tsx), jeśli akurat
@@ -129,4 +129,33 @@ export async function przejdzDoNarzedzia(
   } else {
     await page.getByRole("banner").getByRole("button", { name: nazwa, exact: true }).click();
   }
+}
+
+/**
+ * Czeka, aż strona przestanie się przewijać — także przewijaniem ZAPLANOWANYM.
+ *
+ * Na telefonie zejście z ekranu startowego płynnie przewija stronę do edytora, a po
+ * `scrollend` (albo po 900 ms) `dosun` w DesignTab.tsx dosuwa ją jednym skokiem. Test,
+ * który w tym czasie zrobi `scrollTo(0, 0)` albo zmierzy pozycję, dostaje stan
+ * przejściowy: `dosun` cofa stronę, gdy właśnie otwiera się rozwijane menu. Dlatego
+ * dwa warunki naraz: `<html>` bez `data-przewijanie-do-edytora` (żaden ruch nie czeka)
+ * ORAZ `scrollY` taki sam w dwóch odczytach ~100 ms od siebie (nic się nie przesuwa).
+ */
+export async function poczekajNaKoniecPrzewijania(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            new Promise<boolean>((gotowe) => {
+              const przed = window.scrollY;
+              setTimeout(
+                () => gotowe(!("przewijanieDoEdytora" in document.documentElement.dataset) && window.scrollY === przed),
+                100
+              );
+            })
+        ),
+      { message: "strona wciąż się przewija", intervals: [50], timeout: 5000 }
+    )
+    .toBe(true);
 }

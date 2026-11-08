@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { wczytajPrzyklad, otworzMenuPaska, przejdzDoNarzedzia } from "./_flow";
+import { wczytajPrzyklad, otworzMenuPaska, przejdzDoNarzedzia, poczekajNaKoniecPrzewijania } from "./_flow";
 
 /**
  * Pola formularzy na telefonie mają co najmniej 16 px.
@@ -87,6 +87,9 @@ test("okno historii wersji: pole nazwy wersji ma 16 px", async ({ page }) => {
   await wczytajPrzyklad(page, "mieszkanie");
   // Po wczytaniu przykładu strona bywa przewinięta, a menu wyskakuje względem przycisku —
   // bez powrotu na górę pozycja menu raz na jakiś czas ląduje poza ekranem telefonu.
+  // Ale dopiero po KOŃCU przewijania do edytora: `scrollTo` w trakcie ruchu `dosun`
+  // (DesignTab.tsx) cofał chwilę później — akurat wtedy, gdy otwierało się menu.
+  await poczekajNaKoniecPrzewijania(page);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole("button", { name: "Projekty", exact: true }).click();
   const pozycja = page.getByRole("menuitem", { name: /Wersje projektu/ });

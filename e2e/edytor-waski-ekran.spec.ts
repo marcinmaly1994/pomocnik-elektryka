@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { otworzKatalogElementow, otworzMenuPaska, zamknijMenuPaska, odslonNarzedziaRysowania } from "./_flow";
+import {
+  otworzKatalogElementow,
+  otworzMenuPaska,
+  zamknijMenuPaska,
+  odslonNarzedziaRysowania,
+  poczekajNaKoniecPrzewijania,
+} from "./_flow";
 
 /**
  * Edytor planu na ekranie telefonu.
@@ -176,10 +182,11 @@ test("telefon: po wybraniu drogi startu rysunek jest w kadrze, razem z paskiem n
     .toBeGreaterThan(200);
 
   const pasekNarzedzi = page.locator('nav[aria-label="Narzędzia rysowania"]');
-  // Płynny ruch może na chwilę minąć cel (układ nad edytorem jeszcze się układa), a
-  // `dosun` w DesignTab cofa go dopiero po `scrollend` — mierzymy więc stan końcowy,
-  // nie pierwszą klatkę po przekroczeniu 200 px.
-  await expect.poll(async () => (await pasekNarzedzi.boundingBox())!.y, { timeout: 3000 }).toBeGreaterThanOrEqual(0);
+  // Mierzymy stan KOŃCOWY, nie pierwszą klatkę po przekroczeniu 200 px: płynny ruch
+  // liczy cel na starcie (układ nad edytorem jeszcze się wtedy układa), a `dosun`
+  // w DesignTab poprawia go dopiero po `scrollend`.
+  await poczekajNaKoniecPrzewijania(page);
+  expect((await pasekNarzedzi.boundingBox())!.y).toBeGreaterThanOrEqual(0);
   const box = (await plotno.boundingBox())!;
   // Pasek narzedzi na gorze kadru, plotno tuz pod nim — jedno i drugie widoczne
   // bez dalszego przewijania.
