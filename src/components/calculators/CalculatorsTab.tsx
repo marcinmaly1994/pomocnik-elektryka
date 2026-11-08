@@ -1365,8 +1365,9 @@ export function CalculatorsTab() {
 
                   {sized.ostrzezenia.length > 0 && (
                     <div className="mt-2 space-y-1.5">
+                      {/* role="note": lista odświeża się przy każdym wpisanym znaku — role="alert" czytałby KAŻDĄ pozycję przerywając czytnik */}
                       {sized.ostrzezenia.map((w, i) => (
-                        <Alert key={i} variant={w.level === "error" ? "danger" : "caution"}>
+                        <Alert key={i} role="note" variant={w.level === "error" ? "danger" : "caution"}>
                           {w.message}
                         </Alert>
                       ))}
@@ -1529,7 +1530,7 @@ export function CalculatorsTab() {
                   {sizedBreaker.ostrzezenia.length > 0 && (
                     <div className="mt-2 space-y-1.5">
                       {sizedBreaker.ostrzezenia.map((w, i) => (
-                        <Alert key={i} variant={w.level === "error" ? "danger" : "caution"}>
+                        <Alert key={i} role="note" variant={w.level === "error" ? "danger" : "caution"}>
                           {w.message}
                         </Alert>
                       ))}
@@ -2828,7 +2829,7 @@ export function CalculatorsTab() {
               {obwodEV.wartosci?.dobor.ostrzezenia && obwodEV.wartosci.dobor.ostrzezenia.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {obwodEV.wartosci.dobor.ostrzezenia.map((o, i) => (
-                    <Alert key={i} variant={o.level === "error" ? "danger" : "caution"}>
+                    <Alert key={i} role="note" variant={o.level === "error" ? "danger" : "caution"}>
                       {o.message}
                     </Alert>
                   ))}
@@ -3035,7 +3036,7 @@ export function CalculatorsTab() {
               {sizedFeeder.ostrzezenia.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {sizedFeeder.ostrzezenia.map((w, i) => (
-                    <Alert key={i} variant={w.level === "error" ? "danger" : "caution"}>
+                    <Alert key={i} role="note" variant={w.level === "error" ? "danger" : "caution"}>
                       {w.message}
                     </Alert>
                   ))}

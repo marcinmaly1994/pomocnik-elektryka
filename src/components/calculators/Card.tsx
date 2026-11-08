@@ -12,11 +12,11 @@ export function Card({ title, icon: Icon, tag, children }: CardProps) {
   return (
     <div className="pe-card p-5">
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {Icon && <Icon size={18} className="text-copper" />}
           <h3 className="pe-display text-lg">{title}</h3>
         </div>
-        {tag && <Badge variant="info">{tag}</Badge>}
+        {tag && <Badge variant="info" className="shrink-0">{tag}</Badge>}
       </div>
       {children}
     </div>

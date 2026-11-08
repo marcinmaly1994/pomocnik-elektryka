@@ -66,8 +66,9 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
   if (wynik.bledy.length > 0) {
     return (
       <div className="mt-2 space-y-1.5">
+        {/* role="note": błędy zmieniają się w trakcie wpisywania — alert przerywałby czytnik przy każdym przeliczeniu */}
         {wynik.bledy.map((b) => (
-          <Alert key={b.code} variant="danger">
+          <Alert key={b.code} role="note" variant="danger">
             {b.message}
           </Alert>
         ))}

@@ -32,4 +32,15 @@ describe("Alert", () => {
     expect(container.firstElementChild!.className).toContain("text-sm");
     expect(container.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   });
+
+  it("role=note wywołującego wyłącza ogłaszanie (listy odświeżane przy pisaniu)", () => {
+    render(
+      <Alert variant="danger" role="note">
+        Lista
+      </Alert>
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("note")).toHaveTextContent("Lista");
+  });
 });

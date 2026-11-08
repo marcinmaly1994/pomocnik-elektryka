@@ -1036,13 +1036,14 @@ export function PanelTab() {
 
         {(sizingWarnings.length > 0 || ostrzezeniaReczne.length > 0) && (
           <div className="mt-4 space-y-1.5">
+            {/* role="note": lista zmienia się przy edycji — bez przerywania czytnika przy każdym przeliczeniu */}
             {sizingWarnings.map((w, i) => (
-              <Alert key={i} variant={w.level === "error" ? "danger" : "caution"}>
+              <Alert key={i} role="note" variant={w.level === "error" ? "danger" : "caution"}>
                 <span className="font-semibold">{w.obwod}</span> — {w.message}
               </Alert>
             ))}
             {ostrzezeniaReczne.map((o, i) => (
-              <Alert key={`reczne-${i}`} variant="caution">
+              <Alert key={`reczne-${i}`} role="note" variant="caution">
                 {o.tresc}
               </Alert>
             ))}
