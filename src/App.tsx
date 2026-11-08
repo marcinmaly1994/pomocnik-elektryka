@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Calculator,
   ChevronDown,
   ChevronRight,
   ClipboardList,
@@ -307,7 +308,7 @@ function FlowArrow() {
 }
 
 /** Narzędzie pomocnicze poza głównym przepływem (Kalkulatory, Protokoły). */
-function ToolTab({ id, label, active, onPick }: TabButtonProps) {
+function ToolTab({ id, label, active, onPick, ikona }: TabButtonProps & { ikona?: React.ReactNode }) {
   const isActive = active === id;
   return (
     <button
@@ -316,10 +317,11 @@ function ToolTab({ id, label, active, onPick }: TabButtonProps) {
       // przyłożenia palca, czyli i tak przed `click`); `focus` — nawigację klawiaturą.
       onPointerEnter={() => pobierzZawczasu(id)}
       onFocus={() => pobierzZawczasu(id)}
-      className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors ${
+      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors ${
         isActive ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"
       }`}
     >
+      {ikona}
       {label}
     </button>
   );
@@ -407,7 +409,7 @@ function ProjectNameField() {
  */
 function NewProjectButton({ onOtworz }: { onOtworz: () => void }) {
   return (
-    <Button variant="copper" size="sm" title="Zacznij nowy projekt od zera" onClick={onOtworz}>
+    <Button variant="copper" size="sm" title="Zacznij nowy projekt od zera" onClick={onOtworz} data-otwieracz="nowy-projekt">
       <FilePlus2 size={14} /> Nowy projekt
     </Button>
   );
@@ -432,7 +434,18 @@ function NowyProjektOkno({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Zacząć nowy projekt?">
+      {/* Okno nie ma DialogTrigger (jest sterowane z App), więc Radix nie wie, dokąd oddać
+          fokus po zamknięciu. Wracamy do przycisku „Nowy projekt”, jeśli jest widoczny
+          (pasek od md), a na telefonie — do „Menu”, bo przycisk w arkuszu już nie istnieje. */}
+      <DialogContent
+        title="Zacząć nowy projekt?"
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          const przycisk = document.querySelector<HTMLElement>('[data-otwieracz="nowy-projekt"]');
+          const cel = przycisk && przycisk.offsetParent !== null ? przycisk : document.querySelector<HTMLElement>('button[aria-label="Menu"]');
+          cel?.focus();
+        }}
+      >
         <p className="mb-3 text-sm text-slate-600">
           {elementCount > 0
             ? `Bieżący projekt (${elementCount} ${elementCount === 1 ? "element" : elementCount < 5 ? "elementy" : "elementów"} na planie) zostanie usunięty z tej przeglądarki.`
@@ -659,8 +672,22 @@ export default function App() {
    */
   const pozycjeNaglowka = (wMenu: boolean) => (
     <>
-      <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
-      <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
+      {/* Ikony tylko w arkuszu: pozostałe pozycje menu je mają, a bez nich Kalkulatory
+          i Protokoły stały w kolumnie jako gołe napisy. Pasek desktopowy zostaje bez zmian. */}
+      <ToolTab
+        id="kalkulatory"
+        label="Kalkulatory"
+        active={tab}
+        onPick={setTab}
+        ikona={wMenu ? <Calculator size={15} aria-hidden="true" /> : undefined}
+      />
+      <ToolTab
+        id="protokoly"
+        label="Protokoły pomiarowe"
+        active={tab}
+        onPick={setTab}
+        ikona={wMenu ? <ClipboardList size={15} aria-hidden="true" /> : undefined}
+      />
       {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów
           z czterech zakładek plus protokołów, więc nie należy do żadnej z nich
           bardziej niż do pozostałych. Do tego samo okno musi żyć poza zakładkami,
@@ -702,7 +729,7 @@ export default function App() {
             badgeVariants(),
             // W pasku chip chowa się poniżej lg (brak miejsca); w menu jest zawsze,
             // bo tam miejsca jest dość, a awaria zapisu ma być widać z każdego ekranu.
-            wMenu ? "flex" : "hidden lg:flex",
+            wMenu ? "flex rounded-lg border-0" : "hidden lg:flex",
             "items-center gap-1 transition-colors enabled:hover:border-copper enabled:hover:text-copper disabled:cursor-default",
             localSaveError ? "font-medium text-warn" : "text-slate-400"
           )}
@@ -777,7 +804,7 @@ export default function App() {
                   startowym, w nagłówku karty powitalnej i w większym rozmiarze
                   (patrz `showEntryScreen` w DesignTab.tsx), więc na wejściu nic nie
                   ginie — a na telefonie odzyskujemy wysokość tam, gdzie jej brakuje. */}
-              <span className="hidden max-w-xl sm:block max-w-xl text-sm leading-snug text-slate-500">
+              <span className="hidden max-w-xl sm:block max-w-xl text-sm leading-snug max-md:leading-tight text-slate-500">
                 Zaprojektuj instalację elektryczną w swoim domu!
               </span>
             </span>

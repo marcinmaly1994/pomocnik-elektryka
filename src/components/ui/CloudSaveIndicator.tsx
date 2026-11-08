@@ -5,6 +5,10 @@ import { useProjectStore } from "@/store/useProjectStore";
  *  widoczny tylko po zalogowaniu, bo to jest właśnie ta różnica konta: bez
  *  sesji nie ma czego pokazywać, projekt i tak zapisuje się tylko lokalnie. */
 export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
+  // Napis jest schowany wizualnie (nie usunięty) poniżej 640 px albo zawsze w trybie
+  // `compact`: przy 375 px „Zapisano 10:42” obok logo, konta i „Menu” zawijało nagłówek
+  // na drugi rząd. Zostaje ikona w kolorze stanu, a pełny opis w `title` i dla czytników.
+  const etykieta = (tekst: string) => <span className={compact ? "sr-only" : "max-sm:sr-only"}>{tekst}</span>;
   const session = useProjectStore((s) => s.session);
   const cloudBusy = useProjectStore((s) => s.cloudBusy);
   const lastCloudSaveAt = useProjectStore((s) => s.lastCloudSaveAt);
@@ -14,15 +18,15 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
 
   if (cloudBusy) {
     return (
-      <span className="flex items-center gap-1 text-xs text-slate-500">
-        <Loader2 size={12} className="animate-spin" /> Zapisywanie w chmurze…
+      <span className="flex items-center gap-1 text-xs text-slate-500" title="Zapisywanie w chmurze…">
+        <Loader2 size={12} className="animate-spin" /> {etykieta("Zapisywanie w chmurze…")}
       </span>
     );
   }
   if (cloudSaveError) {
     return (
       <span className="flex items-center gap-1 text-xs text-red-600" title={cloudSaveError}>
-        <CloudOff size={12} /> Nie udało się zapisać w chmurze
+        <CloudOff size={12} /> {etykieta("Nie udało się zapisać w chmurze")}
       </span>
     );
   }
@@ -42,7 +46,7 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
             : "W chmurze jest nowsza wersja tego projektu. Autozapis wstrzymany do czasu rozstrzygnięcia."
         }
       >
-        <AlertTriangle size={12} /> Zmiany niezapisane — konflikt
+        <AlertTriangle size={12} /> {etykieta("Zmiany niezapisane — konflikt")}
       </span>
     );
   }
@@ -53,7 +57,7 @@ export function CloudSaveIndicator({ compact = false }: { compact?: boolean }) {
       className="flex items-center gap-1 text-xs text-emerald-700"
       title={`Projekt zapisuje się automatycznie w chmurze — dostępny z każdego urządzenia po zalogowaniu. Ostatnio o ${time}`}
     >
-      <Check size={12} /> {compact ? "Zapisano" : `Zapisano ${time}`}
+      <Check size={12} /> {etykieta(`Zapisano ${time}`)}
     </span>
   );
 }

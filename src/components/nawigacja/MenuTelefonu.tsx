@@ -23,7 +23,7 @@ export function MenuTelefonu({ children }: { children: React.ReactNode }) {
       </DialogTrigger>
       <DialogContent title="Menu" wariant="arkusz">
         <div
-          className="flex flex-col gap-1 [&>button]:min-h-11 [&>button]:w-full [&>button]:justify-start [&>button]:text-base"
+          className="flex flex-col gap-1 [&>button]:min-h-11 [&>button]:w-full [&>button]:justify-start [&>button]:text-base [&>button]:px-3 [&>button]:py-2"
           // `onClick` (faza bąbelkowa), NIE `onClickCapture`: React 18 obsługuje fazę
           // przechwytywania osobnym nasłuchem i opróżnia stan PRZED fazą bąbelkową. Zamknięcie
           // arkusza w capture odmontowywało przycisk, zanim dostał własny `onClick` — w przeglądarce

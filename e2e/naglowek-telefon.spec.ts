@@ -73,3 +73,99 @@ test("nagłówek telefonu to jeden rząd", async ({ page }) => {
   const ramka = (await page.getByRole("banner").boundingBox())!;
   expect(ramka.height, `nagłówek ma ${Math.round(ramka.height)} px`).toBeLessThanOrEqual(64);
 });
+
+/**
+ * Przekazanie z arkusza do okna: arkusz zamyka się, a okno otwiera w tej samej chwili.
+ * Dwa okna modalne Radixa naraz potrafią zostawić fokus na przycisku, którego już nie ma
+ * (czytnik ekranu i klawiatura gubią się), a jsdom tego nie widzi.
+ */
+for (const [nazwa, okno] of [
+  ["Dokumentacja", "Komplet dokumentacji"],
+  ["Pomoc", "Pomoc"],
+] as const) {
+  test(`menu → „${nazwa}” otwiera okno i oddaje mu fokus`, async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Menu", exact: true }).click();
+    await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: nazwa, exact: true }).click();
+
+    const dialog = page.getByRole("dialog", { name: okno });
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Menu" })).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')))
+      .toBe(true);
+  });
+}
+
+test("menu → chip „Zapisano lokalnie” otwiera logowanie", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const chip = page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: /Zapisano lokalnie/ });
+  test.skip(await chip.isDisabled(), "Supabase nieskonfigurowany w tym środowisku — chip nie prowadzi do logowania");
+  await chip.click();
+  await expect(page.getByRole("heading", { name: "Zaloguj się" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Menu" })).toHaveCount(0);
+});
+
+/** Nagłówek w jednym rzędzie także na tablecie w pionie przed progiem 768 px, gdzie jest
+ *  hasło pod logo (od 640 px) — tam zawijał się najłatwiej. */
+for (const szer of [640, 700]) {
+  test(`nagłówek to jeden rząd przy ${szer} px`, async ({ page }) => {
+    await page.setViewportSize({ width: szer, height: 900 });
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
+    const ramka = (await page.getByRole("banner").boundingBox())!;
+    expect(ramka.height, `nagłówek ma ${Math.round(ramka.height)} px przy ${szer} px`).toBeLessThanOrEqual(64);
+  });
+}
+
+test("zalogowany: nagłówek zostaje jednym rzędem, a stan zapisu jest ikoną", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(
+    ([klucz, sesja]) => {
+      localStorage.clear();
+      localStorage.setItem(klucz, JSON.stringify(sesja));
+    },
+    ["pomocnikelektryka_sesja", { token: "fake-token", user: { id: "u1", email: "elektryk@example.com" } }] as const
+  );
+  await page.reload();
+  await expect(page.getByTitle("elektryk@example.com")).toBeVisible();
+  const ramka = (await page.getByRole("banner").boundingBox())!;
+  expect(ramka.height, `nagłówek ma ${Math.round(ramka.height)} px`).toBeLessThanOrEqual(64);
+  const rozjazd = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(rozjazd).toBeLessThanOrEqual(0);
+});
+
+test("pozycje arkusza są ułożone jednakowo: do lewej, z ikoną, tej samej wysokości", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const arkusz = page.getByRole("dialog", { name: "Menu" });
+  const pozycje = await arkusz.locator("div.gap-1 > button").evaluateAll((els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect();
+      const tekst = document.createRange();
+      tekst.selectNodeContents(e);
+      return {
+        nazwa: e.textContent?.trim(),
+        x: Math.round(r.x),
+        h: Math.round(r.height),
+        ikona: !!e.querySelector("svg"),
+        lewaTresci: Math.round(e.querySelector("svg")?.getBoundingClientRect().x ?? -1),
+      };
+    })
+  );
+  expect(pozycje.length).toBeGreaterThanOrEqual(5);
+  for (const p of pozycje) {
+    expect(p.ikona, `„${p.nazwa}” bez ikony`).toBe(true);
+    expect(p.x).toBe(pozycje[0].x);
+    expect(p.lewaTresci, `ikona „${p.nazwa}” nie stoi przy lewej krawędzi`).toBe(pozycje[0].lewaTresci);
+  }
+});
+
+test("„Nowy projekt” z menu: po anulowaniu fokus wraca do przycisku „Menu”", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: "Nowy projekt", exact: true }).click();
+  await page.getByRole("dialog", { name: "Zacząć nowy projekt?" }).getByRole("button", { name: "Anuluj" }).click();
+  await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeFocused();
+});
