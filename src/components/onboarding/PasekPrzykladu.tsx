@@ -35,7 +35,12 @@ export function PasekPrzykladu() {
           i mówi wyłącznie o PROJEKCIE. Szersza obietnica była nieprawdziwa — protokoły
           mają własny, ręczny zapis do chmury i on działa normalnie także wtedy, gdy
           otwarty jest przykład (patrz warunek renderowania paska w App.tsx). */}
-      <span>
+      {/* Tekst w elastycznej kolumnie (`basis-0`), przycisk obok niej. Przy samym `<span>`
+          długie zdanie zajmowało cały wiersz i przycisk spadał do trzeciej linii, gdy
+          tylko tekst renderował się odrobinę szerzej (czcionki na Linuksie): na tablecie
+          768 px pasek rósł o 42 px i zabierał je rzutowi. Teraz tekst zawija się w swojej
+          kolumnie, a przycisk schodzi pod spód dopiero na wąskim telefonie (min. 12rem). */}
+      <span className="min-w-[12rem] flex-1 basis-0">
         <strong>To jest projekt przykładowy</strong> — gotowy projekt, na którym widać, co aplikacja liczy sama.
         Poklikaj po zakładkach, zmieniaj co chcesz; ten projekt nie zapisuje się na Twoim koncie.
       </span>

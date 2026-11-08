@@ -433,7 +433,9 @@ export function CostsTab() {
                   <td className="min-w-0 md:p-3">
                     {/* Podpis pola tylko w karcie na telefonie — na monitorze robi to nagłówek tabeli. */}
                     <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Ilość</span>
-                    <div className="flex items-center gap-1">
+                    {/* Wysokość wiersza na dotyku trzyma wrapper (jak przy cenie), nie krzyżyk —
+                        krzyżyk na telefonie znika z układu, gdy nie ma czego cofać. */}
+                    <div className="flex items-center gap-1 [@media(pointer:coarse)]:min-h-11">
                       <input
                         type="number"
                         min={0}
@@ -449,7 +451,10 @@ export function CostsTab() {
                         aria-label={`Przywróć ilość z rzutu: ${r.label}`}
                         title="Wróć do ilości oszacowanej z rzutu"
                         // Na dotyku 32 × 44 px — szerzej zjadałoby pole ilości w karcie na telefonie.
-                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.qtyOverridden ? "" : "invisible"}`}
+                        // Niewidoczny krzyżyk na telefonie nie zajmuje miejsca (`max-md:hidden`): przy
+                        // 320 px jego 36 px zjadało pole, a liczby się ucinały. Od md zostaje
+                        // `invisible`, żeby kolumna w tabeli nie skakała po nadpisaniu ilości.
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.qtyOverridden ? "" : "invisible max-md:hidden"}`}
                       >
                         <X size={13} />
                       </button>
@@ -485,7 +490,7 @@ export function CostsTab() {
                       przy wysokości montażu elementu. */}
                   <td className="min-w-0 text-right md:p-3">
                     <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Wartość, zł</span>
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-1 [@media(pointer:coarse)]:min-h-11">
                       <input
                         type="number"
                         value={r.overridden ? r.value : ""}
@@ -507,7 +512,7 @@ export function CostsTab() {
                         onClick={() => setCostOverride(r.key, null)}
                         aria-label={`Przywróć liczoną wartość: ${r.label}`}
                         title="Wróć do liczenia ilość × cena"
-                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.overridden ? "" : "invisible"}`}
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.overridden ? "" : "invisible max-md:hidden"}`}
                       >
                         <X size={13} />
                       </button>
