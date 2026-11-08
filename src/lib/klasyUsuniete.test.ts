@@ -40,7 +40,9 @@ describe("usunięte klasy interfejsu", () => {
 
   it("tła komunikatów biorą kolor z tokenów, nie z hex z kanałem alfa", () => {
     const RYSUNEK = /DesignCanvas|ElementGlyph|PanelRender|SchemaTab|pdf/i;
-    const wzor = /#(C1793F|2D5A8C|3B8C63|C6433A)1[0-9A-Fa-f]\b/;
+    // Każdy dwucyfrowy kanał alfa (dawniej tylko 1x), bez względu na wielkość liter —
+    // przeoczone były m.in. #C1793F0D, #C6433A0A i #C6433A40.
+    const wzor = /#(C1793F|2D5A8C|3B8C63|C6433A)[0-9A-Fa-f]{2}\b/i;
     const trafienia = zrodla.filter((p) => !RYSUNEK.test(p) && wzor.test(readFileSync(p, "utf8")));
     expect(trafienia).toEqual([]);
   });
