@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
  * Nagłówek na telefonie.
@@ -11,6 +11,27 @@ import { test, expect } from "@playwright/test";
  */
 
 test.use({ viewport: { width: 375, height: 812 } });
+
+/**
+ * Jeden rząd sprawdzany GEOMETRIĄ, nie progiem w pikselach.
+ *
+ * Dawny próg „≤ 64 px” miał ~0 px zapasu (64,25 px przed `leading-tight`), a czcionki na
+ * Linuksie w CI wychodzą odrobinę większe — test mierzył krój pisma, nie liczbę rzędów.
+ * Logo i skrajnie prawa kontrolka („Menu”) muszą zachodzić na siebie w pionie: po zawinięciu
+ * „Menu” spada pod logo. Do tego nagłówek niższy niż 90 px — drugi rząd dokłada co najmniej
+ * 44 px (wysokość celu dotykowego), więc ten próg łapie zawinięcie każdej innej kontrolki.
+ */
+async function sprawdzJedenRzad(page: Page, opis: string) {
+  const logo = (await page.getByRole("button", { name: /^pomocnikelektryka\.pl/ }).boundingBox())!;
+  const menu = (await page.getByRole("button", { name: "Menu", exact: true }).boundingBox())!;
+  const naglowek = (await page.getByRole("banner").boundingBox())!;
+  const zachodza = logo.y < menu.y + menu.height && menu.y < logo.y + logo.height;
+  expect(
+    zachodza,
+    `${opis}: „Menu” (y=${Math.round(menu.y)}) poza rzędem logo (y=${Math.round(logo.y)}–${Math.round(logo.y + logo.height)})`
+  ).toBe(true);
+  expect(naglowek.height, `${opis}: nagłówek ma ${Math.round(naglowek.height)} px`).toBeLessThan(90);
+}
 
 test("„Zaloguj się” mieści się na ekranie telefonu bez przewijania nagłówka", async ({ page }) => {
   await page.goto("/");
@@ -70,8 +91,7 @@ test("strona nie dostaje poziomego przewijania", async ({ page }) => {
 
 test("nagłówek telefonu to jeden rząd", async ({ page }) => {
   await page.goto("/");
-  const ramka = (await page.getByRole("banner").boundingBox())!;
-  expect(ramka.height, `nagłówek ma ${Math.round(ramka.height)} px`).toBeLessThanOrEqual(64);
+  await sprawdzJedenRzad(page, "375 px");
 });
 
 /**
@@ -114,8 +134,7 @@ for (const szer of [640, 700]) {
     await page.setViewportSize({ width: szer, height: 900 });
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
-    const ramka = (await page.getByRole("banner").boundingBox())!;
-    expect(ramka.height, `nagłówek ma ${Math.round(ramka.height)} px przy ${szer} px`).toBeLessThanOrEqual(64);
+    await sprawdzJedenRzad(page, `${szer} px`);
   });
 }
 
@@ -130,8 +149,7 @@ test("zalogowany: nagłówek zostaje jednym rzędem, a stan zapisu jest ikoną",
   );
   await page.reload();
   await expect(page.getByTitle("elektryk@example.com")).toBeVisible();
-  const ramka = (await page.getByRole("banner").boundingBox())!;
-  expect(ramka.height, `nagłówek ma ${Math.round(ramka.height)} px`).toBeLessThanOrEqual(64);
+  await sprawdzJedenRzad(page, "zalogowany, 375 px");
   const rozjazd = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(rozjazd).toBeLessThanOrEqual(0);
 });
