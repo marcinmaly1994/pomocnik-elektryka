@@ -160,3 +160,16 @@ body {
     }
   }
 }
+
+@layer utilities {
+  /* Pola formularzy mają na telefonie co najmniej 16 px: Safari na iPhonie przybliża
+     stronę przy fokusie na polu z mniejszą czcionką i sam jej nie oddala. Reguła stoi
+     w warstwie `utilities`, żeby wygrać z `text-sm` / `text-xs` wpisanymi przy polach —
+     bez niej każde z kilkudziesięciu pól trzeba by poprawiać osobno. Od `md` w górę
+     zostaje rozmiar z klas przy polu. */
+  @media (max-width: 767.98px) {
+    .pe-input {
+      font-size: 1rem;
+    }
+  }
+}

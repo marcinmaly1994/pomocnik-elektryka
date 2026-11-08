@@ -412,7 +412,7 @@ export function CostsTab() {
                   // 13 z 32 pól przy 375 px, wszystkie przy 320 px), a kolumna ceny miała
                   // zapas kilkudziesięciu pikseli. Pole wartości dzieli miejsce z krzyżykiem
                   // cofania, a „zł" stoi w podpisie pola, nie obok liczby.
-                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-2 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
+                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-1.5 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
                     bezCeny(r) ? "bg-[#FDF6EF]" : "md:hover:bg-slate-50"
                   }`}
                   style={{ borderColor: "#EEF1F4" }}
@@ -441,7 +441,7 @@ export function CostsTab() {
                         onChange={(e) => setQtyOverride(r.key, e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0))}
                         placeholder={String(r.qty)}
                         aria-label={`Ilość: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-sm md:w-20 md:px-2.5"
+                        className="pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-20 md:px-2.5"
                         style={r.qtyOverridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
                       />
                       <button
@@ -471,7 +471,7 @@ export function CostsTab() {
                           if (r.overridden) setCostOverride(r.key, null);
                         }}
                         aria-label={`Cena jednostkowa: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-sm md:w-24 md:px-2.5"
+                        className="pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-24 md:px-2.5"
                         style={r.overridden ? { color: "#5B6A80" } : undefined}
                         title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
                         step="0.5"
@@ -496,7 +496,7 @@ export function CostsTab() {
                         // czego kontrolka nie przyjmie.
                         placeholder={formatLiczba(r.value, 2)}
                         aria-label={`Wartość pozycji: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-right text-sm md:w-28 md:px-2.5"
+                        className="pe-input pe-mono w-full min-w-0 px-1 text-right text-sm md:w-28 md:px-2.5"
                         style={r.overridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
                         step="1"
                       />
