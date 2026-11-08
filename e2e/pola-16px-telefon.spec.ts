@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { wczytajPrzyklad, otworzMenuPaska } from "./_flow";
+import { wczytajPrzyklad, otworzMenuPaska, przejdzDoNarzedzia } from "./_flow";
 
 /**
  * Pola formularzy na telefonie mają co najmniej 16 px.
@@ -42,7 +42,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("lista kalkulatorów: wyszukiwarka ma 16 px", async ({ page }) => {
-  await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
+  await przejdzDoNarzedzia(page, "Kalkulatory");
   await expect(page.getByRole("searchbox").or(page.locator("input[type=search], input[placeholder*='Szukaj' i]")).first()).toBeVisible();
   await sprawdz(page);
 });

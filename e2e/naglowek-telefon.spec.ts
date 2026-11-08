@@ -3,12 +3,11 @@ import { test, expect } from "@playwright/test";
 /**
  * Nagłówek na telefonie.
  *
- * Pasek nawigacji przewija się poziomo w jednym rzędzie — świadomie, bo zawijanie
- * na trzy rzędy zjadało 122 px. Kosztem było jednak to, CO wylądowało na końcu
- * przewijania: przy 375 px „Zaloguj się" zaczynało się 623 px za prawą krawędzią,
- * a suwak jest celowo ukryty, więc nic nie zdradzało, że tam cokolwiek jest.
- * Aplikacja namawia do założenia konta, żeby nie stracić pracy — a samego przycisku
- * praktycznie nie dało się znaleźć.
+ * Pasek przewijany w bok ucinał etykiety w pół słowa („Protokoły pomiarow”), a o reszcie
+ * mówiło tylko wygaszenie krawędzi. Teraz poniżej 768 px w nagłówku zostają logo, konto
+ * i przycisk „Menu” z arkuszem pozycji. Konto musi zostać w kadrze: aplikacja namawia do
+ * założenia go, żeby nie stracić pracy, a kiedyś „Zaloguj się” zaczynało się 623 px
+ * za prawą krawędzią.
  */
 
 test.use({ viewport: { width: 375, height: 812 } });
@@ -26,21 +25,40 @@ test("„Zaloguj się” mieści się na ekranie telefonu bez przewijania nagł�
   expect(ramka!.x + ramka!.width).toBeLessThanOrEqual(szerokosc);
 });
 
-/** Zakładki mają się nadal mieścić w jednym rzędzie i przewijać — bez tego
- *  naprawa jednego problemu przywróciłaby drugi, trzyrzędowy nagłówek. */
-test("zakładki nadal przewijają się poziomo, zamiast zawijać na kolejne rzędy", async ({ page }) => {
+test("wszystkie narzędzia są w menu, z pełnymi nazwami", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const arkusz = page.getByRole("dialog", { name: "Menu" });
 
-  const stan = await page.evaluate(() => {
-    const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Kalkulatory");
-    const pasek = btn?.parentElement as HTMLElement | null;
-    return pasek ? { przewijalny: pasek.scrollWidth > pasek.clientWidth, wysokosc: pasek.clientHeight } : null;
-  });
+  for (const nazwa of ["Kalkulatory", "Protokoły pomiarowe", "Dokumentacja", "Pomoc", "Nowy projekt"]) {
+    const przycisk = arkusz.getByRole("button", { name: nazwa, exact: true });
+    await expect(przycisk).toBeVisible();
+    const ramka = (await przycisk.boundingBox())!;
+    expect(ramka.width, `„${nazwa}” ma ${Math.round(ramka.width)} px szerokości`).toBeGreaterThanOrEqual(200);
+    expect(ramka.height, `„${nazwa}” ma ${Math.round(ramka.height)} px wysokości`).toBeGreaterThanOrEqual(44);
+  }
+});
 
-  expect(stan).not.toBeNull();
-  expect(stan!.przewijalny).toBe(true);
-  // Jeden rząd przycisków, nie dwa — wysokość rzędu to ok. 34 px.
-  expect(stan!.wysokosc).toBeLessThan(60);
+test("wybór w menu przenosi i zamyka arkusz", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: "Kalkulatory", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Kalkulatory elektryczne" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Menu" })).toHaveCount(0);
+});
+
+/** „Nowy projekt” ma własne potwierdzenie — zamknięcie arkusza nie może go zabrać ze sobą. */
+test("„Nowy projekt” z menu pokazuje potwierdzenie i je honoruje", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: "Nowy projekt", exact: true }).click();
+
+  const potwierdzenie = page.getByRole("dialog", { name: "Zacząć nowy projekt?" });
+  await expect(potwierdzenie).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Menu" })).toHaveCount(0);
+  await potwierdzenie.getByRole("button", { name: "Tak, zacznij od nowa" }).click();
+  await expect(potwierdzenie).toHaveCount(0);
 });
 
 /** Nagłówek nie ma prawa rozpychać całej strony — to był osobny, naprawiony już błąd. */
@@ -50,22 +68,8 @@ test("strona nie dostaje poziomego przewijania", async ({ page }) => {
   expect(rozjazd).toBeLessThanOrEqual(0);
 });
 
-/**
- * Że pasek da się przewinąć, mówi WYGASZONA krawędź, a nie słowo urwane w pół.
- *
- * Przycięty „Protokoły pomiar" czytał się jak błąd układu. Wygaszenie stoi przy tej
- * krawędzi, za którą jest jeszcze treść, i znika, gdy pasek dojedzie do końca.
- * Obliczony styl oddaje kolory jako `rgb(...)`/`rgba(...)`, stąd takie dopasowania.
- */
-test("pasek zakładek wygasza prawą krawędź, dopóki jest za nią treść", async ({ page }) => {
+test("nagłówek telefonu to jeden rząd", async ({ page }) => {
   await page.goto("/");
-  const pasek = page.getByTestId("pasek-zakladek");
-  const maska = () => pasek.evaluate((el) => getComputedStyle(el).webkitMaskImage || getComputedStyle(el).maskImage);
-
-  // Na starcie: pełny kolor po lewej, przezroczystość na prawym końcu.
-  await expect.poll(maska).toMatch(/^linear-gradient\(to right, rgb\(0, 0, 0\),.*rgba\(0, 0, 0, 0\)\)$/);
-
-  await pasek.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
-  // Na końcu: wygaszona już tylko LEWA krawędź, za którą schowały się pierwsze zakładki.
-  await expect.poll(maska).toMatch(/^linear-gradient\(to right, rgba\(0, 0, 0, 0\),.*rgb\(0, 0, 0\)\)$/);
+  const ramka = (await page.getByRole("banner").boundingBox())!;
+  expect(ramka.height, `nagłówek ma ${Math.round(ramka.height)} px`).toBeLessThanOrEqual(64);
 });

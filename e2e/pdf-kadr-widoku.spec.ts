@@ -76,7 +76,7 @@ async function rzutZPodgladu(page: Page) {
   await page.getByRole("button", { name: "Rzut do PDF" }).click();
   await expect(strony.first()).toBeVisible({ timeout: 30000 });
   const obraz = await strony.first().evaluate((c) => (c as HTMLCanvasElement).toDataURL());
-  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).last().click(); // ostatni = przycisk w stopce; „X” w rogu też ma teraz nazwę „Zamknij”
   return obraz;
 }
 

@@ -23,7 +23,7 @@ import { ZAKLADKA_DOMYSLNA, type AppTab as AppTabRoute } from "@/lib/routing";
 import { Button } from "@/components/ui/button";
 import { badgeVariants } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CloudSaveIndicator } from "@/components/ui/CloudSaveIndicator";
 import { komunikatZapisu } from "@/lib/zapisLokalny";
@@ -35,6 +35,7 @@ import { HelpModal } from "@/components/help/HelpModal";
 import { PasekPrzykladu } from "@/components/onboarding/PasekPrzykladu";
 import { PasekUszkodzonegoZapisu } from "@/components/ui/PasekUszkodzonegoZapisu";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { MenuTelefonu } from "@/components/nawigacja/MenuTelefonu";
 import { KompletDialog } from "@/components/ui/KompletDialog";
 import { KopiaZapasowa } from "@/components/ui/KopiaZapasowa";
 import { PdfPreview } from "@/components/ui/PdfPreview";
@@ -404,14 +405,33 @@ function ProjectNameField() {
  * odzyskania poprzedniego stanu przez odświeżenie strony: skasowane znika na dobre.
  * Okno wprost nazywa, co przepada, a co zostaje — żeby nikt nie klikał w ciemno.
  */
-function NewProjectButton({ onConfirm, elementCount }: { onConfirm: () => void; elementCount: number }) {
+function NewProjectButton({ onOtworz }: { onOtworz: () => void }) {
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="copper" size="sm" title="Zacznij nowy projekt od zera">
-          <FilePlus2 size={14} /> Nowy projekt
-        </Button>
-      </DialogTrigger>
+    <Button variant="copper" size="sm" title="Zacznij nowy projekt od zera" onClick={onOtworz}>
+      <FilePlus2 size={14} /> Nowy projekt
+    </Button>
+  );
+}
+
+/**
+ * Okno potwierdzenia dla „Nowy projekt”. Sterowane z zewnątrz i zamontowane RAZ w `App`,
+ * a nie razem z przyciskiem: przycisk jest też w arkuszu „Menu” na telefonie, który
+ * zamyka się po kliknięciu pozycji — okno, które w nim siedziało, znikało razem z arkuszem
+ * i potwierdzenie w ogóle się nie pokazywało.
+ */
+function NowyProjektOkno({
+  open,
+  onOpenChange,
+  onConfirm,
+  elementCount,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onConfirm: () => void;
+  elementCount: number;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title="Zacząć nowy projekt?">
         <p className="mb-3 text-sm text-slate-600">
           {elementCount > 0
@@ -567,6 +587,9 @@ export default function App() {
    *  przechodzenia najpierw przez „Profil". */
   const [accountModalTab, setAccountModalTab] = useState<AccountModalTab | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Potwierdzenie „Nowy projekt” żyje w App, a nie w przycisku: przycisk stoi też w arkuszu
+  // „Menu”, który zamyka się po kliknięciu — okno zamontowane w nim znikałoby razem z arkuszem.
+  const [nowyProjektOtwarty, setNowyProjektOtwarty] = useState(false);
   const [kompletOpen, setKompletOpen] = useState(false);
   /** Gotowe bajty kompletu — trzymane tu, bo podglad ma pokazac DOKLADNIE ten plik,
    *  ktory przed chwila powstal, a nie zbudowac go po raz drugi. */
@@ -605,8 +628,8 @@ export default function App() {
     setAuthOpen(true);
   }, []);
 
-  // Wygaszenie krawędzi obu przewijanych pasków na telefonie — patrz `useWygaszenieKrawedzi`.
-  const pasekZakladek = useWygaszenieKrawedzi<HTMLDivElement>();
+  // Wygaszenie krawędzi paska etapów na telefonie — patrz `useWygaszenieKrawedzi`.
+  // Pasek narzędzi w nagłówku już nie przewija (na telefonie to arkusz „Menu”).
   const pasekEtapow = useWygaszenieKrawedzi<HTMLDivElement>();
 
   function signOut() {
@@ -626,6 +649,78 @@ export default function App() {
       setTab("projekt");
     }
   }
+
+  /**
+   * Pozycje nagłówka (narzędzia, Dokumentacja, Pomoc, chip zapisu, Nowy projekt) —
+   * jedno źródło dla DWÓCH miejsc: paska od 768 px w górę i arkusza „Menu” na telefonie.
+   * Dzięki temu nazwy dostępne i kolejność nie rozjeżdżają się między szerokościami.
+   * `wMenu` zmienia tylko to, co zależy od miejsca: chip zapisu jest w menu zawsze
+   * widoczny, a pionowa kreska rozdzielająca (tylko dla paska) znika.
+   */
+  const pozycjeNaglowka = (wMenu: boolean) => (
+    <>
+      <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
+      <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
+      {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów
+          z czterech zakładek plus protokołów, więc nie należy do żadnej z nich
+          bardziej niż do pozostałych. Do tego samo okno musi żyć poza zakładkami,
+          bo w trakcie składania je przełącza (patrz `KompletDialog`). */}
+      <button
+        onClick={() => setKompletOpen(true)}
+        className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
+      >
+        <FileStack size={15} /> Dokumentacja
+      </button>
+      <button
+        onClick={() => setHelpOpen(true)}
+        className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
+      >
+        <HelpCircle size={15} /> Pomoc
+      </button>
+      {!wMenu && <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />}
+      {/* Niezalogowany widzi ten sam chip co dotychczas. Po zalogowaniu jego rolę
+          przejmuje `CloudSaveIndicator` obok menu konta: pokazuje PRAWDZIWY status
+          („zapisywanie…”, godzinę ostatniego zapisu albo błąd), nie tylko fakt
+          bycia zalogowanym.
+          Treść i ikona: „Synchronizacja: offline” + `CloudOff` brzmiały jak awaria
+          (czerwonawe skojarzenie „offline” + przekreślona chmura), a to normalny,
+          bezpieczny stan — projekt JEST zapisany, tylko lokalnie. „Zapisano
+          lokalnie” + `Save` mówią wprost co się dzieje, bez straszenia. Klikalne
+          (gdy Supabase jest skonfigurowane) — otwiera logowanie, więc to
+          rzeczywista zachęta, nie tylko podpowiedź w tooltipie. */}
+      {/* Chip stwierdzał „Zapisano lokalnie" ZAWSZE, bo był napisem, nie stanem —
+          także wtedy, gdy pamięć przeglądarki się skończyła i nic się nie zapisało.
+          Teraz mówi prawdę i w razie awarii prowadzi tam, gdzie limitu nie ma
+          (patrz `localSaveError` w store). Zostaje w nagłówku, a nie w pasku stanu
+          edytora, właśnie po to: awarię widać z każdej zakładki. */}
+      {!session && (
+        <button
+          type="button"
+          onClick={SUPABASE_CONFIGURED ? () => setAuthOpen(true) : undefined}
+          disabled={!SUPABASE_CONFIGURED}
+          className={cn(
+            badgeVariants(),
+            // W pasku chip chowa się poniżej lg (brak miejsca); w menu jest zawsze,
+            // bo tam miejsca jest dość, a awaria zapisu ma być widać z każdego ekranu.
+            wMenu ? "flex" : "hidden lg:flex",
+            "items-center gap-1 transition-colors enabled:hover:border-copper enabled:hover:text-copper disabled:cursor-default",
+            localSaveError ? "font-medium text-warn" : "text-slate-400"
+          )}
+          title={
+            localSaveError
+              ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tytul
+              : SUPABASE_CONFIGURED
+                ? "Zaloguj się, aby synchronizować projekt z chmurą"
+                : "Uzupełnij VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY w .env"
+          }
+        >
+          {localSaveError ? <AlertTriangle size={13} /> : <Save size={13} />}{" "}
+          {localSaveError ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tekst : "Zapisano lokalnie"}
+        </button>
+      )}
+      <NewProjectButton onOtworz={() => setNowyProjektOtwarty(true)} />
+    </>
+  );
 
   return (
     // Kolumna z rozciągliwym środkiem: stopka ma siedzieć przy DOLE OKNA, gdy treść
@@ -665,7 +760,7 @@ export default function App() {
               {/* Napis wraca jako zwykły, widoczny <h1> — ten sam rozmiar co
                   poprzednie logo (text-2xl font-bold), tylko obok ikony
                   zamiast bycia częścią jednego złożonego SVG z tekstem. */}
-              <h1 className="font-sans text-lg sm:text-2xl font-bold leading-tight tracking-tight text-ink">
+              <h1 className="font-sans text-base sm:text-2xl font-bold leading-tight tracking-tight text-ink">
                 pomocnikelektryka<span className="text-copper">.pl</span>
               </h1>
               {/* Spacja między nazwą a hasłem: oba są elementami blokowymi, więc jej NIE widać,
@@ -692,85 +787,27 @@ export default function App() {
         {/* JEDEN RZĄD na telefonie, zawijanie od 640 px w górę.
             Przy 375 px ta grupa zawijała się na TRZY rzędy (Kalkulatory + Protokoły,
             Dokumentacja + Pomoc, Nowy projekt + Zaloguj się) i sama brała 122 px —
-            więcej niż logo, nazwa projektu i pasek etapów razem. Teraz przewija się
-            poziomo, tak samo jak pasek etapów niżej: że jest czym przewijać, widać po
-            wygaszonej krawędzi (`useWygaszenieKrawedzi`). Etykiety zostają PEŁNE — skracanie ich
-            zmieniłoby nazwy dostępnościowe, a na nich stoi kilkanaście testów e2e. */}
+            więcej niż logo, nazwa projektu i pasek etapów razem. Teraz na telefonie
+            zostają logo, konto i jeden przycisk „Menu” (arkusz z pozostałymi pozycjami), więc
+            rząd jest jeden. Etykiety w menu są PEŁNE — skracanie ich zmieniłoby nazwy
+            dostępnościowe, a na nich stoi kilkanaście testów e2e. */}
         {/* Od 640 px w górę obie grupy dostają `display: contents` i podział ZNIKA:
             przyciski wracają do zawijania pojedynczo, dokładnie jak przed rozdzieleniem.
             Bez tego grupa konta nie mogła dzielić rzędu z zawiniętymi zakładkami
             i nagłówek rósł na tablecie ze 150 do 184 px — zmierzone przy 640 px. */}
-        <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:flex-wrap sm:[&>*]:shrink-0">
-          {/* Grupa PRZEWIJANA. Konto zostało z niej WYJĘTE (niżej): przy 375 px kończyło
-              się 623 px za prawą krawędzią, a suwak jest celowo ukryty, więc nic nie
-              zdradzało, że tam cokolwiek jest. Aplikacja namawia do założenia konta,
-              żeby nie stracić pracy — a samego przycisku nie dało się znaleźć.
+        <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:[&>*]:shrink-0">
+          {/* Pasek narzędzi od 768 px (`md`) — jak dotąd, z zawijaniem zamiast przewijania.
+              Poniżej niego ta grupa jest ukryta, a te same pozycje stoją w arkuszu „Menu”
+              (`MenuTelefonu`): pasek przewijany w bok ucinał etykiety w pół słowa
+              („Protokoły pomiarow”), a o reszcie mówiło tylko wygaszenie krawędzi.
+              Na `md`+ grupa ma `display: contents`, więc przyciski zawijają się pojedynczo,
+              dokładnie jak przed wprowadzeniem menu.
 
-              Etykiety zostają PEŁNE: skracanie ich na telefonie zmieniłoby nazwy
-              dostępnościowe, na których stoi kilkanaście testów e2e i czytniki ekranu. */}
-          <div
-            ref={pasekZakladek.ref}
-            style={pasekZakladek.styl}
-            data-testid="pasek-zakladek"
-            className="pe-bez-suwaka flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto [&>*]:shrink-0 sm:contents"
-          >
-          <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
-          <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
-          {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów
-              z czterech zakładek plus protokołów, więc nie należy do żadnej z nich
-              bardziej niż do pozostałych. Do tego samo okno musi żyć poza zakładkami,
-              bo w trakcie składania je przełącza (patrz `KompletDialog`). */}
-          <button
-            onClick={() => setKompletOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
-          >
-            <FileStack size={15} /> Dokumentacja
-          </button>
-          <button
-            onClick={() => setHelpOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
-          >
-            <HelpCircle size={15} /> Pomoc
-          </button>
-          <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
-          {/* Niezalogowany widzi ten sam chip co dotychczas. Po zalogowaniu jego rolę
-              przejmuje `CloudSaveIndicator` obok menu konta: pokazuje PRAWDZIWY status
-              („zapisywanie…”, godzinę ostatniego zapisu albo błąd), nie tylko fakt
-              bycia zalogowanym.
-              Treść i ikona: „Synchronizacja: offline” + `CloudOff` brzmiały jak awaria
-              (czerwonawe skojarzenie „offline” + przekreślona chmura), a to normalny,
-              bezpieczny stan — projekt JEST zapisany, tylko lokalnie. „Zapisano
-              lokalnie” + `Save` mówią wprost co się dzieje, bez straszenia. Klikalne
-              (gdy Supabase jest skonfigurowane) — otwiera logowanie, więc to
-              rzeczywista zachęta, nie tylko podpowiedź w tooltipie. */}
-          {/* Chip stwierdzał „Zapisano lokalnie" ZAWSZE, bo był napisem, nie stanem —
-              także wtedy, gdy pamięć przeglądarki się skończyła i nic się nie zapisało.
-              Teraz mówi prawdę i w razie awarii prowadzi tam, gdzie limitu nie ma
-              (patrz `localSaveError` w store). Zostaje w nagłówku, a nie w pasku stanu
-              edytora, właśnie po to: awarię widać z każdej zakładki. */}
-          {!session && (
-            <button
-              type="button"
-              onClick={SUPABASE_CONFIGURED ? () => setAuthOpen(true) : undefined}
-              disabled={!SUPABASE_CONFIGURED}
-              className={cn(
-                badgeVariants(),
-                "hidden items-center gap-1 transition-colors enabled:hover:border-copper enabled:hover:text-copper lg:flex disabled:cursor-default",
-                localSaveError ? "font-medium text-warn" : "text-slate-400"
-              )}
-              title={
-                localSaveError
-                  ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tytul
-                  : SUPABASE_CONFIGURED
-                    ? "Zaloguj się, aby synchronizować projekt z chmurą"
-                    : "Uzupełnij VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY w .env"
-              }
-            >
-              {localSaveError ? <AlertTriangle size={13} /> : <Save size={13} />}{" "}
-              {localSaveError ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tekst : "Zapisano lokalnie"}
-            </button>
-          )}
-            <NewProjectButton onConfirm={resetProject} elementCount={elementCount} />
+              Konto zostaje POZA nią i jest widoczne zawsze: przy 375 px kończyło się
+              kiedyś 623 px za prawą krawędzią, a aplikacja namawia do założenia konta,
+              żeby nie stracić pracy. */}
+          <div data-testid="pasek-zakladek" className="hidden md:contents">
+            {pozycjeNaglowka(false)}
           </div>
 
           {/* Grupa PRZYPIĘTA: poza przewijaniem, więc widoczna przy każdej szerokości.
@@ -830,12 +867,18 @@ export default function App() {
           ) : (
             <button
               onClick={() => setAuthOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:bg-slate-50"
+              // Poniżej 640 px sam znak konta, 44 × 44 px: z napisem nagłówek nie mieścił się
+              // w jednym rzędzie obok logo i „Menu” (zawijał się na dwa, 101 px). Nazwa
+              // dostępna zostaje, bo napis jest tylko schowany wizualnie.
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:bg-slate-50 max-sm:h-11 max-sm:w-11 max-sm:justify-center max-sm:px-0"
+              title="Zaloguj się"
             >
-              <UserRound size={15} /> Zaloguj się
+              <UserRound size={15} aria-hidden="true" /> <span className="max-sm:sr-only">Zaloguj się</span>
             </button>
           )}
           </div>
+          {/* Poniżej 768 px reszta nagłówka mieści się w jednym przycisku (md:hidden w środku). */}
+          <MenuTelefonu>{pozycjeNaglowka(true)}</MenuTelefonu>
         </div>
       </header>
 
@@ -1230,6 +1273,13 @@ export default function App() {
           onClose={() => setAccountModalTab(null)}
         />
       )}
+
+      <NowyProjektOkno
+        open={nowyProjektOtwarty}
+        onOpenChange={setNowyProjektOtwarty}
+        onConfirm={resetProject}
+        elementCount={elementCount}
+      />
 
       <HelpModal
         open={helpOpen}

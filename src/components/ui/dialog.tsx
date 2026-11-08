@@ -22,15 +22,19 @@ export function DialogContent({
   className,
   children,
   title,
+  wariant = "okno",
   ...props
-}: DialogPrimitive.DialogContentProps & { title: string }) {
+}: DialogPrimitive.DialogContentProps & { title: string; wariant?: "okno" | "arkusz" }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink/80" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2",
-          "rounded-card border border-border bg-white p-5 shadow-lg",
+          wariant === "arkusz"
+            ? // Arkusz z prawej (menu na telefonie): pełna wysokość, pod kciukiem.
+              "fixed inset-y-0 right-0 z-50 flex w-[min(20rem,85vw)] flex-col overflow-y-auto rounded-l-xl border-l border-border bg-surface p-5 shadow-pop " +
+                "data-[state=open]:animate-[pe-arkusz-wjazd_200ms_ease-out] motion-reduce:animate-none"
+            : "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card border border-border bg-white p-5 shadow-lg",
           className
         )}
         {...props}
@@ -39,7 +43,7 @@ export function DialogContent({
           <DialogPrimitive.Title className="font-sans text-base font-semibold">
             {title}
           </DialogPrimitive.Title>
-          <DialogPrimitive.Close className="text-slate-400 hover:text-slate-700">
+          <DialogPrimitive.Close aria-label="Zamknij" className="text-slate-400 hover:text-slate-700">
             <X size={18} />
           </DialogPrimitive.Close>
         </div>

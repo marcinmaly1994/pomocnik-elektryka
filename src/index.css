@@ -155,6 +155,15 @@ body {
       opacity: 1;
     }
   }
+  /* Wyłączany w arkuszu klasą `motion-reduce:animate-none` (patrz DialogContent). */
+  @keyframes pe-arkusz-wjazd {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: none;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .pe-onboarding-enter,
     .pe-onboarding-leave,

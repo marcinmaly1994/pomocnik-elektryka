@@ -110,3 +110,23 @@ export async function odslonNarzedziaRysowania(page: Page): Promise<void> {
   await page.mouse.move(10, okno.height / 2);
   await page.locator('[data-testid="karta-narzedzi"], nav[aria-label="Narzędzia rysowania"]').first().waitFor({ state: "visible" });
 }
+
+/**
+ * Przejście do narzędzia z nagłówka — na telefonie przez menu, na większym ekranie wprost.
+ *
+ * Poniżej 768 px Kalkulatory, Protokoły, Dokumentacja, Pomoc i Nowy projekt są
+ * w arkuszu „Menu” (redesign PR 3). Testy, które jadą na obu szerokościach, wołają
+ * to jedno wejście zamiast sprawdzać szerokość same.
+ */
+export async function przejdzDoNarzedzia(
+  page: Page,
+  nazwa: "Kalkulatory" | "Protokoły pomiarowe" | "Dokumentacja" | "Pomoc" | "Nowy projekt"
+): Promise<void> {
+  const menu = page.getByRole("button", { name: "Menu", exact: true });
+  if (await menu.isVisible()) {
+    await menu.click();
+    await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: nazwa, exact: true }).click();
+  } else {
+    await page.getByRole("banner").getByRole("button", { name: nazwa, exact: true }).click();
+  }
+}

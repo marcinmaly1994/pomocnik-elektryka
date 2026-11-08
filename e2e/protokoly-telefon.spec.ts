@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { przejdzDoNarzedzia } from "./_flow";
 
 /**
  * Protokoły pomiarowe na telefonie.
@@ -26,7 +27,7 @@ async function otworzProtokoly(page: Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.getByRole("button", { name: "Protokoły pomiarowe" }).first().click();
+  await przejdzDoNarzedzia(page, "Protokoły pomiarowe");
   await expect(page.getByTestId("karta-protokolu")).toBeVisible();
 }
 
