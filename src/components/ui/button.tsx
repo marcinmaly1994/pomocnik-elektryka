@@ -73,7 +73,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {loading ? (
           <>
-            <span className="invisible inline-flex items-center gap-1.5">{children}</span>
+            {/* opacity-0, nie invisible: visibility:hidden wypada z nazwy dostępnej przycisku w prawdziwych przeglądarkach, a szerokość i tak ma zostać */}
+            <span className="inline-flex items-center gap-1.5 opacity-0">{children}</span>
             <Loader2 aria-hidden="true" className="absolute h-4 w-4 animate-spin motion-reduce:animate-none" />
           </>
         ) : (

@@ -47,6 +47,11 @@ describe("Button", () => {
     const przycisk = screen.getByRole("button", { name: "Zapisz" });
     expect(przycisk).toBeDisabled();
     expect(przycisk).toHaveAttribute("aria-busy", "true");
+    // jsdom nie liczy visibility, więc nazwy nie sprawdzimy wprost: pilnujemy klasy.
+    // `invisible` wyrzuca etykietę z nazwy dostępnej w przeglądarkach, `opacity-0` nie.
+    const etykieta = screen.getByText("Zapisz");
+    expect(etykieta).not.toHaveClass("invisible");
+    expect(etykieta).toHaveClass("opacity-0");
     fireEvent.click(przycisk);
     expect(klik).not.toHaveBeenCalled();
   });
