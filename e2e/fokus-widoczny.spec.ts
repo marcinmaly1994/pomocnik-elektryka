@@ -12,18 +12,28 @@ test("Tab po kalkulatorze: każdy zatrzymany element ma pierścień w kolorze g�
   await expect(page.getByRole("heading", { name: "Dobór obwodu" })).toBeVisible();
   await page.locator("body").click({ position: { x: 1, y: 1 } });
   const bezPierscienia: string[] = [];
-  for (let i = 0; i < 40; i++) {
+  const zatrzymane: { opis: string; etykieta: string; pole: boolean }[] = [];
+  for (let i = 0; i < 90; i++) {
     await page.keyboard.press("Tab");
     const stan = await page.evaluate(() => {
       const el = document.activeElement as HTMLElement | null;
       if (!el || el === document.body) return null;
       const s = getComputedStyle(el);
+      const etykieta = (el.getAttribute("aria-label") || el.textContent || "").trim();
       const opis = `${el.tagName.toLowerCase()} „${(el.getAttribute("aria-label") || el.textContent || "").trim().slice(0, 30)}”`;
       const obrys = s.outlineStyle !== "none" && parseFloat(s.outlineWidth) >= 2 && s.outlineColor === "rgb(45, 90, 140)";
       const pierscien = /rgb\(45, 90, 140\)/.test(s.boxShadow);
-      return { opis, ok: obrys || pierscien };
+      return { opis, etykieta, pole: el.classList.contains("pe-input"), ok: obrys || pierscien };
     });
-    if (stan && !stan.ok) bezPierscienia.push(stan.opis);
+    if (!stan) continue;
+    zatrzymane.push(stan);
+    if (!stan.ok) bezPierscienia.push(stan.opis);
   }
+  // Same puste przystanki (fokus na body) dawałyby zielony test przy pułapce fokusu albo
+  // zepsutej kolejności Tab — dlatego sprawdzamy też, że Tab dotarł do znanych elementów.
+  expect(zatrzymane.length, "Tab ma się zatrzymać na wielu elementach").toBeGreaterThanOrEqual(15);
+  expect(zatrzymane.some((z) => /^(Szukam przekroju|Mam przekrój|WLZ|Pełny dobór)$/.test(z.etykieta)), "przełącznik trybu").toBe(true);
+  expect(zatrzymane.some((z) => z.etykieta === "Pokaż podpowiedź"), "przycisk „i”").toBe(true);
+  expect(zatrzymane.some((z) => z.pole), "pole .pe-input").toBe(true);
   expect(bezPierscienia).toEqual([]);
 });

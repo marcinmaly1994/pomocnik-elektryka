@@ -29,7 +29,9 @@ export function DropdownMenuItem({ className, ...props }: DropdownMenuPrimitive.
     <DropdownMenuPrimitive.Item
       className={cn(
         "flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm text-ink outline-none",
-        "data-[highlighted]:bg-slate-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
+        // Radix przenosi fokus klawiatury na `data-highlighted`, a samo slate-50 jest za blade
+        // na wskaźnik (WCAG 2.4.11) — pierścień wewnątrz pozycji, żeby menu go nie przycinało.
+        "data-[highlighted]:bg-slate-50 data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-blueprint data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
         className
       )}
       {...props}
