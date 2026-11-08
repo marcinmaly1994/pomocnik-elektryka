@@ -3847,7 +3847,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                     {szufladaZwinieta ? (
                       <span className="truncate">{tytulSzuflady}</span>
                     ) : (
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Zaznaczenie</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Zaznaczenie</span>
                     )}
                     {szufladaZwinieta ? <ChevronUp size={16} aria-label="Rozwiń kartę" /> : <ChevronDown size={16} aria-label="Zwiń kartę" />}
                   </button>
