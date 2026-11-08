@@ -36,9 +36,23 @@ body {
   .pe-input {
     @apply rounded border border-border bg-white px-2.5 py-1.5;
   }
+  /* Fokus z klawiatury i z dotyku ten sam: pełny pierścień w kolorze głównym (≥ 3:1
+     na bieli — wymóg WCAG 2.2 dla wskaźnika fokusu), zamiast 20-procentowej poświaty. */
+  .pe-input:focus-visible,
   .pe-input:focus {
-    outline: 2px solid rgb(45 90 140 / 0.2);
+    outline: 2px solid theme('colors.blueprint.DEFAULT');
+    outline-offset: 1px;
     @apply border-blueprint;
+  }
+  /* Natywny <select> zostaje natywny (na telefonie systemowa lista jest najwygodniejsza),
+     ale wygląda jak reszta pól: własna strzałka zamiast systemowej, która w każdej
+     przeglądarce stoi gdzie indziej i ma inny kształt. */
+  .pe-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%234F5D73' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    padding-right: 2rem;
   }
   .pe-chip {
     display: inline-flex;

@@ -2418,7 +2418,7 @@ export function CalculatorsTab() {
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, cosfi: Number(e.target.value) } : x)))}
                     />
                     <select
-                      className="pe-input text-sm order-2 w-28 sm:order-none sm:w-24"
+                      className="pe-input pe-select order-2 w-28 sm:order-none sm:w-24 text-base md:text-sm"
                       aria-label={`Faza: ${o.nazwa}`}
                       title="Do której fazy podłączony jest ten odbiór — albo „3-fazowy”, jeśli obciąża wszystkie trzy równo."
                       value={o.faza ?? "3f"}

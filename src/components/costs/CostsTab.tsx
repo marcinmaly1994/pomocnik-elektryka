@@ -535,7 +535,7 @@ export function CostsTab() {
                       aria-label="Stawka VAT"
                       value={stawkaVat}
                       onChange={(e) => setStawkaVat(stawkaVatZZapisu(Number(e.target.value)))}
-                      className="rounded border bg-white px-1.5 py-0.5 text-sm text-slate-700"
+                      className="pe-input pe-select py-0.5 text-slate-700 text-base md:text-sm"
                       style={{ borderColor: "#D6DCE3" }}
                     >
                       {STAWKI_VAT.map((s) => (

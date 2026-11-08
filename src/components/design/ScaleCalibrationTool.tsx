@@ -126,7 +126,7 @@ export function ScaleCalibrationTool({
               value={paper}
               onChange={(e) => setPaper(e.target.value as keyof typeof PAPER_WIDTHS_MM)}
               aria-label="Format arkusza"
-              className="pe-input py-1 text-xs"
+              className="pe-input pe-select py-1 text-base md:text-sm"
             >
               {Object.keys(PAPER_WIDTHS_MM).map((k) => (
                 <option key={k} value={k}>
@@ -141,7 +141,7 @@ export function ScaleCalibrationTool({
               value={denominator}
               onChange={(e) => setDenominator(Number(e.target.value))}
               aria-label="Skala rzutu"
-              className="pe-input py-1 text-xs"
+              className="pe-input pe-select py-1 text-base md:text-sm"
             >
               {SCALE_DENOMINATORS.map((d) => (
                 <option key={d} value={d}>

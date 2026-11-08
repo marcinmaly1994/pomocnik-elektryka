@@ -314,7 +314,7 @@ export function ProtocolsTab() {
                 <select
                   value={header.uklad}
                   onChange={(e) => setDocHeader({ uklad: e.target.value as typeof header.uklad })}
-                  className="pe-input w-full text-sm"
+                  className="pe-input pe-select w-full text-base md:text-sm"
                 >
                   {["TN-S", "TN-C", "TN-C-S", "TT", "IT"].map((o) => (
                     <option key={o} value={o}>
@@ -570,7 +570,7 @@ export function ProtocolsTab() {
                                 value={String(r[c.key] ?? c.default ?? "")}
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
                                 aria-label={`${c.label}, pozycja ${i + 1}`}
-                                className="pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm"
+                                className="pe-input pe-select w-full py-1 max-lg:py-1.5 text-base md:text-sm"
                               >
                                 {c.options!.map((o) => (
                                   <option key={o} value={o}>

@@ -2757,7 +2757,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <select
                 value={w.rodzaj}
                 onChange={(e) => zmienPrzewod(w.id, { rodzaj: e.target.value as RodzajPrzewodu })}
-                className="rounded border border-border bg-white px-1.5 py-0.5"
+                className="pe-input pe-select py-0.5 text-base md:text-sm"
               >
                 {(Object.keys(RODZAJE_PRZEWODU) as RodzajPrzewodu[]).map((r) => (
                   <option key={r} value={r}>
@@ -3405,7 +3405,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <select
                 value={formatPdf}
                 onChange={(e) => setFormatPdf(e.target.value as FormatArkusza)}
-                className="h-8 rounded-md border border-border bg-white px-2 text-sm"
+                className="pe-input pe-select h-8 py-0 text-base md:text-sm"
               >
                 <option value="A4">A4 poziomo</option>
                 <option value="A3">A3 poziomo</option>
@@ -4231,7 +4231,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <select
             value={pokoje.pendingRoom?.type ?? "inne"}
             onChange={(e) => pokoje.zmienTyp(e.target.value as RoomType)}
-            className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
+            className="pe-input pe-select mb-1 w-full py-1.5 text-base md:text-sm"
           >
             {(Object.entries(ROOM_TYPE_LABELS) as [RoomType, string][]).map(([value, label]) => (
               <option key={value} value={value}>

@@ -459,7 +459,7 @@ export function PanelTab() {
           <select
             value={panelTryb}
             onChange={(e) => setPanelTryb(e.target.value as "zRzutu" | "reczny")}
-            className="pe-input text-sm"
+            className="pe-input pe-select text-base md:text-sm"
             aria-label="Źródło aparatów"
           >
             <option value="zRzutu">Z rzutu instalacji</option>
@@ -468,14 +468,14 @@ export function PanelTab() {
         </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Zasilanie</div>
-          <select value={supply3f ? "3" : "1"} onChange={(e) => setPanelConfig({ supply3f: e.target.value === "3" })} className="pe-input text-sm">
+          <select value={supply3f ? "3" : "1"} onChange={(e) => setPanelConfig({ supply3f: e.target.value === "3" })} className="pe-input pe-select text-base md:text-sm">
             <option value="3">3-fazowe 400/230 V</option>
             <option value="1">1-fazowe 230 V</option>
           </select>
         </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Rozłącznik główny</div>
-          <select value={mainRating} onChange={(e) => setPanelConfig({ mainRating: Number(e.target.value) })} className="pe-input text-sm">
+          <select value={mainRating} onChange={(e) => setPanelConfig({ mainRating: Number(e.target.value) })} className="pe-input pe-select text-base md:text-sm">
             {MAIN_RATING_OPTIONS.map((a) => (
               <option key={a} value={a}>
                 {a} A
@@ -485,7 +485,7 @@ export function PanelTab() {
         </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Modułów w rzędzie</div>
-          <select value={perRow} onChange={(e) => setPanelConfig({ perRow: Number(e.target.value) })} className="pe-input text-sm">
+          <select value={perRow} onChange={(e) => setPanelConfig({ perRow: Number(e.target.value) })} className="pe-input pe-select text-base md:text-sm">
             {PER_ROW_OPTIONS.map((n) => (
               <option key={n} value={n}>
                 {n}
@@ -746,7 +746,7 @@ export function PanelTab() {
                   setAddForm({ kind: def.key, label: def.defLabel, caption: "" });
                 }}
                 aria-label="Rodzaj aparatu do dodania"
-                className="pe-input col-span-2 text-xs"
+                className="pe-input pe-select col-span-2 text-base md:text-sm"
               >
                 {MANUAL_DEVICE_TYPES.map((t) => (
                   <option key={t.key} value={t.key}>
@@ -758,7 +758,7 @@ export function PanelTab() {
                 value={addForm.label}
                 onChange={(e) => setAddForm((f) => ({ ...f, label: e.target.value }))}
                 aria-label="Prąd znamionowy dodawanego aparatu"
-                className="pe-input text-xs"
+                className="pe-input pe-select text-base md:text-sm"
               >
                 {addDef.ratings.map((r) => (
                   <option key={r} value={r}>
@@ -837,7 +837,7 @@ export function PanelTab() {
             <select
               value={warunki.sposobUlozenia}
               onChange={(e) => setWarunki({ sposobUlozenia: e.target.value as LayingMethod })}
-              className="pe-input text-sm"
+              className="pe-input pe-select text-base md:text-sm"
             >
               {(Object.keys(OPIS_ULOZENIA) as LayingMethod[]).map((m) => (
                 <option key={m} value={m}>
@@ -851,7 +851,7 @@ export function PanelTab() {
             <select
               value={warunki.temperaturaC}
               onChange={(e) => setWarunki({ temperaturaC: Number(e.target.value) })}
-              className="pe-input text-sm"
+              className="pe-input pe-select text-base md:text-sm"
               title="30 °C to warunek odniesienia tablic obciążalności. Wyższa temperatura — trasa przez nieocieplone poddasze albo kotłownię — obniża obciążalność przewodu."
             >
               {[25, 30, 35, 40, 45, 50].map((t) => (
@@ -866,7 +866,7 @@ export function PanelTab() {
             <select
               value={warunki.obwodowWWiazce}
               onChange={(e) => setWarunki({ obwodowWWiazce: Number(e.target.value) })}
-              className="pe-input text-sm"
+              className="pe-input pe-select text-base md:text-sm"
               title="Ile obwodów dzieli wspólną trasę (rurę, korytko). Im więcej, tym niższa obciążalność każdego z nich — rozdzielenie tras podnosi ją z powrotem."
             >
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (

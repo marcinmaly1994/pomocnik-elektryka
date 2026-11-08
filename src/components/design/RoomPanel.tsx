@@ -116,7 +116,7 @@ export function WierszPomieszczenia({
         )}
       </div>
       <select
-        className="pe-input w-full text-xs"
+        className="pe-input pe-select w-full text-base md:text-sm"
         value={r.type ?? "inne"}
         onChange={(e) => setRoomShapeType(r.id, e.target.value as RoomType)}
         title="Typ pomieszczenia"
