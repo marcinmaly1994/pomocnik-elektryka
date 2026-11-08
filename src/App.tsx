@@ -38,6 +38,7 @@ import { PasekUszkodzonegoZapisu } from "@/components/ui/PasekUszkodzonegoZapisu
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { MenuTelefonu } from "@/components/nawigacja/MenuTelefonu";
 import { KompletDialog } from "@/components/ui/KompletDialog";
+import { wrocFokusDoOtwieracza } from "@/lib/wrocFokus";
 import { KopiaZapasowa } from "@/components/ui/KopiaZapasowa";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { UdostepnijLinkiem } from "@/components/ui/UdostepnijLinkiem";
@@ -457,15 +458,7 @@ function NowyProjektOkno({
       {/* Okno nie ma DialogTrigger (jest sterowane z App), więc Radix nie wie, dokąd oddać
           fokus po zamknięciu. Wracamy do przycisku „Nowy projekt”, jeśli jest widoczny
           (pasek od md), a na telefonie — do „Menu”, bo przycisk w arkuszu już nie istnieje. */}
-      <DialogContent
-        title="Zacząć nowy projekt?"
-        onCloseAutoFocus={(e) => {
-          e.preventDefault();
-          const przycisk = document.querySelector<HTMLElement>('[data-otwieracz="nowy-projekt"]');
-          const cel = przycisk && przycisk.offsetParent !== null ? przycisk : document.querySelector<HTMLElement>('button[aria-label="Menu"]');
-          cel?.focus();
-        }}
-      >
+      <DialogContent title="Zacząć nowy projekt?" onCloseAutoFocus={wrocFokusDoOtwieracza("nowy-projekt")}>
         <p className="mb-3 text-sm text-slate-600">
           {elementCount > 0
             ? `Bieżący projekt (${elementCount} ${elementCount === 1 ? "element" : elementCount < 5 ? "elementy" : "elementów"} na planie) zostanie usunięty z tej przeglądarki.`
@@ -661,7 +654,8 @@ export default function App() {
     setAuthOpen(true);
   }, []);
 
-  // Wygaszenie krawędzi paska etapów na telefonie — patrz `useWygaszenieKrawedzi`.
+  // Wygaszenie krawędzi paska etapów, gdy przewija się w bok (od 640 px; niżej cztery
+  // etapy stoją naraz w siatce i maski nie ma) — patrz `useWygaszenieKrawedzi`.
   // Pasek narzędzi w nagłówku już nie przewija (na telefonie to arkusz „Menu”).
   const pasekEtapow = useWygaszenieKrawedzi<HTMLDivElement>();
 
@@ -714,12 +708,14 @@ export default function App() {
           bo w trakcie składania je przełącza (patrz `KompletDialog`). */}
       <button
         onClick={() => setKompletOpen(true)}
+        data-otwieracz="dokumentacja"
         className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
       >
         <FileStack size={15} /> Dokumentacja
       </button>
       <button
         onClick={() => setHelpOpen(true)}
+        data-otwieracz="pomoc"
         className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
       >
         <HelpCircle size={15} /> Pomoc
@@ -744,6 +740,7 @@ export default function App() {
         <button
           type="button"
           onClick={SUPABASE_CONFIGURED ? () => setAuthOpen(true) : undefined}
+          data-otwieracz="konto"
           disabled={!SUPABASE_CONFIGURED}
           className={cn(
             badgeVariants(),
@@ -840,10 +837,12 @@ export default function App() {
             zostają logo, konto i jeden przycisk „Menu” (arkusz z pozostałymi pozycjami), więc
             rząd jest jeden. Etykiety w menu są PEŁNE — skracanie ich zmieniłoby nazwy
             dostępnościowe, a na nich stoi kilkanaście testów e2e. */}
-        {/* Od 640 px w górę obie grupy dostają `display: contents` i podział ZNIKA:
-            przyciski wracają do zawijania pojedynczo, dokładnie jak przed rozdzieleniem.
-            Bez tego grupa konta nie mogła dzielić rzędu z zawiniętymi zakładkami
-            i nagłówek rósł na tablecie ze 150 do 184 px — zmierzone przy 640 px. */}
+        {/* Grupy rozpływają się w rzędzie schodkami: grupa konta dostaje `display: contents`
+            od 640 px (`sm`), pasek zakładek — od 768 px (`md`; niżej jest w ogóle ukryty,
+            a jego pozycje stoją w arkuszu „Menu”). Od `md` przyciski zawijają się więc
+            pojedynczo, dokładnie jak przed rozdzieleniem — inaczej grupa konta nie mogła
+            dzielić rzędu z zawiniętymi zakładkami i nagłówek rósł na tablecie ze 150 do
+            184 px (zmierzone przy 640 px, jeszcze przed menu). */}
         <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:[&>*]:shrink-0">
           {/* Pasek narzędzi od 768 px (`md`) — jak dotąd, z zawijaniem zamiast przewijania.
               Poniżej niego ta grupa jest ukryta, a te same pozycje stoją w arkuszu „Menu”
@@ -859,8 +858,9 @@ export default function App() {
             {pozycjeNaglowka(false)}
           </div>
 
-          {/* Grupa PRZYPIĘTA: poza przewijaniem, więc widoczna przy każdej szerokości.
-              `shrink-0`, bo to ona ma zabrać miejsce paskowi zakładek, a nie odwrotnie. */}
+          {/* Grupa KONTA: poza paskiem zakładek, więc widoczna przy każdej szerokości, także
+              tam, gdzie zakładki są schowane w „Menu”. `shrink-0`, bo konto ma się nie
+              ściskać — w ciasnym rzędzie ustępuje logo (`min-w-0`), nie ono. */}
           <div className="flex shrink-0 items-center gap-1.5 sm:contents">
           {session ? (
             <>
@@ -916,6 +916,7 @@ export default function App() {
           ) : (
             <button
               onClick={() => setAuthOpen(true)}
+              data-otwieracz="konto"
               // Poniżej 640 px sam znak konta, 44 × 44 px: z napisem nagłówek nie mieścił się
               // w jednym rzędzie obok logo i „Menu” (zawijał się na dwa, 101 px). Nazwa
               // dostępna zostaje, bo napis jest tylko schowany wizualnie.
@@ -946,12 +947,14 @@ export default function App() {
               już ciasny (patrz komentarz o 375 px wyżej), a ten rząd ma miejsce. */}
           <KopiaZapasowa onOtworzListe={otworzListeProjektow} />
         </div>
-        {/* Bez widocznego suwaka: to pasek nawigacji, a nie okno z treścią. Że da
-            się przewinąć, widać po wygaszonej krawędzi (`useWygaszenieKrawedzi`) — tak samo
-            jak w paskach kart przeglądarki. */}
+        {/* Poniżej 640 px cztery etapy stoją naraz w siatce 4 kolumn — nic się nie przewija
+            i nie ma czego wygaszać. Od `sm` pasek jest jednym rzędem przewijanym w bok: bez
+            widocznego suwaka (to nawigacja, a nie okno z treścią), a że da się przewinąć,
+            widać po wygaszonej krawędzi (`useWygaszenieKrawedzi`) — jak w paskach kart
+            przeglądarki. */}
         {/* `min-w-0` NIE jest tu ozdobą. Element elastyczny ma domyślnie
             `min-width: auto`, więc nie kurczy się poniżej szerokości swojej treści —
-            i `overflow-x-auto` nigdy się nie włączało: zamiast przewijać kafle
+            i `overflow-x-auto` (od `sm`) nigdy się nie włączało: zamiast przewijać kafle
             wewnątrz, pasek rozpychał całą stronę. Na oknie 375 px dawało to dokument
             o szerokości 655 px, czyli poziome przewijanie CAŁEJ aplikacji. */}
         <div

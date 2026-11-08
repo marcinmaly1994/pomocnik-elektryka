@@ -2,6 +2,7 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import { Alert } from "@/components/ui/alert";
 import { LogIn, Loader2, Send } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { wrocFokusDoOtwieracza } from "@/lib/wrocFokus";
 import { Button } from "@/components/ui/button";
 import { SUPABASE_CONFIGURED, sesjaZOdpowiedzi, supaRecover, supaSignIn, supaSignUp } from "@/lib/supabase";
 import type { Session } from "@/lib/supabase";
@@ -96,7 +97,9 @@ export function AuthModal({ open, komunikat, onClose, onSignedIn }: AuthModalPro
         }
       }}
     >
-      <DialogContent title={TITLES[mode]}>
+      {/* Bez DialogTrigger (otwierane z nagłówka, z chipu w menu i z edytora) — patrz
+          `wrocFokusDoOtwieracza`; wraca do „Zaloguj się”, a na telefonie do „Menu”. */}
+      <DialogContent title={TITLES[mode]} onCloseAutoFocus={wrocFokusDoOtwieracza("konto")}>
         {!SUPABASE_CONFIGURED && (
           <Alert variant="danger" className="mb-3">
             Backend nie jest jeszcze skonfigurowany (uzupełnij <span className="pe-mono">VITE_SUPABASE_URL</span> i{" "}

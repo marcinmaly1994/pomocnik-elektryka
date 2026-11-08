@@ -160,7 +160,8 @@ body {
       opacity: 1;
     }
   }
-  /* Wyłączany w arkuszu klasą `motion-reduce:animate-none` (patrz DialogContent). */
+  /* Włączany w arkuszu tylko pod `motion-safe:` (patrz DialogContent) — przy
+     prefers-reduced-motion arkusz po prostu się pojawia, bez wjazdu. */
   @keyframes pe-arkusz-wjazd {
     from {
       transform: translateX(100%);

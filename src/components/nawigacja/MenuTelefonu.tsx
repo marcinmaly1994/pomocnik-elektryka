@@ -17,7 +17,7 @@ export function MenuTelefonu({ children }: { children: React.ReactNode }) {
   return (
     <Dialog open={otwarte} onOpenChange={setOtwarte}>
       <DialogTrigger asChild>
-        <Button variant="subtle" size="icon" aria-label="Menu" className="h-11 w-11 md:hidden">
+        <Button variant="subtle" size="icon" aria-label="Menu" data-otwieracz="menu" className="h-11 w-11 md:hidden">
           <Menu size={20} aria-hidden="true" />
         </Button>
       </DialogTrigger>

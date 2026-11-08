@@ -103,7 +103,7 @@ for (const [nazwa, okno] of [
   ["Dokumentacja", "Komplet dokumentacji"],
   ["Pomoc", "Pomoc"],
 ] as const) {
-  test(`menu → „${nazwa}” otwiera okno i oddaje mu fokus`, async ({ page }) => {
+  test(`menu → „${nazwa}” otwiera okno i oddaje mu fokus, a po Escape wraca do „Menu”`, async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Menu", exact: true }).click();
     await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: nazwa, exact: true }).click();
@@ -114,6 +114,12 @@ for (const [nazwa, okno] of [
     await expect
       .poll(() => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')))
       .toBe(true);
+
+    // Okno nie ma własnego wyzwalacza (sterowane z App), a pozycja arkusza już nie
+    // istnieje — bez `wrocFokusDoOtwieracza` fokus lądował na <body>.
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeFocused();
   });
 }
 
@@ -125,6 +131,11 @@ test("menu → chip „Zapisano lokalnie” otwiera logowanie", async ({ page })
   await chip.click();
   await expect(page.getByRole("heading", { name: "Zaloguj się" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Menu" })).toHaveCount(0);
+
+  // Chip w arkuszu zniknął razem z nim — fokus wraca do „Menu”, którym arkusz otwarto,
+  // a nie do „Zaloguj się” w nagłówku, choć to ten sam rodzaj otwieracza.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeFocused();
 });
 
 /** Nagłówek w jednym rzędzie także na tablecie w pionie przed progiem 768 px, gdzie jest
@@ -186,4 +197,31 @@ test("„Nowy projekt” z menu: po anulowaniu fokus wraca do przycisku „Menu�
   await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: "Nowy projekt", exact: true }).click();
   await page.getByRole("dialog", { name: "Zacząć nowy projekt?" }).getByRole("button", { name: "Anuluj" }).click();
   await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeFocused();
+});
+
+/** Zamknięcie arkusza stoi w rogu, pod kciukiem — ikona ma 18 px, pole kliknięcia 44 × 44 px. */
+test("„Zamknij” arkusza ma pole kliknięcia co najmniej 44 × 44 px", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const zamknij = (await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: "Zamknij" }).boundingBox())!;
+  expect(zamknij.width).toBeGreaterThanOrEqual(44);
+  expect(zamknij.height).toBeGreaterThanOrEqual(44);
+});
+
+/**
+ * Kto prosi o brak ruchu, dostaje arkusz bez wjazdu. `motion-reduce:animate-none`
+ * przegrywało wagą z `data-[state=open]:animate-[…]`, więc animacja szła mimo to.
+ */
+test("przy prefers-reduced-motion arkusz nie wjeżdża", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const arkusz = page.getByRole("dialog", { name: "Menu" });
+  await expect(arkusz).toBeVisible();
+  expect(await arkusz.evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
+
+  await page.keyboard.press("Escape");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  expect(await arkusz.evaluate((e) => getComputedStyle(e).animationName)).toBe("pe-arkusz-wjazd");
 });
