@@ -2548,8 +2548,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               robiło się przeciąganiem każdego z osobna, na oko. Ikony zamiast podpisów,
               bo sześć przycisków z nazwami nie mieści się w kolumnie 268 px; nazwa
               siedzi w `title` i `aria-label`, więc czytniki i testy ją widzą. */}
-          {/* Dwa JAWNE rzędy, nie jeden zawijany: osiem przycisków po 28 px z odstępami
-              przekracza szerokość kolumny o kilka pikseli, więc zawijanie łamało je
+          {/* Dwa JAWNE rzędy, nie jeden zawijany: osiem przycisków po 32 px z odstępami
+              nie mieści się w kolumnie w jednym rzędzie, więc zawijanie łamało je
               w przypadkowym miejscu (7 + 1) i rozdzielało grupy wbrew ich znaczeniu.
               Wyrównanie i rozkładanie to dwie różne operacje — niech i wyglądają na dwie. */}
           <div className="flex items-center gap-1">

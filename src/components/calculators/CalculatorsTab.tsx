@@ -1,7 +1,7 @@
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
 import { dobierzPrzewodACFalownika, obliczStringPV } from "@/lib/calc/pv";
 import { obliczObwodEV } from "@/lib/calc/evCharger";
@@ -1502,8 +1502,7 @@ export function CalculatorsTab() {
                       warunek doboru zabezpieczenia i cały sens tego kalkulatora, więc ma
                       być widoczny wprost, a nie do odtworzenia z chipów wyżej. */}
                   {sizedBreaker.aparat && (
-                    <div className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2" style={{ background: "#3B8C631A", color: "#2C6B4A" }}>
-                      <Check size={16} className="shrink-0 mt-0.5" />
+                    <Alert variant="success" role="note" className="mt-2 items-start">
                       <div>
                         Warunek doboru spełniony:{" "}
                         <strong className="pe-mono">
@@ -1511,7 +1510,7 @@ export function CalculatorsTab() {
                         </strong>{" "}
                         (Ib ≤ In ≤ Iz) — wyłącznik zadziała, zanim przewód się przegrzeje.
                       </div>
-                    </div>
+                    </Alert>
                   )}
 
                   {sizedBreaker.Ia_A !== null && sizedBreaker.Zs_max_Ohm !== null && (
@@ -3179,7 +3178,9 @@ export function CalculatorsTab() {
                 </Alert>
               )}
               {zCalc.ok !== null && (
-                <Alert variant={!zCalc.ok ? "danger" : zCalc.okZalecany ? "success" : "caution"} className="mt-2 items-start">
+                /* role="status" jawnie: werdykt liczy się od nowa przy każdym wciśnięciu klawisza, a domyślny
+                  `alert` (wariant danger) czytałby czytnik ekranu na nowo po każdej cyfrze. */
+                <Alert variant={!zCalc.ok ? "danger" : zCalc.okZalecany ? "success" : "caution"} role="status" className="mt-2 items-start">
                   <span>
                     {!zCalc.ok
                       ? "Warunek niespełniony — zmierzona Zs przekracza limit normy. Skróć obwód, zwiększ przekrój lub zmień charakterystykę zabezpieczenia."
@@ -3236,7 +3237,9 @@ export function CalculatorsTab() {
                 <div className="pe-mono text-lg text-copper">{formatLiczba(groundingCheck.raMax, 0)} Ω</div>
               </div>
               {groundingCheck.ok !== null && (
-                <Alert variant={groundingCheck.ok ? "success" : "danger"} className="mt-2">
+                /* role="status" jawnie: wynik przelicza się przy każdej zmianie pola, a `alert` (wariant danger)
+                    przerywałby czytnikowi ekranu przy każdym znaku. */
+                <Alert variant={groundingCheck.ok ? "success" : "danger"} role="status" className="mt-2">
                   {groundingCheck.ok
                     ? "Warunek spełniony — RCD zadziała, zanim napięcie dotykowe przekroczy 50 V."
                     : "Warunek niespełniony — zmierzona RA przekracza wartość dopuszczalną. Popraw uziom (dodatkowy uziomik, głębsze wbicie) albo zastosuj RCD o niższym IΔn."}

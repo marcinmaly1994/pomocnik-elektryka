@@ -25,7 +25,7 @@ function pliki(katalog: string, rozszerzenia: string[]): string[] {
 }
 
 describe("usunięte klasy interfejsu", () => {
-  const zrodla = pliki("src", [".tsx", ".css"]).filter((p) => !p.endsWith("klasyUsuniete.test.ts"));
+  const zrodla = pliki("src", [".ts", ".tsx", ".css"]).filter((p) => !p.endsWith("klasyUsuniete.test.ts"));
 
   it("przeszukuje faktyczne źródła (test nie przechodzi na pustym zbiorze)", () => {
     expect(zrodla.length).toBeGreaterThan(50);

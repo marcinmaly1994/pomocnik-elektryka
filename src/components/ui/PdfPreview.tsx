@@ -185,9 +185,9 @@ export function PdfPreview({ open, onOpenChange, title, filename, build, wariant
               <ExternalLink size={14} /> Otwórz w nowej karcie
             </a>
           )}
-          <button onClick={() => onOpenChange(false)} className="rounded-md px-3 py-2 text-xs text-slate-500 hover:text-ink">
+          <Button variant="subtle" size="md" onClick={() => onOpenChange(false)}>
             Zamknij
-          </button>
+          </Button>
           <Button variant="primary" size="md"
             onClick={pobierz}
             disabled={!gotowe}

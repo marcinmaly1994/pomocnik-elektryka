@@ -408,13 +408,12 @@ export function ProtocolsTab() {
           <div className="flex flex-wrap items-center gap-2">
             {/* Podgląd stoi PRZED pobieraniem, bo taka jest kolejność pracy: najpierw
                 sprawdzam, czy protokół się zgadza, dopiero potem odkładam plik. */}
-            <button
+            <Button variant="secondary" size="md"
               onClick={() => setPodglad(true)}
               disabled={blokadaPdf}
-              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs text-slate-600 hover:text-ink disabled:opacity-50"
             >
               <Eye size={14} /> Podgląd
-            </button>
+            </Button>
             <Button variant="primary" size="md"
               onClick={async () => setBlocked(!(await downloadProtocolPdf(active, header, rows, limit)))}
               disabled={blokadaPdf}
