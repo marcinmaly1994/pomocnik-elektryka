@@ -29,6 +29,13 @@ for (const okno of [
     const zPodsumowania = await kwota(await page.getByTestId("podsumowanie-brutto").innerText());
     expect(await kwota(await suma.innerText())).toBeCloseTo(zPodsumowania, 2);
 
+    // Zastrzeżenie z etykiety podsumowania (np. „sam materiał”) musi być też w pasku.
+    const etykieta = await page.getByTestId("podsumowanie-kosztorysu").locator("div.text-sm.font-semibold").first().innerText();
+    const zastrzezenie = etykieta.split(" — ")[1];
+    if (zastrzezenie) await expect(suma).toContainText(zastrzezenie);
+    else await expect(suma).not.toContainText("(");
+    expect(await suma.innerText()).not.toContain("RAZEM");
+
     // W połowie listy suma nadal w kadrze.
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight / 2));
     const r = (await suma.boundingBox())!;

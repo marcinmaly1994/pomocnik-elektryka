@@ -39,10 +39,14 @@ const STAN_WPISANE = "border-solid border-copper font-semibold text-caution";
  * Przy ~30 pozycjach podsumowanie u góry i stopka tabeli są poza kadrem, gdy poprawiasz
  * cenę w połowie listy. Napis „Suma brutto”, nie „RAZEM brutto” — tamten szukają testy.
  */
-function SumaWPasku({ brutto }: { brutto: number }) {
+function SumaWPasku({ brutto, zastrzezenie }: { brutto: number; zastrzezenie?: string }) {
   return (
-    <div data-testid="suma-w-pasku" className="text-right leading-tight" aria-live="polite">
-      <div className="text-xs text-slate-500">Suma brutto</div>
+    // aria-atomic: czytnik ogłasza całość („Suma brutto … zł, sam materiał”), nie samą liczbę.
+    <div data-testid="suma-w-pasku" className="text-right leading-tight" aria-live="polite" aria-atomic="true">
+      <div className="text-xs text-slate-500">
+        Suma brutto
+        {zastrzezenie && <span data-testid="suma-w-pasku-zastrzezenie"> ({zastrzezenie})</span>}
+      </div>
       <div className="pe-mono text-base font-semibold text-ink sm:text-lg">{formatLiczba(brutto, 2)} zł</div>
     </div>
   );
@@ -58,13 +62,14 @@ function useSlotPaska(): HTMLElement | null {
   useEffect(() => {
     const znajdz = () => document.getElementById("pasek-kroku-srodek");
     const teraz = znajdz();
-    if (teraz) {
+    if (teraz?.isConnected) {
       setSlot(teraz);
       return;
     }
+    // Obserwujemy do skutku: węzeł odłączony od DOM (pasek przemontowany) nie jest gniazdem.
     const obserwator = new MutationObserver(() => {
       const el = znajdz();
-      if (el) {
+      if (el?.isConnected) {
         setSlot(el);
         obserwator.disconnect();
       }
@@ -165,6 +170,9 @@ export function CostsTab() {
   const grandTotal = podsumowanie.netto;
   const vat = podsumowanie.vat;
   const gross = podsumowanie.brutto;
+  // Zastrzeżenie bierzemy z tej samej etykiety co podsumowanie i stopka („RAZEM brutto — sam
+  // materiał”): goła suma pod okiem przy poprawianiu cen bywa NIEPRAWDĄ (brak robocizny/cen).
+  const zastrzezenieSumy = podsumowanie.etykietaSumy.split(" — ")[1];
   // Pozycje o zerowej wartości nie wchodzą do sumy, więc „RAZEM" potrafi wyglądać na
   // komplet, choć brakuje w nim np. całej robocizny. Zbieramy je, żeby powiedzieć to
   // wprost — aplikacja jest adresowana głównie do laików, którzy nie wychwycą tego sami.
@@ -242,7 +250,7 @@ export function CostsTab() {
 
   return (
     <div className="space-y-5">
-      {slotSumy && createPortal(<SumaWPasku brutto={gross} />, slotSumy)}
+      {slotSumy && createPortal(<SumaWPasku brutto={gross} zastrzezenie={zastrzezenieSumy} />, slotSumy)}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="pe-display mb-1 text-xl">Kosztorys instalacji elektrycznej</h2>

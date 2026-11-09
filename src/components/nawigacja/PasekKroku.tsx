@@ -64,7 +64,7 @@ export function PasekKroku({
       {/* Gniazdo na treść zakładki (dziś: suma brutto kosztorysu, wstawiana portalem
           z CostsTab). Jeden przyklejony pasek zamiast dwóch — drugi zabrałby kolejne
           ~60 px ekranu telefonu. Pusty div nie zajmuje miejsca poza `flex-1`. */}
-      <div id="pasek-kroku-srodek" className="flex min-w-0 flex-1 justify-end" />
+      <div id="pasek-kroku-srodek" className="flex min-w-0 flex-1 justify-end empty:hidden" />
       {nastepny && (
         <Button
           variant="primary"
