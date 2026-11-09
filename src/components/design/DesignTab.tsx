@@ -3154,7 +3154,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         // `flex-1` + `justify-center`: karta rośnie na całą wolną wysokość, a jej treść
         // stoi w pionowym środku. Sama treść jest ta sama co wcześniej — problemem był
         // wyłącznie pas gołego tła pod spodem, nie to, co na karcie stoi.
-        <div className="pe-card flex flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+        // Na telefonie `py-8` zamiast `py-12`: 16 px nad treścią więcej, żeby oba wejścia
+        // („Wgraj rzut”, „Narysuj dom samodzielnie”) mieściły się na pierwszym ekranie
+        // także przy 360 × 780 (e2e/start-telefon.spec.ts).
+        <div className="pe-card flex flex-1 flex-col items-center justify-center gap-4 px-6 py-8 text-center sm:py-12">
           {/* Nagłówek mówi, co ta aplikacja ROBI, a nie co użytkownik ma kliknąć.
               Poprzednie „Zacznij projektować instalację" było poleceniem wydanym
               komuś, kto jeszcze nie wie, gdzie trafił — a jedyne zdanie tłumaczące

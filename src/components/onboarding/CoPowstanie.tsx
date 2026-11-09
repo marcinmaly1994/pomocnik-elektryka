@@ -24,10 +24,16 @@ const MIEDZ = "#C1793F";
 const BLEKIT = "#2D5A8C";
 
 /** Wspólna ramka miniatury — jeden `viewBox` dla wszystkich czterech, żeby rysunki
- *  były tej samej skali i stały równo w rzędzie. */
+ *  były tej samej skali i stały równo w rzędzie.
+ *
+ *  Na telefonie (poniżej `sm`) miniatura ma 40 px wysokości zamiast 64, w tych samych
+ *  proporcjach 3 : 2. W siatce 2 × 2 to dwa rzędy miniatur, a przy pełnym rozmiarze
+ *  „Narysuj dom samodzielnie” lądowało pod pierwszym ekranem (859 px przy 375 × 812).
+ *  Rysunek ma pokazać kształt rzeczy — tabelka, szyna z aparatami — i przy 40 px nadal
+ *  to robi. Pilnuje tego e2e/start-telefon.spec.ts. */
 function Miniatura({ children }: { children: React.ReactNode }) {
   return (
-    <svg viewBox="0 0 96 64" className="h-16 w-24" aria-hidden="true">
+    <svg viewBox="0 0 96 64" className="mx-auto h-10 w-[60px] sm:h-16 sm:w-24" aria-hidden="true">
       <rect x="0.5" y="0.5" width="95" height="63" rx="5" fill="#fff" stroke="#E6EAEF" />
       {children}
     </svg>
@@ -124,9 +130,11 @@ export function CoPowstanie() {
       >
         {ETAPY.map(({ ikona: Ikona, tytul, opis }, i) => (
           <div key={tytul} className="flex items-start gap-2 sm:shrink-0">
-            <div className="w-24 text-center">
+            {/* Na telefonie kolumna szersza (w-32): podpis „Materiał i robocizna” mieści się
+                w jednej linii, więc rząd siatki nie rośnie o drugą linię opisu. */}
+            <div className="w-32 text-center sm:w-24">
               <Ikona />
-              <div className="mt-1.5 text-xs font-semibold text-ink">{tytul}</div>
+              <div className="mt-1 text-xs font-semibold text-ink sm:mt-1.5">{tytul}</div>
               <div className="text-xs leading-tight text-slate-400">{opis}</div>
             </div>
             {/* Strzałka między etapami — czysto dekoracyjna, jak w pasku etapów. */}
