@@ -2772,16 +2772,24 @@ export function CalculatorsTab() {
                 />
               </div>
               {falownikAC.przekroj_mm2 && falownikAC.aparat && (
-                <WynikGlowny wartosci={[]}>
-                  {/* Dotąd ten blok to podpis i znaczniki, bez jednej liczby: nie dopisujemy wartości,
-                      której kalkulator nie pokazywał, więc podpis zostaje małym tekstem nad znacznikami. */}
-                  <div className="mb-1 text-sm text-slate-500">Przewód i zabezpieczenie AC</div>
+                // Przewód i aparat to wynik tego bloku (dotąd same znaczniki) — wartości główne jak w
+                // „Doborze obwodu”; znacznik z kablem zostaje, bo opisuje typ przewodu, nie przekrój.
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Przekrój żyły", wartosc: String(falownikAC.przekroj_mm2).replace(".", ","), jednostka: "mm²" },
+                    {
+                      etykieta: "Wyłącznik nadprądowy",
+                      wartosc: (
+                        <>
+                          {falownikAC.aparat.charakterystyka}
+                          {falownikAC.aparat.In_A} {falownikAC.aparat.bieguny}
+                        </>
+                      ),
+                    },
+                  ]}
+                >
                   <div className="flex gap-2 flex-wrap">
                     <Badge variant="accent">{falownikAC.kabel}</Badge>
-                    <Badge variant="info">
-                      wyłącznik {falownikAC.aparat.charakterystyka}
-                      {falownikAC.aparat.In_A} {falownikAC.aparat.bieguny}
-                    </Badge>
                   </div>
                 </WynikGlowny>
               )}
@@ -3040,14 +3048,27 @@ export function CalculatorsTab() {
                 />
               </div>
 
-              <WynikGlowny wartosci={[]}>
+              <WynikGlowny
+                wartosci={
+                  sizedFeeder.przekroj_mm2 && sizedFeeder.aparat
+                    ? [
+                        { etykieta: "Przekrój żyły", wartosc: String(sizedFeeder.przekroj_mm2).replace(".", ","), jednostka: "mm²" },
+                        {
+                          etykieta: "Wyłącznik nadprądowy",
+                          wartosc: (
+                            <>
+                              {sizedFeeder.aparat.charakterystyka}
+                              {sizedFeeder.aparat.In_A} {sizedFeeder.aparat.bieguny}
+                            </>
+                          ),
+                        },
+                      ]
+                    : []
+                }
+              >
                 {sizedFeeder.przekroj_mm2 && sizedFeeder.aparat ? (
                   <div className="flex gap-2 flex-wrap">
                     <Badge variant="accent">{sizedFeeder.kabel}</Badge>
-                    <Badge variant="info">
-                      wyłącznik {sizedFeeder.aparat.charakterystyka}
-                      {sizedFeeder.aparat.In_A} {sizedFeeder.aparat.bieguny}
-                    </Badge>
                     <Badge variant="success">obc. dop. {sizedFeeder.Iz_A} A</Badge>
                     {sizedFeeder.spadek_napiecia_pct !== null && (
                       <Badge>
