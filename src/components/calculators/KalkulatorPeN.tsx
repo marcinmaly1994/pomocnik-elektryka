@@ -7,6 +7,7 @@ import type { Izolacja, Material } from "@/lib/norms/conductors";
 import { CalcResultView } from "./CalcResultView";
 import { Card } from "./Card";
 import { Field } from "./Field";
+import { WynikGlowny } from "./WynikGlowny";
 import { IZOLACJA_OPTIONS, MATERIAL_OPTIONS, SZEREG_PELNY_OPTIONS } from "./opcje";
 
 /**
@@ -83,10 +84,12 @@ export function KalkulatorPeN({ label }: { label: string }) {
       </div>
 
       {przewodPE.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Wymagany przekrój przewodu PE</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(przewodPE.wartosci.wymagany_mm2, 1)} mm²</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Wymagany przekrój przewodu PE", wartosc: formatLiczba(przewodPE.wartosci.wymagany_mm2, 1), jednostka: "mm²" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
             <Badge variant="accent">z reguły {formatLiczba(przewodPE.wartosci.zReguly_mm2, 1)} mm²</Badge>
             {przewodPE.wartosci.zWarunkuCieplnego_mm2 !== null && (
               <Badge variant="info">
@@ -95,7 +98,7 @@ export function KalkulatorPeN({ label }: { label: string }) {
             )}
             <Badge variant="success">decyduje: {przewodPE.wartosci.decyduje}</Badge>
           </div>
-        </div>
+        </WynikGlowny>
       )}
       <CalcResultView wynik={przewodPE} />
 
@@ -117,13 +120,15 @@ export function KalkulatorPeN({ label }: { label: string }) {
         />
       </div>
       {przewodN.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Prąd w przewodzie N (obciążenie symetryczne)</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(przewodN.wartosci.IN_A, 1)} A</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Prąd w przewodzie N (obciążenie symetryczne)", wartosc: formatLiczba(przewodN.wartosci.IN_A, 1), jednostka: "A" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
             <Badge variant="accent">zalecany przekrój N {formatLiczba(przewodN.wartosci.zalecany_mm2, 1)} mm²</Badge>
           </div>
-        </div>
+        </WynikGlowny>
       )}
       <CalcResultView wynik={przewodN} />
     </Card>

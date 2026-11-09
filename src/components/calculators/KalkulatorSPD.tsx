@@ -7,6 +7,7 @@ import { useCalculatorsStore } from "@/store/useCalculatorsStore";
 import { CalcResultView } from "./CalcResultView";
 import { Card } from "./Card";
 import { Field } from "./Field";
+import { WynikGlowny } from "./WynikGlowny";
 
 /**
  * Kalkulator koordynacji ograniczników przepięć.
@@ -74,10 +75,12 @@ export function KalkulatorSPD({ label }: { label: string }) {
       </div>
 
       {spd.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Skuteczny poziom ochrony na zaciskach urządzenia</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(spd.wartosci.UpSkuteczne_V, 0)} V</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Skuteczny poziom ochrony na zaciskach urządzenia", wartosc: formatLiczba(spd.wartosci.UpSkuteczne_V, 0), jednostka: "V" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
             <Badge variant="accent">
               przyrost na przewodach {formatLiczba(spd.wartosci.przyrostNaPrzewodach_V, 0)} V
             </Badge>
@@ -86,7 +89,7 @@ export function KalkulatorSPD({ label }: { label: string }) {
               maks. długość przewodów {formatLiczba(spd.wartosci.maksDlugosc_m, 2)} m
             </Badge>
           </div>
-        </div>
+        </WynikGlowny>
       )}
       <CalcResultView wynik={spd} />
     </Card>
