@@ -44,6 +44,13 @@ describe("PasekKroku", () => {
     expect(b.textContent).toBe("Cofnij: Instalacja");
   });
 
+  it("ma gniazdo na środku dla treści zakładki (np. sumy kosztorysu)", () => {
+    const { container } = render(<PasekKroku poprzedni={{ id: "schemat", tytul: "Schemat" }} onPick={vi.fn()} />);
+    const slot = container.querySelector("#pasek-kroku-srodek");
+    expect(slot).not.toBeNull();
+    expect(slot!.parentElement!.tagName).toBe("NAV");
+  });
+
   it("bez kroków nie renderuje niczego", () => {
     const { container } = render(<PasekKroku onPick={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();

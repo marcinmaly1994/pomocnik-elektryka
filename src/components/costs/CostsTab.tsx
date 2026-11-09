@@ -1,5 +1,6 @@
 import { Alert } from "@/components/ui/alert";
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
 import { formatLiczba } from "@/lib/liczby";
 import { AlertTriangle, ArrowLeft, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
@@ -33,6 +34,47 @@ const STAN_WPISANE = "border-solid border-copper font-semibold text-caution";
  * trzymane w store (`prices`, `costOverrides`, `qtyOverrides`), więc przetrwają
  * przełączanie zakładek i zapis projektu.
  */
+/**
+ * Suma brutto w przyklejonym pasku kroku (gniazdo `#pasek-kroku-srodek` z PasekKroku).
+ * Przy ~30 pozycjach podsumowanie u góry i stopka tabeli są poza kadrem, gdy poprawiasz
+ * cenę w połowie listy. Napis „Suma brutto”, nie „RAZEM brutto” — tamten szukają testy.
+ */
+function SumaWPasku({ brutto }: { brutto: number }) {
+  return (
+    <div data-testid="suma-w-pasku" className="text-right leading-tight" aria-live="polite">
+      <div className="text-xs text-slate-500">Suma brutto</div>
+      <div className="pe-mono text-base font-semibold text-ink sm:text-lg">{formatLiczba(brutto, 2)} zł</div>
+    </div>
+  );
+}
+
+/**
+ * Gniazdo z paska kroku. Pasek renderuje się w App PO zakładce, a sama zakładka bywa
+ * ładowana leniwie, więc przy pierwszym efekcie gniazda może jeszcze nie być. Zamiast
+ * liczyć na kolejność, czekamy na nie obserwatorem DOM (kończy się po znalezieniu).
+ */
+function useSlotPaska(): HTMLElement | null {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const znajdz = () => document.getElementById("pasek-kroku-srodek");
+    const teraz = znajdz();
+    if (teraz) {
+      setSlot(teraz);
+      return;
+    }
+    const obserwator = new MutationObserver(() => {
+      const el = znajdz();
+      if (el) {
+        setSlot(el);
+        obserwator.disconnect();
+      }
+    });
+    obserwator.observe(document.body, { childList: true, subtree: true });
+    return () => obserwator.disconnect();
+  }, []);
+  return slot;
+}
+
 export function CostsTab() {
   const elements = useProjectStore((s) => s.draft.elements);
   const roomShapes = useProjectStore((s) => s.draft.roomShapes);
@@ -59,6 +101,7 @@ export function CostsTab() {
   // w Rozdzielnicy).
   const docHeader = resolveDocHeader(rawDocHeader, projectName);
   const [podgladPdf, setPodgladPdf] = useState(false);
+  const slotSumy = useSlotPaska();
   // Pusty kosztorys odsyła wprost do Instalacji. Hook wolno wywołać w kilku
   // komponentach naraz — każdy dostaje własną subskrypcję i ten sam odczyt z adresu
   // (patrz komentarz przy `useRoute`).
@@ -199,6 +242,7 @@ export function CostsTab() {
 
   return (
     <div className="space-y-5">
+      {slotSumy && createPortal(<SumaWPasku brutto={gross} />, slotSumy)}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="pe-display mb-1 text-xl">Kosztorys instalacji elektrycznej</h2>
@@ -250,7 +294,7 @@ export function CostsTab() {
         >
           <div>
             <div className="text-sm font-semibold text-ink">{podsumowanie.etykietaSumy}</div>
-            <div className="pe-display text-2xl font-bold text-copper">{formatLiczba(gross, 2)} zł</div>
+            <div data-testid="podsumowanie-brutto" className="pe-display text-2xl font-bold text-copper">{formatLiczba(gross, 2)} zł</div>
           </div>
           <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <div>
