@@ -592,7 +592,8 @@ export function CostsTab() {
                 <td className="p-3 pb-1 text-sm text-slate-500" colSpan={3}>
                   Razem netto
                 </td>
-                <td className="pe-liczba p-3 pb-1 text-sm">{formatLiczba(grandTotal, 2)} zł</td>
+                {/* Stopka: na telefonie wiersz to flex z grow, więc kwota musi być z prawej także poniżej md (jak „RAZEM brutto”) — w ciele `pe-liczba` wyrównuje dopiero od md. */}
+                <td className="pe-liczba p-3 pb-1 text-right text-sm">{formatLiczba(grandTotal, 2)} zł</td>
               </tr>
               <tr className="flex items-baseline justify-between md:table-row [&>td]:grow md:[&>td]:grow-0">
                 <td className="px-3 py-1 text-sm text-slate-500" colSpan={3}>
@@ -615,7 +616,7 @@ export function CostsTab() {
                     </select>
                   </label>
                 </td>
-                <td className="pe-liczba px-3 py-1 text-sm text-slate-500">{formatLiczba(vat, 2)} zł</td>
+                <td className="pe-liczba px-3 py-1 text-right text-sm text-slate-500">{formatLiczba(vat, 2)} zł</td>
               </tr>
               {/* Ostrzeżenie stoi NAD sumą, nie pod nią. Pod spodem gasło: najpierw padała
                   wielka miedziana liczba z podpisem „RAZEM", a dopiero potem, drobnym
