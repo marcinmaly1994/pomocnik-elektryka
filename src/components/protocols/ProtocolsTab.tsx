@@ -532,9 +532,9 @@ export function ProtocolsTab() {
                 22 px. W karcie pomiary stoją po trzy w rzędzie (telefon) albo po sześć
                 (od `sm`), pola tekstowe na całą szerokość albo po dwa, każde z podpisem. */}
             <div className="pe-scroll lg:overflow-x-auto">
-              <table className="block w-full text-sm lg:table lg:min-w-[620px]">
+              <table className="pe-table pe-table-od-lg block w-full text-sm lg:table lg:min-w-[620px]">
                 <thead className="hidden lg:table-header-group">
-                  <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
+                  <tr className="text-left text-xs">
                     <th className="w-8 py-2 pr-2">Lp.</th>
                     {def.columns!.map((c) => (
                       <th key={c.key} className="py-2 pr-2">
@@ -551,8 +551,7 @@ export function ProtocolsTab() {
                     return (
                       <tr
                         key={i}
-                        className="grid grid-cols-6 gap-x-2 gap-y-2 border-b py-3 last:border-0 sm:grid-cols-12 lg:table-row lg:py-0"
-                        style={{ borderColor: "#EEF1F4" }}
+                        className="grid grid-cols-6 gap-x-2 gap-y-2 border-b border-border py-3 last:border-0 sm:grid-cols-12 lg:table-row lg:py-0"
                         data-testid="wiersz-pomiaru"
                       >
                         <td className="col-span-6 text-xs text-slate-400 sm:col-span-12 lg:py-1.5 lg:pr-2">

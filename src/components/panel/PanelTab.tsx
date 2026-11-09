@@ -926,32 +926,32 @@ export function PanelTab() {
           („8,70 / A"), więc wiersze miały po trzy–cztery linie.
         */}
         <div className="pe-scroll md:overflow-x-auto">
-          <table className="block w-full text-left text-xs md:table">
+          <table className="pe-table pe-table-od-md block w-full text-left text-xs md:table">
             <thead className="hidden md:table-header-group">
-              <tr className="text-slate-400">
-                <th className="py-1 pr-3 font-medium">Obwód</th>
-                <th className="py-1 pr-3 font-medium">
+              <tr>
+                <th className="py-1 pr-3">Obwód</th>
+                <th className="py-1 pr-3">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.faza}>Faza</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.Ib}>Ib</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.przekroj}>Przekrój</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 font-medium">
+                <th className="py-1 pr-3">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.aparat}>Aparat</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.Iz}>Iz</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.dU}>ΔU</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.Zs}>Zs max</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 font-medium">
+                <th className="py-1 pr-3">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.rcd}>RCD</Podpowiedz>
                 </th>
               </tr>
@@ -977,10 +977,9 @@ export function PanelTab() {
                     key={s.id}
                     // Zabarwienie wiersza z tokenów tła komunikatów (nieprzezroczyste),
                     // nie z hex z kanałem alfa — patrz klasyUsuniete.test.ts.
-                    className={`grid grid-cols-4 gap-x-2 gap-y-2 border-t px-1 py-2.5 md:table-row md:p-0 ${
+                    className={`grid grid-cols-4 gap-x-2 gap-y-2 border-t border-border px-1 py-2.5 md:table-row md:p-0 ${
                       bad ? "bg-danger-tlo" : warn ? "bg-caution-tlo" : ""
                     }`}
-                    style={{ borderColor: "#EEF1F4" }}
                   >
                     <td className="col-span-4 text-sm font-medium md:py-1.5 md:pr-3 md:text-xs md:font-normal">{s.nazwa}</td>
                     <td className={KOMORKA_DOBORU} data-label="Faza">
@@ -991,22 +990,22 @@ export function PanelTab() {
                         {s.liczba_faz === "3" ? "3F" : s.faza}
                       </span>
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Ib">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="Ib">
                       {formatLiczba(s.Ib_A, 2)} A
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Przekrój">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="Przekrój">
                       {s.przekroj_mm2 ? `${String(s.przekroj_mm2).replace(".", ",")} mm²` : "—"}
                     </td>
                     <td className={`${KOMORKA_DOBORU} pe-mono`} data-label="Aparat">
                       {s.aparat ? `${s.aparat.charakterystyka}${s.aparat.In_A} ${s.aparat.bieguny}` : "—"}
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Iz">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="Iz">
                       {formatLiczba(s.Iz_A, 1)} A
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="ΔU">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="ΔU">
                       {s.spadek_napiecia_pct === null ? "—" : `${zPrzecinkiem(s.spadek_napiecia_pct)}%`}
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Zs max">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="Zs max">
                       {zPrzecinkiem(s.Zs_max_Ohm)} Ω
                     </td>
                     <td className={`${KOMORKA_DOBORU} pe-mono`} data-label="RCD">

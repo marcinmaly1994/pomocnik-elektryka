@@ -444,9 +444,9 @@ export function CostsTab() {
             <span aria-hidden="true" className="inline-block h-3 w-5 rounded-sm border border-solid border-copper" />
             <span>Pełna miedziana — wpisana ręcznie.</span>
           </p>
-          <table className="block w-full text-sm md:table">
+          <table className="pe-table pe-table-od-md block w-full text-sm md:table">
             <thead className="hidden md:table-header-group">
-              <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
+              <tr className="text-left text-xs">
                 <th className="p-3">Pozycja</th>
                 <th className="w-36 p-3">Ilość</th>
                 <th className="w-32 p-3">Cena jedn.</th>
@@ -458,7 +458,7 @@ export function CostsTab() {
                   liście trzydziestu wierszy nie było widać, co kosztuje najwięcej. */}
               {pogrupujWiersze(rows).map((g) => (
                 <Fragment key={g.nazwa}>
-                <tr className="block border-b md:table-row" style={{ borderColor: "#EEF1F4", background: "#F7F9FB" }} data-testid="grupa-kosztorysu">
+                <tr className="block border-b border-border bg-surface-2 md:table-row" data-testid="grupa-kosztorysu">
                   <td colSpan={4} className="block px-3 py-2 md:table-cell">
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-sm font-semibold text-ink">{g.nazwa}</span>
@@ -477,10 +477,9 @@ export function CostsTab() {
                   // 13 z 32 pól przy 375 px, wszystkie przy 320 px), a kolumna ceny miała
                   // zapas kilkudziesięciu pikseli. Pole wartości dzieli miejsce z krzyżykiem
                   // cofania, a „zł" stoi w podpisie pola, nie obok liczby.
-                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-1.5 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
+                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-1.5 gap-y-1.5 border-b border-border p-3 last:border-0 md:table-row md:p-0 ${
                     bezCeny(r) ? "bg-[#FDF6EF]" : "md:hover:bg-slate-50"
                   }`}
-                  style={{ borderColor: "#EEF1F4" }}
                   data-bez-ceny={bezCeny(r) || undefined}
                 >
                   <td className="col-span-3 font-medium md:p-3 md:font-normal">
@@ -593,7 +592,7 @@ export function CostsTab() {
                 <td className="p-3 pb-1 text-sm text-slate-500" colSpan={3}>
                   Razem netto
                 </td>
-                <td className="pe-mono p-3 pb-1 text-right text-sm">{formatLiczba(grandTotal, 2)} zł</td>
+                <td className="pe-liczba p-3 pb-1 text-sm">{formatLiczba(grandTotal, 2)} zł</td>
               </tr>
               <tr className="flex items-baseline justify-between md:table-row [&>td]:grow md:[&>td]:grow-0">
                 <td className="px-3 py-1 text-sm text-slate-500" colSpan={3}>
@@ -616,7 +615,7 @@ export function CostsTab() {
                     </select>
                   </label>
                 </td>
-                <td className="pe-mono px-3 py-1 text-right text-sm text-slate-500">{formatLiczba(vat, 2)} zł</td>
+                <td className="pe-liczba px-3 py-1 text-sm text-slate-500">{formatLiczba(vat, 2)} zł</td>
               </tr>
               {/* Ostrzeżenie stoi NAD sumą, nie pod nią. Pod spodem gasło: najpierw padała
                   wielka miedziana liczba z podpisem „RAZEM", a dopiero potem, drobnym

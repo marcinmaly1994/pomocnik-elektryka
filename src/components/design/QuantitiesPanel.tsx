@@ -69,14 +69,14 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
         <div className="grid gap-5 px-3.5 pb-3.5 sm:grid-cols-2">
           <div>
             <h4 className="mb-1.5 text-xs font-semibold text-slate-600">Wg rodzaju</h4>
-            <table className="w-full text-xs">
+            <table className="pe-table w-full text-xs">
               <tbody>
                 {wiersze.map((w) => (
-                  <tr key={w.klucz} className="border-b last:border-0" style={{ borderColor: "#EEF1F4" }}>
+                  <tr key={w.klucz}>
                     <td className="py-1 pr-2 text-slate-600">{w.label}</td>
                     {/* Liczba punktów w nawiasie TYLKO gdy różni się od sztuk — inaczej
                         „3 szt. (3 pkt.)" przy każdym wierszu to sam szum. */}
-                    <td className="pe-mono w-20 py-1 text-right tabular-nums text-ink">
+                    <td className="pe-liczba w-20 py-1 text-ink">
                       {w.sztuk} szt.
                       {w.sztuk !== w.punktow && <span className="text-slate-400"> ({w.punktow} pkt.)</span>}
                     </td>
@@ -88,12 +88,12 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
 
           <div>
             <h4 className="mb-1.5 text-xs font-semibold text-slate-600">Wg pomieszczenia</h4>
-            <table className="w-full text-xs">
+            <table className="pe-table w-full text-xs">
               <tbody>
                 {pomieszczenia.map((p) => (
-                  <tr key={p.room} className="border-b last:border-0" style={{ borderColor: "#EEF1F4" }}>
+                  <tr key={p.room}>
                     <td className="py-1 pr-2 text-slate-600">{p.room}</td>
-                    <td className="pe-mono w-16 py-1 text-right tabular-nums text-ink">{p.sztuk} szt.</td>
+                    <td className="pe-liczba w-16 py-1 text-ink">{p.sztuk} szt.</td>
                   </tr>
                 ))}
               </tbody>
