@@ -2,7 +2,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { WynikGlowny } from "./WynikGlowny";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
 import { dobierzPrzewodACFalownika, obliczStringPV } from "@/lib/calc/pv";
 import { obliczObwodEV } from "@/lib/calc/evCharger";
@@ -1316,7 +1316,7 @@ export function CalculatorsTab() {
                         </div>
                       </>
                     ) : (
-                      <Alert variant="caution" role="note">
+                      <Alert variant="danger" role="note">
                         nie udało się dobrać — zobacz komunikat niżej
                       </Alert>
                     )}
@@ -1509,7 +1509,7 @@ export function CalculatorsTab() {
                         </div>
                       </>
                     ) : (
-                      <Alert variant="caution" role="note">
+                      <Alert variant="danger" role="note" title="Dobrany wyłącznik nadprądowy">
                         nie udało się dobrać — zobacz komunikat niżej
                       </Alert>
                     )}
@@ -1532,6 +1532,7 @@ export function CalculatorsTab() {
 
                   {sizedBreaker.Ia_A !== null && sizedBreaker.Zs_max_Ohm !== null && (
                     <WynikGlowny
+                      drugorzedny
                       wartosci={[
                         { etykieta: "Prąd zadziałania Ia", wartosc: formatLiczba(sizedBreaker.Ia_A, 0), jednostka: "A" },
                         { etykieta: "Wymagana Zs max", wartosc: formatLiczba(sizedBreaker.Zs_max_Ohm, 2), jednostka: "Ω", ton: "akcent" },
@@ -2794,9 +2795,9 @@ export function CalculatorsTab() {
                 </WynikGlowny>
               )}
               {!falownikAC.przekroj_mm2 && (
-                <div className="mt-2 flex items-center gap-1 text-sm" style={{ color: "#A2352C" }}>
-                  <AlertTriangle size={14} /> nie udało się dobrać przewodu AC
-                </div>
+                <Alert variant="danger" role="note" className="mt-2">
+                  nie udało się dobrać przewodu AC
+                </Alert>
               )}
             </Card>
           )}
@@ -2866,7 +2867,7 @@ export function CalculatorsTab() {
                       </Badge>
                     </div>
                   ) : (
-                    <Alert variant="caution" role="note">
+                    <Alert variant="danger" role="note">
                       nie udało się dobrać — zobacz ostrzeżenia niżej
                     </Alert>
                   )}
@@ -2955,7 +2956,7 @@ export function CalculatorsTab() {
               <WynikGlowny
                 wartosci={[
                   { etykieta: "Moc zainstalowana", wartosc: formatLiczba(balance.sumPower, 0), jednostka: "W" },
-                  { etykieta: "Moc zapotrzebowana", wartosc: formatLiczba(balance.demandPower, 0), jednostka: "W", ton: "akcent" },
+                  { etykieta: "Moc zapotrzebowana", wartosc: formatLiczba(balance.demandPower, 0), jednostka: "W" },
                   { etykieta: "Prąd — 1-faz.", wartosc: formatLiczba(balance.demandCurrent1, 1), jednostka: "A" },
                   { etykieta: "Prąd — 3-faz.", wartosc: formatLiczba(balance.demandCurrent3, 1), jednostka: "A" },
                 ]}
@@ -3077,7 +3078,7 @@ export function CalculatorsTab() {
                     )}
                   </div>
                 ) : (
-                  <Alert variant="caution" role="note">
+                  <Alert variant="danger" role="note">
                     nie udało się dobrać — zobacz komunikat niżej
                   </Alert>
                 )}
@@ -3358,7 +3359,7 @@ export function CalculatorsTab() {
               <WynikGlowny
                 wartosci={[
                   { etykieta: "Wymagany strumień całkowity", wartosc: formatLiczba(lightCalc.requiredLumens, 0), jednostka: "lm" },
-                  { etykieta: "Liczba opraw", wartosc: Math.ceil(lightCalc.fixtureCount) || 0, jednostka: "szt.", ton: "akcent" },
+                  { etykieta: "Liczba opraw", wartosc: Math.ceil(lightCalc.fixtureCount) || 0, jednostka: "szt." },
                 ]}
               />
               <div className="text-xs text-slate-500 mt-2">

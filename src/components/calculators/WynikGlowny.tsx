@@ -19,7 +19,10 @@ export type WartoscWyniku = {
   wartosc: React.ReactNode;
   /** Jednostka mniejszym krojem obok wartości („mm²”, „A”, „Ω”). Pomiń, gdy jest częścią `wartosc`. */
   jednostka?: string;
-  /** `akcent` = miedź (limity, wartości graniczne), domyślnie kolor główny. */
+  /**
+   * `akcent` (miedź) TYLKO dla limitu albo progu — wartości, które trzeba z czymś porównać
+   * (Zs max, RA max, pętla). Zwykły wynik (moc, liczba opraw) zostaje w kolorze głównym.
+   */
   ton?: "glowny" | "akcent";
 };
 
@@ -28,18 +31,21 @@ export function WynikGlowny({
   children,
   className,
   "data-testid": testId,
+  drugorzedny,
 }: {
   wartosci: WartoscWyniku[];
   /** Znaczniki, komunikat — pod wartościami. */
   children?: React.ReactNode;
   className?: string;
   "data-testid"?: string;
+  /** Drugi blok pod głównym: wartości 18 px niezależnie od liczby. */
+  drugorzedny?: boolean;
 }) {
   // Rozmiar od liczby wartości: jedna albo dwie to „bohater” ekranu, przy trzech-czterech
   // równorzędnych nie ma jednej najważniejszej, a 30 px nie mieści się w kolumnach telefonu.
   const duze = wartosci.length <= 2;
   return (
-    <div data-testid={testId} className={cn("pe-result mt-2 p-4", className)}>
+    <div data-testid={testId} data-drugorzedny={drugorzedny ? "" : undefined} className={cn("pe-result mt-2 p-4", className)}>
       {wartosci.length > 0 && (
         <dl
           className={cn(
@@ -55,7 +61,8 @@ export function WynikGlowny({
               <dd
                 className={cn(
                   "pe-mono mt-0.5 font-semibold leading-tight [overflow-wrap:anywhere]",
-                  duze ? "text-2xl sm:text-3xl" : "text-xl",
+                  // Drugi blok pod głównym nie może z nim konkurować, więc zawsze 18 px.
+                  drugorzedny ? "text-lg" : duze ? "text-2xl sm:text-3xl" : "text-xl",
                   ton === "akcent" ? "text-copper" : "text-blueprint"
                 )}
               >

@@ -1,6 +1,6 @@
 import {
   Activity, Anchor, Battery, Cable, Cog, Earth, Gauge, Lightbulb, PlugZap, RotateCw,
-  Ruler, Scale, Shield, ShieldAlert, ShieldCheck, Split, Sun, Waves, Zap, type LucideIcon,
+  Ruler, Scale, Shield, ShieldCheck, Split, Sun, ToggleRight, Waves, Zap, type LucideIcon,
 } from "lucide-react";
 import type { CalcId } from "@/store/useCalculatorsStore";
 
@@ -22,7 +22,7 @@ export const IKONY_KALKULATOROW: Record<CalcId, LucideIcon> = {
   petla: RotateCw,
   uziemienieTT: Earth,
   uziom: Anchor,
-  rcd: ShieldAlert,
+  rcd: ToggleRight,
   peN: Split,
   bilansFaz: Scale,
   kompensacja: Battery,

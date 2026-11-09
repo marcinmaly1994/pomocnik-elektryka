@@ -24,7 +24,9 @@ for (const szer of [375, 1366]) {
       await expect(page.getByRole("heading", { name: "Kalkulatory elektryczne" })).toBeVisible();
       // Wynik bywa liczony chwilę po wejściu — bez czekania późny blok zostałby uznany za „brak wyniku”.
       await expect(page.locator(".pe-result").first()).toBeVisible({ timeout: 3000 }).catch(() => {});
-      const bloki = page.locator(".pe-result");
+      // Blok oznaczony `data-drugorzedny` to drugi blok pod głównym (18 px celowo, żeby nie
+      // konkurował z wynikiem) — reguła ≥ 20/24 px zostaje ścisła dla wyników głównych.
+      const bloki = page.locator(".pe-result:not([data-drugorzedny])");
       const ile = await bloki.count();
       if (ile === 0) {
         bezWyniku.push(id);

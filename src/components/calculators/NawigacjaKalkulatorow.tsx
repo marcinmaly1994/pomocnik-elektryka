@@ -109,8 +109,8 @@ function WierszListy({
       aria-current={aktywny ? "page" : undefined}
       className={`w-full rounded-md px-2.5 py-1 text-left ${aktywny ? "bg-blueprint-tlo shadow-[inset_2px_0_0_#2D5A8C]" : "hover:bg-white"}`}
     >
-      <div className={`flex items-center gap-2 text-sm leading-5 ${aktywny ? "font-medium text-blueprint" : "font-normal text-ink"}`}>
-        <Ikona size={16} aria-hidden="true" className={`shrink-0 ${aktywny ? "text-blueprint" : "text-slate-400"}`} />
+      <div className={`flex items-start gap-2 text-sm leading-5 ${aktywny ? "font-medium text-blueprint" : "font-normal text-ink"}`}>
+        <Ikona size={16} aria-hidden="true" className={`mt-0.5 shrink-0 ${aktywny ? "text-blueprint" : "text-slate-400"}`} />
         <span className="min-w-0">{pozycja.label}</span>
       </div>
       {/* Opis wyrównany do tekstu nazwy (16 px ikony + 8 px odstępu), nie do ikony. */}

@@ -65,4 +65,13 @@ describe("WynikGlowny", () => {
     const { container } = render(<WynikGlowny wartosci={[]}>x</WynikGlowny>);
     expect(container.querySelector("dl")).toBeNull();
   });
+
+  it("drugorzedny: wartości 18 px niezależnie od liczby i znacznik na korzeniu", () => {
+    const { container } = render(
+      <WynikGlowny drugorzedny wartosci={[{ etykieta: "a", wartosc: "1" }]} />
+    );
+    expect(container.querySelector("dd")!.className).toMatch(/text-lg/);
+    expect(container.querySelector("dd")!.className).not.toMatch(/text-2xl/);
+    expect(container.firstElementChild).toHaveAttribute("data-drugorzedny");
+  });
 });
