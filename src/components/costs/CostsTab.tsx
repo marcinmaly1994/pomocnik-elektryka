@@ -16,6 +16,12 @@ import { resolveDocHeader } from "@/lib/docHeader";
 import { Button } from "@/components/ui/button";
 import { useRoute } from "@/hooks/useRoute";
 
+// Ramka jest jedynym nośnikiem stanu pola (liczone / wpisane), więc musi spełniać
+// WCAG 1.4.11 (3:1): slate-400 (#5B6A80) to ~5,4:1 na bieli, a border-border-strong
+// (#C7D0D9) tylko ~1,6:1. `opacity-100` wyłącza przyciemnianie podpowiedzi w Firefoksie.
+const STAN_LICZONE = "border-dashed border-slate-400 placeholder:text-ink placeholder:opacity-100";
+const STAN_WPISANE = "border-solid border-copper font-semibold text-caution";
+
 /**
  * Kosztorys instalacji elektrycznej — ilości materiałów i robocizny szacowane
  * z elementów na planie i obwodów (ta sama heurystyka co Rozdzielnica/Schemat,
@@ -380,6 +386,12 @@ export function CostsTab() {
               drzewie: druga kopia kontrolek dałaby dwa pola o tej samej nazwie.
               Tabela miała na telefonie 553 px w okienku 325 px — kolumna „Wartość"
               była całkiem poza ekranem, a „Cena jedn." przycięta. */}
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-border px-3 py-2 text-xs text-slate-500">
+            <span aria-hidden="true" className="inline-block h-3 w-5 rounded-sm border border-dashed border-slate-400" />
+            <span>Przerywana ramka — wartość policzona przez aplikację (wpisz, żeby ją zmienić).</span>
+            <span aria-hidden="true" className="inline-block h-3 w-5 rounded-sm border border-solid border-copper" />
+            <span>Pełna miedziana — wpisana ręcznie.</span>
+          </p>
           <table className="block w-full text-sm md:table">
             <thead className="hidden md:table-header-group">
               <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
@@ -444,8 +456,8 @@ export function CostsTab() {
                         onChange={(e) => setQtyOverride(r.key, e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0))}
                         placeholder={String(r.qty)}
                         aria-label={`Ilość: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-20 md:px-2.5"
-                        style={r.qtyOverridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
+                        data-stan={r.qtyOverridden ? "wpisane" : "liczone"}
+                        className={`pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-20 md:px-2.5 ${r.qtyOverridden ? STAN_WPISANE : STAN_LICZONE}`}
                       />
                       <button
                         onClick={() => setQtyOverride(r.key, null)}
@@ -502,8 +514,8 @@ export function CostsTab() {
                         // czego kontrolka nie przyjmie.
                         placeholder={formatLiczba(r.value, 2)}
                         aria-label={`Wartość pozycji: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1 text-right text-sm md:w-28 md:px-2.5"
-                        style={r.overridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
+                        data-stan={r.overridden ? "wpisane" : "liczone"}
+                        className={`pe-input pe-mono w-full min-w-0 px-1 text-right text-sm md:w-28 md:px-2.5 ${r.overridden ? STAN_WPISANE : STAN_LICZONE}`}
                         step="1"
                       />
                       <span className="hidden text-xs text-slate-400 md:inline">zł</span>
