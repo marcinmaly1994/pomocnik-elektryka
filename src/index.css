@@ -216,6 +216,30 @@ body {
       transform: none;
     }
   }
+  /* Okno wchodzi z -50%/-50%, bo `DialogContent` centruje je translate'em — animacja
+     transform bez tego przesunięcia rzuciłaby okno w róg. Włączane tylko pod `motion-safe:`. */
+  @keyframes pe-okno-wejscie {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -48%) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  @keyframes pe-przenikanie {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  /* Szkielet wczytywania; puls dokłada TabLoading pod `motion-safe:`. */
+  .pe-szkielet {
+    @apply bg-paper;
+  }
   @media (prefers-reduced-motion: reduce) {
     .pe-onboarding-enter,
     .pe-onboarding-leave,

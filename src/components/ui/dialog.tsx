@@ -27,7 +27,7 @@ export function DialogContent({
 }: DialogPrimitive.DialogContentProps & { title: string; wariant?: "okno" | "arkusz" }) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink/80" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink/80 motion-safe:data-[state=open]:animate-[pe-przenikanie_200ms_ease-out]" />
       <DialogPrimitive.Content
         className={cn(
           wariant === "arkusz"
@@ -37,7 +37,7 @@ export function DialogContent({
                 // `data-[state=open]:` dokłada selektor atrybutu, więc animacja wygrywała wagą
                 // i arkusz wjeżdżał także u kogoś, kto prosił o brak ruchu.
                 "motion-safe:data-[state=open]:animate-[pe-arkusz-wjazd_200ms_ease-out]"
-            : "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card border border-border bg-white p-5 shadow-lg",
+            : "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card border border-border bg-white p-5 shadow-lg motion-safe:data-[state=open]:animate-[pe-okno-wejscie_200ms_ease-out]",
           className
         )}
         {...props}
