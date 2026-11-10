@@ -1858,19 +1858,22 @@ export function CalculatorsTab() {
               />
 
               {ggWkladka.wartosci && (
+                // Wynikiem głównym jest sam prąd znamionowy („In 16 A”) — to liczba, której
+                // szuka się na budowie. Pełna nazwa typu („D0gG (wkładka gwintowa, system D0)”)
+                // w rozmiarze wyniku zawijała się na telefonie w trzy linie i spychała liczbę
+                // na koniec; teraz stoi jako pierwszy znacznik pod wynikiem. Decyzja produktowa
+                // do #269 (2026-11-10).
                 <WynikGlowny
                   wartosci={[
                     {
                       etykieta: "Dobrana wkładka",
-                      wartosc: (
-                        <>
-                          {TYP_WKLADKI_LABELS[ggTyp]}, In {ggWkladka.wartosci.In_A} A
-                        </>
-                      ),
+                      wartosc: <>In {ggWkladka.wartosci.In_A}</>,
+                      jednostka: "A",
                     },
                   ]}
                 >
                   <div className="flex gap-2 flex-wrap">
+                    <Badge>{TYP_WKLADKI_LABELS[ggTyp]}</Badge>
                     <Badge variant="info">czas {CZAS_GG_LABELS[ggWkladka.wartosci.czas_s === 0.2 ? "0.2" : ggWkladka.wartosci.czas_s === 0.4 ? "0.4" : "5"]}</Badge>
                     <Badge variant="accent">Imax (Ia) {formatLiczba(ggWkladka.wartosci.Imax_A, 1)} A</Badge>
                     <Badge variant="success">Zs max {formatLiczba(ggWkladka.wartosci.ZsMax_ohm, 3)} Ω</Badge>
