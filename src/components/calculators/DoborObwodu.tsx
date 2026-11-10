@@ -1,4 +1,5 @@
 import { AlertTriangle, Check, HelpCircle } from "lucide-react";
+import { KOLORY } from "@/lib/tokeny";
 import { formatLiczba } from "@/lib/liczby";
 import type { TrybObwodu } from "@/store/useCalculatorsStore";
 import type { OcenaKryterium, StanKryterium } from "@/lib/calc/kryteriaObwodu";
@@ -32,26 +33,23 @@ export function PrzelacznikTrybu({ tryb, onZmien }: { tryb: TrybObwodu; onZmien:
               aria-selected={aktywny}
               onClick={() => onZmien(o.id)}
               title={o.opis}
-              className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-              style={
-                aktywny
-                  ? { borderColor: "#C1793F", background: "#C1793F14", color: "#8A5526" }
-                  : { borderColor: "#E6EAEF", background: "#fff", color: "#4F5D73" }
-              }
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                aktywny ? "border-copper bg-copper-tlo text-caution" : "border-[#E6EAEF] bg-white text-[#4F5D73]"
+              }`}
             >
               {o.label}
             </button>
           );
         })}
       </div>
-      <p className="mt-1.5 text-[11.5px] text-slate-500">{TRYB_OBWODU_OPCJE.find((o) => o.id === tryb)?.opis}</p>
+      <p className="mt-1.5 text-xs text-slate-500">{TRYB_OBWODU_OPCJE.find((o) => o.id === tryb)?.opis}</p>
     </div>
   );
 }
 
 const STYL_STANU: Record<StanKryterium, { tlo: string; kolor: string }> = {
-  ok: { tlo: "#3B8C631A", kolor: "#2C6B4A" },
-  blad: { tlo: "#C6433A1A", kolor: "#A2352C" },
+  ok: { tlo: KOLORY.successTlo, kolor: KOLORY.success },
+  blad: { tlo: KOLORY.dangerTlo, kolor: KOLORY.danger },
   nieoceniono: { tlo: "#EEF1F4", kolor: "#4F5D73" },
 };
 
@@ -71,7 +69,7 @@ export function KryteriaObwodu({ oceny }: { oceny: OcenaKryterium[] }) {
         return (
           <div
             key={o.kryterium}
-            className="flex items-start gap-2 rounded-lg p-2.5 text-[12.5px]"
+            className="flex items-start gap-2 rounded-lg p-2.5 text-sm"
             style={{ background: styl.tlo, color: styl.kolor }}
           >
             <Ikona size={14} className="mt-0.5 shrink-0" />
@@ -80,7 +78,7 @@ export function KryteriaObwodu({ oceny }: { oceny: OcenaKryterium[] }) {
               <div className="opacity-90">{o.opis}</div>
             </div>
             {o.stan !== "nieoceniono" && typeof o.margines_pct === "number" && (
-              <span className="pe-mono shrink-0 text-[11px] tabular-nums opacity-80">
+              <span className="pe-mono shrink-0 text-xs tabular-nums opacity-80">
                 {o.margines_pct >= 0 ? "zapas " : "przekroczenie "}
                 {formatLiczba(Math.abs(o.margines_pct), 0)}%
               </span>

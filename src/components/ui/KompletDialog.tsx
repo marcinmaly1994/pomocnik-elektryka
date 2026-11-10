@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { wrocFokusDoOtwieracza } from "@/lib/wrocFokus";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/useProjectStore";
 import { useRoute } from "@/hooks/useRoute";
@@ -118,16 +120,21 @@ export function KompletDialog({
   const trwa = postep !== null;
   return (
     <Dialog open={open} onOpenChange={(v) => (trwa ? null : onOpenChange(v))}>
-      <DialogContent className="max-w-lg" title="Komplet dokumentacji">
+      {/* Bez DialogTrigger (sterowane z App) — patrz `wrocFokusDoOtwieracza`. */}
+      <DialogContent
+        className="max-w-lg"
+        title="Komplet dokumentacji"
+        onCloseAutoFocus={wrocFokusDoOtwieracza("dokumentacja")}
+      >
         <p className="mb-3 text-xs leading-relaxed text-slate-500">
           Jeden plik PDF ze stroną tytułową i spisem treści. Zaznacz, co ma w nim być —
           rysunki i tabele powstaną dokładnie takie same jak przy pobieraniu ich osobno.
         </p>
 
         {pozycje.length === 0 ? (
-          <p className="rounded-lg p-3 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
+          <Alert variant="caution" className="text-xs">
             Nie ma jeszcze czego złożyć — narysuj instalację albo wypełnij protokół.
-          </p>
+          </Alert>
         ) : (
           <>
             <div className="pe-scroll max-h-[46vh] space-y-1 overflow-y-auto pr-1">
@@ -163,10 +170,9 @@ export function KompletDialog({
         )}
 
         {blad && (
-          <div className="mt-3 flex gap-2 rounded-lg p-2.5 text-xs" style={{ background: "#C6433A14", color: "#A2352C" }}>
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            <span>{blad}</span>
-          </div>
+          <Alert variant="danger" className="mt-3">
+            {blad}
+          </Alert>
         )}
 
         <div className="mt-4 flex items-center gap-2">

@@ -89,7 +89,7 @@ export function EditorStatusBar({
     <div
       role="status"
       aria-label="Stan projektu"
-      className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-card border border-border bg-white px-3.5 py-2 text-[11.5px] text-slate-500"
+      className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-card border border-border bg-white px-3.5 py-2 text-xs text-slate-500"
     >
       <span className="flex items-center gap-1.5 font-medium text-slate-600">
         <Layers size={13} className="text-slate-400" /> {floorName}
@@ -181,7 +181,7 @@ export function EditorStatusBar({
             onClick={nastepnyKrok.przejdz}
             onPointerEnter={nastepnyKrok.pobierz}
             onFocus={nastepnyKrok.pobierz}
-            className="flex h-full shrink-0 items-center gap-1.5 rounded-full bg-copper px-3 text-[11.5px] font-semibold text-white transition-colors hover:bg-copper/90"
+            className="flex h-full shrink-0 items-center gap-1.5 rounded-full bg-copper px-3 text-xs font-semibold text-white transition-colors hover:bg-copper/90"
           >
             Dalej: {nastepnyKrok.tytul}
             <ArrowRight size={13} />

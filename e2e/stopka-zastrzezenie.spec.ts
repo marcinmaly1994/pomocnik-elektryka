@@ -4,13 +4,15 @@ import { wczytajPrzyklad } from "./_flow";
 /**
  * Zastrzeżenie prawne w stopce nie może być zasłonięte przez nawigację.
  *
- * Pigułki „Cofnij/Dalej" to `position: fixed` w rogach OKNA, więc leżą na tym, co
- * akurat jest pod spodem. Po przewinięciu na sam dół tym czymś jest stopka — a tam
+ * Dawne pigułki „Cofnij/Dalej" były `position: fixed` w rogach OKNA, więc leżały na tym,
+ * co akurat było pod spodem. Po przewinięciu na sam dół tym czymś jest stopka — a tam
  * stoi zdanie o tym, że wyniki nie zastępują odbioru przez osobę z uprawnieniami
- * SEP/budowlanymi. Akurat to zdanie znikało pod przyciskiem.
+ * SEP/budowlanymi. Akurat to zdanie znikało pod przyciskiem. Teraz nawigację niesie
+ * dolny pasek kroku (`sticky`, w przepływie strony), a test pilnuje, żeby dalej niczego
+ * nie zasłaniał.
  *
  * Mierzymy RENDER, a nie wpisane wartości: test złapie też przyszłą zmianę rozmiaru
- * pigułki albo jej odstępu od krawędzi.
+ * paska albo jego odstępu od krawędzi.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });

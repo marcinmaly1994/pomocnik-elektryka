@@ -167,17 +167,17 @@ export function EditElementModal({
             <div className="pe-scroll max-h-64 space-y-3 overflow-y-auto pr-1">
               {ELEMENT_SECTIONS.map((section) => (
                 <div key={section.title}>
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{section.title}</div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{section.title}</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {section.items.map((item) => {
                       const def = ELEMENT_TYPES[item.key];
                       const active = type === item.key;
                       return (
-                        <button
+                        <Button variant="secondary" size="sm"
                           type="button"
                           key={item.key}
                           onClick={() => setType(item.key)}
-                          className="pe-btn-ghost flex items-center gap-2 p-2 text-left text-[11px]"
+                          className="h-auto justify-start gap-2 p-2 text-left"
                           style={active ? { borderColor: def.color, background: `${def.color}14`, color: def.color } : undefined}
                         >
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center">
@@ -190,7 +190,7 @@ export function EditElementModal({
                             />
                           </span>
                           <span className="truncate">{def.label}</span>
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>
@@ -206,15 +206,20 @@ export function EditElementModal({
               </div>
               <div className={`grid gap-1 ${variants.length > 2 ? "grid-cols-6" : "grid-cols-2"}`}>
                 {variants.map((n) => (
-                  <button
+                  <Button variant="secondary" size="sm"
                     key={n}
+                    // Wybrany wariant w kolorach miedzi z tokenów (tło nieprzezroczyste,
+                    // `copper-tlo`), nie z hex z kanałem alfa — patrz klasyUsuniete.test.ts.
+                    className={
+                      gangs === n
+                        ? "border-copper bg-copper-tlo px-0 text-copper hover:border-copper hover:text-copper"
+                        : "px-0"
+                    }
                     type="button"
                     onClick={() => setGangs(n)}
-                    className="pe-btn-ghost py-1.5 text-xs"
-                    style={gangs === n ? { borderColor: "#C1793F", color: "#9A5A27", background: "#C1793F0D" } : undefined}
                   >
                     {n}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -281,14 +286,14 @@ export function EditElementModal({
                       className="pe-input w-full text-sm"
                     />
                     {circuits > 1 && (
-                      <div className="mt-0.5 text-[10px] text-slate-400">
+                      <div className="mt-0.5 text-xs text-slate-400">
                         {i === 0 ? "lewa dźwignia" : "prawa dźwignia"}
                       </div>
                     )}
                   </div>
                 ))}
               </div>
-              <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              <p className="mt-1 text-xs leading-snug text-slate-400">
                 Elementy z tym samym numerem tworzą jedną grupę — wpisz numer, do którego chcesz dołączyć.
                 Puste pole oznacza dobór automatyczny (najbliższy łącznik w tym samym pomieszczeniu).
               </p>
@@ -333,7 +338,7 @@ export function EditElementModal({
                   className="pe-input w-full text-sm"
                 />
               </div>
-              <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              <p className="mt-1 text-xs leading-snug text-slate-400">
                 Obrys przyboru jest jednocześnie strefą ochronną, więc te wymiary decydują, które
                 gniazdo sprawdzenie rzutu zgłosi. Puste pola oznaczają wymiary typowe. Dłuższy bok
                 leży wzdłuż symbolu — obrót elementu obraca też strefę.
@@ -361,7 +366,7 @@ export function EditElementModal({
               aria-label="Wysokość montażu w metrach"
               className="pe-input w-full text-sm"
             />
-            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+            <p className="mt-1 text-xs leading-snug text-slate-400">
               Wchodzi w długość przewodu (zejście od stropu do puszki) i w kosztorys. Puste pole
               oznacza wartość typową dla tego typu osprzętu.
             </p>

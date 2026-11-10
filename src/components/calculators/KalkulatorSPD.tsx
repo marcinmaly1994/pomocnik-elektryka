@@ -1,3 +1,5 @@
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
 import { obliczKoordynacjeSPD, KATEGORIE_PRZEPIECIOWE, TYP_SPD_LABELS, type TypSPD } from "@/lib/calc/spd";
 import { formatLiczba } from "@/lib/calc/result";
@@ -5,6 +7,7 @@ import { useCalculatorsStore } from "@/store/useCalculatorsStore";
 import { CalcResultView } from "./CalcResultView";
 import { Card } from "./Card";
 import { Field } from "./Field";
+import { WynikGlowny } from "./WynikGlowny";
 
 /**
  * Kalkulator koordynacji ograniczników przepięć.
@@ -34,11 +37,11 @@ export function KalkulatorSPD({ label }: { label: string }) {
 
   return (
     <Card title={label} tag="koordynacja ochrony">
-      <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+      <Alert variant="info" role="note" className="mb-3 text-xs">
         Skuteczny poziom ochrony <strong>nie równa się Up z tabliczki</strong> — dochodzi do niego spadek
         indukcyjny na przewodach przyłączeniowych, rzędu 1 kV na metr przy udarze 8/20 µs. Stąd bierze się reguła
         „przewody ≤ 0,5 m”: to wynik rachunku, nie zalecenie montażowe.
-      </div>
+      </Alert>
 
       <div className="grid sm:grid-cols-2 gap-x-4">
         <Field
@@ -72,19 +75,21 @@ export function KalkulatorSPD({ label }: { label: string }) {
       </div>
 
       {spd.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Skuteczny poziom ochrony na zaciskach urządzenia</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(spd.wartosci.UpSkuteczne_V, 0)} V</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Skuteczny poziom ochrony na zaciskach urządzenia", wartosc: formatLiczba(spd.wartosci.UpSkuteczne_V, 0), jednostka: "V" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
+            <Badge variant="accent">
               przyrost na przewodach {formatLiczba(spd.wartosci.przyrostNaPrzewodach_V, 0)} V
-            </span>
-            <span className="pe-chip pe-tag-blue">U_w urządzenia {formatLiczba(spdUw, 0)} V</span>
-            <span className="pe-chip pe-tag-green">
+            </Badge>
+            <Badge variant="info">U_w urządzenia {formatLiczba(spdUw, 0)} V</Badge>
+            <Badge variant="success">
               maks. długość przewodów {formatLiczba(spd.wartosci.maksDlugosc_m, 2)} m
-            </span>
+            </Badge>
           </div>
-        </div>
+        </WynikGlowny>
       )}
       <CalcResultView wynik={spd} />
     </Card>

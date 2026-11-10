@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { KOLORY } from "@/lib/tokeny";
 import { formatLiczba, zPrzecinkiem } from "@/lib/liczby";
 import { Podpowiedz } from "@/components/ui/tooltip";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Eye, FileText, Info, Pencil, Plus, Redo2, RotateCcw, Scissors, Trash2, Undo2 } from "lucide-react";
@@ -34,10 +36,10 @@ import { GotoweUkladyPrzycisk, ListaUkladow } from "@/components/panel/GotoweUkl
 import { useWczytajUklad } from "@/hooks/useWczytajUklad";
 
 const SELECTIVITY_STYLE: Record<SelectivityLevel, { bg: string; fg: string; Icon: typeof AlertTriangle }> = {
-  error: { bg: "#C6433A14", fg: "#A2352C", Icon: AlertTriangle },
-  warn: { bg: "#C1793F14", fg: "#8A5526", Icon: AlertTriangle },
-  ok: { bg: "#3B8C631A", fg: "#2C6B4A", Icon: Check },
-  info: { bg: "#2D5A8C12", fg: "#2D5A8C", Icon: Info },
+  error: { bg: KOLORY.dangerTlo, fg: KOLORY.danger, Icon: AlertTriangle },
+  warn: { bg: KOLORY.cautionTlo, fg: KOLORY.caution, Icon: AlertTriangle },
+  ok: { bg: KOLORY.successTlo, fg: KOLORY.success, Icon: Check },
+  info: { bg: KOLORY.blueprintTlo, fg: KOLORY.blueprint, Icon: Info },
 };
 
 const PER_ROW_OPTIONS = [8, 12, 18, 24];
@@ -95,7 +97,7 @@ const OPISY_SKROTOW_DOBORU: [string, string][] = [
  * łamie się na jednostce ("8,70 A" w jednej linii). Od 768 px zwykła komórka tabeli.
  */
 const KOMORKA_DOBORU =
-  "whitespace-nowrap before:mb-0.5 before:block before:text-[10px] before:uppercase before:tracking-wide before:text-slate-400 before:content-[attr(data-label)] md:py-1.5 md:pr-3 md:before:hidden";
+  "whitespace-nowrap before:mb-0.5 before:block before:text-xs before:uppercase before:tracking-wide before:text-slate-400 before:content-[attr(data-label)] md:py-1.5 md:pr-3 md:before:hidden";
 
 export function PanelTab() {
   const elements = useProjectStore((s) => s.draft.elements); // cały budynek, nie tylko bieżąca kondygnacja
@@ -459,7 +461,7 @@ export function PanelTab() {
           <select
             value={panelTryb}
             onChange={(e) => setPanelTryb(e.target.value as "zRzutu" | "reczny")}
-            className="pe-input text-sm"
+            className="pe-input pe-select text-base md:text-sm"
             aria-label="Źródło aparatów"
           >
             <option value="zRzutu">Z rzutu instalacji</option>
@@ -468,14 +470,14 @@ export function PanelTab() {
         </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Zasilanie</div>
-          <select value={supply3f ? "3" : "1"} onChange={(e) => setPanelConfig({ supply3f: e.target.value === "3" })} className="pe-input text-sm">
+          <select value={supply3f ? "3" : "1"} onChange={(e) => setPanelConfig({ supply3f: e.target.value === "3" })} className="pe-input pe-select text-base md:text-sm">
             <option value="3">3-fazowe 400/230 V</option>
             <option value="1">1-fazowe 230 V</option>
           </select>
         </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Rozłącznik główny</div>
-          <select value={mainRating} onChange={(e) => setPanelConfig({ mainRating: Number(e.target.value) })} className="pe-input text-sm">
+          <select value={mainRating} onChange={(e) => setPanelConfig({ mainRating: Number(e.target.value) })} className="pe-input pe-select text-base md:text-sm">
             {MAIN_RATING_OPTIONS.map((a) => (
               <option key={a} value={a}>
                 {a} A
@@ -485,7 +487,7 @@ export function PanelTab() {
         </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Modułów w rzędzie</div>
-          <select value={perRow} onChange={(e) => setPanelConfig({ perRow: Number(e.target.value) })} className="pe-input text-sm">
+          <select value={perRow} onChange={(e) => setPanelConfig({ perRow: Number(e.target.value) })} className="pe-input pe-select text-base md:text-sm">
             {PER_ROW_OPTIONS.map((n) => (
               <option key={n} value={n}>
                 {n}
@@ -600,7 +602,7 @@ export function PanelTab() {
         />
 
         {supply3f && (
-          <div className="w-full border-t pt-4" style={{ borderColor: "#EEF1F4" }}>
+          <div className="w-full border-t border-border pt-4">
             <div className="mb-2 text-xs text-slate-500">
               Bilans obciążenia faz (prąd obliczeniowy odbiorników, nie prąd znamionowy zabezpieczeń)
             </div>
@@ -619,7 +621,7 @@ export function PanelTab() {
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-[11px]" style={{ color: phaseSpread > 32 ? "#A2352C" : "#4F5D73" }}>
+            <div className="mt-2 text-xs" style={{ color: phaseSpread > 32 ? "#A2352C" : "#4F5D73" }}>
               {phaseSpread > 32
                 ? `Różnica między najbardziej i najmniej obciążoną fazą wynosi ${formatLiczba(phaseSpread, 1)} A — rozważ przepięcie obwodów lub użyj „Wyrównaj fazy”.`
                 : rozlozoneRowno
@@ -664,7 +666,7 @@ export function PanelTab() {
         <div className="pe-card min-w-[280px] flex-1 p-4 xl:sticky xl:top-4 xl:w-[440px] xl:flex-none" data-testid="lista-aparatow">
           <div className="mb-3 flex items-center gap-2">
             <FileText size={15} className="text-copper" />
-            <h3 className="pe-display text-[15px]">Aparaty ({devices.length})</h3>
+            <h3 className="pe-display text-base">Aparaty ({devices.length})</h3>
           </div>
 
           {/* Typowa rozdzielnica domowa to ~10–15 aparatów; przy `max-h-72` (≈9 wierszy)
@@ -737,7 +739,7 @@ export function PanelTab() {
           </div>
 
           <div className="border-t pt-3" style={{ borderColor: "#EEF1F4" }}>
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Dodaj aparat ręcznie</div>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">Dodaj aparat ręcznie</div>
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={addForm.kind}
@@ -746,7 +748,7 @@ export function PanelTab() {
                   setAddForm({ kind: def.key, label: def.defLabel, caption: "" });
                 }}
                 aria-label="Rodzaj aparatu do dodania"
-                className="pe-input col-span-2 text-xs"
+                className="pe-input pe-select col-span-2 text-base md:text-sm"
               >
                 {MANUAL_DEVICE_TYPES.map((t) => (
                   <option key={t.key} value={t.key}>
@@ -758,7 +760,7 @@ export function PanelTab() {
                 value={addForm.label}
                 onChange={(e) => setAddForm((f) => ({ ...f, label: e.target.value }))}
                 aria-label="Prąd znamionowy dodawanego aparatu"
-                className="pe-input text-xs"
+                className="pe-input pe-select text-base md:text-sm"
               >
                 {addDef.ratings.map((r) => (
                   <option key={r} value={r}>
@@ -773,9 +775,9 @@ export function PanelTab() {
                 className="pe-input text-xs"
               />
             </div>
-            <button onClick={addManualDevice} className="pe-btn-ghost mt-2 flex w-full items-center justify-center gap-1.5 py-1.5 text-xs">
+            <Button variant="secondary" size="sm" onClick={addManualDevice} className="mt-2 w-full justify-center">
               <Plus size={13} /> Dodaj
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -786,7 +788,7 @@ export function PanelTab() {
             rozmieszczenia aparatów. Wyłączone przy pustym doborze — PDF z samą główką
             tabeli wygląda jak awaria, nie jak dokument. */}
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="pe-display text-[15px]">Dobór obwodów wg PN-HD 60364</h3>
+          <h3 className="pe-display text-base">Dobór obwodów wg PN-HD 60364</h3>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="copper"
@@ -837,7 +839,7 @@ export function PanelTab() {
             <select
               value={warunki.sposobUlozenia}
               onChange={(e) => setWarunki({ sposobUlozenia: e.target.value as LayingMethod })}
-              className="pe-input text-sm"
+              className="pe-input pe-select text-base md:text-sm"
             >
               {(Object.keys(OPIS_ULOZENIA) as LayingMethod[]).map((m) => (
                 <option key={m} value={m}>
@@ -851,7 +853,7 @@ export function PanelTab() {
             <select
               value={warunki.temperaturaC}
               onChange={(e) => setWarunki({ temperaturaC: Number(e.target.value) })}
-              className="pe-input text-sm"
+              className="pe-input pe-select text-base md:text-sm"
               title="30 °C to warunek odniesienia tablic obciążalności. Wyższa temperatura — trasa przez nieocieplone poddasze albo kotłownię — obniża obciążalność przewodu."
             >
               {[25, 30, 35, 40, 45, 50].map((t) => (
@@ -866,7 +868,7 @@ export function PanelTab() {
             <select
               value={warunki.obwodowWWiazce}
               onChange={(e) => setWarunki({ obwodowWWiazce: Number(e.target.value) })}
-              className="pe-input text-sm"
+              className="pe-input pe-select text-base md:text-sm"
               title="Ile obwodów dzieli wspólną trasę (rurę, korytko). Im więcej, tym niższa obciążalność każdego z nich — rozdzielenie tras podnosi ją z powrotem."
             >
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
@@ -924,32 +926,32 @@ export function PanelTab() {
           („8,70 / A"), więc wiersze miały po trzy–cztery linie.
         */}
         <div className="pe-scroll md:overflow-x-auto">
-          <table className="block w-full text-left text-[11.5px] md:table">
+          <table className="pe-table pe-table-od-md block w-full text-left text-xs md:table">
             <thead className="hidden md:table-header-group">
-              <tr className="text-slate-400">
-                <th className="py-1 pr-3 font-medium">Obwód</th>
-                <th className="py-1 pr-3 font-medium">
+              <tr>
+                <th className="py-1 pr-3">Obwód</th>
+                <th className="py-1 pr-3">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.faza}>Faza</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.Ib}>Ib</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.przekroj}>Przekrój</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 font-medium">
+                <th className="py-1 pr-3">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.aparat}>Aparat</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.Iz}>Iz</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.dU}>ΔU</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 text-right font-medium">
+                <th className="py-1 pr-3 text-right">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.Zs}>Zs max</Podpowiedz>
                 </th>
-                <th className="py-1 pr-3 font-medium">
+                <th className="py-1 pr-3">
                   <Podpowiedz tresc={OBJASNIENIA_DOBORU.rcd}>RCD</Podpowiedz>
                 </th>
               </tr>
@@ -973,10 +975,13 @@ export function PanelTab() {
                 return (
                   <tr
                     key={s.id}
-                    className="grid grid-cols-4 gap-x-2 gap-y-2 border-t px-1 py-2.5 md:table-row md:p-0"
-                    style={{ borderColor: "#EEF1F4", background: bad ? "#C6433A0A" : warn ? "#C1793F0A" : undefined }}
+                    // Zabarwienie wiersza z tokenów tła komunikatów (nieprzezroczyste),
+                    // nie z hex z kanałem alfa — patrz klasyUsuniete.test.ts.
+                    className={`grid grid-cols-4 gap-x-2 gap-y-2 border-t border-border px-1 py-2.5 md:table-row md:p-0 ${
+                      bad ? "bg-danger-tlo" : warn ? "bg-caution-tlo" : ""
+                    }`}
                   >
-                    <td className="col-span-4 text-[12.5px] font-medium md:py-1.5 md:pr-3 md:text-[11.5px] md:font-normal">{s.nazwa}</td>
+                    <td className="col-span-4 text-sm font-medium md:py-1.5 md:pr-3 md:text-xs md:font-normal">{s.nazwa}</td>
                     <td className={KOMORKA_DOBORU} data-label="Faza">
                       <span
                         className="pe-mono font-semibold"
@@ -985,22 +990,22 @@ export function PanelTab() {
                         {s.liczba_faz === "3" ? "3F" : s.faza}
                       </span>
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Ib">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="Ib">
                       {formatLiczba(s.Ib_A, 2)} A
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Przekrój">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="Przekrój">
                       {s.przekroj_mm2 ? `${String(s.przekroj_mm2).replace(".", ",")} mm²` : "—"}
                     </td>
                     <td className={`${KOMORKA_DOBORU} pe-mono`} data-label="Aparat">
                       {s.aparat ? `${s.aparat.charakterystyka}${s.aparat.In_A} ${s.aparat.bieguny}` : "—"}
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Iz">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="Iz">
                       {formatLiczba(s.Iz_A, 1)} A
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="ΔU">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="ΔU">
                       {s.spadek_napiecia_pct === null ? "—" : `${zPrzecinkiem(s.spadek_napiecia_pct)}%`}
                     </td>
-                    <td className={`${KOMORKA_DOBORU} pe-mono tabular-nums md:text-right`} data-label="Zs max">
+                    <td className={`${KOMORKA_DOBORU} pe-liczba`} data-label="Zs max">
                       {zPrzecinkiem(s.Zs_max_Ohm)} Ω
                     </td>
                     <td className={`${KOMORKA_DOBORU} pe-mono`} data-label="RCD">
@@ -1019,7 +1024,7 @@ export function PanelTab() {
             renderuje, a nie jest schowany CSS-em: ten sam tekst w DOM obok dymka dublowałby
             go w każdym zapytaniu po treści. */}
         {sized.length > 0 && !szerokieOkno && (
-          <details className="mt-3 rounded-md border px-3 py-2 text-[11.5px] md:hidden" style={{ borderColor: "#EEF1F4" }}>
+          <details className="mt-3 rounded-md border border-border px-3 py-2 text-xs md:hidden">
             <summary className="-my-2 cursor-pointer py-2 font-medium text-slate-600">Co oznaczają skróty?</summary>
             <dl className="mt-2 space-y-1.5 leading-relaxed text-slate-500">
               {OPISY_SKROTOW_DOBORU.map(([skrot, opis]) => (
@@ -1034,32 +1039,21 @@ export function PanelTab() {
 
         {(sizingWarnings.length > 0 || ostrzezeniaReczne.length > 0) && (
           <div className="mt-4 space-y-1.5">
+            {/* role="note": lista zmienia się przy edycji — bez przerywania czytnika przy każdym przeliczeniu */}
             {sizingWarnings.map((w, i) => (
-              <div
-                key={i}
-                className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
-                style={{ background: w.level === "error" ? "#C6433A14" : "#C1793F14", color: w.level === "error" ? "#A2352C" : "#8A5526" }}
-              >
-                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                <div>
-                  <span className="font-semibold">{w.obwod}</span> — {w.message}
-                </div>
-              </div>
+              <Alert key={i} role="note" variant={w.level === "error" ? "danger" : "caution"}>
+                <span className="font-semibold">{w.obwod}</span> — {w.message}
+              </Alert>
             ))}
             {ostrzezeniaReczne.map((o, i) => (
-              <div
-                key={`reczne-${i}`}
-                className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
-                style={{ background: "#C1793F14", color: "#8A5526" }}
-              >
-                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                <div>{o.tresc}</div>
-              </div>
+              <Alert key={`reczne-${i}`} role="note" variant="caution">
+                {o.tresc}
+              </Alert>
             ))}
           </div>
         )}
 
-        <p className="mt-4 text-[11px] leading-relaxed text-slate-400">
+        <p className="mt-4 text-xs leading-relaxed text-slate-400">
           Dobór orientacyjny/edukacyjny. Projekt do realizacji i odbioru wykonuje i podpisuje osoba
           z uprawnieniami; wymagane pomiary powykonawcze.
         </p>
@@ -1074,7 +1068,7 @@ export function PanelTab() {
       </div>
 
       <div className="pe-card p-5">
-        <h3 className="pe-display mb-1 text-[15px]">Sprawdzenie selektywności i doboru zabezpieczeń</h3>
+        <h3 className="pe-display mb-1 text-base">Sprawdzenie selektywności i doboru zabezpieczeń</h3>
         <p className="mb-3 text-xs text-slate-500">
           Automatyczna kontrola stopniowania zabezpieczeń, ochrony różnicówek i rozkładu obciążenia.
         </p>
@@ -1088,7 +1082,7 @@ export function PanelTab() {
                   <div className="text-xs font-semibold" style={{ color: fg }}>
                     {s.title}
                   </div>
-                  <div className="mt-0.5 text-[11.5px] leading-relaxed" style={{ color: fg }}>
+                  <div className="mt-0.5 text-xs leading-relaxed" style={{ color: fg }}>
                     {s.detail}
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, HelpCircle, X } from "lucide-react";
 import type { Step, StepId } from "@/lib/onboarding";
+import { Button } from "@/components/ui/button";
 
 /**
  * Karta „Zacznij w 3 krokach" — pływająca, dokowana w LEWYM dolnym rogu, nad kolumną
@@ -128,7 +129,7 @@ export function OnboardingChecklist({
         // Przypięty w lewym dolnym rogu telefonu leżał na pasku stanu edytora, który
         // po przewinięciu do rysunku stoi właśnie przy dolnej krawędzi ekranu — na
         // „Zapisano", tuż obok „Dalej". Na monitorze róg jest wolny (kolumna narzędzi).
-        className="mt-4 inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-[11px] text-slate-500 shadow-md transition hover:border-copper hover:text-copper md:fixed md:bottom-4 md:left-4 md:z-30 md:mt-0 md:flex"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-xs text-slate-500 shadow-md transition hover:border-copper hover:text-copper md:fixed md:bottom-4 md:left-4 md:z-30 md:mt-0 md:flex"
         style={{ borderColor: "#DDE3E9" }}
       >
         <HelpCircle size={14} className="text-copper" /> Zacznij w 3 krokach
@@ -170,7 +171,7 @@ export function OnboardingChecklist({
       className={`pe-card pe-onboarding mt-4 w-full max-w-sm p-3 shadow-lg md:fixed md:bottom-4 md:left-4 md:z-30 md:mt-0 md:w-[264px] ${leaving ? "pe-onboarding-leave" : "pe-onboarding-enter"}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <h2 className="pe-display text-[14px]">Zacznij w 3 krokach</h2>
+        <h2 className="pe-display text-sm">Zacznij w 3 krokach</h2>
         <div className="flex shrink-0 items-center gap-1.5">
           <Kropki steps={steps} doneCount={doneCount} />
           <button onClick={onCollapse} aria-label="Zwiń przewodnik" className="-mr-1 rounded p-0.5 text-slate-400 hover:text-ink">
@@ -187,32 +188,32 @@ export function OnboardingChecklist({
           i tak była jedyną, którą się czyta. */}
       {aktywny ? (
         <div className="mt-2">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Krok {aktywny.numer} z {steps.length}
           </div>
           <div className="text-xs font-semibold text-ink">{aktywny.tytul}</div>
-          {!compact && <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{aktywny.opis}</p>}
+          {!compact && <p className="mt-0.5 text-xs leading-snug text-slate-500">{aktywny.opis}</p>}
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            <button onClick={() => onStepAction(aktywny.id)} className="pe-btn-copper px-2.5 py-1 text-[11px]">
+            <Button variant="primary" size="sm" onClick={() => onStepAction(aktywny.id)}>
               {aktywny.cta}
-            </button>
+            </Button>
             {bezPodkladuSkala && (
-              <button onClick={onDrawManually} className="pe-btn-ghost px-2.5 py-1 text-[11px]">
+              <Button variant="secondary" size="sm" onClick={onDrawManually}>
                 Narysuj dom samodzielnie
-              </button>
+              </Button>
             )}
           </div>
         </div>
       ) : (
         /* Komplet kroków. Karta normalnie sama się wtedy chowa, ale wraca na żądanie
            przyciskiem „Otwórz przewodnik" — i wtedy MUSI mieć co pokazać. */
-        <p className="mt-2 text-[11px] leading-snug text-slate-500">
+        <p className="mt-2 text-xs leading-snug text-slate-500">
           Wszystkie trzy kroki za Tobą. Reszta aplikacji — rozdzielnica, schemat, kosztorys — liczy się już
           z tego, co postawisz na rzucie.
         </p>
       )}
 
-      <button onClick={onSkip} className="mt-2.5 w-full text-[11px] text-slate-400 underline hover:text-slate-600">
+      <button onClick={onSkip} className="mt-2.5 w-full text-xs text-slate-400 underline hover:text-slate-600">
         Pomiń — ustawię później
       </button>
     </aside>

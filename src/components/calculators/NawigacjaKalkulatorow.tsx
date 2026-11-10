@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Clock, Search } from "lucide-react";
 import type { CalcId } from "@/store/useCalculatorsStore";
 import { filtruj, pogrupuj, type GrupaId, type PozycjaKalkulatora } from "@/lib/calc/grupy";
+import { ikonaKalkulatora } from "./ikonyKalkulatorow";
 
 /**
  * Nawigacja zakładki Kalkulatory: wyszukiwarka, pogrupowana lista i ekran startowy.
@@ -69,12 +70,12 @@ export function SzukajkaKalkulatorow({
       <kbd
         aria-hidden="true"
         // Skrót klawiszowy nic nie mówi na ekranie dotykowym bez klawiatury.
-        className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 [@media(pointer:coarse)]:hidden"
+        className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 [@media(pointer:coarse)]:hidden"
       >
         {SKROT_SZUKANIA}
       </kbd>
       {fraza.trim() !== "" && (
-        <p className="mt-1 text-[11px] text-slate-500">
+        <p className="mt-1 text-xs text-slate-500">
           {liczbaWynikow === 0 ? "Nic nie pasuje — spróbuj innego słowa." : `Pasujących: ${liczbaWynikow}`}
         </p>
       )}
@@ -100,18 +101,20 @@ function WierszListy({
   aktywny: boolean;
   onWybierz: (id: CalcId) => void;
 }) {
+  const Ikona = ikonaKalkulatora(pozycja.id);
   return (
     <button
       onClick={() => onWybierz(pozycja.id)}
       title={aktywny ? undefined : pozycja.desc}
       aria-current={aktywny ? "page" : undefined}
-      className={`w-full rounded-md px-2.5 py-1 text-left ${aktywny ? "" : "hover:bg-white"}`}
-      style={aktywny ? { background: "#2D5A8C14", boxShadow: "inset 2px 0 0 #2D5A8C" } : undefined}
+      className={`w-full rounded-md px-2.5 py-1 text-left ${aktywny ? "bg-blueprint-tlo shadow-[inset_2px_0_0_#2D5A8C]" : "hover:bg-white"}`}
     >
-      <div className="text-[13px] leading-5" style={{ color: aktywny ? "#2D5A8C" : "#16202B", fontWeight: aktywny ? 500 : 400 }}>
-        {pozycja.label}
+      <div className={`flex items-start gap-2 text-sm leading-5 ${aktywny ? "font-medium text-blueprint" : "font-normal text-ink"}`}>
+        <Ikona size={16} aria-hidden="true" className={`mt-0.5 shrink-0 ${aktywny ? "text-blueprint" : "text-slate-400"}`} />
+        <span className="min-w-0">{pozycja.label}</span>
       </div>
-      {aktywny && <div className="pb-0.5 text-[11px] leading-snug text-slate-500">{pozycja.desc}</div>}
+      {/* Opis wyrównany do tekstu nazwy (16 px ikony + 8 px odstępu), nie do ikony. */}
+      {aktywny && <div className="pb-0.5 pl-6 text-xs leading-snug text-slate-500">{pozycja.desc}</div>}
     </button>
   );
 }
@@ -125,21 +128,23 @@ function Kafel({
   aktywny: boolean;
   onWybierz: (id: CalcId) => void;
 }) {
+  const Ikona = ikonaKalkulatora(pozycja.id);
   return (
     <button
       onClick={() => onWybierz(pozycja.id)}
-      className="w-full rounded-lg p-3 text-left"
-      style={
-        aktywny
-          ? { background: "#2D5A8C10", border: "1px solid #2D5A8C" }
-          : { background: "#fff", border: "1px solid #DCE2E8" }
-      }
+      className={`w-full rounded-lg border p-3 text-left ${aktywny ? "border-blueprint bg-blueprint-tlo" : "border-border bg-white"}`}
     >
-      <div className="min-w-0">
-        <div className="text-[13px] font-medium" style={{ color: aktywny ? "#2D5A8C" : "#16202B" }}>
-          {pozycja.label}
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${aktywny ? "bg-blueprint text-white" : "bg-blueprint-tlo text-blueprint"}`}
+        >
+          <Ikona size={20} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <div className={`text-sm font-medium ${aktywny ? "text-blueprint" : "text-ink"}`}>{pozycja.label}</div>
+          <div className="text-xs leading-snug text-slate-500">{pozycja.desc}</div>
         </div>
-        <div className="text-[11px] leading-snug text-slate-500">{pozycja.desc}</div>
       </div>
     </button>
   );
@@ -239,6 +244,7 @@ export function WyborKalkulatoraMobile({
 }) {
   const [otwarty, setOtwarty] = useState(false);
   const biezacy = lista.find((p) => p.id === aktywny);
+  const IkonaBiezacego = biezacy ? ikonaKalkulatora(biezacy.id) : null;
 
   return (
     <div className="mb-3 lg:hidden">
@@ -250,9 +256,10 @@ export function WyborKalkulatoraMobile({
         aria-label="Zmień kalkulator"
         className="pe-card flex w-full items-center gap-2 px-3 py-2 text-left"
       >
+        {IkonaBiezacego && <IkonaBiezacego size={20} aria-hidden="true" className="shrink-0 text-blueprint" />}
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Kalkulator</div>
-          <div className="truncate text-[13px] font-medium text-ink">{biezacy?.label ?? "Wybierz kalkulator"}</div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Kalkulator</div>
+          <div className="truncate text-sm font-medium text-ink">{biezacy?.label ?? "Wybierz kalkulator"}</div>
         </div>
         <ChevronDown
           size={16}
@@ -306,8 +313,8 @@ export function EkranStartowy({
     <div className="space-y-6">
       {ostatnieDoPokazania.length > 0 && (
         <div>
-          <h3 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink">
-            <Clock size={12} /> Ostatnio używane
+          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+            <Clock size={12} aria-hidden="true" className="text-blueprint" /> Ostatnio używane
           </h3>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {ostatnieDoPokazania.map((p) => (
@@ -320,8 +327,8 @@ export function EkranStartowy({
       {pogrupuj(lista).map(({ grupa, pozycje }) =>
         pozycje.length === 0 ? null : (
           <div key={grupa.id}>
-            <h3 className="mb-0.5 text-[13px] font-semibold text-ink">{grupa.tytul}</h3>
-            <p className="mb-2 text-[11.5px] text-slate-500">{grupa.opis}</p>
+            <h3 className="mb-0.5 text-sm font-semibold text-ink">{grupa.tytul}</h3>
+            <p className="mb-2 text-xs text-slate-500">{grupa.opis}</p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {pozycje.map((p) => (
                 <Kafel key={p.id} pozycja={p} aktywny={false} onWybierz={onWybierz} />

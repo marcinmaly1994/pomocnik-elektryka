@@ -1,5 +1,8 @@
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { WynikGlowny } from "./WynikGlowny";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, ChevronRight, Download, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import { obliczUziom, REZYSTYWNOSC_GRUNTU, TYP_UZIOMU_LABELS, type TypUziomu } from "@/lib/calc/earthing";
 import { dobierzPrzewodACFalownika, obliczStringPV } from "@/lib/calc/pv";
 import { obliczObwodEV } from "@/lib/calc/evCharger";
@@ -55,6 +58,7 @@ import { KryteriaObwodu, PrzelacznikTrybu } from "./DoborObwodu";
 import { ocenKryteria, podsumowanieObwodu, type OcenaKryterium } from "@/lib/calc/kryteriaObwodu";
 import { Field } from "./Field";
 import { HowItWorks } from "./HowItWorks";
+import { Button } from "@/components/ui/button";
 
 /**
  * Kolejność grupowana wg fazy pracy elektryka, nie wg tego, kiedy który kalkulator
@@ -1117,6 +1121,15 @@ export function CalculatorsTab() {
               />
             </>
           )}
+          {/* `key` przemontowuje kartę przy zmianie kalkulatora i odpala przenikanie od nowa.
+              Bezpieczne: wartości pól są w store, a lokalny stan (rozwinięte „Jak to działa")
+              i tak był osobny dla każdego kalkulatora — każdy stoi we własnej gałęzi JSX.
+              Przełącznik trybu obwodu NIE zmienia `activeCalc`, więc nie przemontowuje. */}
+          <div
+            key={activeCalc ?? "start"}
+            data-karta-kalkulatora
+            className="motion-safe:animate-[pe-przenikanie_120ms_ease-out]"
+          >
           {/* Przelacznik trybu STOI NAD karta trybu, a nie w niej: to wybor pytania,
               nie jedno z pol formularza. Cztery dawne kalkulatory (przekroj,
               zabezpieczenie, WLZ, pelny dobor) pytaly o to samo z czterech stron. */}
@@ -1175,20 +1188,19 @@ export function CalculatorsTab() {
                             type="button"
                             onClick={() => setCosphi(e.cos)}
                             title={`Wpisz cos φ = ${String(e.cos).replace(".", ",")}`}
-                            className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
-                            style={on ? { background: "#2D5A8C10" } : undefined}
+                            className={`flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left ${on ? "bg-blueprint-tlo" : "hover:bg-slate-50"}`}
                           >
                             <span
-                              className="pe-mono shrink-0 text-[12px] font-semibold"
+                              className="pe-mono shrink-0 text-xs font-semibold"
                               style={{ color: on ? "#2D5A8C" : "#8A5526" }}
                             >
                               {e.cos.toFixed(2).replace(".", ",")}
                             </span>
-                            <span className="text-[11.5px] leading-snug text-slate-600">{e.odbiorniki}</span>
+                            <span className="text-xs leading-snug text-slate-600">{e.odbiorniki}</span>
                           </button>
                         );
                       })}
-                      <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
+                      <div className="px-2 pb-1 pt-1.5 text-xs leading-relaxed text-slate-500">
                         Wartości orientacyjne, dla pracy przy pełnym obciążeniu — jeśli tabliczka znamionowa albo karta
                         katalogowa podaje cos φ, wpisz TĘ wartość. Silnik obciążony częściowo ma cos φ wyraźnie niższy niż
                         znamionowy (nawet 0,3–0,5 na biegu jałowym), więc dla odbiorników silnikowych pracujących z zapasem
@@ -1225,7 +1237,7 @@ export function CalculatorsTab() {
                       hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy. Więcej przewodów obok siebie gorzej oddaje ciepło, więc obniża dopuszczalną obciążalność każdego z nich."
                     />
                   </div>
-                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={motorStart}
@@ -1248,7 +1260,7 @@ export function CalculatorsTab() {
                       hint="Ile z budżetu spadku zużywa już odcinek od złącza do rozdzielnicy. Typowo 0,5-1%. Limit 3/5% liczy się od ZŁĄCZA, więc obwód odbiorczy ma do dyspozycji resztę — zostaw 0, jeśli liczysz sam obwód."
                     />
                   </div>
-                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={wlasnaStacja}
@@ -1260,57 +1272,64 @@ export function CalculatorsTab() {
 
                 </div>
                 <div className="min-w-0" data-testid="wynik-obok">
-                  <div className="mt-2 p-3 pe-result" data-testid="wynik-doboru">
+                  <WynikGlowny
+                    data-testid="wynik-doboru"
+                    wartosci={
+                      sized.przekroj_mm2
+                        ? [
+                            { etykieta: "Przekrój żyły", wartosc: String(sized.przekroj_mm2).replace(".", ","), jednostka: "mm²" },
+                            ...(sized.aparat
+                              ? [
+                                  {
+                                    etykieta: "Wyłącznik nadprądowy",
+                                    wartosc: (
+                                      <>
+                                        {sized.aparat.charakterystyka}
+                                        {sized.aparat.In_A} {sized.aparat.bieguny}
+                                      </>
+                                    ),
+                                  },
+                                ]
+                              : []),
+                          ]
+                        : []
+                    }
+                  >
                     {sized.przekroj_mm2 ? (
                       <>
                         {/* Dwa wyniki na równi: przekrój i aparat. Dotąd karta pokazywała sam
                             przekrój, a wyłącznik — połowę wyniku tego kalkulatora — trzeba było
                             wyczytać z kryteriów („In 20 A"), bez charakterystyki i biegunów
                             (audyt 2026-11-04, B11). */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <div className="text-xs text-slate-500 mb-1">Przekrój żyły</div>
-                            <div className="pe-mono text-lg text-blueprint">{String(sized.przekroj_mm2).replace(".", ",")} mm²</div>
-                          </div>
-                          {sized.aparat && (
-                            <div>
-                              <div className="text-xs text-slate-500 mb-1">Wyłącznik nadprądowy</div>
-                              <div className="pe-mono text-lg text-blueprint">
-                                {sized.aparat.charakterystyka}
-                                {sized.aparat.In_A} {sized.aparat.bieguny}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="mt-2 flex gap-2 flex-wrap">
-                          <span className="pe-chip pe-tag-blue" title="Typ wyłącznika różnicowoprądowego wymagany dla tego odbiornika">
+                        <div className="flex gap-2 flex-wrap">
+                          <Badge variant="info"  title="Typ wyłącznika różnicowoprądowego wymagany dla tego odbiornika">
                             {circuitKind === "gniazda" ? "RCD 30 mA " : "RCD "}typ {sized.rcd_typ}
-                          </span>
+                          </Badge>
                           {sized.Zs_max_Ohm !== null && (
-                            <span className="pe-chip pe-tag-green">Zs max {formatLiczba(sized.Zs_max_Ohm, 2)} Ω</span>
+                            <Badge variant="success">Zs max {formatLiczba(sized.Zs_max_Ohm, 2)} Ω</Badge>
                           )}
                         </div>
                         <div className="mt-2 flex gap-2 flex-wrap">
-                          <span className="pe-chip pe-tag-copper">{sized.kabel}</span>
-                          <span className="pe-chip pe-tag-blue">Ib {formatLiczba((sized.Ib_A ?? 0), 2)} A</span>
-                          <span className="pe-chip pe-tag-green">obc. dop. {sized.Iz_A} A</span>
+                          <Badge variant="accent">{sized.kabel}</Badge>
+                          <Badge variant="info">Ib {formatLiczba((sized.Ib_A ?? 0), 2)} A</Badge>
+                          <Badge variant="success">obc. dop. {sized.Iz_A} A</Badge>
                           {sized.spadek_napiecia_pct !== null && (
                             // Z podanym spadkiem na WLZ pokazujemy SUMĘ — bo to ona jest
                             // porównywana z limitem — i rozbicie, żeby było widać, skąd wyszła.
-                            <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                            <Badge>
                               {sized.spadek_wlz_pct > 0
                                 ? `ΔU ${formatLiczba(sized.spadek_calkowity_pct, 2)}% = WLZ ${formatLiczba(sized.spadek_wlz_pct, 2)}% + obwód ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`
                                 : `ΔU ${formatLiczba(sized.spadek_napiecia_pct, 2)}% (limit ${sized.spadek_napiecia_limit_pct}%)`}
-                            </span>
+                            </Badge>
                           )}
                         </div>
                       </>
                     ) : (
-                      <div className="text-sm mt-2 flex items-center gap-1" style={{ color: "#A2352C" }}>
-                        <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
-                      </div>
+                      <Alert variant="danger" role="note">
+                        nie udało się dobrać — zobacz komunikat niżej
+                      </Alert>
                     )}
-                  </div>
+                  </WynikGlowny>
 
                   {/* Wpływ sposobu ułożenia — patrz `layingComparison`. Tabelka stoi POD
                       wynikiem, bo to uzasadnienie wybranej liczby, a nie kolejne pole do
@@ -1330,20 +1349,19 @@ export function CalculatorsTab() {
                             type="button"
                             onClick={() => setLayingMethod(row.value)}
                             title={`Przyjmij ułożenie: ${row.label}`}
-                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
-                            style={on ? { background: "#2D5A8C10" } : undefined}
+                            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${on ? "bg-blueprint-tlo" : "hover:bg-slate-50"}`}
                           >
                             <span
-                              className="min-w-0 flex-1 truncate text-[11.5px]"
+                              className="min-w-0 flex-1 truncate text-xs"
                               style={on ? { color: "#2D5A8C", fontWeight: 600 } : { color: "#4F5D73" }}
                             >
                               {row.label}
                             </span>
-                            <span className="pe-mono shrink-0 text-[11.5px] text-slate-500">
+                            <span className="pe-mono shrink-0 text-xs text-slate-500">
                               {row.Iz !== null ? `${formatLiczba(row.Iz, row.Iz % 1 === 0 ? 0 : 1)} A` : "—"}
                             </span>
                             <span
-                              className="pe-mono w-16 shrink-0 text-right text-[12px] font-semibold"
+                              className="pe-mono w-16 shrink-0 text-right text-xs font-semibold"
                               style={{ color: on ? "#2D5A8C" : "#8A5526" }}
                             >
                               {row.przekroj !== null ? `${String(row.przekroj).replace(".", ",")} mm²` : "—"}
@@ -1351,7 +1369,7 @@ export function CalculatorsTab() {
                           </button>
                         );
                       })}
-                      <div className="px-2 pb-1 pt-1.5 text-[11px] leading-relaxed text-slate-500">
+                      <div className="px-2 pb-1 pt-1.5 text-xs leading-relaxed text-slate-500">
                         Kolumny: obciążalność po współczynnikach i wynikający z niej przekrój. Ciepło musi mieć dokąd uciec —
                         przewód natynkowy chłodzi się powietrzem, a ten w ścianie ocieplonej termicznie praktycznie nie oddaje
                         ciepła, więc uniesie najmniej. Pomylenie tych dwóch przypadków to najczęstszy sposób na przegrzanie
@@ -1362,18 +1380,11 @@ export function CalculatorsTab() {
 
                   {sized.ostrzezenia.length > 0 && (
                     <div className="mt-2 space-y-1.5">
+                      {/* role="note": lista odświeża się przy każdym wpisanym znaku — role="alert" czytałby KAŻDĄ pozycję przerywając czytnik */}
                       {sized.ostrzezenia.map((w, i) => (
-                        <div
-                          key={i}
-                          className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
-                          style={{
-                            background: w.level === "error" ? "#C6433A14" : "#C1793F14",
-                            color: w.level === "error" ? "#A2352C" : "#8A5526",
-                          }}
-                        >
-                          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                          <div>{w.message}</div>
-                        </div>
+                        <Alert key={i} role="note" variant={w.level === "error" ? "danger" : "caution"}>
+                          {w.message}
+                        </Alert>
                       ))}
                     </div>
                   )}
@@ -1404,11 +1415,11 @@ export function CalculatorsTab() {
             <Card title={active.label} tag="wyłącznik nadprądowy">
               <div className={UKLAD_POLA_WYNIK}>
                 <div className="min-w-0">
-                  <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                  <Alert variant="info" role="note" className="mb-3 text-xs">
                     Przekrój jest tu <strong>daną wejściową</strong> — dobierasz wyłącznik do przewodu, który już leży albo
                     został narzucony projektem. Jeśli dopiero szukasz przekroju, przełącz na tryb „Szukam przekroju”;
                     oba tryby dzielą te same pola, więc nic nie trzeba przepisywać.
-                  </div>
+                  </Alert>
 
                   <div className="grid sm:grid-cols-2 gap-x-4">
                     <Field
@@ -1466,7 +1477,7 @@ export function CalculatorsTab() {
                       hint="Ile obwodów biegnie razem w tej samej rurce/korytku/wiązce na dłuższym odcinku trasy — więcej obok siebie obniża obciążalność każdego z nich."
                     />
                   </div>
-                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={motorStart}
@@ -1478,36 +1489,46 @@ export function CalculatorsTab() {
 
                 </div>
                 <div className="min-w-0" data-testid="wynik-obok">
-                  <div className="mt-2 p-3 pe-result">
-                    <div className="text-xs text-slate-500 mb-1">Dobrany wyłącznik nadprądowy</div>
+                  <WynikGlowny
+                    wartosci={
+                      sizedBreaker.aparat
+                        ? [
+                            {
+                              etykieta: "Dobrany wyłącznik nadprądowy",
+                              wartosc: (
+                                <>
+                                  {sizedBreaker.aparat.charakterystyka}
+                                  {sizedBreaker.aparat.In_A} {sizedBreaker.aparat.bieguny}
+                                </>
+                              ),
+                            },
+                          ]
+                        : []
+                    }
+                  >
                     {sizedBreaker.aparat ? (
                       <>
-                        <div className="pe-mono text-lg text-blueprint">
-                          {sizedBreaker.aparat.charakterystyka}
-                          {sizedBreaker.aparat.In_A} {sizedBreaker.aparat.bieguny}
-                        </div>
-                        <div className="mt-2 flex gap-2 flex-wrap">
-                          <span className="pe-chip pe-tag-blue">Ib {formatLiczba(sizedBreaker.Ib_A, 2)} A</span>
-                          <span className="pe-chip pe-tag-green">Iz {sizedBreaker.Iz_A} A</span>
-                          <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                        <div className="flex gap-2 flex-wrap">
+                          <Badge variant="info">Ib {formatLiczba(sizedBreaker.Ib_A, 2)} A</Badge>
+                          <Badge variant="success">Iz {sizedBreaker.Iz_A} A</Badge>
+                          <Badge>
                             metoda {sizedBreaker.metoda_odniesienia} · k1 {sizedBreaker.wspolczynniki.k1_temperatura} · k2{" "}
                             {sizedBreaker.wspolczynniki.k2_grupowanie}
-                          </span>
+                          </Badge>
                         </div>
                       </>
                     ) : (
-                      <div className="text-sm mt-2 flex items-center gap-1" style={{ color: "#A2352C" }}>
-                        <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
-                      </div>
+                      <Alert variant="danger" role="note" title="Dobrany wyłącznik nadprądowy">
+                        nie udało się dobrać — zobacz komunikat niżej
+                      </Alert>
                     )}
-                  </div>
+                  </WynikGlowny>
 
                   {/* Warunek Ib ≤ In ≤ Iz rozpisany na trzy liczby obok siebie: to JEDYNY
                       warunek doboru zabezpieczenia i cały sens tego kalkulatora, więc ma
                       być widoczny wprost, a nie do odtworzenia z chipów wyżej. */}
                   {sizedBreaker.aparat && (
-                    <div className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2" style={{ background: "#3B8C631A", color: "#2C6B4A" }}>
-                      <Check size={16} className="shrink-0 mt-0.5" />
+                    <Alert variant="success" role="note" className="mt-2 items-start">
                       <div>
                         Warunek doboru spełniony:{" "}
                         <strong className="pe-mono">
@@ -1515,36 +1536,25 @@ export function CalculatorsTab() {
                         </strong>{" "}
                         (Ib ≤ In ≤ Iz) — wyłącznik zadziała, zanim przewód się przegrzeje.
                       </div>
-                    </div>
+                    </Alert>
                   )}
 
                   {sizedBreaker.Ia_A !== null && sizedBreaker.Zs_max_Ohm !== null && (
-                    <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="text-xs text-slate-500">Prąd zadziałania Ia</div>
-                        <div className="pe-mono">{formatLiczba(sizedBreaker.Ia_A, 0)} A</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-slate-500">Wymagana Zs max</div>
-                        <div className="pe-mono text-copper">{formatLiczba(sizedBreaker.Zs_max_Ohm, 2)} Ω</div>
-                      </div>
-                    </div>
+                    <WynikGlowny
+                      drugorzedny
+                      wartosci={[
+                        { etykieta: "Prąd zadziałania Ia", wartosc: formatLiczba(sizedBreaker.Ia_A, 0), jednostka: "A" },
+                        { etykieta: "Wymagana Zs max", wartosc: formatLiczba(sizedBreaker.Zs_max_Ohm, 2), jednostka: "Ω", ton: "akcent" },
+                      ]}
+                    />
                   )}
 
                   {sizedBreaker.ostrzezenia.length > 0 && (
                     <div className="mt-2 space-y-1.5">
                       {sizedBreaker.ostrzezenia.map((w, i) => (
-                        <div
-                          key={i}
-                          className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
-                          style={{
-                            background: w.level === "error" ? "#C6433A14" : "#C1793F14",
-                            color: w.level === "error" ? "#A2352C" : "#8A5526",
-                          }}
-                        >
-                          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                          <div>{w.message}</div>
-                        </div>
+                        <Alert key={i} role="note" variant={w.level === "error" ? "danger" : "caution"}>
+                          {w.message}
+                        </Alert>
                       ))}
                     </div>
                   )}
@@ -1589,12 +1599,12 @@ export function CalculatorsTab() {
             <Card title={active.label} tag="4 kryteria naraz">
               <div className={UKLAD_POLA_WYNIK}>
                 <div className="min-w-0">
-                  <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+                  <Alert variant="info" role="note" className="mb-3 text-xs">
                     Cztery kryteria liczone NIEZALEŻNIE — obciążalność, spadek napięcia i (opcjonalnie) ochrona
                     przeciwporażeniowa oraz wytrzymałość zwarciowa. Wynikowy przekrój to <strong>maksimum</strong> z nich, nie
                     pierwszy z brzegu. Tylko obwody <strong>3-fazowe</strong> — tablica dla dwóch żył obciążonych (1-fazowe)
                     nie została jeszcze dostarczona.
-                  </div>
+                  </Alert>
 
                   <div className="grid sm:grid-cols-2 gap-x-4">
                     <Field
@@ -1670,17 +1680,17 @@ export function CalculatorsTab() {
                       />
                     </div>
                   ) : (
-                    <div className="mb-3 text-[11px] leading-relaxed text-slate-500">
+                    <div className="mb-3 text-xs leading-relaxed text-slate-500">
                       Metoda gruntowa — bez korekty temperatury/grupowania (brak tablic dla gruntu). Wynik ważny dla 20°C w
                       gruncie.
                     </div>
                   )}
-                  <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                     <input type="checkbox" checked={pdRozruch} onChange={(e) => patch({ pdRozruch: e.target.checked })} className="h-4 w-4 rounded border-border" />
                     Odbiornik z rozruchem silnikowym — charakterystyka C
                   </label>
 
-                  <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={pdSprawdzOchrone}
@@ -1709,7 +1719,7 @@ export function CalculatorsTab() {
                     </div>
                   )}
 
-                  <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+                  <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">
                     <input
                       type="checkbox"
                       checked={pdSprawdzZwarcie}
@@ -1743,7 +1753,7 @@ export function CalculatorsTab() {
                           hint="Prąd zwarcia jednofazowego (L-PE) w tym miejscu instalacji — z pomiaru, z kalkulatora „Prądy zwarciowe” albo z dokumentacji projektowej."
                         />
                       </div>
-                      <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+                      <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                         <input
                           type="checkbox"
                           checked={pdObwodOdbiorczy}
@@ -1758,27 +1768,29 @@ export function CalculatorsTab() {
                 </div>
                 <div className="min-w-0" data-testid="wynik-obok">
                   {pelnyDobor.wartosci && (
-                    <div className="mt-2 p-3 pe-result">
-                      <div className="text-xs text-slate-500 mb-1">Przekrój wynikowy</div>
-                      <div className="pe-mono text-lg text-blueprint">{formatLiczba(pelnyDobor.wartosci.przekroj_mm2, 1)} mm²</div>
-                      <div className="mt-2 flex gap-2 flex-wrap">
-                        <span className="pe-chip pe-tag-copper">{pelnyDobor.wartosci.kabel}</span>
-                        <span className="pe-chip pe-tag-blue">In {pelnyDobor.wartosci.In_A} A</span>
-                        <span className="pe-chip pe-tag-green">
+                    <WynikGlowny
+                      wartosci={[
+                        { etykieta: "Przekrój wynikowy", wartosc: formatLiczba(pelnyDobor.wartosci.przekroj_mm2, 1), jednostka: "mm²" },
+                      ]}
+                    >
+                      <div className="flex gap-2 flex-wrap">
+                        <Badge variant="accent">{pelnyDobor.wartosci.kabel}</Badge>
+                        <Badge variant="info">In {pelnyDobor.wartosci.In_A} A</Badge>
+                        <Badge variant="success">
                           decyduje: {pelnyDobor.wartosci.decydujace.map((k) => KRYTERIUM_LABELS[k]).join(" i ")}
-                        </span>
+                        </Badge>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-slate-500">
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-500">
                         {(Object.entries(pelnyDobor.wartosci.kryteria) as [string, (typeof pelnyDobor.wartosci.kryteria)[keyof typeof pelnyDobor.wartosci.kryteria]][]).map(
                           ([k, v]) => (
-                            <span key={k} className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                            <Badge key={k}>
                               {KRYTERIUM_LABELS[k as keyof typeof KRYTERIUM_LABELS]}:{" "}
                               {v.ocenione ? `${formatLiczba(v.minPrzekroj_mm2!, 1)} mm²` : "nieocenione"}
-                            </span>
+                            </Badge>
                           )
                         )}
                       </div>
-                    </div>
+                    </WynikGlowny>
                   )}
                   <CalcResultView wynik={pelnyDobor} />
                 </div>
@@ -1788,11 +1800,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "gGWkladka" && (
             <Card title={active.label} tag="wkładka topikowa">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Imax i Zs max pochodzą wprost z tablicy czasowo-prądowej wkładki (Poradnik Projektanta Elektryka,
                 tabl. Z.10.3/Z.10.4) — NIE ze wzoru k×In jak dla wyłączników. Tablica pokrywa czasy 0,2 s / 0,4 s / 5 s;
                 nie zawiera 1 s (obwód rozdzielczy w układzie TT) ani 0,1 s.
-              </div>
+              </Alert>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
@@ -1815,7 +1827,7 @@ export function CalculatorsTab() {
                   options={UKLAD_OPTIONS}
                   hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce). TT — własny uziom budynku, niezależny od sieci."
                 />
-                <label className="flex items-center gap-2 text-[13px] text-slate-600 mt-1">
+                <label className="flex items-center gap-2 text-sm text-slate-600 mt-1">
                   <input
                     type="checkbox"
                     checked={ggObwodOdbiorczy}
@@ -1826,7 +1838,7 @@ export function CalculatorsTab() {
                 </label>
               </div>
 
-              <label className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">
+              <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={ggSprawdzZs}
@@ -1855,18 +1867,28 @@ export function CalculatorsTab() {
               />
 
               {ggWkladka.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Dobrana wkładka</div>
-                  <div className="pe-mono text-lg text-blueprint">
-                    {TYP_WKLADKI_LABELS[ggTyp]}, In {ggWkladka.wartosci.In_A} A
+                // Wynikiem głównym jest sam prąd znamionowy („In 16 A”) — to liczba, której
+                // szuka się na budowie. Pełna nazwa typu („D0gG (wkładka gwintowa, system D0)”)
+                // w rozmiarze wyniku zawijała się na telefonie w trzy linie i spychała liczbę
+                // na koniec; teraz stoi jako pierwszy znacznik pod wynikiem. Decyzja produktowa
+                // do #269 (2026-11-10).
+                <WynikGlowny
+                  wartosci={[
+                    {
+                      etykieta: "Dobrana wkładka",
+                      wartosc: <>In {ggWkladka.wartosci.In_A}</>,
+                      jednostka: "A",
+                    },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge>{TYP_WKLADKI_LABELS[ggTyp]}</Badge>
+                    <Badge variant="info">czas {CZAS_GG_LABELS[ggWkladka.wartosci.czas_s === 0.2 ? "0.2" : ggWkladka.wartosci.czas_s === 0.4 ? "0.4" : "5"]}</Badge>
+                    <Badge variant="accent">Imax (Ia) {formatLiczba(ggWkladka.wartosci.Imax_A, 1)} A</Badge>
+                    <Badge variant="success">Zs max {formatLiczba(ggWkladka.wartosci.ZsMax_ohm, 3)} Ω</Badge>
+                    <Badge variant="info">I₂ {formatLiczba(ggWkladka.wartosci.I2_A, 1)} A — wymaga Iz ≥ {formatLiczba(ggWkladka.wartosci.I2_A / 1.45, 1)} A</Badge>
                   </div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-blue">czas {CZAS_GG_LABELS[ggWkladka.wartosci.czas_s === 0.2 ? "0.2" : ggWkladka.wartosci.czas_s === 0.4 ? "0.4" : "5"]}</span>
-                    <span className="pe-chip pe-tag-copper">Imax (Ia) {formatLiczba(ggWkladka.wartosci.Imax_A, 1)} A</span>
-                    <span className="pe-chip pe-tag-green">Zs max {formatLiczba(ggWkladka.wartosci.ZsMax_ohm, 3)} Ω</span>
-                    <span className="pe-chip pe-tag-blue">I₂ {formatLiczba(ggWkladka.wartosci.I2_A, 1)} A — wymaga Iz ≥ {formatLiczba(ggWkladka.wartosci.I2_A / 1.45, 1)} A</span>
-                  </div>
-                </div>
+                </WynikGlowny>
               )}
               <CalcResultView wynik={ggWkladka} />
             </Card>
@@ -1874,11 +1896,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "spadek" && (
             <Card title={active.label} tag="sprawdzenie trasy">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Ten kalkulator sprawdza trasę o <strong>znanym przekroju</strong> — np. kabel, który już jest ułożony
                 albo narzucony z góry. Jeśli dopiero dobierasz przewód, użyj „Dobór obwodu”: tam przekrój
                 jest wynikiem, dobieranym pod obciążalność i spadek naraz.
-              </div>
+              </Alert>
 
               <div className="grid sm:grid-cols-2 gap-x-4">
                 <Field
@@ -1957,7 +1979,7 @@ export function CalculatorsTab() {
               {/* Metoda pełna jest OBOWIĄZKOWA od 35 mm² (spec pkt 7) — silnik zwraca
                   wtedy twardy błąd zamiast liczyć dalej, więc checkbox musi być
                   widoczny obok pola przekroju, a nie schowany w opcjach. */}
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={duZReaktancja}
@@ -1977,21 +1999,23 @@ export function CalculatorsTab() {
               )}
 
               {spadekPelny.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Spadek napięcia na trasie</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(spadekPelny.wartosci.spadek_pct, 2)} %</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">ΔU {formatLiczba(spadekPelny.wartosci.spadek_V, 2)} V</span>
-                    <span className="pe-chip pe-tag-blue">
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Spadek napięcia na trasie", wartosc: formatLiczba(spadekPelny.wartosci.spadek_pct, 2), jednostka: "%" },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant="accent">ΔU {formatLiczba(spadekPelny.wartosci.spadek_V, 2)} V</Badge>
+                    <Badge variant="info">
                       napięcie u odbiornika {formatLiczba(spadekPelny.wartosci.napiecieKoncowe_V, 1)} V
-                    </span>
+                    </Badge>
                     {spadekPelny.wartosci.minPrzekroj_mm2 !== null && (
-                      <span className="pe-chip pe-tag-green">
+                      <Badge variant="success">
                         min. przekrój w limicie {String(spadekPelny.wartosci.minPrzekroj_mm2).replace(".", ",")} mm²
-                      </span>
+                      </Badge>
                     )}
                   </div>
-                </div>
+                </WynikGlowny>
               )}
 
               <CalcResultView wynik={spadekPelny} />
@@ -2000,11 +2024,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "dlugosc" && (
             <Card title={active.label} tag="granica trasy">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Odwrotność „Spadku napięcia": tam podajesz długość i patrzysz na wynik, tutaj dostajesz{" "}
                 <strong>granicę wprost</strong>. Liczone są dwa warunki naraz — spadek napięcia i zadziałanie
                 zabezpieczenia przy zwarciu na końcu trasy — a wiąże ten, który wypada krócej.
-              </div>
+              </Alert>
 
               <div className="grid gap-x-4 sm:grid-cols-2">
                 <Field label="Zasilanie" value={mdPhase} onChange={(v) => patch({ mdPhase: v as "1" | "3" })} options={PHASE_OPTIONS} />
@@ -2078,23 +2102,25 @@ export function CalculatorsTab() {
               </div>
 
               {maksDlugosc.wartosci && (
-                <div className="pe-result mt-2 p-3">
-                  <div className="mb-1 text-xs text-slate-500">Maksymalna długość trasy</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(maksDlugosc.wartosci.L_max_m, 1)} m</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Maksymalna długość trasy", wartosc: formatLiczba(maksDlugosc.wartosci.L_max_m, 1), jednostka: "m" },
+                  ]}
+                >
+                  <div className="flex flex-wrap gap-2">
                     {/* Obie granice OBOK siebie, nie tylko ta wiążąca: dopiero z nich
                         widać, co poprawić — grubszą żyłę czy inne zabezpieczenie. */}
-                    <span className={`pe-chip ${maksDlugosc.wartosci.wiazace === "spadek" ? "pe-tag-copper" : "pe-tag-blue"}`}>
+                    <Badge variant={maksDlugosc.wartosci.wiazace === "spadek" ? "accent" : "info"}>
                       spadek napięcia {formatLiczba(maksDlugosc.wartosci.L_spadek_m, 1)} m
-                    </span>
-                    <span className={`pe-chip ${maksDlugosc.wartosci.wiazace === "ochrona" ? "pe-tag-copper" : "pe-tag-blue"}`}>
+                    </Badge>
+                    <Badge variant={maksDlugosc.wartosci.wiazace === "ochrona" ? "accent" : "info"}>
                       samoczynne wyłączenie {formatLiczba(maksDlugosc.wartosci.L_ochrona_m, 1)} m
-                    </span>
-                    <span className="pe-chip pe-tag-green">
+                    </Badge>
+                    <Badge variant="success">
                       Zs max {formatLiczba(maksDlugosc.wartosci.Zs_max_Ohm, 2)} Ω przy Ia {formatLiczba(maksDlugosc.wartosci.Ia_A, 0)} A
-                    </span>
+                    </Badge>
                   </div>
-                </div>
+                </WynikGlowny>
               )}
 
               <CalcResultView wynik={maksDlugosc} />
@@ -2124,11 +2150,11 @@ export function CalculatorsTab() {
 
           {activeCalc === "zwarcie" && (
             <Card title={active.label} tag="PN-EN 60909">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Współczynnik napięciowy <strong>c wynika z celu obliczenia</strong>, a nie z osobnego pola: do doboru
                 aparatów liczy się najgorszy przypadek największego prądu (c = 1,05), a do ochrony przeciwporażeniowej —
                 najmniejszego (c = 0,95). Pomylenie ich daje wynik pozornie poprawny i całkowicie nieprzydatny.
-              </div>
+              </Alert>
 
               <Field
                 label="Cel obliczenia"
@@ -2190,27 +2216,29 @@ export function CalculatorsTab() {
               </div>
 
               {trafo.wartosci && zwarcie.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Prąd zwarcia trójfazowego</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(zwarcie.wartosci.Ik3_A / 1000, 2)} kA</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">Zt {formatLiczba(trafo.wartosci.Zt_ohm * 1000, 2)} mΩ</span>
-                    <span className="pe-chip pe-tag-blue">Ik2 {formatLiczba(zwarcie.wartosci.Ik2_A / 1000, 2)} kA</span>
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Prąd zwarcia trójfazowego", wartosc: formatLiczba(zwarcie.wartosci.Ik3_A / 1000, 2), jednostka: "kA" },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant="accent">Zt {formatLiczba(trafo.wartosci.Zt_ohm * 1000, 2)} mΩ</Badge>
+                    <Badge variant="info">Ik2 {formatLiczba(zwarcie.wartosci.Ik2_A / 1000, 2)} kA</Badge>
                     {zwarcie.wartosci.Ik1_A !== null && (
-                      <span className="pe-chip pe-tag-blue">Ik1 {formatLiczba(zwarcie.wartosci.Ik1_A, 0)} A</span>
+                      <Badge variant="info">Ik1 {formatLiczba(zwarcie.wartosci.Ik1_A, 0)} A</Badge>
                     )}
                     {zwarcie.wartosci.ip_A !== null && (
-                      <span className="pe-chip pe-tag-green">ip {formatLiczba(zwarcie.wartosci.ip_A / 1000, 2)} kA</span>
+                      <Badge variant="success">ip {formatLiczba(zwarcie.wartosci.ip_A / 1000, 2)} kA</Badge>
                     )}
-                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                    <Badge>
                       c = {formatLiczba(zwarcie.wartosci.c, 2)}
-                    </span>
+                    </Badge>
                   </div>
-                  <div className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  <div className="mt-2 text-xs leading-relaxed text-slate-500">
                     Wymagana zdolność zwarciowa aparatu w tym miejscu: Icn ≥{" "}
                     <strong>{formatLiczba(zwarcie.wartosci.Ik3_A / 1000, 2)} kA</strong> (dobieraj z c = 1,05).
                   </div>
-                </div>
+                </WynikGlowny>
               )}
 
               {/* Błąd danych transformatora wyklucza policzenie zwarcia, więc
@@ -2251,20 +2279,20 @@ export function CalculatorsTab() {
                 />
               </div>
               {wytrzymalosc.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Minimalny przekrój ze względu na zwarcie</div>
-                  <div className="pe-mono text-lg text-blueprint">
-                    {formatLiczba(wytrzymalosc.wartosci.minPrzekroj_mm2, 2)} mm²
-                  </div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">k = {wytrzymalosc.wartosci.k}</span>
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Minimalny przekrój ze względu na zwarcie", wartosc: formatLiczba(wytrzymalosc.wartosci.minPrzekroj_mm2, 2), jednostka: "mm²" },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant="accent">k = {wytrzymalosc.wartosci.k}</Badge>
                     {wytrzymalosc.wartosci.maksCzas_s !== null && (
-                      <span className="pe-chip pe-tag-blue">
+                      <Badge variant="info">
                         t max dla {String(zwPrzekroj).replace(".", ",")} mm² = {formatLiczba(wytrzymalosc.wartosci.maksCzas_s, 3)} s
-                      </span>
+                      </Badge>
                     )}
                   </div>
-                </div>
+                </WynikGlowny>
               )}
               <CalcResultView wynik={wytrzymalosc} />
             </Card>
@@ -2354,22 +2382,24 @@ export function CalculatorsTab() {
               </div>
 
               {uziom.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Rezystancja uziemienia</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(uziom.wartosci.R_wypadkowa_ohm, 2)} Ω</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Rezystancja uziemienia", wartosc: formatLiczba(uziom.wartosci.R_wypadkowa_ohm, 2), jednostka: "Ω" },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
                     {uzLiczba > 1 && (
-                      <span className="pe-chip pe-tag-copper">
+                      <Badge variant="accent">
                         pojedynczy {formatLiczba(uziom.wartosci.R_pojedynczy_ohm, 2)} Ω
-                      </span>
+                      </Badge>
                     )}
                     {uziom.wartosci.potrzebnaDlugosc_m !== null && (
-                      <span className="pe-chip pe-tag-green">
+                      <Badge variant="success">
                         długość dla {formatLiczba(uzWymagana, 0)} Ω: {formatLiczba(uziom.wartosci.potrzebnaDlugosc_m, 1)} m
-                      </span>
+                      </Badge>
                     )}
                   </div>
-                </div>
+                </WynikGlowny>
               )}
               <CalcResultView wynik={uziom} />
             </Card>
@@ -2377,12 +2407,12 @@ export function CalculatorsTab() {
 
           {activeCalc === "bilansFaz" && (
             <Card title={active.label} tag="asymetria i przewód N">
-              <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+              <Alert variant="info" role="note" className="mb-3 text-xs">
                 Przy odbiorach nieliniowych (zasilacze impulsowe, LED, falowniki) 3. harmoniczna sumuje się w przewodzie
                 neutralnym <strong>arytmetycznie</strong>, zamiast się znosić — prąd w N potrafi wtedy przekroczyć prąd
                 fazowy nawet przy idealnie symetrycznym obciążeniu. W przewodzie N nie ma wyłącznika, więc nic tego
                 przeciążenia nie wyłapie.
-              </div>
+              </Alert>
 
               <div className="space-y-2 mb-3">
                 {/* Na wąskim ekranie wiersz łamie się na dwa: nazwa i faza, pod nimi moc,
@@ -2417,7 +2447,10 @@ export function CalculatorsTab() {
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, cosfi: Number(e.target.value) } : x)))}
                     />
                     <select
-                      className="pe-input text-sm order-2 w-28 sm:order-none sm:w-24"
+                      // Stałe w-28: pole z własną strzałką (padding-right 2rem) potrzebuje ok. 112 px,
+                      // żeby najdłuższa opcja („3-fazowy”) się mieściła — i przy 16 px (telefon), i
+                      // przy 14 px (od md); węższe w-24 ucinało napis (zmierzone: 57 px tekstu na 52 px).
+                      className="pe-input pe-select order-2 w-28 sm:order-none text-base md:text-sm"
                       aria-label={`Faza: ${o.nazwa}`}
                       title="Do której fazy podłączony jest ten odbiór — albo „3-fazowy”, jeśli obciąża wszystkie trzy równo."
                       value={o.faza ?? "3f"}
@@ -2444,14 +2477,13 @@ export function CalculatorsTab() {
                 ))}
               </div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <button
+                <Button variant="secondary" size="sm"
                   onClick={() =>
                     setOdbioryFazowe((ds) => [...ds, { id: crypto.randomUUID(), nazwa: "Nowy odbiór", mocW: 1000, cosfi: 1, faza: "L1" }])
                   }
-                  className="pe-btn-ghost text-xs px-2.5 py-1.5 flex items-center gap-1"
                 >
                   <Plus size={13} /> Dodaj odbiór
-                </button>
+                </Button>
               </div>
               <Field
                 label="Udział 3. harmonicznej w prądzie fazowym"
@@ -2463,21 +2495,23 @@ export function CalculatorsTab() {
               />
 
               {bilansFaz.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Prąd w przewodzie neutralnym</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(bilansFaz.wartosci.IN_calkowity_A, 2)} A</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Prąd w przewodzie neutralnym", wartosc: formatLiczba(bilansFaz.wartosci.IN_calkowity_A, 2), jednostka: "A" },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant="accent">
                       L1 {formatLiczba(bilansFaz.wartosci.prady.L1, 1)} A · L2 {formatLiczba(bilansFaz.wartosci.prady.L2, 1)} A · L3{" "}
                       {formatLiczba(bilansFaz.wartosci.prady.L3, 1)} A
-                    </span>
-                    <span className="pe-chip pe-tag-blue">asymetria {formatLiczba(bilansFaz.wartosci.asymetria_pct, 1)}%</span>
-                    <span className="pe-chip pe-tag-green">S {formatLiczba(bilansFaz.wartosci.S_VA / 1000, 2)} kVA</span>
-                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                    </Badge>
+                    <Badge variant="info">asymetria {formatLiczba(bilansFaz.wartosci.asymetria_pct, 1)}%</Badge>
+                    <Badge variant="success">S {formatLiczba(bilansFaz.wartosci.S_VA / 1000, 2)} kVA</Badge>
+                    <Badge>
                       cosφ {formatLiczba(bilansFaz.wartosci.cosfi, 3)}
-                    </span>
+                    </Badge>
                   </div>
-                </div>
+                </WynikGlowny>
               )}
               <CalcResultView wynik={bilansFaz} />
             </Card>
@@ -2548,25 +2582,27 @@ export function CalculatorsTab() {
               </div>
 
               {silnik.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Prąd znamionowy silnika</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(silnik.wartosci.In_A, 2)} A</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">prąd rozruchowy {formatLiczba(silnik.wartosci.Ir_A, 1)} A</span>
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Prąd znamionowy silnika", wartosc: formatLiczba(silnik.wartosci.In_A, 2), jednostka: "A" },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant="accent">prąd rozruchowy {formatLiczba(silnik.wartosci.Ir_A, 1)} A</Badge>
                     {slRozruch === "gwiazda_trojkat" && (
-                      <span className="pe-chip pe-tag-blue">
+                      <Badge variant="info">
                         przy DOL byłoby {formatLiczba(silnik.wartosci.Ir_bezposredni_A, 1)} A
-                      </span>
+                      </Badge>
                     )}
-                    <span className="pe-chip pe-tag-blue">stycznik AC-3 ≥ {formatLiczba(silnik.wartosci.stycznikAC3_A, 1)} A</span>
+                    <Badge variant="info">stycznik AC-3 ≥ {formatLiczba(silnik.wartosci.stycznikAC3_A, 1)} A</Badge>
                     {silnik.wartosci.klasaWyzwalania && (
-                      <span className="pe-chip pe-tag-green">przekaźnik klasy {silnik.wartosci.klasaWyzwalania}</span>
+                      <Badge variant="success">przekaźnik klasy {silnik.wartosci.klasaWyzwalania}</Badge>
                     )}
-                    <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                    <Badge>
                       moment {formatLiczba(silnik.wartosci.momentWzgledny * 100, 0)}% momentu przy DOL
-                    </span>
+                    </Badge>
                   </div>
-                </div>
+                </WynikGlowny>
               )}
               <CalcResultView wynik={silnik} />
             </Card>
@@ -2645,7 +2681,7 @@ export function CalculatorsTab() {
                 />
               </div>
 
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={pvSprawdzMppt}
@@ -2705,17 +2741,19 @@ export function CalculatorsTab() {
               </div>
 
               {stringPV.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Napięcie stringu w zimnie</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(stringPV.wartosci.VocZimny_V, 1)} V</div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">I projektowy (1,25×Isc) {formatLiczba(stringPV.wartosci.IprojektowyA, 2)} A</span>
-                    <span className="pe-chip pe-tag-blue">spadek DC {formatLiczba(stringPV.wartosci.spadekDC_pct, 2)}%</span>
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Napięcie stringu w zimnie", wartosc: formatLiczba(stringPV.wartosci.VocZimny_V, 1), jednostka: "V" },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant="accent">I projektowy (1,25×Isc) {formatLiczba(stringPV.wartosci.IprojektowyA, 2)} A</Badge>
+                    <Badge variant="info">spadek DC {formatLiczba(stringPV.wartosci.spadekDC_pct, 2)}%</Badge>
                     {stringPV.wartosci.VmppGoracy_V !== null && (
-                      <span className="pe-chip pe-tag-green">Vmpp w upale {formatLiczba(stringPV.wartosci.VmppGoracy_V, 1)} V</span>
+                      <Badge variant="success">Vmpp w upale {formatLiczba(stringPV.wartosci.VmppGoracy_V, 1)} V</Badge>
                     )}
                   </div>
-                </div>
+                </WynikGlowny>
               )}
               <CalcResultView wynik={stringPV} />
 
@@ -2747,21 +2785,31 @@ export function CalculatorsTab() {
                 />
               </div>
               {falownikAC.przekroj_mm2 && falownikAC.aparat && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Przewód i zabezpieczenie AC</div>
-                  <div className="mt-1 flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">{falownikAC.kabel}</span>
-                    <span className="pe-chip pe-tag-blue">
-                      wyłącznik {falownikAC.aparat.charakterystyka}
-                      {falownikAC.aparat.In_A} {falownikAC.aparat.bieguny}
-                    </span>
+                // Przewód i aparat to wynik tego bloku (dotąd same znaczniki) — wartości główne jak w
+                // „Doborze obwodu”; znacznik z kablem zostaje, bo opisuje typ przewodu, nie przekrój.
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Przekrój żyły", wartosc: String(falownikAC.przekroj_mm2).replace(".", ","), jednostka: "mm²" },
+                    {
+                      etykieta: "Wyłącznik nadprądowy",
+                      wartosc: (
+                        <>
+                          {falownikAC.aparat.charakterystyka}
+                          {falownikAC.aparat.In_A} {falownikAC.aparat.bieguny}
+                        </>
+                      ),
+                    },
+                  ]}
+                >
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant="accent">{falownikAC.kabel}</Badge>
                   </div>
-                </div>
+                </WynikGlowny>
               )}
               {!falownikAC.przekroj_mm2 && (
-                <div className="mt-2 flex items-center gap-1 text-sm" style={{ color: "#A2352C" }}>
-                  <AlertTriangle size={14} /> nie udało się dobrać przewodu AC
-                </div>
+                <Alert variant="danger" role="note" className="mt-2">
+                  nie udało się dobrać przewodu AC
+                </Alert>
               )}
             </Card>
           )}
@@ -2803,7 +2851,7 @@ export function CalculatorsTab() {
                 />
               </div>
 
-              <label className="mb-3 flex items-center gap-2 text-[13px] text-slate-600">
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={evWbudowanaOchronaDC}
@@ -2814,42 +2862,36 @@ export function CalculatorsTab() {
               </label>
 
               {obwodEV.wartosci && (
-                <div className="mt-2 p-3 pe-result">
-                  <div className="text-xs text-slate-500 mb-1">Prąd obliczeniowy</div>
-                  <div className="pe-mono text-lg text-blueprint">{formatLiczba(obwodEV.wartosci.Ib_A, 2)} A</div>
+                <WynikGlowny
+                  wartosci={[
+                    { etykieta: "Prąd obliczeniowy", wartosc: formatLiczba(obwodEV.wartosci.Ib_A, 2), jednostka: "A" },
+                  ]}
+                >
                   {obwodEV.wartosci.dobor.kabel && obwodEV.wartosci.dobor.aparat ? (
-                    <div className="mt-2 flex gap-2 flex-wrap">
-                      <span className="pe-chip pe-tag-copper">{obwodEV.wartosci.dobor.kabel}</span>
-                      <span className="pe-chip pe-tag-blue">
+                    <div className="flex gap-2 flex-wrap">
+                      <Badge variant="accent">{obwodEV.wartosci.dobor.kabel}</Badge>
+                      <Badge variant="info">
                         wyłącznik {obwodEV.wartosci.dobor.aparat.charakterystyka}
                         {obwodEV.wartosci.dobor.aparat.In_A} {obwodEV.wartosci.dobor.aparat.bieguny}
-                      </span>
-                      <span className="pe-chip pe-tag-green">
+                      </Badge>
+                      <Badge variant="success">
                         {obwodEV.wartosci.wymaganyRCD === "typA_wystarczy" ? "RCD typu A wystarczy" : "wymagany RCD typu B / A+RDC-DD"}
-                      </span>
+                      </Badge>
                     </div>
                   ) : (
-                    <div className="mt-2 flex items-center gap-1 text-sm" style={{ color: "#A2352C" }}>
-                      <AlertTriangle size={14} /> nie udało się dobrać — zobacz ostrzeżenia niżej
-                    </div>
+                    <Alert variant="danger" role="note">
+                      nie udało się dobrać — zobacz ostrzeżenia niżej
+                    </Alert>
                   )}
-                </div>
+                </WynikGlowny>
               )}
 
               {obwodEV.wartosci?.dobor.ostrzezenia && obwodEV.wartosci.dobor.ostrzezenia.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {obwodEV.wartosci.dobor.ostrzezenia.map((o, i) => (
-                    <div
-                      key={i}
-                      className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
-                      style={{
-                        background: o.level === "error" ? "#C6433A14" : "#C1793F14",
-                        color: o.level === "error" ? "#A2352C" : "#8A5526",
-                      }}
-                    >
-                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                      <div>{o.message}</div>
-                    </div>
+                    <Alert key={i} role="note" variant={o.level === "error" ? "danger" : "caution"}>
+                      {o.message}
+                    </Alert>
                   ))}
                 </div>
               )}
@@ -2893,12 +2935,11 @@ export function CalculatorsTab() {
                 ))}
               </div>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <button
+                <Button variant="secondary" size="sm"
                   onClick={() => setDevices((ds) => [...ds, { id: crypto.randomUUID(), name: "Nowy odbiornik", power: 1000 }])}
-                  className="pe-btn-ghost text-xs px-2.5 py-1.5 flex items-center gap-1"
                 >
                   <Plus size={13} /> Dodaj odbiornik
-                </button>
+                </Button>
               </div>
               <Field
                 label="Współczynnik jednoczesności (ks)"
@@ -2915,33 +2956,23 @@ export function CalculatorsTab() {
                 hint="Wypadkowy cos φ instalacji. 1 dla odbiorników grzejnych (bojler, kuchenka, grzałki); przy dużym udziale silników, pomp ciepła i zasilaczy przyjmij niższy — prąd rośnie o 1/cos φ."
               />
               {bledyBilansu.length > 0 ? (
-                <div role="alert" data-testid="bledy-bilansu" className="mt-2 rounded-md p-3 text-[12.5px] leading-relaxed" style={{ background: "#C6433A12", color: "#8C2F28" }}>
+                <Alert variant="danger" role="alert" data-testid="bledy-bilansu" className="mt-2">
                   <div className="mb-1 font-semibold">Popraw dane — wynik nie jest liczony:</div>
                   <ul className="list-disc pl-5">
                     {bledyBilansu.map((b) => (
                       <li key={b}>{b}</li>
                     ))}
                   </ul>
-                </div>
+                </Alert>
               ) : (
-              <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-xs text-slate-500">Moc zainstalowana</div>
-                  <div className="pe-mono">{formatLiczba(balance.sumPower, 0)} W</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Moc zapotrzebowana</div>
-                  <div className="pe-mono text-copper">{formatLiczba(balance.demandPower, 0)} W</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Prąd — 1-faz.</div>
-                  <div className="pe-mono">{formatLiczba(balance.demandCurrent1, 1)} A</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Prąd — 3-faz.</div>
-                  <div className="pe-mono">{formatLiczba(balance.demandCurrent3, 1)} A</div>
-                </div>
-              </div>
+              <WynikGlowny
+                wartosci={[
+                  { etykieta: "Moc zainstalowana", wartosc: formatLiczba(balance.sumPower, 0), jednostka: "W" },
+                  { etykieta: "Moc zapotrzebowana", wartosc: formatLiczba(balance.demandPower, 0), jednostka: "W" },
+                  { etykieta: "Prąd — 1-faz.", wartosc: formatLiczba(balance.demandCurrent1, 1), jednostka: "A" },
+                  { etykieta: "Prąd — 3-faz.", wartosc: formatLiczba(balance.demandCurrent3, 1), jednostka: "A" },
+                ]}
+              />
               )}
               <HowItWorks
                 formulas={[
@@ -2973,13 +3004,13 @@ export function CalculatorsTab() {
                     unit="A"
                     hint="Prąd zapotrzebowany całego budynku (nie suma mocy zainstalowanej!) — wczytaj go przyciskiem poniżej z kalkulatora „Bilans mocy budynku” albo wpisz wartość z wniosku o przyłączenie."
                   />
-                  <button
+                  <Button variant="secondary" size="sm"
                     type="button"
                     onClick={loadWlzCurrentFromBalance}
-                    className="pe-btn-ghost -mt-2 mb-3 text-xs px-2.5 py-1.5 flex items-center gap-1"
+                    className="-mt-2 mb-3"
                   >
                     <Download size={13} /> Wczytaj z bilansu mocy
-                  </button>
+                  </Button>
                 </div>
                 <Field
                   label="Zasilanie"
@@ -3030,42 +3061,47 @@ export function CalculatorsTab() {
                 />
               </div>
 
-              <div className="mt-2 p-3 pe-result">
+              <WynikGlowny
+                wartosci={
+                  sizedFeeder.przekroj_mm2 && sizedFeeder.aparat
+                    ? [
+                        { etykieta: "Przekrój żyły", wartosc: String(sizedFeeder.przekroj_mm2).replace(".", ","), jednostka: "mm²" },
+                        {
+                          etykieta: "Wyłącznik nadprądowy",
+                          wartosc: (
+                            <>
+                              {sizedFeeder.aparat.charakterystyka}
+                              {sizedFeeder.aparat.In_A} {sizedFeeder.aparat.bieguny}
+                            </>
+                          ),
+                        },
+                      ]
+                    : []
+                }
+              >
                 {sizedFeeder.przekroj_mm2 && sizedFeeder.aparat ? (
                   <div className="flex gap-2 flex-wrap">
-                    <span className="pe-chip pe-tag-copper">{sizedFeeder.kabel}</span>
-                    <span className="pe-chip pe-tag-blue">
-                      wyłącznik {sizedFeeder.aparat.charakterystyka}
-                      {sizedFeeder.aparat.In_A} {sizedFeeder.aparat.bieguny}
-                    </span>
-                    <span className="pe-chip pe-tag-green">obc. dop. {sizedFeeder.Iz_A} A</span>
+                    <Badge variant="accent">{sizedFeeder.kabel}</Badge>
+                    <Badge variant="success">obc. dop. {sizedFeeder.Iz_A} A</Badge>
                     {sizedFeeder.spadek_napiecia_pct !== null && (
-                      <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+                      <Badge>
                         ΔU {sizedFeeder.spadek_napiecia_pct}% (limit {sizedFeeder.spadek_napiecia_limit_pct}%)
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 ) : (
-                  <div className="text-sm flex items-center gap-1" style={{ color: "#A2352C" }}>
-                    <AlertTriangle size={14} /> nie udało się dobrać — zobacz komunikat niżej
-                  </div>
+                  <Alert variant="danger" role="note">
+                    nie udało się dobrać — zobacz komunikat niżej
+                  </Alert>
                 )}
-              </div>
+              </WynikGlowny>
 
               {sizedFeeder.ostrzezenia.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {sizedFeeder.ostrzezenia.map((w, i) => (
-                    <div
-                      key={i}
-                      className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
-                      style={{
-                        background: w.level === "error" ? "#C6433A14" : "#C1793F14",
-                        color: w.level === "error" ? "#A2352C" : "#8A5526",
-                      }}
-                    >
-                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-                      <div>{w.message}</div>
-                    </div>
+                    <Alert key={i} role="note" variant={w.level === "error" ? "danger" : "caution"}>
+                      {w.message}
+                    </Alert>
                   ))}
                 </div>
               )}
@@ -3097,7 +3133,7 @@ export function CalculatorsTab() {
                   silnika. Te trzy poniżej były dla niego martwe: dawało się je
                   wypełnić, a kryteria dalej pokazywały „nie podano". */}
               {trybObwodu === "pelny" ? (
-                <p className="mb-3 text-[11.5px] leading-relaxed text-slate-500">
+                <p className="mb-3 text-xs leading-relaxed text-slate-500">
                   Kryteria 3 i 4 włączasz w karcie wyżej — checkboxami „sprawdź ochronę przeciwporażeniową" i „sprawdź
                   wytrzymałość zwarciową". Ten tryb liczy je z impedancji źródła i prądu zwarcia, a nie z gotowej Zs.
                 </p>
@@ -3178,49 +3214,42 @@ export function CalculatorsTab() {
                   hint="Wynik pomiaru pętli zwarcia L-PE miernikiem instalacyjnym w danym punkcie obwodu. Zostaw puste/0, żeby zobaczyć samo Zs max bez oceny."
                 />
               </div>
-              <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div>
-                  <div className="text-xs text-slate-500">Prąd zadziałania Ia</div>
-                  <div className="pe-mono">{formatLiczba(zCalc.ia, 0)} A</div>
-                </div>
-                {/* Dwa progi obok siebie, nie jeden: pierwszy to granica z normy, drugi —
-                    z jakim zapasem powinien wyjść POMIAR, żeby obwód przeszedł odbiór
-                    także przy nagrzanych przewodach i niższym napięciu sieci. */}
-                <div>
-                  <div className="text-xs text-slate-500">Zs max — limit normy</div>
-                  <div className="pe-mono text-copper">{zCalc.zsMax ? formatLiczba(zCalc.zsMax, 2) : "—"} Ω</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Zs — limit zalecany (0,8)</div>
-                  <div className="pe-mono text-copper">{zCalc.zsZalecana ? formatLiczba(zCalc.zsZalecana, 2) : "—"} Ω</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Prąd zwarcia Ik (c = 0,95)</div>
-                  <div className="pe-mono">{zCalc.ik ? formatLiczba(zCalc.ik, 0) : "—"} A</div>
-                </div>
-              </div>
+              <WynikGlowny
+                wartosci={[
+                  { etykieta: "Prąd zadziałania Ia", wartosc: formatLiczba(zCalc.ia, 0), jednostka: "A" },
+                  // Dwa progi obok siebie, nie jeden: pierwszy to granica z normy, drugi —
+                  // z jakim zapasem powinien wyjść POMIAR, żeby obwód przeszedł odbiór
+                  // także przy nagrzanych przewodach i niższym napięciu sieci.
+                  // Brak danych to samo „—” bez jednostki, nie „— Ω”.
+                  {
+                    etykieta: "Zs max — limit normy",
+                    wartosc: zCalc.zsMax ? formatLiczba(zCalc.zsMax, 2) : "—",
+                    jednostka: zCalc.zsMax ? "Ω" : undefined,
+                    ton: "akcent",
+                  },
+                  {
+                    etykieta: "Zs — limit zalecany (0,8)",
+                    wartosc: zCalc.zsZalecana ? formatLiczba(zCalc.zsZalecana, 2) : "—",
+                    jednostka: zCalc.zsZalecana ? "Ω" : undefined,
+                    ton: "akcent",
+                  },
+                  {
+                    etykieta: "Prąd zwarcia Ik (c = 0,95)",
+                    wartosc: zCalc.ik ? formatLiczba(zCalc.ik, 0) : "—",
+                    jednostka: zCalc.ik ? "A" : undefined,
+                  },
+                ]}
+              />
               {zMeasured < 0 && (
-                <div role="alert" className="mt-2 rounded-lg p-3 text-sm" style={{ background: "#C6433A1A", color: "#A2352C" }}>
+                <Alert variant="danger" role="alert" className="mt-2">
                   Impedancja pętli zwarcia nie może być ujemna — sprawdź wpisaną wartość. Zostaw 0, żeby zobaczyć samo Zs max
                   bez oceny.
-                </div>
+                </Alert>
               )}
               {zCalc.ok !== null && (
-                <div
-                  className="mt-2 flex items-start gap-2 rounded-lg p-3 text-sm"
-                  style={
-                    !zCalc.ok
-                      ? { background: "#C6433A1A", color: "#A2352C" }
-                      : zCalc.okZalecany
-                        ? { background: "#3B8C631A", color: "#2C6B4A" }
-                        : { background: "#C1793F1A", color: "#8A5526" }
-                  }
-                >
-                  {zCalc.ok && zCalc.okZalecany ? (
-                    <Check size={16} className="mt-0.5 shrink-0" />
-                  ) : (
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                  )}
+                /* role="status" jawnie: werdykt liczy się od nowa przy każdym wciśnięciu klawisza, a domyślny
+                  `alert` (wariant danger) czytałby czytnik ekranu na nowo po każdej cyfrze. */
+                <Alert variant={!zCalc.ok ? "danger" : zCalc.okZalecany ? "success" : "caution"} role="status" className="mt-2 items-start">
                   <span>
                     {!zCalc.ok
                       ? "Warunek niespełniony — zmierzona Zs przekracza limit normy. Skróć obwód, zwiększ przekrój lub zmień charakterystykę zabezpieczenia."
@@ -3228,7 +3257,7 @@ export function CalculatorsTab() {
                         ? `Warunek spełniony z zapasem ${formatLiczba(zCalc.margines!, 0)}% — zabezpieczenie zadziała w wymaganym czasie.`
                         : `Mieści się w normie, ale bez zapasu (do limitu ${formatLiczba(zCalc.margines!, 0)}%). Pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję — po obciążeniu obwód może wypaść poza limit.`}
                   </span>
-                </div>
+                </Alert>
               )}
               <HowItWorks
                 formulas={[
@@ -3272,20 +3301,19 @@ export function CalculatorsTab() {
                   hint="Wynik pomiaru uziomu miernikiem rezystancji uziemienia — patrz protokół „Pomiar rezystancji uziemienia” w zakładce Protokoły."
                 />
               </div>
-              <div className="mt-2 p-3 pe-result">
-                <div className="text-xs text-slate-500 mb-1">Maksymalna dopuszczalna RA</div>
-                <div className="pe-mono text-lg text-copper">{formatLiczba(groundingCheck.raMax, 0)} Ω</div>
-              </div>
+              <WynikGlowny
+                wartosci={[
+                  { etykieta: "Maksymalna dopuszczalna RA", wartosc: formatLiczba(groundingCheck.raMax, 0), jednostka: "Ω", ton: "akcent" },
+                ]}
+              />
               {groundingCheck.ok !== null && (
-                <div
-                  className="mt-2 p-3 rounded-lg text-sm flex items-start gap-2"
-                  style={groundingCheck.ok ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
-                >
-                  {groundingCheck.ok ? <Check size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+                /* role="status" jawnie: wynik przelicza się przy każdej zmianie pola, a `alert` (wariant danger)
+                    przerywałby czytnikowi ekranu przy każdym znaku. */
+                <Alert variant={groundingCheck.ok ? "success" : "danger"} role="status" className="mt-2">
                   {groundingCheck.ok
                     ? "Warunek spełniony — RCD zadziała, zanim napięcie dotykowe przekroczy 50 V."
                     : "Warunek niespełniony — zmierzona RA przekracza wartość dopuszczalną. Popraw uziom (dodatkowy uziomik, głębsze wbicie) albo zastosuj RCD o niższym IΔn."}
-                </div>
+                </Alert>
               )}
               <HowItWorks
                 formulas={[
@@ -3340,17 +3368,13 @@ export function CalculatorsTab() {
                   hint="Zależy od geometrii pomieszczenia i odbicia ścian/sufitu — typowo 0,4–0,7. Dla jasnego pokoju o zwykłych proporcjach przyjmij 0,6."
                 />
               </div>
-              <div className="mt-2 p-3 pe-result grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-xs text-slate-500">Wymagany strumień całkowity</div>
-                  <div className="pe-mono">{formatLiczba(lightCalc.requiredLumens, 0)} lm</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500">Liczba opraw</div>
-                  <div className="pe-mono text-lg text-copper">{Math.ceil(lightCalc.fixtureCount) || 0} szt.</div>
-                </div>
-              </div>
-              <div className="text-[11px] text-slate-500 mt-2">
+              <WynikGlowny
+                wartosci={[
+                  { etykieta: "Wymagany strumień całkowity", wartosc: formatLiczba(lightCalc.requiredLumens, 0), jednostka: "lm" },
+                  { etykieta: "Liczba opraw", wartosc: Math.ceil(lightCalc.fixtureCount) || 0, jednostka: "szt." },
+                ]}
+              />
+              <div className="text-xs text-slate-500 mt-2">
                 Orientacyjne wymagania: pokój dzienny 150–300 lx, kuchnia (blat) 500 lx, łazienka 200–300 lx, biuro 500 lx, korytarz 100 lx.
               </div>
               <HowItWorks
@@ -3374,7 +3398,7 @@ export function CalculatorsTab() {
                   Treść poprawiona po audycie 2026-11-04 (B14): typ A zamiast „AC/A" (spójnie
                   z doborem w Rozdzielnicy), SPD nazwany po imieniu, reguła liczby obwodów
                   oznaczona jako praktyka, a nie wymóg normy. */}
-              <p className="mb-3 text-[12.5px] text-slate-500">
+              <p className="mb-3 text-sm text-slate-500">
                 Zasady doboru do sprawdzenia przy projekcie — bez obliczeń. Typ RCD dla konkretnego obwodu podaje „Dobór obwodu”
                 i tabela doboru w Rozdzielnicy.
               </p>
@@ -3411,6 +3435,7 @@ export function CalculatorsTab() {
               />
             </Card>
           )}
+          </div>
         </div>
       </div>
     </div>

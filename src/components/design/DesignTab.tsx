@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { klawiszDlaEdytora } from "@/lib/klawiaturaEdytora";
@@ -263,7 +264,7 @@ export interface DesignTabProps {
   /**
    * Kolejny krok przepływu — ląduje jako przycisk na prawym końcu paska stanu
    * (patrz `nastepnyKrok` w EditorStatusBar). Na pozostałych zakładkach tę rolę
-   * pełni pływająca pigułka w rogu okna; tutaj nie może, bo leżałaby na rysunku.
+   * pełni dolny pasek kroku (`PasekKroku`); tutaj się nie mieści, bo zabierałby miejsce rysunkowi.
    * `undefined`, gdy nie ma dokąd iść — projekt jest jeszcze pusty.
    */
   nastepnyKrok?: { tytul: string; przejdz: () => void; pobierz: () => void };
@@ -1155,7 +1156,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       // zakładki był zwykłym blokiem, margines schodził na zewnątrz i suma się zgadzała;
       // po zmianie strony na kolumnę flexową (stopka przy dole okna) marginesy przestały
       // się scalać i rachunek zaniżał się o równe 16 px — akurat tyle, żeby płótno znów
-      // sięgnęło pod pigułkę „Dalej". Odejmowanie MIERZONYCH banerów jest odporne na
+      // sięgnęło pod przycisk „Dalej" w pasku stanu. Odejmowanie MIERZONYCH banerów jest odporne na
       // każdy taki odstęp, bo nie zakłada o nim niczego.
       const kolumna = kolumnaPlotnaRef.current;
       const korzenEdytora = pelnyEkranRef.current;
@@ -1287,10 +1288,19 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // edytor lądował tyle niżej i pasek stanu z „Dalej" wypadał za dolną krawędź).
     // Po zakończeniu ruchu dosuwamy więc edytor do góry jednym skokiem. `scrollend`
     // tam, gdzie jest; zegar jako zapas dla przeglądarek, które go nie znają.
+    //
+    // Na czas całego ruchu (płynny przejazd + dosunięcie) `<html>` niesie
+    // `data-przewijanie-do-edytora`: inaczej z zewnątrz nie da się odróżnić „przewijanie
+    // się skończyło” od „jeszcze nie ruszyło” albo „czeka na dosunięcie” — a ruch zrobiony
+    // w tym czasie (np. `scrollTo(0, 0)`) `dosun` zaraz cofa. Czytają to testy e2e
+    // (`poczekajNaKoniecPrzewijania` w e2e/_flow.ts).
+    const html = document.documentElement;
+    html.dataset.przewijanieDoEdytora = "";
     let zegar = 0;
     const dosun = () => {
       window.removeEventListener("scrollend", dosun);
       window.clearTimeout(zegar);
+      delete html.dataset.przewijanieDoEdytora;
       const el = pelnyEkranRef.current;
       if (el && Math.abs(el.getBoundingClientRect().top) > 2) el.scrollIntoView({ block: "start" });
     };
@@ -1303,6 +1313,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       window.cancelAnimationFrame(id);
       window.removeEventListener("scrollend", dosun);
       window.clearTimeout(zegar);
+      delete html.dataset.przewijanieDoEdytora;
     };
   }, [showEntryScreen, wgrywanie.stan]);
 
@@ -2435,13 +2446,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             Dedykowane (AGD)
           </label>
         )}
-        <button
+        <Button variant="secondary" size="sm"
           type="button"
           onClick={() => rozwinPanel()}
-          className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm"
+          className="shrink-0 text-sm"
         >
           Zmień
-        </button>
+        </Button>
       </div>
     ) : null;
 
@@ -2463,12 +2474,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       dlugosc += Math.hypot(w.points[i].x - w.points[i - 1].x, w.points[i].y - w.points[i - 1].y);
     }
     const petla = petleBezPomieszczenia.some((x) => x.wall.id === w.id);
-    const przycisk = "pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs [@media(pointer:coarse)]:min-h-11";
+    const przycisk = "[@media(pointer:coarse)]:min-h-11";
     return (
       <div className="flex min-w-0 flex-col items-start gap-2 text-xs" data-testid="karta-sciany">
         <div>
           <div className="text-sm font-semibold text-ink">Ściana</div>
-          <div className="text-[11px] text-slate-500">
+          <div className="text-xs text-slate-500">
             {mpu !== null ? `${formatLiczba(dlugosc * mpu, 2)} m` : `${Math.round(dlugosc)} jedn.`} ·{" "}
             {odcinki} {odcinki === 1 ? "odcinek" : odcinki < 5 ? "odcinki" : "odcinków"}
           </div>
@@ -2485,7 +2496,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               const v = Number(e.target.value);
               if (Number.isFinite(v) && v > 0) setWallThicknessOf(w.id, thicknessFromDisplay(v));
             }}
-            className="w-16 rounded border border-border px-1.5 py-0.5"
+            className="pe-input w-16 px-1.5 py-0.5"
           />
           {mpu !== null ? "cm" : "jedn."}
         </div>
@@ -2498,13 +2509,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         />
         <div className="flex flex-wrap gap-1.5">
           {petla && (
-            <button onClick={() => createRoomFromWall(w.id)} className={przycisk}>
+            <Button variant="secondary" size="sm" onClick={() => createRoomFromWall(w.id)} className={przycisk}>
               <Layers size={13} /> Utwórz pomieszczenie z obrysu
-            </button>
+            </Button>
           )}
-          <button onClick={zaznaczenie.usunZaznaczone} className={`${przycisk} text-red-600`}>
+          <Button variant="secondary" size="sm" onClick={zaznaczenie.usunZaznaczone} className={`${przycisk} text-red-600`}>
             <Trash2 size={13} /> Usuń ścianę
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -2528,16 +2539,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           i bez myszy (patrz `zaznaczanieWielokrotne`). Stoi NAD listą operacji na
           zaznaczeniu, bo to on je odblokowuje: najpierw się zaznacza, potem wyrównuje. */}
       {toolMode === "zaznacz" && elements.length > 0 && (
-        <button
+        <Button variant="secondary" size="sm"
           data-testid="zaznacz-kilka"
           onClick={() => setZaznaczanieWielokrotne((v) => !v)}
           aria-pressed={zaznaczanieWielokrotne}
           title="Kolejne kliknięcia dokładają elementy do zaznaczenia — to samo co Shift z kliknięciem"
-          className="pe-btn-ghost flex items-center gap-1.5 px-2.5 py-1 text-xs"
-          style={zaznaczanieWielokrotne ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : undefined}
+          className={zaznaczanieWielokrotne ? "bg-copper-tlo font-semibold text-caution" : undefined}
         >
           <CopyCheck size={13} /> Zaznacz kilka
-        </button>
+        </Button>
       )}
 
       {multiSelected.length > 0 && (
@@ -2549,21 +2559,20 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               robiło się przeciąganiem każdego z osobna, na oko. Ikony zamiast podpisów,
               bo sześć przycisków z nazwami nie mieści się w kolumnie 268 px; nazwa
               siedzi w `title` i `aria-label`, więc czytniki i testy ją widzą. */}
-          {/* Dwa JAWNE rzędy, nie jeden zawijany: osiem przycisków po 28 px z odstępami
-              przekracza szerokość kolumny o kilka pikseli, więc zawijanie łamało je
+          {/* Dwa JAWNE rzędy, nie jeden zawijany: osiem przycisków po 32 px z odstępami
+              nie mieści się w kolumnie w jednym rzędzie, więc zawijanie łamało je
               w przypadkowym miejscu (7 + 1) i rozdzielało grupy wbrew ich znaczeniu.
               Wyrównanie i rozkładanie to dwie różne operacje — niech i wyglądają na dwie. */}
           <div className="flex items-center gap-1">
             {WYROWNANIA.map(({ mode, label, Icon }) => (
-              <button
+              <Button variant="secondary" size="icon"
                 key={mode}
                 onClick={() => przesunElementy(alignMoves(elements, multiSelected, mode))}
                 title={label}
                 aria-label={label}
-                className="pe-btn-ghost flex h-7 w-7 items-center justify-center"
               >
                 <Icon size={14} />
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -2573,29 +2582,28 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           {multiSelected.length >= 3 && (
             <div className="flex items-center gap-1">
               {ROZLOZENIA.map(({ axis, label, Icon }) => (
-                <button
+                <Button variant="secondary" size="icon"
                   key={axis}
                   onClick={() => przesunElementy(distributeMoves(elements, multiSelected, axis))}
                   title={label}
                   aria-label={label}
-                  className="pe-btn-ghost flex h-7 w-7 items-center justify-center"
                 >
                   <Icon size={14} />
-                </button>
+                </Button>
               ))}
             </div>
           )}
 
           <div className="flex flex-wrap items-center gap-1">
-            <button onClick={duplikujZaznaczenie} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs">
+            <Button variant="secondary" size="sm" onClick={duplikujZaznaczenie}>
               <Copy size={13} /> Duplikuj
-            </button>
-            <button onClick={zaznaczenie.usunZaznaczone} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs text-red-600">
+            </Button>
+            <Button variant="secondary" size="sm" onClick={zaznaczenie.usunZaznaczone} className="text-red-600">
               <Trash2 size={13} /> Usuń zaznaczone ({multiSelected.length})
-            </button>
+            </Button>
           </div>
 
-          <span className="text-[11px] text-slate-400">Strzałki przesuwają o 1 jedn., z Shiftem o kratkę.</span>
+          <span className="text-xs text-slate-400">Strzałki przesuwają o 1 jedn., z Shiftem o kratkę.</span>
         </div>
       )}
 
@@ -2619,7 +2627,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 const v = Number(e.target.value);
                 if (Number.isFinite(v) && v > 0) sciany.setWallThickness(thicknessFromDisplay(v));
               }}
-              className="w-16 rounded border border-border px-1.5 py-0.5"
+              className="pe-input w-16 px-1.5 py-0.5"
             />
             {mpu !== null ? "cm" : "jedn."}
           </label>
@@ -2646,8 +2654,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             onZmiana={sciany.setDrawingWall}
             testId="wall-segment-length-input"
           />
-          <button onClick={sciany.finishWall} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
-          <button onClick={() => sciany.setDrawingWall([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
+          <Button variant="secondary" size="sm" onClick={sciany.finishWall} className="shrink-0 text-sm">Zakończ</Button>
+          <Button variant="secondary" size="sm" onClick={() => sciany.setDrawingWall([])} className="shrink-0 text-sm">Anuluj</Button>
         </div>
       )}
 
@@ -2675,12 +2683,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               : "Trasa: PPM → „Dodaj punkt”, przeciągnij uchwyt, dwuklik na uchwycie go kasuje, dwuklik na trasie pokazuje informacje."}
           </span>
           {selected.id in routeOverrides && (
-            <button
+            <Button variant="secondary" size="sm"
               onClick={() => clearRouteOverride(selected.id)}
-              className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs"
             >
               <Undo2 size={13} /> Cofnij do trasy automatycznej
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -2701,8 +2708,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <button
                 key={id}
                 onClick={() => otwory.setOpeningKind(id)}
-                className="rounded-md px-2.5 py-1 text-xs"
-                style={otwory.openingKind === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#4F5D73" }}
+                className={`rounded-md px-2.5 py-1 text-xs ${otwory.openingKind === id ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"}`}
               >
                 {label}
               </button>
@@ -2736,9 +2742,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               : "Kliknij pierwszy element przewodu (łącznik, gniazdo, szafkę…)."}
           </span>
           {przewodStart && (
-            <button className="pe-btn-ghost self-start px-2.5 py-1 text-xs" onClick={() => setPrzewodStart(null)}>
+            <Button variant="secondary" size="sm" className="self-start" onClick={() => setPrzewodStart(null)}>
               Anuluj
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -2761,7 +2767,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <select
                 value={w.rodzaj}
                 onChange={(e) => zmienPrzewod(w.id, { rodzaj: e.target.value as RodzajPrzewodu })}
-                className="rounded border border-border bg-white px-1.5 py-0.5"
+                className="pe-input pe-select py-0.5 text-base md:text-sm"
               >
                 {(Object.keys(RODZAJE_PRZEWODU) as RodzajPrzewodu[]).map((r) => (
                   <option key={r} value={r}>
@@ -2776,12 +2782,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 aria-label="Typ i przekrój kabla"
                 value={w.kabel}
                 onChange={(e) => zmienPrzewod(w.id, { kabel: e.target.value })}
-                className="min-w-0 flex-1 rounded border border-border px-1.5 py-0.5"
+                className="pe-input min-w-0 flex-1 px-1.5 py-0.5"
               />
             </label>
-            <button className="pe-btn-ghost self-start px-2.5 py-1 text-xs text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
+            <Button variant="secondary" size="sm" className="self-start text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
               Usuń przewód
-            </button>
+            </Button>
           </div>
         );
       })()}
@@ -2794,12 +2800,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             <span className="font-medium text-slate-600">Notatka</span>
             <p className="whitespace-pre-wrap break-words text-slate-600">{n.tekst}</p>
             <div className="flex flex-wrap gap-1.5">
-              <button className="pe-btn-ghost px-2.5 py-1 text-xs" onClick={() => setEdycjaNotatki({ id: n.id, tekst: n.tekst })}>
+              <Button variant="secondary" size="sm" onClick={() => setEdycjaNotatki({ id: n.id, tekst: n.tekst })}>
                 Edytuj
-              </button>
-              <button className="pe-btn-ghost px-2.5 py-1 text-xs text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
+              </Button>
+              <Button variant="secondary" size="sm" className="text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
                 Usuń
-              </button>
+              </Button>
             </div>
           </div>
         );
@@ -2820,7 +2826,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 const v = Number(e.target.value);
                 if (Number.isFinite(v) && v > 0) otwory.ustawSzerokosc(o.id, thicknessFromDisplay(v));
               }}
-              className="w-16 rounded border border-border px-1.5 py-0.5"
+              className="pe-input w-16 px-1.5 py-0.5"
             />
             {mpu !== null ? "cm" : "jedn."}
           </div>
@@ -2850,8 +2856,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   pokoje.ustawTryb(id);
                 }}
                 title={hint}
-                className="rounded-md px-2.5 py-1 text-sm"
-                style={pokoje.roomMode === id ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#4F5D73" }}
+                className={`rounded-md px-2.5 py-1 text-sm ${pokoje.roomMode === id ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"}`}
               >
                 {label}
               </button>
@@ -2919,9 +2924,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             />
           )}
           {pokoje.roomMode === "wielobok" && pokoje.drawingRoomPoints.length >= 3 && (
-            <button onClick={pokoje.zakonczRysowanie} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
+            <Button variant="secondary" size="sm" onClick={pokoje.zakonczRysowanie} className="shrink-0 text-sm">Zakończ</Button>
           )}
-          <button onClick={() => pokoje.setDrawingRoomPoints([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
+          <Button variant="secondary" size="sm" onClick={() => pokoje.setDrawingRoomPoints([])} className="shrink-0 text-sm">Anuluj</Button>
         </div>
       )}
       {toolMode === "skala" && (
@@ -2960,15 +2965,14 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         // obok przycisku łamie się na trzy linijki i rozpycha panel.
         <div className="flex min-w-0 flex-col items-start gap-1.5">
           <span className="text-xs font-medium text-slate-600">Obrys zamknięty</span>
-          <button
+          <Button variant="primary" size="sm"
             onClick={() => createRoomFromWall(propozycjaPokoju.wall.id)}
-            className="pe-btn-copper flex items-center gap-1.5 px-2.5 py-1 text-xs"
           >
             <Layers size={13} /> Zrób z niego pomieszczenie
-          </button>
+          </Button>
           <button
             onClick={() => setPetlaDoNazwania(null)}
-            className="text-[11px] text-slate-400 underline hover:text-slate-600"
+            className="text-xs text-slate-400 underline hover:text-slate-600"
             aria-label="Odrzuć propozycję pomieszczenia"
           >
             Nie teraz
@@ -3091,12 +3095,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           się to, do jakiego obwodu trafią w rozdzielnicy). Do zamknięcia i bez powrotu:
           po poprawieniu danych następne wczytanie i tak naliczy zero. */}
       {roomsFixedOnLoad > 0 && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#2D5A8C12", color: "#2D5A8C" }}
-        >
-          <Check size={14} className="shrink-0" />
+        <Alert variant="info" role="status" className="text-xs [&>div:last-child]:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
           <span>
             Poprawiono przypisanie {roomsFixedOnLoad}{" "}
             {roomsFixedOnLoad === 1 ? "elementu" : "elementów"} do pomieszczeń — zapis nie zgadzał się z tym, gdzie
@@ -3110,7 +3110,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           >
             <X size={14} />
           </button>
-        </div>
+          </div>
+        </Alert>
       )}
 
       {/* Trwały baner ryzyka: projekt bez konta żyje WYŁĄCZNIE w localStorage tej
@@ -3129,8 +3130,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {!session && !projektPrzykladowy && (elements.length > 0 || walls.length > 0 || roomShapes.length > 0 || !!bgImageUrl) && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C6433A14", color: "#A2352C" }}
+          className="flex flex-wrap items-center gap-2 rounded-lg bg-danger-tlo px-3 py-2 text-xs text-danger"
         >
           <AlertTriangle size={14} className="shrink-0" />
           <span>
@@ -3154,7 +3154,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         // `flex-1` + `justify-center`: karta rośnie na całą wolną wysokość, a jej treść
         // stoi w pionowym środku. Sama treść jest ta sama co wcześniej — problemem był
         // wyłącznie pas gołego tła pod spodem, nie to, co na karcie stoi.
-        <div className="pe-card flex flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+        // Na telefonie `py-8` zamiast `py-12`: 16 px nad treścią więcej, żeby oba wejścia
+        // („Wgraj rzut”, „Narysuj dom samodzielnie”) mieściły się na pierwszym ekranie
+        // także przy 360 × 780 (e2e/start-telefon.spec.ts).
+        <div className="pe-card flex flex-1 flex-col items-center justify-center gap-4 px-6 py-8 text-center sm:py-12">
           {/* Nagłówek mówi, co ta aplikacja ROBI, a nie co użytkownik ma kliknąć.
               Poprzednie „Zacznij projektować instalację" było poleceniem wydanym
               komuś, kto jeszcze nie wie, gdzie trafił — a jedyne zdanie tłumaczące
@@ -3231,12 +3234,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           właśnie odpowiedział. „Wgraj podkład" zostaje w pasku narzędzi, więc nikomu
           niczego to nie zamyka. */}
       {!bgImageUrl && !showEntryScreen && kondygnacjaPusta && !onboarding.manualDrawingChosen && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C1793F14", color: "#8A5526" }}
-        >
-          <Upload size={14} className="shrink-0" />
+        <Alert variant="caution" role="status" className="text-xs [&>div:last-child]:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
           <span>Zacznij od wgrania rzutu mieszkania albo odręcznego szkicu — posłuży za podkład, na którym rozmieścisz elementy.</span>
           <button onClick={() => fileRef.current?.click()} className="font-semibold underline">
             Wgraj rzut / zdjęcie
@@ -3247,22 +3246,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <button onClick={startManualDrawing} className="font-semibold underline">
             Narysuj dom samodzielnie
           </button>
-        </div>
+          </div>
+        </Alert>
       )}
 
       {/* Trwały, nieinwazyjny baner: praca bez skali jest DOZWOLONA, ale jej skutek
           (nieprecyzyjne długości i kosztorys) musi być widoczny cały czas, a nie raz. */}
       {onboarding.missingScaleWarning && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C1793F14", color: "#8A5526" }}
-        >
+        <Alert variant="caution" role="status" className="text-xs [&>div:last-child]:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
           <span>Skala nieustawiona — długości przewodów i kosztorys mogą być niedokładne.</span>
           <button onClick={() => handleStepAction("skala")} className="font-semibold underline">
             Ustaw skalę
           </button>
-        </div>
+          </div>
+        </Alert>
       )}
 
       {/* Kolejna kondygnacja: skalę odziedziczyła po parterze, ale pomieszczenia są
@@ -3270,24 +3268,21 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           i obwody kuchenne nie zadziałają. Przewodnik prowadzi tylko parter, więc
           tutaj wystarczy krótka prośba (przypadek brzegowy 4). */}
       {onboarding.needsRoomConfirmation && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#2D5A8C12", color: "#2D5A8C" }}
-        >
+        <Alert variant="info" role="status" className="text-xs [&>div:last-child]:flex-1">
+          <div className="flex flex-wrap items-center gap-2">
           <span>Ta kondygnacja ma już skalę z parteru, ale nie ma jeszcze pomieszczeń.</span>
           <button onClick={() => handleStepAction("pomieszczenia")} className="font-semibold underline">
             Obrysuj pomieszczenia
           </button>
-        </div>
+          </div>
+        </Alert>
       )}
 
       {/* Podmiana podkładu unieważniła kalibrację — proponujemy poprawkę, nie kasujemy. */}
       {onboarding.scaleStale && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C6433A14", color: "#A2352C" }}
+          className="flex flex-wrap items-center gap-2 rounded-lg bg-danger-tlo px-3 py-2 text-xs text-danger"
         >
           <span>Podkład się zmienił, więc skala może już nie pasować do tego rzutu.</span>
           <button onClick={() => handleStepAction("skala")} className="font-semibold underline">
@@ -3396,7 +3391,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         wariant={`${trasyWPdf ? "z-trasami" : "bez-tras"}:${formatPdf}`}
         opcje={
           <>
-            <label className="flex items-center gap-2 text-[13px] text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
               <input
                 type="checkbox"
                 checked={trasyWPdf}
@@ -3405,12 +3400,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               />
               Trasy przewodów na rysunku
             </label>
-            <label className="flex items-center gap-2 text-[13px] text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
               Arkusz
               <select
                 value={formatPdf}
                 onChange={(e) => setFormatPdf(e.target.value as FormatArkusza)}
-                className="h-8 rounded-md border border-border bg-white px-2 text-[13px]"
+                className="pe-input pe-select h-8 py-0 text-base md:text-sm"
               >
                 <option value="A4">A4 poziomo</option>
                 <option value="A3">A3 poziomo</option>
@@ -3756,7 +3751,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             />
           ) : toolMode === "pomieszczenie" ? (
             <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-              <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400" data-testid="liczba-pomieszczen">
+              <div className="px-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400" data-testid="liczba-pomieszczen">
                 Pomieszczenia ({roomShapes.length})
               </div>
               {/* Przewija się sama LISTA — przy kilkunastu pomieszczeniach inaczej
@@ -3847,7 +3842,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                     {szufladaZwinieta ? (
                       <span className="truncate">{tytulSzuflady}</span>
                     ) : (
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Zaznaczenie</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Zaznaczenie</span>
                     )}
                     {szufladaZwinieta ? <ChevronUp size={16} aria-label="Rozwiń kartę" /> : <ChevronDown size={16} aria-label="Zwiń kartę" />}
                   </button>
@@ -4153,7 +4148,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           className="absolute left-0 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-r-lg border border-l-0 border-border bg-white/90 py-3 text-slate-400 shadow-md backdrop-blur transition-colors hover:bg-white hover:text-copper"
         >
           <ChevronRight size={13} />
-          <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ writingMode: "vertical-rl" }}>
+          <span className="text-xs font-semibold uppercase tracking-wider" style={{ writingMode: "vertical-rl" }}>
             Narzędzia
           </span>
           <ChevronRight size={13} />
@@ -4198,7 +4193,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                       zapisz();
                     }
                   }}
-                  className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
+                  className="pe-input mb-1 w-full"
                 />
                 <p className="mb-3 text-xs text-slate-400">Notatka trafi też na rzut w PDF. Ctrl+Enter zapisuje.</p>
                 <Button variant="copper" className="w-full" onClick={zapisz}>
@@ -4230,13 +4225,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 pokoje.zapisz();
               }
             }}
-            className="mb-3 w-full rounded border border-border px-3 py-1.5 text-sm"
+            className="pe-input mb-3 w-full"
           />
           <label className="mb-1 block text-xs font-medium text-slate-500">Typ pomieszczenia</label>
           <select
             value={pokoje.pendingRoom?.type ?? "inne"}
             onChange={(e) => pokoje.zmienTyp(e.target.value as RoomType)}
-            className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
+            className="pe-input pe-select mb-1 w-full py-1.5 text-base md:text-sm"
           >
             {(Object.entries(ROOM_TYPE_LABELS) as [RoomType, string][]).map(([value, label]) => (
               <option key={value} value={value}>
@@ -4364,7 +4359,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           >
             {contextMenu.multi ? (
               <>
-                <div className="px-3 py-1.5 text-[11px] text-slate-400">Zaznaczono {multiSelected.length}</div>
+                <div className="px-3 py-1.5 text-xs text-slate-400">Zaznaczono {multiSelected.length}</div>
                 <button
                   onClick={() => {
                     rotateElements(multiSelected);
@@ -4636,7 +4631,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               if (name) renameRoomShape(roomNameEdit.id, name);
               setRoomNameEdit(null);
             }}
-            className="pe-card fixed z-50 px-2 py-1 text-sm outline-none"
+            className="pe-card fixed z-50 px-2 py-1 text-base md:text-sm"
             style={{ left: roomNameEdit.x - 60, top: roomNameEdit.y - 12, width: 120 }}
           />
         </>

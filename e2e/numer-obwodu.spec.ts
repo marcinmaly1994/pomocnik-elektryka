@@ -233,7 +233,9 @@ test("numer obwodu da sie nadac, zmienic i skasowac z okna edycji (dwuklik)", as
   await expect(page.getByRole("dialog")).toBeVisible();
   await wybor(page).getByRole("button", { name: "+ 1" }).click();
   // Wybor od razu widac na chipie — inaczej nie wiadomo, co sie zapisze.
-  await expect(page.getByRole("dialog").locator("button.border-copper")).toHaveText("1");
+  // Po stanie `aria-pressed`, nie po klasie `border-copper`: tę samą miedź ma w oknie
+  // także wybrana liczba gniazd w ramce (tokeny zamiast hex z alfą).
+  await expect(page.getByRole("dialog").getByRole("button", { pressed: true })).toHaveText("1");
   await page.getByRole("button", { name: "Zapisz" }).click();
 
   // Drugie DOLACZA do istniejacego — lista numerow jest ta sama, co w menu.

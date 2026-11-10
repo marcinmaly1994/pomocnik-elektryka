@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 /**
  * Pomija EKRAN STARTOWY (patrz `showEntryScreen` w DesignTab.tsx), jeśli akurat
@@ -109,4 +109,53 @@ export async function odslonNarzedziaRysowania(page: Page): Promise<void> {
   const okno = page.viewportSize()!;
   await page.mouse.move(10, okno.height / 2);
   await page.locator('[data-testid="karta-narzedzi"], nav[aria-label="Narzędzia rysowania"]').first().waitFor({ state: "visible" });
+}
+
+/**
+ * Przejście do narzędzia z nagłówka — na telefonie przez menu, na większym ekranie wprost.
+ *
+ * Poniżej 768 px Kalkulatory, Protokoły, Dokumentacja, Pomoc i Nowy projekt są
+ * w arkuszu „Menu” (redesign PR 3). Testy, które jadą na obu szerokościach, wołają
+ * to jedno wejście zamiast sprawdzać szerokość same.
+ */
+export async function przejdzDoNarzedzia(
+  page: Page,
+  nazwa: "Kalkulatory" | "Protokoły pomiarowe" | "Dokumentacja" | "Pomoc" | "Nowy projekt"
+): Promise<void> {
+  const menu = page.getByRole("button", { name: "Menu", exact: true });
+  if (await menu.isVisible()) {
+    await menu.click();
+    await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: nazwa, exact: true }).click();
+  } else {
+    await page.getByRole("banner").getByRole("button", { name: nazwa, exact: true }).click();
+  }
+}
+
+/**
+ * Czeka, aż strona przestanie się przewijać — także przewijaniem ZAPLANOWANYM.
+ *
+ * Na telefonie zejście z ekranu startowego płynnie przewija stronę do edytora, a po
+ * `scrollend` (albo po 900 ms) `dosun` w DesignTab.tsx dosuwa ją jednym skokiem. Test,
+ * który w tym czasie zrobi `scrollTo(0, 0)` albo zmierzy pozycję, dostaje stan
+ * przejściowy: `dosun` cofa stronę, gdy właśnie otwiera się rozwijane menu. Dlatego
+ * dwa warunki naraz: `<html>` bez `data-przewijanie-do-edytora` (żaden ruch nie czeka)
+ * ORAZ `scrollY` taki sam w dwóch odczytach ~100 ms od siebie (nic się nie przesuwa).
+ */
+export async function poczekajNaKoniecPrzewijania(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            new Promise<boolean>((gotowe) => {
+              const przed = window.scrollY;
+              setTimeout(
+                () => gotowe(!("przewijanieDoEdytora" in document.documentElement.dataset) && window.scrollY === przed),
+                100
+              );
+            })
+        ),
+      { message: "strona wciąż się przewija", intervals: [50], timeout: 5000 }
+    )
+    .toBe(true);
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { Ruler } from "lucide-react";
 import type { Point } from "@/types";
+import { Button } from "@/components/ui/button";
 import {
   PAPER_WIDTHS_MM,
   SCALE_DENOMINATORS,
@@ -76,8 +77,7 @@ export function ScaleCalibrationTool({
               setMode(m);
               setError(null);
             }}
-            className="rounded-md px-2 py-1 text-[11px]"
-            style={mode === m ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : { color: "#4F5D73" }}
+            className={`rounded-md px-2 py-1 text-xs ${mode === m ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"}`}
           >
             {m === "pomiar" ? "Zmierzę na rzucie" : "Rzut jest w skali"}
           </button>
@@ -112,9 +112,9 @@ export function ScaleCalibrationTool({
                 className="pe-input w-20 py-1 text-xs"
               />
             </label>
-            <button onClick={applyMeasured} className="pe-btn-copper px-2 py-1 text-xs">
+            <Button variant="primary" size="sm" onClick={applyMeasured}>
               Zatwierdź skalę
-            </button>
+            </Button>
           </>
         )
       ) : (
@@ -125,7 +125,7 @@ export function ScaleCalibrationTool({
               value={paper}
               onChange={(e) => setPaper(e.target.value as keyof typeof PAPER_WIDTHS_MM)}
               aria-label="Format arkusza"
-              className="pe-input py-1 text-xs"
+              className="pe-input pe-select py-1 text-base md:text-sm"
             >
               {Object.keys(PAPER_WIDTHS_MM).map((k) => (
                 <option key={k} value={k}>
@@ -140,7 +140,7 @@ export function ScaleCalibrationTool({
               value={denominator}
               onChange={(e) => setDenominator(Number(e.target.value))}
               aria-label="Skala rzutu"
-              className="pe-input py-1 text-xs"
+              className="pe-input pe-select py-1 text-base md:text-sm"
             >
               {SCALE_DENOMINATORS.map((d) => (
                 <option key={d} value={d}>
@@ -152,23 +152,22 @@ export function ScaleCalibrationTool({
           {presetWidth !== null && (
             <span className="text-slate-400">rzut ma wtedy ok. {formatLiczba(presetWidth, 1)} m szerokości</span>
           )}
-          <button
+          <Button variant="primary" size="sm"
             onClick={() => presetMpu && onApply(presetMpu)}
             disabled={!presetMpu}
-            className="pe-btn-copper px-2 py-1 text-xs"
           >
             Zatwierdź skalę
-          </button>
+          </Button>
         </>
       )}
 
-      <button onClick={onCancel} disabled={mode === "pomiar" && !calibPoints.length} className="pe-btn-ghost px-2 py-1">
+      <Button variant="secondary" size="sm" onClick={onCancel} disabled={mode === "pomiar" && !calibPoints.length}>
         Anuluj
-      </button>
+      </Button>
       {metersPerUnit && (
-        <button onClick={onClear} className="pe-btn-ghost px-2 py-1 text-red-600">
+        <Button variant="secondary" size="sm" onClick={onClear} className="text-red-600">
           Usuń kalibrację
-        </button>
+        </Button>
       )}
 
       {error && (

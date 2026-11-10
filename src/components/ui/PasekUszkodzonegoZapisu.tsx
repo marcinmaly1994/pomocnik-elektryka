@@ -35,8 +35,7 @@ export function PasekUszkodzonegoZapisu() {
     <div
       role="alert"
       data-testid="zapis-uszkodzony"
-      className="mb-4 flex flex-wrap items-start gap-2.5 rounded-lg px-3 py-2 text-xs"
-      style={{ background: "#C6433A12", color: "#8C2F28" }}
+      className="mb-4 flex flex-wrap items-start gap-2.5 rounded-lg bg-danger-tlo px-3 py-2 text-xs text-danger"
     >
       <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">

@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { AlertTriangle, LogIn, Loader2, MailCheck, Send } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
+import { LogIn, Loader2, MailCheck, Send } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { wrocFokusDoOtwieracza } from "@/lib/wrocFokus";
 import { Button } from "@/components/ui/button";
 import { SUPABASE_CONFIGURED, sesjaZOdpowiedzi, supaRecover, supaResend, supaSignIn, supaSignUp } from "@/lib/supabase";
 import type { Session, SupaError } from "@/lib/supabase";
@@ -144,14 +146,15 @@ export function AuthModal({ open, komunikat, onClose, onSignedIn }: AuthModalPro
         }
       }}
     >
-      <DialogContent title={TITLES[mode]}>
+      {/* Bez DialogTrigger (otwierane z nagłówka, z chipu w menu i z edytora) — patrz
+          `wrocFokusDoOtwieracza`; wraca do „Zaloguj się”, a na telefonie do „Menu”. */}
+      <DialogContent title={TITLES[mode]} onCloseAutoFocus={wrocFokusDoOtwieracza("konto")}>
         {!SUPABASE_CONFIGURED && (
-          <div className="mb-3 flex gap-2 rounded-md p-2.5 text-xs" style={{ background: "#C6433A1A", color: "#A2352C" }}>
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <Alert variant="danger" className="mb-3">
             Backend nie jest jeszcze skonfigurowany (uzupełnij <span className="pe-mono">VITE_SUPABASE_URL</span> i{" "}
             <span className="pe-mono">VITE_SUPABASE_ANON_KEY</span> w pliku <span className="pe-mono">.env</span>), więc
             logowanie się nie powiedzie.
-          </div>
+          </Alert>
         )}
         <form className="space-y-3" onSubmit={submit} noValidate>
           <label className="block">
@@ -225,7 +228,7 @@ export function AuthModal({ open, komunikat, onClose, onSignedIn }: AuthModalPro
               politykę w tej samej karcie zamyka to okno razem z wpisanym już adresem
               e-mail i hasłem — czyli karze za przeczytanie tego, co się podpisuje. */}
           {mode === "register" && (
-            <p className="text-[11px] leading-relaxed text-slate-500">
+            <p className="text-xs leading-relaxed text-slate-500">
               Zakładając konto akceptujesz{" "}
               <a
                 href="/regulamin"

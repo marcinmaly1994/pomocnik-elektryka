@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
 
 /**
  * Lekki popover ze strzałką, przypięty pod wskazanym elementem paska narzędzi.
@@ -70,9 +71,9 @@ export function CoachMark({ anchor, text, onDismiss, dismissLabel = "Rozumiem" }
         }
       />
       <p className="mb-2.5 text-xs leading-relaxed text-ink">{text}</p>
-      <button onClick={onDismiss} className="pe-btn-copper w-full px-2 py-1.5 text-xs" autoFocus>
+      <Button variant="primary" size="sm" onClick={onDismiss} className="w-full" autoFocus>
         {dismissLabel}
-      </button>
+      </Button>
     </div>
   );
 }

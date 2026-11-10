@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
 import { dobierzN, dobierzPE } from "@/lib/calc/protectiveConductor";
 import { formatLiczba } from "@/lib/calc/result";
@@ -6,6 +7,7 @@ import type { Izolacja, Material } from "@/lib/norms/conductors";
 import { CalcResultView } from "./CalcResultView";
 import { Card } from "./Card";
 import { Field } from "./Field";
+import { WynikGlowny } from "./WynikGlowny";
 import { IZOLACJA_OPTIONS, MATERIAL_OPTIONS, SZEREG_PELNY_OPTIONS } from "./opcje";
 
 /**
@@ -82,19 +84,21 @@ export function KalkulatorPeN({ label }: { label: string }) {
       </div>
 
       {przewodPE.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Wymagany przekrój przewodu PE</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(przewodPE.wartosci.wymagany_mm2, 1)} mm²</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">z reguły {formatLiczba(przewodPE.wartosci.zReguly_mm2, 1)} mm²</span>
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Wymagany przekrój przewodu PE", wartosc: formatLiczba(przewodPE.wartosci.wymagany_mm2, 1), jednostka: "mm²" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
+            <Badge variant="accent">z reguły {formatLiczba(przewodPE.wartosci.zReguly_mm2, 1)} mm²</Badge>
             {przewodPE.wartosci.zWarunkuCieplnego_mm2 !== null && (
-              <span className="pe-chip pe-tag-blue">
+              <Badge variant="info">
                 z warunku cieplnego {formatLiczba(przewodPE.wartosci.zWarunkuCieplnego_mm2, 2)} mm²
-              </span>
+              </Badge>
             )}
-            <span className="pe-chip pe-tag-green">decyduje: {przewodPE.wartosci.decyduje}</span>
+            <Badge variant="success">decyduje: {przewodPE.wartosci.decyduje}</Badge>
           </div>
-        </div>
+        </WynikGlowny>
       )}
       <CalcResultView wynik={przewodPE} />
 
@@ -116,13 +120,15 @@ export function KalkulatorPeN({ label }: { label: string }) {
         />
       </div>
       {przewodN.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Prąd w przewodzie N (obciążenie symetryczne)</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(przewodN.wartosci.IN_A, 1)} A</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">zalecany przekrój N {formatLiczba(przewodN.wartosci.zalecany_mm2, 1)} mm²</span>
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Prąd w przewodzie N (obciążenie symetryczne)", wartosc: formatLiczba(przewodN.wartosci.IN_A, 1), jednostka: "A" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
+            <Badge variant="accent">zalecany przekrój N {formatLiczba(przewodN.wartosci.zalecany_mm2, 1)} mm²</Badge>
           </div>
-        </div>
+        </WynikGlowny>
       )}
       <CalcResultView wynik={przewodN} />
     </Card>

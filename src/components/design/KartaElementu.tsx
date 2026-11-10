@@ -4,6 +4,7 @@ import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
 import { formatLiczba } from "@/lib/liczby";
 import { maWlasnyObwodZDefinicji, wchodziDoObwodu } from "@/lib/panel/circuits";
 import { WyborObwodu, type UzytyNumer } from "./WyborObwodu";
+import { Button } from "@/components/ui/button";
 
 /**
  * Właściwości ZAZNACZONEGO elementu — w panelu narzędzia „Zaznacz".
@@ -33,12 +34,12 @@ export function KartaElementu({
 }) {
   const def = ELEMENT_TYPES[element.type];
   const wariant = libSubtitle(element.type, element.gangs);
-  const przycisk = "pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs [@media(pointer:coarse)]:min-h-11";
+  const przycisk = "[@media(pointer:coarse)]:min-h-11";
   return (
     <div className="space-y-2.5" data-testid="karta-elementu">
       <div>
         <div className="text-sm font-semibold text-ink">{def?.label ?? element.type}</div>
-        {wariant && <div className="text-[11px] text-slate-500">{wariant}</div>}
+        {wariant && <div className="text-xs text-slate-500">{wariant}</div>}
       </div>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
@@ -65,15 +66,15 @@ export function KartaElementu({
       </dl>
 
       <div className="flex flex-wrap gap-1.5">
-        <button onClick={onEdytuj} className={przycisk}>
+        <Button variant="secondary" size="sm" onClick={onEdytuj} className={przycisk}>
           <Pencil size={13} /> Edytuj
-        </button>
-        <button onClick={onObroc} className={przycisk}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onObroc} className={przycisk}>
           <RotateCw size={13} /> Obróć o 90°
-        </button>
-        <button onClick={onUsun} className={`${przycisk} text-red-600`}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onUsun} className={`${przycisk} text-red-600`}>
           <Trash2 size={13} /> Usuń
-        </button>
+        </Button>
       </div>
 
       {/* Tylko przy odbiornikach — patrz `wchodziDoObwodu`. */}

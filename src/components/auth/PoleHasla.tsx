@@ -51,7 +51,7 @@ export function PoleHasla({ etykieta, value, onChange, autoComplete, podpowiedz 
         </button>
       </div>
       {podpowiedz && (
-        <div id={`${id}-podp`} className="mt-1 text-[11px] text-slate-500">
+        <div id={`${id}-podp`} className="mt-1 text-xs text-slate-500">
           {podpowiedz}
         </div>
       )}

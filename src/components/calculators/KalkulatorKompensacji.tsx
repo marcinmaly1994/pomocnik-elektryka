@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
 import { obliczKompensacje, UKLAD_BATERII_LABELS, type UkladBaterii } from "@/lib/calc/powerFactor";
 import { formatLiczba } from "@/lib/calc/result";
@@ -5,6 +6,7 @@ import { useCalculatorsStore } from "@/store/useCalculatorsStore";
 import { CalcResultView } from "./CalcResultView";
 import { Card } from "./Card";
 import { Field } from "./Field";
+import { WynikGlowny } from "./WynikGlowny";
 
 /**
  * Kalkulator kompensacji mocy biernej.
@@ -88,23 +90,25 @@ export function KalkulatorKompensacji({ label }: { label: string }) {
       </div>
 
       {kompensacja.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Wymagana moc baterii kondensatorów</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(kompensacja.wartosci.Qc_var / 1000, 2)} kvar</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Wymagana moc baterii kondensatorów", wartosc: formatLiczba(kompensacja.wartosci.Qc_var / 1000, 2), jednostka: "kvar" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
+            <Badge variant="accent">
               C = {formatLiczba(kompensacja.wartosci.C_F * 1e6, 1)} µF
               {kmUklad === "trojkat" ? " / gałąź" : ""}
-            </span>
-            <span className="pe-chip pe-tag-blue">tgφ₁ = {formatLiczba(kompensacja.wartosci.tgfi1, 3)}</span>
-            <span className="pe-chip pe-tag-blue">tgφ₂ = {formatLiczba(kompensacja.wartosci.tgfi2, 3)}</span>
+            </Badge>
+            <Badge variant="info">tgφ₁ = {formatLiczba(kompensacja.wartosci.tgfi1, 3)}</Badge>
+            <Badge variant="info">tgφ₂ = {formatLiczba(kompensacja.wartosci.tgfi2, 3)}</Badge>
             {kompensacja.wartosci.rzadRezonansu !== null && (
-              <span className="pe-chip pe-tag-green">
+              <Badge variant="success">
                 rezonans przy n ≈ {formatLiczba(kompensacja.wartosci.rzadRezonansu, 2)}
-              </span>
+              </Badge>
             )}
           </div>
-        </div>
+        </WynikGlowny>
       )}
 
       <CalcResultView wynik={kompensacja} />

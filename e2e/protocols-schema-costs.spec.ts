@@ -325,7 +325,7 @@ test("Protokoły: podgląd rysuje zadrukowaną kartkę, nie czarny prostokąt", 
 
   oczekujKartke(await zmierzPodglad(page));
 
-  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).last().click(); // ostatni = przycisk w stopce; „X” w rogu też ma teraz nazwę „Zamknij”
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 

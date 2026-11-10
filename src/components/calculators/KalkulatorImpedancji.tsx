@@ -1,3 +1,5 @@
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
 import { obliczImpedancjePrzewodu, obliczPrzewodyRownolegle } from "@/lib/calc/conductorImpedance";
 import { formatLiczba } from "@/lib/calc/result";
@@ -6,6 +8,7 @@ import type { Izolacja, Material, RodzajLinii } from "@/lib/norms/conductors";
 import { CalcResultView } from "./CalcResultView";
 import { Card } from "./Card";
 import { Field, HintButton } from "./Field";
+import { WynikGlowny } from "./WynikGlowny";
 import { IZOLACJA_OPTIONS, MATERIAL_OPTIONS, RODZAJ_LINII_OPTIONS, SZEREG_PELNY_OPTIONS } from "./opcje";
 import { parsujDlugosci } from "./parsujDlugosci";
 
@@ -91,29 +94,31 @@ export function KalkulatorImpedancji({ label }: { label: string }) {
       </div>
 
       {impedancja.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Impedancja przewodu</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(impedancja.wartosci.Z_ohm, 4)} Ω</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">R {formatLiczba(impedancja.wartosci.R_ohm, 4)} Ω</span>
-            <span className="pe-chip pe-tag-blue">X {formatLiczba(impedancja.wartosci.X_ohm, 4)} Ω</span>
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Impedancja przewodu", wartosc: formatLiczba(impedancja.wartosci.Z_ohm, 4), jednostka: "Ω" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
+            <Badge variant="accent">R {formatLiczba(impedancja.wartosci.R_ohm, 4)} Ω</Badge>
+            <Badge variant="info">X {formatLiczba(impedancja.wartosci.X_ohm, 4)} Ω</Badge>
             {impedancja.wartosci.R_do_X !== null && (
-              <span className="pe-chip pe-tag-green">R/X {formatLiczba(impedancja.wartosci.R_do_X, 2)}</span>
+              <Badge variant="success">R/X {formatLiczba(impedancja.wartosci.R_do_X, 2)}</Badge>
             )}
-            <span className="pe-chip" style={{ background: "#EEF1F4", color: "#475569" }}>
+            <Badge>
               γ {formatLiczba(impedancja.wartosci.gamma, 1)} przy {formatLiczba(impedancja.wartosci.tempZyly_C, 0)} °C
-            </span>
+            </Badge>
           </div>
-        </div>
+        </WynikGlowny>
       )}
       <CalcResultView wynik={impedancja} />
 
       <div className="mb-2 mt-4 text-xs font-semibold text-slate-600">Przewody równoległe — podział prądu</div>
-      <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+      <Alert variant="info" role="note" className="mb-3 text-xs">
         Prąd dzieli się <strong>odwrotnie proporcjonalnie do impedancji</strong>, więc krótsza żyła bierze go
         więcej. Zabezpieczenie nadprądowe mierzy prąd CAŁKOWITY, więc przeciążenia pojedynczej żyły nie wykryje —
         stąd normowy wymóg jednakowej długości i przekroju.
-      </div>
+      </Alert>
       <div className="grid sm:grid-cols-2 gap-x-4">
         <Field
           label="Prąd całkowity obwodu"
@@ -147,19 +152,21 @@ export function KalkulatorImpedancji({ label }: { label: string }) {
       </div>
 
       {rownolegle.wartosci && (
-        <div className="mt-2 p-3 pe-result">
-          <div className="text-xs text-slate-500 mb-1">Najbardziej obciążona żyła</div>
-          <div className="pe-mono text-lg text-blueprint">{formatLiczba(rownolegle.wartosci.Imax_A, 1)} A</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">
+        <WynikGlowny
+          wartosci={[
+            { etykieta: "Najbardziej obciążona żyła", wartosc: formatLiczba(rownolegle.wartosci.Imax_A, 1), jednostka: "A" },
+          ]}
+        >
+          <div className="flex gap-2 flex-wrap">
+            <Badge variant="accent">
               podział {rownolegle.wartosci.prady_A.map((I) => formatLiczba(I, 1)).join(" / ")} A
-            </span>
-            <span className="pe-chip pe-tag-blue">
+            </Badge>
+            <Badge variant="info">
               przy równym podziale {formatLiczba(rownolegle.wartosci.pradRowny_A, 1)} A
-            </span>
-            <span className="pe-chip pe-tag-green">odchylenie {formatLiczba(rownolegle.wartosci.odchylenie_pct, 1)}%</span>
+            </Badge>
+            <Badge variant="success">odchylenie {formatLiczba(rownolegle.wartosci.odchylenie_pct, 1)}%</Badge>
           </div>
-        </div>
+        </WynikGlowny>
       )}
       <CalcResultView wynik={rownolegle} />
     </Card>

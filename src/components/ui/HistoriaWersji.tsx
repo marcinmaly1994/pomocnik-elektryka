@@ -94,7 +94,7 @@ export function HistoriaWersji({ open, onOpenChange }: { open: boolean; onOpenCh
                 value={nazwa}
                 onChange={(e) => setNazwa(e.target.value)}
                 placeholder="np. przed zmianą obwodów"
-                className="min-w-0 flex-1 rounded-md border border-border px-2 py-1.5"
+                className="pe-input min-w-0 flex-1"
               />
               <Button type="submit" variant="copper" size="sm" className="gap-1.5">
                 <History size={14} /> Zapisz wersję

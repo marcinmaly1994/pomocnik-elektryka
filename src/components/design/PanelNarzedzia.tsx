@@ -1,6 +1,7 @@
 import { Layers, Plus } from "lucide-react";
 import type { ToolMode } from "./DesignCanvas";
 import { RAIL_TOOLS } from "./railTools";
+import { Button } from "@/components/ui/button";
 
 /**
  * Nagłówek panelu obok paska narzędzi: nazwa wybranego narzędzia i jedno zdanie, co
@@ -27,7 +28,7 @@ export function NaglowekNarzedzia({ narzedzie }: { narzedzie: ToolMode }) {
             nagłówek, a ten jest pierwszym na ekranie edytora — przeskok od zera do h3 psuł
             hierarchię dla czytnika ekranu. */}
         <h2 className="text-sm font-semibold leading-tight text-ink">{t.label}</h2>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{t.hint}</p>
+        <p className="mt-0.5 text-xs leading-snug text-slate-500">{t.hint}</p>
       </div>
     </div>
   );
@@ -57,15 +58,15 @@ export function PodpowiedzZaznacz({
           Na tej kondygnacji nic jeszcze nie ma. Zacznij od obrysowania pomieszczeń — od nich zależy podział na
           obwody, a w kuchni i łazience także strefy ochronne. Osprzęt możesz też stawiać od razu.
         </p>
-        <button
+        <Button variant="primary" size="sm"
           onClick={() => onWybierz("pomieszczenie")}
-          className="pe-btn-copper flex w-full items-center justify-center gap-1.5 py-1.5 text-xs"
+          className="w-full justify-center"
         >
           <Layers size={13} /> Obrysuj pierwsze pomieszczenie
-        </button>
-        <button onClick={() => onWybierz("elementy")} className="pe-btn-ghost flex w-full items-center justify-center gap-1.5 py-1.5 text-xs">
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => onWybierz("elementy")} className="w-full justify-center">
           <Plus size={13} /> Postaw pierwszy element
-        </button>
+        </Button>
       </div>
     );
   }

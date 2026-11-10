@@ -15,23 +15,6 @@ export const DEFAULT_PLAN_WIDTH = 1000;
 export const DEFAULT_PLAN_HEIGHT = 700;
 export const GRID = 20;
 
-/**
- * Odstęp pływających pigułek nawigacji („Cofnij"/„Dalej" w App.tsx) od dolnej
- * krawędzi okna.
- *
- * Na zakładce Instalacja pigułki „Dalej" NIE MA: tam przycisk kolejnego kroku siedzi
- * w pasku stanu pod rysunkiem (patrz `EditorStatusBar`). Powód: pływająca pigułka
- * leżała NA płótnie — przy oknie 1440×900 zajmowała prostokąt 109×36 px w prawym
- * dolnym rogu obszaru rysowania i zjadała tam kliknięcia. Rezerwowanie jej pasma
- * pod płótnem nie było odpowiedzią: wysokość rysunku liczy się z chrome'u STAŁEGO,
- * z pominięciem banerów, a baner „ten projekt istnieje tylko w tej przeglądarce"
- * (stały u każdego niezalogowanego, kto ma cokolwiek do stracenia) spychał rysunek
- * o swoją wysokość w dół i pigułka wracała na płótno. Płótno jest powierzchnią
- * roboczą — nawigacja nie ma prawa na niej stać w ŻADNYM stanie, więc zeszła z niej
- * zupełnie, zamiast negocjować o piksele.
- */
-export const NAWIGACJA_ODSTEP_PX = 20;
-
 /** Oddech między dolną krawędzią płótna a tym, co pod nim, żeby rysunek nie kończył
  *  się dokładnie na krawędzi. */
 const ODDECH_POD_PLOTNEM = 12;

@@ -1,5 +1,8 @@
+import { cn } from "@/lib/utils";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
 import { PROTOCOL_DEFS, PROTOCOL_ORDER, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
 import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
@@ -12,6 +15,7 @@ import type { ProtocolKey } from "@/types";
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { waskiEkran } from "@/lib/design";
+import { Button } from "@/components/ui/button";
 
 /**
  * Pola danych ogólnych w kolejności i szerokości układu od `xl` (siatka 12 kolumn,
@@ -103,7 +107,7 @@ function TrescPozycji({ value, onChange, etykieta }: { value: string; onChange: 
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label={etykieta}
-      className="min-w-0 flex-1 basis-[calc(100%-2rem)] resize-none overflow-hidden bg-transparent text-sm leading-snug outline-none md:basis-auto"
+      className="min-w-0 flex-1 basis-[calc(100%-2rem)] resize-none overflow-hidden bg-transparent text-base leading-snug md:basis-auto md:text-sm"
     />
   );
 }
@@ -258,29 +262,27 @@ export function ProtocolsTab() {
             className="pe-input min-w-0 flex-1 text-sm"
             style={{ maxWidth: 320 }}
           />
-          <button
+          <Button variant="primary" size="md"
             onClick={() => saveProtokolyToCloud(nazwaZestawu)}
             disabled={cloudBusy}
-            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
           >
             <Save size={14} /> {protokolyId ? "Zapisz zmiany" : "Zapisz na koncie"}
-          </button>
-          <button onClick={() => setOknoZestawow(true)} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+          </Button>
+          <Button variant="secondary" size="md" onClick={() => setOknoZestawow(true)}>
             <FolderOpen size={14} /> Moje zestawy
-          </button>
+          </Button>
           {protokolyId && (
-            <button
+            <Button variant="secondary" size="md"
               onClick={() => {
                 if (confirm("Zacząć nowy, pusty zestaw protokołów? Bieżący zostaje zapisany na koncie.")) nowyZestawProtokolow();
                 setNazwaZestawu("");
               }}
-              className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs"
             >
               <FilePlus2 size={14} /> Nowy zestaw
-            </button>
+            </Button>
           )}
           {cloudSaveError && <span className="text-xs text-red-600">{cloudSaveError}</span>}
-          <p className="w-full text-[11px] text-slate-400">
+          <p className="w-full text-xs text-slate-400">
             Zapis pod nazwą, która już jest na koncie, nadpisuje tamten zestaw. Nową pozycję tworzy dopiero nowa nazwa
             (maksymalnie {LIMIT_ZAPISOW}).
           </p>
@@ -298,7 +300,7 @@ export function ProtocolsTab() {
           className="mb-3 flex w-full items-center gap-2 text-left"
         >
           {daneZwiniete ? <ChevronRight size={15} className="shrink-0 text-slate-400" /> : <ChevronDown size={15} className="shrink-0 text-slate-400" />}
-          <h3 className="pe-display text-[15px]">Dane ogólne (wspólne dla wszystkich protokołów)</h3>
+          <h3 className="pe-display text-base">Dane ogólne (wspólne dla wszystkich protokołów)</h3>
           {daneZwiniete && (
             <span className="ml-auto truncate pl-3 text-xs text-slate-400">
               {[header.obiekt, header.wykonawca, header.data].filter(Boolean).join(" · ") || "nie wypełniono"}
@@ -315,7 +317,7 @@ export function ProtocolsTab() {
                 <select
                   value={header.uklad}
                   onChange={(e) => setDocHeader({ uklad: e.target.value as typeof header.uklad })}
-                  className="pe-input w-full text-sm"
+                  className="pe-input pe-select w-full text-base md:text-sm"
                 >
                   {["TN-S", "TN-C", "TN-C-S", "TT", "IT"].map((o) => (
                     <option key={o} value={o}>
@@ -354,7 +356,7 @@ export function ProtocolsTab() {
         {/* Ostrzeżenie o brakach zostaje widoczne TAKŻE po zwinięciu — inaczej
             zwinięcie sekcji chowałoby jedyny sygnał, że protokół wyjdzie niekompletny. */}
         {!headerReady && (
-          <p className={daneZwiniete ? "text-[11px]" : "mt-2 text-[11px]"} style={{ color: "#8A5526" }}>
+          <p className={daneZwiniete ? "text-xs" : "mt-2 text-xs"} style={{ color: "#8A5526" }}>
             Uzupełnij co najmniej „Obiekt” i „Wykonawca pomiarów” — te dane trafiają do nagłówka każdego protokołu.
           </p>
         )}
@@ -380,15 +382,13 @@ export function ProtocolsTab() {
                 // a formularz zostawał poza ekranem.
                 if (waskiEkran()) requestAnimationFrame(() => kartaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
               }}
-              className="rounded-lg px-3 py-2 text-left text-xs"
-              style={
-                active === k
-                  ? { background: "#2D5A8C12", border: "1px solid #2D5A8C", color: "#2D5A8C" }
-                  : { background: "#fff", border: "1px solid #DCE2E8", color: "#4F5D73" }
-              }
+              className={cn(
+                "rounded-lg border px-3 py-2 text-left text-xs",
+                active === k ? "border-blueprint bg-blueprint-tlo text-blueprint" : "border-[#DCE2E8] bg-white text-[#4F5D73]",
+              )}
             >
               <div className="font-semibold">{d.title}</div>
-              <div className="mt-0.5 flex items-center gap-1 text-[10px]">
+              <div className="mt-0.5 flex items-center gap-1 text-xs">
                 {st?.rows?.length ? `${st.rows.length} poz.` : "brak danych"}
                 {v === true && <span style={{ color: "#3B8C63" }}>· pozytywny</span>}
                 {v === false && <span style={{ color: "#C6433A" }}>· negatywny</span>}
@@ -402,26 +402,24 @@ export function ProtocolsTab() {
       <div ref={kartaRef} className="pe-card scroll-mt-3 p-5" data-testid="karta-protokolu">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="pe-display text-[15px]">{def.title}</h3>
+            <h3 className="pe-display text-base">{def.title}</h3>
             <p className="mt-0.5 text-xs text-slate-500">{def.intro}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* Podgląd stoi PRZED pobieraniem, bo taka jest kolejność pracy: najpierw
                 sprawdzam, czy protokół się zgadza, dopiero potem odkładam plik. */}
-            <button
+            <Button variant="secondary" size="md"
               onClick={() => setPodglad(true)}
               disabled={blokadaPdf}
-              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs text-slate-600 hover:text-ink disabled:opacity-50"
             >
               <Eye size={14} /> Podgląd
-            </button>
-            <button
+            </Button>
+            <Button variant="primary" size="md"
               onClick={async () => setBlocked(!(await downloadProtocolPdf(active, header, rows, limit)))}
               disabled={blokadaPdf}
-              className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
             >
               <Download size={14} /> Pobierz protokół (PDF)
-            </button>
+            </Button>
           </div>
           {ujemne.length > 0 && (
             <p role="alert" data-testid="ujemne-wartosci" className="w-full text-xs text-red-700">
@@ -447,17 +445,16 @@ export function ProtocolsTab() {
         </div>
 
         {blocked && (
-          <div className="mb-3 flex gap-2 rounded-md p-2.5 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <Alert variant="caution" className="mb-3 text-xs">
             Przeglądarka zablokowała pobieranie w tym widoku. Spróbuj ponownie lub otwórz aplikację w osobnej karcie.
-          </div>
+          </Alert>
         )}
 
         {def.checklist ? (
           rows.length === 0 ? (
-            <button onClick={initChecklist} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-sm">
+            <Button variant="secondary" size="md" onClick={initChecklist}>
               <Plus size={14} /> Wczytaj listę kontrolną oględzin
-            </button>
+            </Button>
           ) : (
             // Najwyżej 56rem: przy 1920 px treść pozycji stała przy lewej krawędzi,
             // a „zgodne / niezgodne / n/d" ok. 1600 px dalej.
@@ -478,7 +475,7 @@ export function ProtocolsTab() {
                       <button
                         key={v}
                         onClick={() => setRow(i, { status: r.status === v ? "" : v })}
-                        className="rounded-md px-2 py-1 text-[11px]"
+                        className="rounded-md px-2 py-1 text-xs"
                         style={
                           r.status === v
                             ? { background: `${col}1A`, color: col, border: `1px solid ${col}` }
@@ -498,12 +495,12 @@ export function ProtocolsTab() {
                   </button>
                 </div>
               ))}
-              <button
+              <Button variant="secondary" size="sm"
                 onClick={() => update({ rows: [...rows, { text: "", status: "" }] })}
-                className="pe-btn-ghost mt-2 flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                className="mt-2"
               >
                 <Plus size={13} /> Dodaj pozycję
-              </button>
+              </Button>
             </div>
           )
         ) : (
@@ -535,9 +532,9 @@ export function ProtocolsTab() {
                 22 px. W karcie pomiary stoją po trzy w rzędzie (telefon) albo po sześć
                 (od `sm`), pola tekstowe na całą szerokość albo po dwa, każde z podpisem. */}
             <div className="pe-scroll lg:overflow-x-auto">
-              <table className="block w-full text-sm lg:table lg:min-w-[620px]">
+              <table className="pe-table pe-table-od-lg block w-full text-sm lg:table lg:min-w-[620px]">
                 <thead className="hidden lg:table-header-group">
-                  <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
+                  <tr className="text-left text-xs">
                     <th className="w-8 py-2 pr-2">Lp.</th>
                     {def.columns!.map((c) => (
                       <th key={c.key} className="py-2 pr-2">
@@ -554,8 +551,7 @@ export function ProtocolsTab() {
                     return (
                       <tr
                         key={i}
-                        className="grid grid-cols-6 gap-x-2 gap-y-2 border-b py-3 last:border-0 sm:grid-cols-12 lg:table-row lg:py-0"
-                        style={{ borderColor: "#EEF1F4" }}
+                        className="grid grid-cols-6 gap-x-2 gap-y-2 border-b border-border py-3 last:border-0 sm:grid-cols-12 lg:table-row lg:py-0"
                         data-testid="wiersz-pomiaru"
                       >
                         <td className="col-span-6 text-xs text-slate-400 sm:col-span-12 lg:py-1.5 lg:pr-2">
@@ -564,7 +560,7 @@ export function ProtocolsTab() {
                         </td>
                         {def.columns!.map((c) => (
                           <td key={c.key} className={`min-w-0 lg:py-1.5 lg:pr-2 ${c.type === "text" ? "col-span-6" : "col-span-2"}`}>
-                            <span className="mb-0.5 block truncate text-[11px] text-slate-400 lg:hidden">{c.label}</span>
+                            <span className="mb-0.5 block truncate text-xs text-slate-400 lg:hidden">{c.label}</span>
                             {c.type === "computed" ? (
                               <span className="pe-mono text-xs text-slate-500">{c.compute!(r, limit)}</span>
                             ) : c.type === "select" ? (
@@ -572,7 +568,7 @@ export function ProtocolsTab() {
                                 value={String(r[c.key] ?? c.default ?? "")}
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
                                 aria-label={`${c.label}, pozycja ${i + 1}`}
-                                className="pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm"
+                                className="pe-input pe-select w-full py-1 max-lg:py-1.5 text-base md:text-sm"
                               >
                                 {c.options!.map((o) => (
                                   <option key={o} value={o}>
@@ -600,12 +596,7 @@ export function ProtocolsTab() {
                           ) : ok === null ? (
                             <span className="text-xs text-slate-400">—</span>
                           ) : (
-                            <span
-                              className="pe-chip"
-                              style={ok ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
-                            >
-                              {ok ? "pozytywna" : "negatywna"}
-                            </span>
+                            <Badge variant={ok ? "success" : "danger"}>{ok ? "pozytywna" : "negatywna"}</Badge>
                           )}
                         </td>
                         <td className="col-span-2 flex justify-end lg:table-cell lg:py-1.5">
@@ -624,9 +615,9 @@ export function ProtocolsTab() {
               </table>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button onClick={addRow} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs">
+              <Button variant="secondary" size="sm" onClick={addRow}>
                 <Plus size={13} /> Dodaj wiersz
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -637,7 +628,7 @@ export function ProtocolsTab() {
         {verdict === null && rows.length > 0 && (() => {
           const brak = wierszeBezOceny(def, rows, limit);
           return (
-            <div className="mt-4 rounded-md p-3 text-sm" style={{ background: "#C1793F14", color: "#8A5526" }} data-testid="protokol-niekompletny">
+            <div className="mt-4 rounded-md bg-caution-tlo p-3 text-sm text-caution" data-testid="protokol-niekompletny">
               Niekompletny — {brakOpis(brak, !!def.checklist)}.
               {def.checklist ? " Oceń każdą pozycję albo usuń te, które nie dotyczą obiektu." : " Uzupełnij pomiary albo usuń puste wiersze."}
             </div>
@@ -645,8 +636,7 @@ export function ProtocolsTab() {
         })()}
         {verdict !== null && (
           <div
-            className="mt-4 rounded-md p-3 text-sm"
-            style={verdict ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
+            className={`mt-4 rounded-md p-3 text-sm ${verdict ? "bg-success-tlo text-success" : "bg-danger-tlo text-danger"}`}
           >
             {verdict ? "Wynik pozytywny — instalacja w badanym zakresie spełnia wymagania." : "Wynik negatywny — stwierdzono niezgodności wymagające usunięcia."}
           </div>

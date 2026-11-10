@@ -1,4 +1,6 @@
+import { Alert } from "@/components/ui/alert";
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
 import { formatLiczba } from "@/lib/liczby";
 import { AlertTriangle, ArrowLeft, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
@@ -15,6 +17,12 @@ import { resolveDocHeader } from "@/lib/docHeader";
 import { Button } from "@/components/ui/button";
 import { useRoute } from "@/hooks/useRoute";
 
+// Ramka jest jedynym nośnikiem stanu pola (liczone / wpisane), więc musi spełniać
+// WCAG 1.4.11 (3:1): slate-400 (#5B6A80) to ~5,4:1 na bieli, a border-border-strong
+// (#C7D0D9) tylko ~1,6:1. `opacity-100` wyłącza przyciemnianie podpowiedzi w Firefoksie.
+const STAN_LICZONE = "border-dashed border-slate-400 placeholder:text-ink placeholder:opacity-100";
+const STAN_WPISANE = "border-solid border-copper font-semibold text-caution";
+
 /**
  * Kosztorys instalacji elektrycznej — ilości materiałów i robocizny szacowane
  * z elementów na planie i obwodów (ta sama heurystyka co Rozdzielnica/Schemat,
@@ -26,6 +34,52 @@ import { useRoute } from "@/hooks/useRoute";
  * trzymane w store (`prices`, `costOverrides`, `qtyOverrides`), więc przetrwają
  * przełączanie zakładek i zapis projektu.
  */
+/**
+ * Suma brutto w przyklejonym pasku kroku (gniazdo `#pasek-kroku-srodek` z PasekKroku).
+ * Przy ~30 pozycjach podsumowanie u góry i stopka tabeli są poza kadrem, gdy poprawiasz
+ * cenę w połowie listy. Napis „Suma brutto”, nie „RAZEM brutto” — tamten szukają testy.
+ */
+function SumaWPasku({ brutto, zastrzezenie }: { brutto: number; zastrzezenie?: string }) {
+  return (
+    // aria-atomic: czytnik ogłasza całość („Suma brutto … zł, sam materiał”), nie samą liczbę.
+    <div data-testid="suma-w-pasku" className="text-right leading-tight" aria-live="polite" aria-atomic="true">
+      <div className="text-xs text-slate-500">
+        Suma brutto
+        {zastrzezenie && <span data-testid="suma-w-pasku-zastrzezenie"> ({zastrzezenie})</span>}
+      </div>
+      <div className="pe-mono text-base font-semibold text-ink sm:text-lg">{formatLiczba(brutto, 2)} zł</div>
+    </div>
+  );
+}
+
+/**
+ * Gniazdo z paska kroku. Pasek renderuje się w App PO zakładce, a sama zakładka bywa
+ * ładowana leniwie, więc przy pierwszym efekcie gniazda może jeszcze nie być. Zamiast
+ * liczyć na kolejność, czekamy na nie obserwatorem DOM (kończy się po znalezieniu).
+ */
+function useSlotPaska(): HTMLElement | null {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const znajdz = () => document.getElementById("pasek-kroku-srodek");
+    const teraz = znajdz();
+    if (teraz?.isConnected) {
+      setSlot(teraz);
+      return;
+    }
+    // Obserwujemy do skutku: węzeł odłączony od DOM (pasek przemontowany) nie jest gniazdem.
+    const obserwator = new MutationObserver(() => {
+      const el = znajdz();
+      if (el?.isConnected) {
+        setSlot(el);
+        obserwator.disconnect();
+      }
+    });
+    obserwator.observe(document.body, { childList: true, subtree: true });
+    return () => obserwator.disconnect();
+  }, []);
+  return slot;
+}
+
 export function CostsTab() {
   const elements = useProjectStore((s) => s.draft.elements);
   const roomShapes = useProjectStore((s) => s.draft.roomShapes);
@@ -52,6 +106,7 @@ export function CostsTab() {
   // w Rozdzielnicy).
   const docHeader = resolveDocHeader(rawDocHeader, projectName);
   const [podgladPdf, setPodgladPdf] = useState(false);
+  const slotSumy = useSlotPaska();
   // Pusty kosztorys odsyła wprost do Instalacji. Hook wolno wywołać w kilku
   // komponentach naraz — każdy dostaje własną subskrypcję i ten sam odczyt z adresu
   // (patrz komentarz przy `useRoute`).
@@ -115,6 +170,9 @@ export function CostsTab() {
   const grandTotal = podsumowanie.netto;
   const vat = podsumowanie.vat;
   const gross = podsumowanie.brutto;
+  // Zastrzeżenie bierzemy z tej samej etykiety co podsumowanie i stopka („RAZEM brutto — sam
+  // materiał”): goła suma pod okiem przy poprawianiu cen bywa NIEPRAWDĄ (brak robocizny/cen).
+  const zastrzezenieSumy = podsumowanie.etykietaSumy.split(" — ")[1];
   // Pozycje o zerowej wartości nie wchodzą do sumy, więc „RAZEM" potrafi wyglądać na
   // komplet, choć brakuje w nim np. całej robocizny. Zbieramy je, żeby powiedzieć to
   // wprost — aplikacja jest adresowana głównie do laików, którzy nie wychwycą tego sami.
@@ -192,6 +250,7 @@ export function CostsTab() {
 
   return (
     <div className="space-y-5">
+      {slotSumy && createPortal(<SumaWPasku brutto={gross} zastrzezenie={zastrzezenieSumy} />, slotSumy)}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="pe-display mb-1 text-xl">Kosztorys instalacji elektrycznej</h2>
@@ -200,33 +259,33 @@ export function CostsTab() {
             gotową wartość pozycji, jeśli masz ją z oferty ryczałtem.
           </p>
         </div>
-        <div className="flex gap-2">
+        {/* flex-wrap: trzy przyciski rozmiaru md (text-sm, nowrap) mają razem ok. 520 px —
+            na 360–430 px bez zawijania wypychały całą stronę poza ekran. */}
+        <div className="flex flex-wrap gap-2">
           {/* Format pliku i to, że ceny NIE pobierają się ze sklepów, siedzą w dymku
               przycisku, a nie w akapicie nad tabelą. Stały tam jako trwały baner —
               instrukcja obsługi funkcji, której większość użytkowników nigdy nie użyje,
               czytana za każdym razem przed pierwszą pozycją kosztorysu. Sam fakt, że
               cennik da się zaimportować, mówi zdanie wprowadzające obok. */}
-          <button
+          <Button variant="secondary" size="md"
             onClick={() => fileRef.current?.click()}
             title="Wgraj plik CSV w formacie nazwa;cena — aplikacja dopasuje pozycje po słowach kluczowych. Ceny nie pobierają się automatycznie ze stron sklepów."
-            className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs"
           >
             <Upload size={14} /> Importuj cennik CSV
-          </button>
+          </Button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvImport} />
           {/* CSV zostaje dla tych, którzy liczą dalej w arkuszu; PDF jest tym, co wysyła
               się klientowi — stąd on dostaje przycisk główny. Pobranie dzieje się
               z poziomu PODGLĄDU, tak jak przy pozostałych eksportach: nikt nie ma wysłać
               dokumentu, na który sam nie spojrzał. */}
-          <button onClick={exportCsv} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+          <Button variant="secondary" size="md" onClick={exportCsv}>
             <Download size={14} /> Eksportuj CSV
-          </button>
-          <button
+          </Button>
+          <Button variant="primary" size="md"
             onClick={() => setPodgladPdf(true)}
-            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs"
           >
             <FileText size={14} /> Kosztorys do PDF
-          </button>
+          </Button>
         </div>
       </div>
       {/*
@@ -242,8 +301,8 @@ export function CostsTab() {
           data-testid="podsumowanie-kosztorysu"
         >
           <div>
-            <div className="text-sm font-semibold text-ink">{podsumowanie.etykietaSumy}</div>
-            <div className="pe-display text-2xl font-bold text-copper">{formatLiczba(gross, 2)} zł</div>
+            <div data-testid="podsumowanie-etykieta" className="text-sm font-semibold text-ink">{podsumowanie.etykietaSumy}</div>
+            <div data-testid="podsumowanie-brutto" className="pe-display text-2xl font-bold text-copper">{formatLiczba(gross, 2)} zł</div>
           </div>
           <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <div>
@@ -379,9 +438,19 @@ export function CostsTab() {
               drzewie: druga kopia kontrolek dałaby dwa pola o tej samej nazwie.
               Tabela miała na telefonie 553 px w okienku 325 px — kolumna „Wartość"
               była całkiem poza ekranem, a „Cena jedn." przycięta. */}
-          <table className="block w-full text-sm md:table">
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-border px-3 py-2 text-xs text-slate-500">
+            <span className="inline-flex items-start gap-1.5">
+              <span aria-hidden="true" className="mt-0.5 inline-block h-3 w-5 shrink-0 rounded-sm border border-dashed border-slate-400" />
+              <span>Przerywana ramka — wartość policzona przez aplikację (wpisz, żeby ją zmienić).</span>
+            </span>
+            <span className="inline-flex items-start gap-1.5">
+              <span aria-hidden="true" className="mt-0.5 inline-block h-3 w-5 shrink-0 rounded-sm border border-solid border-copper" />
+              <span>Pełna miedziana ramka — wpisana ręcznie.</span>
+            </span>
+          </p>
+          <table className="pe-table pe-table-od-md block w-full text-sm md:table">
             <thead className="hidden md:table-header-group">
-              <tr className="border-b text-left text-xs text-slate-500" style={{ borderColor: "#DCE2E8" }}>
+              <tr className="text-left text-xs">
                 <th className="p-3">Pozycja</th>
                 <th className="w-36 p-3">Ilość</th>
                 <th className="w-32 p-3">Cena jedn.</th>
@@ -393,7 +462,7 @@ export function CostsTab() {
                   liście trzydziestu wierszy nie było widać, co kosztuje najwięcej. */}
               {pogrupujWiersze(rows).map((g) => (
                 <Fragment key={g.nazwa}>
-                <tr className="block border-b md:table-row" style={{ borderColor: "#EEF1F4", background: "#F7F9FB" }} data-testid="grupa-kosztorysu">
+                <tr className="block border-b border-border bg-surface-2 md:table-row" data-testid="grupa-kosztorysu">
                   <td colSpan={4} className="block px-3 py-2 md:table-cell">
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-sm font-semibold text-ink">{g.nazwa}</span>
@@ -412,10 +481,9 @@ export function CostsTab() {
                   // 13 z 32 pól przy 375 px, wszystkie przy 320 px), a kolumna ceny miała
                   // zapas kilkudziesięciu pikseli. Pole wartości dzieli miejsce z krzyżykiem
                   // cofania, a „zł" stoi w podpisie pola, nie obok liczby.
-                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-2 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
+                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-1.5 gap-y-1.5 border-b border-border p-3 last:border-0 md:table-row md:p-0 ${
                     bezCeny(r) ? "bg-[#FDF6EF]" : "md:hover:bg-slate-50"
                   }`}
-                  style={{ borderColor: "#EEF1F4" }}
                   data-bez-ceny={bezCeny(r) || undefined}
                 >
                   <td className="col-span-3 font-medium md:p-3 md:font-normal">
@@ -432,8 +500,10 @@ export function CostsTab() {
                       z rzutu, pokazana jako podpowiedź. */}
                   <td className="min-w-0 md:p-3">
                     {/* Podpis pola tylko w karcie na telefonie — na monitorze robi to nagłówek tabeli. */}
-                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Ilość</span>
-                    <div className="flex items-center gap-1">
+                    <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Ilość</span>
+                    {/* Wysokość wiersza na dotyku trzyma wrapper (jak przy cenie), nie krzyżyk —
+                        krzyżyk na telefonie znika z układu, gdy nie ma czego cofać. */}
+                    <div className="flex items-center gap-1 [@media(pointer:coarse)]:min-h-11">
                       <input
                         type="number"
                         min={0}
@@ -441,22 +511,25 @@ export function CostsTab() {
                         onChange={(e) => setQtyOverride(r.key, e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0))}
                         placeholder={String(r.qty)}
                         aria-label={`Ilość: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-sm md:w-20 md:px-2.5"
-                        style={r.qtyOverridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
+                        data-stan={r.qtyOverridden ? "wpisane" : "liczone"}
+                        className={`pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-20 md:px-2.5 ${r.qtyOverridden ? STAN_WPISANE : STAN_LICZONE}`}
                       />
                       <button
                         onClick={() => setQtyOverride(r.key, null)}
                         aria-label={`Przywróć ilość z rzutu: ${r.label}`}
                         title="Wróć do ilości oszacowanej z rzutu"
                         // Na dotyku 32 × 44 px — szerzej zjadałoby pole ilości w karcie na telefonie.
-                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.qtyOverridden ? "" : "invisible"}`}
+                        // Niewidoczny krzyżyk na telefonie nie zajmuje miejsca (`max-md:hidden`): przy
+                        // 320 px jego 36 px zjadało pole, a liczby się ucinały. Od md zostaje
+                        // `invisible`, żeby kolumna w tabeli nie skakała po nadpisaniu ilości.
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.qtyOverridden ? "" : "invisible max-md:hidden"}`}
                       >
                         <X size={13} />
                       </button>
                     </div>
                   </td>
                   <td className="min-w-0 md:p-3">
-                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Cena</span>
+                    <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Cena</span>
                     {/* Ten sam wiersz co ilość i wartość: tamte mają obok przycisk cofania, który na dotyku
                         ma 44 px wysokości i centruje pole. Bez wrappera pole ceny leżało 5 px wyżej. */}
                     <div className="flex items-center [@media(pointer:coarse)]:min-h-11">
@@ -471,8 +544,7 @@ export function CostsTab() {
                           if (r.overridden) setCostOverride(r.key, null);
                         }}
                         aria-label={`Cena jednostkowa: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-sm md:w-24 md:px-2.5"
-                        style={r.overridden ? { color: "#5B6A80" } : undefined}
+                        className={`pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-24 md:px-2.5${r.overridden ? " text-slate-400" : ""}`}
                         title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
                         step="0.5"
                       />
@@ -484,8 +556,8 @@ export function CostsTab() {
                       Puste pole = wartość liczona z ilości i ceny — ten sam zapis co
                       przy wysokości montażu elementu. */}
                   <td className="min-w-0 text-right md:p-3">
-                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Wartość, zł</span>
-                    <div className="flex items-center justify-end gap-1">
+                    <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Wartość, zł</span>
+                    <div className="flex items-center justify-end gap-1 [@media(pointer:coarse)]:min-h-11">
                       <input
                         type="number"
                         value={r.overridden ? r.value : ""}
@@ -496,8 +568,8 @@ export function CostsTab() {
                         // czego kontrolka nie przyjmie.
                         placeholder={formatLiczba(r.value, 2)}
                         aria-label={`Wartość pozycji: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-right text-sm md:w-28 md:px-2.5"
-                        style={r.overridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
+                        data-stan={r.overridden ? "wpisane" : "liczone"}
+                        className={`pe-input pe-mono w-full min-w-0 px-1 text-right text-sm md:w-28 md:px-2.5 ${r.overridden ? STAN_WPISANE : STAN_LICZONE}`}
                         step="1"
                       />
                       <span className="hidden text-xs text-slate-400 md:inline">zł</span>
@@ -507,7 +579,7 @@ export function CostsTab() {
                         onClick={() => setCostOverride(r.key, null)}
                         aria-label={`Przywróć liczoną wartość: ${r.label}`}
                         title="Wróć do liczenia ilość × cena"
-                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.overridden ? "" : "invisible"}`}
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.overridden ? "" : "invisible max-md:hidden"}`}
                       >
                         <X size={13} />
                       </button>
@@ -523,7 +595,8 @@ export function CostsTab() {
                 <td className="p-3 pb-1 text-sm text-slate-500" colSpan={3}>
                   Razem netto
                 </td>
-                <td className="pe-mono p-3 pb-1 text-right text-sm">{formatLiczba(grandTotal, 2)} zł</td>
+                {/* Stopka: na telefonie wiersz to flex z grow, więc kwota musi być z prawej także poniżej md (jak „RAZEM brutto”) — w ciele `pe-liczba` wyrównuje dopiero od md. */}
+                <td className="pe-liczba p-3 pb-1 text-right text-sm">{formatLiczba(grandTotal, 2)} zł</td>
               </tr>
               <tr className="flex items-baseline justify-between md:table-row [&>td]:grow md:[&>td]:grow-0">
                 <td className="px-3 py-1 text-sm text-slate-500" colSpan={3}>
@@ -535,8 +608,7 @@ export function CostsTab() {
                       aria-label="Stawka VAT"
                       value={stawkaVat}
                       onChange={(e) => setStawkaVat(stawkaVatZZapisu(Number(e.target.value)))}
-                      className="rounded border bg-white px-1.5 py-0.5 text-sm text-slate-700"
-                      style={{ borderColor: "#D6DCE3" }}
+                      className="pe-input pe-select py-0.5 text-slate-700 text-base md:text-sm"
                     >
                       {STAWKI_VAT.map((s) => (
                         <option key={s} value={s}>
@@ -546,7 +618,7 @@ export function CostsTab() {
                     </select>
                   </label>
                 </td>
-                <td className="pe-mono px-3 py-1 text-right text-sm text-slate-500">{formatLiczba(vat, 2)} zł</td>
+                <td className="pe-liczba px-3 py-1 text-right text-sm text-slate-500">{formatLiczba(vat, 2)} zł</td>
               </tr>
               {/* Ostrzeżenie stoi NAD sumą, nie pod nią. Pod spodem gasło: najpierw padała
                   wielka miedziana liczba z podpisem „RAZEM", a dopiero potem, drobnym
@@ -556,8 +628,10 @@ export function CostsTab() {
               {unpriced.length > 0 && (
                 <tr>
                   <td colSpan={4} className="px-3 pb-2 pt-2">
-                    <div className="flex gap-2.5 rounded-md p-3 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
-                      <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                    {/* `role="note"`, nie domyślny `status`: lista pozycji bez ceny zmienia się
+                        przy każdym wpisanym znaku, a region `status` kazałby czytnikowi
+                        odczytywać całe zdanie od nowa w trakcie pisania. */}
+                    <Alert variant="caution" role="note" className="gap-2.5 text-xs">
                       <div>
                         <strong>
                           {podsumowanie.brakRobocizny
@@ -570,7 +644,7 @@ export function CostsTab() {
                           ? " — robocizna potrafi być większą częścią kosztu niż cały materiał."
                           : "."}
                       </div>
-                    </div>
+                    </Alert>
                   </td>
                 </tr>
               )}

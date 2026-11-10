@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { KOLORY } from "@/lib/tokeny";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Info, Search } from "lucide-react";
 import { podsumowanieProblemow, type PlanIssue, type PlanIssueLevel } from "@/lib/planCheck";
 
@@ -16,10 +17,10 @@ import { podsumowanieProblemow, type PlanIssue, type PlanIssueLevel } from "@/li
  */
 
 const STYL: Record<PlanIssueLevel, { bg: string; fg: string; Icon: typeof AlertTriangle }> = {
-  error: { bg: "#C6433A14", fg: "#A2352C", Icon: AlertTriangle },
-  warn: { bg: "#C1793F14", fg: "#8A5526", Icon: AlertTriangle },
-  ok: { bg: "#3B8C631A", fg: "#2C6B4A", Icon: Check },
-  info: { bg: "#2D5A8C12", fg: "#2D5A8C", Icon: Info },
+  error: { bg: KOLORY.dangerTlo, fg: KOLORY.danger, Icon: AlertTriangle },
+  warn: { bg: KOLORY.cautionTlo, fg: KOLORY.caution, Icon: AlertTriangle },
+  ok: { bg: KOLORY.successTlo, fg: KOLORY.success, Icon: Check },
+  info: { bg: KOLORY.blueprintTlo, fg: KOLORY.blueprint, Icon: Info },
 };
 
 export interface PlanCheckPanelProps {
@@ -51,7 +52,7 @@ export function PlanCheckPanel({ issues, onShowElements, onShowRoom, przelaczone
   const otwarte = przelaczone ?? maProblemy;
 
   const bledy = issues.filter((i) => i.level === "error").length;
-  const kolorNaglowka = bledy > 0 ? "#A2352C" : maProblemy ? "#8A5526" : "#2C6B4A";
+  const kolorNaglowka = bledy > 0 ? KOLORY.danger : maProblemy ? KOLORY.caution : KOLORY.success;
 
   return (
     <div className="pe-card mt-2">
@@ -66,11 +67,11 @@ export function PlanCheckPanel({ issues, onShowElements, onShowRoom, przelaczone
           <ChevronRight size={14} className="shrink-0 text-slate-400" />
         )}
         <Search size={14} className="shrink-0 text-slate-400" />
-        <span className="text-[13px] font-semibold text-ink">Sprawdzenie rzutu</span>
-        <span className="text-[11.5px] font-medium" style={{ color: kolorNaglowka }}>
+        <span className="text-sm font-semibold text-ink">Sprawdzenie rzutu</span>
+        <span className="text-xs font-medium" style={{ color: kolorNaglowka }}>
           {podsumowanieProblemow(issues)}
         </span>
-        <span className="ml-auto text-[11px] text-slate-400">
+        <span className="ml-auto text-xs text-slate-400">
           {otwarte ? "zwiń" : "rozwiń"}
         </span>
       </button>
@@ -90,7 +91,7 @@ export function PlanCheckPanel({ issues, onShowElements, onShowRoom, przelaczone
                   <div className="text-xs font-semibold" style={{ color: fg }}>
                     {s.title}
                   </div>
-                  <div className="mt-0.5 text-[11.5px] leading-relaxed" style={{ color: fg }}>
+                  <div className="mt-0.5 text-xs leading-relaxed" style={{ color: fg }}>
                     {s.detail}
                   </div>
                   {/* Skok z listy na rysunek — bez tego „Gniazdo 230 V (Łazienka)" przy
@@ -99,7 +100,7 @@ export function PlanCheckPanel({ issues, onShowElements, onShowRoom, przelaczone
                   {doPokazania && (
                     <button
                       onClick={() => onShowElements(s.elementIds)}
-                      className="mt-1.5 text-[11px] font-semibold underline"
+                      className="mt-1.5 text-xs font-semibold underline"
                       style={{ color: fg }}
                     >
                       Pokaż na planie ({s.elementIds.length})
@@ -108,7 +109,7 @@ export function PlanCheckPanel({ issues, onShowElements, onShowRoom, przelaczone
                   {pokojDoPokazania && (
                     <button
                       onClick={() => onShowRoom!(pokojDoPokazania)}
-                      className="mt-1.5 text-[11px] font-semibold underline"
+                      className="mt-1.5 text-xs font-semibold underline"
                       style={{ color: fg }}
                     >
                       Pokaż na planie
