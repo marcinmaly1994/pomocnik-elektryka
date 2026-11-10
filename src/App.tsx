@@ -10,7 +10,6 @@ import {
   Folder,
   FolderOpen,
   HelpCircle,
-  Loader2,
   LogOut,
   Pencil,
   Save,
@@ -121,8 +120,16 @@ function pobierzZawczasu(tab: AppTab): void {
 
 function TabLoading() {
   return (
-    <div className="flex items-center gap-2 py-12 text-sm text-slate-400">
-      <Loader2 size={16} className="animate-spin" /> Wczytywanie…
+    // Szkielet układu zamiast kręciołka: strona nie skacze, gdy przyjdzie treść.
+    // `role="status"` zostaje, żeby czytnik nadal słyszał, że coś się wczytuje.
+    // Biała karta, bo bloki w kolorze tła strony (`bg-paper`) na samym tle byłyby niewidoczne;
+    // `sr-only` daje czytnikowi tekst, bo sam `aria-label` na `role="status"` bywa pomijany.
+    <div role="status" aria-label="Wczytywanie" className="pe-card my-6 space-y-3 p-5">
+      <span className="sr-only">Wczytywanie…</span>
+      <div className="pe-szkielet h-6 w-1/3 rounded-card motion-safe:animate-pulse" />
+      <div className="pe-szkielet h-4 w-full rounded-card motion-safe:animate-pulse" />
+      <div className="pe-szkielet h-4 w-2/3 rounded-card motion-safe:animate-pulse" />
+      <div className="pe-szkielet h-40 w-full rounded-card motion-safe:animate-pulse" />
     </div>
   );
 }

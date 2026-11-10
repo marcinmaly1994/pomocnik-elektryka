@@ -1121,6 +1121,15 @@ export function CalculatorsTab() {
               />
             </>
           )}
+          {/* `key` przemontowuje kartę przy zmianie kalkulatora i odpala przenikanie od nowa.
+              Bezpieczne: wartości pól są w store, a lokalny stan (rozwinięte „Jak to działa")
+              i tak był osobny dla każdego kalkulatora — każdy stoi we własnej gałęzi JSX.
+              Przełącznik trybu obwodu NIE zmienia `activeCalc`, więc nie przemontowuje. */}
+          <div
+            key={activeCalc ?? "start"}
+            data-karta-kalkulatora
+            className="motion-safe:animate-[pe-przenikanie_120ms_ease-out]"
+          >
           {/* Przelacznik trybu STOI NAD karta trybu, a nie w niej: to wybor pytania,
               nie jedno z pol formularza. Cztery dawne kalkulatory (przekroj,
               zabezpieczenie, WLZ, pelny dobor) pytaly o to samo z czterech stron. */}
@@ -3426,6 +3435,7 @@ export function CalculatorsTab() {
               />
             </Card>
           )}
+          </div>
         </div>
       </div>
     </div>

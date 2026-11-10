@@ -38,6 +38,53 @@ body {
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
   }
+  /* Wspólny wygląd tabel: nagłówek na tle surface-2, linie w kolorze ramek, liczby
+     z prawej i w kroju o równej szerokości cyfr (kolumny kwot czytają się w pionie).
+     ROZMIAR tekstu zostaje przy tabeli — dziewięciokolumnowa tabela doboru obwodów
+     ma świadomie 12 px.
+     Kosztorys, dobór obwodów i protokoły są na telefonie kartami (`display:block`), a
+     tabelą stają się dopiero od breakpointu: `pe-table-od-md` / `pe-table-od-lg`.
+     Linie komórek i wyrównanie liczb w prawo włączamy dopiero od niego — inaczej każda
+     komórka karty dostałaby własną linię. Między kartami linię rysuje sam wiersz
+     (`border-b border-border`). */
+  .pe-table thead th {
+    @apply bg-surface-2 font-semibold text-slate-500;
+  }
+  .pe-table .pe-liczba {
+    @apply pe-mono tabular-nums;
+  }
+  .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) th,
+  .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) td {
+    @apply border-b border-border;
+  }
+  .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) .pe-liczba {
+    @apply text-right;
+  }
+  @media (min-width: theme('screens.md')) {
+    .pe-table-od-md th,
+    .pe-table-od-md td {
+      @apply border-b border-border;
+    }
+    .pe-table-od-md .pe-liczba {
+      @apply text-right;
+    }
+  }
+  @media (min-width: theme('screens.lg')) {
+    .pe-table-od-lg th,
+    .pe-table-od-lg td {
+      @apply border-b border-border;
+    }
+    .pe-table-od-lg .pe-liczba {
+      @apply text-right;
+    }
+  }
+  /* Ostatni wiersz bez linii pod spodem; stopka z sumami też — sumy łączy kolejność, nie kreski.
+     Selektor z dwiema klasami (0,2,3) wygrywa z regułami linii wyżej: ich `:not(...)`
+     opakowano w `:where()`, więc liczą się za zero i nie podbijają swojej swoistości. */
+  .pe-table.pe-table tbody tr:last-child td,
+  .pe-table.pe-table tfoot td {
+    @apply border-b-0;
+  }
   .pe-card {
     @apply rounded-card border border-border bg-surface shadow-xs;
   }
@@ -169,6 +216,30 @@ body {
     to {
       transform: none;
     }
+  }
+  /* Okno wchodzi z -50%/-50%, bo `DialogContent` centruje je translate'em — animacja
+     transform bez tego przesunięcia rzuciłaby okno w róg. Włączane tylko pod `motion-safe:`. */
+  @keyframes pe-okno-wejscie {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -48%) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  @keyframes pe-przenikanie {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  /* Szkielet wczytywania; puls dokłada TabLoading pod `motion-safe:`. */
+  .pe-szkielet {
+    @apply bg-paper;
   }
   @media (prefers-reduced-motion: reduce) {
     .pe-onboarding-enter,
