@@ -149,7 +149,7 @@ export function CropTool({ obrazUrl, szerokoscObrazu: W, wysokoscObrazu: H, onPr
 
   return (
     <div className="pe-card p-4">
-      <h2 className="pe-display mb-1 text-[15px]">Przytnij rzut</h2>
+      <h2 className="pe-display mb-1 text-base">Przytnij rzut</h2>
       <p className="mb-1 text-sm text-slate-600">
         Zaznacz obszar, który chcesz zachować — resztę (np. tabelkę z legendą pomieszczeń albo opis obok planu)
         usuniemy z podkładu. Możesz też pominąć ten krok i użyć całego pliku.

@@ -109,7 +109,7 @@ export function KalkulatorImpedancji({ label }: { label: string }) {
       <CalcResultView wynik={impedancja} />
 
       <div className="mb-2 mt-4 text-xs font-semibold text-slate-600">Przewody równoległe — podział prądu</div>
-      <div className="mb-3 rounded-md p-2.5 text-[11.5px] leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
+      <div className="mb-3 rounded-md p-2.5 text-xs leading-relaxed" style={{ background: "#2D5A8C10", color: "#2D5A8C" }}>
         Prąd dzieli się <strong>odwrotnie proporcjonalnie do impedancji</strong>, więc krótsza żyła bierze go
         więcej. Zabezpieczenie nadprądowe mierzy prąd CAŁKOWITY, więc przeciążenia pojedynczej żyły nie wykryje —
         stąd normowy wymóg jednakowej długości i przekroju.

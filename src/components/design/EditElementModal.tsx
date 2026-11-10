@@ -167,7 +167,7 @@ export function EditElementModal({
             <div className="pe-scroll max-h-64 space-y-3 overflow-y-auto pr-1">
               {ELEMENT_SECTIONS.map((section) => (
                 <div key={section.title}>
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{section.title}</div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{section.title}</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {section.items.map((item) => {
                       const def = ELEMENT_TYPES[item.key];
@@ -177,7 +177,7 @@ export function EditElementModal({
                           type="button"
                           key={item.key}
                           onClick={() => setType(item.key)}
-                          className="pe-btn-ghost flex items-center gap-2 p-2 text-left text-[11px]"
+                          className="pe-btn-ghost flex items-center gap-2 p-2 text-left text-xs"
                           style={active ? { borderColor: def.color, background: `${def.color}14`, color: def.color } : undefined}
                         >
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center">
@@ -281,14 +281,14 @@ export function EditElementModal({
                       className="pe-input w-full text-sm"
                     />
                     {circuits > 1 && (
-                      <div className="mt-0.5 text-[10px] text-slate-400">
+                      <div className="mt-0.5 text-xs text-slate-400">
                         {i === 0 ? "lewa dźwignia" : "prawa dźwignia"}
                       </div>
                     )}
                   </div>
                 ))}
               </div>
-              <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              <p className="mt-1 text-xs leading-snug text-slate-400">
                 Elementy z tym samym numerem tworzą jedną grupę — wpisz numer, do którego chcesz dołączyć.
                 Puste pole oznacza dobór automatyczny (najbliższy łącznik w tym samym pomieszczeniu).
               </p>
@@ -333,7 +333,7 @@ export function EditElementModal({
                   className="pe-input w-full text-sm"
                 />
               </div>
-              <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              <p className="mt-1 text-xs leading-snug text-slate-400">
                 Obrys przyboru jest jednocześnie strefą ochronną, więc te wymiary decydują, które
                 gniazdo sprawdzenie rzutu zgłosi. Puste pola oznaczają wymiary typowe. Dłuższy bok
                 leży wzdłuż symbolu — obrót elementu obraca też strefę.
@@ -361,7 +361,7 @@ export function EditElementModal({
               aria-label="Wysokość montażu w metrach"
               className="pe-input w-full text-sm"
             />
-            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+            <p className="mt-1 text-xs leading-snug text-slate-400">
               Wchodzi w długość przewodu (zejście od stropu do puszki) i w kosztorys. Puste pole
               oznacza wartość typową dla tego typu osprzętu.
             </p>

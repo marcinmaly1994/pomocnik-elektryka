@@ -2468,7 +2468,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       <div className="flex min-w-0 flex-col items-start gap-2 text-xs" data-testid="karta-sciany">
         <div>
           <div className="text-sm font-semibold text-ink">Ściana</div>
-          <div className="text-[11px] text-slate-500">
+          <div className="text-xs text-slate-500">
             {mpu !== null ? `${formatLiczba(dlugosc * mpu, 2)} m` : `${Math.round(dlugosc)} jedn.`} ·{" "}
             {odcinki} {odcinki === 1 ? "odcinek" : odcinki < 5 ? "odcinki" : "odcinków"}
           </div>
@@ -2595,7 +2595,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             </button>
           </div>
 
-          <span className="text-[11px] text-slate-400">Strzałki przesuwają o 1 jedn., z Shiftem o kratkę.</span>
+          <span className="text-xs text-slate-400">Strzałki przesuwają o 1 jedn., z Shiftem o kratkę.</span>
         </div>
       )}
 
@@ -2968,7 +2968,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           </button>
           <button
             onClick={() => setPetlaDoNazwania(null)}
-            className="text-[11px] text-slate-400 underline hover:text-slate-600"
+            className="text-xs text-slate-400 underline hover:text-slate-600"
             aria-label="Odrzuć propozycję pomieszczenia"
           >
             Nie teraz
@@ -3396,7 +3396,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         wariant={`${trasyWPdf ? "z-trasami" : "bez-tras"}:${formatPdf}`}
         opcje={
           <>
-            <label className="flex items-center gap-2 text-[13px] text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
               <input
                 type="checkbox"
                 checked={trasyWPdf}
@@ -3405,12 +3405,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               />
               Trasy przewodów na rysunku
             </label>
-            <label className="flex items-center gap-2 text-[13px] text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
               Arkusz
               <select
                 value={formatPdf}
                 onChange={(e) => setFormatPdf(e.target.value as FormatArkusza)}
-                className="h-8 rounded-md border border-border bg-white px-2 text-[13px]"
+                className="h-8 rounded-md border border-border bg-white px-2 text-sm"
               >
                 <option value="A4">A4 poziomo</option>
                 <option value="A3">A3 poziomo</option>
@@ -3756,7 +3756,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             />
           ) : toolMode === "pomieszczenie" ? (
             <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-              <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400" data-testid="liczba-pomieszczen">
+              <div className="px-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400" data-testid="liczba-pomieszczen">
                 Pomieszczenia ({roomShapes.length})
               </div>
               {/* Przewija się sama LISTA — przy kilkunastu pomieszczeniach inaczej
@@ -3847,7 +3847,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                     {szufladaZwinieta ? (
                       <span className="truncate">{tytulSzuflady}</span>
                     ) : (
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Zaznaczenie</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Zaznaczenie</span>
                     )}
                     {szufladaZwinieta ? <ChevronUp size={16} aria-label="Rozwiń kartę" /> : <ChevronDown size={16} aria-label="Zwiń kartę" />}
                   </button>
@@ -4153,7 +4153,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           className="absolute left-0 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-r-lg border border-l-0 border-border bg-white/90 py-3 text-slate-400 shadow-md backdrop-blur transition-colors hover:bg-white hover:text-copper"
         >
           <ChevronRight size={13} />
-          <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ writingMode: "vertical-rl" }}>
+          <span className="text-xs font-semibold uppercase tracking-wider" style={{ writingMode: "vertical-rl" }}>
             Narzędzia
           </span>
           <ChevronRight size={13} />
@@ -4364,7 +4364,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           >
             {contextMenu.multi ? (
               <>
-                <div className="px-3 py-1.5 text-[11px] text-slate-400">Zaznaczono {multiSelected.length}</div>
+                <div className="px-3 py-1.5 text-xs text-slate-400">Zaznaczono {multiSelected.length}</div>
                 <button
                   onClick={() => {
                     rotateElements(multiSelected);

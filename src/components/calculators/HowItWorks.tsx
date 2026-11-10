@@ -31,15 +31,15 @@ export function HowItWorks({ formulas, notes }: HowItWorksProps) {
         <div className="mt-3 space-y-3">
           {formulas.map((f, i) => (
             <div key={i}>
-              <div className="mb-1 text-[11px] text-slate-500">{f.label}</div>
+              <div className="mb-1 text-xs text-slate-500">{f.label}</div>
               <div className="pe-mono rounded-md px-3 py-2 text-sm" style={{ background: "#EEF1F4", color: "#16202B" }}>
                 {f.eq}
               </div>
-              {f.where && <div className="mt-1 text-[11px] leading-relaxed text-slate-500">{f.where}</div>}
+              {f.where && <div className="mt-1 text-xs leading-relaxed text-slate-500">{f.where}</div>}
             </div>
           ))}
           {notes && notes.length > 0 && (
-            <ul className="space-y-1.5 pt-1 text-[11px] text-slate-600">
+            <ul className="space-y-1.5 pt-1 text-xs text-slate-600">
               {notes.map((n, i) => (
                 <li key={i} className="flex gap-1.5">
                   <span className="text-copper">•</span>

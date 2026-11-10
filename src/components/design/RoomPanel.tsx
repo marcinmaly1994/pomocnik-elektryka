@@ -91,7 +91,7 @@ export function WierszPomieszczenia({
           }}
         />
         {areaM2 !== null && (
-          <span className="pe-mono shrink-0 text-[11px] text-slate-500" title="Powierzchnia pomieszczenia">
+          <span className="pe-mono shrink-0 text-xs text-slate-500" title="Powierzchnia pomieszczenia">
             {formatLiczba(areaM2, 1)} m²
           </span>
         )}
@@ -147,7 +147,7 @@ export function WierszPomieszczenia({
           {/* Przesuwanie całego pokoju (F5) nie ma przycisku — chwyta się wnętrze — więc
               bez tej linijki nikt by o nim nie wiedział. Na dotyku przeciąganie wnętrza
               należy do przesuwania widoku, stąd ukryte. */}
-          <p className="w-full text-[11px] leading-snug text-slate-500 [@media(pointer:coarse)]:hidden">
+          <p className="w-full text-xs leading-snug text-slate-500 [@media(pointer:coarse)]:hidden">
             Przeciągnij wnętrze pokoju albo użyj strzałek, żeby przesunąć go razem z osprzętem.
           </p>
         </div>

@@ -25,7 +25,7 @@ export function PolitykaPrywatnosci() {
 
       <BanerSzkicu czego="nie wskazuje administratora danych — czyli nie spełnia jeszcze obowiązku z art. 13 RODO." />
 
-      <div className="space-y-7 text-[13px] leading-relaxed text-slate-600">
+      <div className="space-y-7 text-sm leading-relaxed text-slate-600">
         <p>
           Krótko, zanim przejdziemy do szczegółów:{" "}
           <strong className="text-ink">bez założenia konta ta aplikacja nie wysyła o tobie niczego na serwer.</strong>{" "}
@@ -49,7 +49,7 @@ export function PolitykaPrywatnosci() {
 
         <Sekcja ikona={HardDrive} tytul="Co zostaje w twojej przeglądarce">
           <p>
-            W pamięci lokalnej przeglądarki (<span className="pe-mono text-[12px]">localStorage</span>) zapisujemy:
+            W pamięci lokalnej przeglądarki (<span className="pe-mono text-xs">localStorage</span>) zapisujemy:
           </p>
           <ul className="ml-4 list-disc space-y-1">
             <li>twój projekt instalacji — rzut, pomieszczenia, osprzęt, obwody, kosztorys i wgrany podkład;</li>

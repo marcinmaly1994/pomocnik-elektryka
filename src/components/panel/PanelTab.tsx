@@ -95,7 +95,7 @@ const OPISY_SKROTOW_DOBORU: [string, string][] = [
  * łamie się na jednostce ("8,70 A" w jednej linii). Od 768 px zwykła komórka tabeli.
  */
 const KOMORKA_DOBORU =
-  "whitespace-nowrap before:mb-0.5 before:block before:text-[10px] before:uppercase before:tracking-wide before:text-slate-400 before:content-[attr(data-label)] md:py-1.5 md:pr-3 md:before:hidden";
+  "whitespace-nowrap before:mb-0.5 before:block before:text-xs before:uppercase before:tracking-wide before:text-slate-400 before:content-[attr(data-label)] md:py-1.5 md:pr-3 md:before:hidden";
 
 export function PanelTab() {
   const elements = useProjectStore((s) => s.draft.elements); // cały budynek, nie tylko bieżąca kondygnacja
@@ -619,7 +619,7 @@ export function PanelTab() {
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-[11px]" style={{ color: phaseSpread > 32 ? "#A2352C" : "#4F5D73" }}>
+            <div className="mt-2 text-xs" style={{ color: phaseSpread > 32 ? "#A2352C" : "#4F5D73" }}>
               {phaseSpread > 32
                 ? `Różnica między najbardziej i najmniej obciążoną fazą wynosi ${formatLiczba(phaseSpread, 1)} A — rozważ przepięcie obwodów lub użyj „Wyrównaj fazy”.`
                 : rozlozoneRowno
@@ -664,7 +664,7 @@ export function PanelTab() {
         <div className="pe-card min-w-[280px] flex-1 p-4 xl:sticky xl:top-4 xl:w-[440px] xl:flex-none" data-testid="lista-aparatow">
           <div className="mb-3 flex items-center gap-2">
             <FileText size={15} className="text-copper" />
-            <h3 className="pe-display text-[15px]">Aparaty ({devices.length})</h3>
+            <h3 className="pe-display text-base">Aparaty ({devices.length})</h3>
           </div>
 
           {/* Typowa rozdzielnica domowa to ~10–15 aparatów; przy `max-h-72` (≈9 wierszy)
@@ -737,7 +737,7 @@ export function PanelTab() {
           </div>
 
           <div className="border-t pt-3" style={{ borderColor: "#EEF1F4" }}>
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Dodaj aparat ręcznie</div>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">Dodaj aparat ręcznie</div>
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={addForm.kind}
@@ -786,7 +786,7 @@ export function PanelTab() {
             rozmieszczenia aparatów. Wyłączone przy pustym doborze — PDF z samą główką
             tabeli wygląda jak awaria, nie jak dokument. */}
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="pe-display text-[15px]">Dobór obwodów wg PN-HD 60364</h3>
+          <h3 className="pe-display text-base">Dobór obwodów wg PN-HD 60364</h3>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="copper"
@@ -924,7 +924,7 @@ export function PanelTab() {
           („8,70 / A"), więc wiersze miały po trzy–cztery linie.
         */}
         <div className="pe-scroll md:overflow-x-auto">
-          <table className="block w-full text-left text-[11.5px] md:table">
+          <table className="block w-full text-left text-xs md:table">
             <thead className="hidden md:table-header-group">
               <tr className="text-slate-400">
                 <th className="py-1 pr-3 font-medium">Obwód</th>
@@ -976,7 +976,7 @@ export function PanelTab() {
                     className="grid grid-cols-4 gap-x-2 gap-y-2 border-t px-1 py-2.5 md:table-row md:p-0"
                     style={{ borderColor: "#EEF1F4", background: bad ? "#C6433A0A" : warn ? "#C1793F0A" : undefined }}
                   >
-                    <td className="col-span-4 text-[12.5px] font-medium md:py-1.5 md:pr-3 md:text-[11.5px] md:font-normal">{s.nazwa}</td>
+                    <td className="col-span-4 text-sm font-medium md:py-1.5 md:pr-3 md:text-xs md:font-normal">{s.nazwa}</td>
                     <td className={KOMORKA_DOBORU} data-label="Faza">
                       <span
                         className="pe-mono font-semibold"
@@ -1019,7 +1019,7 @@ export function PanelTab() {
             renderuje, a nie jest schowany CSS-em: ten sam tekst w DOM obok dymka dublowałby
             go w każdym zapytaniu po treści. */}
         {sized.length > 0 && !szerokieOkno && (
-          <details className="mt-3 rounded-md border px-3 py-2 text-[11.5px] md:hidden" style={{ borderColor: "#EEF1F4" }}>
+          <details className="mt-3 rounded-md border px-3 py-2 text-xs md:hidden" style={{ borderColor: "#EEF1F4" }}>
             <summary className="-my-2 cursor-pointer py-2 font-medium text-slate-600">Co oznaczają skróty?</summary>
             <dl className="mt-2 space-y-1.5 leading-relaxed text-slate-500">
               {OPISY_SKROTOW_DOBORU.map(([skrot, opis]) => (
@@ -1037,7 +1037,7 @@ export function PanelTab() {
             {sizingWarnings.map((w, i) => (
               <div
                 key={i}
-                className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
                 style={{ background: w.level === "error" ? "#C6433A14" : "#C1793F14", color: w.level === "error" ? "#A2352C" : "#8A5526" }}
               >
                 <AlertTriangle size={13} className="mt-0.5 shrink-0" />
@@ -1049,7 +1049,7 @@ export function PanelTab() {
             {ostrzezeniaReczne.map((o, i) => (
               <div
                 key={`reczne-${i}`}
-                className="flex gap-2 rounded-md p-2.5 text-[11.5px] leading-relaxed"
+                className="flex gap-2 rounded-md p-2.5 text-xs leading-relaxed"
                 style={{ background: "#C1793F14", color: "#8A5526" }}
               >
                 <AlertTriangle size={13} className="mt-0.5 shrink-0" />
@@ -1059,7 +1059,7 @@ export function PanelTab() {
           </div>
         )}
 
-        <p className="mt-4 text-[11px] leading-relaxed text-slate-400">
+        <p className="mt-4 text-xs leading-relaxed text-slate-400">
           Dobór orientacyjny/edukacyjny. Projekt do realizacji i odbioru wykonuje i podpisuje osoba
           z uprawnieniami; wymagane pomiary powykonawcze.
         </p>
@@ -1074,7 +1074,7 @@ export function PanelTab() {
       </div>
 
       <div className="pe-card p-5">
-        <h3 className="pe-display mb-1 text-[15px]">Sprawdzenie selektywności i doboru zabezpieczeń</h3>
+        <h3 className="pe-display mb-1 text-base">Sprawdzenie selektywności i doboru zabezpieczeń</h3>
         <p className="mb-3 text-xs text-slate-500">
           Automatyczna kontrola stopniowania zabezpieczeń, ochrony różnicówek i rozkładu obciążenia.
         </p>
@@ -1088,7 +1088,7 @@ export function PanelTab() {
                   <div className="text-xs font-semibold" style={{ color: fg }}>
                     {s.title}
                   </div>
-                  <div className="mt-0.5 text-[11.5px] leading-relaxed" style={{ color: fg }}>
+                  <div className="mt-0.5 text-xs leading-relaxed" style={{ color: fg }}>
                     {s.detail}
                   </div>
                 </div>

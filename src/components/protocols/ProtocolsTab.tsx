@@ -280,7 +280,7 @@ export function ProtocolsTab() {
             </button>
           )}
           {cloudSaveError && <span className="text-xs text-red-600">{cloudSaveError}</span>}
-          <p className="w-full text-[11px] text-slate-400">
+          <p className="w-full text-xs text-slate-400">
             Zapis pod nazwą, która już jest na koncie, nadpisuje tamten zestaw. Nową pozycję tworzy dopiero nowa nazwa
             (maksymalnie {LIMIT_ZAPISOW}).
           </p>
@@ -298,7 +298,7 @@ export function ProtocolsTab() {
           className="mb-3 flex w-full items-center gap-2 text-left"
         >
           {daneZwiniete ? <ChevronRight size={15} className="shrink-0 text-slate-400" /> : <ChevronDown size={15} className="shrink-0 text-slate-400" />}
-          <h3 className="pe-display text-[15px]">Dane ogólne (wspólne dla wszystkich protokołów)</h3>
+          <h3 className="pe-display text-base">Dane ogólne (wspólne dla wszystkich protokołów)</h3>
           {daneZwiniete && (
             <span className="ml-auto truncate pl-3 text-xs text-slate-400">
               {[header.obiekt, header.wykonawca, header.data].filter(Boolean).join(" · ") || "nie wypełniono"}
@@ -354,7 +354,7 @@ export function ProtocolsTab() {
         {/* Ostrzeżenie o brakach zostaje widoczne TAKŻE po zwinięciu — inaczej
             zwinięcie sekcji chowałoby jedyny sygnał, że protokół wyjdzie niekompletny. */}
         {!headerReady && (
-          <p className={daneZwiniete ? "text-[11px]" : "mt-2 text-[11px]"} style={{ color: "#8A5526" }}>
+          <p className={daneZwiniete ? "text-xs" : "mt-2 text-xs"} style={{ color: "#8A5526" }}>
             Uzupełnij co najmniej „Obiekt” i „Wykonawca pomiarów” — te dane trafiają do nagłówka każdego protokołu.
           </p>
         )}
@@ -388,7 +388,7 @@ export function ProtocolsTab() {
               }
             >
               <div className="font-semibold">{d.title}</div>
-              <div className="mt-0.5 flex items-center gap-1 text-[10px]">
+              <div className="mt-0.5 flex items-center gap-1 text-xs">
                 {st?.rows?.length ? `${st.rows.length} poz.` : "brak danych"}
                 {v === true && <span style={{ color: "#3B8C63" }}>· pozytywny</span>}
                 {v === false && <span style={{ color: "#C6433A" }}>· negatywny</span>}
@@ -402,7 +402,7 @@ export function ProtocolsTab() {
       <div ref={kartaRef} className="pe-card scroll-mt-3 p-5" data-testid="karta-protokolu">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="pe-display text-[15px]">{def.title}</h3>
+            <h3 className="pe-display text-base">{def.title}</h3>
             <p className="mt-0.5 text-xs text-slate-500">{def.intro}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -478,7 +478,7 @@ export function ProtocolsTab() {
                       <button
                         key={v}
                         onClick={() => setRow(i, { status: r.status === v ? "" : v })}
-                        className="rounded-md px-2 py-1 text-[11px]"
+                        className="rounded-md px-2 py-1 text-xs"
                         style={
                           r.status === v
                             ? { background: `${col}1A`, color: col, border: `1px solid ${col}` }
@@ -564,7 +564,7 @@ export function ProtocolsTab() {
                         </td>
                         {def.columns!.map((c) => (
                           <td key={c.key} className={`min-w-0 lg:py-1.5 lg:pr-2 ${c.type === "text" ? "col-span-6" : "col-span-2"}`}>
-                            <span className="mb-0.5 block truncate text-[11px] text-slate-400 lg:hidden">{c.label}</span>
+                            <span className="mb-0.5 block truncate text-xs text-slate-400 lg:hidden">{c.label}</span>
                             {c.type === "computed" ? (
                               <span className="pe-mono text-xs text-slate-500">{c.compute!(r, limit)}</span>
                             ) : c.type === "select" ? (

@@ -47,7 +47,7 @@ const TEKSTY: Record<RodzajDokumentu, { tytul: string; pusto: string; usunPytani
  *  powiedzieć o sobie, czym jest, bez czytania instrukcji. */
 function NaglowekSekcji({ ikona: Ikona, children }: { ikona: typeof Cloud; children: React.ReactNode }) {
   return (
-    <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+    <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
       <Ikona size={12} /> {children}
     </h3>
   );
@@ -116,7 +116,7 @@ export function ProjectsModal({
         {zLokalnymi && (
           <section className="mb-4">
             <NaglowekSekcji ikona={Monitor}>W tej przeglądarce</NaglowekSekcji>
-            <div className="mb-2 text-[11px] leading-relaxed text-slate-400">
+            <div className="mb-2 text-xs leading-relaxed text-slate-400">
               Wykorzystano{" "}
               <strong className="text-slate-500">
                 {projektyLokalne!.length} z {LIMIT_ZAPISOW}
@@ -134,9 +134,9 @@ export function ProjectsModal({
                     <div className="min-w-0">
                       <div className="truncate text-sm">
                         {p.nazwa}
-                        {otwarty && <span className="ml-2 text-[11px] text-copper">otwarty</span>}
+                        {otwarty && <span className="ml-2 text-xs text-copper">otwarty</span>}
                       </div>
-                      <div className="text-[11px] text-slate-400">
+                      <div className="text-xs text-slate-400">
                         {p.zmieniony ? new Date(p.zmieniony).toLocaleString("pl-PL") : "—"}
                       </div>
                     </div>
@@ -188,7 +188,7 @@ export function ProjectsModal({
               {/* Zasada nadpisywania stoi tu, a nie w osobnej pomocy: to jedyne miejsce,
                   gdzie widać nazwy obok siebie, więc tutaj pytanie „co się stanie, jeśli
                   zapiszę pod tą samą nazwą" pojawia się naturalnie. */}
-              <div className="mb-2 text-[11px] leading-relaxed text-slate-400">
+              <div className="mb-2 text-xs leading-relaxed text-slate-400">
                 Wykorzystano{" "}
                 <strong className="text-slate-500">
                   {items?.length ?? 0} z {LIMIT_ZAPISOW}
@@ -203,7 +203,7 @@ export function ProjectsModal({
                   <div key={p.id} className="pe-input flex items-center justify-between py-2">
                     <div className="min-w-0">
                       <div className="truncate text-sm">{p.name}</div>
-                      <div className="text-[11px] text-slate-400">{new Date(p.updated_at).toLocaleString("pl-PL")}</div>
+                      <div className="text-xs text-slate-400">{new Date(p.updated_at).toLocaleString("pl-PL")}</div>
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <button onClick={() => onLoad(p.id)} className="pe-btn-ghost px-2.5 py-1 text-xs">

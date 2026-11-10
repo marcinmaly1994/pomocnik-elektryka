@@ -38,7 +38,7 @@ export function UdostepnijLinkiem({ bajty }: { bajty: Uint8Array | null }) {
 
   if (!SUPABASE_CONFIGURED) return null;
   if (!session) {
-    return <span className="text-[13px] text-slate-500">Zaloguj się, żeby udostępnić dokumentację linkiem tylko do odczytu.</span>;
+    return <span className="text-sm text-slate-500">Zaloguj się, żeby udostępnić dokumentację linkiem tylko do odczytu.</span>;
   }
 
   async function udostepnij() {
@@ -84,7 +84,7 @@ export function UdostepnijLinkiem({ bajty }: { bajty: Uint8Array | null }) {
   }
 
   return (
-    <div className="flex w-full flex-col gap-2 text-[13px]" data-testid="udostepnij-linkiem">
+    <div className="flex w-full flex-col gap-2 text-sm" data-testid="udostepnij-linkiem">
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" className="gap-1.5" disabled={!bajty || trwa} onClick={udostepnij}>
           {trwa ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Udostępnij linkiem (tylko do odczytu)

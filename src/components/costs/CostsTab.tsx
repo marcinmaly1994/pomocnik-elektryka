@@ -432,7 +432,7 @@ export function CostsTab() {
                       z rzutu, pokazana jako podpowiedź. */}
                   <td className="min-w-0 md:p-3">
                     {/* Podpis pola tylko w karcie na telefonie — na monitorze robi to nagłówek tabeli. */}
-                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Ilość</span>
+                    <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Ilość</span>
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
@@ -456,7 +456,7 @@ export function CostsTab() {
                     </div>
                   </td>
                   <td className="min-w-0 md:p-3">
-                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Cena</span>
+                    <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Cena</span>
                     {/* Ten sam wiersz co ilość i wartość: tamte mają obok przycisk cofania, który na dotyku
                         ma 44 px wysokości i centruje pole. Bez wrappera pole ceny leżało 5 px wyżej. */}
                     <div className="flex items-center [@media(pointer:coarse)]:min-h-11">
@@ -484,7 +484,7 @@ export function CostsTab() {
                       Puste pole = wartość liczona z ilości i ceny — ten sam zapis co
                       przy wysokości montażu elementu. */}
                   <td className="min-w-0 text-right md:p-3">
-                    <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-slate-400 md:hidden">Wartość, zł</span>
+                    <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Wartość, zł</span>
                     <div className="flex items-center justify-end gap-1">
                       <input
                         type="number"

@@ -326,9 +326,9 @@ export function EditorToolbar({
           aria-label="Rozmiar elementów"
           className="w-16 accent-copper"
         />
-        <span className="pe-mono w-8 text-right text-[11px] tabular-nums">{formatLiczba(elementScale, 1)}×</span>
+        <span className="pe-mono w-8 text-right text-xs tabular-nums">{formatLiczba(elementScale, 1)}×</span>
         {elementScale !== defaultElementScale && (
-          <button onClick={() => onElementScaleChange(defaultElementScale)} className="text-[11px] text-blueprint hover:underline">
+          <button onClick={() => onElementScaleChange(defaultElementScale)} className="text-xs text-blueprint hover:underline">
             reset
           </button>
         )}
@@ -412,7 +412,7 @@ export function EditorToolbar({
             katalogu przy wstawianiu. */}
         {onPrzelaczKategorie && (
           <fieldset className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
-            <legend className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Osprzęt na rzucie</legend>
+            <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Osprzęt na rzucie</legend>
             {KATEGORIE_OSPRZETU.map((k) => (
               <label key={k} className="flex items-center gap-1.5 text-xs text-slate-500">
                 <input
@@ -503,7 +503,7 @@ export function EditorToolbar({
           onClick={() => onZoomChange(clampZoom(zoomStandardowy))}
           title="Przywróć standardowe powiększenie"
           aria-label={`Powiększenie ${Math.round((zoom / zoomStandardowy) * 100)} procent — kliknij, aby przywrócić 100%`}
-          className="pe-mono w-11 text-center text-[11px] tabular-nums text-slate-600 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
+          className="pe-mono w-11 text-center text-xs tabular-nums text-slate-600 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
         >
           {Math.round((zoom / zoomStandardowy) * 100)}%
         </button>

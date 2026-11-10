@@ -152,7 +152,7 @@ export function ElementLibrary({
               >
                 <span className="text-xs font-semibold text-slate-600">{section.title}</span>
                 <span className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-slate-400">{section.items.length}</span>
+                  <span className="text-xs text-slate-400">{section.items.length}</span>
                   {isOpen ? <ChevronDown size={13} className="text-slate-400" /> : <ChevronRight size={13} className="text-slate-400" />}
                 </span>
               </button>
@@ -175,8 +175,8 @@ export function ElementLibrary({
                             <GlyphPreview type={item.key} color={def.color} gangs={g} />
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-[11.5px] font-medium text-ink">{def.label}</span>
-                            {isActive && <span className="block truncate text-[10px] text-slate-500">{libSubtitle(item.key, g)}</span>}
+                            <span className="block truncate text-xs font-medium text-ink">{def.label}</span>
+                            {isActive && <span className="block truncate text-xs text-slate-500">{libSubtitle(item.key, g)}</span>}
                           </span>
                         </button>
 
@@ -189,7 +189,7 @@ export function ElementLibrary({
                                   key={n}
                                   type="button"
                                   onClick={() => onSetGangs(item.key, n)}
-                                  className="rounded-md py-1 text-[11px]"
+                                  className="rounded-md py-1 text-xs"
                                   style={
                                     sel
                                       ? { background: `${def.color}16`, color: def.color, border: `1px solid ${def.color}` }
@@ -204,7 +204,7 @@ export function ElementLibrary({
                         )}
 
                         {isActive && item.key === "gniazdko" && (
-                          <label className="mt-1.5 flex items-center gap-2 px-0.5 text-[11px] text-slate-600">
+                          <label className="mt-1.5 flex items-center gap-2 px-0.5 text-xs text-slate-600">
                             <input type="checkbox" checked={dedicated} onChange={(e) => onToggleDedicated(e.target.checked)} />
                             Dedykowane (AGD)
                           </label>
@@ -224,7 +224,7 @@ export function ElementLibrary({
           w 3 krokach" w kroku trzecim, a zajmuje prawie 90 px w kolumnie, w której
           właśnie o te 90 px toczy się gra — dwa razy to samo, za cenę połowy listy. */}
       {goraKarty === null && (
-        <div ref={stopkaRef} className="mt-4 border-t pt-4 text-[11px] leading-relaxed text-slate-400" style={{ borderColor: "#EEF1F4" }}>
+        <div ref={stopkaRef} className="mt-4 border-t pt-4 text-xs leading-relaxed text-slate-400" style={{ borderColor: "#EEF1F4" }}>
           Kliknij, aby wybrać element, następnie kliknij na planie, żeby go postawić. Pomieszczenie
           dobiera się automatycznie na podstawie tego, gdzie na planie element wyląduje.
         </div>

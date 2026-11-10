@@ -51,55 +51,55 @@ body {
     @apply rounded-md bg-copper font-medium text-white transition-colors;
   }
   .pe-btn-copper:hover:not(:disabled) {
-    background: #86501f;
+    background: theme('colors.copper.hover');
   }
   .pe-btn-copper:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
   .pe-input {
-    @apply rounded-[5px] border border-border bg-white px-2.5 py-1.5;
+    @apply rounded border border-border bg-white px-2.5 py-1.5;
   }
   .pe-input:focus {
-    outline: 2px solid #2d5a8c33;
+    outline: 2px solid rgb(45 90 140 / 0.2);
     @apply border-blueprint;
   }
   .pe-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 7px;
-    border-radius: 3px;
-    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: theme('borderRadius.sm');
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.01em;
   }
   .pe-tag-blue {
-    background: #2d5a8c0f;
-    color: #2d5a8c;
-    border: 1px solid #2d5a8c26;
+    background: theme('colors.blueprint.tlo');
+    color: theme('colors.blueprint.DEFAULT');
+    border: 1px solid theme('colors.border-strong');
   }
   .pe-tag-copper {
-    background: #c1793f0f;
-    color: #8a5526;
-    border: 1px solid #c1793f26;
+    background: theme('colors.copper.tlo');
+    color: theme('colors.caution.DEFAULT');
+    border: 1px solid theme('colors.border-strong');
   }
   .pe-tag-green {
-    background: #3b8c630f;
-    color: #2c6b4a;
-    border: 1px solid #3b8c6326;
+    background: theme('colors.success.tlo');
+    color: theme('colors.success.DEFAULT');
+    border: 1px solid theme('colors.border-strong');
   }
   .pe-result {
     @apply rounded border border-border bg-white;
-    border-top: 2px solid #2d5a8c;
+    border-top: 2px solid theme('colors.blueprint.DEFAULT');
   }
   .pe-scroll::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   .pe-scroll::-webkit-scrollbar-thumb {
-    background: #c7d0d9;
-    border-radius: 8px;
+    background: theme('colors.border-strong');
+    border-radius: 8px; /* suwak przeglądarki — poza skalą promieni 6/10/14 */
   }
 
   /**

@@ -21,7 +21,7 @@ export function ListaUkladow({ onWybierz }: { onWybierz: (s: SzablonRozdzielnicy
             >
               <div className="text-sm font-semibold text-ink">{s.nazwa}</div>
               <div className="mt-0.5 text-xs leading-snug text-slate-600">{s.opis}</div>
-              <div className="mt-1.5 font-mono text-[11px] text-slate-400">
+              <div className="mt-1.5 font-mono text-xs text-slate-400">
                 {moduly} mod. · {rzedy} × {s.config.perRow}
               </div>
             </button>

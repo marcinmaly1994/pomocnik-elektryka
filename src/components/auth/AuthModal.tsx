@@ -163,7 +163,7 @@ export function AuthModal({ open, komunikat, onClose, onSignedIn }: AuthModalPro
               politykę w tej samej karcie zamyka to okno razem z wpisanym już adresem
               e-mail i hasłem — czyli karze za przeczytanie tego, co się podpisuje. */}
           {mode === "register" && (
-            <p className="text-[11px] leading-relaxed text-slate-500">
+            <p className="text-xs leading-relaxed text-slate-500">
               Zakładając konto akceptujesz{" "}
               <a
                 href="/regulamin"

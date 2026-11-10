@@ -54,7 +54,7 @@ export function Podpowiedz({ children, tresc }: { children: ReactNode; tresc: st
             side="top"
             sideOffset={6}
             collisionPadding={8}
-            className="z-50 max-w-xs rounded-card border border-border bg-white px-3 py-2 text-[11.5px] font-normal leading-relaxed text-ink shadow-lg"
+            className="z-50 max-w-xs rounded-card border border-border bg-white px-3 py-2 text-xs font-normal leading-relaxed text-ink shadow-lg"
             // Escape i kliknięcie obok mają zamknąć także opis PRZYPIĘTY — inaczej
             // zostawałby na ekranie i nie było jak go zdjąć poza trafieniem w ten sam napis.
             onEscapeKeyDown={() => setPrzypiety(false)}

@@ -53,7 +53,7 @@ export function WyborObwodu({
     return (
       <div className={otoczka}>
         <div className="text-xs font-semibold text-slate-500">Numer obwodu</div>
-        <p className={`mt-1 text-[11px] leading-relaxed text-slate-500 ${szerokosc}`}>{zablokowane}</p>
+        <p className={`mt-1 text-xs leading-relaxed text-slate-500 ${szerokosc}`}>{zablokowane}</p>
       </div>
     );
   }
@@ -76,7 +76,7 @@ export function WyborObwodu({
   // proponowałby numer zajęty na parterze i po cichu scalał dwa obwody w jeden.
   const nastepny = (doPokazania.length ? Math.max(...doPokazania.map((u) => u.numer)) : 0) + 1;
   const klasa = (aktywny: boolean, gdzieIndziej = false) =>
-    `rounded-md border px-2 py-1 text-[12px] leading-none transition-colors ${
+    `rounded-md border px-2 py-1 text-xs leading-none transition-colors ${
       aktywny
         ? "border-copper bg-copper/10 font-semibold text-copper"
         : gdzieIndziej
@@ -110,7 +110,7 @@ export function WyborObwodu({
         ))}
         <button
           onClick={() => onWybierz(nastepny)}
-          className="rounded-md border border-dashed border-border px-2 py-1 text-[12px] leading-none text-slate-500 transition-colors hover:border-copper hover:text-copper"
+          className="rounded-md border border-dashed border-border px-2 py-1 text-xs leading-none text-slate-500 transition-colors hover:border-copper hover:text-copper"
           title={`Nowy obwód o numerze ${nastepny}`}
         >
           + {nastepny}
