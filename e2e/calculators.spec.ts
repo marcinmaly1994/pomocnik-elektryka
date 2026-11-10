@@ -593,7 +593,9 @@ test("dobór wkładki gG: domyślne dane (D0gG, 16A, TN odbiorczy) — Imax i Zs
   await wybierzKalkulator(page, /^Dobór wkładki gG/);
 
   const result = page.locator(".pe-result").first();
-  await expect(result).toContainText("D0gG (wkładka gwintowa, system D0), In 16 A");
+  // Prąd znamionowy jest wynikiem głównym, typ wkładki — znacznikiem pod nim (#269).
+  await expect(result.locator("dd")).toHaveText("In 16 A");
+  await expect(result).toContainText("D0gG (wkładka gwintowa, system D0)");
   await expect(result).toContainText("120,0 A");
   await expect(result).toContainText("1,821 Ω");
 });
