@@ -53,11 +53,11 @@ body {
   .pe-table .pe-liczba {
     @apply pe-mono tabular-nums;
   }
-  .pe-table:not(.pe-table-od-md):not(.pe-table-od-lg) th,
-  .pe-table:not(.pe-table-od-md):not(.pe-table-od-lg) td {
+  .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) th,
+  .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) td {
     @apply border-b border-border;
   }
-  .pe-table:not(.pe-table-od-md):not(.pe-table-od-lg) .pe-liczba {
+  .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) .pe-liczba {
     @apply text-right;
   }
   @media (min-width: theme('screens.md')) {
@@ -79,7 +79,8 @@ body {
     }
   }
   /* Ostatni wiersz bez linii pod spodem; stopka z sumami też — sumy łączy kolejność, nie kreski.
-     Selektor z dwiema klasami, żeby wygrać z regułami linii wyżej. */
+     Selektor z dwiema klasami (0,2,3) wygrywa z regułami linii wyżej: ich `:not(...)`
+     opakowano w `:where()`, więc liczą się za zero i nie podbijają swojej swoistości. */
   .pe-table.pe-table tbody tr:last-child td,
   .pe-table.pe-table tfoot td {
     @apply border-b-0;

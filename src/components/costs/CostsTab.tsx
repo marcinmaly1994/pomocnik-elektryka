@@ -301,7 +301,7 @@ export function CostsTab() {
           data-testid="podsumowanie-kosztorysu"
         >
           <div>
-            <div className="text-sm font-semibold text-ink">{podsumowanie.etykietaSumy}</div>
+            <div data-testid="podsumowanie-etykieta" className="text-sm font-semibold text-ink">{podsumowanie.etykietaSumy}</div>
             <div data-testid="podsumowanie-brutto" className="pe-display text-2xl font-bold text-copper">{formatLiczba(gross, 2)} zł</div>
           </div>
           <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
@@ -439,10 +439,14 @@ export function CostsTab() {
               Tabela miała na telefonie 553 px w okienku 325 px — kolumna „Wartość"
               była całkiem poza ekranem, a „Cena jedn." przycięta. */}
           <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-border px-3 py-2 text-xs text-slate-500">
-            <span aria-hidden="true" className="inline-block h-3 w-5 rounded-sm border border-dashed border-slate-400" />
-            <span>Przerywana ramka — wartość policzona przez aplikację (wpisz, żeby ją zmienić).</span>
-            <span aria-hidden="true" className="inline-block h-3 w-5 rounded-sm border border-solid border-copper" />
-            <span>Pełna miedziana — wpisana ręcznie.</span>
+            <span className="inline-flex items-start gap-1.5">
+              <span aria-hidden="true" className="mt-0.5 inline-block h-3 w-5 shrink-0 rounded-sm border border-dashed border-slate-400" />
+              <span>Przerywana ramka — wartość policzona przez aplikację (wpisz, żeby ją zmienić).</span>
+            </span>
+            <span className="inline-flex items-start gap-1.5">
+              <span aria-hidden="true" className="mt-0.5 inline-block h-3 w-5 shrink-0 rounded-sm border border-solid border-copper" />
+              <span>Pełna miedziana ramka — wpisana ręcznie.</span>
+            </span>
           </p>
           <table className="pe-table pe-table-od-md block w-full text-sm md:table">
             <thead className="hidden md:table-header-group">
@@ -540,8 +544,7 @@ export function CostsTab() {
                           if (r.overridden) setCostOverride(r.key, null);
                         }}
                         aria-label={`Cena jednostkowa: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-24 md:px-2.5"
-                        style={r.overridden ? { color: "#5B6A80" } : undefined}
+                        className={`pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-24 md:px-2.5${r.overridden ? " text-slate-400" : ""}`}
                         title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
                         step="0.5"
                       />
@@ -606,7 +609,6 @@ export function CostsTab() {
                       value={stawkaVat}
                       onChange={(e) => setStawkaVat(stawkaVatZZapisu(Number(e.target.value)))}
                       className="pe-input pe-select py-0.5 text-slate-700 text-base md:text-sm"
-                      style={{ borderColor: "#D6DCE3" }}
                     >
                       {STAWKI_VAT.map((s) => (
                         <option key={s} value={s}>

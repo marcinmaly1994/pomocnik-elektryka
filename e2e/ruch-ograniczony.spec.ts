@@ -21,8 +21,11 @@ test.describe("ograniczony ruch", () => {
   });
 });
 
-test("bez ograniczenia: okno wchodzi animacją pe-okno-wejscie", async ({ page }) => {
+test("bez ograniczenia: okno wchodzi animacją pe-okno-wejscie, karta kalkulatora pe-przenikanie", async ({ page }) => {
   await page.goto("/kalkulatory/spadek");
+  await expect(page.getByRole("heading", { name: "Kalkulatory elektryczne" })).toBeVisible();
+  const karta = page.locator("[data-karta-kalkulatora]").first();
+  expect(await karta.evaluate((e) => getComputedStyle(e).animationName)).toContain("pe-przenikanie");
   await page.locator("header").getByRole("button", { name: /Pomoc/ }).first().click();
   const okno = page.getByRole("dialog").first();
   await expect(okno).toBeVisible();

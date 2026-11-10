@@ -602,7 +602,7 @@ export function PanelTab() {
         />
 
         {supply3f && (
-          <div className="w-full border-t pt-4" style={{ borderColor: "#EEF1F4" }}>
+          <div className="w-full border-t border-border pt-4">
             <div className="mb-2 text-xs text-slate-500">
               Bilans obciążenia faz (prąd obliczeniowy odbiorników, nie prąd znamionowy zabezpieczeń)
             </div>
@@ -1024,7 +1024,7 @@ export function PanelTab() {
             renderuje, a nie jest schowany CSS-em: ten sam tekst w DOM obok dymka dublowałby
             go w każdym zapytaniu po treści. */}
         {sized.length > 0 && !szerokieOkno && (
-          <details className="mt-3 rounded-md border px-3 py-2 text-xs md:hidden" style={{ borderColor: "#EEF1F4" }}>
+          <details className="mt-3 rounded-md border border-border px-3 py-2 text-xs md:hidden">
             <summary className="-my-2 cursor-pointer py-2 font-medium text-slate-600">Co oznaczają skróty?</summary>
             <dl className="mt-2 space-y-1.5 leading-relaxed text-slate-500">
               {OPISY_SKROTOW_DOBORU.map(([skrot, opis]) => (

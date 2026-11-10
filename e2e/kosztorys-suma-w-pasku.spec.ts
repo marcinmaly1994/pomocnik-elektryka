@@ -30,7 +30,7 @@ for (const okno of [
     expect(await kwota(await suma.innerText())).toBeCloseTo(zPodsumowania, 2);
 
     // Zastrzeżenie z etykiety podsumowania (np. „sam materiał”) musi być też w pasku.
-    const etykieta = await page.getByTestId("podsumowanie-kosztorysu").locator("div.text-sm.font-semibold").first().innerText();
+    const etykieta = await page.getByTestId("podsumowanie-etykieta").innerText();
     const zastrzezenie = etykieta.split(" — ")[1];
     if (zastrzezenie) await expect(suma).toContainText(zastrzezenie);
     else await expect(suma).not.toContainText("(");
@@ -45,5 +45,16 @@ for (const okno of [
     const cena = page.getByLabel(/^Cena jednostkowa: Gniazdko 230V podwójne/);
     await cena.fill(String(Number(await cena.inputValue()) + 10));
     await expect.poll(async () => kwota(await suma.innerText())).toBeGreaterThan(przed);
+    // Pasek i podsumowanie u góry to ta sama kwota — po zmianie ceny...
+    const gora = page.getByTestId("podsumowanie-brutto");
+    await expect.poll(async () => (await kwota(await suma.innerText())) - (await kwota(await gora.innerText()))).toBe(0);
+
+    // ...i po zmianie stawki VAT.
+    const vat = page.getByLabel("Stawka VAT");
+    const pasekPrzedVat = await kwota(await suma.innerText());
+    const inna = (await vat.inputValue()) === "23" ? "8" : "23";
+    await vat.selectOption(inna);
+    await expect.poll(async () => kwota(await suma.innerText())).not.toBe(pasekPrzedVat);
+    await expect.poll(async () => (await kwota(await suma.innerText())) - (await kwota(await gora.innerText()))).toBe(0);
   });
 }

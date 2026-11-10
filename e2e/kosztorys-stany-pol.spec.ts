@@ -35,4 +35,7 @@ test("pole liczone ma przerywaną ramkę i czytelny tekst, wpisane — pełną",
 
   const wartosc = page.getByLabel(/^Wartość pozycji: Gniazdko 230V podwójne/);
   await expect(wartosc).toHaveAttribute("data-stan", "liczone");
+  await wartosc.fill("123");
+  await expect(wartosc).toHaveAttribute("data-stan", "wpisane");
+  expect(await wartosc.evaluate((e) => getComputedStyle(e).borderTopStyle)).toBe("solid");
 });
