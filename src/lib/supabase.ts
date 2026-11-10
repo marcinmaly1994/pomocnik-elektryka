@@ -74,6 +74,48 @@
  *    dostać od właściciela, nie zgadnąć. Bez tego kroku przycisk „Udostępnij linkiem"
  *    zgłasza, że udostępnianie nie jest skonfigurowane; reszta działa normalnie.
  *
+ * 6) Limity po stronie bazy (audyt kont 10.11.2026). Limit 5 zapisów na rodzaj
+ *    sprawdza też aplikacja (`lib/dokumenty.ts`), ale przeglądarka to tylko
+ *    uprzejmość — bezpośrednie wywołania API przechodziły bez żadnego limitu,
+ *    również z wielomegabajtowym `data`. Ten trigger jest właściwą granicą:
+ *
+ *    create or replace function public.pilnuj_limitow_projektow()
+ *    returns trigger
+ *    language plpgsql
+ *    security definer
+ *    set search_path = public
+ *    as $$
+ *    declare
+ *      rodzaj text := coalesce(new.data->>'kind', 'projekt');
+ *      ile int;
+ *    begin
+ *      if pg_column_size(new.data) > 20 * 1024 * 1024 then
+ *        raise exception 'limit_rozmiaru';
+ *      end if;
+ *      -- Liczymy przy dodaniu ORAZ przy zmianie rodzaju, bo inaczej dałoby się
+ *      -- dodać protokoły i przemianować je na szósty projekt.
+ *      if tg_op = 'INSERT' or rodzaj is distinct from coalesce(old.data->>'kind', 'projekt') then
+ *        -- Dwa równoległe INSERT-y tego samego użytkownika czekają na siebie,
+ *        -- zamiast oba policzyć 4 i oba przejść.
+ *        perform pg_advisory_xact_lock(hashtext(new.user_id::text));
+ *        select count(*) into ile from public.projects
+ *          where user_id = new.user_id
+ *            and coalesce(data->>'kind', 'projekt') = rodzaj
+ *            and id is distinct from new.id;
+ *        if ile >= 5 then
+ *          raise exception 'limit_zapisow';
+ *        end if;
+ *      end if;
+ *      return new;
+ *    end $$;
+ *
+ *    drop trigger if exists pilnuj_limitow on public.projects;
+ *    create trigger pilnuj_limitow
+ *      before insert or update on public.projects
+ *      for each row execute function public.pilnuj_limitow_projektow();
+ *
+ *    Kody `limit_zapisow` / `limit_rozmiaru` tłumaczy `polskiKomunikatBledu`.
+ *
  * Bez konfiguracji aplikacja działa w pełni lokalnie — logowanie i zapis
  * w chmurze są po prostu niedostępne (`SUPABASE_CONFIGURED` = false).
  */
@@ -187,6 +229,10 @@ export function polskiKomunikatBledu(status: number, surowy: string, kod?: strin
     return "Konto z tym adresem e-mail już istnieje. Zaloguj się albo zresetuj hasło.";
   if (ma("same_password", "different from the old password")) return "Nowe hasło musi być inne niż obecne.";
   if (ma("weak_password", "at least 6 characters")) return "Hasło jest za krótkie lub zbyt słabe (minimum 6 znaków).";
+  // Odmowy z triggera `pilnuj_limitow_projektow` (krok 6 konfiguracji) — ten sam limit
+  // co w `lib/dokumenty.ts`, tyle że wymuszony przez bazę, a nie przez przeglądarkę.
+  if (ma("limit_zapisow")) return "Masz już 5 zapisanych pozycji tego rodzaju. Usuń jedną, żeby zapisać nową.";
+  if (ma("limit_rozmiaru")) return "Projekt jest za duży do zapisania w chmurze (limit 20 MB). Usuń albo zmniejsz podkłady.";
   if (status === 429 || ma("rate_limit", "rate limit", "too many requests"))
     return "Zbyt wiele prób. Odczekaj chwilę i spróbuj ponownie.";
   if (status >= 500) return "Serwer chwilowo nie odpowiada. Spróbuj ponownie za chwilę.";
@@ -239,6 +285,22 @@ export function supaRefresh(refreshToken: string) {
     "/auth/v1/token?grant_type=refresh_token",
     { method: "POST", body: { refresh_token: refreshToken } },
   );
+}
+
+/**
+ * Unieważnia sesję po stronie serwera — kasuje jej token odnawiający.
+ *
+ * Samo wyczyszczenie `localStorage` to za mało: token odnawiający nie wygasa sam
+ * z siebie, więc kopia zrobiona przed wylogowaniem (cudzy komputer, wtyczka, zrzut
+ * pamięci) dawała dostęp do konta bez końca. Po tym wywołaniu wymiana takiej kopii
+ * na nową sesję zwraca błąd.
+ *
+ * `scope=local` — tylko TA sesja; inne urządzenia tego samego użytkownika zostają
+ * zalogowane. Sam token dostępu (JWT) jest bezstanowy i działa do swojego `exp`
+ * (najdłużej godzinę) — tego żadne wylogowanie w Supabase nie cofa.
+ */
+export function supaLogout(token: string) {
+  return sbFetch<void>("/auth/v1/logout?scope=local", { method: "POST", token });
 }
 
 export function supaSignUp(email: string, password: string) {

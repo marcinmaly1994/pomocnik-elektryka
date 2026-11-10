@@ -64,6 +64,20 @@ test("„Wyloguj” w menu konta wraca do stanu niezalogowanego", async ({ page 
   expect(sesjaPoWylogowaniu).toBeNull();
 });
 
+test("„Wyloguj” unieważnia sesję także na serwerze, a nie tylko w przeglądarce", async ({ page }) => {
+  // Bez tego token odnawiający skopiowany przed wylogowaniem działał bez końca.
+  const wylogowania: string[] = [];
+  await page.route("**/auth/v1/logout**", (r) => {
+    wylogowania.push(r.request().headers()["authorization"] ?? "");
+    return r.fulfill({ status: 204, body: "" });
+  });
+  await wejdzZalogowany(page);
+  await page.getByTitle(FAKE_SESSION.user.email).click();
+  await page.getByRole("menuitem", { name: /Wyloguj/ }).click();
+  await expect(page.getByRole("button", { name: "Zaloguj się" })).toBeVisible();
+  await expect.poll(() => wylogowania).toEqual([`Bearer ${FAKE_SESSION.token}`]);
+});
+
 test("panel logowania: „Zapomniałeś hasła?” otwiera reset i da się wrócić do logowania", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
