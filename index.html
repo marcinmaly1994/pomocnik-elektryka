@@ -32,17 +32,21 @@
     <!-- Podgląd linku w Messengerze, na Facebooku, LinkedInie i Slacku. Bez tych
          znaczników wklejony adres pokazywał gołą, pustą kartę — a aplikacja na tym
          etapie rozchodzi się głównie linkiem wysłanym znajomemu.
-         Adresy MUSZĄ być bezwzględne: scrapery nie rozwiązują ścieżek względnych. -->
+         Adresy MUSZĄ być bezwzględne: scrapery nie rozwiązują ścieżek względnych.
+         DO ZMIANY PRZY URUCHAMIANIU DOMENY (tak jak robots.txt): og:url, og:image
+         i twitter:image wskazują dziś adres tymczasowy *.pages.dev, bo docelowa
+         domena jeszcze nie działa — z nią karta podglądu wychodziła bez obrazka.
+         Nazwa marki (og:site_name, tytuły) zostaje bez zmian. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="pomocnikelektryka.pl" />
     <meta property="og:locale" content="pl_PL" />
-    <meta property="og:url" content="https://pomocnikelektryka.pl/" />
+    <meta property="og:url" content="https://pomocnik-elektryka.pages.dev/" />
     <meta property="og:title" content="pomocnikelektryka.pl — zaprojektuj instalację elektryczną w swoim domu" />
     <meta
       property="og:description"
       content="Narysuj rzut mieszkania, rozmieść gniazda i oświetlenie, a aplikacja dobierze zabezpieczenia wg PN-HD 60364, policzy kosztorys i wystawi schemat oraz protokoły pomiarowe."
     />
-    <meta property="og:image" content="https://pomocnikelektryka.pl/og.png" />
+    <meta property="og:image" content="https://pomocnik-elektryka.pages.dev/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="pomocnikelektryka.pl — rzut, dobór zabezpieczeń, schemat, kalkulatory i protokoły" />
@@ -53,7 +57,7 @@
       name="twitter:description"
       content="Narysuj rzut, rozmieść osprzęt, a aplikacja dobierze zabezpieczenia wg PN-HD 60364 i wystawi schemat oraz protokoły."
     />
-    <meta name="twitter:image" content="https://pomocnikelektryka.pl/og.png" />
+    <meta name="twitter:image" content="https://pomocnik-elektryka.pages.dev/og.png" />
   </head>
   <body>
     <div id="root"></div>

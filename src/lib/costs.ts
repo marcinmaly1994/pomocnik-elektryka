@@ -24,6 +24,9 @@ export const DEFAULT_PRICES: PriceTable = {
   // przekroje: rozrzut cen jest duży (SPD T1+T2 to kilkaset złotych, T2 — sto kilkadziesiąt),
   // a zmyślona liczba jest gorsza od jawnego pytania. Trafiają na listę „uzupełnij".
   rcbo: 0, spd: 0, spdFuse: 0, rozBezp: 0, ovr: 0, ppoz: 0, stycznik: 0, przekaznik: 0, zasilacz: 0, lampka: 0,
+  // RCD typu B (ładowarka EV, falownik) — osobno od `rcd`, bo kosztuje kilka-kilkanaście
+  // razy więcej (audyt 4.11.2026, P3). Też BEZ ceny: rozrzut 4P 40–63 A to setki złotych.
+  rcdB: 0,
 };
 
 /**
@@ -94,6 +97,7 @@ export const PRICE_LABELS: Record<string, string> = {
   mcb: "Wyłącznik nadprądowy 1-faz. B10/16 (szt.)",
   mcb3f: "Wyłącznik nadprądowy 3-faz. C16/C25 (szt.)",
   rcd: "Wyłącznik różnicowoprądowy 30mA (szt.)",
+  rcdB: "Wyłącznik różnicowoprądowy typu B (szt.)",
   glowny: "Wyłącznik główny (szt.)",
   rcbo: "Wyłącznik różnicowo-nadprądowy RCBO (szt.)",
   spd: "Ogranicznik przepięć SPD (szt.)",
@@ -270,7 +274,11 @@ export function computeCosts(
     const wielobiegunowy = (d: PanelDevice) => /^[34]P/.test(d.poles);
     q.mcb = ile((d) => d.kind === "mcb" && !wielobiegunowy(d));
     q.mcb3f = ile((d) => d.kind === "mcb" && wielobiegunowy(d));
-    q.rcd = ile((d) => d.kind === "rcd");
+    // Typ siedzi w podpisie aparatu („… 40A/30mA typ B”, patrz `buildPanelDevices`) —
+    // to jedyne miejsce, w którym niesie go PanelDevice, także po ręcznej edycji.
+    const typuB = (d: PanelDevice) => d.kind === "rcd" && /\btyp\s*B\b/i.test(d.caption);
+    q.rcd = ile((d) => d.kind === "rcd" && !typuB(d));
+    q.rcdB = ile(typuB);
     q.glowny = ile((d) => d.kind === "main");
     for (const k of APARATY_DOKLADANE) q[k] = ile((d) => d.kind === k);
     q.rozdzielnica = Math.max(q.rozdzielnica, ap.length ? 1 : 0);
@@ -278,7 +286,8 @@ export function computeCosts(
     const threePhase = circuits.filter((c) => c.breaker.includes("3-faz.")).length;
     q.mcb3f = threePhase;
     q.mcb = circuits.length - threePhase;
-    q.rcd = rcdGroups.length;
+    q.rcdB = rcdGroups.filter((r) => r.typ === "B").length;
+    q.rcd = rcdGroups.length - q.rcdB;
     q.glowny = circuits.length ? 1 : 0;
     q.rozdzielnica = Math.max(q.rozdzielnica, circuits.length ? 1 : 0);
   }
@@ -372,7 +381,7 @@ export const GRUPY_KOSZTORYSU: { nazwa: string; klucze: string[] }[] = [
   {
     nazwa: "Rozdzielnica i aparatura",
     klucze: [
-      "rozdzielnica", "glowny", "rcd", "mcb", "mcb3f", "rcbo", "spd", "spdFuse", "rozBezp", "ovr", "ppoz",
+      "rozdzielnica", "glowny", "rcd", "rcdB", "mcb", "mcb3f", "rcbo", "spd", "spdFuse", "rozBezp", "ovr", "ppoz",
       "stycznik", "przekaznik", "zasilacz", "lampka",
     ],
   },
@@ -620,6 +629,9 @@ function kluczZNazwy(nazwa: string): string | null {
     if (!slowa.some((kw) => mala.includes(kw))) continue;
     // Nadprądowy 3-biegunowy / 3-fazowy ma w kosztorysie własną pozycję.
     if (klucz === "mcb" && /\b[34]p\b|3\s*-?\s*faz/.test(mala)) return "mcb3f";
+    // RCD typu B ma własną pozycję. Rozpoznawany dopiero PO trafieniu w „różnicowoprądowy”,
+    // a nie osobnym słowem kluczowym: „typ B” jest też charakterystyką nadprądowego.
+    if (klucz === "rcd" && /\btypu?\s*b\b|\brcd[\s-]*b\b/.test(mala)) return "rcdB";
     return klucz;
   }
   return null;
