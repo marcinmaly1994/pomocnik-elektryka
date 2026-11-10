@@ -41,7 +41,7 @@ import { PdfPreview } from "@/components/ui/PdfPreview";
 import { UdostepnijLinkiem } from "@/components/ui/UdostepnijLinkiem";
 import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
-import { SUPABASE_CONFIGURED } from "@/lib/supabase";
+import { SUPABASE_CONFIGURED, sesjaZOdpowiedzi, supaRefresh } from "@/lib/supabase";
 import { odczytajFragmentAuth } from "@/lib/fragmentAuth";
 import { etapy, type Etap, type StanEtapu } from "@/lib/postepKrokow";
 /**
@@ -610,6 +610,29 @@ export default function App() {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
     if (zLinku.rodzaj === "reset") {
       setResetToken(zLinku.token);
+      return;
+    }
+    if (zLinku.rodzaj === "potwierdzono") {
+      const sesja = useProjectStore.getState().session;
+      if (sesja) {
+        // Zalogowany w tej przeglądarce: okno logowania byłoby nie na miejscu.
+        // Po zmianie adresu odświeżamy sesję, żeby menu konta pokazało nowy adres
+        // od razu, a nie dopiero przy następnym odnowieniu tokenu.
+        if (zLinku.co === "email" && sesja.refreshToken) {
+          supaRefresh(sesja.refreshToken)
+            .then((r) => useProjectStore.getState().setSession(sesjaZOdpowiedzi(r)))
+            .catch(() => {});
+        }
+        return;
+      }
+      setAuthKomunikat(
+        zLinku.co === "rejestracja"
+          ? "Adres e-mail potwierdzony. Możesz się zalogować."
+          : zLinku.co === "email"
+            ? "Nowy adres e-mail potwierdzony. Zaloguj się nim."
+            : "Pierwszy link przyjęty. Kliknij jeszcze link wysłany na drugi adres e-mail."
+      );
+      setAuthOpen(true);
       return;
     }
     setAuthKomunikat(

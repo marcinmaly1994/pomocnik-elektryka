@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, Check, Download, KeyRound, Loader2, Trash2 } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { AlertTriangle, Check, Download, KeyRound, Loader2, Mail, Trash2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import {
   type Session,
 } from "@/lib/supabase";
 import { zapiszKopie } from "@/lib/kopiaProjektu";
+import { PODPOWIEDZ_HASLA, bladEmaila, bladNowegoHasla } from "@/lib/walidacjaKonta";
+import { PoleHasla } from "./PoleHasla";
 
 export type AccountModalTab = "profil" | "ustawienia";
 
@@ -39,6 +41,97 @@ const WYKONAWCA_FIELDS: [string, string][] = [
   ["swiadectwo", "Świadectwo wzorcowania"],
 ];
 
+/**
+ * Wykonuje operację na koncie dopiero po sprawdzeniu obecnego hasła.
+ *
+ * Hasło sprawdzamy ZALOGOWANIEM nim — sama otwarta sesja to za mało: na wspólnym
+ * komputerze albo z tokenem wyniesionym z przeglądarki dawała przejęcie konta jednym
+ * polem. Operacja idzie świeżym tokenem z tego logowania, a sesję-sprawdzian od razu
+ * unieważniamy, żeby nie zostawiać po niej ważnego tokenu odnawiającego.
+ */
+async function zPotwierdzonymHaslem(email: string, haslo: string, akcja: (token: string) => Promise<unknown>): Promise<void> {
+  const swieza = await supaSignIn(email, haslo).catch((e: unknown) => {
+    // Komunikat podmieniamy w miejscu: 400 przy logowaniu to tutaj zawsze złe hasło,
+    // a „Nieprawidłowy e-mail lub hasło” sugerowałoby, że coś jest nie tak z adresem.
+    if ((e as { status?: number }).status === 400 && e instanceof Error) e.message = "Obecne hasło jest nieprawidłowe.";
+    throw e;
+  });
+  try {
+    await akcja(swieza.access_token);
+  } finally {
+    void supaLogout(swieza.access_token).catch(() => {});
+  }
+}
+
+/** Zmiana adresu e-mail. Supabase NIE zmienia go od razu — wysyła link potwierdzający
+ *  (przy włączonej „Secure email change” na oba adresy). Do kliknięcia logujesz się
+ *  dotychczasowym, więc komunikat musi to powiedzieć wprost. */
+function ZmianaEmaila({ session }: { session: Session }) {
+  const [nowy, setNowy] = useState("");
+  const [haslo, setHaslo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [wyslano, setWyslano] = useState<string | null>(null);
+
+  async function zmien(e: FormEvent) {
+    e.preventDefault();
+    setErr("");
+    setWyslano(null);
+    const adres = nowy.trim();
+    const zly = bladEmaila(adres);
+    if (zly) return setErr(zly);
+    if (adres.toLowerCase() === (session.user.email ?? "").toLowerCase()) return setErr("To jest obecny adres tego konta.");
+    if (!haslo) return setErr("Podaj obecne hasło.");
+    if (!session.user.email) return setErr("Nie znamy adresu e-mail tego konta — zaloguj się ponownie.");
+    setBusy(true);
+    try {
+      await zPotwierdzonymHaslem(session.user.email, haslo, (token) => supaUpdateUser(token, { email: adres }));
+      setWyslano(adres);
+      setNowy("");
+      setHaslo("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Nie udało się zmienić adresu.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="pe-card p-4" onSubmit={zmien} noValidate>
+      <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-ink">
+        <Mail size={14} /> Zmiana adresu e-mail
+      </h3>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <div className="mb-1 text-xs text-slate-500">Nowy adres e-mail</div>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={nowy}
+            onChange={(e) => setNowy(e.target.value)}
+            className="pe-input w-full text-sm"
+          />
+        </label>
+        <PoleHasla etykieta="Hasło do konta" value={haslo} onChange={setHaslo} autoComplete="current-password" />
+      </div>
+      {err && <div role="alert" className="mt-2 text-xs text-red-600">{err}</div>}
+      {wyslano && (
+        <div role="status" className="mt-2 text-xs" style={{ color: "#2C6B4A" }}>
+          Wysłaliśmy link potwierdzający na {wyslano}. Adres zmieni się dopiero po jego kliknięciu — do tego czasu
+          logujesz się dotychczasowym.
+        </div>
+      )}
+      <Button type="submit" variant="copper" size="sm" className="mt-3" disabled={busy}>
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+        Zmień adres
+      </Button>
+    </form>
+  );
+}
+
 function ProfilTab({ session }: { session: Session }) {
   const docHeader = useProjectStore((s) => s.docHeader);
   const setDocHeader = useProjectStore((s) => s.setDocHeader);
@@ -52,15 +145,13 @@ function ProfilTab({ session }: { session: Session }) {
 
   const createdAt = typeof session.user.created_at === "string" ? session.user.created_at : null;
 
-  async function changePassword() {
+  async function changePassword(e: FormEvent) {
+    e.preventDefault();
     setErr("");
     setOk(false);
-    if (newPassword.length < 6) {
-      setErr("Hasło musi mieć co najmniej 6 znaków.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setErr("Hasła nie są takie same.");
+    const blad = bladNowegoHasla(newPassword, confirmPassword);
+    if (blad) {
+      setErr(blad);
       return;
     }
     if (!currentPassword) {
@@ -73,20 +164,8 @@ function ProfilTab({ session }: { session: Session }) {
       return;
     }
     setBusy(true);
-    // Obecne hasło sprawdzamy ZALOGOWANIEM nim — ta sama bramka co przy usuwaniu
-    // konta. Sama otwarta sesja to za mało: na wspólnym komputerze albo z tokenem
-    // wyniesionym z przeglądarki dawała przejęcie konta jednym polem.
-    let swieza: Awaited<ReturnType<typeof supaSignIn>>;
     try {
-      swieza = await supaSignIn(email, currentPassword);
-    } catch (e) {
-      const status = (e as { status?: number }).status;
-      setErr(status === 400 ? "Obecne hasło jest nieprawidłowe." : e instanceof Error ? e.message : "Nie udało się sprawdzić hasła.");
-      setBusy(false);
-      return;
-    }
-    try {
-      await supaUpdateUser(swieza.access_token, { password: newPassword });
+      await zPotwierdzonymHaslem(email, currentPassword, (token) => supaUpdateUser(token, { password: newPassword }));
       setOk(true);
       setCurrentPassword("");
       setNewPassword("");
@@ -94,9 +173,6 @@ function ProfilTab({ session }: { session: Session }) {
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Nie udało się zmienić hasła.");
     } finally {
-      // Sesja z logowania-sprawdzianu była potrzebna tylko na to jedno wywołanie.
-      // Bez wylogowania zostawałby po niej ważny token odnawiający.
-      void supaLogout(swieza.access_token).catch(() => {});
       setBusy(false);
     }
   }
@@ -141,55 +217,36 @@ function ProfilTab({ session }: { session: Session }) {
         </div>
       </div>
 
-      <div className="pe-card p-4">
+      <ZmianaEmaila session={session} />
+
+      <form className="pe-card p-4" onSubmit={changePassword} noValidate>
         <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-ink">
           <KeyRound size={14} /> Zmiana hasła
         </h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block sm:col-span-2">
-            <div className="mb-1 text-xs text-slate-500">Obecne hasło</div>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="pe-input w-full text-sm"
-              autoComplete="current-password"
-            />
-          </label>
-          <label className="block">
-            <div className="mb-1 text-xs text-slate-500">Nowe hasło</div>
-            <input
-              type="password"
-              minLength={6}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="pe-input w-full text-sm"
-              autoComplete="new-password"
-            />
-          </label>
-          <label className="block">
-            <div className="mb-1 text-xs text-slate-500">Powtórz nowe hasło</div>
-            <input
-              type="password"
-              minLength={6}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="pe-input w-full text-sm"
-              autoComplete="new-password"
-            />
-          </label>
+          <div className="sm:col-span-2">
+            <PoleHasla etykieta="Obecne hasło" value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" />
+          </div>
+          <PoleHasla
+            etykieta="Nowe hasło"
+            value={newPassword}
+            onChange={setNewPassword}
+            autoComplete="new-password"
+            podpowiedz={PODPOWIEDZ_HASLA}
+          />
+          <PoleHasla etykieta="Powtórz nowe hasło" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
         </div>
-        {err && <div className="mt-2 text-xs text-red-600">{err}</div>}
+        {err && <div role="alert" className="mt-2 text-xs text-red-600">{err}</div>}
         {ok && (
-          <div className="mt-2 flex items-center gap-1 text-xs" style={{ color: "#2C6B4A" }}>
+          <div role="status" className="mt-2 flex items-center gap-1 text-xs" style={{ color: "#2C6B4A" }}>
             <Check size={13} /> Hasło zmienione.
           </div>
         )}
-        <Button variant="copper" size="sm" className="mt-3" onClick={changePassword} disabled={busy || !newPassword}>
+        <Button type="submit" variant="copper" size="sm" className="mt-3" disabled={busy}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
           Zmień hasło
         </Button>
-      </div>
+      </form>
     </div>
   );
 }
@@ -272,16 +329,7 @@ function UsunKontoDialog({ open, session, onClose, onUsuniete }: {
             </p>
           </div>
 
-          <label className="block">
-            <div className="mb-1 text-xs text-slate-500">Aktualne hasło</div>
-            <input
-              type="password"
-              value={haslo}
-              onChange={(e) => setHaslo(e.target.value)}
-              className="pe-input w-full text-sm"
-              autoComplete="current-password"
-            />
-          </label>
+          <PoleHasla etykieta="Aktualne hasło" value={haslo} onChange={setHaslo} autoComplete="current-password" />
 
           {err && <div className="text-xs text-red-600">{err}</div>}
 

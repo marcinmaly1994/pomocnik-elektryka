@@ -12,7 +12,13 @@
 
 export type FragmentAuth =
   | { rodzaj: "reset"; token: string }
-  | { rodzaj: "blad"; kod: string };
+  | { rodzaj: "blad"; kod: string }
+  /**
+   * Potwierdzenie załatwione już po stronie Supabase — aplikacja ma tylko zdjąć
+   * fragment z adresu (niesie tokeny sesji!) i powiedzieć, co się stało.
+   * `email_polowa` — przy bezpiecznej zmianie adresu pierwszy z dwóch linków.
+   */
+  | { rodzaj: "potwierdzono"; co: "rejestracja" | "email" | "email_polowa" };
 
 export function odczytajFragmentAuth(hash: string): FragmentAuth | null {
   const p = new URLSearchParams(hash.replace(/^#/, ""));
@@ -22,10 +28,13 @@ export function odczytajFragmentAuth(hash: string): FragmentAuth | null {
   const blad = p.get("error");
   if (blad) return { rodzaj: "blad", kod: p.get("error_code") || blad };
 
-  // Wyłącznie `recovery`. `signup` też przychodzi z tokenem, ale konto jest
-  // wtedy potwierdzone już po stronie Supabase i nie ma czego dokańczać —
-  // otwarcie na to okna tylko zdezorientowałoby użytkownika.
-  if (p.get("type") !== "recovery") return null;
+  const typ = p.get("type");
+  if (typ === "signup") return { rodzaj: "potwierdzono", co: "rejestracja" };
+  if (typ === "email_change") return { rodzaj: "potwierdzono", co: "email" };
+  // Pierwszy link bezpiecznej zmiany adresu wraca bez tokenów, z samym opisem.
+  if (/other email/i.test(p.get("message") ?? "")) return { rodzaj: "potwierdzono", co: "email_polowa" };
+
+  if (typ !== "recovery") return null;
 
   const token = p.get("access_token");
   // Bez tokenu nie ma czym zmienić hasła. Okno bez możliwości zapisu to ślepy

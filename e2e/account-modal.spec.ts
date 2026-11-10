@@ -95,10 +95,10 @@ test("zmiana hasła: walidacja krótkiego hasła i niezgodnego potwierdzenia bez
 
   await page.getByLabel("Nowe hasło", { exact: true }).fill("abc");
   await page.getByRole("button", { name: "Zmień hasło" }).click();
-  await expect(page.getByText("Hasło musi mieć co najmniej 6 znaków.")).toBeVisible();
+  await expect(page.getByText("Hasło musi mieć co najmniej 8 znaków.")).toBeVisible();
 
-  await page.getByLabel("Nowe hasło", { exact: true }).fill("abcdef");
-  await page.getByLabel("Powtórz nowe hasło").fill("ghijkl");
+  await page.getByLabel("Nowe hasło", { exact: true }).fill("abcdefgh");
+  await page.getByLabel("Powtórz nowe hasło").fill("ghijklmn");
   await page.getByRole("button", { name: "Zmień hasło" }).click();
   await expect(page.getByText("Hasła nie są takie same.")).toBeVisible();
 });
