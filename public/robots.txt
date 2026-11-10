@@ -13,6 +13,8 @@
 #  i dopisz linie `Sitemap: https://pomocnikelektryka.pl/sitemap.xml`
 #  (sam plik sitemap trzeba wtedy wygenerowac - dzis bylby bez sensu, bo nikt
 #  go nie przeczyta).
+#  Przy tej samej okazji: og:url, og:image i twitter:image w index.html
+#  wskazuja dzis adres *.pages.dev - przestaw je na domene.
 #
 #  Komentarze bez polskich znakow SWIADOMIE: ten plik serwowany jest jako
 #  text/plain, a naglowek z kodowaniem zalezy od hostingu - przy lacinskim

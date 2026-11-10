@@ -73,8 +73,8 @@ const WT00_WT1_GG: WierszGG[] = [
   { In_A: 100, I2_A: 160.0, n_godz: 2, k2: 1.6, t02: { Imax_A: 1200.0, k: 12.0, Zkdop_ohm: 0.19 }, t04: { Imax_A: 1000.0, k: 10.0, Zkdop_ohm: 0.23 }, t5: { Imax_A: 570.0, k: 5.7, Zkdop_ohm: 0.40 } },
   { In_A: 125, I2_A: 200.0, n_godz: 2, k2: 1.6, t02: { Imax_A: 1725.0, k: 13.8, Zkdop_ohm: 0.13 }, t04: { Imax_A: 1475.0, k: 11.8, Zkdop_ohm: 0.15 }, t5: { Imax_A: 712.5, k: 5.7, Zkdop_ohm: 0.32 } },
   { In_A: 160, I2_A: 256.0, n_godz: 2, k2: 1.6, t02: { Imax_A: 1888.0, k: 11.8, Zkdop_ohm: 0.12 }, t04: { Imax_A: 1616.0, k: 10.1, Zkdop_ohm: 0.14 }, t5: { Imax_A: 912.0, k: 5.7, Zkdop_ohm: 0.25 } },
-  { In_A: 200, I2_A: 320.0, n_godz: 2, k2: 1.6, t02: { Imax_A: 2820.0, k: 14.1, Zkdop_ohm: 0.08 }, t04: { Imax_A: 2400.0, k: 12.0, Zkdop_ohm: 0.09 }, t5: { Imax_A: 1220.0, k: 6.1, Zkdop_ohm: 0.18 } },
-  { In_A: 250, I2_A: 400.0, n_godz: 2, k2: 1.6, t02: { Imax_A: 3500.0, k: 14.0, Zkdop_ohm: 0.06 }, t04: { Imax_A: 2975.0, k: 11.9, Zkdop_ohm: 0.07 }, t5: { Imax_A: 1575.0, k: 6.3, Zkdop_ohm: 0.14 } },
+  { In_A: 200, I2_A: 320.0, n_godz: 3, k2: 1.6, t02: { Imax_A: 2820.0, k: 14.1, Zkdop_ohm: 0.08 }, t04: { Imax_A: 2400.0, k: 12.0, Zkdop_ohm: 0.09 }, t5: { Imax_A: 1220.0, k: 6.1, Zkdop_ohm: 0.18 } },
+  { In_A: 250, I2_A: 400.0, n_godz: 3, k2: 1.6, t02: { Imax_A: 3500.0, k: 14.0, Zkdop_ohm: 0.06 }, t04: { Imax_A: 2975.0, k: 11.9, Zkdop_ohm: 0.07 }, t5: { Imax_A: 1575.0, k: 6.3, Zkdop_ohm: 0.14 } },
 ];
 
 const TABLICE: Record<TypWkladkiGG, WierszGG[]> = { D0gG: D0GG, WT00gG_WT1gG: WT00_WT1_GG };

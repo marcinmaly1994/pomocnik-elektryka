@@ -126,6 +126,33 @@ describe("computeCosts", () => {
     expect(quantities.rozdzielnica).toBe(1);
     expect(quantities.rcd).toBe(1);
   });
+
+  // Audyt 4.11.2026, P3: RCD typu B (ładowarka EV) kosztuje kilka-kilkanaście razy więcej
+  // niż zwykły, a liczył się po cenie zwykłego.
+  it("RCD typu B z grup liczy się osobno od zwykłych", () => {
+    const circuits: Circuit[] = [{ id: "obw1", name: "x", type: "gniazdko", elements: [], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true }];
+    const rcdGroups: RcdGroup[] = [
+      { id: "rcd1", rating: "30mA", circuits },
+      { id: "rcd2", rating: "30mA", typ: "B", circuits },
+    ];
+    const { quantities } = computeCosts([], circuits, rcdGroups);
+    expect(quantities.rcd).toBe(1);
+    expect(quantities.rcdB).toBe(1);
+  });
+
+  it("RCD typu B z aparatów rozdzielnicy rozpoznany po podpisie", () => {
+    const rcd = (caption: string) => ({ uid: caption, kind: "rcd", tag: "FI", modules: 4, label: "40A", caption, poles: "4P" });
+    const { quantities } = computeCosts([], [], [], {
+      aparaty: [rcd("Wyłącznik różnicowoprądowy 40A/30mA typ A"), rcd("Wyłącznik różnicowoprądowy 40A/30mA typ B")],
+    });
+    expect(quantities.rcd).toBe(1);
+    expect(quantities.rcdB).toBe(1);
+  });
+
+  it("RCD typu B nie ma ceny domyślnej — trafia na listę „uzupełnij”, a nie po cenie zwykłego", () => {
+    expect(DEFAULT_PRICES.rcdB).toBe(0);
+    expect(GRUPY_KOSZTORYSU.some((g) => g.klucze.includes("rcdB"))).toBe(true);
+  });
 });
 
 describe("parsePriceCsv", () => {
@@ -140,6 +167,10 @@ describe("parsePriceCsv", () => {
 
   it("„Wyłącznik różnicowoprądowy” i „nadprądowy” trafiają do aparatów, nie do łącznika", () => {
     expect(parsePriceCsv("Wyłącznik różnicowoprądowy 30mA;95")).toEqual({ rcd: 95 });
+    expect(parsePriceCsv("Wyłącznik różnicowoprądowy 4P 40A 30mA typ B;1450")).toEqual({ rcdB: 1450 });
+    expect(parsePriceCsv("RCD typu B 63A;1600")).toEqual({ rcdB: 1600 });
+    // „typ B” przy nadprądowym to charakterystyka, nie typ RCD.
+    expect(parsePriceCsv("Wyłącznik nadprądowy typ B16;15")).toEqual({ mcb: 15 });
     expect(parsePriceCsv("Wyłącznik nadprądowy B16;15")).toEqual({ mcb: 15 });
     expect(parsePriceCsv("Wyłącznik nadprądowy B16 3P;48,00")).toEqual({ mcb3f: 48 });
   });

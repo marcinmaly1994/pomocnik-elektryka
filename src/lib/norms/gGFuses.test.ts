@@ -12,6 +12,13 @@ describe("tablice gG — spójność fizyczna (łapie literówki przy przepisywa
         expect(w.I2_A / w.In_A).toBeCloseTo(w.k2, 1);
       });
 
+      // Czas umowny wg PN-EN 60269-1, tabl. 2: In ≤ 63 A → 1 h, ≤ 160 A → 2 h,
+      // ≤ 400 A → 3 h, powyżej → 4 h. Audyt 4.11.2026: 200 A i 250 A miały 2 h.
+      it(`${typ} In=${In}A: czas umowny wg PN-EN 60269-1`, () => {
+        const oczekiwany = In <= 63 ? 1 : In <= 160 ? 2 : In <= 400 ? 3 : 4;
+        expect(w.n_godz).toBe(oczekiwany);
+      });
+
       for (const [nazwa, punkt] of [
         ["0,2s", w.t02],
         ["0,4s", w.t04],
