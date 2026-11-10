@@ -10,6 +10,7 @@ import {
   Folder,
   FolderOpen,
   HelpCircle,
+  House,
   LogOut,
   Pencil,
   Save,
@@ -717,6 +718,18 @@ export default function App() {
    */
   const pozycjeNaglowka = (wMenu: boolean) => (
     <>
+      {/* Tylko w arkuszu: na telefonie pasek z krokami 01–04 jest na Kalkulatorach
+          i Protokołach ukryty (B13), a bez tej pozycji jedyną drogą powrotu do projektu
+          było logo — nieoczywiste. Na pasku od 768 px wzwyż kroki są zawsze widoczne. */}
+      {wMenu && (
+        <ToolTab
+          id="projekt"
+          label="Projekt instalacji"
+          active={tab}
+          onPick={setTab}
+          ikona={<House size={15} aria-hidden="true" />}
+        />
+      )}
       {/* Ikony tylko w arkuszu: pozostałe pozycje menu je mają, a bez nich Kalkulatory
           i Protokoły stały w kolumnie jako gołe napisy. Pasek desktopowy zostaje bez zmian. */}
       <ToolTab
@@ -966,7 +979,15 @@ export default function App() {
       {/* Pasek projektu: nazwa po lewej, etapy przepływu po prawej. `<section>` z nazwą,
           bo to landmark: bez niego nazwa projektu i kafle etapów zostawały jedynym
           fragmentem strony poza wszystkimi landmarkami. */}
-      <section aria-label="Projekt i etapy pracy" className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      {/* Na telefonie (< 768 px) ukryty na Kalkulatorach i Protokołach (B13 z audytu
+          4.11.2026): te narzędzia są NIEZALEŻNE od projektu, a pasek spychał ich formularz
+          o ok. 100 px w dół. Powrót do projektu — pozycja „Projekt instalacji” w Menu. */}
+      <section
+        aria-label="Projekt i etapy pracy"
+        className={`mb-5 flex flex-wrap items-center justify-between gap-3 ${
+          tab === "kalkulatory" || tab === "protokoly" ? "max-md:hidden" : ""
+        }`}
+      >
         {/* `min-w-0 max-w-full`: długa nazwa projektu ma się skracać wielokropkiem w tym
             rzędzie, a nie rozpychać strony ani spychać etapów (patrz `ProjectNameField`). */}
         <div className="flex min-w-0 max-w-full items-center gap-2">
