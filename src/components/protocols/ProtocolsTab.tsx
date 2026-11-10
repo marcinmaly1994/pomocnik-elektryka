@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
@@ -12,6 +13,7 @@ import type { ProtocolKey } from "@/types";
 import { useRoute } from "@/hooks/useRoute";
 import { dopasujParam } from "@/lib/routing";
 import { waskiEkran } from "@/lib/design";
+import { Button } from "@/components/ui/button";
 
 /**
  * Pola danych ogólnych w kolejności i szerokości układu od `xl` (siatka 12 kolumn,
@@ -258,26 +260,24 @@ export function ProtocolsTab() {
             className="pe-input min-w-0 flex-1 text-sm"
             style={{ maxWidth: 320 }}
           />
-          <button
+          <Button variant="primary" size="md"
             onClick={() => saveProtokolyToCloud(nazwaZestawu)}
             disabled={cloudBusy}
-            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
           >
             <Save size={14} /> {protokolyId ? "Zapisz zmiany" : "Zapisz na koncie"}
-          </button>
-          <button onClick={() => setOknoZestawow(true)} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+          </Button>
+          <Button variant="secondary" size="md" onClick={() => setOknoZestawow(true)}>
             <FolderOpen size={14} /> Moje zestawy
-          </button>
+          </Button>
           {protokolyId && (
-            <button
+            <Button variant="secondary" size="md"
               onClick={() => {
                 if (confirm("Zacząć nowy, pusty zestaw protokołów? Bieżący zostaje zapisany na koncie.")) nowyZestawProtokolow();
                 setNazwaZestawu("");
               }}
-              className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs"
             >
               <FilePlus2 size={14} /> Nowy zestaw
-            </button>
+            </Button>
           )}
           {cloudSaveError && <span className="text-xs text-red-600">{cloudSaveError}</span>}
           <p className="w-full text-xs text-slate-400">
@@ -315,7 +315,7 @@ export function ProtocolsTab() {
                 <select
                   value={header.uklad}
                   onChange={(e) => setDocHeader({ uklad: e.target.value as typeof header.uklad })}
-                  className="pe-input w-full text-sm"
+                  className="pe-input pe-select w-full text-base md:text-sm"
                 >
                   {["TN-S", "TN-C", "TN-C-S", "TT", "IT"].map((o) => (
                     <option key={o} value={o}>
@@ -408,20 +408,18 @@ export function ProtocolsTab() {
           <div className="flex flex-wrap items-center gap-2">
             {/* Podgląd stoi PRZED pobieraniem, bo taka jest kolejność pracy: najpierw
                 sprawdzam, czy protokół się zgadza, dopiero potem odkładam plik. */}
-            <button
+            <Button variant="secondary" size="md"
               onClick={() => setPodglad(true)}
               disabled={blokadaPdf}
-              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs text-slate-600 hover:text-ink disabled:opacity-50"
             >
               <Eye size={14} /> Podgląd
-            </button>
-            <button
+            </Button>
+            <Button variant="primary" size="md"
               onClick={async () => setBlocked(!(await downloadProtocolPdf(active, header, rows, limit)))}
               disabled={blokadaPdf}
-              className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
             >
               <Download size={14} /> Pobierz protokół (PDF)
-            </button>
+            </Button>
           </div>
           {ujemne.length > 0 && (
             <p role="alert" data-testid="ujemne-wartosci" className="w-full text-xs text-red-700">
@@ -455,9 +453,9 @@ export function ProtocolsTab() {
 
         {def.checklist ? (
           rows.length === 0 ? (
-            <button onClick={initChecklist} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-sm">
+            <Button variant="secondary" size="md" onClick={initChecklist}>
               <Plus size={14} /> Wczytaj listę kontrolną oględzin
-            </button>
+            </Button>
           ) : (
             // Najwyżej 56rem: przy 1920 px treść pozycji stała przy lewej krawędzi,
             // a „zgodne / niezgodne / n/d" ok. 1600 px dalej.
@@ -498,12 +496,12 @@ export function ProtocolsTab() {
                   </button>
                 </div>
               ))}
-              <button
+              <Button variant="secondary" size="sm"
                 onClick={() => update({ rows: [...rows, { text: "", status: "" }] })}
-                className="pe-btn-ghost mt-2 flex items-center gap-1 px-2.5 py-1.5 text-xs"
+                className="mt-2"
               >
                 <Plus size={13} /> Dodaj pozycję
-              </button>
+              </Button>
             </div>
           )
         ) : (
@@ -572,7 +570,7 @@ export function ProtocolsTab() {
                                 value={String(r[c.key] ?? c.default ?? "")}
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
                                 aria-label={`${c.label}, pozycja ${i + 1}`}
-                                className="pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm"
+                                className="pe-input pe-select w-full py-1 max-lg:py-1.5 text-base md:text-sm"
                               >
                                 {c.options!.map((o) => (
                                   <option key={o} value={o}>
@@ -600,12 +598,7 @@ export function ProtocolsTab() {
                           ) : ok === null ? (
                             <span className="text-xs text-slate-400">—</span>
                           ) : (
-                            <span
-                              className="pe-chip"
-                              style={ok ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
-                            >
-                              {ok ? "pozytywna" : "negatywna"}
-                            </span>
+                            <Badge variant={ok ? "success" : "danger"}>{ok ? "pozytywna" : "negatywna"}</Badge>
                           )}
                         </td>
                         <td className="col-span-2 flex justify-end lg:table-cell lg:py-1.5">
@@ -624,9 +617,9 @@ export function ProtocolsTab() {
               </table>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button onClick={addRow} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1.5 text-xs">
+              <Button variant="secondary" size="sm" onClick={addRow}>
                 <Plus size={13} /> Dodaj wiersz
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -637,7 +630,7 @@ export function ProtocolsTab() {
         {verdict === null && rows.length > 0 && (() => {
           const brak = wierszeBezOceny(def, rows, limit);
           return (
-            <div className="mt-4 rounded-md p-3 text-sm" style={{ background: "#C1793F14", color: "#8A5526" }} data-testid="protokol-niekompletny">
+            <div className="mt-4 rounded-md bg-caution-tlo p-3 text-sm text-caution" data-testid="protokol-niekompletny">
               Niekompletny — {brakOpis(brak, !!def.checklist)}.
               {def.checklist ? " Oceń każdą pozycję albo usuń te, które nie dotyczą obiektu." : " Uzupełnij pomiary albo usuń puste wiersze."}
             </div>
@@ -645,8 +638,7 @@ export function ProtocolsTab() {
         })()}
         {verdict !== null && (
           <div
-            className="mt-4 rounded-md p-3 text-sm"
-            style={verdict ? { background: "#3B8C631A", color: "#2C6B4A" } : { background: "#C6433A1A", color: "#A2352C" }}
+            className={`mt-4 rounded-md p-3 text-sm ${verdict ? "bg-success-tlo text-success" : "bg-danger-tlo text-danger"}`}
           >
             {verdict ? "Wynik pozytywny — instalacja w badanym zakresie spełnia wymagania." : "Wynik negatywny — stwierdzono niezgodności wymagające usunięcia."}
           </div>

@@ -1,3 +1,5 @@
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Check, Info, TriangleAlert } from "lucide-react";
 import type { CalcResult, Ocena } from "@/lib/calc/result";
 import { formatLiczba } from "@/lib/calc/result";
@@ -64,14 +66,11 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
   if (wynik.bledy.length > 0) {
     return (
       <div className="mt-2 space-y-1.5">
+        {/* role="note": błędy zmieniają się w trakcie wpisywania — alert przerywałby czytnik przy każdym przeliczeniu */}
         {wynik.bledy.map((b) => (
-          <div
-            key={b.code}
-            className="flex gap-2 rounded-md bg-danger-tlo p-2.5 text-xs leading-relaxed text-danger"
-          >
-            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-            <div>{b.message}</div>
-          </div>
+          <Alert key={b.code} role="note" variant="danger">
+            {b.message}
+          </Alert>
         ))}
       </div>
     );
@@ -122,11 +121,11 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
       {wynik.zrodla.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {wynik.zrodla.map((z, i) => (
-            <span key={i} className="pe-chip bg-paper text-slate-600">
+            <Badge key={i}>
               {z.norma}
               {z.miejsce ? ` ${z.miejsce}` : ""}
               {z.czego ? ` — ${z.czego}` : ""}
-            </span>
+            </Badge>
           ))}
         </div>
       )}

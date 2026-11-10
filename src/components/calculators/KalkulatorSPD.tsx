@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
 import { obliczKoordynacjeSPD, KATEGORIE_PRZEPIECIOWE, TYP_SPD_LABELS, type TypSPD } from "@/lib/calc/spd";
 import { formatLiczba } from "@/lib/calc/result";
@@ -76,13 +77,13 @@ export function KalkulatorSPD({ label }: { label: string }) {
           <div className="text-xs text-slate-500 mb-1">Skuteczny poziom ochrony na zaciskach urządzenia</div>
           <div className="pe-mono text-lg text-blueprint">{formatLiczba(spd.wartosci.UpSkuteczne_V, 0)} V</div>
           <div className="mt-2 flex gap-2 flex-wrap">
-            <span className="pe-chip pe-tag-copper">
+            <Badge variant="accent">
               przyrost na przewodach {formatLiczba(spd.wartosci.przyrostNaPrzewodach_V, 0)} V
-            </span>
-            <span className="pe-chip pe-tag-blue">U_w urządzenia {formatLiczba(spdUw, 0)} V</span>
-            <span className="pe-chip pe-tag-green">
+            </Badge>
+            <Badge variant="info">U_w urządzenia {formatLiczba(spdUw, 0)} V</Badge>
+            <Badge variant="success">
               maks. długość przewodów {formatLiczba(spd.wartosci.maksDlugosc_m, 2)} m
-            </span>
+            </Badge>
           </div>
         </div>
       )}

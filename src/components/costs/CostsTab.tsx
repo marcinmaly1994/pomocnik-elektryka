@@ -200,33 +200,33 @@ export function CostsTab() {
             gotową wartość pozycji, jeśli masz ją z oferty ryczałtem.
           </p>
         </div>
-        <div className="flex gap-2">
+        {/* flex-wrap: trzy przyciski rozmiaru md (text-sm, nowrap) mają razem ok. 520 px —
+            na 360–430 px bez zawijania wypychały całą stronę poza ekran. */}
+        <div className="flex flex-wrap gap-2">
           {/* Format pliku i to, że ceny NIE pobierają się ze sklepów, siedzą w dymku
               przycisku, a nie w akapicie nad tabelą. Stały tam jako trwały baner —
               instrukcja obsługi funkcji, której większość użytkowników nigdy nie użyje,
               czytana za każdym razem przed pierwszą pozycją kosztorysu. Sam fakt, że
               cennik da się zaimportować, mówi zdanie wprowadzające obok. */}
-          <button
+          <Button variant="secondary" size="md"
             onClick={() => fileRef.current?.click()}
             title="Wgraj plik CSV w formacie nazwa;cena — aplikacja dopasuje pozycje po słowach kluczowych. Ceny nie pobierają się automatycznie ze stron sklepów."
-            className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs"
           >
             <Upload size={14} /> Importuj cennik CSV
-          </button>
+          </Button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvImport} />
           {/* CSV zostaje dla tych, którzy liczą dalej w arkuszu; PDF jest tym, co wysyła
               się klientowi — stąd on dostaje przycisk główny. Pobranie dzieje się
               z poziomu PODGLĄDU, tak jak przy pozostałych eksportach: nikt nie ma wysłać
               dokumentu, na który sam nie spojrzał. */}
-          <button onClick={exportCsv} className="pe-btn-ghost flex items-center gap-1.5 px-3 py-2 text-xs">
+          <Button variant="secondary" size="md" onClick={exportCsv}>
             <Download size={14} /> Eksportuj CSV
-          </button>
-          <button
+          </Button>
+          <Button variant="primary" size="md"
             onClick={() => setPodgladPdf(true)}
-            className="pe-btn-copper flex items-center gap-1.5 px-3 py-2 text-xs"
           >
             <FileText size={14} /> Kosztorys do PDF
-          </button>
+          </Button>
         </div>
       </div>
       {/*
@@ -412,7 +412,7 @@ export function CostsTab() {
                   // 13 z 32 pól przy 375 px, wszystkie przy 320 px), a kolumna ceny miała
                   // zapas kilkudziesięciu pikseli. Pole wartości dzieli miejsce z krzyżykiem
                   // cofania, a „zł" stoi w podpisie pola, nie obok liczby.
-                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-2 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
+                  className={`grid grid-cols-[1.07fr_0.62fr_1.43fr] gap-x-1.5 gap-y-1.5 border-b p-3 last:border-0 md:table-row md:p-0 ${
                     bezCeny(r) ? "bg-[#FDF6EF]" : "md:hover:bg-slate-50"
                   }`}
                   style={{ borderColor: "#EEF1F4" }}
@@ -433,7 +433,9 @@ export function CostsTab() {
                   <td className="min-w-0 md:p-3">
                     {/* Podpis pola tylko w karcie na telefonie — na monitorze robi to nagłówek tabeli. */}
                     <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Ilość</span>
-                    <div className="flex items-center gap-1">
+                    {/* Wysokość wiersza na dotyku trzyma wrapper (jak przy cenie), nie krzyżyk —
+                        krzyżyk na telefonie znika z układu, gdy nie ma czego cofać. */}
+                    <div className="flex items-center gap-1 [@media(pointer:coarse)]:min-h-11">
                       <input
                         type="number"
                         min={0}
@@ -441,7 +443,7 @@ export function CostsTab() {
                         onChange={(e) => setQtyOverride(r.key, e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0))}
                         placeholder={String(r.qty)}
                         aria-label={`Ilość: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-sm md:w-20 md:px-2.5"
+                        className="pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-20 md:px-2.5"
                         style={r.qtyOverridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
                       />
                       <button
@@ -449,7 +451,10 @@ export function CostsTab() {
                         aria-label={`Przywróć ilość z rzutu: ${r.label}`}
                         title="Wróć do ilości oszacowanej z rzutu"
                         // Na dotyku 32 × 44 px — szerzej zjadałoby pole ilości w karcie na telefonie.
-                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.qtyOverridden ? "" : "invisible"}`}
+                        // Niewidoczny krzyżyk na telefonie nie zajmuje miejsca (`max-md:hidden`): przy
+                        // 320 px jego 36 px zjadało pole, a liczby się ucinały. Od md zostaje
+                        // `invisible`, żeby kolumna w tabeli nie skakała po nadpisaniu ilości.
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.qtyOverridden ? "" : "invisible max-md:hidden"}`}
                       >
                         <X size={13} />
                       </button>
@@ -471,7 +476,7 @@ export function CostsTab() {
                           if (r.overridden) setCostOverride(r.key, null);
                         }}
                         aria-label={`Cena jednostkowa: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-sm md:w-24 md:px-2.5"
+                        className="pe-input pe-mono w-full min-w-0 px-1 text-sm md:w-24 md:px-2.5"
                         style={r.overridden ? { color: "#5B6A80" } : undefined}
                         title={r.overridden ? "Pozycja wyceniona ryczałtem — zmiana ceny wróci do liczenia ilość × cena" : undefined}
                         step="0.5"
@@ -485,7 +490,7 @@ export function CostsTab() {
                       przy wysokości montażu elementu. */}
                   <td className="min-w-0 text-right md:p-3">
                     <span className="mb-0.5 block text-xs uppercase tracking-wide text-slate-400 md:hidden">Wartość, zł</span>
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-1 [@media(pointer:coarse)]:min-h-11">
                       <input
                         type="number"
                         value={r.overridden ? r.value : ""}
@@ -496,7 +501,7 @@ export function CostsTab() {
                         // czego kontrolka nie przyjmie.
                         placeholder={formatLiczba(r.value, 2)}
                         aria-label={`Wartość pozycji: ${r.label}`}
-                        className="pe-input pe-mono w-full min-w-0 px-1.5 text-right text-sm md:w-28 md:px-2.5"
+                        className="pe-input pe-mono w-full min-w-0 px-1 text-right text-sm md:w-28 md:px-2.5"
                         style={r.overridden ? { color: "#8A5526", borderColor: "#C1793F", fontWeight: 600 } : undefined}
                         step="1"
                       />
@@ -507,7 +512,7 @@ export function CostsTab() {
                         onClick={() => setCostOverride(r.key, null)}
                         aria-label={`Przywróć liczoną wartość: ${r.label}`}
                         title="Wróć do liczenia ilość × cena"
-                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.overridden ? "" : "invisible"}`}
+                        className={`rounded p-0.5 text-slate-400 hover:text-ink [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-8 flex items-center justify-center ${r.overridden ? "" : "invisible max-md:hidden"}`}
                       >
                         <X size={13} />
                       </button>
@@ -535,7 +540,7 @@ export function CostsTab() {
                       aria-label="Stawka VAT"
                       value={stawkaVat}
                       onChange={(e) => setStawkaVat(stawkaVatZZapisu(Number(e.target.value)))}
-                      className="rounded border bg-white px-1.5 py-0.5 text-sm text-slate-700"
+                      className="pe-input pe-select py-0.5 text-slate-700 text-base md:text-sm"
                       style={{ borderColor: "#D6DCE3" }}
                     >
                       {STAWKI_VAT.map((s) => (

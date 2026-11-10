@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { KOLORY } from "@/lib/tokeny";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Info, Search } from "lucide-react";
 import { podsumowanieProblemow, type PlanIssue, type PlanIssueLevel } from "@/lib/planCheck";
 
@@ -16,10 +17,10 @@ import { podsumowanieProblemow, type PlanIssue, type PlanIssueLevel } from "@/li
  */
 
 const STYL: Record<PlanIssueLevel, { bg: string; fg: string; Icon: typeof AlertTriangle }> = {
-  error: { bg: "#C6433A14", fg: "#A2352C", Icon: AlertTriangle },
-  warn: { bg: "#C1793F14", fg: "#8A5526", Icon: AlertTriangle },
-  ok: { bg: "#3B8C631A", fg: "#2C6B4A", Icon: Check },
-  info: { bg: "#2D5A8C12", fg: "#2D5A8C", Icon: Info },
+  error: { bg: KOLORY.dangerTlo, fg: KOLORY.danger, Icon: AlertTriangle },
+  warn: { bg: KOLORY.cautionTlo, fg: KOLORY.caution, Icon: AlertTriangle },
+  ok: { bg: KOLORY.successTlo, fg: KOLORY.success, Icon: Check },
+  info: { bg: KOLORY.blueprintTlo, fg: KOLORY.blueprint, Icon: Info },
 };
 
 export interface PlanCheckPanelProps {
@@ -51,7 +52,7 @@ export function PlanCheckPanel({ issues, onShowElements, onShowRoom, przelaczone
   const otwarte = przelaczone ?? maProblemy;
 
   const bledy = issues.filter((i) => i.level === "error").length;
-  const kolorNaglowka = bledy > 0 ? "#A2352C" : maProblemy ? "#8A5526" : "#2C6B4A";
+  const kolorNaglowka = bledy > 0 ? KOLORY.danger : maProblemy ? KOLORY.caution : KOLORY.success;
 
   return (
     <div className="pe-card mt-2">

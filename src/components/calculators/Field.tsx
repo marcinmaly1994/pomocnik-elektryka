@@ -113,38 +113,50 @@ export function Field({ label, value, onChange, unit, type = "number", step, opt
   // (w kalkulatorach kilkudziesięciu): czytnik ekranu czytał „edycja, pusty" zamiast
   // „Współczynnik cos φ", a testy nie potrafiły trafić w pole po jego etykiecie.
   const id = useId();
+  const idJednostki = `${id}-jednostka`;
   return (
     <div className="mb-3">
       <div className="mb-1 flex items-center gap-1 text-xs text-slate-500">
         <label htmlFor={id}>{label}</label>
         {hint && <HintButton hint={hint} />}
       </div>
-      <div className="flex items-center gap-2">
-        {options ? (
-          <select
-            id={id}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="pe-input w-full text-sm"
-          >
-            {options.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        ) : (
+      {options ? (
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="pe-input pe-select w-full text-base md:text-sm"
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        // Jednostka W ramce pola: „15 m” czyta się jak jedna wartość, a wąski telefon nie
+        // traci 56 px na osobną kolumnę z jednostką. Dla czytnika ekranu jednostka jest
+        // OPISEM pola (aria-describedby), nie częścią nazwy — nazwa zostaje z etykiety.
+        <div className="relative">
           <input
             id={id}
             type={type}
             step={step || "any"}
             value={value}
             onChange={(e) => onChange(type === "number" ? Number(e.target.value) : e.target.value)}
-            className="pe-input pe-mono w-full text-sm"
+            aria-describedby={unit ? idJednostki : undefined}
+            className={`pe-input pe-mono w-full text-base md:text-sm ${unit ? "pr-12" : ""}`}
           />
-        )}
-        {unit && <span className="w-14 text-xs text-slate-500">{unit}</span>}
-      </div>
+          {unit && (
+            <span
+              id={idJednostki}
+              className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-slate-500"
+            >
+              {unit}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -2435,13 +2435,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             Dedykowane (AGD)
           </label>
         )}
-        <button
+        <Button variant="secondary" size="sm"
           type="button"
           onClick={() => rozwinPanel()}
-          className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm"
+          className="shrink-0 text-sm"
         >
           Zmień
-        </button>
+        </Button>
       </div>
     ) : null;
 
@@ -2463,7 +2463,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       dlugosc += Math.hypot(w.points[i].x - w.points[i - 1].x, w.points[i].y - w.points[i - 1].y);
     }
     const petla = petleBezPomieszczenia.some((x) => x.wall.id === w.id);
-    const przycisk = "pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs [@media(pointer:coarse)]:min-h-11";
+    const przycisk = "[@media(pointer:coarse)]:min-h-11";
     return (
       <div className="flex min-w-0 flex-col items-start gap-2 text-xs" data-testid="karta-sciany">
         <div>
@@ -2498,13 +2498,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         />
         <div className="flex flex-wrap gap-1.5">
           {petla && (
-            <button onClick={() => createRoomFromWall(w.id)} className={przycisk}>
+            <Button variant="secondary" size="sm" onClick={() => createRoomFromWall(w.id)} className={przycisk}>
               <Layers size={13} /> Utwórz pomieszczenie z obrysu
-            </button>
+            </Button>
           )}
-          <button onClick={zaznaczenie.usunZaznaczone} className={`${przycisk} text-red-600`}>
+          <Button variant="secondary" size="sm" onClick={zaznaczenie.usunZaznaczone} className={`${przycisk} text-red-600`}>
             <Trash2 size={13} /> Usuń ścianę
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -2528,16 +2528,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           i bez myszy (patrz `zaznaczanieWielokrotne`). Stoi NAD listą operacji na
           zaznaczeniu, bo to on je odblokowuje: najpierw się zaznacza, potem wyrównuje. */}
       {toolMode === "zaznacz" && elements.length > 0 && (
-        <button
+        <Button variant="secondary" size="sm"
           data-testid="zaznacz-kilka"
           onClick={() => setZaznaczanieWielokrotne((v) => !v)}
           aria-pressed={zaznaczanieWielokrotne}
           title="Kolejne kliknięcia dokładają elementy do zaznaczenia — to samo co Shift z kliknięciem"
-          className="pe-btn-ghost flex items-center gap-1.5 px-2.5 py-1 text-xs"
           style={zaznaczanieWielokrotne ? { background: "#C1793F14", color: "#8A5526", fontWeight: 600 } : undefined}
         >
           <CopyCheck size={13} /> Zaznacz kilka
-        </button>
+        </Button>
       )}
 
       {multiSelected.length > 0 && (
@@ -2549,21 +2548,20 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               robiło się przeciąganiem każdego z osobna, na oko. Ikony zamiast podpisów,
               bo sześć przycisków z nazwami nie mieści się w kolumnie 268 px; nazwa
               siedzi w `title` i `aria-label`, więc czytniki i testy ją widzą. */}
-          {/* Dwa JAWNE rzędy, nie jeden zawijany: osiem przycisków po 28 px z odstępami
-              przekracza szerokość kolumny o kilka pikseli, więc zawijanie łamało je
+          {/* Dwa JAWNE rzędy, nie jeden zawijany: osiem przycisków po 32 px z odstępami
+              nie mieści się w kolumnie w jednym rzędzie, więc zawijanie łamało je
               w przypadkowym miejscu (7 + 1) i rozdzielało grupy wbrew ich znaczeniu.
               Wyrównanie i rozkładanie to dwie różne operacje — niech i wyglądają na dwie. */}
           <div className="flex items-center gap-1">
             {WYROWNANIA.map(({ mode, label, Icon }) => (
-              <button
+              <Button variant="secondary" size="icon"
                 key={mode}
                 onClick={() => przesunElementy(alignMoves(elements, multiSelected, mode))}
                 title={label}
                 aria-label={label}
-                className="pe-btn-ghost flex h-7 w-7 items-center justify-center"
               >
                 <Icon size={14} />
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -2573,26 +2571,25 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           {multiSelected.length >= 3 && (
             <div className="flex items-center gap-1">
               {ROZLOZENIA.map(({ axis, label, Icon }) => (
-                <button
+                <Button variant="secondary" size="icon"
                   key={axis}
                   onClick={() => przesunElementy(distributeMoves(elements, multiSelected, axis))}
                   title={label}
                   aria-label={label}
-                  className="pe-btn-ghost flex h-7 w-7 items-center justify-center"
                 >
                   <Icon size={14} />
-                </button>
+                </Button>
               ))}
             </div>
           )}
 
           <div className="flex flex-wrap items-center gap-1">
-            <button onClick={duplikujZaznaczenie} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs">
+            <Button variant="secondary" size="sm" onClick={duplikujZaznaczenie}>
               <Copy size={13} /> Duplikuj
-            </button>
-            <button onClick={zaznaczenie.usunZaznaczone} className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs text-red-600">
+            </Button>
+            <Button variant="secondary" size="sm" onClick={zaznaczenie.usunZaznaczone} className="text-red-600">
               <Trash2 size={13} /> Usuń zaznaczone ({multiSelected.length})
-            </button>
+            </Button>
           </div>
 
           <span className="text-xs text-slate-400">Strzałki przesuwają o 1 jedn., z Shiftem o kratkę.</span>
@@ -2646,8 +2643,8 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             onZmiana={sciany.setDrawingWall}
             testId="wall-segment-length-input"
           />
-          <button onClick={sciany.finishWall} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
-          <button onClick={() => sciany.setDrawingWall([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
+          <Button variant="secondary" size="sm" onClick={sciany.finishWall} className="shrink-0 text-sm">Zakończ</Button>
+          <Button variant="secondary" size="sm" onClick={() => sciany.setDrawingWall([])} className="shrink-0 text-sm">Anuluj</Button>
         </div>
       )}
 
@@ -2675,12 +2672,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               : "Trasa: PPM → „Dodaj punkt”, przeciągnij uchwyt, dwuklik na uchwycie go kasuje, dwuklik na trasie pokazuje informacje."}
           </span>
           {selected.id in routeOverrides && (
-            <button
+            <Button variant="secondary" size="sm"
               onClick={() => clearRouteOverride(selected.id)}
-              className="pe-btn-ghost flex items-center gap-1 px-2.5 py-1 text-xs"
             >
               <Undo2 size={13} /> Cofnij do trasy automatycznej
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -2736,9 +2732,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               : "Kliknij pierwszy element przewodu (łącznik, gniazdo, szafkę…)."}
           </span>
           {przewodStart && (
-            <button className="pe-btn-ghost self-start px-2.5 py-1 text-xs" onClick={() => setPrzewodStart(null)}>
+            <Button variant="secondary" size="sm" className="self-start" onClick={() => setPrzewodStart(null)}>
               Anuluj
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -2761,7 +2757,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <select
                 value={w.rodzaj}
                 onChange={(e) => zmienPrzewod(w.id, { rodzaj: e.target.value as RodzajPrzewodu })}
-                className="rounded border border-border bg-white px-1.5 py-0.5"
+                className="pe-input pe-select py-0.5 text-base md:text-sm"
               >
                 {(Object.keys(RODZAJE_PRZEWODU) as RodzajPrzewodu[]).map((r) => (
                   <option key={r} value={r}>
@@ -2779,9 +2775,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 className="min-w-0 flex-1 rounded border border-border px-1.5 py-0.5"
               />
             </label>
-            <button className="pe-btn-ghost self-start px-2.5 py-1 text-xs text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
+            <Button variant="secondary" size="sm" className="self-start text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
               Usuń przewód
-            </button>
+            </Button>
           </div>
         );
       })()}
@@ -2794,12 +2790,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             <span className="font-medium text-slate-600">Notatka</span>
             <p className="whitespace-pre-wrap break-words text-slate-600">{n.tekst}</p>
             <div className="flex flex-wrap gap-1.5">
-              <button className="pe-btn-ghost px-2.5 py-1 text-xs" onClick={() => setEdycjaNotatki({ id: n.id, tekst: n.tekst })}>
+              <Button variant="secondary" size="sm" onClick={() => setEdycjaNotatki({ id: n.id, tekst: n.tekst })}>
                 Edytuj
-              </button>
-              <button className="pe-btn-ghost px-2.5 py-1 text-xs text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
+              </Button>
+              <Button variant="secondary" size="sm" className="text-red-600" onClick={() => zaznaczenie.usunZaznaczone()}>
                 Usuń
-              </button>
+              </Button>
             </div>
           </div>
         );
@@ -2919,9 +2915,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             />
           )}
           {pokoje.roomMode === "wielobok" && pokoje.drawingRoomPoints.length >= 3 && (
-            <button onClick={pokoje.zakonczRysowanie} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Zakończ</button>
+            <Button variant="secondary" size="sm" onClick={pokoje.zakonczRysowanie} className="shrink-0 text-sm">Zakończ</Button>
           )}
-          <button onClick={() => pokoje.setDrawingRoomPoints([])} className="pe-btn-ghost shrink-0 px-2.5 py-1 text-sm">Anuluj</button>
+          <Button variant="secondary" size="sm" onClick={() => pokoje.setDrawingRoomPoints([])} className="shrink-0 text-sm">Anuluj</Button>
         </div>
       )}
       {toolMode === "skala" && (
@@ -2960,12 +2956,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         // obok przycisku łamie się na trzy linijki i rozpycha panel.
         <div className="flex min-w-0 flex-col items-start gap-1.5">
           <span className="text-xs font-medium text-slate-600">Obrys zamknięty</span>
-          <button
+          <Button variant="primary" size="sm"
             onClick={() => createRoomFromWall(propozycjaPokoju.wall.id)}
-            className="pe-btn-copper flex items-center gap-1.5 px-2.5 py-1 text-xs"
           >
             <Layers size={13} /> Zrób z niego pomieszczenie
-          </button>
+          </Button>
           <button
             onClick={() => setPetlaDoNazwania(null)}
             className="text-xs text-slate-400 underline hover:text-slate-600"
@@ -3129,8 +3124,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {!session && !projektPrzykladowy && (elements.length > 0 || walls.length > 0 || roomShapes.length > 0 || !!bgImageUrl) && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C6433A14", color: "#A2352C" }}
+          className="flex flex-wrap items-center gap-2 rounded-lg bg-danger-tlo px-3 py-2 text-xs text-danger"
         >
           <AlertTriangle size={14} className="shrink-0" />
           <span>
@@ -3286,8 +3280,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       {onboarding.scaleStale && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: "#C6433A14", color: "#A2352C" }}
+          className="flex flex-wrap items-center gap-2 rounded-lg bg-danger-tlo px-3 py-2 text-xs text-danger"
         >
           <span>Podkład się zmienił, więc skala może już nie pasować do tego rzutu.</span>
           <button onClick={() => handleStepAction("skala")} className="font-semibold underline">
@@ -3410,7 +3403,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <select
                 value={formatPdf}
                 onChange={(e) => setFormatPdf(e.target.value as FormatArkusza)}
-                className="h-8 rounded-md border border-border bg-white px-2 text-sm"
+                className="pe-input pe-select h-8 py-0 text-base md:text-sm"
               >
                 <option value="A4">A4 poziomo</option>
                 <option value="A3">A3 poziomo</option>
@@ -4236,7 +4229,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <select
             value={pokoje.pendingRoom?.type ?? "inne"}
             onChange={(e) => pokoje.zmienTyp(e.target.value as RoomType)}
-            className="mb-1 w-full rounded border border-border px-3 py-1.5 text-sm"
+            className="pe-input pe-select mb-1 w-full py-1.5 text-base md:text-sm"
           >
             {(Object.entries(ROOM_TYPE_LABELS) as [RoomType, string][]).map(([value, label]) => (
               <option key={value} value={value}>

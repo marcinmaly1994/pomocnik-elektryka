@@ -23,7 +23,7 @@ body {
     letter-spacing: -0.01em;
   }
   .pe-card {
-    @apply rounded-card border border-border bg-white;
+    @apply rounded-card border border-border bg-surface shadow-xs;
   }
   .pe-nav-btn {
     border-bottom: 2px solid transparent;
@@ -33,61 +33,26 @@ body {
   .pe-nav-btn:hover {
     @apply text-blueprint;
   }
-  .pe-btn-ghost {
-    @apply rounded-md border border-border bg-white font-medium transition-all;
-  }
-  .pe-btn-ghost:hover {
-    @apply border-blueprint text-blueprint;
-  }
-  .pe-btn-ghost:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  /* Przycisk akcji głównej. Klasa zniknęła z arkusza przy migracji na komponent
-     `Button` (patrz komentarz w ui/button.tsx), ale osiem surowych <button> w
-     aplikacji nadal się do niej odwoływało — renderowały się jako goły tekst bez
-     tła i obramowania, m.in. „Zatwierdź skalę" i „Eksportuj CSV". */
-  .pe-btn-copper {
-    @apply rounded-md bg-copper font-medium text-white transition-colors;
-  }
-  .pe-btn-copper:hover:not(:disabled) {
-    background: theme('colors.copper.hover');
-  }
-  .pe-btn-copper:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
   .pe-input {
     @apply rounded border border-border bg-white px-2.5 py-1.5;
   }
+  /* Fokus z klawiatury i z dotyku ten sam: pełny pierścień w kolorze głównym (≥ 3:1
+     na bieli — wymóg WCAG 2.2 dla wskaźnika fokusu), zamiast 20-procentowej poświaty. */
+  .pe-input:focus-visible,
   .pe-input:focus {
-    outline: 2px solid rgb(45 90 140 / 0.2);
+    outline: 2px solid theme('colors.blueprint.DEFAULT');
+    outline-offset: 1px;
     @apply border-blueprint;
   }
-  .pe-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: theme('borderRadius.sm');
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-  }
-  .pe-tag-blue {
-    background: theme('colors.blueprint.tlo');
-    color: theme('colors.blueprint.DEFAULT');
-    border: 1px solid theme('colors.border-strong');
-  }
-  .pe-tag-copper {
-    background: theme('colors.copper.tlo');
-    color: theme('colors.caution.DEFAULT');
-    border: 1px solid theme('colors.border-strong');
-  }
-  .pe-tag-green {
-    background: theme('colors.success.tlo');
-    color: theme('colors.success.DEFAULT');
-    border: 1px solid theme('colors.border-strong');
+  /* Natywny <select> zostaje natywny (na telefonie systemowa lista jest najwygodniejsza),
+     ale wygląda jak reszta pól: własna strzałka zamiast systemowej, która w każdej
+     przeglądarce stoi gdzie indziej i ma inny kształt. */
+  .pe-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%234F5D73' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    padding-right: 2rem;
   }
   .pe-result {
     @apply rounded border border-border bg-white;
@@ -192,6 +157,19 @@ body {
     }
     .pe-onboarding-bar {
       transition: none;
+    }
+  }
+}
+
+@layer utilities {
+  /* Pola formularzy mają na telefonie co najmniej 16 px: Safari na iPhonie przybliża
+     stronę przy fokusie na polu z mniejszą czcionką i sam jej nie oddala. Reguła stoi
+     w warstwie `utilities`, żeby wygrać z `text-sm` / `text-xs` wpisanymi przy polach —
+     bez niej każde z kilkudziesięciu pól trzeba by poprawiać osobno. Od `md` w górę
+     zostaje rozmiar z klas przy polu. */
+  @media (max-width: 767.98px) {
+    .pe-input {
+      font-size: 1rem;
     }
   }
 }

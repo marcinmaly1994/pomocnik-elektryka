@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, HelpCircle, X } from "lucide-react";
 import type { Step, StepId } from "@/lib/onboarding";
+import { Button } from "@/components/ui/button";
 
 /**
  * Karta „Zacznij w 3 krokach" — pływająca, dokowana w LEWYM dolnym rogu, nad kolumną
@@ -193,13 +194,13 @@ export function OnboardingChecklist({
           <div className="text-xs font-semibold text-ink">{aktywny.tytul}</div>
           {!compact && <p className="mt-0.5 text-xs leading-snug text-slate-500">{aktywny.opis}</p>}
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            <button onClick={() => onStepAction(aktywny.id)} className="pe-btn-copper px-2.5 py-1 text-xs">
+            <Button variant="primary" size="sm" onClick={() => onStepAction(aktywny.id)}>
               {aktywny.cta}
-            </button>
+            </Button>
             {bezPodkladuSkala && (
-              <button onClick={onDrawManually} className="pe-btn-ghost px-2.5 py-1 text-xs">
+              <Button variant="secondary" size="sm" onClick={onDrawManually}>
                 Narysuj dom samodzielnie
-              </button>
+              </Button>
             )}
           </div>
         </div>

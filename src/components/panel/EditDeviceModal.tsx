@@ -140,7 +140,7 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f }:
                 const sugestia = SUGEROWANE_MODULY[nowe];
                 if (sugestia !== undefined) setModules(sugestia);
               }}
-              className="pe-input w-full text-sm"
+              className="pe-input pe-select w-full text-base md:text-sm"
               aria-label="Liczba biegunów"
             >
               {(BIEGUNY.includes(poles) ? BIEGUNY : [poles, ...BIEGUNY]).map((b) => (
@@ -169,7 +169,7 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f }:
           {supply3f && (
             <label className="col-span-2 block">
               <div className="mb-1 text-xs text-slate-500">Faza</div>
-              <select value={phase} onChange={(e) => setPhase(e.target.value)} className="pe-input w-full text-sm" aria-label="Faza">
+              <select value={phase} onChange={(e) => setPhase(e.target.value)} className="pe-input pe-select w-full text-base md:text-sm" aria-label="Faza">
                 <option value="">— nie dotyczy</option>
                 {FAZY.map((f) => (
                   <option key={f} value={f}>
