@@ -3,6 +3,8 @@ import { KeyRound, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supaUpdateUser } from "@/lib/supabase";
+import { PODPOWIEDZ_HASLA, bladNowegoHasla } from "@/lib/walidacjaKonta";
+import { PoleHasla } from "./PoleHasla";
 
 interface NoweHasloDialogProps {
   open: boolean;
@@ -34,12 +36,9 @@ export function NoweHasloDialog({ open, token, onClose, onZmienione }: NoweHaslo
     setErr("");
     // Ta sama para reguł co przy zmianie hasła w panelu konta — rozjazd między
     // tymi miejscami znaczyłby, że hasło przyjęte tu bywa odrzucane tam.
-    if (haslo.length < 6) {
-      setErr("Hasło musi mieć co najmniej 6 znaków.");
-      return;
-    }
-    if (haslo !== powtorz) {
-      setErr("Hasła nie są takie same.");
+    const blad = bladNowegoHasla(haslo, powtorz);
+    if (blad) {
+      setErr(blad);
       return;
     }
     setBusy(true);
@@ -67,28 +66,8 @@ export function NoweHasloDialog({ open, token, onClose, onZmienione }: NoweHaslo
             Wpisz nowe hasło do swojego konta. Po zapisaniu zalogujesz się nim jak zwykle.
           </p>
 
-          <label className="block">
-            <div className="mb-1 text-xs text-slate-500">Nowe hasło</div>
-            <input
-              type="password"
-              minLength={6}
-              value={haslo}
-              onChange={(e) => setHaslo(e.target.value)}
-              className="pe-input w-full text-sm"
-              autoComplete="new-password"
-            />
-          </label>
-          <label className="block">
-            <div className="mb-1 text-xs text-slate-500">Powtórz nowe hasło</div>
-            <input
-              type="password"
-              minLength={6}
-              value={powtorz}
-              onChange={(e) => setPowtorz(e.target.value)}
-              className="pe-input w-full text-sm"
-              autoComplete="new-password"
-            />
-          </label>
+          <PoleHasla etykieta="Nowe hasło" value={haslo} onChange={setHaslo} autoComplete="new-password" podpowiedz={PODPOWIEDZ_HASLA} />
+          <PoleHasla etykieta="Powtórz nowe hasło" value={powtorz} onChange={setPowtorz} autoComplete="new-password" />
 
           {err && <div className="text-xs text-red-600">{err}</div>}
 

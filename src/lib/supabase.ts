@@ -116,9 +116,18 @@
  *
  *    Kody `limit_zapisow` / `limit_rozmiaru` tłumaczy `polskiKomunikatBledu`.
  *
+ * 7) Formularze konta (audyt 10.11.2026, punkty 5–12) — ustawienia w panelu:
+ *    - Authentication → Providers → Email → Minimum password length = 8 (to samo
+ *      co `MIN_DLUGOSC_HASLA` w `lib/walidacjaKonta.ts` — serwer jest granicą,
+ *      aplikacja tylko mówi o niej wcześniej),
+ *    - Secure email change: włączone (link na oba adresy),
+ *    - szablon „Change Email Address” z `docs/szablony-maili-supabase.md`.
+ *
  * Bez konfiguracji aplikacja działa w pełni lokalnie — logowanie i zapis
  * w chmurze są po prostu niedostępne (`SUPABASE_CONFIGURED` = false).
  */
+
+import { MIN_DLUGOSC_HASLA } from "./walidacjaKonta";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
@@ -154,6 +163,9 @@ export interface Session {
 /** Błąd z API z zachowanym kodem HTTP — po 401 trzeba odświeżyć sesję i ponowić. */
 export interface SupaError extends Error {
   status?: number;
+  /** Kod błędu z Supabase (`email_not_confirmed`, `invalid_credentials`…), gdy go podał.
+   *  Komunikat jest już po polsku — po kodzie wywołujący rozpoznaje, CO się stało. */
+  kod?: string;
 }
 
 /**
@@ -225,10 +237,14 @@ export function polskiKomunikatBledu(status: number, surowy: string, kod?: strin
   if (ma("invalid_credentials", "invalid login credentials")) return "Nieprawidłowy e-mail lub hasło.";
   if (ma("email_not_confirmed", "email not confirmed"))
     return "Adres e-mail nie został jeszcze potwierdzony. Kliknij link z wiadomości wysłanej po rejestracji.";
-  if (ma("user_already_exists", "user already registered", "already been registered"))
+  if (ma("user_already_exists", "user already registered"))
     return "Konto z tym adresem e-mail już istnieje. Zaloguj się albo zresetuj hasło.";
   if (ma("same_password", "different from the old password")) return "Nowe hasło musi być inne niż obecne.";
-  if (ma("weak_password", "at least 6 characters")) return "Hasło jest za krótkie lub zbyt słabe (minimum 6 znaków).";
+  if (ma("weak_password", "password should be at least"))
+    return `Hasło jest za krótkie lub zbyt słabe (minimum ${MIN_DLUGOSC_HASLA} znaków).`;
+  if (ma("email_address_invalid", "validation_failed", "unable to validate email", "invalid format"))
+    return "Nieprawidłowy adres e-mail.";
+  if (ma("email_exists", "already been registered")) return "Ten adres e-mail jest już zajęty przez inne konto.";
   // Odmowy z triggera `pilnuj_limitow_projektow` (krok 6 konfiguracji) — ten sam limit
   // co w `lib/dokumenty.ts`, tyle że wymuszony przez bazę, a nie przez przeglądarkę.
   if (ma("limit_zapisow")) return "Masz już 5 zapisanych pozycji tego rodzaju. Usuń jedną, żeby zapisać nową.";
@@ -274,6 +290,7 @@ async function sbFetch<T>(path: string, { method = "GET", body, token }: SbFetch
     // każdej innej awarii i mógł ponowić po odświeżeniu tokenu.
     const err = new Error(polskiKomunikatBledu(res.status, surowy, data?.error_code ?? data?.code)) as SupaError;
     err.status = res.status;
+    err.kod = data?.error_code ?? data?.code;
     throw err;
   }
   return data as T;
@@ -301,6 +318,15 @@ export function supaRefresh(refreshToken: string) {
  */
 export function supaLogout(token: string) {
   return sbFetch<void>("/auth/v1/logout?scope=local", { method: "POST", token });
+}
+
+/**
+ * Ponownie wysyła link potwierdzający rejestrację. Bez tego zgubiony albo wygasły
+ * mail zostawiał konto, do którego nie da się zalogować i którego nie da się założyć
+ * drugi raz. Supabase odpowiada tak samo dla nieistniejących adresów — UI też musi.
+ */
+export function supaResend(email: string) {
+  return sbFetch<Record<string, never>>("/auth/v1/resend", { method: "POST", body: { type: "signup", email } });
 }
 
 export function supaSignUp(email: string, password: string) {

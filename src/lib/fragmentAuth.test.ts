@@ -25,11 +25,21 @@ describe("odczytajFragmentAuth", () => {
   });
 
   /**
-   * Potwierdzenie rejestracji Supabase załatwia po swojej stronie ZANIM przekieruje —
-   * aplikacja nie ma tu nic do zrobienia i nie może otwierać żadnego okna.
+   * Potwierdzenie Supabase załatwia po swojej stronie ZANIM przekieruje. Aplikacja
+   * ma tylko zdjąć fragment (niesie tokeny) i powiedzieć, co się stało — wcześniej
+   * fragment rejestracji zostawał w pasku adresu razem z tokenem sesji.
    */
-  it("fragment potwierdzenia rejestracji jest ignorowany", () => {
-    expect(odczytajFragmentAuth("#access_token=eyJabc&type=signup")).toBeNull();
+  it("fragment potwierdzenia rejestracji → potwierdzono rejestrację", () => {
+    expect(odczytajFragmentAuth("#access_token=eyJabc&type=signup")).toEqual({ rodzaj: "potwierdzono", co: "rejestracja" });
+  });
+
+  it("fragment potwierdzenia zmiany adresu → potwierdzono e-mail", () => {
+    expect(odczytajFragmentAuth("#access_token=eyJabc&type=email_change")).toEqual({ rodzaj: "potwierdzono", co: "email" });
+  });
+
+  it("pierwszy z dwóch linków bezpiecznej zmiany adresu → połowa", () => {
+    const hash = "#message=Confirmation+link+accepted.+Please+proceed+to+confirm+link+sent+to+the+other+email";
+    expect(odczytajFragmentAuth(hash)).toEqual({ rodzaj: "potwierdzono", co: "email_polowa" });
   });
 
   /** Bez tokenu nie da się zmienić hasła — otwarcie okna byłoby ślepym zaułkiem. */
