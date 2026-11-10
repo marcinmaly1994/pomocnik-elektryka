@@ -88,7 +88,14 @@ export function WyborObwodu({
     <div className={otoczka}>
       <div className="text-xs font-semibold text-slate-500">Numer obwodu</div>
       <div className={`mt-1.5 flex flex-wrap gap-1 ${szerokosc}`}>
-        <button onClick={() => onWybierz(undefined)} className={klasa(numerAktualny === undefined)} title="Obwód dobierze automat">
+        {/* `aria-pressed`: który numer jest wybrany, mówi nie tylko miedziany kolor —
+            czytnik ekranu go nie widzi, a test nie musi zgadywać po klasach. */}
+        <button
+          onClick={() => onWybierz(undefined)}
+          className={klasa(numerAktualny === undefined)}
+          aria-pressed={numerAktualny === undefined}
+          title="Obwód dobierze automat"
+        >
           auto
         </button>
         {doPokazania.map(({ numer, gdzieIndziej }) => (
@@ -96,6 +103,7 @@ export function WyborObwodu({
             key={numer}
             onClick={() => onWybierz(numer)}
             className={klasa(numerAktualny === numer, gdzieIndziej)}
+            aria-pressed={numerAktualny === numer}
             title={
               gdzieIndziej
                 ? `Dołącz do obwodu ${numer} — ten obwód jest na innej kondygnacji`

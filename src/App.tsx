@@ -1,8 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
+  Calculator,
   ChevronDown,
   ChevronRight,
   ClipboardList,
@@ -25,7 +24,7 @@ import { ZAKLADKA_DOMYSLNA, type AppTab as AppTabRoute } from "@/lib/routing";
 import { Button } from "@/components/ui/button";
 import { badgeVariants } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CloudSaveIndicator } from "@/components/ui/CloudSaveIndicator";
 import { komunikatZapisu } from "@/lib/zapisLokalny";
@@ -37,11 +36,12 @@ import { HelpModal } from "@/components/help/HelpModal";
 import { PasekPrzykladu } from "@/components/onboarding/PasekPrzykladu";
 import { PasekUszkodzonegoZapisu } from "@/components/ui/PasekUszkodzonegoZapisu";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { MenuTelefonu } from "@/components/nawigacja/MenuTelefonu";
 import { KompletDialog } from "@/components/ui/KompletDialog";
+import { wrocFokusDoOtwieracza } from "@/lib/wrocFokus";
 import { KopiaZapasowa } from "@/components/ui/KopiaZapasowa";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { UdostepnijLinkiem } from "@/components/ui/UdostepnijLinkiem";
-import { NAWIGACJA_ODSTEP_PX } from "@/lib/design";
 import { projectFileName } from "@/lib/pdf/download";
 import { SUPABASE_CONFIGURED } from "@/lib/supabase";
 import { odczytajFragmentAuth } from "@/lib/fragmentAuth";
@@ -62,7 +62,7 @@ import { etapy, type Etap, type StanEtapu } from "@/lib/postepKrokow";
 import { computeCircuits } from "@/lib/panel/circuits";
 import { jestOdplywem } from "@/lib/panel/devices";
 import { useWygaszenieKrawedzi } from "@/hooks/useWygaszenieKrawedzi";
-import { useChowanieNaPrzewijaniu } from "@/hooks/useChowanieNaPrzewijaniu";
+import { PasekKroku } from "@/components/nawigacja/PasekKroku";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
 
 /**
@@ -244,12 +244,12 @@ function FlowCard({
   const gotowy = stan === "gotowy";
   return (
     <div
-      className="flex shrink-0 items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors"
-      style={
-        isActive
-          ? { borderColor: "#C1793F", background: "#C1793F0A" }
-          : { borderColor: "#E6EAEF", background: "#fff" }
-      }
+      // Poniżej `sm` karta jest kolumną siatki 4 × 1 (patrz `pasek-etapow`): `min-w-0`
+      // i ciasny odstęp; od `sm` wraca dawny kafel w rzędzie. Kolory z tokenów, nie z hex.
+      className={cn(
+        "min-w-0 rounded-xl border px-1.5 py-1.5 transition-colors sm:flex sm:shrink-0 sm:items-center sm:gap-2.5 sm:px-3 sm:py-2",
+        isActive ? "border-copper bg-copper-tlo" : "border-border bg-surface",
+      )}
     >
       {/* Numer, plakietka i podtytuł są `aria-hidden`, żeby nazwą dostępnościową
           przycisku został sam tytuł etapu („Rozdzielnica", nie „02 Rozdzielnica 8 obw.
@@ -260,18 +260,32 @@ function FlowCard({
         onPointerEnter={() => pobierzZawczasu(tab)}
         onFocus={() => pobierzZawczasu(tab)}
         title={opis}
-        className="flex items-center gap-2.5 text-left"
+        aria-current={isActive ? "step" : undefined}
+        // Poniżej `sm`: numer nad tytułem, cały kafel jest celem dotyku (min. 44 px).
+        className="flex min-h-11 w-full min-w-0 flex-col items-center justify-center gap-0.5 sm:min-h-0 sm:w-auto sm:flex-row sm:justify-start sm:gap-2.5 sm:text-left"
       >
-        <span
-          aria-hidden="true"
-          className="pe-mono flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
-          style={isActive ? { background: "#9A5A27", color: "#fff" } : { background: "#EEF1F4", color: "#5B6A80" }}
-        >
-          {step}
+        <span className="relative shrink-0">
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pe-mono flex h-6 w-6 items-center justify-center rounded-lg text-xs font-bold sm:h-7 sm:w-7",
+              isActive ? "bg-copper text-white" : "bg-paper text-slate-400",
+            )}
+          >
+            {step}
+          </span>
+          {/* Poniżej `sm` nie ma plakietki („8 obw."), więc stan „gotowy" niesie zielona
+              kropka przy numerze — ta sama zieleń co grafika danych. */}
+          {gotowy && (
+            <span
+              aria-hidden="true"
+              className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full bg-success-grafika sm:hidden"
+            />
+          )}
         </span>
-        <span className="min-w-0">
-          <span className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold" style={{ color: isActive ? "#16202B" : "#475569" }}>
+        <span className="min-w-0 max-w-full">
+          <span className="flex items-center justify-center gap-1.5 sm:justify-start">
+            <span className={cn("truncate text-xs font-semibold sm:text-sm", isActive ? "text-ink" : "text-slate-500")}>
               {title}
             </span>
             {/* Kolor niesie stan szybciej niż napis: zielony = jest treść, szary =
@@ -281,12 +295,10 @@ function FlowCard({
                 niesie teraz liczby („8 obw."), a wersaliki robiły z nich krzyk. */}
             <span
               aria-hidden="true"
-              className="pe-mono shrink-0 rounded px-1 py-0.5 text-xs tracking-wide"
-              style={
-                gotowy
-                  ? { background: "#3B8C6318", color: "#2C6B4A", fontWeight: 600 }
-                  : { background: "#EEF1F4", color: "#5B6A80" }
-              }
+              className={cn(
+                "pe-mono hidden shrink-0 rounded px-1 py-0.5 text-xs tracking-wide sm:inline-flex",
+                gotowy ? "bg-success-tlo font-semibold text-success" : "bg-paper text-slate-400",
+              )}
             >
               {plakietka}
             </span>
@@ -308,11 +320,12 @@ function FlowCard({
 
 /** Strzałka między etapami — czysto dekoracyjna, ukryta przed czytnikami ekranu. */
 function FlowArrow() {
-  return <ChevronRight aria-hidden="true" size={16} className="shrink-0 text-slate-300" />;
+  // Poniżej `sm` cztery kafle stoją w siatce bez przerw na strzałki.
+  return <ChevronRight aria-hidden="true" size={16} className="hidden shrink-0 text-slate-300 sm:block" />;
 }
 
 /** Narzędzie pomocnicze poza głównym przepływem (Kalkulatory, Protokoły). */
-function ToolTab({ id, label, active, onPick }: TabButtonProps) {
+function ToolTab({ id, label, active, onPick, ikona }: TabButtonProps & { ikona?: React.ReactNode }) {
   const isActive = active === id;
   return (
     <button
@@ -321,9 +334,11 @@ function ToolTab({ id, label, active, onPick }: TabButtonProps) {
       // przyłożenia palca, czyli i tak przed `click`); `focus` — nawigację klawiaturą.
       onPointerEnter={() => pobierzZawczasu(id)}
       onFocus={() => pobierzZawczasu(id)}
-      className="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors"
-      style={isActive ? { color: "#8A5526", background: "#C1793F14", fontWeight: 600 } : { color: "#4F5D73" }}
+      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors ${
+        isActive ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"
+      }`}
     >
+      {ikona}
       {label}
     </button>
   );
@@ -338,16 +353,6 @@ type AppTab = AppTabRoute;
  *  „Kalkulatory”/„Protokoły pomiarowe”, które są narzędziami OBOK przepływu, nie jego
  *  krokami. Używana przez przycisk „Dalej”, żeby wiedzieć, dokąd prowadzi kolejny krok,
  *  bez zgadywania po całej liście zakładek. */
-/**
- * Schowana pigułka zjeżdża pod dolną krawędź i przestaje łapać kliknięcia, ale
- * zostaje w DOM i w kolejności Tab: fokus z klawiatury wyciąga ją z powrotem.
- */
-function klasySchowanejPigulki(schowana: boolean): string {
-  return schowana
-    ? "pointer-events-none translate-y-24 opacity-0 focus-visible:pointer-events-auto focus-visible:translate-y-0 focus-visible:opacity-100"
-    : "";
-}
-
 const KOLEJNOSC_KROKOW: { id: AppTab; tytul: string }[] = [
   { id: "projekt", tytul: "Instalacja" },
   { id: "rozdzielnica", tytul: "Rozdzielnica" },
@@ -389,7 +394,7 @@ function ProjectNameField() {
           if (e.key === "Enter") commit();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="rounded border border-copper/40 bg-white px-2 py-0.5 text-base font-semibold text-ink outline-none focus:border-copper"
+        className="rounded border border-copper/40 bg-white px-2 py-0.5 text-base font-semibold text-ink focus:border-copper"
         style={{ width: "18ch" }}
         aria-label="Nazwa projektu"
       />
@@ -404,11 +409,15 @@ function ProjectNameField() {
     // to ta sama waga, jaką dostają nagłówki sekcji (`pe-display`) w reszcie apki.
     <button
       onClick={() => setEditing(true)}
-      className="group flex items-center gap-1.5 rounded px-2 py-0.5 text-base font-semibold text-ink hover:bg-slate-100"
+      className="group flex min-w-0 items-center gap-1.5 rounded px-2 py-0.5 text-base font-semibold text-ink hover:bg-slate-100"
       title="Zmień nazwę projektu"
     >
-      {projectName}
-      <Pencil size={13} className="text-slate-400 group-hover:text-slate-600" />
+      {/* Jedna linia z wielokropkiem; pełna nazwa w dymku (`title` przycisku zostaje
+          bez zmian — stoją na nim testy e2e). */}
+      <span className="min-w-0 truncate" title={projectName}>
+        {projectName}
+      </span>
+      <Pencil size={13} className="shrink-0 text-slate-400 group-hover:text-slate-600" />
     </button>
   );
 }
@@ -419,15 +428,37 @@ function ProjectNameField() {
  * odzyskania poprzedniego stanu przez odświeżenie strony: skasowane znika na dobre.
  * Okno wprost nazywa, co przepada, a co zostaje — żeby nikt nie klikał w ciemno.
  */
-function NewProjectButton({ onConfirm, elementCount }: { onConfirm: () => void; elementCount: number }) {
+function NewProjectButton({ onOtworz }: { onOtworz: () => void }) {
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="copper" size="sm" title="Zacznij nowy projekt od zera">
-          <FilePlus2 size={14} /> Nowy projekt
-        </Button>
-      </DialogTrigger>
-      <DialogContent title="Zacząć nowy projekt?">
+    <Button variant="copper" size="sm" title="Zacznij nowy projekt od zera" onClick={onOtworz} data-otwieracz="nowy-projekt">
+      <FilePlus2 size={14} /> Nowy projekt
+    </Button>
+  );
+}
+
+/**
+ * Okno potwierdzenia dla „Nowy projekt”. Sterowane z zewnątrz i zamontowane RAZ w `App`,
+ * a nie razem z przyciskiem: przycisk jest też w arkuszu „Menu” na telefonie, który
+ * zamyka się po kliknięciu pozycji — okno, które w nim siedziało, znikało razem z arkuszem
+ * i potwierdzenie w ogóle się nie pokazywało.
+ */
+function NowyProjektOkno({
+  open,
+  onOpenChange,
+  onConfirm,
+  elementCount,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onConfirm: () => void;
+  elementCount: number;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Okno nie ma DialogTrigger (jest sterowane z App), więc Radix nie wie, dokąd oddać
+          fokus po zamknięciu. Wracamy do przycisku „Nowy projekt”, jeśli jest widoczny
+          (pasek od md), a na telefonie — do „Menu”, bo przycisk w arkuszu już nie istnieje. */}
+      <DialogContent title="Zacząć nowy projekt?" onCloseAutoFocus={wrocFokusDoOtwieracza("nowy-projekt")}>
         <p className="mb-3 text-sm text-slate-600">
           {elementCount > 0
             ? `Bieżący projekt (${elementCount} ${elementCount === 1 ? "element" : elementCount < 5 ? "elementy" : "elementów"} na planie) zostanie usunięty z tej przeglądarki.`
@@ -466,8 +497,6 @@ export default function App() {
   // go używają: kalkulatory i protokoły.
   const [route, nawiguj] = useRoute();
   const tab = route.tab;
-  // Pigułki „Cofnij/Dalej" chowają się przy czytaniu w dół — patrz hook.
-  const pigulkiSchowane = useChowanieNaPrzewijaniu(tab);
   const setTab = (t: AppTab) => nawiguj(t);
 
   // Adres, którego nie dało się rozpoznać, pokazuje stronę startową — więc niech i
@@ -531,7 +560,7 @@ export default function App() {
    * Dotyczy WYŁĄCZNIE tej jednej zakładki, bo tylko o nią chodziło: świecąca zachęta
    * do przejścia dalej, zanim cokolwiek powstało, wysyłała nowego użytkownika w trzy
    * puste ekrany zamiast do rysowania. Na dalszych krokach ten sam próg byłby FAŁSZYWY
-   * — rozdzielnicę da się złożyć ręcznie, bez rzutu (patrz pigułka niżej).
+   * — rozdzielnicę da się złożyć ręcznie, bez rzutu (patrz pasek kroku na końcu `<main>`).
    */
   const projektPusty = useProjectStore(
     (s) => s.draft.elements.length === 0 && s.draft.walls.length === 0 && s.draft.roomShapes.length === 0
@@ -584,6 +613,9 @@ export default function App() {
    *  przechodzenia najpierw przez „Profil". */
   const [accountModalTab, setAccountModalTab] = useState<AccountModalTab | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Potwierdzenie „Nowy projekt” żyje w App, a nie w przycisku: przycisk stoi też w arkuszu
+  // „Menu”, który zamyka się po kliknięciu — okno zamontowane w nim znikałoby razem z arkuszem.
+  const [nowyProjektOtwarty, setNowyProjektOtwarty] = useState(false);
   const [kompletOpen, setKompletOpen] = useState(false);
   /** Gotowe bajty kompletu — trzymane tu, bo podglad ma pokazac DOKLADNIE ten plik,
    *  ktory przed chwila powstal, a nie zbudowac go po raz drugi. */
@@ -622,8 +654,9 @@ export default function App() {
     setAuthOpen(true);
   }, []);
 
-  // Wygaszenie krawędzi obu przewijanych pasków na telefonie — patrz `useWygaszenieKrawedzi`.
-  const pasekZakladek = useWygaszenieKrawedzi<HTMLDivElement>();
+  // Wygaszenie krawędzi paska etapów, gdy przewija się w bok (od 640 px; niżej cztery
+  // etapy stoją naraz w siatce i maski nie ma) — patrz `useWygaszenieKrawedzi`.
+  // Pasek narzędzi w nagłówku już nie przewija (na telefonie to arkusz „Menu”).
   const pasekEtapow = useWygaszenieKrawedzi<HTMLDivElement>();
 
   function signOut() {
@@ -644,6 +677,95 @@ export default function App() {
     }
   }
 
+  /**
+   * Pozycje nagłówka (narzędzia, Dokumentacja, Pomoc, chip zapisu, Nowy projekt) —
+   * jedno źródło dla DWÓCH miejsc: paska od 768 px w górę i arkusza „Menu” na telefonie.
+   * Dzięki temu nazwy dostępne i kolejność nie rozjeżdżają się między szerokościami.
+   * `wMenu` zmienia tylko to, co zależy od miejsca: chip zapisu jest w menu zawsze
+   * widoczny, a pionowa kreska rozdzielająca (tylko dla paska) znika.
+   */
+  const pozycjeNaglowka = (wMenu: boolean) => (
+    <>
+      {/* Ikony tylko w arkuszu: pozostałe pozycje menu je mają, a bez nich Kalkulatory
+          i Protokoły stały w kolumnie jako gołe napisy. Pasek desktopowy zostaje bez zmian. */}
+      <ToolTab
+        id="kalkulatory"
+        label="Kalkulatory"
+        active={tab}
+        onPick={setTab}
+        ikona={wMenu ? <Calculator size={15} aria-hidden="true" /> : undefined}
+      />
+      <ToolTab
+        id="protokoly"
+        label="Protokoły pomiarowe"
+        active={tab}
+        onPick={setTab}
+        ikona={wMenu ? <ClipboardList size={15} aria-hidden="true" /> : undefined}
+      />
+      {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów
+          z czterech zakładek plus protokołów, więc nie należy do żadnej z nich
+          bardziej niż do pozostałych. Do tego samo okno musi żyć poza zakładkami,
+          bo w trakcie składania je przełącza (patrz `KompletDialog`). */}
+      <button
+        onClick={() => setKompletOpen(true)}
+        data-otwieracz="dokumentacja"
+        className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
+      >
+        <FileStack size={15} /> Dokumentacja
+      </button>
+      <button
+        onClick={() => setHelpOpen(true)}
+        data-otwieracz="pomoc"
+        className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
+      >
+        <HelpCircle size={15} /> Pomoc
+      </button>
+      {!wMenu && <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />}
+      {/* Niezalogowany widzi ten sam chip co dotychczas. Po zalogowaniu jego rolę
+          przejmuje `CloudSaveIndicator` obok menu konta: pokazuje PRAWDZIWY status
+          („zapisywanie…”, godzinę ostatniego zapisu albo błąd), nie tylko fakt
+          bycia zalogowanym.
+          Treść i ikona: „Synchronizacja: offline” + `CloudOff` brzmiały jak awaria
+          (czerwonawe skojarzenie „offline” + przekreślona chmura), a to normalny,
+          bezpieczny stan — projekt JEST zapisany, tylko lokalnie. „Zapisano
+          lokalnie” + `Save` mówią wprost co się dzieje, bez straszenia. Klikalne
+          (gdy Supabase jest skonfigurowane) — otwiera logowanie, więc to
+          rzeczywista zachęta, nie tylko podpowiedź w tooltipie. */}
+      {/* Chip stwierdzał „Zapisano lokalnie" ZAWSZE, bo był napisem, nie stanem —
+          także wtedy, gdy pamięć przeglądarki się skończyła i nic się nie zapisało.
+          Teraz mówi prawdę i w razie awarii prowadzi tam, gdzie limitu nie ma
+          (patrz `localSaveError` w store). Zostaje w nagłówku, a nie w pasku stanu
+          edytora, właśnie po to: awarię widać z każdej zakładki. */}
+      {!session && (
+        <button
+          type="button"
+          onClick={SUPABASE_CONFIGURED ? () => setAuthOpen(true) : undefined}
+          data-otwieracz="konto"
+          disabled={!SUPABASE_CONFIGURED}
+          className={cn(
+            badgeVariants(),
+            // W pasku chip chowa się poniżej lg (brak miejsca); w menu jest zawsze,
+            // bo tam miejsca jest dość, a awaria zapisu ma być widać z każdego ekranu.
+            wMenu ? "flex rounded-lg border-0" : "hidden lg:flex",
+            "items-center gap-1 transition-colors enabled:hover:border-copper enabled:hover:text-copper disabled:cursor-default",
+            localSaveError ? "font-medium text-warn" : "text-slate-400"
+          )}
+          title={
+            localSaveError
+              ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tytul
+              : SUPABASE_CONFIGURED
+                ? "Zaloguj się, aby synchronizować projekt z chmurą"
+                : "Uzupełnij VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY w .env"
+          }
+        >
+          {localSaveError ? <AlertTriangle size={13} /> : <Save size={13} />}{" "}
+          {localSaveError ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tekst : "Zapisano lokalnie"}
+        </button>
+      )}
+      <NewProjectButton onOtworz={() => setNowyProjektOtwarty(true)} />
+    </>
+  );
+
   return (
     // Kolumna z rozciągliwym środkiem: stopka ma siedzieć przy DOLE OKNA, gdy treść
     // jest krótsza niż ekran. Wcześniej kończyła się tam, gdzie kończyła się treść,
@@ -651,7 +773,9 @@ export default function App() {
     // gołego tła POD stopką przy oknie 1440×900 — najważniejsza strona wyglądała na
     // uciętą w połowie. `min-h-screen` samo tego nie robiło: rozciągało tło, ale nie
     // rozdzielało wysokości między dzieci.
-    <div className="flex min-h-screen flex-col p-6">
+    // `p-4` na telefonie: przy 360 px `p-6` zabierało 48 px, więc treść dostaje 16 px
+    // więcej szerokości. Od `sm` zostaje dawne `p-6` (pasek kroku liczy się z tym samym).
+    <div className="flex min-h-screen flex-col p-4 sm:p-6">
       {/* Nagłówek niesie jedyną informację o tym, CZYM jest ta strona, więc logo i hasło
           dostają realną wagę: znak graficzny jako punkt zaczepienia dla oka, nazwa w
           rozmiarze tytułu i hasło w kolorze tekstu, a nie wyszarzonym. Wcześniej logo
@@ -682,7 +806,7 @@ export default function App() {
               {/* Napis wraca jako zwykły, widoczny <h1> — ten sam rozmiar co
                   poprzednie logo (text-2xl font-bold), tylko obok ikony
                   zamiast bycia częścią jednego złożonego SVG z tekstem. */}
-              <h1 className="font-sans text-lg sm:text-2xl font-bold leading-tight tracking-tight text-ink">
+              <h1 className="font-sans text-base sm:text-2xl font-bold leading-tight tracking-tight text-ink">
                 pomocnikelektryka<span className="text-copper">.pl</span>
               </h1>
               {/* Spacja między nazwą a hasłem: oba są elementami blokowymi, więc jej NIE widać,
@@ -699,7 +823,7 @@ export default function App() {
                   startowym, w nagłówku karty powitalnej i w większym rozmiarze
                   (patrz `showEntryScreen` w DesignTab.tsx), więc na wejściu nic nie
                   ginie — a na telefonie odzyskujemy wysokość tam, gdzie jej brakuje. */}
-              <span className="hidden max-w-xl sm:block max-w-xl text-sm leading-snug text-slate-500">
+              <span className="hidden max-w-xl sm:block max-w-xl text-sm leading-snug max-md:leading-tight text-slate-500">
                 Zaprojektuj instalację elektryczną w swoim domu!
               </span>
             </span>
@@ -709,89 +833,34 @@ export default function App() {
         {/* JEDEN RZĄD na telefonie, zawijanie od 640 px w górę.
             Przy 375 px ta grupa zawijała się na TRZY rzędy (Kalkulatory + Protokoły,
             Dokumentacja + Pomoc, Nowy projekt + Zaloguj się) i sama brała 122 px —
-            więcej niż logo, nazwa projektu i pasek etapów razem. Teraz przewija się
-            poziomo, tak samo jak pasek etapów niżej: że jest czym przewijać, widać po
-            wygaszonej krawędzi (`useWygaszenieKrawedzi`). Etykiety zostają PEŁNE — skracanie ich
-            zmieniłoby nazwy dostępnościowe, a na nich stoi kilkanaście testów e2e. */}
-        {/* Od 640 px w górę obie grupy dostają `display: contents` i podział ZNIKA:
-            przyciski wracają do zawijania pojedynczo, dokładnie jak przed rozdzieleniem.
-            Bez tego grupa konta nie mogła dzielić rzędu z zawiniętymi zakładkami
-            i nagłówek rósł na tablecie ze 150 do 184 px — zmierzone przy 640 px. */}
-        <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:flex-wrap sm:[&>*]:shrink-0">
-          {/* Grupa PRZEWIJANA. Konto zostało z niej WYJĘTE (niżej): przy 375 px kończyło
-              się 623 px za prawą krawędzią, a suwak jest celowo ukryty, więc nic nie
-              zdradzało, że tam cokolwiek jest. Aplikacja namawia do założenia konta,
-              żeby nie stracić pracy — a samego przycisku nie dało się znaleźć.
+            więcej niż logo, nazwa projektu i pasek etapów razem. Teraz na telefonie
+            zostają logo, konto i jeden przycisk „Menu” (arkusz z pozostałymi pozycjami), więc
+            rząd jest jeden. Etykiety w menu są PEŁNE — skracanie ich zmieniłoby nazwy
+            dostępnościowe, a na nich stoi kilkanaście testów e2e. */}
+        {/* Grupy rozpływają się w rzędzie schodkami: grupa konta dostaje `display: contents`
+            od 640 px (`sm`), pasek zakładek — od 768 px (`md`; niżej jest w ogóle ukryty,
+            a jego pozycje stoją w arkuszu „Menu”). Od `md` przyciski zawijają się więc
+            pojedynczo, dokładnie jak przed rozdzieleniem — inaczej grupa konta nie mogła
+            dzielić rzędu z zawiniętymi zakładkami i nagłówek rósł na tablecie ze 150 do
+            184 px (zmierzone przy 640 px, jeszcze przed menu). */}
+        <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:[&>*]:shrink-0">
+          {/* Pasek narzędzi od 768 px (`md`) — jak dotąd, z zawijaniem zamiast przewijania.
+              Poniżej niego ta grupa jest ukryta, a te same pozycje stoją w arkuszu „Menu”
+              (`MenuTelefonu`): pasek przewijany w bok ucinał etykiety w pół słowa
+              („Protokoły pomiarow”), a o reszcie mówiło tylko wygaszenie krawędzi.
+              Na `md`+ grupa ma `display: contents`, więc przyciski zawijają się pojedynczo,
+              dokładnie jak przed wprowadzeniem menu.
 
-              Etykiety zostają PEŁNE: skracanie ich na telefonie zmieniłoby nazwy
-              dostępnościowe, na których stoi kilkanaście testów e2e i czytniki ekranu. */}
-          <div
-            ref={pasekZakladek.ref}
-            style={pasekZakladek.styl}
-            data-testid="pasek-zakladek"
-            className="pe-bez-suwaka flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto [&>*]:shrink-0 sm:contents"
-          >
-          <ToolTab id="kalkulatory" label="Kalkulatory" active={tab} onPick={setTab} />
-          <ToolTab id="protokoly" label="Protokoły pomiarowe" active={tab} onPick={setTab} />
-          {/* Komplet jest w NAGŁÓWKU, nie na końcu przepływu: składa się z dokumentów
-              z czterech zakładek plus protokołów, więc nie należy do żadnej z nich
-              bardziej niż do pozostałych. Do tego samo okno musi żyć poza zakładkami,
-              bo w trakcie składania je przełącza (patrz `KompletDialog`). */}
-          <button
-            onClick={() => setKompletOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
-          >
-            <FileStack size={15} /> Dokumentacja
-          </button>
-          <button
-            onClick={() => setHelpOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-slate-500 transition-colors hover:text-copper"
-          >
-            <HelpCircle size={15} /> Pomoc
-          </button>
-          <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
-          {/* Niezalogowany widzi ten sam chip co dotychczas. Po zalogowaniu jego rolę
-              przejmuje `CloudSaveIndicator` obok menu konta: pokazuje PRAWDZIWY status
-              („zapisywanie…”, godzinę ostatniego zapisu albo błąd), nie tylko fakt
-              bycia zalogowanym.
-              Treść i ikona: „Synchronizacja: offline” + `CloudOff` brzmiały jak awaria
-              (czerwonawe skojarzenie „offline” + przekreślona chmura), a to normalny,
-              bezpieczny stan — projekt JEST zapisany, tylko lokalnie. „Zapisano
-              lokalnie” + `Save` mówią wprost co się dzieje, bez straszenia. Klikalne
-              (gdy Supabase jest skonfigurowane) — otwiera logowanie, więc to
-              rzeczywista zachęta, nie tylko podpowiedź w tooltipie. */}
-          {/* Chip stwierdzał „Zapisano lokalnie" ZAWSZE, bo był napisem, nie stanem —
-              także wtedy, gdy pamięć przeglądarki się skończyła i nic się nie zapisało.
-              Teraz mówi prawdę i w razie awarii prowadzi tam, gdzie limitu nie ma
-              (patrz `localSaveError` w store). Zostaje w nagłówku, a nie w pasku stanu
-              edytora, właśnie po to: awarię widać z każdej zakładki. */}
-          {!session && (
-            <button
-              type="button"
-              onClick={SUPABASE_CONFIGURED ? () => setAuthOpen(true) : undefined}
-              disabled={!SUPABASE_CONFIGURED}
-              className={cn(
-                badgeVariants(),
-                "hidden items-center gap-1 transition-colors enabled:hover:border-copper enabled:hover:text-copper lg:flex disabled:cursor-default",
-                localSaveError ? "font-medium text-warn" : "text-slate-400"
-              )}
-              title={
-                localSaveError
-                  ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tytul
-                  : SUPABASE_CONFIGURED
-                    ? "Zaloguj się, aby synchronizować projekt z chmurą"
-                    : "Uzupełnij VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY w .env"
-              }
-            >
-              {localSaveError ? <AlertTriangle size={13} /> : <Save size={13} />}{" "}
-              {localSaveError ? komunikatZapisu(localSaveError, lastLocalSaveAt)?.tekst : "Zapisano lokalnie"}
-            </button>
-          )}
-            <NewProjectButton onConfirm={resetProject} elementCount={elementCount} />
+              Konto zostaje POZA nią i jest widoczne zawsze: przy 375 px kończyło się
+              kiedyś 623 px za prawą krawędzią, a aplikacja namawia do założenia konta,
+              żeby nie stracić pracy. */}
+          <div data-testid="pasek-zakladek" className="hidden md:contents">
+            {pozycjeNaglowka(false)}
           </div>
 
-          {/* Grupa PRZYPIĘTA: poza przewijaniem, więc widoczna przy każdej szerokości.
-              `shrink-0`, bo to ona ma zabrać miejsce paskowi zakładek, a nie odwrotnie. */}
+          {/* Grupa KONTA: poza paskiem zakładek, więc widoczna przy każdej szerokości, także
+              tam, gdzie zakładki są schowane w „Menu”. `shrink-0`, bo konto ma się nie
+              ściskać — w ciasnym rzędzie ustępuje logo (`min-w-0`), nie ono. */}
           <div className="flex shrink-0 items-center gap-1.5 sm:contents">
           {session ? (
             <>
@@ -847,12 +916,19 @@ export default function App() {
           ) : (
             <button
               onClick={() => setAuthOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:bg-slate-50"
+              data-otwieracz="konto"
+              // Poniżej 640 px sam znak konta, 44 × 44 px: z napisem nagłówek nie mieścił się
+              // w jednym rzędzie obok logo i „Menu” (zawijał się na dwa, 101 px). Nazwa
+              // dostępna zostaje, bo napis jest tylko schowany wizualnie.
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:bg-slate-50 max-sm:h-11 max-sm:w-11 max-sm:justify-center max-sm:px-0"
+              title="Zaloguj się"
             >
-              <UserRound size={15} /> Zaloguj się
+              <UserRound size={15} aria-hidden="true" /> <span className="max-sm:sr-only">Zaloguj się</span>
             </button>
           )}
           </div>
+          {/* Poniżej 768 px reszta nagłówka mieści się w jednym przycisku (md:hidden w środku). */}
+          <MenuTelefonu>{pozycjeNaglowka(true)}</MenuTelefonu>
         </div>
       </header>
 
@@ -860,7 +936,9 @@ export default function App() {
           bo to landmark: bez niego nazwa projektu i kafle etapów zostawały jedynym
           fragmentem strony poza wszystkimi landmarkami. */}
       <section aria-label="Projekt i etapy pracy" className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        {/* `min-w-0 max-w-full`: długa nazwa projektu ma się skracać wielokropkiem w tym
+            rzędzie, a nie rozpychać strony ani spychać etapów (patrz `ProjectNameField`). */}
+        <div className="flex min-w-0 max-w-full items-center gap-2">
           <Folder size={15} className="text-slate-400" aria-hidden="true" />
           <span className="text-sm text-slate-400">Projekt:</span>
           <ProjectNameField />
@@ -869,19 +947,21 @@ export default function App() {
               już ciasny (patrz komentarz o 375 px wyżej), a ten rząd ma miejsce. */}
           <KopiaZapasowa onOtworzListe={otworzListeProjektow} />
         </div>
-        {/* Bez widocznego suwaka: to pasek nawigacji, a nie okno z treścią. Że da
-            się przewinąć, widać po wygaszonej krawędzi (`useWygaszenieKrawedzi`) — tak samo
-            jak w paskach kart przeglądarki. */}
+        {/* Poniżej 640 px cztery etapy stoją naraz w siatce 4 kolumn — nic się nie przewija
+            i nie ma czego wygaszać. Od `sm` pasek jest jednym rzędem przewijanym w bok: bez
+            widocznego suwaka (to nawigacja, a nie okno z treścią), a że da się przewinąć,
+            widać po wygaszonej krawędzi (`useWygaszenieKrawedzi`) — jak w paskach kart
+            przeglądarki. */}
         {/* `min-w-0` NIE jest tu ozdobą. Element elastyczny ma domyślnie
             `min-width: auto`, więc nie kurczy się poniżej szerokości swojej treści —
-            i `overflow-x-auto` nigdy się nie włączało: zamiast przewijać kafle
+            i `overflow-x-auto` (od `sm`) nigdy się nie włączało: zamiast przewijać kafle
             wewnątrz, pasek rozpychał całą stronę. Na oknie 375 px dawało to dokument
             o szerokości 655 px, czyli poziome przewijanie CAŁEJ aplikacji. */}
         <div
           ref={pasekEtapow.ref}
           style={pasekEtapow.styl}
           data-testid="pasek-etapow"
-          className="pe-bez-suwaka -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 py-0.5"
+          className="pe-bez-suwaka grid min-w-0 grid-cols-4 gap-1.5 sm:-mx-1 sm:flex sm:items-center sm:gap-2 sm:overflow-x-auto sm:px-1 sm:py-0.5"
         >
           <FlowCard
             step="01"
@@ -936,6 +1016,16 @@ export default function App() {
             tab="kosztorys"
             onPick={setTab}
           />
+          {/* Postęp przez cztery etapy — tylko na telefonie, gdzie nie ma strzałek między
+              kaflami. Na Kalkulatorach i Protokołach żaden etap nie jest aktywny. */}
+          {KOLEJNOSC_KROKOW.some((k) => k.id === tab) && (
+            <div aria-hidden="true" className="col-span-4 h-0.5 rounded-full bg-paper sm:hidden">
+              <div
+                className="h-full rounded-full bg-copper"
+                style={{ width: `${((KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab) + 1) / 4) * 100}%` }}
+              />
+            </div>
+          )}
         </div>
       </section>
 
@@ -1003,7 +1093,7 @@ export default function App() {
       )}
 
       {/* Strona towarzysząca, nie krok przepływu — stąd brak kafla, paska przykładu
-          i pigułek nawigacji (patrz komentarz przy `AppTab` w lib/routing.ts). */}
+          i dolnego paska kroku (patrz komentarz przy `AppTab` w lib/routing.ts). */}
       {tab === "prywatnosc" && (
         <Suspense fallback={<TabLoading />}>
           <PolitykaPrywatnosci />
@@ -1019,12 +1109,11 @@ export default function App() {
       {tab === "projekt" && (
         <>
           <Suspense fallback={<TabLoading />}>
-            {/* Przejście do kolejnego kroku wędruje TUTAJ, zamiast pływać pigułką
-                w rogu okna — na tej jednej zakładce, bo na tej jednej pigułka leżała
-                na powierzchni roboczej (patrz `NAWIGACJA_ODSTEP_PX` w lib/design.ts
-                i `nastepnyKrok` w EditorStatusBar). `undefined` na pustym projekcie:
-                ten sam próg co przy pigułce na pozostałych zakładkach, liczony w tym
-                samym miejscu, żeby obie drogi nie mogły się rozjechać. */}
+            {/* Przejście do kolejnego kroku wędruje TUTAJ, a nie do paska kroku pod treścią:
+                tu rolę paska pełni pasek stanu pod rysunkiem (patrz `nastepnyKrok`
+                w EditorStatusBar), bo nawigacja nie ma prawa stać na płótnie.
+                `undefined` na pustym projekcie — ten próg działa tylko na Instalacji,
+                na dalszych krokach pasek kroku jest zawsze. */}
             <DesignTab
               onOpenAuth={() => setAuthOpen(true)}
               onOpenPomoc={() => setHelpOpen(true)}
@@ -1042,92 +1131,23 @@ export default function App() {
         </>
       )}
       </ErrorBoundary>
+      {/* Pasek kroku tylko na 02–04: na Instalacji tę rolę ma pasek stanu pod rysunkiem
+          (z progiem pustego projektu), a Kalkulatory i Protokoły nie są krokami.
+          Na dalszych krokach NIE gasimy go pustym rzutem: Rozdzielnicę da się złożyć
+          ręcznie, bez rysowania, a schemat powstaje właśnie z niej. */}
+      {(() => {
+        const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
+        if (idx < 1) return null;
+        return (
+          <PasekKroku
+            poprzedni={KOLEJNOSC_KROKOW[idx - 1]}
+            nastepny={KOLEJNOSC_KROKOW[idx + 1]}
+            onPick={setTab}
+            onPrefetch={pobierzZawczasu}
+          />
+        );
+      })()}
       </main>
-
-      {/*
-        Duży, zawsze widoczny przycisk „Dalej” — bez niego jedyną drogą do kolejnego
-        kroku były małe kafle przepływu na samej górze strony, poza kadrem po
-        przewinięciu w dół do treści. Kto nie skojarzył kafli z nawigacją, nie miał
-        skąd wiedzieć, co robić dalej.
-
-        `position: fixed` w rogu, więc nie zależy od długości treści ani pozycji
-        przewijania — zawsze w tym samym miejscu, niezależnie od zakładki. Pokazuje
-        się TYLKO na krokach głównego przepływu (nie na „Kalkulatory”/„Protokoły
-        pomiarowe”, które są narzędziami obok przepływu) i znika na ostatnim kroku —
-        nie ma dokąd iść dalej z Kosztorysu.
-
-        `z-30`: CELOWO niżej niż nakładka pełnoekranowego projektowania (`z-40` w
-        DesignTab) — w pełnym ekranie chowa się razem z resztą chrome'u, zgodnie
-        z sensem tego trybu (skupienie na rysunku, bez elementów nawigacji).
-      */}
-      {/*
-        „Cofnij” — lustrzane odbicie przycisku „Dalej” (ten sam styl, przeciwny róg,
-        ta sama logika widoczności): powrót do POPRZEDNIEGO kroku głównego przepływu,
-        bez konieczności sięgania po kafle na górze strony. Nie pokazuje się na
-        pierwszym kroku („Instalacja") — nie ma dokąd się cofnąć.
-      */}
-      {(() => {
-        const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
-        const poprzedni = idx > 0 ? KOLEJNOSC_KROKOW[idx - 1] : undefined;
-        if (!poprzedni) return null;
-        return (
-          <button
-            onClick={() => setTab(poprzedni.id)}
-            onPointerEnter={() => pobierzZawczasu(poprzedni.id)}
-            onFocus={() => pobierzZawczasu(poprzedni.id)}
-            // Ukryty poniżej `md`: to `position: fixed` w rogu OKNA, obojętne na
-            // przewijanie i długość treści pod spodem — na wąskich/niskich oknach
-            // (kolumna narzędzi + panel Instalacji już same potrzebują sporo
-            // szerokości) potrafił więc wylądować DOKŁADNIE na polu wyszukiwania
-            // elementów albo zakładkach panelu, zasłaniając je. Kafle „01/02/03/04”
-            // u góry dają dokładnie tę samą nawigację, więc chowamy tu tylko wygodny
-            // skrót, nie funkcję.
-            //
-            // Odstęp od dolnej krawędzi ze wspólnej stałej, nie z klasy `bottom-5` —
-            // patrz `NAWIGACJA_ODSTEP_PX`, gdzie stoi też historia pigułki na płótnie.
-            style={{ bottom: NAWIGACJA_ODSTEP_PX }}
-            data-schowana={pigulkiSchowane || undefined}
-            className={`fixed left-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-[transform,opacity] duration-200 hover:scale-105 hover:bg-copper/90 md:flex ${klasySchowanejPigulki(pigulkiSchowane)}`}
-          >
-            <ArrowLeft size={15} />
-            Cofnij: {poprzedni.tytul}
-          </button>
-        );
-      })()}
-
-      {(() => {
-        const idx = KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab);
-        const nastepny = idx >= 0 ? KOLEJNOSC_KROKOW[idx + 1] : undefined;
-        if (!nastepny) return null;
-        // Na Instalacji tego przycisku tu NIE MA — przenosi się do paska stanu pod
-        // rysunkiem, bo pływając w rogu okna leżał na płótnie i zjadał tam kliknięcia
-        // (patrz `nastepnyKrok` przekazywane do `DesignTab` wyżej). Tam też, i TYLKO
-        // tam, działa próg pustego projektu.
-        //
-        // Świadomie NIE gasimy pigułki na dalszych krokach pustym rzutem, choć
-        // pierwsza wersja tak robiła. Rozdzielnicę da się złożyć RĘCZNIE, bez
-        // rysowania czegokolwiek („Zbuduj rozdzielnicę bez rzutu" — aparaty żyją
-        // w `panelDevices`, nie w `draft`), a schemat powstaje właśnie z niej. Próg
-        // liczony z zawartości rzutu zabierałby wtedy „Dalej: Schemat" komuś, kto ma
-        // pełną rozdzielnicę — czyli gasiłby skrót dokładnie tam, gdzie jest dokąd iść.
-        // Na dalszych krokach użytkownik i tak już świadomie tam wszedł.
-        if (tab === "projekt") return null;
-        return (
-          <button
-            onClick={() => setTab(nastepny.id)}
-            onPointerEnter={() => pobierzZawczasu(nastepny.id)}
-            onFocus={() => pobierzZawczasu(nastepny.id)}
-            // Patrz komentarz przy „Cofnij" wyżej — ten sam powód, ten sam próg,
-            // ten sam odstęp ze wspólnej stałej.
-            style={{ bottom: NAWIGACJA_ODSTEP_PX }}
-            data-schowana={pigulkiSchowane || undefined}
-            className={`fixed right-5 z-30 hidden items-center gap-1.5 rounded-full bg-copper px-3.5 py-2 text-sm font-semibold text-white shadow-lg transition-[transform,opacity] duration-200 hover:scale-105 hover:bg-copper/90 md:flex ${klasySchowanejPigulki(pigulkiSchowane)}`}
-          >
-            Dalej: {nastepny.tytul}
-            <ArrowRight size={15} />
-          </button>
-        );
-      })()}
 
       {resetToken && (
         <NoweHasloDialog
@@ -1318,6 +1338,13 @@ export default function App() {
         />
       )}
 
+      <NowyProjektOkno
+        open={nowyProjektOtwarty}
+        onOpenChange={setNowyProjektOtwarty}
+        onConfirm={resetProject}
+        elementCount={elementCount}
+      />
+
       <HelpModal
         open={helpOpen}
         onClose={() => setHelpOpen(false)}
@@ -1337,12 +1364,7 @@ export default function App() {
         opcje={<UdostepnijLinkiem bajty={kompletBajty} />}
       />
 
-      {/* Zapas pod pigułki TYLKO tam, gdzie one są: na ekranie startowym i w zakładkach
-          spoza przepływu (Kalkulatory, Protokoły) nie ma ani „Cofnij", ani „Dalej",
-          a pusty pas pod stopką to dokładnie ten pas gołego tła, który już raz
-          z tego ekranu usuwano. Ten sam warunek co przy samych pigułkach wyżej. */}
       <SiteFooter
-        rezerwaNaNawigacje={KOLEJNOSC_KROKOW.findIndex((k) => k.id === tab) > 0}
         onOtworzDokument={setTab}
       />
     </div>
@@ -1385,34 +1407,18 @@ function LinkDokumentu({
  * zastrzeżenie musi być widoczne, a nie schowane w „warunkach użytkowania".
  */
 function SiteFooter({
-  rezerwaNaNawigacje,
   onOtworzDokument,
 }: {
-  rezerwaNaNawigacje: boolean;
   onOtworzDokument: (tab: "prywatnosc" | "regulamin") => void;
 }) {
-  /*
-   * `md:pb-16` to ZAPAS pod pływające pigułki „Cofnij/Dalej".
-   *
-   * Są `position: fixed` w rogach OKNA, więc po przewinięciu na sam dół leżały na
-   * stopce — akurat na zdaniu o tym, że wyniki nie zastępują odbioru przez osobę
-   * z uprawnieniami SEP/budowlanymi. 64 px to wysokość pigułki (36) plus jej odstęp
-   * od krawędzi (`NAWIGACJA_ODSTEP_PX` = 20) plus luz.
-   *
-   * Świadomie ZAMIAST chowania pigułek przy dojechaniu do stopki: gaszenie skrótu
-   * „Dalej" dokładnie wtedy, gdy ktoś doczytał stronę do końca i chce przejść dalej,
-   * zabierałoby go w jedynym momencie, w którym jest naprawdę potrzebny.
-   *
-   * Dopiero od `md`, bo poniżej pigułek w ogóle nie ma (patrz ich `hidden md:flex`)
-   * i pusty pas byłby marnotrawstwem na najciaśniejszym ekranie.
-   */
   return (
     <footer
-      className={`mt-10 border-t border-border pt-5 text-xs text-slate-500 ${rezerwaNaNawigacje ? "md:pb-16" : ""}`}
+      className="mt-10 border-t border-border pt-5 text-xs text-slate-500"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
-          <Logo className="mb-1.5 h-5 w-auto" />
+          {/* `h-10`: napis w logo ma przy tej wysokości ok. 16 px (zmierzone bbox; przy `h-5` było ok. 8 px). */}
+          <Logo className="mb-1.5 h-10 w-auto" />
           <p className="leading-relaxed">
             Wyniki obliczeń — dobór zabezpieczeń, przekrojów przewodów, długości tras i kosztorys — są{" "}
             <strong className="font-semibold text-slate-600">orientacyjne</strong>. Nie zastępują projektu instalacji

@@ -105,8 +105,7 @@ function WierszListy({
       onClick={() => onWybierz(pozycja.id)}
       title={aktywny ? undefined : pozycja.desc}
       aria-current={aktywny ? "page" : undefined}
-      className={`w-full rounded-md px-2.5 py-1 text-left ${aktywny ? "" : "hover:bg-white"}`}
-      style={aktywny ? { background: "#2D5A8C14", boxShadow: "inset 2px 0 0 #2D5A8C" } : undefined}
+      className={`w-full rounded-md px-2.5 py-1 text-left ${aktywny ? "bg-blueprint-tlo shadow-[inset_2px_0_0_#2D5A8C]" : "hover:bg-white"}`}
     >
       <div className="text-sm leading-5" style={{ color: aktywny ? "#2D5A8C" : "#16202B", fontWeight: aktywny ? 500 : 400 }}>
         {pozycja.label}
@@ -128,12 +127,7 @@ function Kafel({
   return (
     <button
       onClick={() => onWybierz(pozycja.id)}
-      className="w-full rounded-lg p-3 text-left"
-      style={
-        aktywny
-          ? { background: "#2D5A8C10", border: "1px solid #2D5A8C" }
-          : { background: "#fff", border: "1px solid #DCE2E8" }
-      }
+      className={`w-full rounded-lg border p-3 text-left ${aktywny ? "border-blueprint bg-blueprint-tlo" : "border-[#DCE2E8] bg-white"}`}
     >
       <div className="min-w-0">
         <div className="text-sm font-medium" style={{ color: aktywny ? "#2D5A8C" : "#16202B" }}>

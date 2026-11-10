@@ -24,10 +24,16 @@ const MIEDZ = "#C1793F";
 const BLEKIT = "#2D5A8C";
 
 /** Wspólna ramka miniatury — jeden `viewBox` dla wszystkich czterech, żeby rysunki
- *  były tej samej skali i stały równo w rzędzie. */
+ *  były tej samej skali i stały równo w rzędzie.
+ *
+ *  Na telefonie (poniżej `sm`) miniatura ma 40 px wysokości zamiast 64, w tych samych
+ *  proporcjach 3 : 2. W siatce 2 × 2 to dwa rzędy miniatur, a przy pełnym rozmiarze
+ *  „Narysuj dom samodzielnie” lądowało pod pierwszym ekranem (859 px przy 375 × 812).
+ *  Rysunek ma pokazać kształt rzeczy — tabelka, szyna z aparatami — i przy 40 px nadal
+ *  to robi. Pilnuje tego e2e/start-telefon.spec.ts. */
 function Miniatura({ children }: { children: React.ReactNode }) {
   return (
-    <svg viewBox="0 0 96 64" className="h-16 w-24" aria-hidden="true">
+    <svg viewBox="0 0 96 64" className="mx-auto h-10 w-[60px] sm:h-16 sm:w-24" aria-hidden="true">
       <rect x="0.5" y="0.5" width="95" height="63" rx="5" fill="#fff" stroke="#E6EAEF" />
       {children}
     </svg>
@@ -114,25 +120,26 @@ export function CoPowstanie() {
   return (
     <div className="w-full">
       <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Co z tego powstanie</div>
-      {/* Przewijanie poziome zamiast zawijania: cztery miniatury w dwóch rzędach po dwie
-          gubią kolejność etapów, a to ona jest tu treścią. Ten sam chwyt co w pasku
-          etapów w nagłówku (patrz `pe-bez-suwaka` w App.tsx). */}
+      {/* Poniżej `sm` siatka 2 × 2 bez strzałek: cztery miniatury w jednym rzędzie wymagały
+          przewijania w bok, a etapy 03–04 były wtedy poza kadrem. Kolejność zostaje czytelna
+          z podpisów i z rozmieszczenia (rząd po rzędzie). Od `sm` obecny rząd ze strzałkami. */}
       <div
-        tabIndex={0}
         role="group"
-        aria-label="Co z tego powstanie — etapy, obszar przewijany"
-        className="pe-bez-suwaka mt-3 flex items-start justify-center gap-2 overflow-x-auto"
+        aria-label="Co z tego powstanie — etapy"
+        className="mt-3 grid grid-cols-2 justify-items-center gap-3 sm:flex sm:items-start sm:justify-center sm:gap-2"
       >
         {ETAPY.map(({ ikona: Ikona, tytul, opis }, i) => (
-          <div key={tytul} className="flex shrink-0 items-start gap-2">
-            <div className="w-24 text-center">
+          <div key={tytul} className="flex items-start gap-2 sm:shrink-0">
+            {/* Na telefonie kolumna szersza (w-32): podpis „Materiał i robocizna” mieści się
+                w jednej linii, więc rząd siatki nie rośnie o drugą linię opisu. */}
+            <div className="w-32 text-center sm:w-24">
               <Ikona />
-              <div className="mt-1.5 text-xs font-semibold text-ink">{tytul}</div>
+              <div className="mt-1 text-xs font-semibold text-ink sm:mt-1.5">{tytul}</div>
               <div className="text-xs leading-tight text-slate-400">{opis}</div>
             </div>
             {/* Strzałka między etapami — czysto dekoracyjna, jak w pasku etapów. */}
             {i < ETAPY.length - 1 && (
-              <svg viewBox="0 0 8 14" className="mt-7 h-3.5 w-2 shrink-0" aria-hidden="true">
+              <svg viewBox="0 0 8 14" className="mt-7 hidden h-3.5 w-2 shrink-0 sm:block" aria-hidden="true">
                 <path d="M1 1 L7 7 L1 13" fill="none" stroke="#C9D3DC" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
             )}

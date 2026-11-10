@@ -1,3 +1,4 @@
+import { Alert } from "@/components/ui/alert";
 import { useEffect, useState } from "react";
 import { Cloud, Loader2, Monitor, Trash2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -106,9 +107,9 @@ export function ProjectsModal({
         {/* Komunikat o limicie stoi NAD listą, bo to on jest powodem otwarcia okna —
             użytkownik ma tu do wykonania konkretną decyzję, a nie przejrzeć zapisy. */}
         {limitMsg && (
-          <div className="mb-2 rounded-md p-2.5 text-xs" style={{ background: "#C1793F14", color: "#8A5526" }}>
+          <Alert variant="caution" className="mb-2 text-xs">
             {limitMsg}
-          </div>
+          </Alert>
         )}
         {err && <div className="mb-2 text-xs text-red-600">{err}</div>}
         {loadError && <div className="mb-2 text-xs text-red-600">{loadError}</div>}

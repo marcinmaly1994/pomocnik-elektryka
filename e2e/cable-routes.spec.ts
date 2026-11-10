@@ -1215,7 +1215,7 @@ test("PDF: rzut ma trasy mimo wyłączonego przełącznika w edytorze, a checkbo
   // Zamknięcie podglądu nie zostawia tras na scenie — przełącznik edytora dalej mówi „Pokaż".
   await checkbox.check();
   await expect(strony).toHaveCount(3, { timeout: 30000 });
-  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Zamknij" }).last().click(); // ostatni = przycisk w stopce; „X” w rogu też ma teraz nazwę „Zamknij”
   expect(await routeLineCounts(page)).toEqual({ solid: 0, dashed: 0 });
   await expect(przelacznik).toBeVisible();
 });

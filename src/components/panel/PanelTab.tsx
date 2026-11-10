@@ -975,8 +975,12 @@ export function PanelTab() {
                 return (
                   <tr
                     key={s.id}
-                    className="grid grid-cols-4 gap-x-2 gap-y-2 border-t px-1 py-2.5 md:table-row md:p-0"
-                    style={{ borderColor: "#EEF1F4", background: bad ? "#C6433A0A" : warn ? "#C1793F0A" : undefined }}
+                    // Zabarwienie wiersza z tokenów tła komunikatów (nieprzezroczyste),
+                    // nie z hex z kanałem alfa — patrz klasyUsuniete.test.ts.
+                    className={`grid grid-cols-4 gap-x-2 gap-y-2 border-t px-1 py-2.5 md:table-row md:p-0 ${
+                      bad ? "bg-danger-tlo" : warn ? "bg-caution-tlo" : ""
+                    }`}
+                    style={{ borderColor: "#EEF1F4" }}
                   >
                     <td className="col-span-4 text-sm font-medium md:py-1.5 md:pr-3 md:text-xs md:font-normal">{s.nazwa}</td>
                     <td className={KOMORKA_DOBORU} data-label="Faza">

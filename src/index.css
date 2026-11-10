@@ -1,4 +1,20 @@
 @tailwind base;
+
+@layer base {
+  /* Dolny pasek kroku (PasekKroku, ok. 5 rem) jest `sticky`: bez tego fokus z klawiatury
+     i przewinięcie do kotwicy lądowały POD nim (WCAG 2.4.11). */
+  html {
+    scroll-padding-bottom: 5rem;
+  }
+  /* Jeden wskaźnik fokusu dla całej aplikacji (WCAG 2.4.7 / 2.4.11): 2 px w kolorze
+     głównym, 3:1 i więcej na każdym tle interfejsu. Tylko z klawiatury
+     (`:focus-visible`) — klik myszą nie zostawia obwódki. Komponenty z własnym
+     pierścieniem (Button: `ring-2`) nadpisują go `outline-none`, więc nic się nie dubluje. */
+  :focus-visible {
+    outline: 2px solid theme('colors.blueprint.DEFAULT');
+    outline-offset: 2px;
+  }
+}
 @tailwind components;
 @tailwind utilities;
 
@@ -142,6 +158,16 @@ body {
     }
     to {
       opacity: 1;
+    }
+  }
+  /* Włączany w arkuszu tylko pod `motion-safe:` (patrz DialogContent) — przy
+     prefers-reduced-motion arkusz po prostu się pojawia, bez wjazdu. */
+  @keyframes pe-arkusz-wjazd {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: none;
     }
   }
   @media (prefers-reduced-motion: reduce) {

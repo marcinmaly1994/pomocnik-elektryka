@@ -96,7 +96,7 @@ export function UdostepnijLinkiem({ bajty }: { bajty: Uint8Array | null }) {
               aria-label="Link do udostępnionej dokumentacji"
               value={nowyLink}
               onFocus={(e) => e.target.select()}
-              className="min-w-0 flex-1 rounded-md border border-border bg-white px-2 py-1 font-mono text-xs"
+              className="pe-input min-w-0 flex-1 px-2 py-1 font-mono text-xs"
             />
             <Button variant="ghost" size="sm" className="gap-1" onClick={() => kopiuj(nowyLink)}>
               {skopiowany ? <Check size={14} /> : <Copy size={14} />} {skopiowany ? "Skopiowano" : "Kopiuj"}

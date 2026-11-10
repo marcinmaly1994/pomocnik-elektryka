@@ -18,7 +18,7 @@ import { KOLORY } from "@/lib/tokeny";
  */
 
 /**
- * Tła są NIEPRZEZROCZYSTE, a nie w wersji z kanałem alfa (dawniej `#3B8C631A`).
+ * Tła są NIEPRZEZROCZYSTE, a nie w wersji z kanałem alfa (dawne kolory półprzezroczyste).
  * Pasek werdyktu przykleja się do góry przy przewijaniu, więc przez półprzezroczyste
  * tło przejeżdżałby pod nim rachunek krok po kroku. Wartości to dokładnie te same
  * barwy zmieszane z bielą karty (10%), więc wygląd bez przewijania się nie zmienia.

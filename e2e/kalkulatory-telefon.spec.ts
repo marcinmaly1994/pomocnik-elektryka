@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { przejdzDoNarzedzia } from "./_flow";
 
 /**
  * Kalkulatory na telefonie — przegląd wszystkich dziewiętnastu naraz.
@@ -27,7 +28,7 @@ async function otworzKalkulatory(page: Page, pierwszy: string) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.getByRole("button", { name: "Kalkulatory", exact: true }).click();
+  await przejdzDoNarzedzia(page, "Kalkulatory");
   await page.getByRole("button", { name: zaczynaSieOd(pierwszy) }).first().click();
 }
 

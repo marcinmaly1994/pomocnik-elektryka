@@ -316,7 +316,8 @@ function UstawieniaTab({ session, onClose }: { session: Session; onClose: () => 
         </Button>
       </div>
 
-      <div className="pe-card p-4" style={{ borderColor: "#C6433A40" }}>
+      {/* Ramka strefy zagrożenia z tokenu (`danger-grafika` przygaszony), nie z hex z alfą. */}
+      <div className="pe-card border-danger-grafika/25 p-4">
         <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-red-600">
           <AlertTriangle size={14} /> Strefa zagrożenia
         </h3>

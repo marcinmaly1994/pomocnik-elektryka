@@ -1,5 +1,6 @@
 import { AlertTriangle, Calculator, ClipboardList, ShieldCheck } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { wrocFokusDoOtwieracza } from "@/lib/wrocFokus";
 import { KROKI, SKROTY } from "./pomocTresc";
 
 interface HelpModalProps {
@@ -27,7 +28,12 @@ function Key({ children }: { children: string }) {
 export function HelpModal({ open, onClose, onOtworzPrywatnosc }: HelpModalProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Pomoc" className="max-h-[85vh] max-w-2xl overflow-y-auto">
+      {/* Bez DialogTrigger (sterowane z App) — patrz `wrocFokusDoOtwieracza`. */}
+      <DialogContent
+        title="Pomoc"
+        className="max-h-[85vh] max-w-2xl overflow-y-auto"
+        onCloseAutoFocus={wrocFokusDoOtwieracza("pomoc")}
+      >
         <div className="space-y-6 text-sm leading-relaxed text-slate-600">
           <p>
             <strong className="text-ink">pomocnikelektryka.pl</strong> pomaga zaprojektować

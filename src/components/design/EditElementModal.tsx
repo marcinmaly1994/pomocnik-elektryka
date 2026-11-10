@@ -208,10 +208,15 @@ export function EditElementModal({
                 {variants.map((n) => (
                   <Button variant="secondary" size="sm"
                     key={n}
-                    className="px-0"
+                    // Wybrany wariant w kolorach miedzi z tokenów (tło nieprzezroczyste,
+                    // `copper-tlo`), nie z hex z kanałem alfa — patrz klasyUsuniete.test.ts.
+                    className={
+                      gangs === n
+                        ? "border-copper bg-copper-tlo px-0 text-copper hover:border-copper hover:text-copper"
+                        : "px-0"
+                    }
                     type="button"
                     onClick={() => setGangs(n)}
-                    style={gangs === n ? { borderColor: "#C1793F", color: "#9A5A27", background: "#C1793F0D" } : undefined}
                   >
                     {n}
                   </Button>
