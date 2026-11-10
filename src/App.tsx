@@ -667,7 +667,8 @@ export default function App() {
   const pasekEtapow = useWygaszenieKrawedzi<HTMLDivElement>();
 
   function signOut() {
-    setSession(null);
+    // `wyloguj`, a nie samo `setSession(null)`: unieważnia też sesję na serwerze.
+    void useProjectStore.getState().wyloguj();
   }
 
   async function loadCloudProject(id: string) {

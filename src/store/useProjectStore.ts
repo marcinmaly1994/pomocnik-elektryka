@@ -59,6 +59,7 @@ import {
   supaGetProject,
   supaInsertProject,
   supaListProjects,
+  supaLogout,
   supaRefresh,
   supaUpdateProject,
   wymagaOdswiezenia,
@@ -113,6 +114,22 @@ function loadStoredSession(): Session | null {
     return null;
   }
 }
+
+/**
+ * Do kogo należą powiązania z chmurą trzymane w pamięci (`cloudId`, `protokolyId`,
+ * znaczniki `updated_at`).
+ *
+ * Wylogowanie celowo ich nie czyści — powrót TEGO SAMEGO konta nie może zakładać
+ * drugiego wiersza dla tego samego projektu. Ale gdy w tej samej karcie zaloguje się
+ * KTOŚ INNY, te id wskazują na cudze wiersze: zapis szedł w nie, RLS go odrzucał
+ * pustą odpowiedzią, a aplikacja pokazywała fałszywy konflikt albo — po „nadpisz
+ * mimo to" — fałszywe „Zapisano". Porównanie z tym polem rozstrzyga, czy to powrót,
+ * czy zmiana konta.
+ */
+let wlascicielStanuChmury: string | null = loadStoredSession()?.user?.id ?? null;
+
+const ZAPIS_ZNIKNAL =
+  "Nie znaleziono tego zapisu na Twoim koncie (mógł zostać usunięty). Kliknij „Zapisz”, żeby zapisać go od nowa.";
 
 /**
  * Projekt do otwarcia przy starcie — z listy projektów lokalnych.
@@ -608,6 +625,8 @@ interface ProjectState {
   setProtocolState: (key: ProtocolKey, patch: Partial<ProtocolState>) => void;
 
   setSession: (session: Session | null) => void;
+  /** Wylogowanie: natychmiast lokalnie, a w tle unieważnienie sesji na serwerze. */
+  wyloguj: () => Promise<void>;
   setCloudId: (id: string | null) => void;
   /** Natychmiastowy zapis w chmurze (bez czekania na debounce autosave'u) — do
    *  przycisku „Zapisz teraz” w menu konta. Ten sam kod ścieżki, którym leci
@@ -1280,10 +1299,44 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     } catch {
       // limit przeglądarki / tryb prywatny — sesja działa nadal w tej karcie
     }
+    if (session && wlascicielStanuChmury && wlascicielStanuChmury !== session.user.id) {
+      // Inne konto niż to, do którego należą id w pamięci — patrz `wlascicielStanuChmury`.
+      lastCloudSavedJson = null;
+      znaneUpdatedAt = null;
+      znaneUpdatedAtProtokoly = null;
+      ostatniaZapisanaNazwa = null;
+      set({
+        cloudId: null,
+        protokolyId: null,
+        lastCloudSaveAt: null,
+        konfliktChmury: null,
+        pytanieONadpisanie: null,
+        limitBlokada: null,
+        autozapisWstrzymany: false,
+      });
+    }
+    if (session) wlascicielStanuChmury = session.user.id;
     // Wylogowanie kasuje tylko KOMUNIKAT błędu — cloudId zostaje, żeby powrót do
     // tego samego konta w tej karcie nie założył drugiego wiersza w chmurze dla
     // tego samego projektu.
     set(session ? { session } : { session, cloudSaveError: null });
+  },
+
+  wyloguj: async () => {
+    const sesja = get().session;
+    // Najpierw lokalnie: interfejs ma zareagować od razu, także bez sieci.
+    get().setSession(null);
+    if (!sesja) return;
+    try {
+      // Wygasły token dostępu nie przejdzie przez /logout, a wtedy token odnawiający
+      // zostałby ważny — czyli dokładnie to, przed czym to wywołanie ma chronić.
+      let token = sesja.token;
+      if (wymagaOdswiezenia(sesja) && sesja.refreshToken) token = (await supaRefresh(sesja.refreshToken)).access_token;
+      await supaLogout(token);
+    } catch {
+      // Brak sieci albo sesja już martwa po stronie serwera. Lokalnie i tak jest
+      // wylogowany; nic więcej z tej karty zrobić się nie da.
+    }
   },
 
   setCloudId: (id) => set({ cloudId: id }),
@@ -1353,6 +1406,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         );
         if (warunek && wiersze.length === 0) {
           set({ autozapisWstrzymany: true, konfliktChmury: { rodzaj: "projekt", id: docelowyId, nazwa: projectName } });
+          return;
+        }
+        if (wiersze.length === 0) {
+          // Bez warunku pusta odpowiedź znaczy, że wiersza nie ma albo nie jest nasz
+          // (RLS). Wcześniej szło to dalej jako udany zapis — „Zapisano” bez zapisu.
+          znaneUpdatedAt = null;
+          lastCloudSavedJson = null;
+          set({ cloudId: null, autozapisWstrzymany: true, cloudSaveError: ZAPIS_ZNIKNAL });
           return;
         }
         znaneUpdatedAt = wiersze[0]?.updated_at ?? null;
@@ -1458,6 +1519,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         );
         if (warunek && wiersze.length === 0) {
           set({ konfliktChmury: { rodzaj: "protokoly", id: docelowyId, nazwa: tytul } });
+          return;
+        }
+        if (wiersze.length === 0) {
+          znaneUpdatedAtProtokoly = null;
+          set({ protokolyId: null, cloudSaveError: ZAPIS_ZNIKNAL });
           return;
         }
         znaneUpdatedAtProtokoly = wiersze[0]?.updated_at ?? null;

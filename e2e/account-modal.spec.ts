@@ -103,6 +103,42 @@ test("zmiana hasła: walidacja krótkiego hasła i niezgodnego potwierdzenia bez
   await expect(page.getByText("Hasła nie są takie same.")).toBeVisible();
 });
 
+test("zmiana hasła wymaga obecnego hasła i zmienia je tokenem z ponownego logowania", async ({ page }) => {
+  // Supabase podstawiony: sprawdzamy, CO aplikacja wysyła, nie prawdziwe konto.
+  const zmiany: string[] = [];
+  await page.route("**/auth/v1/token?grant_type=password", async (r) => {
+    const { password } = r.request().postDataJSON() as { password: string };
+    if (password !== "obecne-haslo") {
+      return r.fulfill({ status: 400, json: { error_code: "invalid_credentials", msg: "Invalid login credentials" } });
+    }
+    return r.fulfill({ json: { access_token: "swiezy-token", refresh_token: "r", expires_in: 3600, user: FAKE_SESSION.user } });
+  });
+  await page.route("**/auth/v1/user", async (r) => {
+    zmiany.push(r.request().headers()["authorization"] ?? "");
+    return r.fulfill({ json: FAKE_SESSION.user });
+  });
+  await page.route("**/auth/v1/logout**", (r) => r.fulfill({ status: 204, body: "" }));
+
+  await wejdzZalogowany(page);
+  await otworzMenuKonta(page);
+  await page.getByRole("menuitem", { name: "Profil" }).click();
+
+  await page.getByLabel("Nowe hasło", { exact: true }).fill("nowe-haslo");
+  await page.getByLabel("Powtórz nowe hasło").fill("nowe-haslo");
+  await page.getByRole("button", { name: "Zmień hasło" }).click();
+  await expect(page.getByText("Podaj obecne hasło.")).toBeVisible();
+
+  await page.getByLabel("Obecne hasło").fill("zle-haslo");
+  await page.getByRole("button", { name: "Zmień hasło" }).click();
+  await expect(page.getByText("Obecne hasło jest nieprawidłowe.")).toBeVisible();
+  expect(zmiany).toHaveLength(0);
+
+  await page.getByLabel("Obecne hasło").fill("obecne-haslo");
+  await page.getByRole("button", { name: "Zmień hasło" }).click();
+  await expect(page.getByText("Hasło zmienione.")).toBeVisible();
+  expect(zmiany).toEqual(["Bearer swiezy-token"]);
+});
+
 test("eksport danych pobiera plik JSON z projektem", async ({ page }) => {
   await wejdzZalogowany(page);
   await otworzMenuKonta(page);

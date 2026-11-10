@@ -10,6 +10,7 @@ import {
   supaUsunUdostepnienie,
   supaDeleteProject,
   supaListProjects,
+  supaLogout,
   supaSignIn,
   supaUpdateUser,
   type Session,
@@ -42,6 +43,7 @@ function ProfilTab({ session }: { session: Session }) {
   const docHeader = useProjectStore((s) => s.docHeader);
   const setDocHeader = useProjectStore((s) => s.setDocHeader);
 
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -61,15 +63,40 @@ function ProfilTab({ session }: { session: Session }) {
       setErr("Hasła nie są takie same.");
       return;
     }
+    if (!currentPassword) {
+      setErr("Podaj obecne hasło.");
+      return;
+    }
+    const email = session.user.email;
+    if (!email) {
+      setErr("Nie znamy adresu e-mail tego konta — zaloguj się ponownie.");
+      return;
+    }
     setBusy(true);
+    // Obecne hasło sprawdzamy ZALOGOWANIEM nim — ta sama bramka co przy usuwaniu
+    // konta. Sama otwarta sesja to za mało: na wspólnym komputerze albo z tokenem
+    // wyniesionym z przeglądarki dawała przejęcie konta jednym polem.
+    let swieza: Awaited<ReturnType<typeof supaSignIn>>;
     try {
-      await supaUpdateUser(session.token, { password: newPassword });
+      swieza = await supaSignIn(email, currentPassword);
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      setErr(status === 400 ? "Obecne hasło jest nieprawidłowe." : e instanceof Error ? e.message : "Nie udało się sprawdzić hasła.");
+      setBusy(false);
+      return;
+    }
+    try {
+      await supaUpdateUser(swieza.access_token, { password: newPassword });
       setOk(true);
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Nie udało się zmienić hasła.");
     } finally {
+      // Sesja z logowania-sprawdzianu była potrzebna tylko na to jedno wywołanie.
+      // Bez wylogowania zostawałby po niej ważny token odnawiający.
+      void supaLogout(swieza.access_token).catch(() => {});
       setBusy(false);
     }
   }
@@ -119,6 +146,16 @@ function ProfilTab({ session }: { session: Session }) {
           <KeyRound size={14} /> Zmiana hasła
         </h3>
         <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block sm:col-span-2">
+            <div className="mb-1 text-xs text-slate-500">Obecne hasło</div>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="pe-input w-full text-sm"
+              autoComplete="current-password"
+            />
+          </label>
           <label className="block">
             <div className="mb-1 text-xs text-slate-500">Nowe hasło</div>
             <input
@@ -127,6 +164,7 @@ function ProfilTab({ session }: { session: Session }) {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="pe-input w-full text-sm"
+              autoComplete="new-password"
             />
           </label>
           <label className="block">
@@ -137,6 +175,7 @@ function ProfilTab({ session }: { session: Session }) {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="pe-input w-full text-sm"
+              autoComplete="new-password"
             />
           </label>
         </div>

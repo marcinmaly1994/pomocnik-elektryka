@@ -151,6 +151,12 @@ describe("polskiKomunikatBledu", () => {
     expect(polskiKomunikatBledu(422, "New password should be different from the old password.")).toMatch(/inne niż obecne/);
   });
 
+  it("tłumaczy odmowy z triggera limitów w bazie", () => {
+    // PostgREST zwraca `raise exception` jako { code: "P0001", message: "limit_zapisow" }.
+    expect(polskiKomunikatBledu(400, "limit_zapisow", "P0001")).toMatch(/5 zapisanych pozycji/);
+    expect(polskiKomunikatBledu(400, "limit_rozmiaru", "P0001")).toMatch(/za duży/);
+  });
+
   it("rozpoznaje też po kodzie błędu, gdy treść się zmieni", () => {
     expect(polskiKomunikatBledu(400, "cokolwiek", "invalid_credentials")).toBe("Nieprawidłowy e-mail lub hasło.");
     expect(polskiKomunikatBledu(422, "cokolwiek", "same_password")).toMatch(/inne niż obecne/);
