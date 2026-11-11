@@ -258,8 +258,8 @@ function elementy(): InstallationElement[] {
     // a ramek wielokrotnych aplikacja nie modeluje — patrz `gniazdoPodwojne`.
     e("kuch-gn1", "gniazdko", KUCHNIA, 5.5, 0.2, { gangs: 2 }),
     e("kuch-gn2", "gniazdko", KUCHNIA, 6.5, 0.2, { gangs: 2 }),
-    e("kuch-agd1", "wypustAGD", KUCHNIA, 5.2, 1.1, { dedicated: true, note: "Zmywarka" }),
-    e("kuch-agd2", "wypustAGD", KUCHNIA, 5.2, 2, { dedicated: true, note: "Piekarnik" }),
+    e("kuch-agd1", "wypustAGD", KUCHNIA, 5.2, 1.1, { dedicated: true, note: "Zmywarka", agdLetter: "Z" }),
+    e("kuch-agd2", "wypustAGD", KUCHNIA, 5.2, 2, { dedicated: true, note: "Piekarnik", agdLetter: "P" }),
     e("kuch-plyta", "gniazdko400", KUCHNIA, 5.2, 2.9, { dedicated: true, note: "Płyta indukcyjna" }),
     e("kuch-led", "tasmaLed", KUCHNIA, 6.8, 1.1, { note: "Podszafkowa" }),
     e("kuch-sw", "wlacznik", KUCHNIA, 6.8, 2.6),

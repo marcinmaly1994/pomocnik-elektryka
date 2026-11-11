@@ -64,6 +64,9 @@ test("kuchnia: „Wstaw typowy osprzęt” dodaje szablon, Ctrl+Z zdejmuje cało
   const el = await elementyWProjekcie(page);
   expect(el.every((e) => e.room === "Kuchnia")).toBe(true);
   expect(el.filter((e) => e.type === "wypustAGD").map((e) => e.agdLetter).sort()).toEqual(["I", "P", "Z"]);
+  // R2 z audytu Instalacji 11.11.2026: drugie kliknięcie dokładało kolejny komplet.
+  // Teraz w pełnej kuchni nie ma już czego dołożyć, więc i przycisku nie ma.
+  await expect(szablon.getByRole("button")).toHaveCount(0);
 
   // jedno cofnięcie zdejmuje cały szablon
   await page.locator("[data-testid=plan-okno]").first().hover();

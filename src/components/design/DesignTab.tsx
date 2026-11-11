@@ -87,7 +87,7 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SzablonPomieszczenia } from "@/components/design/SzablonPomieszczenia";
-import { elementySzablonu, odmianaElementu } from "@/lib/szablonyPomieszczen";
+import { brakujaceWSzablonie, elementySzablonu, odmianaElementu } from "@/lib/szablonyPomieszczen";
 import { domyslnyPrzewod, RODZAJE_PRZEWODU } from "@/lib/przewodyReczne";
 import { rzutDoDxf } from "@/lib/dxf";
 import type { RodzajPrzewodu } from "@/types";
@@ -3036,6 +3036,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             key={`szablon-${pokoj.id}`}
             typ={pokoj.type ?? guessRoomType(pokoj.name)}
             elementowWPokoju={elements.filter((e) => e.roomId === pokoj.id).length}
+            brakujace={brakujaceWSzablonie(pokoj.type ?? guessRoomType(pokoj.name), pokoj, elements)}
             onWstaw={() => {
               const nowe = elementySzablonu(pokoj.type ?? guessRoomType(pokoj.name), {
                 room: pokoj,

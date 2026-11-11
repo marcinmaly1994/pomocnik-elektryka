@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Opening, RoomShape, RoomType } from "@/types";
+import type { InstallationElement, Opening, RoomShape, RoomType } from "@/types";
 import { pointInPolygon } from "./geometry";
-import { elementySzablonu, odmianaElementu, opisSzablonu, SZABLONY } from "./szablonyPomieszczen";
+import { brakujaceWSzablonie, elementySzablonu, odmianaElementu, opisPozycji, opisSzablonu, SZABLONY } from "./szablonyPomieszczen";
 
 const MPU = 0.05; // 1 jedn. = 5 cm
 /** Kuchnia 5 × 4 m. */
@@ -90,6 +90,54 @@ describe("szablony pomieszczeń", () => {
     const typy: RoomType[] = ["kuchnia", "lazienka", "pralnia", "kotlownia", "salon", "sypialnia", "pokoj", "garaz", "klatka", "inne"];
     for (const t of typy) expect(opisSzablonu(t).length, t).toBeGreaterThan(0);
     expect(opisSzablonu("kuchnia")).toContain("3 × Gniazdo 230 V podwójne");
+  });
+
+  /**
+   * R2 z audytu Instalacji 11.11.2026: w kuchni z ośmioma elementami szablon dokładał
+   * cały komplet — drugą oprawę, drugi łącznik i drugie wypusty AGD P/Z/I, czyli trzy
+   * zbędne obwody w rozdzielnicy. Szablon ma dokładać tylko to, czego brakuje.
+   */
+  describe("w pomieszczeniu, w którym już coś stoi", () => {
+    const stoi = (type: InstallationElement["type"], extra: Partial<InstallationElement> = {}): InstallationElement => ({
+      id: `s${n++}`,
+      type,
+      x: 50,
+      y: 40,
+      rotation: 0,
+      room: "Kuchnia",
+      floor: "f1",
+      dedicated: false,
+      note: "",
+      gangs: 1,
+      ...extra,
+    });
+    const wstawDo = (elements: InstallationElement[]) =>
+      elementySzablonu("kuchnia", { room: kuchnia, elements, walls: [], roomShapes: [kuchnia], openings: [drzwi], mpu: MPU, skalaSymboli: 0.5, noweId: () => `n${n++}` });
+
+    it("pełny komplet z szablonu — nie dokłada niczego", () => {
+      const komplet = wstaw("kuchnia");
+      expect(brakujaceWSzablonie("kuchnia", kuchnia, komplet)).toEqual([]);
+      expect(wstawDo(komplet)).toEqual([]);
+    });
+
+    it("dokłada tylko brakujące sztuki, z rozróżnieniem wariantu gniazda i litery AGD", () => {
+      const nowe = wstawDo([stoi("oswietlenie"), stoi("gniazdko", { gangs: 2 }), stoi("wypustAGD", { agdLetter: "P" })]);
+      expect(nowe.filter((e) => e.type === "oswietlenie")).toHaveLength(0);
+      expect(nowe.filter((e) => e.type === "wlacznik")).toHaveLength(1);
+      expect(nowe.filter((e) => e.type === "gniazdko" && e.gangs === 2)).toHaveLength(2);
+      expect(nowe.filter((e) => e.type === "gniazdko" && e.gangs === 1)).toHaveLength(1);
+      expect(nowe.filter((e) => e.type === "wypustAGD").map((e) => e.agdLetter).sort()).toEqual(["I", "Z"]);
+    });
+
+    it("liczy tylko to pomieszczenie na tej kondygnacji", () => {
+      const obce = [stoi("oswietlenie", { room: "Salon" }), stoi("oswietlenie", { floor: "f2" })];
+      expect(wstawDo(obce).filter((e) => e.type === "oswietlenie")).toHaveLength(1);
+    });
+
+    it("opis brakujących mówi, co dojdzie", () => {
+      const brak = brakujaceWSzablonie("kuchnia", kuchnia, [stoi("oswietlenie"), stoi("wlacznik"), stoi("gniazdko", { gangs: 2 })]);
+      expect(opisPozycji(brak)).toBe("2 × Gniazdo 230 V podwójne, Gniazdo 230 V, Wypust AGD (P), Wypust AGD (Z), Wypust AGD (I)");
+    });
   });
 
   it("odmiana: element / elementy / elementów", () => {
