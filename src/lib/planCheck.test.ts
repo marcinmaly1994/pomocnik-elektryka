@@ -340,3 +340,63 @@ describe("nachodzące pomieszczenia (audyt 5.11.2026, B8)", () => {
     expect(issues.find((x) => x.rule === "pomieszczenia-nachodza")).toBeUndefined();
   });
 });
+
+/**
+ * R14 z audytu Instalacji 11.11.2026: zdublowany osprzęt przechodził sprawdzenie
+ * „bez zastrzeżeń", choć w rozdzielnicy dawał zbędne obwody (każdy wypust AGD to
+ * osobny obwód B16).
+ */
+describe("zdublowany osprzęt (audyt 11.11.2026, R14)", () => {
+  const KUCHNIA = pokoj("Kuchnia", "kuchnia");
+
+  it("dwa wypusty AGD z tą samą literą w jednym pokoju dają uwagę", () => {
+    const issues = checkPlan({
+      elements: [el("wypustAGD", 10, 10, "Kuchnia", { agdLetter: "P" }), el("wypustAGD", 90, 10, "Kuchnia", { agdLetter: "P" }), el("wypustAGD", 50, 10, "Kuchnia", { agdLetter: "Z" })],
+      roomShapes: [KUCHNIA],
+      metersPerUnit: MPU,
+    });
+    const u = issues.find((x) => x.rule === "agd-ta-sama-litera");
+    expect(u?.level).toBe("warn");
+    expect(u?.elementIds).toEqual(["wypustAGD-10-10", "wypustAGD-90-10"]);
+    expect(u?.detail).toContain("Kuchnia");
+  });
+
+  it("ta sama litera z różnymi opisami to dwa różne odbiorniki", () => {
+    const issues = checkPlan({
+      elements: [el("wypustAGD", 10, 10, "Kuchnia", { note: "Zmywarka" }), el("wypustAGD", 90, 10, "Kuchnia", { note: "Piekarnik" })],
+      roomShapes: [KUCHNIA],
+      metersPerUnit: MPU,
+    });
+    expect(reguly(issues)).not.toContain("agd-ta-sama-litera");
+  });
+
+  it("te same litery w RÓŻNYCH pokojach to dwa różne odbiorniki", () => {
+    const issues = checkPlan({
+      elements: [el("wypustAGD", 10, 10, "Kuchnia", { agdLetter: "P" }), el("wypustAGD", 90, 10, "Łazienka", { agdLetter: "P" })],
+      roomShapes: [KUCHNIA, LAZIENKA],
+      metersPerUnit: MPU,
+    });
+    expect(reguly(issues)).not.toContain("agd-ta-sama-litera");
+  });
+
+  it("dwa takie same elementy w jednym miejscu dają uwagę", () => {
+    const issues = checkPlan({
+      elements: [el("gniazdko", 10, 10, "Kuchnia"), el("gniazdko", 10, 10, "Kuchnia", { id: "kopia" }), el("wlacznik", 10, 10, "Kuchnia")],
+      roomShapes: [KUCHNIA],
+      metersPerUnit: MPU,
+    });
+    const u = issues.find((x) => x.rule === "elementy-jeden-na-drugim");
+    expect(u?.level).toBe("warn");
+    expect(u?.elementIds).toEqual(["gniazdko-10-10", "kopia"]);
+  });
+
+  it("osprzęt rozstawiony osobno nie daje uwag o duplikatach", () => {
+    const issues = checkPlan({
+      elements: [el("gniazdko", 10, 10, "Kuchnia"), el("gniazdko", 30, 10, "Kuchnia"), el("wypustAGD", 50, 10, "Kuchnia", { agdLetter: "P" })],
+      roomShapes: [KUCHNIA],
+      metersPerUnit: MPU,
+    });
+    expect(reguly(issues)).not.toContain("agd-ta-sama-litera");
+    expect(reguly(issues)).not.toContain("elementy-jeden-na-drugim");
+  });
+});

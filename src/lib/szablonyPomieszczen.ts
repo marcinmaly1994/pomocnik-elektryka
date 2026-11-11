@@ -100,7 +100,44 @@ export const SZABLONY: Partial<Record<RoomType, PozycjaSzablonu[]>> = {
 
 /** Krótki opis zawartości szablonu do pokazania przed wstawieniem, np. „oprawa, łącznik, 4 × gniazdo”. */
 export function opisSzablonu(typ: RoomType): string {
-  const pozycje = SZABLONY[typ] ?? [];
+  return opisPozycji(SZABLONY[typ] ?? []);
+}
+
+/** Wariant pozycji, po którym szablon rozpoznaje sztukę już stojącą w pokoju. */
+function wariantPozycji(type: ElementType, gangs: number | undefined, agdLetter: string | undefined): string {
+  return `${type}|${gangs ?? 1}|${type === "wypustAGD" ? (agdLetter ?? "A") : ""}`;
+}
+
+/**
+ * Pozycje szablonu, których w pomieszczeniu jeszcze NIE MA — po typie, wariancie gniazda
+ * (pojedyncze / podwójne) i literze wypustu AGD.
+ *
+ * Szablon dokładał wcześniej cały komplet bez względu na to, co już stoi, a komunikat
+ * obiecywał „uzupełnienie”. W gotowej kuchni dawało to drugą oprawę, drugi łącznik
+ * i drugie wypusty P/Z/I — czyli trzy zbędne obwody w rozdzielnicy (R2 z audytu
+ * Instalacji 11.11.2026). Stojąca sztuka „zalicza” jedną sztukę pozycji o tym samym
+ * wariancie; gniazdo pojedyncze nie zastępuje podwójnego, bo to inny punkt w kosztorysie.
+ */
+export function brakujaceWSzablonie(typ: RoomType, room: RoomShape, elements: InstallationElement[]): PozycjaSzablonu[] {
+  const stoi = new Map<string, number>();
+  for (const e of elements) {
+    if (e.floor !== room.floor) continue;
+    if (e.roomId !== undefined ? e.roomId !== room.id : e.room !== room.name) continue;
+    const k = wariantPozycji(e.type, e.gangs, e.agdLetter);
+    stoi.set(k, (stoi.get(k) ?? 0) + 1);
+  }
+  const wynik: PozycjaSzablonu[] = [];
+  for (const p of SZABLONY[typ] ?? []) {
+    const k = wariantPozycji(p.type, p.gangs, p.agdLetter);
+    const zaliczone = Math.min(p.ile, stoi.get(k) ?? 0);
+    stoi.set(k, (stoi.get(k) ?? 0) - zaliczone);
+    if (p.ile > zaliczone) wynik.push({ ...p, ile: p.ile - zaliczone });
+  }
+  return wynik;
+}
+
+/** Opis listy pozycji szablonu, np. „2 × Gniazdo 230 V podwójne, Wypust AGD (Z)”. */
+export function opisPozycji(pozycje: PozycjaSzablonu[]): string {
   const nazwa = (p: PozycjaSzablonu) => {
     const etykieta = ELEMENT_TYPES[p.type].label;
     const wariant = p.gangs === 2 ? " podwójne" : "";
@@ -195,9 +232,10 @@ export interface KontekstSzablonu {
  *   jak przy stawianiu ręcznym (`snapElementToWall`), i odsunięta od sąsiadów.
  */
 export function elementySzablonu(typ: RoomType, ctx: KontekstSzablonu): InstallationElement[] {
-  const pozycje = SZABLONY[typ];
   const { room, walls, roomShapes, openings, skalaSymboli } = ctx;
-  if (!pozycje || room.points.length < 3) return [];
+  // Tylko to, czego w pokoju jeszcze nie ma — patrz `brakujaceWSzablonie`.
+  const pozycje = brakujaceWSzablonie(typ, room, ctx.elements);
+  if (!pozycje.length || room.points.length < 3) return [];
   const mpu = ctx.mpu && ctx.mpu > 0 ? ctx.mpu : MANUAL_DRAW_SCALE_MPU;
   const jednostek = (m: number) => m / mpu;
   const noweId = ctx.noweId ?? (() => crypto.randomUUID());

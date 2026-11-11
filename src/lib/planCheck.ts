@@ -384,6 +384,48 @@ export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInpu
     });
   }
 
+  // --- zdublowany osprzęt (R14 z audytu Instalacji 11.11.2026) -------------------
+  // Litera wypustu AGD i jego opis (`note`, nazwa odbiornika) mówią, KTÓRY to odbiornik,
+  // a każdy wypust to osobny obwód. Dwa wypusty z tą samą literą I tym samym opisem
+  // w jednej kuchni to prawie zawsze pomyłka (podwójne wklejenie, szablon), która
+  // dokłada zbędny obwód B16 do rozdzielnicy i kosztorysu. Ta sama litera przy różnych
+  // opisach („Zmywarka", „Piekarnik") to dwa różne odbiorniki — tak je rozróżnia też
+  // nazwa obwodu w `computeCircuits`.
+  const agdPoPokoju = new Map<string, InstallationElement[]>();
+  for (const e of elements) {
+    if (e.type !== "wypustAGD") continue;
+    const k = `${e.roomId ?? e.room}|${e.agdLetter || "A"}|${e.note.trim().toLowerCase()}`;
+    agdPoPokoju.set(k, [...(agdPoPokoju.get(k) ?? []), e]);
+  }
+  const powtorzoneAgd = [...agdPoPokoju.values()].filter((g) => g.length > 1);
+  if (powtorzoneAgd.length > 0) {
+    out.push({
+      rule: "agd-ta-sama-litera",
+      level: "warn",
+      title: "Wypusty AGD z tą samą literą w jednym pomieszczeniu",
+      detail: `${lista(powtorzoneAgd.map((g) => `${g[0].room}: ${g.length} × (${g[0].agdLetter || "A"}${g[0].note.trim() ? `, ${g[0].note.trim()}` : ""})`))} — każdy wypust to osobny obwód w rozdzielnicy. Jeśli to dwa różne odbiorniki, nadaj im różne litery albo opisy; jeśli to pomyłka, usuń nadmiarowy.`,
+      elementIds: powtorzoneAgd.flat().map((e) => e.id),
+    });
+  }
+
+  // Dwa takie same symbole w jednym punkcie — na rysunku wyglądają jak jeden, a liczą
+  // się podwójnie w obwodach, zestawieniu i kosztorysie.
+  const jedenNaDrugim: InstallationElement[] = [];
+  elements.forEach((a, i) => {
+    if (jedenNaDrugim.includes(a)) return;
+    const kopie = elements.slice(i + 1).filter((b) => b.type === a.type && Math.hypot(a.x - b.x, a.y - b.y) < 0.5);
+    if (kopie.length) jedenNaDrugim.push(a, ...kopie.filter((b) => !jedenNaDrugim.includes(b)));
+  });
+  if (jedenNaDrugim.length > 0) {
+    out.push({
+      rule: "elementy-jeden-na-drugim",
+      level: "warn",
+      title: `Elementy postawione jeden na drugim (${jedenNaDrugim.length})`,
+      detail: `${lista([...new Set(jedenNaDrugim.map(opis))])} — w tym samym miejscu stoi kilka takich samych symboli. Na rysunku widać jeden, ale w obwodach i kosztorysie liczą się wszystkie. Usuń nadmiarowe albo rozsuń je.`,
+      elementIds: jedenNaDrugim.map((e) => e.id),
+    });
+  }
+
   // --- podsumowanie ---------------------------------------------------------------
   // Ten sam wzorzec co w rozdzielnicy: brak błędów i ostrzeżeń to też wynik i trzeba
   // go pokazać, inaczej pusta lista czyta się jak niedziałające narzędzie.
