@@ -106,6 +106,19 @@ let znaneUpdatedAt: string | null = null;
  *  praca znika bez sladu. */
 let znaneUpdatedAtProtokoly: string | null = null;
 
+/** Pod tym kluczem `wczytajPrzyklad` zostawia id slotu projektu, który był otwarty
+ *  przed przykładem — `zakonczPrzyklad` do niego wraca. */
+const KLUCZ_PRZED_PRZYKLADEM = "pomocnikelektryka_przed_przykladem";
+
+/** Powiązanie projektu z chmurą sprzed wczytania przykładu — `zakonczPrzyklad`
+ *  przywraca je razem z projektem. Tylko w pamięci, jak samo `cloudId`. */
+let chmuraPrzedPrzykladem: {
+  cloudId: string | null;
+  lastCloudSavedJson: string | null;
+  znaneUpdatedAt: string | null;
+  ostatniaZapisanaNazwa: string | null;
+} | null = null;
+
 function loadStoredSession(): Session | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -455,6 +468,10 @@ interface ProjectState {
    *  a moduł z wybranym przykładem dociąga się dopiero na kliknięcie (dynamiczny
    *  `import()` w rejestrze). */
   wczytajPrzyklad: (id: PrzykladId) => Promise<void>;
+  /** Wyjście z przykładu („Zacznij własny projekt" na pasku przykładu): powrót do
+   *  projektu, który był otwarty przed wczytaniem przykładu, a gdy go nie ma — pusty
+   *  projekt jak po `resetProject`. Patrz `wczytajPrzyklad`. */
+  zakonczPrzyklad: () => void;
 
   /**
    * Ile elementów dostało poprawione przypisanie do pomieszczenia przy ostatnim
@@ -1277,7 +1294,34 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   wczytajPrzyklad: async (id) => {
     const { zbudujPrzyklad } = await import("@/lib/demo");
-    get().loadProjectPayload(await zbudujPrzyklad(id));
+    const przyklad = await zbudujPrzyklad(id);
+    /**
+     * Przykład dostaje WŁASNY slot, a bieżący projekt zostaje na liście nietknięty.
+     *
+     * Ekran startowy z przyciskiem „Zobacz gotowy przykład" pokazuje się przy pustym
+     * RZUCIE — ale projekt z pustym rzutem bywa pełen danych: protokoły pomiarowe,
+     * nagłówek dokumentów, cennik. Wczytanie wprost do bieżącego slotu nadpisywało je
+     * bez pytania, a wyjście z przykładu dokańczało dzieła (R1 z audytu 11.11.2026).
+     *
+     * Ta sama kolejność co w `resetProject`: najpierw domknięcie zapisu opuszczanego
+     * projektu, potem przestawienie wskaźnika. Id poprzedniego slotu trafia do pamięci
+     * przeglądarki, nie tylko do zmiennej — po odświeżeniu strony w trakcie oglądania
+     * wyjście z przykładu dalej ma dokąd wrócić. Przykład wczytany Z przykładu nie
+     * nadpisuje tego wskazania: wraca się do pracy użytkownika, nie do innego przykładu.
+     */
+    if (!get().projektPrzykladowy) {
+      zapiszTerazLokalnie();
+      try {
+        const poprzedni = biezacyId(localStorage);
+        if (poprzedni) localStorage.setItem(KLUCZ_PRZED_PRZYKLADEM, poprzedni);
+        else localStorage.removeItem(KLUCZ_PRZED_PRZYKLADEM);
+      } catch {
+        // Bez dostępu do pamięci nie ma też czego nadpisać — nic się tu nie zapisuje.
+      }
+      chmuraPrzedPrzykladem = { cloudId: get().cloudId, lastCloudSavedJson, znaneUpdatedAt, ostatniaZapisanaNazwa };
+      przelaczNaNowyProjektLokalny();
+    }
+    get().loadProjectPayload(przyklad);
     // Nowy, świeżo wczytany przykład nie jest ŻADNYM wierszem w chmurze. Bez tego
     // autozapis w tle nadpisałby projekt, który był otwarty wcześniej (patrz ta sama
     // ostrożność w `resetProject`).
@@ -1285,6 +1329,56 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     znaneUpdatedAt = null;
     ostatniaZapisanaNazwa = null;
     set({ cloudId: null, lastCloudSaveAt: null, cloudSaveError: null, konfliktChmury: null });
+  },
+
+  zakonczPrzyklad: () => {
+    let poprzedni: string | null;
+    let przyklad: string | null;
+    try {
+      poprzedni = localStorage.getItem(KLUCZ_PRZED_PRZYKLADEM);
+      localStorage.removeItem(KLUCZ_PRZED_PRZYKLADEM);
+      przyklad = biezacyId(localStorage);
+      if (poprzedni && poprzedni !== przyklad && localStorage.getItem(kluczProjektu(poprzedni)) === null) poprzedni = null;
+    } catch {
+      poprzedni = null;
+      przyklad = null;
+    }
+    const chmura = chmuraPrzedPrzykladem;
+    chmuraPrzedPrzykladem = null;
+    // Nie ma dokąd wrócić (projekt skasowany w międzyczasie z listy, przykład sprzed
+    // tej poprawki, brak dostępu do pamięci) — zostaje dotychczasowe wyjście.
+    if (!poprzedni || !przyklad || poprzedni === przyklad) {
+      get().resetProject();
+      return;
+    }
+    get().otworzProjektLokalny(poprzedni);
+    let wrocilismy: boolean;
+    try {
+      wrocilismy = biezacyId(localStorage) === poprzedni;
+    } catch {
+      wrocilismy = false;
+    }
+    if (!wrocilismy) {
+      // Slot poprzedniego projektu nie dał się wczytać (`otworzProjektLokalny` zostawia
+      // wtedy wszystko, jak było). Zostaje on na liście nietknięty; z przykładu
+      // wychodzimy tak jak dawniej.
+      get().resetProject();
+      return;
+    }
+    // Slot przykładu znika razem z wyjściem: to był podgląd, nie projekt użytkownika,
+    // i nie ma czego trzymać na liście „Moje projekty".
+    try {
+      usunProjekt(localStorage, przyklad);
+    } catch {
+      // Zostanie na liście jako zwykły wpis — to kosmetyka, nie utrata danych.
+    }
+    // Powiązanie z chmurą żyje tylko w pamięci karty, więc po odświeżeniu strony go nie
+    // ma i tak. Bez odświeżenia powrót bez niego założyłby w chmurze DRUGI wiersz
+    // projektu, dlatego wraca razem z warunkiem wykrywania konfliktu (`znaneUpdatedAt`).
+    lastCloudSavedJson = chmura?.lastCloudSavedJson ?? null;
+    znaneUpdatedAt = chmura?.znaneUpdatedAt ?? null;
+    ostatniaZapisanaNazwa = chmura?.ostatniaZapisanaNazwa ?? null;
+    set({ cloudId: chmura?.cloudId ?? null, lastCloudSaveAt: null, cloudSaveError: null, konfliktChmury: null });
   },
 
   setProtocolState: (key, patch) =>
