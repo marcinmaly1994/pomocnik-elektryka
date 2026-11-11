@@ -96,8 +96,8 @@ test("„Zacznij własny projekt” zostawia pusty plan i gasi pasek", async ({ 
 
   await expect(pasekPrzykladu(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Kosztorys", exact: true })).toBeVisible();
-  // Wyjście z przykładu to `resetProject`, więc wracamy do punktu zero — łącznie
-  // z ekranem startowym, bo żaden z faktów trzymających go z dala już nie zachodzi.
+  // Wyjście z przykładu wraca do projektu sprzed niego (`zakonczPrzyklad`) — tu
+  // świeżego, więc do punktu zero, łącznie z ekranem startowym.
   await expect(ekranStartowy(page)).toBeVisible();
 });
 
@@ -118,6 +118,63 @@ test("pusty kosztorys nie wystawia rachunku za dom, którego nie ma", async ({ p
   // komunikatem o braku.
   await page.getByRole("button", { name: "Wróć do Instalacji" }).click();
   await expect(ekranStartowy(page)).toBeVisible();
+});
+
+/**
+ * R1 z audytu Instalacji 11.11.2026: ekran startowy (a z nim „Zobacz gotowy przykład")
+ * pokazuje się przy PUSTYM RZUCIE — a projekt z pustym rzutem wcale nie musi być pusty.
+ * Elektryk, który wypełnił tylko protokół, ma dokładnie taki projekt. Wczytanie
+ * przykładu nadpisywało jego slot, a wyjście z przykładu dokańczało dzieła — dane
+ * znikały z przeglądarki bez śladu.
+ */
+async function wpiszAdresWProtokolach(page: Page, adres: string) {
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+  await page.getByLabel("Adres obiektu").fill(adres);
+}
+
+async function wyjdzZPrzykladu(page: Page) {
+  await page.getByRole("button", { name: "Zacznij własny projekt" }).click();
+  await page.getByRole("button", { name: "Tak, zacznij własny" }).click();
+  await expect(pasekPrzykladu(page)).toHaveCount(0);
+}
+
+test("przykład nie kasuje projektu z pustym rzutem — wyjście z niego wraca do danych", async ({ page }) => {
+  await swiezyProjekt(page);
+  await wpiszAdresWProtokolach(page, "ul. Testowa 1");
+
+  await page.getByRole("button", { name: "Instalacja", exact: true }).click();
+  await wczytajPrzyklad(page);
+  await wyjdzZPrzykladu(page);
+
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+  await expect(page.getByLabel("Adres obiektu")).toHaveValue("ul. Testowa 1");
+});
+
+test("powrót z przykładu działa także po odświeżeniu strony w trakcie oglądania", async ({ page }) => {
+  await swiezyProjekt(page);
+  await wpiszAdresWProtokolach(page, "ul. Testowa 2");
+
+  await page.getByRole("button", { name: "Instalacja", exact: true }).click();
+  await wczytajPrzyklad(page);
+  // Autozapis chodzi z opóźnieniem 600 ms — odświeżenie przed nim nie sprawdzałoby
+  // niczego, bo przykład w ogóle nie trafiłby jeszcze do pamięci przeglądarki.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const id = localStorage.getItem("pomocnikelektryka_projekt_biezacy");
+        return id ? (localStorage.getItem(`pomocnikelektryka_projekt_${id}`) ?? "").includes('"projektPrzykladowy":true') : false;
+      })
+    )
+    .toBe(true);
+  await page.reload();
+  await expect(pasekPrzykladu(page)).toBeVisible();
+  await wyjdzZPrzykladu(page);
+
+  await page.getByRole("button", { name: "Protokoły pomiarowe", exact: true }).click();
+  await expect(page.getByLabel("Adres obiektu")).toHaveValue("ul. Testowa 2");
+  // Slot przykładu nie zostaje na liście projektów — wyszło się z niego, a nie odłożyło.
+  const projekty = await page.evaluate(() => JSON.parse(localStorage.getItem("pomocnikelektryka_projekty") ?? "[]").length);
+  expect(projekty).toBe(1);
 });
 
 test("pasek przykładu NIE wchodzi na Kalkulatory i Protokoły", async ({ page }) => {

@@ -13,14 +13,14 @@ import { Button } from "@/components/ui/button";
  * ogląda cudze mieszkanie. Stąd też wyjście („Zacznij własny projekt") jest dostępne
  * z każdej z nich, a nie tylko z tej, w której przykład się wczytało.
  *
- * Wyjście prowadzi przez to samo potwierdzenie co „Nowy projekt" w nagłówku, bo robi
- * dokładnie to samo — `resetProject`. Okno jest tu jednak KRÓTSZE i mówi co innego:
- * przy kasowaniu przykładu nie ma czego żałować, więc straszenie „tej operacji nie da
- * się cofnąć" byłoby nie na miejscu.
+ * Wyjście (`zakonczPrzyklad`) wraca do projektu, który był otwarty przed przykładem —
+ * przykład ma własny slot, więc niczego nie nadpisał (R1 z audytu 11.11.2026). Okno
+ * jest krótsze niż przy „Nowym projekcie": przy kasowaniu przykładu nie ma czego
+ * żałować, więc straszenie „tej operacji nie da się cofnąć" byłoby nie na miejscu.
  */
 export function PasekPrzykladu() {
   const projektPrzykladowy = useProjectStore((s) => s.projektPrzykladowy);
-  const resetProject = useProjectStore((s) => s.resetProject);
+  const zakonczPrzyklad = useProjectStore((s) => s.zakonczPrzyklad);
 
   if (!projektPrzykladowy) return null;
 
@@ -46,7 +46,7 @@ export function PasekPrzykladu() {
         </DialogTrigger>
         <DialogContent title="Zacząć własny projekt?">
           <p className="mb-4 text-sm text-slate-600">
-            Przykład zniknie i wrócisz do pustego planu. Możesz go wczytać ponownie w każdej chwili.
+            Przykład zniknie i wrócisz do swojego projektu. Przykład możesz wczytać ponownie w każdej chwili.
           </p>
           <div className="flex justify-end gap-2">
             <DialogClose asChild>
@@ -55,7 +55,7 @@ export function PasekPrzykladu() {
               </Button>
             </DialogClose>
             <DialogClose asChild>
-              <Button variant="copper" size="sm" onClick={resetProject}>
+              <Button variant="copper" size="sm" onClick={zakonczPrzyklad}>
                 Tak, zacznij własny
               </Button>
             </DialogClose>
