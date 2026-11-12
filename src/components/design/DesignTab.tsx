@@ -40,8 +40,10 @@ import {
   useActiveFloorOpenings,
   useActiveFloorRoomShapes,
   useActiveFloorWalls,
+  useOpcjeDoboru,
   useProjectStore,
 } from "@/store/useProjectStore";
+import { computeSizedCircuits } from "@/lib/panel/project";
 import type { Circuit, ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { computeSanitaryZones } from "@/lib/elements";
@@ -2007,12 +2009,23 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * liczą Rozdzielnica, Schemat i Kosztorys. Karta elementu pokazuje go także przy
    * „auto" (R6 z audytu Instalacji 11.11.2026): wcześniej skutek przypisania było
    * widać dopiero po przejściu do Rozdzielnicy.
+   *
+   * Zabezpieczenie i przewód — PO DOBORZE (`computeSizedCircuits`, z tymi samymi
+   * opcjami co Rozdzielnica, Schemat i Kosztorys), nie wartości wstępne z
+   * `computeCircuits`. Te drugie różniły się przy odbiornikach z własnym obwodem:
+   * karta ładowarki EV mówiła „C25 3-faz. · 5x4", a Rozdzielnica „B16 · 5x2,5".
+   * Liczone tylko przy zaznaczonym elemencie — dobór szacuje trasy, a karta jest
+   * jedynym odbiorcą tej mapy.
    */
+  const opcjeDoboru = useOpcjeDoboru();
+  const zaznaczonyElement = selected?.kind === "el";
   const obwodElementu = useMemo(() => {
     const mapa = new Map<string, Circuit>();
-    for (const c of computeCircuits(wszystkieElementy, wszystkiePomieszczenia)) for (const e of c.elements) mapa.set(e.id, c);
+    if (!zaznaczonyElement) return mapa;
+    for (const c of computeSizedCircuits(wszystkieElementy, opcjeDoboru, wszystkiePomieszczenia).circuits)
+      for (const e of c.elements) mapa.set(e.id, c);
     return mapa;
-  }, [wszystkieElementy, wszystkiePomieszczenia]);
+  }, [zaznaczonyElement, wszystkieElementy, wszystkiePomieszczenia, opcjeDoboru]);
   const panelTryb = useProjectStore((s) => s.panelTryb);
 
   const uzyteNumeryObwodow = useMemo(() => {
