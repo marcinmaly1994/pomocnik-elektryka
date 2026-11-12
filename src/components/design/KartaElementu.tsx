@@ -1,5 +1,5 @@
-import { Pencil, RotateCw, Trash2 } from "lucide-react";
-import type { InstallationElement } from "@/types";
+import { ArrowRight, Pencil, RotateCw, Trash2 } from "lucide-react";
+import type { Circuit, InstallationElement } from "@/types";
 import { ELEMENT_TYPES, libSubtitle } from "@/lib/elements";
 import { formatLiczba } from "@/lib/liczby";
 import { maWlasnyObwodZDefinicji, wchodziDoObwodu } from "@/lib/panel/circuits";
@@ -24,6 +24,9 @@ export function KartaElementu({
   onObroc,
   onUsun,
   onObwod,
+  obwod,
+  panelReczny = false,
+  onPokazWRozdzielnicy,
 }: {
   element: InstallationElement;
   uzyteNumery: UzytyNumer[];
@@ -31,6 +34,12 @@ export function KartaElementu({
   onObroc: () => void;
   onUsun: () => void;
   onObwod: (numer: number | undefined) => void;
+  /** Obwód, do którego element trafił (także przy „auto") — patrz `obwodElementu` w DesignTab. */
+  obwod?: Circuit;
+  /** Rozdzielnica prowadzona ręcznie: aparaty mogą się różnić od obwodów z rzutu. */
+  panelReczny?: boolean;
+  /** Przejście do zakładki Rozdzielnica — gdy jest dostępne. */
+  onPokazWRozdzielnicy?: () => void;
 }) {
   const def = ELEMENT_TYPES[element.type];
   const etykieta = def?.label ?? element.type;
@@ -49,11 +58,29 @@ export function KartaElementu({
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt className="text-slate-400">Pomieszczenie</dt>
         <dd className="text-ink">{element.room || "bez pomieszczenia"}</dd>
-        {element.dedicated && (
+        {/* Obwód, do którego element NAPRAWDĘ trafił — także przy „auto" (R6 z audytu
+            Instalacji 11.11.2026). Wcześniej stało tu samo „dedykowany (AGD)", a skutek
+            przypisania było widać dopiero w Rozdzielnicy. */}
+        {obwod ? (
           <>
             <dt className="text-slate-400">Obwód</dt>
-            <dd className="text-ink">dedykowany (AGD)</dd>
+            <dd className="text-ink" data-testid="obwod-elementu">
+              {obwod.name}
+              <span className="block pe-mono text-slate-500">
+                {obwod.breaker} · {obwod.cable}
+              </span>
+              {panelReczny && (
+                <span className="block text-slate-500">Rozdzielnica jest prowadzona ręcznie — aparaty mogą się różnić.</span>
+              )}
+            </dd>
           </>
+        ) : (
+          element.dedicated && (
+            <>
+              <dt className="text-slate-400">Obwód</dt>
+              <dd className="text-ink">dedykowany (AGD)</dd>
+            </>
+          )
         )}
         {element.heightM !== undefined && (
           <>
@@ -68,6 +95,11 @@ export function KartaElementu({
           </>
         )}
       </dl>
+      {obwod && onPokazWRozdzielnicy && (
+        <button onClick={onPokazWRozdzielnicy} className="flex items-center gap-1 text-xs font-medium text-blueprint hover:underline [@media(pointer:coarse)]:min-h-8">
+          Pokaż w rozdzielnicy <ArrowRight size={12} />
+        </button>
+      )}
 
       <div className="flex flex-wrap gap-1.5">
         <Button variant="secondary" size="sm" onClick={onEdytuj} className={przycisk}>

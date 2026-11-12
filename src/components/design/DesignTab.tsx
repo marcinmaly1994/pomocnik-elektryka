@@ -42,7 +42,7 @@ import {
   useActiveFloorWalls,
   useProjectStore,
 } from "@/store/useProjectStore";
-import type { ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
+import type { Circuit, ElementType, InstallationElement, OpeningKind, Point, RoomType, Wall } from "@/types";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { computeSanitaryZones } from "@/lib/elements";
 import { computeLightGroups } from "@/lib/lightGroups";
@@ -129,7 +129,7 @@ import { ScaleCalibrationTool } from "./ScaleCalibrationTool";
 import { EditorToolbar } from "./EditorToolbar";
 import { EditorStatusBar } from "./EditorStatusBar";
 import { ToolRail } from "./ToolRail";
-import { WyborObwodu } from "./WyborObwodu";
+import { WyborObwodu, WyborObwoduGrupy } from "./WyborObwodu";
 import { ElementLibrary } from "./ElementLibrary";
 import { RoomPanel, WierszPomieszczenia } from "./RoomPanel";
 import { PlanCheckPanel } from "./PlanCheckPanel";
@@ -2002,6 +2002,19 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * bywa zamierzone — jeden pion), ale są oznaczone, żeby było to wybór, a nie
    * przypadek.
    */
+  /**
+   * Obwód, do którego trafił każdy element — te same obwody CAŁEGO budynku, które
+   * liczą Rozdzielnica, Schemat i Kosztorys. Karta elementu pokazuje go także przy
+   * „auto" (R6 z audytu Instalacji 11.11.2026): wcześniej skutek przypisania było
+   * widać dopiero po przejściu do Rozdzielnicy.
+   */
+  const obwodElementu = useMemo(() => {
+    const mapa = new Map<string, Circuit>();
+    for (const c of computeCircuits(wszystkieElementy, wszystkiePomieszczenia)) for (const e of c.elements) mapa.set(e.id, c);
+    return mapa;
+  }, [wszystkieElementy, wszystkiePomieszczenia]);
+  const panelTryb = useProjectStore((s) => s.panelTryb);
+
   const uzyteNumeryObwodow = useMemo(() => {
     const naTej = new Set<number>();
     for (const e of elements) if (typeof e.obwod === "number") naTej.add(e.obwod);
@@ -2604,6 +2617,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             </Button>
           </div>
 
+          {/* R5 z audytu Instalacji 11.11.2026: numer obwodu dla całej grupy — do tej
+              pory tylko pod prawym przyciskiem. */}
+          <div className="w-full" data-testid="obwod-grupy">
+            <WyborObwoduGrupy
+              wariant="formularz"
+              zaznaczone={elements.filter((e) => multiSelected.includes(e.id))}
+              uzyte={uzyteNumeryObwodow}
+              onWybierz={(n) => przypiszObwod(multiSelected, n)}
+            />
+          </div>
+
           <span className="text-xs text-slate-400">Strzałki przesuwają o 1 jedn., z Shiftem o kratkę.</span>
         </div>
       )}
@@ -3011,6 +3035,9 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             setSelected(null);
           }}
           onObwod={(n) => przypiszObwod([el.id], n)}
+          obwod={obwodElementu.get(el.id)}
+          panelReczny={panelTryb === "reczny"}
+          onPokazWRozdzielnicy={nastepnyKrok?.tytul === "Rozdzielnica" ? nastepnyKrok.przejdz : undefined}
         />
       );
     })()
@@ -4380,37 +4407,15 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 >
                   <Trash2 size={14} /> Usuń zaznaczone
                 </button>
-                {/* Przypisanie GRUPOWE jest tu najważniejsze: obwód składa się
-                    z kilku punktów, więc klikanie ich po jednym byłoby karą za
-                    korzystanie z funkcji. */}
-                {(() => {
-                  // Elementy spoza obwodów (łączniki, teletechnika, rozdzielnica…) w ogóle
-                  // się tu nie liczą — patrz `wchodziDoObwodu`. Gdy zostaną same takie,
-                  // wyboru nie ma wcale: nie ma czemu nadać numeru ani czego wyjaśniać.
-                  const zaznaczone = elements.filter((e) => multiSelected.includes(e.id) && wchodziDoObwodu(e));
-                  if (zaznaczone.length === 0) return null;
-                  const doPrzypisania = zaznaczone.filter((e) => !maWlasnyObwodZDefinicji(e));
-                  if (doPrzypisania.length === 0) {
-                    return (
-                      <WyborObwodu
-                        uzyte={uzyteNumeryObwodow}
-                        onWybierz={() => {}}
-                        zablokowane="Żaden z zaznaczonych odbiorników nie może dzielić obwodu — ładowarka EV, gniazdo trójfazowe, wypust AGD i gniazdo dedykowane mają własny z definicji."
-                      />
-                    );
-                  }
-                  const numery = new Set(doPrzypisania.map((e) => e.obwod));
-                  return (
-                    <WyborObwodu
-                      numerAktualny={numery.size === 1 ? [...numery][0] : undefined}
-                      uzyte={uzyteNumeryObwodow}
-                      onWybierz={(n) => {
-                        przypiszObwod(multiSelected, n);
-                        zaznaczenie.zamknijMenu();
-                      }}
-                    />
-                  );
-                })()}
+                {/* Ten sam wybór co w panelu zaznaczenia — patrz `WyborObwoduGrupy`. */}
+                <WyborObwoduGrupy
+                  zaznaczone={elements.filter((e) => multiSelected.includes(e.id))}
+                  uzyte={uzyteNumeryObwodow}
+                  onWybierz={(n) => {
+                    przypiszObwod(multiSelected, n);
+                    zaznaczenie.zamknijMenu();
+                  }}
+                />
               </>
             ) : contextMenu.kind === "wall" ? (
               <>
