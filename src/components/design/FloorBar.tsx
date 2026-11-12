@@ -39,7 +39,7 @@ function DeleteFloorButton({ name, elementCount, onConfirm }: { name: string; el
           {elementCount > 0
             ? `Razem z nią zniknie ${zLiczba(elementCount, "element", "elementy", "elementów")} oraz narysowane na niej ściany i pomieszczenia.`
             : "Kondygnacja jest pusta — zniknie razem z narysowanymi na niej ścianami i pomieszczeniami."}{" "}
-          Tej operacji nie da się cofnąć.
+          Ctrl+Z tego nie cofnie, ale przed usunięciem zapiszemy wersję projektu — wrócisz do niej przez „Projekty” → „Wersje projektu…”.
         </p>
         <div className="flex justify-end gap-2">
           <DialogClose asChild>

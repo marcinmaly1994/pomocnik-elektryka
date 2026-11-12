@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen, wczytajPrzyklad } from "./_flow";
+import { otworzMenuPaska, skipEntryScreen, wczytajPrzyklad } from "./_flow";
 
 /**
  * Kadr, w którym otwiera się rysunek.
@@ -148,6 +148,8 @@ for (const [nazwa, okno] of [
         return { skala: st.scaleX(), x: st.x(), y: st.y() };
       });
     const poOtwarciu = await scena();
+    // Na telefonie „Dopasuj" jest w menu „Więcej" paska (R7 z audytu Instalacji 11.11.2026).
+    if (okno.width < 768) await otworzMenuPaska(page, "Więcej");
     await page.getByRole("button", { name: "Dopasuj widok do planu" }).first().click();
     await page.waitForTimeout(300);
     const poDopasowaniu = await scena();

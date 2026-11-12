@@ -1,6 +1,6 @@
 import type Konva from "konva";
 import { test, expect, type Page } from "@playwright/test";
-import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska, odslonNarzedziaRysowania } from "./_flow";
+import { skipEntryScreen, otworzMenuPaska, zamknijMenuPaska, odslonNarzedziaRysowania, wlaczPelnyEkran } from "./_flow";
 
 /**
  * Tryb pełnoekranowy: plan dostaje całe okno pomniejszone o dwa niskie paski
@@ -504,7 +504,7 @@ test.describe("telefon w pełnym ekranie", () => {
     await page.reload();
     await skipEntryScreen(page);
     await page.getByRole("button", { name: "Wstaw Element", exact: true }).click();
-    await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+    await wlaczPelnyEkran(page);
     await page.getByRole("button", { name: "Pokaż narzędzia rysowania" }).tap();
 
     const naglowek = page.getByTestId("naglowek-narzedzia");

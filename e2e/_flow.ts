@@ -36,7 +36,7 @@ export async function skipEntryScreen(page: Page): Promise<void> {
  * Bezpieczne do powtórzenia: gdy panel już stoi otwarty, nie klikamy drugi raz
  * (co by go zamknęło).
  */
-export async function otworzMenuPaska(page: Page, etykieta: "Plan" | "Rysunek"): Promise<void> {
+export async function otworzMenuPaska(page: Page, etykieta: "Plan" | "Rysunek" | "Więcej"): Promise<void> {
   const przycisk = page.getByRole("button", { name: etykieta, exact: true });
   if ((await przycisk.getAttribute("aria-expanded")) !== "true") await przycisk.click();
 }
@@ -49,6 +49,17 @@ export async function otworzMenuPaska(page: Page, etykieta: "Plan" | "Rysunek"):
  * zaraz sięga po element z listy, trzeba go domknąć jawnie. Escape, bo to ta sama
  * droga, którą ma użytkownik, i nie wymaga trafiania w żaden konkretny piksel.
  */
+/**
+ * Włącza pełny ekran edytora. Na monitorze przycisk stoi wprost w pasku, na telefonie
+ * (poniżej 768 px) w menu „Więcej" — R7 z audytu Instalacji 11.11.2026: na końcu
+ * przewijanego paska wypadał za krawędź ekranu.
+ */
+export async function wlaczPelnyEkran(page: Page): Promise<void> {
+  const wPasku = page.getByRole("button", { name: "Projektowanie na pełnym ekranie" });
+  if ((await page.viewportSize()!.width) < 768) await otworzMenuPaska(page, "Więcej");
+  await wPasku.click();
+}
+
 export async function zamknijMenuPaska(page: Page): Promise<void> {
   await page.keyboard.press("Escape");
 }

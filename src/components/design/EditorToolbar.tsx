@@ -1,12 +1,12 @@
 import { type ReactNode } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { KATEGORIE_OSPRZETU } from "@/lib/elements";
-import { ArrowUpFromLine, Cable, DraftingCompass, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
+import { ArrowUpFromLine, Cable, DraftingCompass, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, MoreHorizontal, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { FloorManagement, FloorTabs } from "./FloorBar";
 import { PasekMenu } from "./PasekMenu";
-import { useSzerokieOkno } from "./pasekMenuKontekst";
+import { useSzerokieOkno, useZamknijPasekMenu } from "./pasekMenuKontekst";
 
 /**
  * JEDEN pasek edytora, w JEDNYM rzędzie: zakładki kondygnacji, dwa rozwijane menu
@@ -119,6 +119,54 @@ const ZOOM_STEP = 0.1;
 
 /** Pionowa kreska rozdzielająca grupy kontrolek. Znika na wąskim ekranie, gdzie pasek
  *  i tak się zawija i kreska nie rozdzielałaby już niczego sensownego. */
+/**
+ * Zawartość menu „Więcej" na telefonie (R7) — te same akcje co ikony w pasku na
+ * monitorze, z tymi samymi nazwami dostępnościowymi, tylko z podpisami: w menu jest
+ * na nie miejsce, a ikona DXF bez podpisu nic laikowi nie mówi.
+ */
+function MenuWiecej({
+  pelnyEkran,
+  onTogglePelnyEkran,
+  onDopasuj,
+  onPdf,
+  onDxf,
+}: {
+  pelnyEkran: boolean;
+  onTogglePelnyEkran: () => void;
+  onDopasuj: () => void;
+  onPdf?: () => void;
+  onDxf?: () => void;
+}) {
+  const zamknij = useZamknijPasekMenu();
+  const pozycja = "flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-ink hover:bg-slate-50 min-h-11";
+  const wykonaj = (akcja: () => void) => () => {
+    zamknij();
+    akcja();
+  };
+  return (
+    <div className="flex flex-col">
+      {!pelnyEkran && (
+        <button className={pozycja} onClick={wykonaj(onTogglePelnyEkran)} aria-label="Projektowanie na pełnym ekranie">
+          <Maximize2 size={15} className="text-slate-500" /> Pełny ekran
+        </button>
+      )}
+      <button className={pozycja} onClick={wykonaj(onDopasuj)} aria-label="Dopasuj widok do planu">
+        <Scan size={15} className="text-slate-500" /> Dopasuj widok do planu
+      </button>
+      {onPdf && (
+        <button className={pozycja} onClick={wykonaj(onPdf)} aria-label="Rzut do PDF">
+          <FileText size={15} className="text-slate-500" /> Rzut do PDF
+        </button>
+      )}
+      {onDxf && (
+        <button className={pozycja} onClick={wykonaj(onDxf)} aria-label="Rzut do DXF">
+          <DraftingCompass size={15} className="text-slate-500" /> Rzut do DXF
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Separator() {
   return <span className="hidden h-5 w-px shrink-0 bg-border sm:block" aria-hidden="true" />;
 }
@@ -220,7 +268,7 @@ export function EditorToolbar({
    * (patrz `PasekMenu`), więc przewijany pasek ich nie przycina.
    */
   return (
-    <div className="pe-bez-suwaka flex flex-nowrap items-center gap-x-2.5 gap-y-1.5 overflow-x-auto rounded-card border border-border bg-white px-2.5 py-1.5 [&>*]:shrink-0 md:flex-wrap md:overflow-visible">
+    <div className="pe-bez-suwaka flex flex-nowrap items-center gap-x-1.5 gap-y-1.5 overflow-x-auto md:gap-x-2.5 rounded-card border border-border bg-white px-2.5 py-1.5 [&>*]:shrink-0 md:flex-wrap md:overflow-visible">
       {szerokieOkno && <FloorTabs />}
 
       <PasekMenu etykieta="Plan" ikona={<SlidersHorizontal size={14} />} szerokosc={320}>
@@ -473,6 +521,30 @@ export function EditorToolbar({
 
       <Separator />
 
+      {/* R7 z audytu Instalacji 11.11.2026: na telefonie pełny ekran, PDF i DXF stały za
+          prawą krawędzią przewijanego paska (zmierzone: 377–493 px przy ekranie 375),
+          bez żadnej wskazówki, że tam są. Rząd jest pełny już bez nich — menu, cofanie
+          i powiększenie zajmują całe 341 px — więc schodzą do jednego menu „Więcej",
+          które stoi w kadrze. Na monitorze bez zmian: ikony wprost w pasku.
+          W pełnym ekranie na jego miejscu stoi wyjście — jednym dotknięciem i w kadrze
+          (na końcu rzędu wypadało za krawędź ekranu). */}
+      {!szerokieOkno && pelnyEkran && (
+        <Button variant="ghost" size="icon" onClick={onTogglePelnyEkran} title="Wyjdź z pełnego ekranu" aria-label="Wyjdź z pełnego ekranu" aria-pressed>
+          <Minimize2 size={15} />
+        </Button>
+      )}
+      {!szerokieOkno && !pelnyEkran && (
+        <PasekMenu etykieta="Więcej" ikona={<MoreHorizontal size={14} />} szerokosc={230}>
+          <MenuWiecej
+            pelnyEkran={pelnyEkran}
+            onTogglePelnyEkran={onTogglePelnyEkran}
+            onDopasuj={onDopasuj}
+            onPdf={onPdf}
+            onDxf={onDxf}
+          />
+        </PasekMenu>
+      )}
+
       <div className="flex items-center">
         <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title="Cofnij">
           <Undo2 size={15} />
@@ -526,7 +598,8 @@ export function EditorToolbar({
         >
           <Plus size={14} />
         </button>
-        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+        {szerokieOkno && <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />}
+        {szerokieOkno && (
         <button
           onClick={onDopasuj}
           aria-label="Dopasuj widok do planu"
@@ -535,10 +608,12 @@ export function EditorToolbar({
         >
           <Scan size={13} />
         </button>
+        )}
       </div>
 
       {/* Pełny ekran stoi POZA grupą powiększenia: tamta zmienia skalę rysunku,
           ta zmienia ilość miejsca, jaką rysunek dostaje. */}
+      {szerokieOkno && (
       <Button
         variant="ghost"
         size="icon"
@@ -549,17 +624,18 @@ export function EditorToolbar({
       >
         {pelnyEkran ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
       </Button>
+      )}
 
       {/* Zapis stał dotąd WYŁĄCZNIE w menu przy profilu — czyli tam, gdzie nikt nie
           zagląda w trakcie rysowania. Autozapis i tak działa w tle, ale świadome
           „zapisz teraz" musi być pod ręką: to ono daje pewność, że praca jest
           odłożona, zanim zamknie się kartę. */}
-      {onPdf && (
+      {szerokieOkno && onPdf && (
         <Button variant="ghost" size="icon" onClick={onPdf} title="Rzut do PDF — z tabliczką rysunkową i legendą symboli" aria-label="Rzut do PDF">
           <FileText size={15} />
         </Button>
       )}
-      {onDxf && (
+      {szerokieOkno && onDxf && (
         <Button
           variant="ghost"
           size="icon"

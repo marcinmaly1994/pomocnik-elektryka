@@ -88,12 +88,19 @@ test("menu „Plan” otwiera się w całości, a nie przycięte do paska", asyn
   expect(trafiony).toContain("Dodaj kondygnację");
 });
 
-test("baner „Mało miejsca na rysunek?” zniknął — pełny ekran jest w pasku", async ({ page }) => {
+test("baner „Mało miejsca na rysunek?” zniknął — pełny ekran jest w menu „Więcej” paska", async ({ page }) => {
   await start(page);
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).first().click();
   await pomiar(page);
   await expect(page.getByText("Mało miejsca na rysunek?")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Projektowanie na pełnym ekranie" })).toHaveCount(1);
+  // R7 z audytu Instalacji 11.11.2026: na telefonie pełny ekran, PDF i DXF są w menu
+  // „Więcej", które stoi w kadrze, a nie za prawą krawędzią przewijanego paska.
+  const wiecej = page.getByRole("button", { name: "Więcej", exact: true });
+  await expect(wiecej).toBeInViewport();
+  await wiecej.click();
+  for (const nazwa of ["Projektowanie na pełnym ekranie", "Rzut do PDF", "Rzut do DXF"]) {
+    await expect(page.getByRole("button", { name: nazwa })).toBeInViewport();
+  }
 });
 
 /**
