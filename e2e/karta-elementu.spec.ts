@@ -159,3 +159,46 @@ test("Escape odznacza element — karta znika, a okno edycji zamknięte Escape j
   await expect(karta).toHaveCount(0);
   await expect(page.getByTestId("panel-zaznacz")).toBeVisible();
 });
+
+test("numer obwodu dla całej grupy da się nadać z panelu, nie tylko z menu", async ({ page }) => {
+  // R5 z audytu Instalacji 11.11.2026: panel zaznaczenia miał wyrównanie, Duplikuj
+  // i Usuń, a numer obwodu dla grupy był tylko pod prawym przyciskiem.
+  await otworzPlan(page);
+  await postawGniazda(page, [
+    { x: 150, y: 150 },
+    { x: 230, y: 150 },
+  ]);
+  await page.getByTestId("zaznacz-kilka").click();
+  await klikPlan(page, 150, 150);
+  await klikPlan(page, 230, 150);
+  await expect(page.getByText("Zaznaczono: 2")).toBeVisible();
+
+  const panel = page.getByTestId("obwod-grupy");
+  await panel.getByRole("button", { name: "+ 1" }).click();
+  await expect(panel.getByRole("button", { name: "1", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const id = localStorage.getItem("pomocnikelektryka_projekt_biezacy");
+        return (JSON.parse(localStorage.getItem("pomocnikelektryka_projekt_" + id) ?? "{}").draft?.elements ?? []).map((e: { obwod?: number }) => e.obwod);
+      })
+    )
+    .toEqual([1, 1]);
+});
+
+test("karta mówi, w którym obwodzie jest element — także przy „auto”", async ({ page }) => {
+  // R6 z audytu Instalacji 11.11.2026: przy „auto" karta milczała, a skutek było
+  // widać dopiero w Rozdzielnicy.
+  await otworzPlan(page);
+  await postawGniazda(page, [{ x: 150, y: 150 }]);
+  await klikPlan(page, 150, 150);
+  const obwod = page.getByTestId("karta-elementu").getByTestId("obwod-elementu");
+  await expect(obwod).toContainText("B16");
+  await expect(obwod).toContainText("YDYp 3x2,5");
+
+  await page.getByTestId("karta-elementu").getByRole("button", { name: "+ 1" }).click();
+  await expect(obwod).toContainText("Obwód 1");
+
+  await page.getByTestId("karta-elementu").getByRole("button", { name: /Pokaż w rozdzielnicy/ }).click();
+  await expect(page.getByText(/Aparaty \(\d+\)/)).toBeVisible();
+});

@@ -1,3 +1,5 @@
+import type { InstallationElement } from "@/types";
+import { maWlasnyObwodZDefinicji, wchodziDoObwodu } from "@/lib/panel/circuits";
 /**
  * Wybór numeru obwodu — w menu pod prawym przyciskiem I w oknie edycji elementu
  * (dwuklik). Jeden komponent na obie drogi, żeby nie rozjechały się w tym, co
@@ -125,5 +127,45 @@ export function WyborObwodu({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Numer obwodu dla KILKU zaznaczonych elementów naraz — w menu pod prawym przyciskiem
+ * i w panelu zaznaczenia (R5 z audytu Instalacji 11.11.2026; wcześniej tylko w menu,
+ * a panel miał wyrównanie, Duplikuj i Usuń). Przypisanie grupowe jest tu najważniejsze:
+ * obwód składa się z kilku punktów, więc klikanie ich po jednym byłoby karą za
+ * korzystanie z funkcji.
+ *
+ * Elementy spoza obwodów (łączniki, teletechnika, rozdzielnica…) w ogóle się tu nie
+ * liczą — patrz `wchodziDoObwodu`. Gdy zostaną same takie, wyboru nie ma wcale.
+ */
+export function WyborObwoduGrupy({
+  zaznaczone,
+  uzyte,
+  onWybierz,
+  wariant = "menu",
+}: {
+  zaznaczone: InstallationElement[];
+  uzyte: UzytyNumer[];
+  onWybierz: (numer: number | undefined) => void;
+  wariant?: "menu" | "formularz";
+}) {
+  const wObwodach = zaznaczone.filter(wchodziDoObwodu);
+  if (wObwodach.length === 0) return null;
+  const doPrzypisania = wObwodach.filter((e) => !maWlasnyObwodZDefinicji(e));
+  if (doPrzypisania.length === 0) {
+    return (
+      <WyborObwodu
+        wariant={wariant}
+        uzyte={uzyte}
+        onWybierz={() => {}}
+        zablokowane="Żaden z zaznaczonych odbiorników nie może dzielić obwodu — ładowarka EV, gniazdo trójfazowe, wypust AGD i gniazdo dedykowane mają własny z definicji."
+      />
+    );
+  }
+  const numery = new Set(doPrzypisania.map((e) => e.obwod));
+  return (
+    <WyborObwodu wariant={wariant} numerAktualny={numery.size === 1 ? [...numery][0] : undefined} uzyte={uzyte} onWybierz={onWybierz} />
   );
 }
