@@ -5,7 +5,7 @@ import { formatLiczba } from "@/lib/liczby";
 import { AlertTriangle, ArrowLeft, Download, FileText, Info, Upload, X } from "lucide-react";
 import { useOpcjeDoboru, useProjectStore } from "@/store/useProjectStore";
 import { computeRcdGroups } from "@/lib/panel/circuits";
-import { buildPanelDevices } from "@/lib/panel/devices";
+import { aparatyDoWidoku, buildPanelDevices } from "@/lib/panel/devices";
 import { computeSizedCircuits, lowVoltageLengths, routeSummaries } from "@/lib/panel/project";
 import { ZAPAS_MONTAZOWY_M } from "@/lib/panel/norms";
 import { bezCeny, computeCosts, kosztorysRows, parsePriceCsv, pogrupujWiersze, podsumowanieKosztorysu, STAWKI_VAT, stawkaVatZZapisu } from "@/lib/costs";
@@ -144,10 +144,11 @@ export function CostsTab() {
    */
   const panelDevices = useProjectStore((s) => s.panelDevices);
   const panelConfig = useProjectStore((s) => s.panelConfig);
+  const panelTryb = useProjectStore((s) => s.panelTryb);
   const aparaty = useMemo(() => {
-    const zapisane = panelDevices.length ? panelDevices : circuits.length ? buildPanelDevices(rcdGroups, panelConfig) : [];
+    const zapisane = aparatyDoWidoku(panelDevices, panelTryb, () => (circuits.length ? buildPanelDevices(rcdGroups, panelConfig) : []));
     return circuits.length || zapisane.some((d) => d.kind !== "main" && d.kind !== "blank") ? zapisane : [];
-  }, [panelDevices, circuits, rcdGroups, panelConfig]);
+  }, [panelDevices, panelTryb, circuits, rcdGroups, panelConfig]);
   const { quantities, cableLengthSource } = useMemo(
     () =>
       computeCosts(elements, circuits, rcdGroups, {

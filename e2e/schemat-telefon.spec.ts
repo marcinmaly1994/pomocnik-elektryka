@@ -76,12 +76,21 @@ test.describe("na telefonie", () => {
   test("„+” i „−” trzymają środek widoku, a nie lewą krawędź", async ({ page }) => {
     await otworzSchemat(page);
     await page.getByRole("button", { name: "Dopasuj schemat do szerokości" }).click();
+    // Punkt RYSUNKU pod środkiem okienka, jako ułamek szerokości rysunku. Przy „+” i „−”
+    // ma zostać ten sam. (Dawniej mierzone od wyłącznika głównego, który stał dokładnie
+    // pośrodku rysunku — z ogranicznikiem przepięć w przykładzie już nie stoi.)
+    const srodekNaRysunku = () =>
+      page.getByTestId("schemat-okno").evaluate((el) => {
+        const svg = el.querySelector("svg")!.getBoundingClientRect();
+        const o = el.getBoundingClientRect();
+        return (o.left + o.width / 2 - svg.left) / svg.width;
+      });
+    const naStarcie = await srodekNaRysunku();
     for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Powiększ schemat" }).click();
     expect(await powiekszenie(page)).toBeGreaterThan(40);
-    // Wyłącznik główny stoi na środku rysunku, więc przy dopasowaniu był na środku okienka.
-    expect(Math.abs(await odSrodka(page))).toBeLessThan(20);
+    expect(Math.abs((await srodekNaRysunku()) - naStarcie)).toBeLessThan(0.02);
     await page.getByRole("button", { name: "Pomniejsz schemat" }).click();
-    expect(Math.abs(await odSrodka(page))).toBeLessThan(20);
+    expect(Math.abs((await srodekNaRysunku()) - naStarcie)).toBeLessThan(0.02);
   });
 
   test("przyciski powiększenia mają rozmiar pod palec", async ({ page }) => {

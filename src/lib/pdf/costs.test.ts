@@ -47,7 +47,7 @@ describe("buildCostsPdf", () => {
 
   it("wypisuje pozycje razem z ich wartoscia", async () => {
     const out = bytesToAscii(await buildCostsPdf(rows, header));
-    expect(out).toContain("Gniazdko 230V podtynkowe");
+    expect(out).toContain("Gniazdo 230 V podtynkowe");
     expect(out).toContain("180,00"); // 12 x 15 zl
   });
 

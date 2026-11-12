@@ -3,8 +3,8 @@ import type { ElementType, ElementTypeDef, InstallationElement } from "@/types";
 /** Katalog typów elementów instalacji — przeniesiony 1:1 z ELEMENT_TYPES w wersji JS. */
 export const ELEMENT_TYPES: Record<ElementType, ElementTypeDef> = {
   gniazdko: { label: "Gniazdo 230 V", code: "G", color: "#2D5A8C", role: "socket" },
-  gniazdkoHerm: { label: "Gniazdko hermetyczne", code: "IP", color: "#2D5A8C", role: "socketWet" },
-  gniazdko400: { label: "Gniazdo Trójfazowe", code: "3F", color: "#1F4470", role: "socket3f" },
+  gniazdkoHerm: { label: "Gniazdo hermetyczne", code: "IP", color: "#2D5A8C", role: "socketWet" },
+  gniazdko400: { label: "Gniazdo trójfazowe", code: "3F", color: "#1F4470", role: "socket3f" },
   wypustAGD: { label: "Wypust AGD", code: "AGD", color: "#1F4470", role: "dedicated" },
   ladowarkaEV: { label: "Ładowarka EV", code: "EV", color: "#1F4470", role: "ev" },
 

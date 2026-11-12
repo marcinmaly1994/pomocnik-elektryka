@@ -275,7 +275,7 @@ export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInpu
       rule: "ip44",
       level: "warn",
       title: "Zwykłe gniazdo w pomieszczeniu wilgotnym",
-      detail: `${lista(bezIp.map(opis))} — w łazience i pralni osprzęt powinien być bryzgoszczelny (min. IP44). Podmień na „Gniazdko hermetyczne” albo potwierdź, że w tym miejscu wilgoć nie występuje.`,
+      detail: `${lista(bezIp.map(opis))} — w łazience i pralni osprzęt powinien być bryzgoszczelny (min. IP44). Podmień na „Gniazdo hermetyczne” albo potwierdź, że w tym miejscu wilgoć nie występuje.`,
       elementIds: bezIp.map((e) => e.id),
     });
   }

@@ -32,7 +32,9 @@ async function domWRozdzielnicy(page: Page) {
   await wczytajPrzyklad(page, "dom");
   await page.getByRole("button", { name: "Rozdzielnica", exact: true }).click();
   await expect(page.getByText(/Widok frontu rozdzielnicy/)).toBeVisible();
-  await expect.poll(async () => (await aparatyZZapisu(page)).length).toBeGreaterThan(0);
+  // Odbudowana lista ma rozłącznik główny — sama niepusta to za mało, bo przykład
+  // zapisuje ręczny ogranicznik przepięć jeszcze przed odbudową (przegląd 12.11.2026).
+  await expect.poll(async () => (await aparatyZZapisu(page)).some((d) => d.kind === "main")).toBe(true);
 }
 
 test("B1: faza w tabeli doboru = faza aparatu na froncie i schemacie", async ({ page }) => {
