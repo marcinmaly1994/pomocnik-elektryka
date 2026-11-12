@@ -1,6 +1,6 @@
 import { Alert } from "@/components/ui/alert";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
-import { formatLiczba } from "@/lib/liczby";
+import { formatLiczba, zLiczba } from "@/lib/liczby";
 import { klawiszDlaEdytora } from "@/lib/klawiaturaEdytora";
 import { wymiaryNotatki } from "@/lib/opisPomieszczenia";
 import {
@@ -1780,10 +1780,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         const bylCosDoPorzucenia =
           porzuconyPodglad ||
           przewodStart !== null ||
-          sciany.drawingWall.length > 0 || pokoje.drawingRoomPoints.length > 0 || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
+          sciany.drawingWall.length > 0 || pokoje.drawingRoomPoints.length > 0 || selected !== null || multiSelected.length > 0 || calibPoints.length > 0 || contextMenu !== null;
         sciany.setDrawingWall([]);
         pokoje.setDrawingRoomPoints([]);
         setPrzewodStart(null);
+        setSelected(null);
         setMultiSelected([]);
         setCalibPoints([]);
         zaznaczenie.zamknijMenu();
@@ -2481,7 +2482,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           <div className="text-sm font-semibold text-ink">Ściana</div>
           <div className="text-xs text-slate-500">
             {mpu !== null ? `${formatLiczba(dlugosc * mpu, 2)} m` : `${Math.round(dlugosc)} jedn.`} ·{" "}
-            {odcinki} {odcinki === 1 ? "odcinek" : odcinki < 5 ? "odcinki" : "odcinków"}
+            {zLiczba(odcinki, "odcinek", "odcinki", "odcinków")}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">

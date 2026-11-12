@@ -64,6 +64,7 @@ import { jestOdplywem } from "@/lib/panel/devices";
 import { useWygaszenieKrawedzi } from "@/hooks/useWygaszenieKrawedzi";
 import { PasekKroku } from "@/components/nawigacja/PasekKroku";
 import { WERSJA_BUILDU } from "virtual:wersja-buildu";
+import { zLiczba } from "@/lib/liczby";
 
 /**
  * KAŻDA zakładka ładowana leniwie — nigdy nie widać więcej niż jednej naraz.
@@ -469,7 +470,7 @@ function NowyProjektOkno({
       <DialogContent title="Zacząć nowy projekt?" onCloseAutoFocus={wrocFokusDoOtwieracza("nowy-projekt")}>
         <p className="mb-3 text-sm text-slate-600">
           {elementCount > 0
-            ? `Bieżący projekt (${elementCount} ${elementCount === 1 ? "element" : elementCount < 5 ? "elementy" : "elementów"} na planie) zostanie usunięty z tej przeglądarki.`
+            ? `Bieżący projekt (${zLiczba(elementCount, "element", "elementy", "elementów")} na planie) zostanie usunięty z tej przeglądarki.`
             : "Bieżący projekt zostanie wyczyszczony."}{" "}
           Tej operacji nie da się cofnąć.
         </p>

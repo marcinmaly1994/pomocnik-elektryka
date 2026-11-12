@@ -237,6 +237,9 @@ function elementy(): InstallationElement[] {
     eP("dom-garaz-sw", "wlacznik", GARAZ, 2.75, 3.3),
     eP("dom-garaz-lampa1", "oswietlenie", GARAZ, 1.5, 2),
     eP("dom-garaz-lampa2", "oswietlenie", GARAZ, 1.5, 6),
+    // Garaż i kotłownia z kotłem gazowym — czujnik czadu, inaczej przykład dostaje
+    // własną uwagę w sprawdzeniu rzutu (R10 z audytu Instalacji 11.11.2026).
+    eP("dom-garaz-czad", "czujnikCzadu", GARAZ, 2.75, 4.5),
 
     // --- Kuchnia (mokra) ---
     eP("dom-kuch-gn1", "gniazdko", KUCHNIA, 3.5, 0.25, { gangs: 2 }),
@@ -279,6 +282,7 @@ function elementy(): InstallationElement[] {
     eP("dom-kotlownia-gn", "gniazdkoHerm", KOTLOWNIA, 9.75, 7),
     eP("dom-kotlownia-sw", "wlacznik", KOTLOWNIA, 8.75, 5.6),
     eP("dom-kotlownia-lampa", "oswietlenie", KOTLOWNIA, 9.1, 6.5),
+    eP("dom-kotlownia-czad", "czujnikCzadu", KOTLOWNIA, 9.25, 7.75),
 
     // ===================== PIĘTRO =====================
 

@@ -64,3 +64,15 @@ test("przewijany schemat na telefonie da się obsłużyć z klawiatury", async (
   await okno.focus();
   await expect(okno).toBeFocused();
 });
+
+test("przełącznik stref ochronnych mówi, czy jest włączony — jak siatka i trasy obok", async ({ page }) => {
+  // R4 z audytu Instalacji 11.11.2026: miał stały opis „Pokaż strefy…" także przy
+  // widocznych strefach i nie miał `aria-pressed`, w przeciwieństwie do sąsiadów.
+  await otworzPrzyklad(page);
+  const wlaczone = page.getByRole("button", { name: "Ukryj strefy ochronne w łazience" });
+  await expect(wlaczone).toHaveAttribute("aria-pressed", "true");
+  await wlaczone.click();
+  const wylaczone = page.getByRole("button", { name: "Pokaż strefy ochronne w łazience" });
+  await expect(wylaczone).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Ukryj strefy ochronne w łazience" })).toHaveCount(0);
+});

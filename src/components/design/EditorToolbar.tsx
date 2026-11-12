@@ -353,8 +353,18 @@ export function EditorToolbar({
         <Grid3x3 size={15} className={gridOn ? "text-copper" : undefined} />
       </Button>
 
-      <Button variant="ghost" size="icon" onClick={onToggleZones} title="Pokaż strefy ochronne w łazience">
-        {showZones ? <Eye size={15} /> : <EyeOff size={15} />}
+      {/* Ten sam wzorzec co siatka i trasy obok: opis mówi, co zrobi kliknięcie,
+          `aria-pressed` i miedziana ikona — czy warstwa jest włączona (R4 z audytu
+          Instalacji 11.11.2026; wcześniej opis zawsze brzmiał „Pokaż…"). */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggleZones}
+        title={showZones ? "Ukryj strefy ochronne w łazience" : "Pokaż strefy ochronne w łazience"}
+        aria-label={showZones ? "Ukryj strefy ochronne w łazience" : "Pokaż strefy ochronne w łazience"}
+        aria-pressed={showZones}
+      >
+        {showZones ? <Eye size={15} className="text-copper" /> : <EyeOff size={15} />}
       </Button>
 
       {/* Trasy przewodów są poglądowe (linia prosta, nie prawdziwy przebieg wzdłuż

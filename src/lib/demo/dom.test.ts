@@ -42,8 +42,8 @@ describe("dom — parter", () => {
   const payload = zbudujProjektDom();
   const naParterze = payload.draft.elements.filter((e) => e.floor === "f1");
 
-  it("ma rozdzielnicę główną i pięćdziesiąt jeden elementów", () => {
-    expect(naParterze.length).toBe(52);
+  it("ma rozdzielnicę główną i pięćdziesiąt trzy elementy", () => {
+    expect(naParterze.length).toBe(54);
     expect(naParterze.some((e) => e.type === "rozdzielnica")).toBe(true);
   });
 

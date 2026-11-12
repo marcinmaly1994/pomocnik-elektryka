@@ -38,3 +38,23 @@ export function zPrzecinkiem(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
   return String(v).replace(".", ",");
 }
+
+/**
+ * Forma rzeczownika po liczebniku: „1 element", „3 elementy", „12 elementów",
+ * „22 elementy". Zwraca SAMO słowo.
+ *
+ * Jedna funkcja zamiast `n === 1 ? … : n < 5 ? … : …` rozsianego po kodzie — tamten
+ * skrót dawał „22 elementów" i „22 uwag" (R8 z audytu Instalacji 11.11.2026), bo
+ * forma „kilka" wraca dla 22–24, 32–34…, a nie wraca dla 12–14.
+ */
+export function slowoLiczby(n: number, jeden: string, kilka: string, wiele: string): string {
+  if (n === 1) return jeden;
+  const j = Math.abs(n) % 10;
+  const d = Math.abs(n) % 100;
+  return j >= 2 && j <= 4 && (d < 12 || d > 14) ? kilka : wiele;
+}
+
+/** Liczba razem z odmienionym słowem: „22 elementy". Patrz `slowoLiczby`. */
+export function zLiczba(n: number, jeden: string, kilka: string, wiele: string): string {
+  return `${n} ${slowoLiczby(n, jeden, kilka, wiele)}`;
+}

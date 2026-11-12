@@ -3,6 +3,7 @@ import { ELEMENT_TYPES } from "@/lib/elements";
 import { MANUAL_DRAW_SCALE_MPU, WALL_SNAP_TOLERANCE_M } from "@/lib/design";
 import { pointInPolygon, punktWewnatrzWielokata } from "@/lib/geometry";
 import { glyphBoxSize } from "@/lib/glyphs";
+import { slowoLiczby } from "@/lib/liczby";
 import { bezNakladaniaNaSasiadow } from "@/lib/rozstawElementow";
 import { przyscienny, snapElementToWall } from "@/lib/wallSnap";
 
@@ -327,10 +328,7 @@ export function elementySzablonu(typ: RoomType, ctx: KontekstSzablonu): Installa
   return gotowe;
 }
 
-/** „1 element”, „2 elementy”, „5 elementów”, „22 elementy”. */
+/** „1 element”, „2 elementy”, „5 elementów”, „22 elementy” — patrz `slowoLiczby`. */
 export function odmianaElementu(n: number): string {
-  if (n === 1) return "element";
-  const j = n % 10;
-  const d = n % 100;
-  return j >= 2 && j <= 4 && (d < 12 || d > 14) ? "elementy" : "elementów";
+  return slowoLiczby(n, "element", "elementy", "elementów");
 }

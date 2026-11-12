@@ -15,6 +15,7 @@ import { LINE_W, STROKE } from "./glyphyOprawa";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, pradyWgKluczaAparatu } from "@/lib/panel/project";
 import { buildPanelDevices, czuloscITypRcd, jestOdplywem, PHASE_COLORS } from "@/lib/panel/devices";
+import { zLiczba } from "@/lib/liczby";
 import type { PanelDevice } from "@/types";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
@@ -305,13 +306,6 @@ function PeTaps({ columns }: { columns: Column[] }) {
   );
 }
 
-/** „1 obwód", „3 obwody", „12 obwodów", „22 obwody" — polska odmiana liczebnika. */
-function odmiana(n: number, jeden: string, kilka: string, wiele: string): string {
-  if (n === 1) return `1 ${jeden}`;
-  const d = n % 10;
-  const s = n % 100;
-  return `${n} ${d >= 2 && d <= 4 && !(s >= 12 && s <= 14) ? kilka : wiele}`;
-}
 
 /** Jeden obwód odbiorczy: wyłącznik nadprądowy (symbol MCB użytkownika), znacznik przewodu i nazwa odbiornika. */
 function CircuitBranch({ x, device }: { x: number; device: PanelDevice }) {
@@ -662,8 +656,8 @@ export function SchemaTab() {
             {/* Liczby z APARATÓW, tak jak sam rysunek — nie z obwodów policzonych z rzutu
                 (po usunięciu aparatu w Rozdzielnicy nagłówek mówił dalej „11 obwodów").
                 Różnicówki to prawdziwe aparaty RCD, bez umownej grupy „poza różnicówką". */}
-            Generowany automatycznie z obwodów rozdzielnicy — {odmiana(liczbaObwodow, "obwód", "obwody", "obwodów")},{" "}
-            {odmiana(rcdDevices.length, "różnicówka", "różnicówki", "różnicówek")}.
+            Generowany automatycznie z obwodów rozdzielnicy — {zLiczba(liczbaObwodow, "obwód", "obwody", "obwodów")},{" "}
+            {zLiczba(rcdDevices.length, "różnicówka", "różnicówki", "różnicówek")}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

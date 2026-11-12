@@ -69,6 +69,18 @@ describe("checkPlan — strefy ochronne", () => {
     expect(reguly(wynik)).not.toContain("strefa1");
   });
 
+  it("strefa nie przechodzi przez ścianę — gniazdo w sąsiednim pokoju nie jest w strefie wanny", () => {
+    // R10 z audytu Instalacji 11.11.2026: gniazdo w sypialni za ścianą łazienki dostawało
+    // „Gniazdo w strefie 2". Strefy 701 kończą się na stałych przegrodach.
+    const wynik = reguly(sprawdz([wanna, el("gniazdko", 120, 100, "Sypialnia"), el("gniazdko", 105, 100, "Sypialnia")]));
+    expect(wynik).not.toContain("strefa2");
+    expect(wynik).not.toContain("strefa1");
+  });
+
+  it("element bez pomieszczenia dalej jest sprawdzany względem przyboru", () => {
+    expect(reguly(sprawdz([wanna, el("gniazdko", 120, 100, NO_ROOM)]))).toContain("strefa2");
+  });
+
   it("łącznik w strefie 2 jest DOZWOLONY — norma traktuje go inaczej niż gniazdo", () => {
     expect(reguly(sprawdz([wanna, el("wlacznik", 120, 100)]))).not.toContain("strefa2");
   });

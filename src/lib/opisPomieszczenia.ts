@@ -232,7 +232,30 @@ export function miejsceNaOpis(opcje: {
   // — w małej łazience trafiał inaczej pod umywalkę albo pod brodzik. Nazwa pomieszczenia
   // za ścianą czytałaby się już jako nazwa SĄSIADA, więc ona tej furtki nie dostaje.
   const wolneGdziekolwiek = opcje.wolnoZaObrys ? wszystkie.find((k) => zaslonieta(k.x, k.y) === 0) : undefined;
-  return wolneGdziekolwiek ?? najlepsze ?? kotwica;
+  if (wolneGdziekolwiek) return wolneGdziekolwiek;
+  if (najlepsze) return najlepsze;
+  // Opis nie mieści się w obrysie W OGÓLE — jest szerszy od pomieszczenia („Klatka
+  // schodowa na piętrze" w klatce szerokiej na metr). Wystawać będzie tak czy inaczej,
+  // więc zamiast wracać na środek (zwykle prosto na oprawę) bierzemy najmniej zasłonięte
+  // miejsce, którego ŚRODEK leży w pomieszczeniu: napis dalej czyta się jako jego nazwa
+  // (R10 z audytu Instalacji 11.11.2026). Tylko gdy sama kotwica stoi w pomieszczeniu
+  // (nazwa w środku obrysu) — kotwica celowo postawiona poza nim (podpis nad strefą
+  // przyboru) zostaje tam, gdzie ją wskazano.
+  if (obrys && pointInPolygon(kotwica, obrys)) {
+    let wPokoju: { x: number; y: number } | null = null;
+    let min = Infinity;
+    for (const k of wszystkie) {
+      if (!pointInPolygon(k, obrys)) continue;
+      const pole = zaslonieta(k.x, k.y);
+      if (pole === 0) return k;
+      if (pole < min) {
+        min = pole;
+        wPokoju = k;
+      }
+    }
+    if (wPokoju) return wPokoju;
+  }
+  return kotwica;
 }
 
 /**
