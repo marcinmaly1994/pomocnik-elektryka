@@ -26,7 +26,7 @@ test("symbole łączników: biblioteka i plan", async ({ page }) => {
   for (const n of names) await expect(page.getByRole("button", { name: new RegExp(n.replace(/[()]/g, "\\$&")) })).toBeVisible();
 
   // wariantów 1/2 już nie ma — liczbę biegunów niesie typ
-  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).first().click();
   await expect(page.getByRole("button", { name: "2", exact: true })).toHaveCount(0);
 
 
@@ -37,7 +37,8 @@ test("symbole łączników: biblioteka i plan", async ({ page }) => {
   await page.evaluate(() => window.scrollTo(0, 0));
 
   for (let i = 0; i < names.length; i++) {
-    await page.getByRole("button", { name: new RegExp(names[i].replace(/[()]/g, "\\$&")) }).click();
+    // `.first()`: od R13 (Ostatnio używane) ten sam typ bywa też kaflem nad katalogiem.
+    await page.getByRole("button", { name: new RegExp(names[i].replace(/[()]/g, "\\$&")) }).first().click();
     await page.evaluate(() => window.scrollTo(0, 0));
     // Mierzone PRZY KAŻDYM kliknięciu, nie raz przed pętlą: baner „projekt tylko
     // w tej przeglądarce" pojawia się dopiero po postawieniu PIERWSZEGO elementu,

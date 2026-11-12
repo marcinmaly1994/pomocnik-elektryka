@@ -3,6 +3,16 @@ import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import type { ElementType } from "@/types";
 import { ELEMENT_SECTIONS, ELEMENT_TYPES, SEARCH_KEYWORDS, libSubtitle } from "@/lib/elements";
 import { GlyphPreview } from "@/components/design/ElementGlyphSvg";
+import { czytajOstatnie, dodajOstatni, zapiszOstatnie } from "@/lib/ostatnieElementy";
+
+/** `localStorage` albo nic — dostęp potrafi rzucić (tryb prywatny, zablokowane dane). */
+function magazynPrzegladarki(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 interface ElementLibraryProps {
   activeType: ElementType;
@@ -91,6 +101,15 @@ export function ElementLibrary({
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
 
+  /** Ostatnio wybierane typy — patrz `lib/ostatnieElementy.ts` (R13 z audytu Instalacji). */
+  const [ostatnie, setOstatnie] = useState(() => czytajOstatnie(magazynPrzegladarki()));
+  const wybierz = (typ: ElementType) => {
+    const nowe = dodajOstatni(ostatnie, typ);
+    setOstatnie(nowe);
+    zapiszOstatnie(magazynPrzegladarki(), nowe);
+    onPick(typ);
+  };
+
   const visibleSections = query
     ? ELEMENT_SECTIONS.map((s) => ({
         ...s,
@@ -141,6 +160,35 @@ export function ElementLibrary({
         ref={listaRef}
         style={wypelnijWysokosc ? { paddingBottom: miejsce.zapas } : { maxHeight: miejsce.limit, paddingBottom: miejsce.zapas }}
       >
+        {/* Ostatnio używane — nad akordeonem, bo to skrót do tego, co i tak trzeba by
+            w nim odszukać. Chowane przy wyszukiwaniu: wtedy lista jest już odpowiedzią. */}
+        {!query && ostatnie.length > 0 && (
+          <div role="group" aria-label="Ostatnio używane" className="pb-1">
+            <div className="mb-1 px-0.5 text-xs font-semibold text-slate-500">Ostatnio używane</div>
+            <div className="grid grid-cols-2 gap-1">
+              {ostatnie.map((typ) => {
+                const def = ELEMENT_TYPES[typ];
+                const aktywny = activeType === typ;
+                return (
+                  <button
+                    key={typ}
+                    type="button"
+                    data-testid="ostatnio-uzywany"
+                    onClick={() => wybierz(typ)}
+                    title={def.label}
+                    className="flex min-w-0 items-center gap-1.5 rounded-md p-1 text-left"
+                    style={{ background: aktywny ? `${def.color}10` : "#fff", border: `1px solid ${aktywny ? def.color : "#DCE2E8"}` }}
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                      <GlyphPreview type={typ} color={def.color} gangs={1} />
+                    </span>
+                    <span className="truncate text-xs text-ink">{def.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {visibleSections.map((section) => {
           const isOpen = !!query || openSection === section.title;
           return (
@@ -167,7 +215,7 @@ export function ElementLibrary({
                       <div key={item.key}>
                         <button
                           type="button"
-                          onClick={() => onPick(item.key)}
+                          onClick={() => wybierz(item.key)}
                           className="flex w-full items-center gap-2 rounded-md p-1.5 text-left"
                           style={{ background: isActive ? `${def.color}10` : "#fff", border: `1px solid ${isActive ? def.color : "#DCE2E8"}` }}
                         >

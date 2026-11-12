@@ -2545,24 +2545,26 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * pływała nad rzutem i zasłaniała okolicę zaznaczonej ściany, a karta elementu stała
    * w schowanym panelu — dwa różne miejsca na to samo.
    */
-  const trescKontekstu = (zakres: "wszystko" | "zaznaczenie" | "rysowanie") => (
+  const przelacznikZaznaczKilka = toolMode === "zaznacz" && elements.length > 0 && (
+    <Button variant="secondary" size="sm"
+      data-testid="zaznacz-kilka"
+      onClick={() => setZaznaczanieWielokrotne((v) => !v)}
+      aria-pressed={zaznaczanieWielokrotne}
+      title="Kolejne kliknięcia dokładają elementy do zaznaczenia — to samo co Shift z kliknięciem"
+      className={zaznaczanieWielokrotne ? "bg-copper-tlo font-semibold text-caution" : undefined}
+    >
+      <CopyCheck size={13} /> Zaznacz kilka
+    </Button>
+  );
+
+  const trescKontekstu = (zakres: "wszystko" | "zaznaczenie" | "rysowanie", bezPrzelacznika = false) => (
     <>
       {zakres !== "rysowanie" && (
       <>
       {/* Zatrzaśnięty Shift — jedyna droga do zaznaczenia wielokrotnego bez klawiatury
           i bez myszy (patrz `zaznaczanieWielokrotne`). Stoi NAD listą operacji na
           zaznaczeniu, bo to on je odblokowuje: najpierw się zaznacza, potem wyrównuje. */}
-      {toolMode === "zaznacz" && elements.length > 0 && (
-        <Button variant="secondary" size="sm"
-          data-testid="zaznacz-kilka"
-          onClick={() => setZaznaczanieWielokrotne((v) => !v)}
-          aria-pressed={zaznaczanieWielokrotne}
-          title="Kolejne kliknięcia dokładają elementy do zaznaczenia — to samo co Shift z kliknięciem"
-          className={zaznaczanieWielokrotne ? "bg-copper-tlo font-semibold text-caution" : undefined}
-        >
-          <CopyCheck size={13} /> Zaznacz kilka
-        </Button>
-      )}
+      {!bezPrzelacznika && przelacznikZaznaczKilka}
 
       {multiSelected.length > 0 && (
         <div className="flex min-w-0 flex-col items-start gap-1.5">
@@ -3740,6 +3742,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               `DesignCanvas`. Tylko w JEDNYM miejscu naraz: dwie kopie dawałyby dwa
               przyciski „Zakończ" o tej samej nazwie. */}
           <NaglowekNarzedzia narzedzie={toolMode} />
+          {/* R15 z audytu Instalacji 11.11.2026: „Zaznacz kilka" stał sam w miedzianej
+              ramce na górze panelu, czyli w najmocniejszym miejscu — a to przełącznik
+              potrzebny głównie na dotyku (na monitorze to samo robi Shift). Na monitorze
+              stoi więc jako zwykły przycisk pod nagłówkiem, a ramka pokazuje się dopiero,
+              gdy ma co pokazać (zaznaczenie, karta ściany, trasa). */}
+          {szerokieOkno && kontekstoweAktywne && przelacznikZaznaczKilka && <div className="mb-2">{przelacznikZaznaczKilka}</div>}
           {szerokieOkno && kontekstoweAktywne && (
             // `flex-col`, nie `flex-wrap` jak w wersji pełnoekranowej: tam pigułka ma
             // całą szerokość okna i bloki spokojnie stoją obok siebie, tu kolumna ma
@@ -3751,7 +3759,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             // rzutem (patrz `trescKontekstu`). `empty:hidden`: bez zaznaczenia i na
             // pustej kondygnacji (bez „Zaznacz kilka") ramka nie ma czego pokazać.
             <div className="mb-2 flex min-w-0 flex-col items-start gap-2 rounded-card border border-copper/40 bg-[#FDF6EF] px-2.5 py-2 text-left shadow-sm empty:hidden">
-              {pelnyEkran ? trescKontekstu("zaznaczenie") : kontekstoweTresc}
+              {pelnyEkran ? trescKontekstu("zaznaczenie", true) : trescKontekstu("wszystko", true)}
             </div>
           )}
 
@@ -4158,7 +4166,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               />
             </div>
           )}
-          {!pelnyEkran && <QuantitiesPanel zestawienie={zestawienie} />}
+          {/* Zestawienie stoi POD rzutem, więc po zaznaczeniu przewijamy do planu — inaczej
+              zaznaczenie działoby się poza ekranem. */}
+          {!pelnyEkran && (
+            <QuantitiesPanel
+              zestawienie={zestawienie}
+              onZaznacz={(ids) => {
+                pokazElementyNaPlanie(ids);
+                window.requestAnimationFrame(() => pelnyEkranRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+              }}
+            />
+          )}
         </div>
       </div>
 

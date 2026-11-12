@@ -53,7 +53,7 @@ async function place(page: import("@playwright/test").Page, name: RegExp, x: num
   // podnosi płótno z powrotem o ~46 px. Dlatego mierzymy je dopiero po kliknięciu w
   // bibliotekę — pomiar wcześniejszy przesuwał wszystkie elementy w dół względem
   // narysowanego pomieszczenia, przez co wypadały poza nie i traciły grupę.
-  await page.getByRole("button", { name }).click();
+  await page.getByRole("button", { name }).first().click();
   const box = await planBox(page);
   await page.mouse.click(box.x + x, box.y + y);
 }

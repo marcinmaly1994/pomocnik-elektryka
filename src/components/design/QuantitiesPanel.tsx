@@ -20,9 +20,17 @@ import type { Zestawienie } from "@/lib/quantities";
 
 export interface QuantitiesPanelProps {
   zestawienie: Zestawienie;
+  /**
+   * Zaznacza elementy na planie i przewija do niego — ta sama droga co „Pokaż na
+   * planie" w sprawdzeniu rzutu. R12 z audytu Instalacji 11.11.2026: zestawienie
+   * tylko liczyło, a poprawka „wszystkich gniazd hermetycznych" zaczynała się od
+   * szukania ich po rysunku. Po zaznaczeniu działa na nich cały panel grupy
+   * (wyrównanie, numer obwodu, usuwanie).
+   */
+  onZaznacz?: (ids: string[]) => void;
 }
 
-export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
+export function QuantitiesPanel({ zestawienie, onZaznacz }: QuantitiesPanelProps) {
   const [otwarte, setOtwarte] = useState(false);
   const { wiersze, pomieszczenia, sztukRazem, punktowRazem } = zestawienie;
 
@@ -73,7 +81,9 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
               <tbody>
                 {wiersze.map((w) => (
                   <tr key={w.klucz}>
-                    <td className="py-1 pr-2 text-slate-600">{w.label}</td>
+                    <td className="py-1 pr-2 text-slate-600">
+                      <Etykieta tekst={w.label} ids={w.ids} onZaznacz={onZaznacz} />
+                    </td>
                     {/* Liczba punktów w nawiasie TYLKO gdy różni się od sztuk — inaczej
                         „3 szt. (3 pkt.)" przy każdym wierszu to sam szum. */}
                     <td className="pe-liczba w-20 py-1 text-ink">
@@ -92,7 +102,9 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
               <tbody>
                 {pomieszczenia.map((p) => (
                   <tr key={p.room}>
-                    <td className="py-1 pr-2 text-slate-600">{p.room}</td>
+                    <td className="py-1 pr-2 text-slate-600">
+                      <Etykieta tekst={p.room} ids={p.ids} onZaznacz={onZaznacz} />
+                    </td>
                     <td className="pe-liczba w-16 py-1 text-ink">{p.sztuk} szt.</td>
                   </tr>
                 ))}
@@ -103,10 +115,26 @@ export function QuantitiesPanel({ zestawienie }: QuantitiesPanelProps) {
           <p className="text-xs leading-relaxed text-slate-400 sm:col-span-2">
             Gniazdo w ramce wielokrotnej liczy się jako tyle sztuk, ile ma mechanizmów — te
             same liczby wchodzą do kosztorysu. Wyposażenie sanitarne (wanna, prysznic, umywalka)
-            nie jest osprzętem elektrycznym i nie jest tu liczone.
+            nie jest osprzętem elektrycznym i nie jest tu liczone.{onZaznacz && " Kliknij nazwę, żeby zaznaczyć te elementy na planie."}
           </p>
         </div>
       )}
     </div>
+  );
+}
+
+/** Nazwa wiersza — przycisk zaznaczający jego elementy, gdy jest gdzie je zaznaczyć. */
+function Etykieta({ tekst, ids, onZaznacz }: { tekst: string; ids: string[]; onZaznacz?: (ids: string[]) => void }) {
+  if (!onZaznacz || ids.length === 0) return <>{tekst}</>;
+  return (
+    <button
+      type="button"
+      onClick={() => onZaznacz(ids)}
+      className="text-left text-blueprint underline-offset-2 hover:underline [@media(pointer:coarse)]:min-h-8"
+      aria-label={`Zaznacz na planie: ${tekst} (${ids.length})`}
+      title={`Zaznacz na planie (${ids.length})`}
+    >
+      {tekst}
+    </button>
   );
 }
