@@ -4,6 +4,7 @@ import { useProjectStore } from "@/store/useProjectStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger, DialogContent, DialogClose } from "@/components/ui/dialog";
 import { useZamknijPasekMenu } from "./pasekMenuKontekst";
+import { zLiczba } from "@/lib/liczby";
 
 /**
  * Kondygnacje — przeniesione z powłoki aplikacji do paska edytora, bo dotyczą
@@ -36,7 +37,7 @@ function DeleteFloorButton({ name, elementCount, onConfirm }: { name: string; el
       <DialogContent title={`Usunąć kondygnację „${name}"?`}>
         <p className="mb-4 text-sm text-slate-600">
           {elementCount > 0
-            ? `Razem z nią zniknie ${elementCount} ${elementCount === 1 ? "element" : elementCount < 5 ? "elementy" : "elementów"} oraz narysowane na niej ściany i pomieszczenia.`
+            ? `Razem z nią zniknie ${zLiczba(elementCount, "element", "elementy", "elementów")} oraz narysowane na niej ściany i pomieszczenia.`
             : "Kondygnacja jest pusta — zniknie razem z narysowanymi na niej ścianami i pomieszczeniami."}{" "}
           Tej operacji nie da się cofnąć.
         </p>

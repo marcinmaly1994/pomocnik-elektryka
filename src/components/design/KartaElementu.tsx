@@ -33,12 +33,16 @@ export function KartaElementu({
   onObwod: (numer: number | undefined) => void;
 }) {
   const def = ELEMENT_TYPES[element.type];
-  const wariant = libSubtitle(element.type, element.gangs);
+  const etykieta = def?.label ?? element.type;
+  // Podpis z katalogu bywa powtórzeniem nazwy („Punkt sufitowy / punkt sufitowy") —
+  // w katalogu stoi pod ikoną i nie razi, w karcie tuż pod tytułem już tak (R11).
+  const podpis = libSubtitle(element.type, element.gangs);
+  const wariant = podpis.toLowerCase() === etykieta.toLowerCase() ? "" : podpis;
   const przycisk = "[@media(pointer:coarse)]:min-h-11";
   return (
     <div className="space-y-2.5" data-testid="karta-elementu">
       <div>
-        <div className="text-sm font-semibold text-ink">{def?.label ?? element.type}</div>
+        <div className="text-sm font-semibold text-ink">{etykieta}</div>
         {wariant && <div className="text-xs text-slate-500">{wariant}</div>}
       </div>
 

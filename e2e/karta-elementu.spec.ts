@@ -139,3 +139,23 @@ test("rozdzielnica nie ma wyboru numeru obwodu — ani w karcie, ani w menu", as
   await expect(menu.getByText("Edytuj")).toBeVisible();
   await expect(menu.getByText("Numer obwodu")).toHaveCount(0);
 });
+
+test("Escape odznacza element — karta znika, a okno edycji zamknięte Escape jej nie rusza", async ({ page }) => {
+  // R3 z audytu Instalacji 11.11.2026: Escape czyścił tylko zaznaczenie wielu
+  // elementów, a pojedynczy zostawał zaznaczony razem z kartą.
+  await otworzPlan(page);
+  await postawGniazda(page, [{ x: 150, y: 150 }]);
+  await klikPlan(page, 150, 150);
+  const karta = page.getByTestId("karta-elementu");
+  await expect(karta).toBeVisible();
+
+  // Escape zamykający okno edycji jest „zużyty" przez okno — zaznaczenie zostaje.
+  await karta.getByRole("button", { name: "Edytuj" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(karta).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(karta).toHaveCount(0);
+  await expect(page.getByTestId("panel-zaznacz")).toBeVisible();
+});

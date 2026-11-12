@@ -7,7 +7,7 @@ import { wczytajPrzyklad } from "./_flow";
  * Karta „Sprawdzenie rzutu" stoi pod edytorem, a edytor zajmuje całą wysokość okna:
  * przy 1440×900 zaczynała się na ok. 945 px. Przykładowy dom ma w niej ostrzeżenie
  * o braku czujnika czadu w kotłowni i garażu — widoczne dopiero po przewinięciu pod
- * rysunek, a w pełnym ekranie wcale.
+ * rysunek, a w pełnym ekranie wcale. (Dziś przykład ma czujniki — `przykladowyDom` je zdejmuje.)
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -18,6 +18,24 @@ async function przykladowyDom(page: Page) {
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
   await wczytajPrzyklad(page, "dom");
+  // Od R10 z audytu Instalacji 11.11.2026 przykład przechodzi własne sprawdzenie bez
+  // uwag (ma czujniki czadu). Te testy potrzebują JEDNEJ uwagi, więc zdejmujemy oba
+  // czujniki z zapisanego projektu i wczytujemy go ponownie — ta sama uwaga co dawniej.
+  // Slot czytany W TRAKCIE czekania: przykład dostaje własny slot dopiero po dociągnięciu
+  // danych (R1), więc odczytany od razu wskazywałby jeszcze poprzedni projekt.
+  const slot = () =>
+    page.evaluate(() => `pomocnikelektryka_projekt_${localStorage.getItem("pomocnikelektryka_projekt_biezacy")}`);
+  await expect
+    .poll(async () => page.evaluate((k) => (localStorage.getItem(k) ?? "").includes("czujnikCzadu"), await slot()))
+    .toBe(true);
+  const klucz = await slot();
+  await page.evaluate((k) => {
+    const p = JSON.parse(localStorage.getItem(k)!);
+    p.draft.elements = p.draft.elements.filter((e: { type: string }) => e.type !== "czujnikCzadu");
+    localStorage.setItem(k, JSON.stringify(p));
+  }, klucz);
+  await page.reload();
+  await expect(page.getByText("To jest projekt przykładowy")).toBeVisible();
 }
 
 test("uwaga ze sprawdzenia widać w pasku stanu, bez przewijania", async ({ page }) => {

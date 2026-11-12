@@ -3,6 +3,7 @@ import { ELEMENT_TYPES, fixtureSizeM, NO_ROOM, SANITARY_FIXTURES } from "@/lib/e
 import { guessRoomType, ROOM_TYPE_LABELS } from "@/lib/design";
 import { distanceToRect, obrysyNachodza } from "@/lib/geometry";
 import { isLightControl, isLightPoint } from "@/lib/lightGroups";
+import { zLiczba } from "@/lib/liczby";
 
 /**
  * Sprawdzenie rzutu — odpowiednik `computeSelectivity` z rozdzielnicy, tylko dla planu.
@@ -94,8 +95,8 @@ export function podsumowanieProblemow(issues: PlanIssue[]): string {
   const uwagi = issues.filter((i) => i.level === "warn").length;
   if (bledy === 0 && uwagi === 0) return "bez zastrzeżeń";
   const czesci: string[] = [];
-  if (bledy > 0) czesci.push(`${bledy} ${bledy === 1 ? "błąd" : bledy < 5 ? "błędy" : "błędów"}`);
-  if (uwagi > 0) czesci.push(`${uwagi} ${uwagi === 1 ? "uwaga" : uwagi < 5 ? "uwagi" : "uwag"}`);
+  if (bledy > 0) czesci.push(zLiczba(bledy, "błąd", "błędy", "błędów"));
+  if (uwagi > 0) czesci.push(zLiczba(uwagi, "uwaga", "uwagi", "uwag"));
   return czesci.join(" · ");
 }
 
@@ -123,9 +124,9 @@ export function stanSprawdzenia(issues: PlanIssue[]): {
   const bledy = issues.filter((i) => i.level === "error").length;
   const uwagi = issues.filter((i) => i.level === "warn").length;
   if (bledy > 0)
-    return { poziom: "error", tekst: podsumowanieProblemow(issues), krotko: `${bledy} ${bledy === 1 ? "błąd" : bledy < 5 ? "błędy" : "błędów"}` };
+    return { poziom: "error", tekst: podsumowanieProblemow(issues), krotko: zLiczba(bledy, "błąd", "błędy", "błędów") };
   if (uwagi > 0)
-    return { poziom: "warn", tekst: podsumowanieProblemow(issues), krotko: `${uwagi} ${uwagi === 1 ? "uwaga" : uwagi < 5 ? "uwagi" : "uwag"}` };
+    return { poziom: "warn", tekst: podsumowanieProblemow(issues), krotko: zLiczba(uwagi, "uwaga", "uwagi", "uwag") };
   if (issues.some((i) => i.rule === "pusto")) return { poziom: "pusto", tekst: "nic do sprawdzenia", krotko: "" };
   return { poziom: "ok", tekst: "bez zastrzeżeń", krotko: "bez uwag" };
 }
@@ -203,6 +204,11 @@ export function checkPlan({ elements, roomShapes, metersPerUnit }: PlanCheckInpu
       let w2: string | null = null;
       let wU: string | null = null;
       for (const s of sanitarne) {
+        // Strefy 701 kończą się na stałych przegrodach: gniazdo w sypialni za ścianą
+        // łazienki nie leży w strefie wanny, choć w linii prostej bywa bliżej niż 0,6 m
+        // (R10 z audytu Instalacji 11.11.2026 — przykład „Dom" zgłaszał sam siebie).
+        // Gdy któryś z dwóch nie ma pomieszczenia, ściany nie znamy — sprawdzamy jak dawniej.
+        if (e.room && s.room && e.room !== NO_ROOM && s.room !== NO_ROOM && (e.roomId ?? e.room) !== (s.roomId ?? s.room)) continue;
         const f = SANITARY_FIXTURES[s.type]!;
         // Wymiary KONKRETNEGO przyboru, nie katalogowe: użytkownik mógł podać własne
         // (patrz `fixtureSizeM`), a wtedy rysunek pokazuje jeden obrys, a strefa liczy

@@ -9,6 +9,7 @@ import { ODSUNIECIE_TRASY } from "@/lib/panel/routing";
 import { computeCosts } from "@/lib/costs";
 import { gniazdoPodwojne, SANITARY_FIXTURES } from "@/lib/elements";
 import { glyphBoxSize } from "@/lib/glyphs";
+import { checkPlan } from "@/lib/planCheck";
 import type { ProjectPayload } from "@/store/useProjectStore";
 import type { InstallationElement, RoomType } from "@/types";
 
@@ -36,6 +37,20 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))('przykład „%s"', (id) =>
     const metraz = payload.draft.roomShapes.reduce((a, r) => a + (polygonAreaM2(r.points, mpu) ?? 0), 0);
     const zNazwy = Number(payload.projectName.replace(/[^\d,]/g, "").replace(",", "."));
     expect(zNazwy, payload.projectName).toBeCloseTo(metraz, 0);
+  });
+
+  it("przechodzi własne sprawdzenie rzutu bez błędów i uwag na każdej kondygnacji", () => {
+    // R10 z audytu Instalacji 11.11.2026: przykład, który ma pokazać, co aplikacja
+    // potrafi, witał nowego użytkownika ostrzeżeniem o własnym błędzie.
+    for (const f of payload.floors) {
+      const issues = checkPlan({
+        elements: payload.draft.elements.filter((e) => e.floor === f.id),
+        roomShapes: payload.draft.roomShapes.filter((r) => r.floor === f.id),
+        metersPerUnit: scaleOf(payload.scales, f.id),
+      });
+      const problemy = issues.filter((i) => i.level === "error" || i.level === "warn").map((i) => `${i.title}: ${i.detail}`);
+      expect(problemy, f.name).toEqual([]);
+    }
   });
 
   it("element LEŻY w pomieszczeniu, które ma wpisane — nie tylko je nazywa", () => {

@@ -382,3 +382,31 @@ describe("wymiaryNotatki", () => {
     expect(dwaWiersze.font).toBe(jeden.font);
   });
 });
+
+describe("miejsce na opis — nazwa szersza niż pomieszczenie (R10 z audytu Instalacji 11.11.2026)", () => {
+  // Klatka schodowa 1 × 5 m, a „Klatka schodowa na piętrze" ma ponad 3 m szerokości:
+  // napis nie zmieści się w obrysie NIGDZIE, więc wcześniej wracał na środek — prosto
+  // na oprawę. Ma zostać w pokoju (środkiem w obrysie), ale tam, gdzie nic nie zasłania.
+  const klatka = [
+    { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 20, y: 100 },
+    { x: 0, y: 100 },
+  ];
+  const oprawa = { x1: 5, y1: 45, x2: 15, y2: 55 };
+
+  it("ucieka spod symbolu wzdłuż pomieszczenia, zamiast zostać na środku", () => {
+    const p = miejsceNaOpis({
+      kotwica: { x: 10, y: 50 },
+      blok: { lewo: 30, prawo: 30, gora: 3, dol: 3 },
+      przeszkody: [oprawa],
+      obrys: klatka,
+      krok: 5,
+      krokow: 8,
+    });
+    expect(p.x).toBe(10);
+    expect(Math.abs(p.y - 50)).toBeGreaterThanOrEqual(8);
+    expect(p.y).toBeGreaterThan(0);
+    expect(p.y).toBeLessThan(100);
+  });
+});

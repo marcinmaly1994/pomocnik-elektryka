@@ -102,7 +102,12 @@ export function EditorStatusBar({
         </span>
       </span>
 
-      <span title="Wszystkie elementy na planie, także wyposażenie sanitarne — zestawienie pod rysunkiem liczy tylko osprzęt elektryczny">
+      {/* Trzy liczniki elementów mówią co innego (R11 z audytu Instalacji 11.11.2026):
+          ten — bieżącą kondygnację (stoi zaraz za jej nazwą), kafel „Instalacja" u góry —
+          cały budynek, zestawienie pod rysunkiem — sam osprzęt elektryczny. */}
+      <span
+        title={`Elementy na kondygnacji „${floorName}", także wyposażenie sanitarne. Kafel „Instalacja" u góry liczy cały budynek, a zestawienie pod rysunkiem tylko osprzęt elektryczny.`}
+      >
         Elementy: <span className="pe-mono text-slate-700">{elementCount}</span>
       </span>
 

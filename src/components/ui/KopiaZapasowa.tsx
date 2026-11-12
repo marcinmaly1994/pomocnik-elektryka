@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { czytajKopie, zapiszKopie } from "@/lib/kopiaProjektu";
+import { zLiczba } from "@/lib/liczby";
 
 /**
  * „Kopia zapasowa" w pasku projektu: zapis projektu do pliku i powrót z pliku.
@@ -150,7 +151,7 @@ export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void })
               <p className="mb-3 text-sm text-slate-600">
                 Bieżący projekt{" "}
                 {elementCount > 0
-                  ? `(${elementCount} ${elementCount === 1 ? "element" : elementCount < 5 ? "elementy" : "elementów"} na planie)`
+                  ? `(${zLiczba(elementCount, "element", "elementy", "elementów")} na planie)`
                   : ""}{" "}
                 zostanie zastąpiony zawartością pliku. Tej operacji nie da się cofnąć —
                 ale plik zostaje na dysku, więc zawsze można wrócić.
