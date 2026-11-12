@@ -50,10 +50,19 @@ describe("summarizeFloor", () => {
 
   it("rozbija na pomieszczenia", () => {
     const z = summarizeFloor([el("gniazdko", "Salon"), el("gniazdko", "Salon"), el("gniazdko", "Kuchnia")]);
-    expect(z.pomieszczenia).toEqual([
+    expect(z.pomieszczenia.map(({ ids: _ids, ...reszta }) => reszta)).toEqual([
       { room: "Kuchnia", sztuk: 1, punktow: 1 },
       { room: "Salon", sztuk: 2, punktow: 2 },
     ]);
+  });
+
+  it("każdy wiersz zna swoje elementy — do „Zaznacz na planie” (R12)", () => {
+    const a = el("gniazdko", "Salon");
+    const b = el("gniazdko", "Kuchnia");
+    const c = el("oswietlenie", "Salon");
+    const z = summarizeFloor([a, b, c]);
+    expect(z.wiersze.find((w) => w.type === "gniazdko")?.ids).toEqual([a.id, b.id]);
+    expect(z.pomieszczenia.find((p) => p.room === "Salon")?.ids).toEqual([a.id, c.id]);
   });
 
   it("„Bez pomieszczenia” ląduje na końcu, nie w środku alfabetu", () => {

@@ -86,7 +86,7 @@ test("rozdzielnica + gniazdo + lampa BEZ ścian: przełącznik rysuje dwie trasy
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 130);
   await page.waitForTimeout(300);
@@ -143,7 +143,7 @@ test("obwod gniazd i obwod oswietlenia W TYM SAMYM pokoju maja ROZNE kolory", as
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 210, box.y + 150);
   await page.waitForTimeout(300);
@@ -199,13 +199,13 @@ test("łącznik i oprawa w tym samym pomieszczeniu: trasa STEROWANIA rysuje się
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 100);
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
-  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 60, box.y + 100);
   await page.waitForTimeout(300);
@@ -237,13 +237,13 @@ test("z rozdzielnicą na planie: zasilanie oprawy STEROWANEJ łącznikiem ląduj
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 250, box.y + 100);
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
-  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 150);
   await page.waitForTimeout(300);
@@ -289,17 +289,17 @@ test("z rozdzielnicą: KILKA opraw JEDNEGO obwodu na jednym łączniku — TYLKO
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 200, box.y + 60);
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   await page.mouse.click(box.x + 260, box.y + 90);
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   await page.mouse.click(box.x + 220, box.y + 140);
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
-  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 150, box.y + 30);
   await page.waitForTimeout(300);
@@ -331,17 +331,17 @@ test("jeden łącznik sterujący TRZEMA oprawami: TYLKO JEDNA trasa sterowania d
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   let box = await planBox(page);
   await page.mouse.click(box.x + 250, box.y + 60);
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   await page.mouse.click(box.x + 280, box.y + 150);
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   await page.mouse.click(box.x + 250, box.y + 240);
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
-  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).first().click();
   box = await planBox(page);
   const switchScreen = { x: box.x + 60, y: box.y + 150 };
   await page.mouse.click(switchScreen.x, switchScreen.y);
@@ -396,13 +396,13 @@ test("cztery oprawy na jednym łączniku: łańcuch, nie drzewo — ŻADNA opraw
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
   let box = await planBox(page);
   for (const p of points) {
-    await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+    await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
     await page.mouse.click(box.x + p.x, box.y + p.y);
   }
 
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Łączniki i sterowanie/ }).click();
-  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).click();
+  await page.getByRole("button", { name: /Łącznik jednobiegunowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 230, box.y + 125);
   await page.waitForTimeout(300);
@@ -922,7 +922,7 @@ test("obwod gniazdowy i oswietleniowy dziela sciane: rownolegle pasy, gniazda bl
   // oprawa na srodku — jej trasa idzie dolem w prawo tylko KAWALEK, potem w gore
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 300, box.y + 180);
   await page.waitForTimeout(400);
@@ -992,7 +992,7 @@ test("trasa do oprawy odbija na jej wysokosci i wchodzi POD KATEM PROSTYM", asyn
   // Oprawa BLIZEJ prawej sciany niz dolnej — ale to dolna daje krotsza cala trase.
   await otworzKatalogElementow(page);
   await page.getByRole("button", { name: /Oświetlenie/ }).first().click();
-  await page.getByRole("button", { name: /Punkt sufitowy/ }).click();
+  await page.getByRole("button", { name: /Punkt sufitowy/ }).first().click();
   box = await planBox(page);
   await page.mouse.click(box.x + 400, box.y + 230);
   await page.waitForTimeout(400);

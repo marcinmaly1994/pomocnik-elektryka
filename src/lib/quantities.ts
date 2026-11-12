@@ -29,12 +29,16 @@ export interface WierszZestawienia {
   sztuk: number;
   /** Punkty na rysunku (symbole). */
   punktow: number;
+  /** Elementy tego wiersza — „Zaznacz na planie" w zestawieniu (R12 z audytu Instalacji). */
+  ids: string[];
 }
 
 export interface WierszPomieszczenia {
   room: string;
   sztuk: number;
   punktow: number;
+  /** Elementy tego pomieszczenia — patrz `WierszZestawienia.ids`. */
+  ids: string[];
 }
 
 export interface Zestawienie {
@@ -70,14 +74,16 @@ export function summarizeFloor(elements: InstallationElement[]): Zestawienie {
     // Grupowanie po typie PLUS wariancie: pojedyncze i podwójne to dwa produkty
     // do zamówienia, więc dwa wiersze — tak samo jak dwie pozycje w kosztorysie.
     const klucz = kluczOsprzetu(e);
-    const wiersz = wgTypu.get(klucz) ?? { klucz, type: e.type, label: etykietaOsprzetu(e), sztuk: 0, punktow: 0 };
+    const wiersz = wgTypu.get(klucz) ?? { klucz, type: e.type, label: etykietaOsprzetu(e), sztuk: 0, punktow: 0, ids: [] as string[] };
     wiersz.sztuk += sztuk;
     wiersz.punktow += 1;
+    wiersz.ids.push(e.id);
     wgTypu.set(klucz, wiersz);
 
-    const pokoj = wgPokoju.get(e.room) ?? { room: e.room, sztuk: 0, punktow: 0 };
+    const pokoj = wgPokoju.get(e.room) ?? { room: e.room, sztuk: 0, punktow: 0, ids: [] as string[] };
     pokoj.sztuk += sztuk;
     pokoj.punktow += 1;
+    pokoj.ids.push(e.id);
     wgPokoju.set(e.room, pokoj);
   }
 

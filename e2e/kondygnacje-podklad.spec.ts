@@ -26,7 +26,7 @@ async function pustyProjekt(page: Page) {
 
 async function postawGniazdko(page: Page, x: number, y: number) {
   await page.getByRole("button", { name: "Wstaw Element" }).click();
-  await page.getByRole("button", { name: /Gniazdo 230 V/ }).click();
+  await page.getByRole("button", { name: /Gniazdo 230 V/ }).first().click();
   const box = await planBox(page);
   await page.mouse.click(box.x + x, box.y + y);
 }
