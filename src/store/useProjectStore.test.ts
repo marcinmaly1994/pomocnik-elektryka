@@ -891,3 +891,47 @@ describe("historia rozdzielnicy z ustawieniami (F17)", () => {
     expect(useProjectStore.getState().panelConfig.mainRating).toBe(80);
   });
 });
+
+/**
+ * R9 z audytu Instalacji 11.11.2026: operacje, których Ctrl+Z nie cofnie, zostawiają
+ * po sobie automatyczną wersję projektu (F15) — jedyną drogę powrotu.
+ */
+describe("automatyczna wersja przed operacją nieodwracalną", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useProjectStore.getState().resetProject();
+  });
+
+  const wersje = () => {
+    const id = localStorage.getItem("pomocnikelektryka_projekt_biezacy");
+    return JSON.parse(localStorage.getItem(`pomocnikelektryka_wersje_${id}`) ?? "[]") as { nazwa: string; payload: ProjectPayload }[];
+  };
+
+  it("usunięcie kondygnacji zapisuje wersję z jej zawartością", () => {
+    const s = useProjectStore.getState();
+    s.addFloor("Piętro");
+    const pietro = useProjectStore.getState().activeFloorId;
+    useProjectStore.getState().setDraft((d) => ({ ...d, elements: [...d.elements, { ...sampleElement, floor: pietro }] }));
+
+    useProjectStore.getState().removeFloor(pietro);
+
+    const w = wersje();
+    expect(w).toHaveLength(1);
+    expect(w[0].nazwa).toBe("Przed usunięciem kondygnacji „Piętro”");
+    expect(w[0].payload.draft.elements.some((e) => e.floor === pietro)).toBe(true);
+    expect(useProjectStore.getState().draft.elements.some((e) => e.floor === pietro)).toBe(false);
+  });
+
+  it("pusty projekt nie zostawia wersji — nie ma czego ratować", () => {
+    useProjectStore.getState().addFloor("Piętro");
+    useProjectStore.getState().removeFloor(useProjectStore.getState().activeFloorId);
+    expect(wersje()).toHaveLength(0);
+  });
+
+  it("ostatniej kondygnacji nie da się usunąć — i nie powstaje wersja", () => {
+    useProjectStore.getState().setDraft((d) => ({ ...d, elements: [sampleElement] }));
+    useProjectStore.getState().removeFloor("f1");
+    expect(wersje()).toHaveLength(0);
+    expect(useProjectStore.getState().floors).toHaveLength(1);
+  });
+});

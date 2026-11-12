@@ -5,6 +5,7 @@ import {
   zamknijMenuPaska,
   odslonNarzedziaRysowania,
   poczekajNaKoniecPrzewijania,
+  wlaczPelnyEkran,
 } from "./_flow";
 
 /**
@@ -135,7 +136,10 @@ test("pasek edytora jest nizszy niz przed zwinieciem — na monitorze jeden rzad
 
     // ...a pod reka zostaje to, czego uzywa sie W TRAKCIE rysowania.
     await expect(page.getByRole("button", { name: "Cofnij" })).toBeVisible();
+    // Na telefonie „Dopasuj" jest w menu „Więcej" (R7) — rząd jest pełny bez niego.
+    if (page.viewportSize()!.width < 768) await otworzMenuPaska(page, "Więcej");
     await expect(page.getByRole("button", { name: "Dopasuj widok do planu" })).toBeVisible();
+    if (page.viewportSize()!.width < 768) await zamknijMenuPaska(page);
   }
 });
 
@@ -218,7 +222,7 @@ test("monitor: strona NIE drga — tam edytor i tak mieści się w oknie", async
 test("telefon w pelnym ekranie: karta narzedzi jest WASKA i nie zakrywa rysunku", async ({ page }) => {
   await page.setViewportSize(TELEFON);
   await otworzEdytor(page);
-  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await wlaczPelnyEkran(page);
   await odslonNarzedziaRysowania(page);
 
   const karta = (await page.getByTestId("karta-narzedzi").boundingBox())!;
@@ -244,7 +248,7 @@ test.describe("telefon w pelnym ekranie, dotykiem", () => {
   test("telefon w pelnym ekranie: karte da sie schowac PALCEM, bez najezdzania myszą", async ({ page }) => {
     await page.setViewportSize(TELEFON);
     await otworzEdytor(page);
-    await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+    await wlaczPelnyEkran(page);
 
     const uchwyt = page.getByRole("button", { name: "Pokaż narzędzia rysowania" });
     await uchwyt.tap();
@@ -261,7 +265,7 @@ test.describe("telefon w pelnym ekranie, dotykiem", () => {
 test("monitor w pelnym ekranie: pasek narzedzi bez zmian — i tak byl pionowy", async ({ page }) => {
   await page.setViewportSize(MONITOR);
   await otworzEdytor(page);
-  await page.getByRole("button", { name: "Projektowanie na pełnym ekranie" }).click();
+  await wlaczPelnyEkran(page);
 
   // Najechaniem, nie kliknieciem uchwytu — powod w `odslonNarzedziaRysowania`.
   await odslonNarzedziaRysowania(page);

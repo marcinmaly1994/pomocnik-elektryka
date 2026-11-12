@@ -30,6 +30,7 @@ import { zLiczba } from "@/lib/liczby";
 export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void }) {
   const getProjectPayload = useProjectStore((s) => s.getProjectPayload);
   const loadProjectPayload = useProjectStore((s) => s.loadProjectPayload);
+  const migawkaPrzed = useProjectStore((s) => s.migawkaPrzed);
   const projectName = useProjectStore((s) => s.projectName);
   const elementCount = useProjectStore((s) => s.draft.elements.length);
 
@@ -64,6 +65,9 @@ export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void })
 
   function potwierdzWczytanie() {
     if (!doWczytania) return;
+    // Wczytanie kopii zastępuje bieżący projekt i czyści historię cofania — wersja
+    // „Przed wczytaniem kopii" jest jedyną drogą powrotu (R9 z audytu Instalacji).
+    migawkaPrzed("Przed wczytaniem kopii z pliku");
     loadProjectPayload(doWczytania);
     setDoWczytania(null);
   }
@@ -153,8 +157,8 @@ export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void })
                 {elementCount > 0
                   ? `(${zLiczba(elementCount, "element", "elementy", "elementów")} na planie)`
                   : ""}{" "}
-                zostanie zastąpiony zawartością pliku. Tej operacji nie da się cofnąć —
-                ale plik zostaje na dysku, więc zawsze można wrócić.
+                zostanie zastąpiony zawartością pliku. Przed wczytaniem zapiszemy jego wersję —
+                wrócisz do niej przez „Projekty” → „Wersje projektu…”.
               </p>
               <p className="mb-4 text-xs text-slate-500">
                 Zastąpione zostaną też ceny, protokoły i rozdzielnica — kopia obejmuje cały projekt.

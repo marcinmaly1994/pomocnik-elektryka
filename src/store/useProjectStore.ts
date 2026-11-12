@@ -14,6 +14,7 @@ import {
   usunProjekt,
   type WpisProjektu,
 } from "@/lib/projektyLokalne";
+import { zapiszWersje } from "@/lib/wersjeProjektu";
 import { czytajKopie } from "@/lib/kopiaProjektu";
 import { WARUNKI_DOBORU_DOMYSLNE, type WarunkiDoboru } from "@/lib/panel/norms";
 import type { ProjectSizingOptions } from "@/lib/panel/project";
@@ -618,6 +619,12 @@ interface ProjectState {
   /** Kopiuje kondygnację razem z geometrią i osprzętem — patrz implementacja. */
   duplicateFloor: (id: string, name: string) => void;
   removeFloor: (id: string) => void;
+  /**
+   * Automatyczna wersja projektu (F15) przed operacją, której Ctrl+Z nie cofnie —
+   * usunięcie kondygnacji, wczytanie kopii z pliku (R9 z audytu Instalacji
+   * 11.11.2026). Pomija przykład i projekt bez treści. Zwraca, czy migawka powstała.
+   */
+  migawkaPrzed: (nazwa: string) => boolean;
 
   setBgImage: (floorId: string, dataUrl: string | null) => void;
   setScale: (floorId: string, metersPerUnit: number) => void;
@@ -1158,7 +1165,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       };
     }),
 
-  removeFloor: (id) =>
+  migawkaPrzed: (nazwa) => {
+    const st = get();
+    const { draft, protocols } = st;
+    const pusty =
+      draft.elements.length === 0 && draft.walls.length === 0 && draft.roomShapes.length === 0 && Object.keys(protocols).length === 0;
+    if (st.projektPrzykladowy || pusty) return false;
+    try {
+      // Najpierw domknięty zapis bieżącego slotu — migawka i slot mają mówić o tym samym.
+      zapiszTerazLokalnie();
+      const id = biezacyId(localStorage);
+      if (!id) return false;
+      return zapiszWersje(localStorage, id, nazwa, st.getProjectPayload()).ok;
+    } catch {
+      // Brak dostępu do pamięci nie może zablokować samej operacji.
+      return false;
+    }
+  },
+
+  removeFloor: (id) => {
+    if (get().floors.length > 1) {
+      const nazwa = get().floors.find((f) => f.id === id)?.name ?? "kondygnacja";
+      get().migawkaPrzed(`Przed usunięciem kondygnacji „${nazwa}”`);
+    }
     set((state) => {
       if (state.floors.length <= 1) return state;
       const floors = state.floors.filter((f) => f.id !== id);
@@ -1183,7 +1212,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         scales,
         activeFloorId: state.activeFloorId === id ? floors[0].id : state.activeFloorId,
       };
-    }),
+    });
+  },
 
   setBgImage: (floorId, dataUrl) =>
     set((state) => {
