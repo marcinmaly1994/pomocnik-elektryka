@@ -2092,6 +2092,26 @@ useProjectStore.subscribe(() => {
 });
 
 /**
+ * Zapis NATYCHMIAST, gdy strona znika z ekranu — zamknięcie karty, odświeżenie,
+ * przejście do innej aplikacji na telefonie.
+ *
+ * Autozapis czeka 600 ms po ostatniej zmianie, więc zmiana zrobiona tuż przed
+ * zamknięciem przepadała bez śladu (przegląd 12.11.2026, pkt 2). `pagehide` łapie
+ * zamknięcie i odświeżenie, `visibilitychange` — telefon, który kartę w tle potrafi
+ * ubić bez żadnego `pagehide`. Tylko gdy zapis faktycznie wisi w kolejce: inaczej
+ * nie ma czego domykać, a `wykonajAutozapis` i tak porównuje treść z ostatnim zapisem.
+ */
+if (typeof window !== "undefined") {
+  const domknijZapis = () => {
+    if (autosaveTimer) zapiszTerazLokalnie();
+  };
+  window.addEventListener("pagehide", domknijZapis);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") domknijZapis();
+  });
+}
+
+/**
  * Zapisuje projekt lokalnie NATYCHMIAST, nie czekając na debounce.
  *
  * Do użycia przed czynnością, po której ta karta przestanie istnieć — dziś jedyną
