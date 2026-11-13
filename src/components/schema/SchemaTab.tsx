@@ -772,7 +772,7 @@ function OknoRysunku({
 }: {
   szerokosc: number;
   wysokosc: number;
-  svgRef: React.RefObject<SVGSVGElement>;
+  svgRef: React.RefObject<SVGSVGElement | null>;
   /** Wyłącznik główny — staje na środku okienka, gdy rysunek jest od niego szerszy. */
   srodekStartowyX: number;
   children: React.ReactNode;
