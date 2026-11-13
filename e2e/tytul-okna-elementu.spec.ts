@@ -53,7 +53,7 @@ test("tytuł okna podaje nazwę elementu, w który kliknięto", async ({ page })
   await postaw(page, /Gniazdo 230 V/, 120, 120);
   // Drugi typ z tej samej, domyślnie rozwiniętej sekcji biblioteki — sekcja
   // „Łączniki i sterowanie" startuje zwinięta i test potykał się o nią, a nie o kod.
-  await postaw(page, /Gniazdko hermetyczne/, 260, 220);
+  await postaw(page, /Gniazdo hermetyczne/, 260, 220);
 
   await otworzEdycje(page, "gniazdko");
   await expect(page.getByRole("heading", { name: "Edytuj element: Gniazdo 230 V" })).toBeVisible();
@@ -61,7 +61,7 @@ test("tytuł okna podaje nazwę elementu, w który kliknięto", async ({ page })
 
   // Ten sam test dla DRUGIEGO typu — stały tytuł przeszedłby pierwszą połowę.
   await otworzEdycje(page, "gniazdkoHerm");
-  await expect(page.getByRole("heading", { name: "Edytuj element: Gniazdko hermetyczne" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Edytuj element: Gniazdo hermetyczne" })).toBeVisible();
 });
 
 /**

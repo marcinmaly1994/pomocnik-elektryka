@@ -32,7 +32,9 @@ test("podsumowanie z kwotą brutto stoi na górze, bez przewijania, i zgadza si�
   const kwotaGora = (await gora.locator(".text-copper").textContent())!.trim();
   const kwotaDol = (await page.locator("tfoot tr").last().locator("td").last().textContent())!.trim();
   expect(kwotaGora).toBe(kwotaDol);
-  await expect(gora).toContainText(/Bez ceny\s*4 pozycje — poza sumą/);
+  // 5, nie 4: przykład ma ogranicznik przepięć dołożony ręcznie, a aparaty ręczne
+  // celowo nie mają ceny domyślnej (przegląd 12.11.2026, pkt 4).
+  await expect(gora).toContainText(/Bez ceny\s*5 pozycji — poza sumą/);
 });
 
 test("wartości w tabeli z polskim przecinkiem dziesiętnym", async ({ page }) => {
@@ -64,7 +66,7 @@ test("pozycje w grupach z sumą częściową; suma grup = netto", async ({ page 
 test("pozycje bez ceny są oznaczone w samym wierszu", async ({ page }) => {
   await otworz(page);
   const bez = page.locator("tr[data-bez-ceny]");
-  await expect(bez).toHaveCount(4);
+  await expect(bez).toHaveCount(5); // z ogranicznikiem przepięć przykładu
   await expect(bez.filter({ hasText: "Robocizna" })).toContainText("Bez ceny — nie wchodzi do sumy");
 });
 

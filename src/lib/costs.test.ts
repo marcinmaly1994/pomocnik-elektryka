@@ -252,7 +252,7 @@ describe("pozycjeBezCeny", () => {
 
   it("wyzerowana recznie pozycja nadal jest zgloszona jako poza suma", () => {
     const rows = kosztorysRows({ gniazdko: 12 }, { gniazdko: 15 }, { gniazdko: 0 });
-    expect(pozycjeBezCeny(rows)).toEqual(["Gniazdko 230V podtynkowe"]);
+    expect(pozycjeBezCeny(rows)).toEqual(["Gniazdo 230 V podtynkowe"]);
   });
 });
 
@@ -404,7 +404,7 @@ describe("podsumowanieKosztorysu — suma mówi, czym jest", () => {
     // Domyślny cennik ma `robocizna: 0`, więc to jest przypadek TYPOWY, nie brzegowy:
     // na mieszkaniu 70 m² pod „RAZEM brutto" stała kwota za sam materiał.
     const p = podsumowanieKosztorysu([
-      w("gniazdko", "Gniazdko 230V podtynkowe (szt.)", 16, 240),
+      w("gniazdko", "Gniazdo 230 V podtynkowe (szt.)", 16, 240),
       w("robocizna", "Robocizna za punkt instalacyjny (szt., opcjonalnie)", 38, 0),
     ]);
     expect(p.brakRobocizny).toBe(true);
@@ -414,7 +414,7 @@ describe("podsumowanieKosztorysu — suma mówi, czym jest", () => {
 
   it("komplet cen to zwykłe RAZEM brutto", () => {
     const p = podsumowanieKosztorysu([
-      w("gniazdko", "Gniazdko 230V podtynkowe (szt.)", 16, 240),
+      w("gniazdko", "Gniazdo 230 V podtynkowe (szt.)", 16, 240),
       w("robocizna", "Robocizna za punkt instalacyjny (szt., opcjonalnie)", 38, 4560),
     ]);
     expect(p.brakRobocizny).toBe(false);
@@ -425,7 +425,7 @@ describe("podsumowanieKosztorysu — suma mówi, czym jest", () => {
   });
 
   it("stawka 8% liczy VAT od tej samej sumy netto", () => {
-    const wiersze = [w("gniazdko", "Gniazdko 230V podtynkowe (szt.)", 10, 1000)];
+    const wiersze = [w("gniazdko", "Gniazdo 230 V podtynkowe (szt.)", 10, 1000)];
     const p = podsumowanieKosztorysu(wiersze, 8);
     expect(p.netto).toBe(1000);
     expect(p.vat).toBeCloseTo(80, 2);
@@ -606,5 +606,26 @@ describe("grupy kosztorysu", () => {
     expect(bezCeny(w("oprawa", 0, 9))).toBe(true);
     expect(bezCeny(w("oprawa", 0, 0))).toBe(false);
     expect(bezCeny(w("gniazdko", 90, 6))).toBe(false);
+  });
+});
+
+/**
+ * Nazwy pozycji kosztorysu zgodne z katalogiem i doborem (przegląd 12.11.2026, pkt 5)
+ * — i nadal rozpoznawane przy imporcie cennika: eksport CSV wczytany z powrotem ma
+ * trafić każdą cenę do tej samej pozycji, z której wyszła.
+ */
+describe("nazwy pozycji: zgodne z katalogiem i odporne na eksport → import", () => {
+  const ZMIENIONE = ["gniazdko", "gniazdkoPodwojne", "gniazdkoHerm", "gniazdko400", "mcb3f"] as const;
+
+  it("„Gniazdo 230 V”, a nie „Gniazdko 230V”; 3-faz. bez charakterystyki sprzecznej z doborem", () => {
+    expect(PRICE_LABELS.gniazdko).toBe("Gniazdo 230 V podtynkowe (szt.)");
+    expect(PRICE_LABELS.gniazdkoPodwojne).toBe("Gniazdo 230 V podwójne (szt.)");
+    expect(PRICE_LABELS.gniazdkoHerm).toBe("Gniazdo hermetyczne IP44 (szt.)");
+    expect(PRICE_LABELS.gniazdko400).toBe("Gniazdo 400 V / siłowe (szt.)");
+    expect(PRICE_LABELS.mcb3f).not.toMatch(/C16|C25/);
+  });
+
+  it.each(ZMIENIONE)("%s: nazwa z eksportu wraca przy imporcie do swojej pozycji", (klucz) => {
+    expect(parsePriceCsv(`${PRICE_LABELS[klucz]};12,50`)).toEqual({ [klucz]: 12.5 });
   });
 });

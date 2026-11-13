@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  aparatyDoWidoku,
   balancePhases,
   buildPanelDevices,
   computePhaseLoad,
@@ -225,6 +226,17 @@ describe("computeSelectivity", () => {
     expect(findings.some((f) => f.level === "info" && f.title.includes("Selektywność różnicowoprądowa"))).toBe(true);
   });
 
+  it("liczba różnicówek w komunikacie jest poprawnie odmieniona (przegląd 12.11.2026, pkt 3)", () => {
+    const rcd = (n: number) => ({ ...okRcd, uid: `rcd${n}`, tag: `FI${n}` });
+    const tekst = (ile: number) =>
+      computeSelectivity([okMcb, ...Array.from({ length: ile }, (_, i) => rcd(i + 1))], 40, false, true).find((f) =>
+        f.title.includes("Selektywność różnicowoprądowa")
+      )!.detail;
+    expect(tekst(4)).toContain("4 wyłączniki różnicowoprądowe");
+    expect(tekst(5)).toContain("5 wyłączników różnicowoprądowych");
+    expect(tekst(4)).not.toContain("jest 4");
+  });
+
   it("brak SPD -> warn", () => {
     const findings = computeSelectivity([okMcb, okRcd], 40, false, false);
     expect(findings.some((f) => f.level === "warn" && f.title.includes("ogranicznika przepięć"))).toBe(true);
@@ -324,5 +336,29 @@ describe("daSieSkasowac", () => {
 
   it("zaślepki NIE — to puste miejsce na szynie, nie aparat", () => {
     expect(daSieSkasowac({ kind: "blank" })).toBe(false);
+  });
+});
+
+/**
+ * Aparaty do Schematu i Kosztorysu, zanim Rozdzielnica zdążyła się odbudować (przegląd
+ * 12.11.2026). W trybie „z rzutu" zapisana lista z SAMYMI ręcznymi aparatami (np. SPD)
+ * dawała pusty schemat — brakowało rozłącznika i wyłączników, które Rozdzielnica
+ * dobudowuje dopiero przy otwarciu.
+ */
+describe("aparatyDoWidoku", () => {
+  const spd = { uid: "manual-1", kind: "spd", manual: true, tag: "F0", modules: 4, label: "T2", caption: "SPD", poles: "4P" } as const;
+  const zbudowane = [{ uid: "Q1-0", kind: "main", tag: "Q1", modules: 4, label: "40A", caption: "Rozłącznik", poles: "4P" }];
+
+  it("pusta lista → aparaty z obwodów", () => {
+    expect(aparatyDoWidoku([], "zRzutu", () => zbudowane)).toEqual(zbudowane);
+  });
+
+  it("z rzutu i same ręczne → z obwodów PLUS ręczne, jak po odbudowie w Rozdzielnicy", () => {
+    expect(aparatyDoWidoku([spd], "zRzutu", () => zbudowane)).toEqual([...zbudowane, spd]);
+  });
+
+  it("lista już odbudowana albo tryb ręczny → bez zmian", () => {
+    expect(aparatyDoWidoku([...zbudowane, spd], "zRzutu", () => [])).toEqual([...zbudowane, spd]);
+    expect(aparatyDoWidoku([spd], "reczny", () => zbudowane)).toEqual([spd]);
   });
 });

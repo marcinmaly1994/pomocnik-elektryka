@@ -18,7 +18,7 @@ test("pole liczone ma przerywaną ramkę i czytelny tekst, wpisane — pełną",
 
   await expect(page.getByText(/przerywana ramka/i)).toBeVisible();
 
-  const ilosc = page.getByLabel(/^Ilość: Gniazdko 230V podwójne/);
+  const ilosc = page.getByLabel(/^Ilość: Gniazdo 230 V podwójne/);
   await expect(ilosc).toHaveAttribute("data-stan", "liczone");
   const styl = await ilosc.evaluate((e) => {
     const s = getComputedStyle(e);
@@ -33,7 +33,7 @@ test("pole liczone ma przerywaną ramkę i czytelny tekst, wpisane — pełną",
   await expect(ilosc).toHaveAttribute("data-stan", "wpisane");
   expect(await ilosc.evaluate((e) => getComputedStyle(e).borderTopStyle)).toBe("solid");
 
-  const wartosc = page.getByLabel(/^Wartość pozycji: Gniazdko 230V podwójne/);
+  const wartosc = page.getByLabel(/^Wartość pozycji: Gniazdo 230 V podwójne/);
   await expect(wartosc).toHaveAttribute("data-stan", "liczone");
   await wartosc.fill("123");
   await expect(wartosc).toHaveAttribute("data-stan", "wpisane");

@@ -42,7 +42,7 @@ for (const okno of [
     expect(r.y + r.height).toBeLessThanOrEqual(okno.height);
 
     const przed = await kwota(await suma.innerText());
-    const cena = page.getByLabel(/^Cena jednostkowa: Gniazdko 230V podwójne/);
+    const cena = page.getByLabel(/^Cena jednostkowa: Gniazdo 230 V podwójne/);
     await cena.fill(String(Number(await cena.inputValue()) + 10));
     await expect.poll(async () => kwota(await suma.innerText())).toBeGreaterThan(przed);
     // Pasek i podsumowanie u góry to ta sama kwota — po zmianie ceny...

@@ -88,7 +88,7 @@ test("żadne pole kosztorysu nie ucina liczby na telefonie — od 320 do 430 px"
     // zjeżdżałoby niżej od sąsiadów.
     const wysokosci = await page.evaluate(() => {
       const pole = (etykieta: string) =>
-        document.querySelector<HTMLInputElement>(`input[aria-label^="${etykieta}: Gniazdko 230V podtynkowe"]`)!.getBoundingClientRect().top;
+        document.querySelector<HTMLInputElement>(`input[aria-label^="${etykieta}: Gniazdo 230 V podtynkowe"]`)!.getBoundingClientRect().top;
       return [pole("Ilość"), pole("Cena jednostkowa"), pole("Wartość pozycji")];
     });
     expect(Math.max(...wysokosci) - Math.min(...wysokosci), `szerokość ${szerokosc} px`).toBeLessThan(2);

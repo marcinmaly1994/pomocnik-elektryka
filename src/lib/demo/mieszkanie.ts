@@ -317,6 +317,8 @@ export function zbudujProjektPrzykladowy(): ProjectPayload {
     },
     floors: [{ id: FLOOR, name: "Parter" }],
     projectName: "Przykład: mieszkanie 70 m²",
+    // Mieszkanie w bloku: typ 1 jest zwykle w rozdzielnicy budynku, w mieszkaniu typ 2.
+    spd: { klasa: "T2" },
     obiekt: "Mieszkanie przykładowe, 70 m²",
     planSize: { w: 240, h: 180 },
   });

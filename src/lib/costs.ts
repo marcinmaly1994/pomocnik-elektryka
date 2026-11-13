@@ -52,10 +52,11 @@ export function stawkaVatZZapisu(v: unknown): StawkaVat {
 }
 
 export const PRICE_LABELS: Record<string, string> = {
-  gniazdko: "Gniazdko 230V podtynkowe (szt.)",
-  gniazdkoPodwojne: "Gniazdko 230V podwójne (szt.)",
-  gniazdkoHerm: "Gniazdko hermetyczne IP44 (szt.)",
-  gniazdko400: "Gniazdo 400V / siłowe (szt.)",
+  // Nazwy jak w katalogu elementów („Gniazdo 230 V") — przegląd 12.11.2026, pkt 5.
+  gniazdko: "Gniazdo 230 V podtynkowe (szt.)",
+  gniazdkoPodwojne: "Gniazdo 230 V podwójne (szt.)",
+  gniazdkoHerm: "Gniazdo hermetyczne IP44 (szt.)",
+  gniazdko400: "Gniazdo 400 V / siłowe (szt.)",
   wypustAGD: "Wypust zasilający AGD (szt.)",
   ladowarkaEV: "Ładowarka EV / wallbox (szt., opcjonalnie)",
   wlacznik: "Łącznik jednobiegunowy (szt.)",
@@ -95,7 +96,9 @@ export const PRICE_LABELS: Record<string, string> = {
   kabelLan: "Przewód UTP kat. 6 (mb)",
   kabelKoncentryk: "Przewód koncentryczny RG-6 (mb)",
   mcb: "Wyłącznik nadprądowy 1-faz. B10/16 (szt.)",
-  mcb3f: "Wyłącznik nadprądowy 3-faz. C16/C25 (szt.)",
+  // Bez charakterystyki w nazwie: dobór daje B16 albo C16/C25 zależnie od odbiornika,
+  // a „C16/C25" stało obok „B16 3P" z Rozdzielnicy jak sprzeczność.
+  mcb3f: "Wyłącznik nadprądowy 3-faz. (szt.)",
   rcd: "Wyłącznik różnicowoprądowy 30mA (szt.)",
   rcdB: "Wyłącznik różnicowoprądowy typu B (szt.)",
   glowny: "Wyłącznik główny (szt.)",
@@ -548,8 +551,13 @@ const CSV_KEYWORD_MAP: [string, string[]][] = [
   ["glowny", ["wyłącznik główny", "wylacznik glowny", "rozłącznik izolacyjny", "rozlacznik izolacyjny"]],
   ["mcb", ["wyłącznik nadprądowy", "wylacznik nadpradowy", " b16", " b10", " b20", " c16", " c20", " c25"]],
   ["rozdzielnica", ["rozdzielnica", "obudowa"]],
-  ["gniazdkoPodwojne", ["gniazdo podwójne", "gniazdko podwójne", "gniazdo podwojne", "gniazdko podwojne"]],
-  ["gniazdko", ["gniazdko", "gniazdo podtynkowe"]],
+  // Hermetyczne i 400 V PRZED ogólnymi gniazdami: „Gniazdko hermetyczne" zawiera
+  // „gniazdko" i trafiało do zwykłego gniazda, a „Gniazdo 400 V" nie trafiało nigdzie —
+  // eksport kosztorysu wczytany z powrotem gubił obie ceny.
+  ["gniazdkoHerm", ["hermetyczn", "ip44", "bryzgoszczeln"]],
+  ["gniazdko400", ["400 v", "400v", "siłow", "silow", "trójfazow", "trojfazow"]],
+  ["gniazdkoPodwojne", ["gniazdo podwójne", "gniazdko podwójne", "gniazdo podwojne", "gniazdko podwojne", "230 v podwójne", "230v podwójne", "230 v podwojne", "230v podwojne"]],
+  ["gniazdko", ["gniazdko", "gniazdo podtynkowe", "gniazdo 230"]],
   // Warianty łączników MUSZĄ stać przed ogólnym `wlacznik`: „łącznik" jest podciągiem
   // każdej z tych nazw.
   ["wlacznikDwubiegunowy", ["dwubiegunow"]],

@@ -1,5 +1,6 @@
 import type { PanelDevice, RcdGroup } from "@/types";
 import { colorForCircuit } from "./circuits";
+import { slowoLiczby, zLiczba } from "@/lib/liczby";
 
 /**
  * Kolory faz wg konwencji oznaczania żył (PN-HD 308 S2): L1 brązowy, L2 czarny,
@@ -360,7 +361,8 @@ export function computeSelectivity(
     out.push({
       level: "info",
       title: "Selektywność różnicowoprądowa",
-      detail: `W rozdzielnicy jest ${rcds.length} wyłączników różnicowoprądowych pracujących równolegle. Jeśli któryś ma być nadrzędny (szeregowo przed pozostałymi), musi być typu S (zwłocznego) i mieć prąd różnicowy co najmniej 3× większy od podrzędnych.`,
+      // Odmiana przez `zLiczba` — wcześniej „W rozdzielnicy jest 4 wyłączników" (przegląd 12.11.2026).
+      detail: `${zLiczba(rcds.length, "wyłącznik różnicowoprądowy", "wyłączniki różnicowoprądowe", "wyłączników różnicowoprądowych")} w rozdzielnicy ${slowoLiczby(rcds.length, "pracuje", "pracują", "pracuje")} równolegle. Jeśli któryś ma być nadrzędny (szeregowo przed pozostałymi), musi być typu S (zwłocznego) i mieć prąd różnicowy co najmniej 3× większy od podrzędnych.`,
     });
   }
 
@@ -446,4 +448,24 @@ export function przeniesAparat(devices: PanelDevice[], from: number, to: number)
   const [przenoszony] = kopia.splice(from, 1);
   kopia.splice(to, 0, przenoszony);
   return kopia;
+}
+
+/**
+ * Aparaty, z których Schemat i Kosztorys rysują i liczą rozdzielnicę.
+ *
+ * Źródłem jest zapisana lista z Rozdzielnicy. W trybie „z rzutu” Rozdzielnica
+ * odbudowuje ją z obwodów dopiero przy OTWARCIU zakładki i dokleja do niej aparaty
+ * ręczne (patrz efekt w PanelTab.tsx). Do tego czasu lista potrafi zawierać same
+ * aparaty ręczne — np. ogranicznik przepięć z przykładu — i brać ją wprost znaczyło
+ * pusty schemat bez rozłącznika i wyłączników (przegląd 12.11.2026). Wtedy składamy
+ * to samo, co złożyłaby Rozdzielnica: aparaty z obwodów plus ręczne.
+ */
+export function aparatyDoWidoku(
+  zapisane: PanelDevice[],
+  tryb: "zRzutu" | "reczny",
+  zbudujZObwodow: () => PanelDevice[]
+): PanelDevice[] {
+  if (!zapisane.length) return zbudujZObwodow();
+  if (tryb === "zRzutu" && zapisane.every((d) => d.manual)) return [...zbudujZObwodow(), ...zapisane];
+  return zapisane;
 }

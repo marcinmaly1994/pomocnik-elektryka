@@ -359,6 +359,8 @@ export function zbudujProjektDom(): ProjectPayload {
       { id: PIETRO, name: "Piętro", heightM: 2.6 },
     ],
     projectName: "Przykład: dom 136 m²",
+    // Dom wolnostojący: typ 1+2 przy złączu — standard przy nowych domach.
+    spd: { klasa: "T1+T2" },
     obiekt: "Dom jednorodzinny przykładowy, 136 m²",
     planSize: { w: 240, h: 200 },
   });

@@ -216,7 +216,9 @@ describe.each(PRZYKLADY.map((x) => [x.id] as const))('przykład „%s"', (id) =>
     // w przykładzie chodzi. Gotowa lista aparatów zamrażałaby wynik doboru z dnia,
     // w którym powstał plik z danymi.
     expect(payload.panelTryb).toBe("zRzutu");
-    expect(payload.panelDevices).toEqual([]);
+    // Jedyny zapisany aparat to ręczny ogranicznik przepięć (przegląd 12.11.2026, pkt 4) —
+    // resztę rozdzielnica odbudowuje z obwodów, a ręczny SPD odbudowa zachowuje.
+    expect(payload.panelDevices.map((d) => [d.kind, d.manual])).toEqual([["spd", true]]);
     // Przewodnik „Zacznij w 3 krokach" jest na gotowym projekcie bezprzedmiotowy —
     // wszystkie trzy kroki są w nim z definicji wykonane.
     expect(payload.onboarding.krok1Done).toBe(true);

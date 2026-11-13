@@ -32,7 +32,8 @@ test("zmiany w Rozdzielnicy trafiają do kosztorysu i do nagłówka schematu", a
 
   await zakladka(page, /Kosztorys/);
   await expect.poll(() => ilosc(page, "Wyłącznik nadprądowy 1-faz.")).toBe("10");
-  expect(await ilosc(page, "Ogranicznik przepięć SPD")).toBeNull();
+  // Przykład ma już jeden ogranicznik dołożony ręcznie (przegląd 12.11.2026, pkt 4).
+  expect(await ilosc(page, "Ogranicznik przepięć SPD")).toBe("1");
 
   await zakladka(page, "Rozdzielnica");
   await page.getByRole("button", { name: "Usuń aparat F7", exact: true }).click();
@@ -44,7 +45,7 @@ test("zmiany w Rozdzielnicy trafiają do kosztorysu i do nagłówka schematu", a
 
   await zakladka(page, /Kosztorys/);
   await expect.poll(() => ilosc(page, "Wyłącznik nadprądowy 1-faz.")).toBe("9");
-  expect(await ilosc(page, "Ogranicznik przepięć SPD")).toBe("1");
+  expect(await ilosc(page, "Ogranicznik przepięć SPD")).toBe("2");
   // Bez ceny domyślnej — kosztorys mówi wprost, że trzeba ją uzupełnić.
   await expect(page.getByText(/Ogranicznik przepięć SPD/).last()).toBeVisible();
 

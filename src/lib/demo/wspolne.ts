@@ -1,4 +1,4 @@
-import type { InstallationElement, ElementType, RoomShape, Wall } from "@/types";
+import type { InstallationElement, ElementType, PanelDevice, RoomShape, Wall } from "@/types";
 import { MANUAL_DRAW_SCALE_MPU, WALL_SNAP_TOLERANCE_M } from "@/lib/design";
 import { przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { DEFAULT_ELEMENT_SCALE, elementRenderScale } from "@/lib/symbolScale";
@@ -109,6 +109,13 @@ export function bazaPayloadu(opis: {
   obiekt: string;
   /** Arkusz, na którym rysunek powstał — patrz `planSize` w nagłówkach przykładów. */
   planSize: ProjectPayload["planSize"];
+  /**
+   * Ogranicznik przepięć przykładu — jako aparat RĘCZNY, tak jak doda go użytkownik
+   * („Dodaj aparat ręcznie"). Automat celowo SPD nie dokłada (patrz `buildPanelDevices`),
+   * ale przykład pokazowy nie może witać ostrzeżeniem „Brak ogranicznika przepięć"
+   * (przegląd 12.11.2026, pkt 4).
+   */
+  spd: { klasa: "T1+T2" | "T2" };
 }): ProjectPayload {
   return {
     draft: opis.draft,
@@ -144,7 +151,9 @@ export function bazaPayloadu(opis: {
     // Rozdzielnica ma się ODBUDOWAĆ z obwodów policzonych z rzutu — o to w przykładzie
     // chodzi. Stąd tryb „z rzutu" i pusta lista aparatów: gotowa lista zamrażałaby
     // wynik doboru z dnia, w którym powstał plik z danymi.
-    panelDevices: [],
+    // Aparaty z obwodów odbudują się same w trybie „z rzutu"; zostaje tylko ręczny SPD,
+    // który odbudowa zachowuje (patrz efekt w PanelTab.tsx).
+    panelDevices: [ogranicznikPrzepiec(opis.spd.klasa)],
     panelHidden: [],
     panelTryb: "zRzutu",
     panelOverrides: {},
@@ -154,5 +163,22 @@ export function bazaPayloadu(opis: {
     // pomieszczenia, stoją elementy), a `reconcile` i tak by je odhaczyło z faktów.
     onboarding: { ...INITIAL_ONBOARDING, krok1Done: true, krok2Done: true, krok3Done: true, pominiety: true, ostatnioOtwarty: false },
     projektPrzykladowy: true,
+  };
+}
+
+/** Ogranicznik przepięć 3-fazowy (4 moduły), w tej samej postaci co aparat dodany ręcznie w Rozdzielnicy. */
+function ogranicznikPrzepiec(klasa: "T1+T2" | "T2"): PanelDevice {
+  return {
+    uid: "manual-1",
+    kind: "spd",
+    manual: true,
+    // „F0": przed wyłącznikami obwodów F1…Fn, bo SPD stoi zaraz za rozłącznikiem
+    // głównym — i nie koliduje z numeracją, którą automat nadaje obwodom.
+    tag: "F0",
+    modules: 4,
+    label: klasa,
+    caption: "Ogranicznik przepięć (SPD)",
+    poles: "4P",
+    phase: "3F",
   };
 }

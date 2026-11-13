@@ -14,7 +14,7 @@ import { GLYPHS, labelOffset } from "./deviceGlyphs";
 import { LINE_W, STROKE } from "./glyphyOprawa";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, pradyWgKluczaAparatu } from "@/lib/panel/project";
-import { buildPanelDevices, czuloscITypRcd, jestOdplywem, PHASE_COLORS } from "@/lib/panel/devices";
+import { aparatyDoWidoku, buildPanelDevices, czuloscITypRcd, jestOdplywem, PHASE_COLORS } from "@/lib/panel/devices";
 import { zLiczba } from "@/lib/liczby";
 import type { PanelDevice } from "@/types";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
@@ -575,9 +575,10 @@ export function SchemaTab() {
    * zakładki — wtedy schemat pokazuje to, co wynika z rzutu.
    */
   const panelDevices = useProjectStore((s) => s.panelDevices);
+  const panelTryb = useProjectStore((s) => s.panelTryb);
   const devices = useMemo(
-    () => (panelDevices.length ? panelDevices : buildPanelDevices(rcdGroups, { ...panelConfig, pradyWgKlucza })),
-    [panelDevices, rcdGroups, panelConfig, pradyWgKlucza]
+    () => aparatyDoWidoku(panelDevices, panelTryb, () => buildPanelDevices(rcdGroups, { ...panelConfig, pradyWgKlucza })),
+    [panelDevices, panelTryb, rcdGroups, panelConfig, pradyWgKlucza]
   );
 
   const mainDevice = devices.find((d) => d.kind === "main");

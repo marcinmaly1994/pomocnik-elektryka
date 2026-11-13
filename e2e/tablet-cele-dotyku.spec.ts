@@ -51,9 +51,9 @@ test.describe("tablet 768×1024", () => {
   test("kosztorys: krzyżyk „Przywróć” pod palec", async ({ page }) => {
     await otworzPrzyklad(page);
     await page.getByRole("button", { name: /Kosztorys/ }).first().click();
-    const ilosc = page.getByLabel("Ilość: Gniazdko 230V podtynkowe (szt.)");
+    const ilosc = page.getByLabel("Ilość: Gniazdo 230 V podtynkowe (szt.)");
     await ilosc.fill("9");
-    const r = await wymiary(page, "Przywróć ilość z rzutu: Gniazdko 230V podtynkowe (szt.)");
+    const r = await wymiary(page, "Przywróć ilość z rzutu: Gniazdo 230 V podtynkowe (szt.)");
     expect(r.h).toBeGreaterThanOrEqual(44);
     expect(r.w).toBeGreaterThanOrEqual(32);
   });
