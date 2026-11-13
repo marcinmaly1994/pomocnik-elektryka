@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import { KOLORY_TAILWIND, PROMIENIE, CIENIE } from "./src/lib/tokeny";
+import { KOLORY_TAILWIND, PROMIENIE, CIENIE, CZASY } from "./src/lib/tokeny";
 
 // Paleta przeniesiona z oryginalnego pliku PomocnikElektryka.jsx ("schemat kreślarski + miedź"),
 // zdefiniowana teraz jako właściwy motyw Tailwind zamiast rozproszonych wartości hex w stylach inline.
@@ -41,6 +41,19 @@ export default {
         lg: PROMIENIE.karta,
         card: PROMIENIE.karta,
         xl: PROMIENIE.duzy,
+      },
+      // Czasy ruchu z tokenów (`CZASY`) — klasy `duration-szybko` / `duration-zwykle`
+      // i nazwane animacje zamiast `animate-[pe-…_200ms_ease-out]` w komponentach.
+      // Klatki kluczowe żyją w src/index.css.
+      transitionDuration: {
+        szybko: CZASY.szybko,
+        zwykle: CZASY.zwykle,
+      },
+      animation: {
+        "przenikanie-szybko": `pe-przenikanie ${CZASY.szybko} ease-out`,
+        przenikanie: `pe-przenikanie ${CZASY.zwykle} ease-out`,
+        "okno-wejscie": `pe-okno-wejscie ${CZASY.zwykle} ease-out`,
+        "arkusz-wjazd": `pe-arkusz-wjazd ${CZASY.zwykle} ease-out`,
       },
       boxShadow: {
         xs: CIENIE.xs,

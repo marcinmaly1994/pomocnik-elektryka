@@ -14,6 +14,11 @@ const USUNIETE: Record<string, RegExp> = {
   "pe-btn-*": /\bpe-btn-(copper|ghost)\b/,
   "pe-chip": /\bpe-chip\b/,
   "pe-tag-*": /\bpe-tag-(blue|green|copper)\b/,
+  // Czasy animacji idą z tokenów (`CZASY` w lib/tokeny.ts → klasy `duration-szybko`,
+  // `duration-zwykle`, `animate-*`), a nie z liczb wpisanych w klasę — drobiazg
+  // z redesignu, pozycja 6 przeglądu z 12.11.2026.
+  "duration-<liczba>": /\bduration-\d+\b/,
+  "animate-[…]": /\banimate-\[/,
 };
 
 function pliki(katalog: string, rozszerzenia: string[]): string[] {

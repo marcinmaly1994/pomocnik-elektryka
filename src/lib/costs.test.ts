@@ -409,6 +409,7 @@ describe("podsumowanieKosztorysu — suma mówi, czym jest", () => {
     ]);
     expect(p.brakRobocizny).toBe(true);
     expect(p.etykietaSumy).toBe("RAZEM brutto — sam materiał");
+    expect(p.zastrzezenieSumy).toBe("sam materiał");
     expect(p.niewycenione).toContain("Robocizna za punkt instalacyjny");
   });
 
@@ -419,6 +420,7 @@ describe("podsumowanieKosztorysu — suma mówi, czym jest", () => {
     ]);
     expect(p.brakRobocizny).toBe(false);
     expect(p.etykietaSumy).toBe("RAZEM brutto");
+    expect(p.zastrzezenieSumy).toBeUndefined();
     expect(p.niewycenione).toEqual([]);
     expect(p.netto).toBe(4800);
     expect(p.brutto).toBeCloseTo(4800 * 1.23, 2);

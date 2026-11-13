@@ -39,7 +39,7 @@ export function PodpowiedzKolka({ sygnal }: { sygnal: number }) {
       // czytnik ekranu nie miałby innej drogi, żeby go zauważyć.
       role="status"
       aria-live="polite"
-      className={`pointer-events-none absolute left-1/2 top-6 z-30 -translate-x-1/2 transition-opacity duration-200 ${
+      className={`pointer-events-none absolute left-1/2 top-6 z-30 -translate-x-1/2 transition-opacity duration-zwykle ${
         widoczna ? "opacity-100" : "opacity-0"
       }`}
       // Schowany komunikat znika też dla czytnika i dla testów — sama przezroczystość
