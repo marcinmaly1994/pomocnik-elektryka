@@ -1128,7 +1128,7 @@ export function CalculatorsTab() {
           <div
             key={activeCalc ?? "start"}
             data-karta-kalkulatora
-            className="motion-safe:animate-[pe-przenikanie_120ms_ease-out]"
+            className="motion-safe:animate-przenikanie-szybko"
           >
           {/* Przelacznik trybu STOI NAD karta trybu, a nie w niej: to wybor pytania,
               nie jedno z pol formularza. Cztery dawne kalkulatory (przekroj,

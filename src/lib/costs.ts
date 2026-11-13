@@ -495,6 +495,12 @@ export interface PodsumowanieKosztorysu {
    * w `DEFAULT_PRICES`). Zamiast tego suma mówi, czym jest.
    */
   etykietaSumy: string;
+  /**
+   * Samo zastrzeżenie do sumy („sam materiał" / „niepełny"), bez „RAZEM brutto" —
+   * do paska z sumą nad zakładką. Osobne pole zamiast wycinania z `etykietaSumy`
+   * po myślniku: zmiana treści etykiety psuła po cichu pasek (drobiazg z redesignu).
+   */
+  zastrzezenieSumy?: string;
 }
 
 /** Klucz robocizny w cenniku — jedno miejsce, żeby nazwa nie rozjechała się z `DEFAULT_PRICES`. */
@@ -505,17 +511,15 @@ export function podsumowanieKosztorysu(rows: CostRow[], stawkaVat: StawkaVat = V
   const vat = netto * (stawkaVat / 100);
   const bezCeny = wierszeBezCeny(rows);
   const brakRobocizny = bezCeny.some((r) => r.key === KLUCZ_ROBOCIZNY);
+  const zastrzezenieSumy = brakRobocizny ? "sam materiał" : bezCeny.length > 0 ? "niepełny" : undefined;
   return {
     netto,
     vat,
     brutto: netto + vat,
     niewycenione: bezCeny.map((r) => r.label.replace(/\s*\(.*?\)\s*$/, "")),
     brakRobocizny,
-    etykietaSumy: brakRobocizny
-      ? "RAZEM brutto — sam materiał"
-      : bezCeny.length > 0
-        ? "RAZEM brutto — niepełny"
-        : "RAZEM brutto",
+    etykietaSumy: zastrzezenieSumy ? `RAZEM brutto — ${zastrzezenieSumy}` : "RAZEM brutto",
+    zastrzezenieSumy,
   };
 }
 

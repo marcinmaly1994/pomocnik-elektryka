@@ -56,6 +56,13 @@ export const KOLORY_TAILWIND = {
 /** Trzy promienie: pola, przyciski, znaczniki / karty i panele / dialogi i arkusze. */
 export const PROMIENIE = { maly: "6px", karta: "10px", duzy: "14px" } as const;
 
+/**
+ * Dwa czasy ruchu: szybki (przenikanie treści w miejscu) i zwykły (okna, arkusze,
+ * wysuwane panele). Wcześniej 120 / 200 ms wpisane wprost w klasy w kilku plikach —
+ * zmiana tempa wymagała szukania liczb po kodzie. Pilnuje tego `klasyUsuniete.test.ts`.
+ */
+export const CZASY = { szybko: "120ms", zwykle: "200ms" } as const;
+
 /** Dwa poziomy cienia: karta leżąca na tle / coś unoszącego się nad treścią. */
 export const CIENIE = {
   xs: "0 1px 2px rgb(22 32 43 / 0.06)",

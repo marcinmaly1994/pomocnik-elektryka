@@ -3534,7 +3534,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           przyciski paska narzędzi i zakładki panelu pod spodem. */}
       {pelnyEkran && (
         <div
-          className="absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-3 py-2 shadow-lg backdrop-blur transition-[top] duration-200 empty:hidden"
+          className="absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-3 py-2 shadow-lg backdrop-blur transition-[top] duration-zwykle empty:hidden"
           // Odsłonięty pasek edytora zajmuje górę okna — pigułka zjeżdża wtedy pod niego,
           // zamiast się z nim nakładać.
           style={{ top: rozmiaryChrome.gora + 12 }}
@@ -3583,7 +3583,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               // też `top`/`bottom`, przez co karta gonilaby wysuwający się pasek
               // z opóźnieniem i na moment go zasłaniała — czyli dokładnie to, co
               // ta zmiana ma naprawić. Odsunięcie ma być natychmiastowe.
-              ? "absolute left-0 z-30 flex overflow-hidden rounded-r-card border border-l-0 border-border bg-white shadow-xl transition-transform duration-200"
+              ? "absolute left-0 z-30 flex overflow-hidden rounded-r-card border border-l-0 border-border bg-white shadow-xl transition-transform duration-zwykle"
               : /**
                  * KOLUMNA na telefonie, RZĄD od 768 px w górę.
                  *

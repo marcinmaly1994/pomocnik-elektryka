@@ -1,3 +1,4 @@
+import { KOLORY } from "@/lib/tokeny";
 import { Alert } from "@/components/ui/alert";
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
@@ -173,7 +174,7 @@ export function CostsTab() {
   const gross = podsumowanie.brutto;
   // Zastrzeżenie bierzemy z tej samej etykiety co podsumowanie i stopka („RAZEM brutto — sam
   // materiał”): goła suma pod okiem przy poprawianiu cen bywa NIEPRAWDĄ (brak robocizny/cen).
-  const zastrzezenieSumy = podsumowanie.etykietaSumy.split(" — ")[1];
+  const zastrzezenieSumy = podsumowanie.zastrzezenieSumy;
   // Pozycje o zerowej wartości nie wchodzą do sumy, więc „RAZEM" potrafi wyglądać na
   // komplet, choć brakuje w nim np. całej robocizny. Zbieramy je, żeby powiedzieć to
   // wprost — aplikacja jest adresowana głównie do laików, którzy nie wychwycą tego sami.
@@ -317,7 +318,7 @@ export function CostsTab() {
             {unpriced.length > 0 && (
               <div>
                 <dt className="text-slate-500">Bez ceny</dt>
-                <dd style={{ color: "#8A5526" }}>
+                <dd className="text-caution">
                   {unpriced.length}{" "}
                   {unpriced.length === 1
                     ? "pozycja"
@@ -354,12 +355,12 @@ export function CostsTab() {
           uwagi), więc na węższych ekranach wszystko stoi jak dotąd, jedno pod drugim. */}
       <div className="space-y-5 xl:grid xl:grid-cols-[minmax(0,64rem)_20rem] xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-5 xl:space-y-0">
       {rows.length > 0 && (
-        <div className="rounded-lg border border-border px-3 py-2 text-xs xl:col-start-2 xl:row-start-1" style={{ background: "#F7F9FB" }}>
+        <div className="rounded-lg border border-border px-3 py-2 text-xs xl:col-start-2 xl:row-start-1" style={{ background: KOLORY.surface2 }}>
           <div className="mb-1.5 text-xs font-semibold text-slate-600">Skąd wzięły się metry kabla</div>
           <div className="space-y-1.5">
             <div
               className="flex items-start gap-2"
-              style={{ color: cableLengthSource === "plan" ? "#2C6B4A" : "#8A5526" }}
+              style={{ color: cableLengthSource === "plan" ? KOLORY.success : KOLORY.caution }}
             >
               {cableLengthSource === "plan" ? (
                 <Info size={14} className="mt-0.5 shrink-0" />
@@ -394,7 +395,7 @@ export function CostsTab() {
             </div>
 
             {niskopradoweWKosztorysie && (
-              <div className="flex items-start gap-2" style={{ color: niskopradowe ? "#2C6B4A" : "#8A5526" }}>
+              <div className="flex items-start gap-2" style={{ color: niskopradowe ? KOLORY.success : KOLORY.caution }}>
                 {niskopradowe ? (
                   <Info size={14} className="mt-0.5 shrink-0" />
                 ) : (
@@ -490,7 +491,7 @@ export function CostsTab() {
                   <td className="col-span-3 font-medium md:p-3 md:font-normal">
                     {r.label}
                     {bezCeny(r) && (
-                      <span className="mt-0.5 block text-xs font-normal" style={{ color: "#8A5526" }}>
+                      <span className="mt-0.5 block text-xs font-normal text-caution">
                         Bez ceny — nie wchodzi do sumy. Wpisz cenę jednostkową albo wartość pozycji.
                       </span>
                     )}

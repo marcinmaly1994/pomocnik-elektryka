@@ -441,7 +441,7 @@ export function PanelTab() {
       </div>
 
       {unassignedCount > 0 && (
-        <div className="flex items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: "3px solid #C1793F", paddingLeft: 12 }}>
+        <div className="flex items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: `3px solid ${KOLORY.copper}`, paddingLeft: 12 }}>
           <AlertTriangle size={15} className="mt-0.5 shrink-0 text-copper" />
           <span>
             {unassignedCount} {unassignedCount === 1 ? "element" : "elementów"} bez rozpoznanego pomieszczenia na planie
@@ -501,7 +501,7 @@ export function PanelTab() {
             wie, że akurat te dwa pola trzeba zweryfikować u operatora/na liczniku, zanim
             zaufa reszcie wyników — w przeciwieństwie do pól obok, które da się zmienić
             bez konsekwencji dla poprawności. */}
-        <div className="flex w-full items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: "3px solid #C1793F", paddingLeft: 12 }}>
+        <div className="flex w-full items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: `3px solid ${KOLORY.copper}`, paddingLeft: 12 }}>
           <AlertTriangle size={15} className="mt-0.5 shrink-0 text-copper" />
           <span>
             „Zasilanie" i „Rozłącznik główny" aplikacja przyjmuje jako domysł — sprawdź je w umowie z zakładem
@@ -612,7 +612,7 @@ export function PanelTab() {
                   <span className="pe-mono w-6 text-xs font-bold" style={{ color: PHASE_COLORS[ph] }}>
                     {ph}
                   </span>
-                  <div className="h-3 flex-1 overflow-hidden rounded-full" style={{ background: "#EEF1F4" }}>
+                  <div className="h-3 flex-1 overflow-hidden rounded-full" style={{ background: KOLORY.paper }}>
                     <div style={{ width: `${(phaseLoad[ph] / maxPhase) * 100}%`, height: "100%", background: PHASE_COLORS[ph], opacity: 0.75 }} />
                   </div>
                   <span className="pe-mono w-20 text-right text-xs text-slate-600">
@@ -621,7 +621,7 @@ export function PanelTab() {
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-xs" style={{ color: phaseSpread > 32 ? "#A2352C" : "#4F5D73" }}>
+            <div className={`mt-2 text-xs ${phaseSpread > 32 ? "text-danger" : "text-slate-500"}`}>
               {phaseSpread > 32
                 ? `Różnica między najbardziej i najmniej obciążoną fazą wynosi ${formatLiczba(phaseSpread, 1)} A — rozważ przepięcie obwodów lub użyj „Wyrównaj fazy”.`
                 : rozlozoneRowno
@@ -738,7 +738,7 @@ export function PanelTab() {
             ))}
           </div>
 
-          <div className="border-t pt-3" style={{ borderColor: "#EEF1F4" }}>
+          <div className="border-t border-paper pt-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">Dodaj aparat ręcznie</div>
             <div className="grid grid-cols-2 gap-2">
               <select
@@ -814,7 +814,7 @@ export function PanelTab() {
           {bezSkali.length === 0 ? (
             <>Długości tras policzone z kalibracji skali planu.</>
           ) : (
-            <span style={{ color: "#8A5526" }}>
+            <span className="text-caution">
               Bez skali: {bezSkali.join(", ")} — spadek napięcia nie został sprawdzony dla obwodów
               sięgających {bezSkali.length === 1 ? "tej kondygnacji" : "tych kondygnacji"}.
             </span>
