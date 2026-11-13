@@ -106,7 +106,7 @@ function IkonaKosztorys() {
   );
 }
 
-const ETAPY: { ikona: () => JSX.Element; tytul: string; opis: string }[] = [
+const ETAPY: { ikona: () => React.JSX.Element; tytul: string; opis: string }[] = [
   { ikona: IkonaRzut, tytul: "Rzut", opis: "Pokoje i osprzęt" },
   // „Dobrana sama", nie „Dobrana automatycznie" — dłuższy wariant zawijał się na dwie
   // linie i sam podpis robił się wyższy niż miniatura nad nim, przez co rząd przestawał
