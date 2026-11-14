@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata, przesunNaDlugosc, prostokatOdKotwicy, obrysyNachodza } from "./geometry";
+import { snap, clampNum, pointInPolygon, polygonArea, polygonAreaM2, nearestPointOnPolyline, distanceToRect, rectangleSizeM, punktWewnatrzWielokata, przesunNaDlugosc, prostokatOdKotwicy, obrysyNachodza, prostokatMiedzy, rogiProstokata } from "./geometry";
 
 describe("snap", () => {
   it("zaokrągla do siatki 20", () => {
@@ -474,5 +474,25 @@ describe("obrysyNachodza", () => {
 
   it("zachodzenie o włos (mniej niż tolerancja) — nie, to szum przyciągania", () => {
     expect(obrysyNachodza(pr(0, 0, 100, 100), pr(99.8, 0, 200, 100))).toBe(false);
+  });
+});
+
+describe("prostokatMiedzy / rogiProstokata — ramka i prostokąt pomieszczenia na płótnie", () => {
+  it("prostokąt nie zależy od kierunku przeciągnięcia", () => {
+    const r = { x: 10, y: 20, w: 30, h: 40 };
+    expect(prostokatMiedzy({ x: 10, y: 20 }, { x: 40, y: 60 })).toEqual(r);
+    expect(prostokatMiedzy({ x: 40, y: 60 }, { x: 10, y: 20 })).toEqual(r);
+    expect(prostokatMiedzy({ x: 40, y: 20 }, { x: 10, y: 60 })).toEqual(r);
+  });
+
+  it("rogi idą zgodnie z ruchem wskazówek zegara od lewego górnego — jak w prostokatOdKotwicy", () => {
+    const rogi = rogiProstokata({ x: 0, y: 0, w: 100, h: 50 });
+    expect(rogi).toEqual([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 50 },
+      { x: 0, y: 50 },
+    ]);
+    expect(prostokatOdKotwicy({ x: 0, y: 0 }, 100, 50, { w: 1000, h: 1000 })).toEqual(rogi);
   });
 });

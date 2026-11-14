@@ -338,12 +338,44 @@ export function prostokatOdKotwicy(
   const yMax = Math.max(kotwica.y, y1);
 
   // Kolejność narożników zgodna z ruchem wskazówek zegara, tak jak przy prostokącie
-  // rysowanym myszą (`rectBetween` w DesignCanvas) — dalsze liczenie pola i obwodu
+  // rysowanym myszą (`rogiProstokata`) — dalsze liczenie pola i obwodu
   // zakłada spójny obieg.
   return [
     { x: xMin, y: yMin },
     { x: xMax, y: yMin },
     { x: xMax, y: yMax },
     { x: xMin, y: yMax },
+  ];
+}
+
+/** Prostokąt osiowy rysowany przeciągnięciem: narożnik `x`,`y` i wymiary, w jednostkach planu. */
+export interface ProstokatRamki {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Prostokąt rozpięty między dwoma narożnikami — niezależnie od kierunku przeciągnięcia.
+ *
+ * Wspólny dla ramki zaznaczania i prostokąta pomieszczenia w DesignCanvas: wcześniej
+ * ten sam wzór stał tam dwa razy (raz jako `rectBetween`, raz rozpisany w miejscu).
+ */
+export function prostokatMiedzy(a: Point, b: Point): ProstokatRamki {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+}
+
+/**
+ * Cztery narożniki prostokąta jako obrys — zgodnie z ruchem wskazówek zegara, od lewego
+ * górnego, jak w `prostokatOdKotwicy`. Z nich liczy się pole podglądu i powstaje obrys
+ * pomieszczenia, więc obie drogi idą przez ten sam wielobok.
+ */
+export function rogiProstokata(r: ProstokatRamki): Point[] {
+  return [
+    { x: r.x, y: r.y },
+    { x: r.x + r.w, y: r.y },
+    { x: r.x + r.w, y: r.y + r.h },
+    { x: r.x, y: r.y + r.h },
   ];
 }

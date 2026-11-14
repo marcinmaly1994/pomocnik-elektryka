@@ -42,9 +42,19 @@ import {
 import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { dystansPalcow, kadrPodPalcem, kierunekPalca, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from "@/lib/gestDotyku";
 import { useDlugiePrzytrzymanie } from "@/hooks/useDlugiePrzytrzymanie";
+import { useProstokatPrzeciagany } from "@/hooks/useProstokatPrzeciagany";
 import { prostokatOtworu, prostokatSymbolu } from "@/lib/rozstawElementow";
 import { nearestRouteSegmentIndex } from "@/lib/punktTrasy";
-import { clampNum, nearestPointOnPolyline, pointInPolygon, polygonAreaM2, rectangleSizeM, snap } from "@/lib/geometry";
+import {
+  clampNum,
+  nearestPointOnPolyline,
+  pointInPolygon,
+  polygonAreaM2,
+  prostokatMiedzy,
+  rectangleSizeM,
+  rogiProstokata,
+  snap,
+} from "@/lib/geometry";
 import { ElementGlyphKonva, SelectionOutlineKonva } from "@/components/design/ElementGlyphKonva";
 import { glyphBoxSize, groupLabelAnchors, groupLabelCandidates } from "@/lib/glyphs";
 
@@ -372,12 +382,6 @@ interface DesignCanvasProps {
   onAddCalibPoint: (p: Point) => void;
 }
 
-interface MarqueeRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
 
 /**
  * Punkt planu pod kursorem. `null` znaczy wyłącznie „nie wiadomo, gdzie jest kursor"
@@ -967,15 +971,10 @@ export function DesignCanvas({
   // trasy jest imperatywny (onDragMove aktualizuje węzeł Line wprost), zapis do
   // store'a dopiero na onDragEnd — jeden wpis w historii na cały ruch.
   const routeLineNodesRef = useRef<Map<string, Konva.Line>>(new Map());
-  const marqueeStartRef = useRef<Point | null>(null);
   /** Trwające przeciąganie całego pomieszczenia — patrz `handleStageMouseDown`. */
   const przesuwaniePokojuRef = useRef<{ id: string; start: Point; przesuniete: Point } | null>(null);
-  // Źródło prawdy dla bieżącego prostokąta zaznaczania to ref, nie tylko stan —
-  // przy szybkich zdarzeniach mousemove+mouseup w jednej turze React batchuje
-  // aktualizacje stanu, więc odczyt samego stanu w handlerze mouseup potrafił
-  // widzieć nieaktualną (sprzed ostatniego mousemove) wartość.
-  const marqueeRectRef = useRef<MarqueeRect | null>(null);
-  const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
+  /** Ramka zaznaczania obszarem (narzędzie „Zaznacz", przeciągnięcie po pustym płótnie). */
+  const ramka = useProstokatPrzeciagany();
   const groupDragRef = useRef<{ ids: string[]; start: Record<string, Point>; draggedId: string } | null>(null);
   /**
    * Konva po zakończeniu przeciągnięcia elementu i tak wysyła Stage'owi zdarzenie
@@ -987,12 +986,9 @@ export function DesignCanvas({
    */
   const elementDragJustEndedRef = useRef(false);
 
-  // Prostokąt pomieszczenia rysowany przeciągnięciem — ta sama para ref+stan co przy
-  // zaznaczaniu prostokątem wyżej i z tego samego powodu (React batchuje stan między
-  // mousemove a mouseup, więc handler `mouseup` czytający sam stan widziałby stary rozmiar).
-  const roomRectStartRef = useRef<Point | null>(null);
-  const roomRectRef = useRef<MarqueeRect | null>(null);
-  const [roomRect, setRoomRect] = useState<MarqueeRect | null>(null);
+  /** Prostokąt pomieszczenia rysowany przeciągnięciem albo dwoma kliknięciami. */
+  const prostokatPokoju = useProstokatPrzeciagany();
+  const roomRect = prostokatPokoju.prostokat;
   /** Prostokąt domknięty przeciągnięciem — gasi `click`, który Konva wysyła zaraz
    *  po `mouseup` (patrz `handleStageMouseUp`). */
   const roomRectJustDrawnRef = useRef(false);
@@ -1010,8 +1006,8 @@ export function DesignCanvas({
    * pusta, więc samo jej wyczyszczenie wystarczy.
    */
   function anulujPodglad(): boolean {
-    const przeciaganieProstokata = roomRectStartRef.current !== null;
-    const bylo = przeciaganieProstokata || roomRect !== null || marqueeStartRef.current !== null || marqueeRect !== null;
+    const przeciaganieProstokata = prostokatPokoju.trwa();
+    const bylo = przeciaganieProstokata || roomRect !== null || ramka.trwa() || ramka.prostokat !== null;
 
     // Po `mouseup` Konva wyśle jeszcze `click`. Tylko przy PRZERWANYM PRZECIĄGANIU
     // trzeba go zjeść — inaczej puszczenie przycisku od razu stawiałoby kotwicę
@@ -1020,12 +1016,8 @@ export function DesignCanvas({
     // całkiem już zamierzone kliknięcie użytkownika.
     if (przeciaganieProstokata) roomRectJustDrawnRef.current = true;
 
-    roomRectStartRef.current = null;
-    roomRectRef.current = null;
-    marqueeStartRef.current = null;
-    marqueeRectRef.current = null;
-    setRoomRect(null);
-    setMarqueeRect(null);
+    prostokatPokoju.porzuc();
+    ramka.porzuc();
     setZaczep(null);
     setOsieKursora(null);
     return bylo;
@@ -1414,17 +1406,6 @@ export function DesignCanvas({
     return formatPowierzchniaObrysu(points, metersPerUnit);
   }
 
-  /** Cztery narożniki prostokąta podglądu jako obrys — żeby powierzchnia liczyła się
-   *  tą samą drogą co dla wieloboku i dla gotowego pomieszczenia. */
-  function rogiProstokata(r: MarqueeRect): Point[] {
-    return [
-      { x: r.x, y: r.y },
-      { x: r.x + r.w, y: r.y },
-      { x: r.x + r.w, y: r.y + r.h },
-      { x: r.x, y: r.y + r.h },
-    ];
-  }
-
   /** Czy punkt trafia w pierwszy wierzchołek wieloboku na tyle blisko, by go zamknąć.
    *  Wymaga co najmniej 3 punktów — z dwóch nie powstanie pomieszczenie. */
   function closesPolygon(p: Point): boolean {
@@ -1442,20 +1423,6 @@ export function DesignCanvas({
     if (drawingWall.length < 3) return false;
     const first = drawingWall[0];
     return Math.hypot(p.x - first.x, p.y - first.y) <= POLYGON_CLOSE_RADIUS;
-  }
-
-  function rectCorners(r: MarqueeRect): Point[] {
-    return [
-      { x: r.x, y: r.y },
-      { x: r.x + r.w, y: r.y },
-      { x: r.x + r.w, y: r.y + r.h },
-      { x: r.x, y: r.y + r.h },
-    ];
-  }
-
-  /** Prostokąt rozpięty między dwoma narożnikami — niezależnie od kolejności. */
-  function rectBetween(a: Point, b: Point): MarqueeRect {
-    return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
   }
 
   /**
@@ -1488,11 +1455,7 @@ export function DesignCanvas({
     if (drawingRoom && roomMode === "prostokat") {
       const p = stage && planPoint(stage);
       if (!p) return;
-      const start = snapPunktuPokoju(p);
-      roomRectStartRef.current = start;
-      const rect = { x: start.x, y: start.y, w: 0, h: 0 };
-      roomRectRef.current = rect;
-      setRoomRect(rect);
+      prostokatPokoju.zacznij(snapPunktuPokoju(p));
       return;
     }
 
@@ -1513,10 +1476,7 @@ export function DesignCanvas({
     if (toolMode !== "zaznacz") return;
     const p = stage && planPoint(stage);
     if (!p) return;
-    marqueeStartRef.current = p;
-    const rect = { x: p.x, y: p.y, w: 0, h: 0 };
-    marqueeRectRef.current = rect;
-    setMarqueeRect(rect);
+    ramka.zacznij(p);
   }
 
   function handleStageMouseMove(e: KonvaEventObject<MouseEvent>) {
@@ -1603,26 +1563,14 @@ export function DesignCanvas({
       const { punkt: rog, zaczep: nowyZaczep, wyrownanie } = punktPokojuZZaczepem(raw);
       setZaczep(nowyZaczep);
       setOsieKursora({ punkt: rog, ...wyrownanie });
-      const start = roomRectStartRef.current ?? rectAnchor;
-      if (!start) return;
-      const rect = rectBetween(start, rog);
-      roomRectRef.current = rect;
-      setRoomRect(rect);
+      prostokatPokoju.rozciagnij(rog, rectAnchor);
       return;
     }
 
-    if (!marqueeStartRef.current) return;
+    if (!ramka.trwa()) return;
     const p = stage && planPoint(stage);
     if (!p) return;
-    const start = marqueeStartRef.current;
-    const rect = {
-      x: Math.min(start.x, p.x),
-      y: Math.min(start.y, p.y),
-      w: Math.abs(p.x - start.x),
-      h: Math.abs(p.y - start.y),
-    };
-    marqueeRectRef.current = rect;
-    setMarqueeRect(rect);
+    ramka.rozciagnij(p);
   }
 
   function handleStageMouseUp() {
@@ -1632,31 +1580,27 @@ export function DesignCanvas({
       onRoomMoveEnd?.(ruchPokoju.przesuniete.x !== 0 || ruchPokoju.przesuniete.y !== 0);
       return;
     }
-    if (roomRectStartRef.current) {
-      roomRectStartRef.current = null;
-      const rect = roomRectRef.current;
+    if (prostokatPokoju.trwa()) {
+      const rect = prostokatPokoju.zakoncz();
       // Prostokąt zbyt mały to NIE jest nieudane przeciągnięcie do wyrzucenia —
       // to zwykłe kliknięcie, czyli pierwszy krok trybu dwóch kliknięć. Kotwicę
       // stawia dopiero `handleStageClick` (tam trafia też klik bez żadnego ruchu
       // myszy), więc tutaj tylko sprzątamy podgląd i nie gasimy tamtej ścieżki.
       const domkniety = !!rect && rect.w >= MIN_ROOM_SIZE && rect.h >= MIN_ROOM_SIZE;
-      roomRectRef.current = null;
       if (domkniety) {
-        setRoomRect(null);
+        prostokatPokoju.schowaj();
         // Konva wyśle po tym `click` (mousedown i mouseup na tym samym celu) —
         // bez tej flagi domykałby od razu KOLEJNY prostokąt w miejscu, w którym
         // skończyło się przeciągnięcie.
         roomRectJustDrawnRef.current = true;
-        onRoomRectDrawn(rectCorners(rect!));
+        onRoomRectDrawn(rogiProstokata(rect!));
       }
       return;
     }
 
-    if (!marqueeStartRef.current) return;
-    marqueeStartRef.current = null;
-    const rect = marqueeRectRef.current;
-    marqueeRectRef.current = null;
-    setMarqueeRect(null);
+    if (!ramka.trwa()) return;
+    const rect = ramka.zakoncz();
+    ramka.schowaj();
     if (!rect || (rect.w < 4 && rect.h < 4)) {
       // Zbyt mały ruch = zwykły klik, nie zaznaczanie obszarem. Klik w puste miejsce
       // WEWNĄTRZ obrysu zaznacza to pomieszczenie (audyt 5.11.2026, B9): podpowiedź
@@ -1727,10 +1671,10 @@ export function DesignCanvas({
         // Druga (obok przytrzymania) droga do tego samego prostokąta: klik stawia
         // narożnik, ruch myszy rozciąga podgląd, kolejny klik domyka figurę.
         if (rectAnchor) {
-          const rect = rectBetween(rectAnchor, rogSnapowany);
+          const rect = prostokatMiedzy(rectAnchor, rogSnapowany);
           if (rect.w < MIN_ROOM_SIZE || rect.h < MIN_ROOM_SIZE) return; // za mały — czekamy dalej
-          setRoomRect(null);
-          onRoomRectDrawn(rectCorners(rect));
+          prostokatPokoju.porzuc();
+          onRoomRectDrawn(rogiProstokata(rect));
           return;
         }
         onAddRoomPoint(rogSnapowany);
@@ -3696,12 +3640,12 @@ export function DesignCanvas({
             );
           })}
 
-          {marqueeRect && (
+          {ramka.prostokat && (
             <Rect
-              x={marqueeRect.x}
-              y={marqueeRect.y}
-              width={marqueeRect.w}
-              height={marqueeRect.h}
+              x={ramka.prostokat.x}
+              y={ramka.prostokat.y}
+              width={ramka.prostokat.w}
+              height={ramka.prostokat.h}
               fill="#2D5A8C14"
               stroke="#2D5A8C"
               strokeWidth={1}
