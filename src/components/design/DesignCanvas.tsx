@@ -108,7 +108,8 @@ export interface WidokSterowanie {
   ustaw(x: number, y: number): void;
 }
 
-/** Jak długo po dotknięciu ignorujemy dorobiony klik [ms]. Patrz `klikAlboDotyk`. */
+/** Jak długo po dotknięciu ignorujemy KAŻDY klik [ms] — zapas na wypadek, gdyby gest nie
+ *  zaczął się od `pointerdown`. Patrz `klikAlboDotyk` i `echoTapu`. */
 const ECHO_TAPU_MS = 400;
 
 /**
@@ -721,6 +722,32 @@ export function DesignCanvas({
   /** Ostatnie dotknięcie obsłużone przez `onTap`/`onDblTap` — patrz `klikAlboDotyk`. */
   const echoTapuRef = useRef(0);
 
+  /** Czy `onTap`/`onDblTap` obsłużył już BIEŻĄCY gest — kasowane przy każdym
+   *  `pointerdown` na kontenerze płótna, czyli na początku następnego gestu. */
+  const tapWGescieRef = useRef(false);
+
+  /**
+   * Czy klik to ECHO dotknięcia, które `onTap` już obsłużył.
+   *
+   * Samo okno czasu (`ECHO_TAPU_MS`) nie wystarczało: postawienie elementu przerysowuje
+   * cały edytor, a dorobione `mousedown`/`mouseup` czekają w kolejce, aż ten render się
+   * skończy. Na wolnym telefonie — i w CI pod obciążeniem — Konva składała z nich `click`
+   * po więcej niż 400 ms i stawiała DRUGI element w tym samym miejscu (e2e
+   * `przytrzymanie-dotykiem`: „Received: 2"; przy 6× zwolnionym procesorze klik
+   * przychodził 2,1 s po `tap`).
+   *
+   * Dlatego rozstrzyga GEST, nie zegar. Każdy gest zaczyna się od `pointerdown`, który
+   * zapisuje rodzaj wskaźnika (`typWskaznikaRef`) i kasuje `tapWGescieRef`. Klik, gdy
+   * ostatni wskaźnik był palcem, a ten gest ma już obsłużony `tap`, jest jego echem —
+   * bez względu na to, jak długo czekał. Sam klik tego nie powie: Konva składa go
+   * z dorobionego `mouseup`, który `pointerType` nie ma. Prawdziwa mysz zaczyna własny
+   * gest od `pointerdown` typu „mouse", więc jej klik przechodzi zawsze.
+   */
+  function echoTapu(): boolean {
+    if (Date.now() - echoTapuRef.current < ECHO_TAPU_MS) return true;
+    return typWskaznikaRef.current === "touch" && tapWGescieRef.current;
+  }
+
   /**
    * TA SAMA czynność pod kliknięciem myszy i pod dotknięciem palca.
    *
@@ -737,17 +764,19 @@ export function DesignCanvas({
    *
    * `echoTapuRef` to zabezpieczenie na przeglądarki, które oddają `touchstart` jako
    * nieodwoływalny: wtedy dorobiony klik JEDNAK przyjdzie, a bez straży wstawiłby
-   * drugie drzwi w to samo miejsce albo skasował drugi punkt trasy.
+   * drugie drzwi w to samo miejsce albo skasował drugi punkt trasy. Dotknięcie PUSTEGO
+   * płótna dorabia go zawsze — patrz `echoTapu`.
    */
   function klikAlboDotyk(akcja: (e: KonvaEventObject<MouseEvent | TouchEvent>) => void) {
     return {
       onClick: (e: KonvaEventObject<MouseEvent>) => {
-        if (Date.now() - echoTapuRef.current < ECHO_TAPU_MS) return;
+        if (echoTapu()) return;
         if (poGescieKadru()) return;
         akcja(e);
       },
       onTap: (e: KonvaEventObject<TouchEvent>) => {
         echoTapuRef.current = Date.now();
+        tapWGescieRef.current = true;
         if (poGescieKadru()) return;
         akcja(e);
       },
@@ -765,12 +794,13 @@ export function DesignCanvas({
     return {
       onDblClick: (e: KonvaEventObject<MouseEvent>) => {
         if (e.evt.button !== 0) return;
-        if (Date.now() - echoTapuRef.current < ECHO_TAPU_MS) return;
+        if (echoTapu()) return;
         if (poGescieKadru()) return;
         akcja(e);
       },
       onDblTap: (e: KonvaEventObject<TouchEvent>) => {
         echoTapuRef.current = Date.now();
+        tapWGescieRef.current = true;
         if (poGescieKadru()) return;
         akcja(e);
       },
@@ -2100,6 +2130,8 @@ export function DesignCanvas({
       }}
       onPointerDown={(e) => {
         typWskaznikaRef.current = e.pointerType;
+        // Nowy gest — `tap` poprzedniego nie może już połknąć jego kliknięcia (`echoTapu`).
+        tapWGescieRef.current = false;
         zacznijPrzesuwanie(e);
       }}
       onPointerMove={(e) => {

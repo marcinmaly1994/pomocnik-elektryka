@@ -142,6 +142,24 @@ describe("długie przytrzymanie palcem", () => {
       expect(result.current.pochlonEchoKliku()).toBe(false);
     });
 
+    /**
+     * Echo przychodzi po PUSZCZENIU palca, a nie po otwarciu menu. Okno liczone od
+     * otwarcia gasło, zanim echo doszło, gdy ktoś trzymał palec dłużej albo render
+     * menu trwał — i pod menu stawał element (e2e `przytrzymanie-dotykiem` w CI).
+     */
+    it("pamięć o echu liczy się od puszczenia palca, nie od otwarcia menu", () => {
+      const { result } = renderHook(() => useDlugiePrzytrzymanie());
+      const p = result.current.propsy(vi.fn());
+
+      act(() => p.onTouchStart(dotyk({ x: 50, y: 50 })));
+      act(() => void vi.advanceTimersByTime(CZAS_PRZYTRZYMANIA));
+      // palec trzymany jeszcze 600 ms po otwarciu menu — dłużej niż całe okno echa
+      act(() => void vi.advanceTimersByTime(600));
+      act(() => p.onTouchEnd(dotyk()));
+      act(() => void vi.advanceTimersByTime(300));
+      expect(result.current.pochlonEchoKliku()).toBe(true);
+    });
+
     it("podniesienie palca po otwarciu menu blokuje dorobione zdarzenia u źródła", () => {
       const { result } = renderHook(() => useDlugiePrzytrzymanie());
       const p = result.current.propsy(vi.fn());
