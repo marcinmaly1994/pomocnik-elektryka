@@ -82,7 +82,6 @@ import {
 import {
   autoSymbolScale,
   skalaZRysunku,
-  DEFAULT_ELEMENT_SCALE,
   elementRenderScale,
   sanitaryRenderScale,
 } from "@/lib/symbolScale";
@@ -123,6 +122,7 @@ import { useRysowaniePomieszczen } from "@/hooks/useRysowaniePomieszczen";
 import { useOtwory } from "@/hooks/useOtwory";
 import { useWstawianieElementu } from "@/hooks/useWstawianieElementu";
 import { useZaznaczenie } from "@/hooks/useZaznaczenie";
+import { useWarstwyWidoku } from "@/hooks/useWarstwyWidoku";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
 import { DesignCanvas, type RoomDrawMode, type ToolMode } from "./DesignCanvas";
@@ -350,13 +350,25 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const floorName = floors.find((f) => f.id === activeFloorId)?.name ?? "Kondygnacja";
 
   const elements = useActiveFloorElements();
-  /**
-   * Filtry widoku osprzętu (F8 z audytu 5.11.2026) — ukryte kategorie katalogu znikają
-   * z płótna, a że rzut PDF rasteryzuje się z płótna, także z wydruku (razem z legendą
-   * i zestawieniem). Stan widoku, nie projektu: nie zmienia obliczeń, rozdzielnicy ani
-   * kosztorysu. `elements` zostaje pełne dla wszystkiego poza rysunkiem.
-   */
-  const [ukryteKategorie, setUkryteKategorie] = useState<string[]>([]);
+  /** Warstwy i pomoce widoku (strefy, trasy, wymiary, siatka, przyciąganie, filtry
+   *  kategorii…) — stan widoku, nie projektu. Patrz `useWarstwyWidoku`. */
+  const warstwy = useWarstwyWidoku();
+  const {
+    showZones,
+    showRoutes,
+    showDimensions,
+    showAreas,
+    showHeights,
+    showUnderlay,
+    snapOn,
+    setSnapOn,
+    gridOn,
+    wallSnapOn,
+    elementScale,
+    ukryteKategorie,
+    pokazWszystkieKategorie,
+    pokazKategorie,
+  } = warstwy;
   const elementyWidoczne = useMemo(() => widoczneElementy(elements, ukryteKategorie), [elements, ukryteKategorie]);
   const rawDocHeader = useProjectStore((st) => st.docHeader);
   const projectName = useProjectStore((st) => st.projectName);
@@ -576,13 +588,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * stanie, w którym aplikacja się otwiera.
    */
   const [zaznaczanieWielokrotne, setZaznaczanieWielokrotne] = useState(false);
-  /** Przyciąganie do siatki. Domyślnie WYŁĄCZONE, bo na wgranym podkładzie ściany
-   *  budynku nie leżą na oczkach siatki i przyciąganie tylko odciągałoby od rzutu.
-   *  Rysowanie od zera włącza je jawnie — patrz `startManualDrawing`. */
-  const [snapOn, setSnapOn] = useState(false);
-  /** Widoczność siatki — osobno od przyciągania. Domyślnie włączona, bo bez rzutu
-   *  pod spodem to jedyny punkt odniesienia przy rysowaniu od zera. */
-  const [gridOn, setGridOn] = useState(true);
   /** Piąte skupisko — patrz `useZaznaczenie`. Stoi tutaj, bo `useOtwory` niżej
    *  melduje mu świeżo postawiony otwór. */
   const zaznaczenie = useZaznaczenie();
@@ -645,11 +650,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    *  i kasował rysowaną właśnie ścianę. Sam setter pochodzi z `useState`, więc jest
    *  stabilny i jako zależność nie zmienia niczego. */
   const { setDrawingWall: setSzkicSciany } = sciany;
-  const [showZones, setShowZones] = useState(true);
-  /** Widoczność tras przewodów — domyślnie WYŁĄCZONA: to warstwa poglądowa, nie
-   *  zawsze potrzebna, i bez rozdzielnicy postawionej na planie i tak jest pusta
-   *  (patrz `cableRoutes` niżej), więc nie ma po co narzucać jej od razu. */
-  const [showRoutes, setShowRoutes] = useState(false);
   /**
    * Czy rzut w PDF-ie ma pokazywać trasy przewodów. DOMYŚLNIE tak, niezależnie od
    * przełącznika w edytorze — rzut instalacji bez przewodów to nie jest rysunek
@@ -659,26 +659,6 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const [trasyWPdf, setTrasyWPdf] = useState(true);
   /** Arkusz rzutu w PDF (F10). A3 dla domu, na którym A4 wymuszało 1:150 i drobne opisy. */
   const [formatPdf, setFormatPdf] = useState<FormatArkusza>("A4");
-  /** Tryb wymiarowania — domyslnie WYLACZONY: przy rysowaniu wymiary przeszkadzaja,
-   *  a potrzebne sa przy sprawdzaniu i przed wydrukiem. */
-  const [showDimensions, setShowDimensions] = useState(false);
-  /** Powierzchnia pomieszczeń — osobno od wymiarów, bo odpowiada na inne pytanie:
-   *  wymiary służą do wytyczenia ścian, powierzchnia do sprawdzenia metrażu. Oba
-   *  domyślnie wyłączone z tego samego powodu — przy rysowaniu podpisy przeszkadzają. */
-  const [showAreas, setShowAreas] = useState(false);
-  /** Wysokosci montazu przy osprzecie — domyslnie WYLACZONE z tego samego powodu co
-   *  wymiary. Osobno od nich, bo wymiary opisuja BUDYNEK, a te INSTALACJE. */
-  const [showHeights, setShowHeights] = useState(false);
-  /** Podglad kondygnacji ponizej — domyslnie WYLACZONY: na parterze nie ma czego
-   *  pokazac, a przy jednej kondygnacji przelacznik byloby samym szumem. */
-  const [showUnderlay, setShowUnderlay] = useState(false);
-  /** Przyciaganie osprzetu do scian. Domyslnie WLACZONE: to najczestsza czynnosc
-   *  w calej aplikacji, a bez obrotu symbole stoja byle jak. Wylaczalne, bo nie kazdy
-   *  element montuje sie w scianie (gniazdo podlogowe, wyspa kuchenna). */
-  const [wallSnapOn, setWallSnapOn] = useState(true);
-  // Skala samych symboli na planie (nie powiększenie widoku) — ustawienie widoku, więc
-  // stan lokalny jak snapOn/showZones, a nie część zapisywanego projektu.
-  const [elementScale, setElementScale] = useState(DEFAULT_ELEMENT_SCALE);
   const [zoom, setZoom] = useState(1);
   /** Gdy użytkownik sam ustawi powiększenie, przestajemy je dopasowywać automatycznie —
    *  nic bardziej nie irytuje niż widok, który sam sobie zmienia skalę po zmianie okna. */
@@ -3403,32 +3383,11 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         bgName={bgName}
         onPickBg={() => fileRef.current?.click()}
         onClearBg={() => setBgImage(activeFloorId, null)}
-        snapOn={snapOn}
-        gridOn={gridOn}
-        onGridChange={setGridOn}
+        {...warstwy.paskowi}
         opisKrokuSiatki={opisKrokuSiatki}
         onZapisz={session ? () => void saveToCloud({ reczny: true }) : null}
         zapisTrwa={cloudBusy}
-        onSnapChange={setSnapOn}
-        wallSnapOn={wallSnapOn}
-        onWallSnapChange={setWallSnapOn}
-        elementScale={elementScale}
-        onElementScaleChange={setElementScale}
-        defaultElementScale={DEFAULT_ELEMENT_SCALE}
-        showZones={showZones}
-        onToggleZones={() => setShowZones((z) => !z)}
-        showRoutes={showRoutes}
-        onToggleRoutes={() => setShowRoutes((r) => !r)}
-        showDimensions={showDimensions}
-        onToggleDimensions={() => setShowDimensions((d) => !d)}
-        showAreas={showAreas}
-        onToggleAreas={() => setShowAreas((a) => !a)}
-        ukryteKategorie={ukryteKategorie}
-        onPrzelaczKategorie={(k) => setUkryteKategorie((u) => (u.includes(k) ? u.filter((x) => x !== k) : [...u, k]))}
-        showHeights={showHeights}
-        onToggleHeights={() => setShowHeights((h) => !h)}
-        showUnderlay={showUnderlay}
-        onToggleUnderlay={idPonizej ? () => setShowUnderlay((u) => !u) : null}
+        onToggleUnderlay={idPonizej ? warstwy.paskowi.onToggleUnderlay : null}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={undo}
@@ -3795,7 +3754,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-x-2 gap-y-1 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-1 text-xs text-caution shadow-sm"
             >
               <span>Ukryte na rzucie: {ukryteKategorie.join(", ")}</span>
-              <button className="font-semibold underline" onClick={() => setUkryteKategorie([])}>
+              <button className="font-semibold underline" onClick={pokazWszystkieKategorie}>
                 Pokaż wszystko
               </button>
             </div>
@@ -3994,7 +3953,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               // Stawiany element ukrytej kategorii zniknąłby spod kursora — kategoria
               // wraca na rzut, zanim element powstanie (F8).
               const k = kategoriaElementu(wstawianie.activeType);
-              if (k && ukryteKategorie.includes(k)) setUkryteKategorie((u) => u.filter((x) => x !== k));
+              if (k) pokazKategorie(k);
               wstawianie.wstaw(p);
             }}
             duchElementu={{
