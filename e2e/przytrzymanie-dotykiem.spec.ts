@@ -135,3 +135,26 @@ test("przytrzymanie na scenie zatwierdza rysowaną ścianę", async ({ page }) =
   });
   expect(sciany).toHaveLength(1);
 });
+
+/**
+ * Jedno dotknięcie = JEDEN element, także na wolnym urządzeniu.
+ *
+ * Postawienie elementu przerysowuje edytor, a dorobione przez przeglądarkę
+ * `mousedown`/`mouseup` czekają w kolejce, aż render się skończy. Straż na echo była
+ * oknem 400 ms, więc gdy render trwał dłużej (CI pod obciążeniem; przy 6× zwolnionym
+ * procesorze klik przychodził 2,1 s po `tap`), Konva składała z nich `click` i stawiała
+ * DRUGI element w tym samym miejscu. Teraz o echu decyduje gest (`echoTapu`
+ * w DesignCanvas), a nie zegar. Przed poprawką ten test padał w 12 z 16 powtórzeń.
+ */
+test("jedno dotknięcie stawia jeden element, także przy wolnym procesorze", async ({ page }) => {
+  await otworzPlan(page, "Wstaw Element");
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+  await dotknij(page, 150, 150);
+  await expect.poll(() => liczbaElementow(page)).toBe(1);
+  // echo przychodzi PO renderze — trzeba na nie poczekać, inaczej test nic nie mierzy
+  await page.waitForTimeout(3500);
+  expect(await liczbaElementow(page)).toBe(1);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+  await cdp.detach();
+});

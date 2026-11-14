@@ -29,7 +29,8 @@ export const TOLERANCJA_RUCHU = 10;
 /**
  * Tyle pamiętamy o otwartym menu, czekając na dorobiony klik [ms].
  *
- * Zapas na wszelki wypadek, nie główny mechanizm: echo przychodzi tuż po `touchend`,
+ * Liczone od puszczenia palca (`zapamietajEcho` w `onTouchEnd`), nie tylko od otwarcia
+ * menu. Zapas na wszelki wypadek, nie główny mechanizm: echo przychodzi tuż po `touchend`,
  * a każde NOWE dotknięcie i tak kasuje tę pamięć (patrz `onTouchStart`). Bez tego
  * drugiego kasowania dotknięcie zaraz po zamknięciu menu wpadało jeszcze w okno
  * pamięci i było połykane — element nie stawiał się wcale.
@@ -89,6 +90,25 @@ export function useDlugiePrzytrzymanie(): PrzytrzymanieApi {
     }
   }, []);
 
+  /**
+   * Zapamiętuje, że nadchodzący klik będzie echem, na `PAMIEC_ECHA` od TERAZ.
+   *
+   * Wołane przy otwarciu menu i JESZCZE RAZ przy puszczeniu palca. Wcześniej okno
+   * liczyło się tylko od otwarcia (500 ms przytrzymania), a echo przychodzi po
+   * `touchend` — przy dłuższym trzymaniu albo wolnym renderze menu z 400 ms zostawało
+   * niewiele i echo stawiało element pod menu (e2e `przytrzymanie-dotykiem`).
+   */
+  const zapamietajEcho = useCallback(() => {
+    echoRef.current = true;
+    if (echoLicznikRef.current !== null) window.clearTimeout(echoLicznikRef.current);
+    // Gdy `preventDefault` zadziała, dorobiony klik nie przyjdzie wcale i pamięć
+    // o echu zostałaby na zawsze — połykając PRAWDZIWE kliknięcie kiedyś później.
+    echoLicznikRef.current = window.setTimeout(() => {
+      echoRef.current = false;
+      echoLicznikRef.current = null;
+    }, PAMIEC_ECHA);
+  }, []);
+
   const przerwij = useCallback(() => {
     if (licznikRef.current !== null) window.clearTimeout(licznikRef.current);
     licznikRef.current = null;
@@ -126,14 +146,7 @@ export function useDlugiePrzytrzymanie(): PrzytrzymanieApi {
           licznikRef.current = null;
           startRef.current = null;
           otwarteRef.current = true;
-          echoRef.current = true;
-          if (echoLicznikRef.current !== null) window.clearTimeout(echoLicznikRef.current);
-          // Gdy `preventDefault` zadziała, dorobiony klik nie przyjdzie wcale i pamięć
-          // o echu zostałaby na zawsze — połykając PRAWDZIWE kliknięcie kiedyś później.
-          echoLicznikRef.current = window.setTimeout(() => {
-            echoRef.current = false;
-            echoLicznikRef.current = null;
-          }, PAMIEC_ECHA);
+          zapamietajEcho();
           akcja(x, y);
         }, CZAS_PRZYTRZYMANIA);
       },
@@ -149,11 +162,13 @@ export function useDlugiePrzytrzymanie(): PrzytrzymanieApi {
         przerwij();
         if (!otwarteRef.current) return;
         otwarteRef.current = false;
+        // Echo przychodzi PO puszczeniu palca — stąd okno od nowa właśnie tutaj.
+        zapamietajEcho();
         // Menu już stoi — przeglądarka nie ma po co dorabiać kliknięcia pod nim.
         e.evt.preventDefault();
       },
     }),
-    [przerwij, zapomnijEcho]
+    [przerwij, zapomnijEcho, zapamietajEcho]
   );
 
   const pochlonEchoKliku = useCallback(() => {
