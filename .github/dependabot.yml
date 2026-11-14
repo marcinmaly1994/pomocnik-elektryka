@@ -5,9 +5,14 @@
 # w tyle). Zbiorczy PR, bo przy jednej osobie pracującej nad repo dwadzieścia osobnych
 # PR-ów tygodniowo byłoby szumem, który kończy się ignorowaniem wszystkich.
 #
-# WYDANIA GŁÓWNE są pomijane celowo (React 19, Tailwind 4, TypeScript 7,
-# Zustand 5, Konva 10…): każde to osobna migracja z własnym planem, a nie aktualizacja,
-# którą da się przejrzeć w minutę. Wejdą ręcznie, kiedy przyjdzie na nie czas.
+# WYDANIA GŁÓWNE są pomijane celowo: każde to osobna migracja z własnym planem, a nie
+# aktualizacja, którą da się przejrzeć w minutę (React 19, Tailwind 4, Zustand 5,
+# Konva 10 i TypeScript 7 weszły tak ręcznie w listopadzie 2026, #285–#289 i dalej).
+#
+# TypeScript jest w projekcie DWA razy: `typescript-7` (alias, natywny kompilator —
+# sprawdzanie typów w `build` i `typecheck`) oraz `typescript` 6.0 dla typescript-eslint,
+# który potrzebuje starego API JS, a TS 7 go nie ma. typescript-eslint deklaruje
+# `typescript <6.1.0`, więc `typescript` stoi na 6.0.x do czasu, aż poszerzy ten zakres.
 #
 # Testy chmury (@chmura) w PR-ach Dependabota się POMINĄ: sekrety konta testowego
 # należą do Actions, nie do Dependabota, a workflow już to znosi (patrz krok „Przygotuj
@@ -27,6 +32,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # Patrz wyżej: typescript-eslint obsługuje TypeScript tylko do <6.1.0.
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
     commit-message:
       prefix: "Zależności"
 
