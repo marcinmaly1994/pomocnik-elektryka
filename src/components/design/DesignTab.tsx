@@ -53,6 +53,7 @@ import { checkPlan, stanSprawdzenia } from "@/lib/planCheck";
 import { pozycjeZestawieniaDoPdf, summarizeFloor } from "@/lib/quantities";
 import { przeliczPrzyscienneDoSkali, przyscienny, snapElementToWall } from "@/lib/wallSnap";
 import { computeCircuits, maWlasnyObwodZDefinicji, wchodziDoObwodu } from "@/lib/panel/circuits";
+import { kopieElementow, obroconeO90, poPrzesunieciu, uzyteNumeryObwodow, zObwodem } from "@/lib/operacjeElementow";
 
 import { bezNakladaniaNaSasiadow } from "@/lib/rozstawElementow";
 import { applyRouteOverrides, buildCableRoutes, findPanel } from "@/lib/panel/loads";
@@ -71,7 +72,6 @@ import {
   oczkoSiatkiM,
   planSizeForImage,
   roomNameAfterMove,
-  detectRoomName,
   guessRoomType,
   scaleOf,
   wierzcholkiZamknietejSciany,
@@ -1855,13 +1855,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   }
 
   /**
-   * Zastosowanie listy ruchów `{id, x, y}` — JEDNA droga dla wszystkiego, co przesuwa
-   * elementy: przeciągnięcia grupy myszą, strzałek, duplikowania i wyrównywania.
-   *
-   * Wspólna, bo każde z nich musi przeliczyć przypisanie do pomieszczenia
-   * (`roomNameAfterMove`). Wyrównanie rzędu gniazdek potrafi przesunąć skrajne o pół
-   * metra — czyli akurat tyle, żeby wyjechały z pokoju — a osobne ścieżki zapisu
-   * prędzej czy później rozjechałyby się w tym, która o tym pamięta.
+   * Zastosowanie listy ruchów `{id, x, y}` — patrz `poPrzesunieciu` w lib/operacjeElementow.
    *
    * Pusta lista nie dotyka store'a: „Wyrównaj" na już równym rzędzie nie ma czego
    * zapisać i nie powinno zostawiać po sobie pustego kroku w historii cofania.
@@ -1869,13 +1863,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const przesunElementy = useCallback(
     (moves: Move[]) => {
       if (moves.length === 0) return;
-      setDraft((d) => ({
-        ...d,
-        elements: d.elements.map((e) => {
-          const m = moves.find((mv) => mv.id === e.id);
-          return m ? { ...e, x: m.x, y: m.y, room: roomNameAfterMove(m, e.room, roomShapes, mpu) } : e;
-        }),
-      }));
+      setDraft((d) => ({ ...d, elements: poPrzesunieciu(d.elements, moves, roomShapes, mpu) }));
     },
     [setDraft, roomShapes, mpu]
   );
@@ -1890,22 +1878,17 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   /**
    * Duplikuje zaznaczone elementy, odsunięte o pół oczka siatki.
    *
-   * Kopie dostają nowe `id` i przeliczone pomieszczenie (mogły wylądować w innym),
-   * a zaznaczenie przechodzi na NIE — tak działa duplikowanie w każdym edytorze
-   * i dzięki temu można od razu ciągnąć nową grupę w docelowe miejsce albo
-   * powtórzyć skrót, żeby zrobić rząd.
+   * Kopie (`kopieElementow` — te same co przy wklejaniu) przechodzą do zaznaczenia —
+   * tak działa duplikowanie w każdym edytorze i dzięki temu można od razu ciągnąć nową
+   * grupę w docelowe miejsce albo powtórzyć skrót, żeby zrobić rząd.
    */
   function duplikujZaznaczenie() {
     const ids = zaznaczoneElementy;
     if (ids.length === 0) return;
-    const odsuniecie = GRID / 2;
-    const kopie = elements
-      .filter((e) => ids.includes(e.id))
-      .map((e) => {
-        const x = e.x + odsuniecie;
-        const y = e.y + odsuniecie;
-        return { ...e, id: crypto.randomUUID(), x, y, room: roomNameAfterMove({ x, y }, e.room, roomShapes, mpu) };
-      });
+    const kopie = kopieElementow(
+      elements.filter((e) => ids.includes(e.id)),
+      { floor: activeFloorId, odsuniecie: GRID / 2, roomShapes, mpu }
+    );
     if (kopie.length === 0) return;
     setDraft((d) => ({ ...d, elements: [...d.elements, ...kopie] }));
     setSelected(null);
@@ -1941,27 +1924,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     const zrodlo = schowekRef.current;
     if (zrodlo.length === 0) return;
     const naTejSamej = zrodlo.every((e) => e.floor === activeFloorId);
+    // Na tej samej kondygnacji każde kolejne Ctrl+V pół oczka dalej, żeby kopie nie
+    // leżały jedna na drugiej; na innej — w tym samym miejscu (gniazda nad sobą).
     const odsuniecie = naTejSamej ? (GRID / 2) * ++wklejenRef.current : 0;
-    const kopie = zrodlo.map((e) => {
-      const x = e.x + odsuniecie;
-      const y = e.y + odsuniecie;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { roomId: _id, obwod, lightGroup, ...reszta } = e;
-      return {
-        ...reszta,
-        // Na tej samej kondygnacji kopia zachowuje ręczny numer obwodu i grupy, tak jak
-        // Ctrl+D. Na INNEJ — nie: numer obwodu znaczy to samo w całym budynku, więc
-        // gniazdo z piętra dołączyłoby do obwodu z parteru.
-        ...(naTejSamej ? { obwod, lightGroup } : {}),
-        id: crypto.randomUUID(),
-        floor: activeFloorId,
-        x,
-        y,
-        // Pokój z położenia na DOCELOWEJ kondygnacji; nazwa pokoju z innego piętra nie
-        // jest tu „nazwą wpisaną ręcznie", którą trzeba chronić.
-        room: naTejSamej ? roomNameAfterMove({ x, y }, e.room, roomShapes, mpu) : detectRoomName({ x, y }, roomShapes, mpu),
-      };
-    });
+    const kopie = kopieElementow(zrodlo, { floor: activeFloorId, odsuniecie, roomShapes, mpu });
     setDraft((d) => ({ ...d, elements: [...d.elements, ...kopie] }));
     setToolMode("zaznacz");
     setSelected(null);
@@ -1975,35 +1941,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
    * dzieli obwody po rodzaju punktu, mokrości pomieszczenia i kolejności, a
    * projektant wie, że kuchnia ma iść osobno. Patrz `computeCircuits`.
    *
-   * Odbiorniki z własnym obwodem z definicji (ładowarka EV, gniazdo trójfazowe,
-   * wypust AGD, gniazdo dedykowane) są tu pomijane, nawet gdyby trafiły do
-   * zaznaczenia grupowego — ich obwód ma inny przewód i inne zabezpieczenie, więc
-   * dołączenie do wspólnego dałoby obwód z błędnym doborem.
+   * Które elementy są pomijane — patrz `zObwodem` w lib/operacjeElementow.
    */
   function przypiszObwod(ids: string[], numer: number | undefined) {
-    setDraft((d) => ({
-      ...d,
-      elements: d.elements.map((e) =>
-        ids.includes(e.id) && wchodziDoObwodu(e) && !maWlasnyObwodZDefinicji(e) ? { ...e, obwod: numer } : e
-      ),
-    }));
+    setDraft((d) => ({ ...d, elements: zObwodem(d.elements, ids, numer) }));
   }
 
-  /**
-   * Numery, które już gdzieś w PROJEKCIE są — do podpowiedzi w menu. Bez nich
-   * przypisanie drugiego gniazda do „obwodu 3" wymagałoby zapamiętania, że taki
-   * numer w ogóle istnieje.
-   *
-   * Liczone z CAŁEGO budynku, nie z bieżącej kondygnacji, bo numer znaczy to samo
-   * w całym projekcie: `computeCircuits` w rozdzielnicy grupuje po nim wszystkie
-   * elementy, niezależnie od piętra. Gdy lista pochodziła z jednej kondygnacji,
-   * „+ nowy" na piętrze proponował numer zajęty na parterze — i kliknięcie po cichu
-   * scalało dwa niezwiązane zestawy punktów w jeden obwód.
-   *
-   * Numery używane WYŁĄCZNIE gdzie indziej zostają na liście (scalenie przez piętra
-   * bywa zamierzone — jeden pion), ale są oznaczone, żeby było to wybór, a nie
-   * przypadek.
-   */
   /**
    * Obwód, do którego trafił każdy element — te same obwody CAŁEGO budynku, które
    * liczą Rozdzielnica, Schemat i Kosztorys. Karta elementu pokazuje go także przy
@@ -2028,22 +1971,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   }, [zaznaczonyElement, wszystkieElementy, wszystkiePomieszczenia, opcjeDoboru]);
   const panelTryb = useProjectStore((s) => s.panelTryb);
 
-  const uzyteNumeryObwodow = useMemo(() => {
-    const naTej = new Set<number>();
-    for (const e of elements) if (typeof e.obwod === "number") naTej.add(e.obwod);
-    const wszystkieNumery = new Set<number>();
-    for (const e of wszystkieElementy) if (typeof e.obwod === "number") wszystkieNumery.add(e.obwod);
-    return [...wszystkieNumery]
-      .sort((a, b) => a - b)
-      .map((numer) => ({ numer, gdzieIndziej: !naTej.has(numer) }));
-  }, [elements, wszystkieElementy]);
+  /** Numery obwodów do podpowiedzi w menu — bez nich przypisanie drugiego gniazda do
+   *  „obwodu 3" wymagałoby pamiętania, że taki numer w ogóle istnieje. */
+  const numeryObwodow = useMemo(() => uzyteNumeryObwodow(elements, wszystkieElementy), [elements, wszystkieElementy]);
 
   /** Obraca element(y) o 90° (w prawo) — np. gniazdko/łącznik przy skośnej ścianie. */
   function rotateElements(ids: string[]) {
-    setDraft((d) => ({
-      ...d,
-      elements: d.elements.map((e) => (ids.includes(e.id) ? { ...e, rotation: ((e.rotation ?? 0) + 90) % 360 } : e)),
-    }));
+    setDraft((d) => ({ ...d, elements: obroconeO90(d.elements, ids) }));
   }
 
   /**
@@ -2638,7 +2572,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
             <WyborObwoduGrupy
               wariant="formularz"
               zaznaczone={elements.filter((e) => multiSelected.includes(e.id))}
-              uzyte={uzyteNumeryObwodow}
+              uzyte={numeryObwodow}
               onWybierz={(n) => przypiszObwod(multiSelected, n)}
             />
           </div>
@@ -3042,7 +2976,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       return (
         <KartaElementu
           element={el}
-          uzyteNumery={uzyteNumeryObwodow}
+          uzyteNumery={numeryObwodow}
           onEdytuj={() => setEditingId(el.id)}
           onObroc={() => rotateElements([el.id])}
           onUsun={() => {
@@ -4314,7 +4248,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           element={editingElement}
           roomSuggestions={roomSuggestions}
           autoLightGroups={lightGroups.get(editingElement.id)}
-          uzyteObwody={uzyteNumeryObwodow}
+          uzyteObwody={numeryObwodow}
           onClose={() => setEditingId(null)}
           onSave={(patch) => {
             setDraft((d) => ({ ...d, elements: d.elements.map((e) => (e.id === editingElement.id ? { ...e, ...patch } : e)) }));
@@ -4441,7 +4375,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                 {/* Ten sam wybór co w panelu zaznaczenia — patrz `WyborObwoduGrupy`. */}
                 <WyborObwoduGrupy
                   zaznaczone={elements.filter((e) => multiSelected.includes(e.id))}
-                  uzyte={uzyteNumeryObwodow}
+                  uzyte={numeryObwodow}
                   onWybierz={(n) => {
                     przypiszObwod(multiSelected, n);
                     zaznaczenie.zamknijMenu();
@@ -4624,7 +4558,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   return (
                     <WyborObwodu
                       numerAktualny={el.obwod}
-                      uzyte={uzyteNumeryObwodow}
+                      uzyte={numeryObwodow}
                       onWybierz={(n) => {
                         przypiszObwod([contextMenu.id], n);
                         zaznaczenie.zamknijMenu();
