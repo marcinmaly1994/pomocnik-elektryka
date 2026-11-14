@@ -12,13 +12,15 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    // Od TS 6 `types` domyślnie jest puste — @types/node nie wchodzi już sam, a testy
+    // w src czytają pliki przez node:fs.
+    "types": ["node"],
 
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
