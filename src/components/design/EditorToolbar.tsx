@@ -268,7 +268,7 @@ export function EditorToolbar({
    * (patrz `PasekMenu`), więc przewijany pasek ich nie przycina.
    */
   return (
-    <div className="pe-bez-suwaka flex flex-nowrap items-center gap-x-1.5 gap-y-1.5 overflow-x-auto md:gap-x-2.5 rounded-card border border-border bg-white px-2.5 py-1.5 [&>*]:shrink-0 md:flex-wrap md:overflow-visible">
+    <div className="pe-bez-suwaka flex flex-nowrap items-center gap-x-1.5 gap-y-1.5 overflow-x-auto md:gap-x-2.5 rounded-card border border-border bg-white px-2.5 py-1.5 *:shrink-0 md:flex-wrap md:overflow-visible">
       {szerokieOkno && <FloorTabs />}
 
       <PasekMenu etykieta="Plan" ikona={<SlidersHorizontal size={14} />} szerokosc={320}>
@@ -569,7 +569,7 @@ export function EditorToolbar({
           disabled={zoom <= minZoom()}
           aria-label="Oddal widok"
           title="Oddal widok"
-          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
+          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30 pointer-coarse:min-h-11 md:pointer-coarse:min-w-11 flex items-center justify-center"
         >
           <Minus size={14} />
         </button>
@@ -585,7 +585,7 @@ export function EditorToolbar({
           onClick={() => onZoomChange(clampZoom(zoomStandardowy))}
           title="Przywróć standardowe powiększenie"
           aria-label={`Powiększenie ${Math.round((zoom / zoomStandardowy) * 100)} procent — kliknij, aby przywrócić 100%`}
-          className="pe-mono w-11 text-center text-xs tabular-nums text-slate-600 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
+          className="pe-mono w-11 text-center text-xs tabular-nums text-slate-600 pointer-coarse:min-h-11 md:pointer-coarse:min-w-11 flex items-center justify-center"
         >
           {Math.round((zoom / zoomStandardowy) * 100)}%
         </button>
@@ -594,7 +594,7 @@ export function EditorToolbar({
           disabled={zoom >= MAX_ZOOM}
           aria-label="Przybliż widok"
           title="Przybliż widok"
-          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
+          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink disabled:opacity-30 pointer-coarse:min-h-11 md:pointer-coarse:min-w-11 flex items-center justify-center"
         >
           <Plus size={14} />
         </button>
@@ -604,7 +604,7 @@ export function EditorToolbar({
           onClick={onDopasuj}
           aria-label="Dopasuj widok do planu"
           title="Dopasuj widok do planu"
-          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink [@media(pointer:coarse)]:min-h-11 md:[@media(pointer:coarse)]:min-w-11 flex items-center justify-center"
+          className="rounded px-1.5 py-1 text-slate-500 hover:text-ink pointer-coarse:min-h-11 md:pointer-coarse:min-w-11 flex items-center justify-center"
         >
           <Scan size={13} />
         </button>

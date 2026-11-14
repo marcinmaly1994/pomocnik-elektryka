@@ -676,7 +676,7 @@ export function PanelTab() {
               z okna (minus nagłówek karty i formularz „Dodaj aparat" pod nią), a nie
               ze sztywnych 26rem — przy 14 aparatach i wysokim frontcie obok ostatnie
               trzy trzeba było doprzewijać w małym okienku. */}
-          <div className="pe-scroll mb-4 max-h-[26rem] space-y-1 overflow-y-auto xl:max-h-[calc(100vh-17rem)]">
+          <div className="pe-scroll mb-4 max-h-104 space-y-1 overflow-y-auto xl:max-h-[calc(100vh-17rem)]">
             {/* Na dotyku ikonki mają 40 × 44 px (były 13 × 13 — cztery obok siebie,
                 zmieniane palcem). Żeby nie zjadły opisu aparatu, na wąskim ekranie
                 wiersz łamie się na dwie linie: oznaczenie i opis u góry, wartość
@@ -690,7 +690,7 @@ export function PanelTab() {
                   onClick={() => setEdytowany(d.uid)}
                   title="Edytuj aparat"
                   aria-label={`Edytuj aparat ${d.tag}`}
-                  className="flex items-center justify-center [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-10 ml-auto text-slate-400 hover:text-blueprint sm:ml-0"
+                  className="flex items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-10 ml-auto text-slate-400 hover:text-blueprint sm:ml-0"
                 >
                   <Pencil size={13} />
                 </button>
@@ -705,7 +705,7 @@ export function PanelTab() {
                   disabled={i === 0}
                   title="Przesuń wyżej na szynie"
                   aria-label={`Przesuń aparat ${d.tag} wyżej na szynie`}
-                  className="flex items-center justify-center [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-10 text-slate-400 hover:text-blueprint disabled:opacity-30"
+                  className="flex items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-10 text-slate-400 hover:text-blueprint disabled:opacity-30"
                 >
                   <ArrowUp size={13} />
                 </button>
@@ -714,7 +714,7 @@ export function PanelTab() {
                   disabled={i === devices.length - 1}
                   title="Przesuń niżej na szynie"
                   aria-label={`Przesuń aparat ${d.tag} niżej na szynie`}
-                  className="flex items-center justify-center [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-10 text-slate-400 hover:text-blueprint disabled:opacity-30"
+                  className="flex items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-10 text-slate-400 hover:text-blueprint disabled:opacity-30"
                 >
                   <ArrowDown size={13} />
                 </button>
@@ -729,7 +729,7 @@ export function PanelTab() {
                     onClick={() => removeDevice(d.uid)}
                     title="Usuń aparat"
                     aria-label={`Usuń aparat ${d.tag}`}
-                    className="flex items-center justify-center [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-10 text-slate-400 hover:text-red-500"
+                    className="flex items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-10 text-slate-400 hover:text-red-500"
                   >
                     <Trash2 size={13} />
                   </button>

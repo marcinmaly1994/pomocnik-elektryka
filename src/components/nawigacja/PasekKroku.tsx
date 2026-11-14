@@ -43,7 +43,7 @@ export function PasekKroku({
       // równa się odstępowi strony (`p-4 sm:p-6` w App.tsx). `mt-auto`: na krótkiej
       // zakładce pasek ląduje tuż nad stopką, nie w środku pustego ekranu (minimalny
       // odstęp od treści daje osobny `h-6` wyżej).
-      className="sticky bottom-0 z-20 -mx-4 mt-auto flex items-center justify-between gap-3 border-t border-border bg-surface/95 px-4 py-3 shadow-pop backdrop-blur-sm sm:-mx-6 sm:px-6 md:mx-0 md:rounded-card md:border md:px-4"
+      className="sticky bottom-0 z-20 -mx-4 mt-auto flex items-center justify-between gap-3 border-t border-border bg-surface/95 px-4 py-3 shadow-pop backdrop-blur-xs sm:-mx-6 sm:px-6 md:mx-0 md:rounded-card md:border md:px-4"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
       {poprzedni ? (

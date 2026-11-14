@@ -14,7 +14,7 @@ import type { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
  * Dotąd miały 26 × 22 px przy 2 px odstępu — przy palcu „+" i „Dopasuj" leżały pod
  * tym samym opuszkiem. Pod myszą zostaje zwarty pasek, jak w edytorze rzutu.
  */
-const DOTYK = "[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11";
+const DOTYK = "pointer-coarse:min-h-11 pointer-coarse:min-w-11";
 export function PrzyciskiPowiekszenia({
   p,
   nazwa,

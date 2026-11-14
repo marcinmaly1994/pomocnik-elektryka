@@ -384,7 +384,7 @@ export function ProtocolsTab() {
               }}
               className={cn(
                 "rounded-lg border px-3 py-2 text-left text-xs",
-                active === k ? "border-blueprint bg-blueprint-tlo text-blueprint" : "border-[#DCE2E8] bg-white text-[#4F5D73]",
+                active === k ? "border-blueprint bg-blueprint-tlo text-blueprint" : "border-[#DCE2E8] bg-white text-slate-500",
               )}
             >
               <div className="font-semibold">{d.title}</div>
@@ -489,7 +489,7 @@ export function ProtocolsTab() {
                   <button
                     onClick={() => removeRow(i)}
                     aria-label={`Usuń pozycję ${i + 1}`}
-                    className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 flex items-center justify-center ml-auto shrink-0 text-slate-300 hover:text-red-500 md:ml-0"
+                    className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 flex items-center justify-center ml-auto shrink-0 text-slate-300 hover:text-red-500 md:ml-0"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -585,7 +585,7 @@ export function ProtocolsTab() {
                                 onChange={(e) => setRow(i, { [c.key]: e.target.value })}
                                 aria-label={`${c.label}, pozycja ${i + 1}`}
                                 aria-invalid={c.type === "number" && Number(r[c.key]) < 0 ? true : undefined}
-                                className={`pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm ${c.type === "number" ? "pe-mono" : ""} ${c.type === "number" && Number(r[c.key]) < 0 ? "!border-red-500" : ""}`}
+                                className={`pe-input w-full py-1 text-xs max-lg:py-1.5 max-lg:text-sm ${c.type === "number" ? "pe-mono" : ""} ${c.type === "number" && Number(r[c.key]) < 0 ? "border-red-500!" : ""}`}
                               />
                             )}
                           </td>
@@ -603,7 +603,7 @@ export function ProtocolsTab() {
                           <button
                             onClick={() => removeRow(i)}
                             aria-label={`Usuń wiersz ${i + 1}`}
-                            className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 flex items-center justify-center text-slate-300 hover:text-red-500"
+                            className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 flex items-center justify-center text-slate-300 hover:text-red-500"
                           >
                             <Trash2 size={13} />
                           </button>

@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { execSync } from "node:child_process";
 import path from "node:path";
 
@@ -55,7 +56,7 @@ function wtyczkaWersji() {
 }
 
 export default defineConfig({
-  plugins: [react(), wtyczkaWersji()],
+  plugins: [react(), tailwindcss(), wtyczkaWersji()],
   resolve: {
     alias: {
       // `import.meta.dirname`, nie `__dirname`: Vite 8 ostrzega, że przy natywnym

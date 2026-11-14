@@ -96,7 +96,7 @@ export function CalcResultView<T>({ wynik }: { wynik: CalcResult<T> }) {
                     to najdłuższa linia w całym widoku. Najpierw na spacjach, w środku
                     słowa dopiero, gdy nie ma innego wyjścia: `break-all` cięło „tablicy"
                     na „tab/licy" nawet tam, gdzie spacja była tuż obok. */}
-                <div className="pe-mono text-xs text-slate-500 [overflow-wrap:anywhere]">= {k.podstawienie}</div>
+                <div className="pe-mono text-xs text-slate-500 wrap-anywhere">= {k.podstawienie}</div>
                 <div className="pe-mono text-sm font-semibold text-blueprint">= {k.wynik}</div>
               </div>
             ))}

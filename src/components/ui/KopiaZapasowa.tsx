@@ -89,7 +89,7 @@ export function KopiaZapasowa({ onOtworzListe }: { onOtworzListe?: () => void })
           <button
             type="button"
             aria-label="Projekty"
-            className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-2 py-0.5 text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 [@media(pointer:coarse)]:min-h-8 [@media(pointer:coarse)]:min-w-8 [@media(pointer:coarse)]:justify-center"
+            className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-2 py-0.5 text-sm text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 pointer-coarse:min-h-8 pointer-coarse:min-w-8 pointer-coarse:justify-center"
             title="Lista projektów, zapis do pliku i odczyt z pliku"
           >
             <Archive size={14} aria-hidden="true" /> <span className="hidden sm:inline">Projekty</span>

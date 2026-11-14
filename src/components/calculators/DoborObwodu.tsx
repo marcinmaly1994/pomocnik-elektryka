@@ -34,7 +34,7 @@ export function PrzelacznikTrybu({ tryb, onZmien }: { tryb: TrybObwodu; onZmien:
               onClick={() => onZmien(o.id)}
               title={o.opis}
               className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                aktywny ? "border-copper bg-copper-tlo text-caution" : "border-[#E6EAEF] bg-white text-[#4F5D73]"
+                aktywny ? "border-copper bg-copper-tlo text-caution" : "border-[#E6EAEF] bg-white text-slate-500"
               }`}
             >
               {o.label}

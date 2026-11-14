@@ -133,10 +133,10 @@ export function PasekMenu({
             // skrótów nie trafiają do planu pod spodem.
             data-nakladka-edytora=""
             id={panelId}
-            // `z-[45]`: nad pełnoekranowym edytorem (`z-40` — w portalu panel nie jest
+            // `z-45`: nad pełnoekranowym edytorem (`z-40` — w portalu panel nie jest
             // już jego dzieckiem), ale pod oknami dialogowymi (`z-50`), które otwiera
             // choćby „Duplikuj" z wnętrza panelu.
-            className="fixed z-[45] flex flex-col gap-2.5 rounded-card border border-border bg-white p-3 shadow-lg"
+            className="fixed z-45 flex flex-col gap-2.5 rounded-card border border-border bg-white p-3 shadow-lg"
             style={{ top: polozenie.top, left: polozenie.left, width: polozenie.width }}
           >
             <ZamknijContext.Provider value={() => setOtwarte(false)}>{children}</ZamknijContext.Provider>
