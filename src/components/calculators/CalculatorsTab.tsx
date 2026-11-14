@@ -2423,22 +2423,22 @@ export function CalculatorsTab() {
                 {bfOdbiory.map((o) => (
                   <div key={o.id} className="flex flex-wrap items-center gap-2 border-b border-border pb-2 last:border-0 last:pb-0 sm:border-0 sm:pb-0 sm:flex-nowrap">
                     <input
-                      className="pe-input text-sm order-1 min-w-0 flex-1 basis-40 sm:order-none sm:basis-auto"
+                      className="pe-input text-sm order-1 min-w-0 flex-1 basis-40 sm:order-0 sm:basis-auto"
                       aria-label="Nazwa odbioru"
                       value={o.nazwa}
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, nazwa: e.target.value } : x)))}
                     />
                     <input
-                      className="pe-input text-sm order-3 w-20 pe-mono sm:order-none"
+                      className="pe-input text-sm order-3 w-20 pe-mono sm:order-0"
                       type="number"
                       aria-label={`Moc: ${o.nazwa}`}
                       title="Moc czynna odbioru [W] — z tabliczki znamionowej."
                       value={o.mocW}
                       onChange={(e) => setOdbioryFazowe((ds) => ds.map((x) => (x.id === o.id ? { ...x, mocW: Number(e.target.value) } : x)))}
                     />
-                    <span className="order-3 text-xs text-slate-400 sm:order-none">W</span>
+                    <span className="order-3 text-xs text-slate-400 sm:order-0">W</span>
                     <input
-                      className="pe-input text-sm order-3 w-16 pe-mono sm:order-none"
+                      className="pe-input text-sm order-3 w-16 pe-mono sm:order-0"
                       type="number"
                       step="0.05"
                       aria-label={`cos φ: ${o.nazwa}`}
@@ -2450,7 +2450,7 @@ export function CalculatorsTab() {
                       // Stałe w-28: pole z własną strzałką (padding-right 2rem) potrzebuje ok. 112 px,
                       // żeby najdłuższa opcja („3-fazowy”) się mieściła — i przy 16 px (telefon), i
                       // przy 14 px (od md); węższe w-24 ucinało napis (zmierzone: 57 px tekstu na 52 px).
-                      className="pe-input pe-select order-2 w-28 sm:order-none text-base md:text-sm"
+                      className="pe-input pe-select order-2 w-28 sm:order-0 text-base md:text-sm"
                       aria-label={`Faza: ${o.nazwa}`}
                       title="Do której fazy podłączony jest ten odbiór — albo „3-fazowy”, jeśli obciąża wszystkie trzy równo."
                       value={o.faza ?? "3f"}
@@ -2469,7 +2469,7 @@ export function CalculatorsTab() {
                     <button
                       onClick={() => setOdbioryFazowe((ds) => ds.filter((x) => x.id !== o.id))}
                       aria-label={`Usuń odbiór: ${o.nazwa}`}
-                      className="order-3 ml-auto sm:order-none sm:ml-0 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 flex items-center justify-center text-slate-400 hover:text-red-500"
+                      className="order-3 ml-auto sm:order-0 sm:ml-0 pointer-coarse:min-h-11 pointer-coarse:min-w-11 flex items-center justify-center text-slate-400 hover:text-red-500"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -2927,7 +2927,7 @@ export function CalculatorsTab() {
                     <button
                       onClick={() => setDevices((ds) => ds.filter((x) => x.id !== d.id))}
                       aria-label={`Usuń odbiornik: ${d.name}`}
-                      className="[@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 flex items-center justify-center ml-auto text-slate-400 hover:text-red-500 sm:ml-0"
+                      className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 flex items-center justify-center ml-auto text-slate-400 hover:text-red-500 sm:ml-0"
                     >
                       <Trash2 size={15} />
                     </button>

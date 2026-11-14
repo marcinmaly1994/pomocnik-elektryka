@@ -47,7 +47,7 @@ export function KartaElementu({
   // w katalogu stoi pod ikoną i nie razi, w karcie tuż pod tytułem już tak (R11).
   const podpis = libSubtitle(element.type, element.gangs);
   const wariant = podpis.toLowerCase() === etykieta.toLowerCase() ? "" : podpis;
-  const przycisk = "[@media(pointer:coarse)]:min-h-11";
+  const przycisk = "pointer-coarse:min-h-11";
   return (
     <div className="space-y-2.5" data-testid="karta-elementu">
       <div>
@@ -91,12 +91,12 @@ export function KartaElementu({
         {element.note && (
           <>
             <dt className="text-slate-400">Opis</dt>
-            <dd className="break-words text-ink">{element.note}</dd>
+            <dd className="wrap-break-word text-ink">{element.note}</dd>
           </>
         )}
       </dl>
       {obwod && onPokazWRozdzielnicy && (
-        <button onClick={onPokazWRozdzielnicy} className="flex items-center gap-1 text-xs font-medium text-blueprint hover:underline [@media(pointer:coarse)]:min-h-8">
+        <button onClick={onPokazWRozdzielnicy} className="flex items-center gap-1 text-xs font-medium text-blueprint hover:underline pointer-coarse:min-h-8">
           Pokaż w rozdzielnicy <ArrowRight size={12} />
         </button>
       )}

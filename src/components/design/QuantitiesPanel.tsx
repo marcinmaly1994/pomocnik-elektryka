@@ -130,7 +130,7 @@ function Etykieta({ tekst, ids, onZaznacz }: { tekst: string; ids: string[]; onZ
     <button
       type="button"
       onClick={() => onZaznacz(ids)}
-      className="text-left text-blueprint underline-offset-2 hover:underline [@media(pointer:coarse)]:min-h-8"
+      className="text-left text-blueprint underline-offset-2 hover:underline pointer-coarse:min-h-8"
       aria-label={`Zaznacz na planie: ${tekst} (${ids.length})`}
       title={`Zaznacz na planie (${ids.length})`}
     >

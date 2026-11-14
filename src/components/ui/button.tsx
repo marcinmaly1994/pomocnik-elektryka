@@ -25,7 +25,7 @@ const buttonVariants = cva(
   "relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium " +
     "transition-[color,background-color,border-color,transform] duration-szybko ease-out active:scale-[.98] " +
     "disabled:pointer-events-none disabled:opacity-40 " +
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blueprint focus-visible:ring-offset-2 " +
+    "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blueprint focus-visible:ring-offset-2 " +
     "motion-reduce:transition-none motion-reduce:active:scale-100",
   {
     variants: {

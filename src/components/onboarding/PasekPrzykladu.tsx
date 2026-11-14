@@ -36,13 +36,13 @@ export function PasekPrzykladu() {
           tylko tekst renderował się odrobinę szerzej (czcionki na Linuksie): na tablecie
           768 px pasek rósł o 42 px i zabierał je rzutowi. Teraz tekst zawija się w swojej
           kolumnie, a przycisk schodzi pod spód dopiero na wąskim telefonie (min. 12rem). */}
-      <span className="min-w-[12rem] flex-1 basis-0">
+      <span className="min-w-48 flex-1 basis-0">
         <strong>To jest projekt przykładowy</strong> — gotowy projekt, na którym widać, co aplikacja liczy sama.
         Poklikaj po zakładkach, zmieniaj co chcesz; ten projekt nie zapisuje się na Twoim koncie.
       </span>
       <Dialog>
         <DialogTrigger asChild>
-          <button className="ml-auto shrink-0 font-semibold underline [@media(pointer:coarse)]:min-h-8">Zacznij własny projekt</button>
+          <button className="ml-auto shrink-0 font-semibold underline pointer-coarse:min-h-8">Zacznij własny projekt</button>
         </DialogTrigger>
         <DialogContent title="Zacząć własny projekt?">
           <p className="mb-4 text-sm text-slate-600">

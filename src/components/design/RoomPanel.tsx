@@ -72,8 +72,8 @@ export function WierszPomieszczenia({
   const recolorRoomShape = useProjectStore((s) => s.recolorRoomShape);
   const deleteRoomShape = useProjectStore((s) => s.deleteRoomShape);
   const areaM2 = polygonAreaM2(r.points, metersPerUnit);
-  const ikona = "text-slate-400 hover:text-blueprint [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-9 flex items-center justify-center";
-  const przycisk = "[@media(pointer:coarse)]:min-h-11";
+  const ikona = "text-slate-400 hover:text-blueprint pointer-coarse:min-h-11 pointer-coarse:min-w-9 flex items-center justify-center";
+  const przycisk = "pointer-coarse:min-h-11";
   const tytulSciany =
     "Utwórz ścianę z obrysu — przyda się, jeśli to pomieszczenie nie ma jeszcze osobno narysowanej ściany. Jeśli już ma, doda drugą, nachodzącą.";
 
@@ -148,7 +148,7 @@ export function WierszPomieszczenia({
           {/* Przesuwanie całego pokoju (F5) nie ma przycisku — chwyta się wnętrze — więc
               bez tej linijki nikt by o nim nie wiedział. Na dotyku przeciąganie wnętrza
               należy do przesuwania widoku, stąd ukryte. */}
-          <p className="w-full text-xs leading-snug text-slate-500 [@media(pointer:coarse)]:hidden">
+          <p className="w-full text-xs leading-snug text-slate-500 pointer-coarse:hidden">
             Przeciągnij wnętrze pokoju albo użyj strzałek, żeby przesunąć go razem z osprzętem.
           </p>
         </div>

@@ -344,7 +344,7 @@ function ToolTab({ id, label, active, onPick, ikona }: TabButtonProps & { ikona?
       onPointerEnter={() => pobierzZawczasu(id)}
       onFocus={() => pobierzZawczasu(id)}
       className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm transition-colors ${
-        isActive ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"
+        isActive ? "bg-copper-tlo font-semibold text-caution" : "text-slate-500"
       }`}
     >
       {ikona}
@@ -888,7 +888,7 @@ export default function App() {
             pojedynczo, dokładnie jak przed rozdzieleniem — inaczej grupa konta nie mogła
             dzielić rzędu z zawiniętymi zakładkami i nagłówek rósł na tablecie ze 150 do
             184 px (zmierzone przy 640 px, jeszcze przed menu). */}
-        <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:[&>*]:shrink-0">
+        <div className="flex min-w-0 items-center gap-1.5 sm:flex-wrap sm:*:shrink-0">
           {/* Pasek narzędzi od 768 px (`md`) — jak dotąd, z zawijaniem zamiast przewijania.
               Poniżej niego ta grupa jest ukryta, a te same pozycje stoją w arkuszu „Menu”
               (`MenuTelefonu`): pasek przewijany w bok ucinał etykiety w pół słowa
@@ -1445,7 +1445,7 @@ function LinkDokumentu({
       }}
       // Na dotyku cel ma 32 px wysokości zamiast 16: link w stopce to osobny wiersz, nie
       // fragment zdania, więc WCAG 2.5.8 (min. 24 px) go nie zwalnia.
-      className="text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-ink [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-8 [@media(pointer:coarse)]:items-center"
+      className="text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-ink pointer-coarse:inline-flex pointer-coarse:min-h-8 pointer-coarse:items-center"
     >
       {children}
     </a>

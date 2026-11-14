@@ -1,4 +1,36 @@
-@tailwind base;
+@import "tailwindcss";
+/* Motyw nadal w tailwind.config.ts: czyta z src/lib/tokeny.ts (jedno źródło kolorów,
+   promieni, cieni i czasów), a testy kontrastu i tokenów importują ten plik. */
+@config "../tailwind.config.ts";
+
+/* Zgodność z Tailwind 3 — v4 zmienił domyślne wartości, na których opiera się
+   interfejs (plus kolor obrysu niżej):
+   - domyślny kolor ramki to teraz `currentColor` (był gray-200) — gołe `border` bez
+     koloru zrobiłoby się czarne,
+   - przyciski dostały `cursor: default` (był pointer),
+   - placeholder ma 50% koloru tekstu (był gray-400). */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+    /* Kolor obrysu ustawiony z góry, nie dopiero w `:focus-visible`: w v4
+       `transition-colors` animuje też `outline-color`, więc pierścień fokusu
+       przechodziłby przez 150 ms z koloru tekstu w niebieski. Bez obrysu
+       (`outline-style: none`) ten kolor nic nie rysuje. */
+    outline-color: --theme(--color-blueprint);
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+}
 
 @layer base {
   /* Dolny pasek kroku (PasekKroku, ok. 5 rem) jest `sticky`: bez tego fokus z klawiatury
@@ -11,15 +43,14 @@
      (`:focus-visible`) — klik myszą nie zostawia obwódki. Komponenty z własnym
      pierścieniem (Button: `ring-2`) nadpisują go `outline-none`, więc nic się nie dubluje. */
   :focus-visible {
-    outline: 2px solid theme('colors.blueprint.DEFAULT');
+    outline: 2px solid --theme(--color-blueprint);
     outline-offset: 2px;
   }
 }
-@tailwind components;
-@tailwind utilities;
-
-body {
-  @apply bg-paper text-ink font-sans;
+@layer base {
+  body {
+    @apply bg-paper text-ink font-sans;
+  }
 }
 
 /* Klasy `.pe-*` przeniesione 1:1 z bloku CSS w oryginalnym PomocnikElektryka.jsx
@@ -51,7 +82,10 @@ body {
     @apply bg-surface-2 font-semibold text-slate-500;
   }
   .pe-table .pe-liczba {
-    @apply pe-mono tabular-nums;
+    /* To samo co `.pe-mono` — v4 nie pozwala na @apply klasy z warstwy components. */
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
   .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) th,
   .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) td {
@@ -60,7 +94,7 @@ body {
   .pe-table:where(:not(.pe-table-od-md):not(.pe-table-od-lg)) .pe-liczba {
     @apply text-right;
   }
-  @media (min-width: theme('screens.md')) {
+  @media (min-width: --theme(--breakpoint-md)) {
     .pe-table-od-md th,
     .pe-table-od-md td {
       @apply border-b border-border;
@@ -69,7 +103,7 @@ body {
       @apply text-right;
     }
   }
-  @media (min-width: theme('screens.lg')) {
+  @media (min-width: --theme(--breakpoint-lg)) {
     .pe-table-od-lg th,
     .pe-table-od-lg td {
       @apply border-b border-border;
@@ -103,7 +137,7 @@ body {
      na bieli — wymóg WCAG 2.2 dla wskaźnika fokusu), zamiast 20-procentowej poświaty. */
   .pe-input:focus-visible,
   .pe-input:focus {
-    outline: 2px solid theme('colors.blueprint.DEFAULT');
+    outline: 2px solid --theme(--color-blueprint);
     outline-offset: 1px;
     @apply border-blueprint;
   }
@@ -119,14 +153,14 @@ body {
   }
   .pe-result {
     @apply rounded border border-border bg-white;
-    border-top: 2px solid theme('colors.blueprint.DEFAULT');
+    border-top: 2px solid --theme(--color-blueprint);
   }
   .pe-scroll::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   .pe-scroll::-webkit-scrollbar-thumb {
-    background: theme('colors.border-strong');
+    background: --theme(--color-border-strong);
     border-radius: 8px; /* suwak przeglądarki — poza skalą promieni 6/10/14 */
   }
 
@@ -217,16 +251,18 @@ body {
       transform: none;
     }
   }
-  /* Okno wchodzi z -50%/-50%, bo `DialogContent` centruje je translate'em — animacja
-     transform bez tego przesunięcia rzuciłaby okno w róg. Włączane tylko pod `motion-safe:`. */
+  /* `DialogContent` centruje okno klasami `-translate-x/y-1/2`, które w Tailwind 4
+     ustawiają osobną właściwość `translate` — składa się ona z `transform` animacji.
+     Dlatego tu tylko lekkie podniesienie (2% wysokości) i skala, bez -50%/-50%:
+     wpisane jeszcze raz przesunęłyby okno podwójnie. Włączane tylko pod `motion-safe:`. */
   @keyframes pe-okno-wejscie {
     from {
       opacity: 0;
-      transform: translate(-50%, -48%) scale(0.98);
+      transform: translateY(2%) scale(0.98);
     }
     to {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: none;
     }
   }
   @keyframes pe-przenikanie {

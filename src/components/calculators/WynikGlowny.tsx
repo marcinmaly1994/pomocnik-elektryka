@@ -132,7 +132,7 @@ export function WynikGlowny({
               <dt className="text-sm text-slate-500">{etykieta}</dt>
               <dd
                 className={cn(
-                  "pe-mono mt-0.5 font-semibold leading-tight [overflow-wrap:anywhere]",
+                  "pe-mono mt-0.5 font-semibold leading-tight wrap-anywhere",
                   // Drugi blok pod głównym nie może z nim konkurować, więc zawsze 18 px.
                   drugorzedny ? "text-lg" : duze ? "text-2xl sm:text-3xl" : "text-xl",
                   ton === "akcent" ? "text-copper" : "text-blueprint"

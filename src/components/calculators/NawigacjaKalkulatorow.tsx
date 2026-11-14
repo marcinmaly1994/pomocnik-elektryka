@@ -70,7 +70,7 @@ export function SzukajkaKalkulatorow({
       <kbd
         aria-hidden="true"
         // Skrót klawiszowy nic nie mówi na ekranie dotykowym bez klawiatury.
-        className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 [@media(pointer:coarse)]:hidden"
+        className="pe-mono pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-coarse:hidden"
       >
         {SKROT_SZUKANIA}
       </kbd>
@@ -196,7 +196,7 @@ export function ListaKalkulatorow({
               // Na dotyku 44 px wysokości — przy 17 px zwijanie grupy palcem było loterią.
               // Nazwa grupy zwykłą pisownią, jak na ekranie startowym — wersaliki mówiły
               // o tych samych grupach innym głosem niż kafelki obok.
-              className={`${zwarta ? "mb-0.5" : "mb-1.5"} flex w-full items-center gap-1 text-left text-xs font-semibold text-slate-500 hover:text-copper [@media(pointer:coarse)]:min-h-11`}
+              className={`${zwarta ? "mb-0.5" : "mb-1.5"} flex w-full items-center gap-1 text-left text-xs font-semibold text-slate-500 hover:text-copper pointer-coarse:min-h-11`}
             >
               {schowana ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
               {grupa.tytul}

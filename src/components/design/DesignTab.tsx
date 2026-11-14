@@ -2501,7 +2501,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
       dlugosc += Math.hypot(w.points[i].x - w.points[i - 1].x, w.points[i].y - w.points[i - 1].y);
     }
     const petla = petleBezPomieszczenia.some((x) => x.wall.id === w.id);
-    const przycisk = "[@media(pointer:coarse)]:min-h-11";
+    const przycisk = "pointer-coarse:min-h-11";
     return (
       <div className="flex min-w-0 flex-col items-start gap-2 text-xs" data-testid="karta-sciany">
         <div>
@@ -2748,7 +2748,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               <button
                 key={id}
                 onClick={() => otwory.setOpeningKind(id)}
-                className={`rounded-md px-2.5 py-1 text-xs ${otwory.openingKind === id ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"}`}
+                className={`rounded-md px-2.5 py-1 text-xs ${otwory.openingKind === id ? "bg-copper-tlo font-semibold text-caution" : "text-slate-500"}`}
               >
                 {label}
               </button>
@@ -2838,7 +2838,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         return (
           <div className="flex min-w-0 flex-col gap-1.5 text-xs" data-testid="karta-notatki">
             <span className="font-medium text-slate-600">Notatka</span>
-            <p className="whitespace-pre-wrap break-words text-slate-600">{n.tekst}</p>
+            <p className="whitespace-pre-wrap wrap-break-word text-slate-600">{n.tekst}</p>
             <div className="flex flex-wrap gap-1.5">
               <Button variant="secondary" size="sm" onClick={() => setEdycjaNotatki({ id: n.id, tekst: n.tekst })}>
                 Edytuj
@@ -2896,7 +2896,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
                   pokoje.ustawTryb(id);
                 }}
                 title={hint}
-                className={`rounded-md px-2.5 py-1 text-sm ${pokoje.roomMode === id ? "bg-copper-tlo font-semibold text-caution" : "text-[#4F5D73]"}`}
+                className={`rounded-md px-2.5 py-1 text-sm ${pokoje.roomMode === id ? "bg-copper-tlo font-semibold text-caution" : "text-slate-500"}`}
               >
                 {label}
               </button>
@@ -3236,7 +3236,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               ręką, ma nad nim kliknąć dalej. */}
           <button
             onClick={() => setWyborPrzykladu(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-blueprint underline-offset-2 hover:underline [@media(pointer:coarse)]:min-h-8"
+            className="flex items-center gap-1.5 text-sm font-medium text-blueprint underline-offset-2 hover:underline pointer-coarse:min-h-8"
           >
             <Eye size={15} /> Zobacz gotowy przykład
           </button>
@@ -3250,10 +3250,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
               w miejscu, w którym to pytanie realnie pada.
               Kolejność: najpierw pomoc (odpowiedź), potem pominięcie (rezygnacja). */}
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
-            <button onClick={onOpenPomoc} className="flex items-center gap-1 text-slate-500 underline hover:text-copper [@media(pointer:coarse)]:min-h-8">
+            <button onClick={onOpenPomoc} className="flex items-center gap-1 text-slate-500 underline hover:text-copper pointer-coarse:min-h-8">
               <HelpCircle size={13} /> Nie wiesz, od czego zacząć? Zobacz, jak to działa
             </button>
-            <button onClick={onboarding.dismissEntryScreen} className="text-slate-400 underline hover:text-slate-600 [@media(pointer:coarse)]:min-h-8">
+            <button onClick={onboarding.dismissEntryScreen} className="text-slate-400 underline hover:text-slate-600 pointer-coarse:min-h-8">
               Pomiń — zacznę na pustym planie
             </button>
           </div>
@@ -3418,7 +3418,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           elementów — dzięki temu symbol w PDF-ie jest dokładnie tym samym znakiem,
           który użytkownik widzi w aplikacji i na rysunku. `aria-hidden`, bo dla
           czytnika ekranu to duplikat treści palety. */}
-      <div ref={glifyRef} aria-hidden className="pointer-events-none absolute -left-[9999px] top-0 h-0 overflow-hidden">
+      <div ref={glifyRef} aria-hidden className="pointer-events-none absolute left-[-9999px] top-0 h-0 overflow-hidden">
         {uzyteSymbole.map((s) => (
           <span key={`${s.type}:${s.gangs}:${s.agdLetter ?? ""}`} data-glif={`${s.type}:${s.gangs}:${s.agdLetter ?? ""}`}>
             <GlyphPreview type={s.type} color={ELEMENT_TYPES[s.type].color} gangs={s.gangs} agdLetter={s.agdLetter} size={40} />
@@ -3534,7 +3534,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           przyciski paska narzędzi i zakładki panelu pod spodem. */}
       {pelnyEkran && (
         <div
-          className="absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-3 py-2 shadow-lg backdrop-blur transition-[top] duration-zwykle empty:hidden"
+          className="absolute left-1/2 z-30 flex max-w-[calc(100%-10rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-3 py-2 shadow-lg backdrop-blur-sm transition-[top] duration-zwykle empty:hidden"
           // Odsłonięty pasek edytora zajmuje górę okna — pigułka zjeżdża wtedy pod niego,
           // zamiast się z nim nakładać.
           style={{ top: rozmiaryChrome.gora + 12 }}
@@ -3858,7 +3858,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           {ukryteKategorie.length > 0 && (
             <div
               data-testid="ukryte-kategorie"
-              className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-x-2 gap-y-1 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-1 text-xs text-[#8A5526] shadow-sm"
+              className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-x-2 gap-y-1 rounded-card border border-copper/40 bg-[#FDF6EF]/95 px-2.5 py-1 text-xs text-caution shadow-sm"
             >
               <span>Ukryte na rzucie: {ukryteKategorie.join(", ")}</span>
               <button className="font-semibold underline" onClick={() => setUkryteKategorie([])}>
@@ -4205,7 +4205,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           title="Narzędzia rysowania — najedź na krawędź albo kliknij"
           aria-label="Pokaż narzędzia rysowania"
           style={{ width: PAS_WYZWALAJACY }}
-          className="absolute left-0 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-r-lg border border-l-0 border-border bg-white/90 py-3 text-slate-400 shadow-md backdrop-blur transition-colors hover:bg-white hover:text-copper"
+          className="absolute left-0 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-r-lg border border-l-0 border-border bg-white/90 py-3 text-slate-400 shadow-md backdrop-blur-sm transition-colors hover:bg-white hover:text-copper"
         >
           <ChevronRight size={13} />
           <span className="text-xs font-semibold uppercase tracking-wider" style={{ writingMode: "vertical-rl" }}>

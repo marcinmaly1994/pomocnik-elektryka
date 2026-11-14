@@ -86,7 +86,7 @@ export function HintButton({ hint }: { hint: string }) {
         aria-label={open ? "Ukryj podpowiedź" : "Pokaż podpowiedź"}
         // Na dotyku pole trafienia 44 × 44 px (niewidoczne `::after` wokół ikonki) — sama
         // ikonka ma 12 px i palcem trafiało się w nią co któryś raz. Wygląd bez zmian.
-        className="relative cursor-pointer text-slate-400 hover:text-blueprint after:absolute after:content-[''] [@media(pointer:coarse)]:after:-inset-4"
+        className="relative cursor-pointer text-slate-400 hover:text-blueprint after:absolute after:content-[''] pointer-coarse:after:-inset-4"
       >
         <Info size={12} />
       </button>

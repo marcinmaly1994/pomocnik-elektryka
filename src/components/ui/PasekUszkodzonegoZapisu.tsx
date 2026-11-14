@@ -42,14 +42,14 @@ export function PasekUszkodzonegoZapisu() {
         <strong>Nie udało się otworzyć projektu „{zapis.nazwa}”</strong> — jego zapis w tej przeglądarce jest uszkodzony.
         Zaczynasz od pustego planu. Surowa kopia zapisu została zachowana: pobierz ją, jeśli chcesz spróbować ją odzyskać.
       </span>
-      <button type="button" onClick={pobierz} className="shrink-0 font-semibold underline [@media(pointer:coarse)]:min-h-8">
+      <button type="button" onClick={pobierz} className="shrink-0 font-semibold underline pointer-coarse:min-h-8">
         Pobierz uszkodzony zapis
       </button>
       <button
         type="button"
         onClick={zamknij}
         aria-label="Zamknij komunikat"
-        className="shrink-0 rounded p-0.5 hover:bg-black/5 [@media(pointer:coarse)]:min-h-8 [@media(pointer:coarse)]:min-w-8"
+        className="shrink-0 rounded p-0.5 hover:bg-black/5 pointer-coarse:min-h-8 pointer-coarse:min-w-8"
       >
         <X size={14} aria-hidden="true" />
       </button>
