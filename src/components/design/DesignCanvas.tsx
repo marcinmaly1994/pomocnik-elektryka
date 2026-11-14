@@ -43,6 +43,7 @@ import { spreadOverlappingRoutes } from "@/lib/panel/loads";
 import { dystansPalcow, kadrPodPalcem, kierunekPalca, srodekPalcow, zoomZeSzczypania, type PunktEkranu } from "@/lib/gestDotyku";
 import { useDlugiePrzytrzymanie } from "@/hooks/useDlugiePrzytrzymanie";
 import { useProstokatPrzeciagany } from "@/hooks/useProstokatPrzeciagany";
+import { useKursoryRysowania, type WynikPunktu } from "@/hooks/useKursoryRysowania";
 import { prostokatOtworu, prostokatSymbolu } from "@/lib/rozstawElementow";
 import { nearestRouteSegmentIndex } from "@/lib/punktTrasy";
 import {
@@ -103,20 +104,12 @@ const MIN_ROOM_SIZE = 8;
  * okno po ekranie; `ustaw` sprowadza kadr pod konkretny punkt planu — bez tego na
  * płótnie bez granic dało się odjechać dowolnie daleko i nie mieć jak wrócić.
  */
-/** Punkt rysowanej figury razem z tym, co o jego położeniu zadecydowało. */
-interface WynikPunktu {
-  punkt: Point;
-  zaczep: Przyciagniecie | null;
-  /** Które osie złapały wyrównanie — do znacznika przy kursorze. */
-  wyrownanie: { x: boolean; y: boolean };
-}
-
-const BEZ_OSI = { x: false, y: false } as const;
-
 export interface WidokSterowanie {
   przesunOPiksele(dxPx: number, dyPx: number): void;
   ustaw(x: number, y: number): void;
 }
+
+const BEZ_OSI = { x: false, y: false } as const;
 
 /** Jak długo po dotknięciu ignorujemy KAŻDY klik [ms] — zapas na wypadek, gdyby gest nie
  *  zaczął się od `pointerdown`. Patrz `klikAlboDotyk` i `echoTapu`. */
@@ -1018,8 +1011,7 @@ export function DesignCanvas({
 
     prostokatPokoju.porzuc();
     ramka.porzuc();
-    setZaczep(null);
-    setOsieKursora(null);
+    kursory.bezPomocy();
     return bylo;
   }
 
@@ -1032,30 +1024,9 @@ export function DesignCanvas({
       anulujPodgladRef.current = null;
     };
   });
-  // Pozycja kursora w trybie wieloboku — do „gumowej" linii od ostatniego punktu i do
-  // podświetlenia punktu startowego, gdy kolejny klik zamknie figurę.
-  const [roomCursor, setRoomCursor] = useState<Point | null>(null);
-  // To samo dla rysowania ścian — „gumowy" odcinek od ostatniego postawionego
-  // punktu do kursora, z etykietą bieżącej długości (patrz render niżej).
-  const [wallCursor, setWallCursor] = useState<Point | null>(null);
-  /**
-   * Zaczep, na którym stoi w tej chwili rysowany punkt — narożnik albo krawędź już
-   * narysowanej ściany/pomieszczenia, do której go przyciągnęło (`null`, gdy stoi
-   * wolno). Wyłącznie do PODŚWIETLENIA: bez niego przyciąganie jest niewidzialne,
-   * a niewidzialne przyciąganie jest nie do odróżnienia od celnego kliknięcia —
-   * użytkownik nie wie, czy ściany faktycznie się zeszły, czy tylko tak wyglądają.
-   */
-  const [zaczep, setZaczep] = useState<Przyciagniecie | null>(null);
-  /**
-   * Gdzie stoi rysowany punkt i które osie go tam ustawiły — do znacznika wyrównania.
-   *
-   * Bez sygnału wyrównanie było niewidzialne: punkt siadał w linii z czymś, a z ekranu
-   * nie dało się odczytać, czy to zasługa pomocy, czy celnej ręki. Znacznik jest
-   * KRÓTKI i stoi przy samym punkcie — linie przez cały rysunek były pierwszą próbą
-   * i okazały się mylące, bo pokazywały poziom narożnika, nad którym akurat wisiał
-   * kursor, zamiast mówić o punkcie, który się właśnie stawia.
-   */
-  const [osieKursora, setOsieKursora] = useState<{ punkt: Point; x: boolean; y: boolean } | null>(null);
+  /** Gumowe linie, zaczep i znacznik osi przy rysowaniu — patrz `useKursoryRysowania`. */
+  const kursory = useKursoryRysowania();
+  const { kursorPokoju: roomCursor, kursorSciany: wallCursor, zaczep, osie: osieKursora } = kursory;
 
   const drawingRoom = toolMode === "pomieszczenie";
 
@@ -1521,17 +1492,15 @@ export function DesignCanvas({
     if (toolMode === "sciany") {
       const raw = stage && planPoint(stage);
       if (!raw) {
-        setWallCursor(null);
-        setZaczep(null);
-        setOsieKursora(null);
+        kursory.setKursorSciany(null);
+        kursory.bezPomocy();
         return;
       }
-      const { punkt, zaczep: nowyZaczep, wyrownanie } = punktScianyZZaczepem(raw);
+      const wynik = punktScianyZZaczepem(raw);
       // Gumowy odcinek dopiero od drugiego punktu — przed pierwszym kliknięciem nie ma
       // od czego go ciągnąć.
-      setWallCursor(drawingWall.length > 0 ? punkt : null);
-      setZaczep(nowyZaczep);
-      setOsieKursora({ punkt, ...wyrownanie });
+      kursory.setKursorSciany(drawingWall.length > 0 ? wynik.punkt : null);
+      kursory.pokazPomoc(wynik);
       return;
     }
 
@@ -1542,15 +1511,13 @@ export function DesignCanvas({
         // przy kursorze w pobliżu startu pokazujemy punkt startowy, nie pozycję myszy —
         // dzięki temu widać dokładnie, gdzie figura się domknie
         if (closesPolygon(raw)) {
-          setRoomCursor(drawingRoomPoints[0]);
-          setZaczep(null);
-          setOsieKursora(null);
+          kursory.setKursorPokoju(drawingRoomPoints[0]);
+          kursory.bezPomocy();
           return;
         }
-        const { punkt, zaczep: nowyZaczep, wyrownanie } = punktPokojuZZaczepem(raw);
-        setRoomCursor(punkt);
-        setZaczep(nowyZaczep);
-        setOsieKursora({ punkt, ...wyrownanie });
+        const wynik = punktPokojuZZaczepem(raw);
+        kursory.setKursorPokoju(wynik.punkt);
+        kursory.pokazPomoc(wynik);
         return;
       }
       // Kotwica z pierwszego kliknięcia działa tak samo jak wciśnięty przycisk —
@@ -1560,9 +1527,9 @@ export function DesignCanvas({
       // przyciąga się tak samo jak każdy następny, a przed pierwszym kliknięciem
       // kotwicy jeszcze nie ma. Bez tego najczęstszy start — „obrysuj pokój od rogu
       // muru" — przyciągał się niewidzialnie.
-      const { punkt: rog, zaczep: nowyZaczep, wyrownanie } = punktPokojuZZaczepem(raw);
-      setZaczep(nowyZaczep);
-      setOsieKursora({ punkt: rog, ...wyrownanie });
+      const wynik = punktPokojuZZaczepem(raw);
+      const rog = wynik.punkt;
+      kursory.pokazPomoc(wynik);
       prostokatPokoju.rozciagnij(rog, rectAnchor);
       return;
     }
@@ -1682,8 +1649,10 @@ export function DesignCanvas({
       }
       if (closesPolygon(p)) {
         onCloseRoomPolygon();
-        setRoomCursor(null);
-        setZaczep(null);
+        kursory.setKursorPokoju(null);
+        // Także znacznik osi — wcześniej gaszony był tylko zaczep i znacznik stał
+        // przy domkniętej figurze aż do następnego ruchu myszy.
+        kursory.bezPomocy();
         return;
       }
       onAddRoomPoint(snapPunktuPokoju(p));
