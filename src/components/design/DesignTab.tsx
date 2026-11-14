@@ -108,14 +108,6 @@ import { PoleDlugosciOdcinka } from "@/components/design/PoleDlugosciOdcinka";
 import { PoleWymiarowProstokata } from "@/components/design/PoleWymiarowProstokata";
 import { DlugosciOdcinkowSciany } from "@/components/design/DlugosciOdcinkowSciany";
 import { PodpowiedzKolka } from "@/components/design/PodpowiedzKolka";
-import {
-  czyOdnotowacKolko,
-  czyPokazacPodpowiedzKolka,
-  czyPokazacPowitanie,
-  odczytajStanNawigacji,
-  zapamietajOdrzuceniePowitania,
-  zapamietajUmiejetnosc,
-} from "@/lib/podpowiedziNawigacji";
 import { useFloorPlanUpload } from "@/hooks/useFloorPlanUpload";
 import { useRysowanieScian } from "@/hooks/useRysowanieScian";
 import { useRysowaniePomieszczen } from "@/hooks/useRysowaniePomieszczen";
@@ -123,6 +115,7 @@ import { useOtwory } from "@/hooks/useOtwory";
 import { useWstawianieElementu } from "@/hooks/useWstawianieElementu";
 import { useZaznaczenie } from "@/hooks/useZaznaczenie";
 import { useWarstwyWidoku } from "@/hooks/useWarstwyWidoku";
+import { usePodpowiedziRzutu } from "@/hooks/usePodpowiedziRzutu";
 import { CropTool } from "@/components/detect/CropTool";
 import type { WidokSterowanie } from "./DesignCanvas";
 import { DesignCanvas, type RoomDrawMode, type ToolMode } from "./DesignCanvas";
@@ -1383,104 +1376,28 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   const wallToolRef = useRef<HTMLButtonElement | null>(null);
   /** Grupa przycisków powiększenia w pasku — kotwica dymka o nawigacji po rzucie. */
   const [grupaZoomu, setGrupaZoomu] = useState<HTMLDivElement | null>(null);
-  // Który dymek pokazać — trzy okazje (linijka / ściany / nawigacja), ten sam popover.
-  const [coachMark, setCoachMark] = useState<"skala" | "sciany" | "nawigacja" | null>(null);
-  /**
-   * Co użytkownik już wie o ruszaniu rzutem (patrz `podpowiedziNawigacji.ts`).
-   *
-   * Czytane RAZ, przy montowaniu: między zapisem a odczytem stoi tylko ta zakładka,
-   * więc stan Reacta i `localStorage` nie mają jak się rozjechać.
-   */
-  const [stanNawigacji, setStanNawigacji] = useState(odczytajStanNawigacji);
-  /**
-   * Licznik pomyłek „kółko bez Ctrl" — patrz `PodpowiedzKolka`. Licznik, a nie flaga,
-   * żeby kolejne kręcenie przedłużało komunikat, zamiast nie robić nic.
-   */
-  const [sygnalKolka, setSygnalKolka] = useState(0);
-  /** Kiedy ostatnio odnotowaliśmy kręcenie kółkiem — patrz `czyOdnotowacKolko`. */
-  const ostatnieKolkoRef = useRef(0);
+  /** Dymki przewodnika, kolejka dymków, stan nauki nawigacji i sygnał „kółko bez
+   *  Ctrl" — patrz `usePodpowiedziRzutu`. Nazwy jak przed wydzieleniem. */
+  const {
+    dymek: coachMark,
+    pokazDymek: setCoachMark,
+    sygnalKolka,
+    oznaczUmiejetnoscNawigacji,
+    zamknijPowitanieNawigacji,
+    zglosKolkoBezCtrl,
+    poWgraniuPodkladu: dymkiPoWgraniuPodkladu,
+  } = usePodpowiedziRzutu();
   const [seenBefore] = useState(hasSeenOnboarding);
 
   /**
-   * Dymek czekający na SWOJĄ kolej — patrz `poWgraniuPodkladu`.
-   *
-   * Ref, nie stan: nikt go nie ogląda, dopóki nie nadejdzie jego moment, a zmiana
-   * kolejki sama w sobie nie ma prawa niczego przerysować.
-   */
-  const nastepnyCoachMark = useRef<"skala" | null>(null);
-
-  /** Pokazuje dymek czekający w kolejce (jeśli jakiś jest) i opróżnia ją. */
-  const pokazNastepnyCoachMark = useCallback(() => {
-    const nastepny = nastepnyCoachMark.current;
-    nastepnyCoachMark.current = null;
-    setCoachMark(nastepny);
-  }, []);
-  /**
-   * Pierwsze przybliżenie rzutu — gasi obie podpowiedzi o nawigacji na dobre.
-   *
-   * Wołane z JEDNEGO miejsca dla wszystkich dróg: `Ctrl` + kółko na płótnie i
-   * przyciski w pasku wchodzą tym samym `onZoomChange`, więc nie da się nauczyć
-   * przybliżania „po cichu", z pominięciem tego zapisu.
-   */
-  const oznaczUmiejetnoscNawigacji = useCallback(() => {
-    zapamietajUmiejetnosc();
-    setStanNawigacji((s) => (s.umieNawigowac ? s : { ...s, umieNawigowac: true }));
-    // Dymek, który właśnie o tym mówił, nie ma już czego tłumaczyć — ustępuje
-    // miejsca temu, co czekało za nim.
-    //
-    // Kolejkę opróżniamy POZA funkcją aktualizującą stan. React woła ją w trybie
-    // ścisłym dwa razy dla tej samej zmiany: pierwsze wywołanie zabierało dymek
-    // z kolejki, drugie zastawało ją pustą i kasowało go z powrotem.
-    if (coachMark === "nawigacja") pokazNastepnyCoachMark();
-  }, [coachMark, pokazNastepnyCoachMark]);
-
-  /**
-   * „Rozumiem" pod dymkiem o nawigacji — zamyka go na dobre, także po odświeżeniu,
-   * i oddaje scenę temu, co czekało w kolejce (zwykle: dymkowi o skali).
-   */
-  const zamknijPowitanieNawigacji = useCallback(() => {
-    zapamietajOdrzuceniePowitania();
-    setStanNawigacji((s) => ({ ...s, powitanieOdrzucone: true }));
-    pokazNastepnyCoachMark();
-  }, [pokazNastepnyCoachMark]);
-
-  /**
-   * Ktoś kręci kółkiem nad rzutem bez `Ctrl` — czyli przewija stronę, prawdopodobnie
-   * próbując przybliżyć plan. Podnosimy licznik, a `PodpowiedzKolka` zamienia go na
-   * gasnący sam komunikat.
-   */
-  const zglosKolkoBezCtrl = useCallback(() => {
-    if (!czyPokazacPodpowiedzKolka(stanNawigacji, coachMark === "nawigacja")) return;
-    // Jedno kręcenie kółkiem to kilkadziesiąt zdarzeń, a każde szło dotąd prosto
-    // w stan, czyli w pełne przerysowanie tej zakładki razem z płótnem. Dymek i tak
-    // wyglądał identycznie — patrz `ODSTEP_ZGLOSZEN_KOLKA`.
-    const teraz = Date.now();
-    if (!czyOdnotowacKolko(ostatnieKolkoRef.current, teraz)) return;
-    ostatnieKolkoRef.current = teraz;
-    setSygnalKolka((n) => n + 1);
-  }, [stanNawigacji, coachMark]);
-
-  /**
-   * Koniec wgrywania podkładu — przycięciem albo z jego pominięciem.
-   *
-   * Kolejność dymków jest tu celowa: najpierw JAK oglądać rzut, dopiero potem CO z nim
-   * zrobić. Dwóch punktów o znanej odległości nie da się wskazać na rzucie, którego nie
-   * umie się przybliżyć — a nawigacja po płótnie jest jedyną rzeczą w tej aplikacji
-   * wziętą wprost z programów CAD (patrz `podpowiedziNawigacji.ts`).
-   *
-   * Kto nawigację już zna, ten przechodzi prosto do skali, czyli do stanu sprzed tej
-   * zmiany. Kolejka ma najwyżej dwa elementy i nie zamierza być mechanizmem ogólnym.
+   * Koniec wgrywania podkładu — przycięciem albo z jego pominięciem. Po podkładzie
+   * naturalny następny krok to skala (bez niej nie policzymy metrów); kolejność
+   * dymków — patrz `poWgraniuPodkladu` w usePodpowiedziRzutu.
    */
   const poWgraniuPodkladu = useCallback(() => {
-    // Po podkładzie naturalny następny krok to skala — bez niej nie policzymy metrów.
     setToolMode("skala");
-    if (czyPokazacPowitanie(stanNawigacji)) {
-      nastepnyCoachMark.current = "skala";
-      setCoachMark("nawigacja");
-      return;
-    }
-    setCoachMark("skala");
-  }, [stanNawigacji]);
+    dymkiPoWgraniuPodkladu();
+  }, [dymkiPoWgraniuPodkladu]);
 
   /**
    * „Dopasuj widok" — kadr wraca na rysunek.
