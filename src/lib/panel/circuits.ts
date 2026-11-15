@@ -142,7 +142,25 @@ function obwodyReczne(elements: InstallationElement[]): { numer: number; element
 export function computeCircuits(wszystkie: InstallationElement[], roomShapes: RoomShape[] = []): Circuit[] {
   const circuits: Circuit[] = [];
   let n = 1;
-  const add = (c: Omit<Circuit, "id">) => circuits.push({ id: "obw" + n++, ...c });
+  /*
+   * Id obwodu od jego PIERWSZEGO ELEMENTU, nie od kolejnego numeru.
+   *
+   * Numer kolejny przesuwał się przy każdym obwodzie dołożonym wcześniej w kolejności
+   * (obwody dedykowane stoją przed zwykłymi), a id jest kluczem aparatu w rozdzielnicy
+   * (`mcb-<id>`): po nim nadpisania, ukryte pozycje i odwołania aparatów ręcznych
+   * odnajdują swój wyłącznik. Gniazdo trójfazowe postawione na rzucie przejmowało więc
+   * klucz obwodu gniazd — razem z jego nadpisaniami i lampką zasilaną z niego
+   * (przegląd 15.11.2026, pkt 1). Klucze w starym formacie tłumaczy `mapaKluczyStarych`.
+   */
+  const uzyte = new Set<string>();
+  const add = (c: Omit<Circuit, "id">) => {
+    const baza = c.elements[0] ? `obw-${c.elements[0].id}` : `obw${n}`;
+    let id = baza;
+    for (let k = 2; uzyte.has(id); k++) id = `${baza}-${k}`;
+    uzyte.add(id);
+    n++;
+    circuits.push({ id, ...c });
+  };
 
   // Najpierw to, co projektant przypisał ręcznie — reszta reguł dostaje już tylko
   // elementy bez numeru, więc automat nie „odbiera" mu jego decyzji.
@@ -299,8 +317,12 @@ export function computeRcdGroups(circuits: Circuit[]): RcdGroup[] {
   for (let i = 0; i < wspolne.length; i += 6) {
     groups.push({ id: "rcd" + (groups.length + 1), rating: "30mA", typ: "A", circuits: wspolne.slice(i, i + 6) });
   }
+  // Id grupy typu B od OBWODU, nie od pozycji: stoi za wszystkimi wspólnymi grupami,
+  // więc kolejny numer przesuwał się przy każdej nowej szóstce obwodów — a klucz aparatu
+  // (`rcd-<id>`) jest tym, po czym aparaty ręczne i nadpisania odnajdują różnicówkę po
+  // odbudowie (patrz `mapaOznaczenAutomatu` w devices.ts).
   for (const c of circuits.filter((x) => x.wlasnyRcdTypB)) {
-    groups.push({ id: "rcd" + (groups.length + 1), rating: "30mA", typ: "B", circuits: [c] });
+    groups.push({ id: `rcdB-${c.id}`, rating: "30mA", typ: "B", circuits: [c] });
   }
   return groups;
 }

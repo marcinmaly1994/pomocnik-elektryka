@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { chunkLightsByGroup, colorForCircuit, kolorObwodu, KOLORY_OBWODOW, computeCircuits, computeLowVoltage, computeRcdGroups, mainBreakerFor, ostrzezeniaObwodow, wchodziDoObwodu, ZALECANE_MAKS } from "./circuits";
-import type { InstallationElement, RoomShape } from "@/types";
+import type { Circuit, InstallationElement, RoomShape } from "@/types";
 
 function el(partial: Partial<InstallationElement> & { type: InstallationElement["type"] }): InstallationElement {
   return {
@@ -593,5 +593,17 @@ describe("computeCircuits — pokoje o tej samej nazwie na dwóch kondygnacjach"
     const elements = [el({ id: "b", type: "gniazdko", room: "Pracownia", roomId: "p2", floor: "f2" })];
     const obwod = computeCircuits(elements, roomShapes).find((c) => c.elements.some((e) => e.id === "b"))!;
     expect(obwod.name).not.toMatch(/Pracownia/); // suchy pokój → obwód wg zastosowania, nie „mokry” obwód pokoju
+  });
+});
+
+describe("id obwodu od pierwszego elementu (przegląd 15.11.2026, pkt 1)", () => {
+  it("obwód dedykowany dołożony przed zwykłymi nie zmienia id obwodu gniazd", () => {
+    const gn = (id: string, x: number) => ({ id, type: "gniazdko", x, y: 0, room: "Salon", floor: "f1" }) as unknown as InstallationElement;
+    const f3 = { id: "e400", type: "gniazdko400", x: 900, y: 0, room: "Garaż", floor: "f1" } as unknown as InstallationElement;
+    const przed = computeCircuits([gn("e1", 0), gn("e2", 50)]);
+    const po = computeCircuits([gn("e1", 0), gn("e2", 50), f3]);
+    const idGniazd = (lista: Circuit[]) => lista.find((c) => c.elements.some((e) => e.id === "e1"))!.id;
+    expect(idGniazd(po)).toBe(idGniazd(przed));
+    expect(new Set(po.map((c) => c.id)).size).toBe(po.length);
   });
 });
