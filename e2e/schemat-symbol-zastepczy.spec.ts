@@ -25,7 +25,7 @@ async function dodajReczny(page: import("@playwright/test").Page, kind: string) 
   await page.getByRole("button", { name: "Dodaj", exact: true }).click();
 }
 
-test("stycznik dodany ręcznie NIE znika ze schematu — dostaje symbol zastępczy", async ({ page }) => {
+test("stycznik dodany ręcznie NIE znika ze schematu — ma własny symbol, nie zastępczy", async ({ page }) => {
   await zbudujReczniePustaRozdzielnice(page);
   await dodajReczny(page, "stycznik"); // prefiks K -> tag K1, bez przypisanej różnicówki
 
@@ -38,10 +38,10 @@ test("stycznik dodany ręcznie NIE znika ze schematu — dostaje symbol zastępc
   await expect(galaz).toBeVisible();
   await expect(galaz.locator("text").first()).toHaveText("K1");
 
-  // Symbol zastępczy jest wizualnie ODRÓŻNIALNY od prawdziwego glifu MCB — przerywana
-  // ramka, żeby użytkownik widział, że to placeholder, a nie kalka z dokumentacji.
-  const dash = await galaz.locator("rect").first().getAttribute("stroke-dasharray");
-  expect(dash).toBeTruthy();
+  // Od przeglądu 15.11.2026 (pkt 3) stycznik ma własny symbol — styk z półokręgiem —
+  // a nie zastępczą przerywaną ramkę.
+  await expect(galaz.locator("rect[stroke-dasharray]")).toHaveCount(0);
+  await expect(galaz.locator("path")).not.toHaveCount(0);
 });
 
 test("wyłącznik nadprądowy nadal rysuje pełny glif MCB, bez przerywanej ramki", async ({ page }) => {
@@ -240,4 +240,23 @@ test("bezpiecznik pod SPD rysuje się nad ogranicznikiem, nie jako osobny obwód
   await expect(bezpiecznik).toHaveCount(1);
   // 3 tory przy zasilaniu 3-fazowym, nie jedna wkładka.
   await expect(bezpiecznik.locator("text").nth(1)).toHaveText("3P · gG 63A");
+});
+
+/**
+ * Przegląd 15.11.2026, pkt 3 i 4: żaden aparat z katalogu nie dostaje już zastępczej
+ * przerywanej ramki, a RCBO ma symbol inny niż różnicówka (MCB z przekładnikiem).
+ */
+test("stycznik, przekaźnik, zasilacz, CZF i RCBO — własne symbole, bez ramki zastępczej", async ({ page }) => {
+  await zbudujReczniePustaRozdzielnice(page);
+  for (const k of ["stycznik", "przekaznik", "zasilacz", "ovr", "rcbo", "rcd"]) await dodajReczny(page, k);
+
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
+  const svg = page.locator("svg:has(#incoming-supply)");
+  await expect(svg.locator('[id^="circuit-"]')).toHaveCount(5);
+  await expect(svg.locator('[id^="circuit-"] rect[stroke-dasharray]')).toHaveCount(0);
+
+  // RCBO ≠ RCD: inna liczba ścieżek w symbolu.
+  const rcbo = await svg.locator('[id^="circuit-F"]').first().locator("path").count();
+  const rcd = await svg.locator('[id^="rcd-FI"]').first().locator("path").count();
+  expect(rcbo).not.toBe(rcd);
 });

@@ -139,7 +139,14 @@ const LAMPKA_LABEL_DX = labelOffset(GLYPHS.lampka, 0, LEAF_GLYPH_H);
 const BEZPIECZNIK_LABEL_DX = labelOffset(GLYPHS.bezpiecznik, 0, LEAF_GLYPH_H);
 /** RCBO — ten sam symbol co różnicówka (styk z członem wyłącznika, przekładnik,
  *  wyzwalacz), wpisany w gniazdo wyłącznika obwodu. */
-const RCBO_LABEL_DX = labelOffset(GLYPHS.rcd, 0, LEAF_GLYPH_H);
+const RCBO_LABEL_DX = labelOffset(GLYPHS.rcbo, 0, LEAF_GLYPH_H);
+/** Aparaty pomocnicze — symbole w siatce 0–100, patrz `deviceGlyphs.tsx`. */
+const POMOCNICZE_LABEL_DX = {
+  stycznik: labelOffset(GLYPHS.stycznik, 0, LEAF_GLYPH_H),
+  przekaznik: labelOffset(GLYPHS.przekaznik, 0, LEAF_GLYPH_H),
+  zasilacz: labelOffset(GLYPHS.zasilacz, 0, LEAF_GLYPH_H),
+  ovr: labelOffset(GLYPHS.czf, 0, LEAF_GLYPH_H),
+};
 
 /** Ile znaków mieści się w jednej linii komórki tabeli. Szerokość znaku (4,3 px dla
  *  `fontSize=8`) zmierzona przez `getComputedTextLength()` na realnych nazwach obwodów —
@@ -594,9 +601,13 @@ function symbolOdplywu(device: PanelDevice): { spec: GlyphSpec; labelDx: number 
   if (device.kind === "mcb") return { spec: GLYPHS.mcb, labelDx: MCB_LABEL_DX };
   if (device.kind === "rozBezp") return { spec: device.poles === "3P" ? GLYPHS.rozBezp3f : GLYPHS.rozBezp1f, labelDx: ROZBEZP_LABEL_DX };
   if (device.kind === "spdFuse") return { spec: GLYPHS.bezpiecznik, labelDx: BEZPIECZNIK_LABEL_DX };
-  // RCBO dostawał symbol zastępczy (przerywaną ramkę), choć to jeden z najczęstszych
-  // aparatów (audyt rozdzielnicy 15.11.2026, błąd 10).
-  if (device.kind === "rcbo") return { spec: GLYPHS.rcd, labelDx: RCBO_LABEL_DX };
+  // RCBO: własny symbol (MCB z przekładnikiem), nie symbol różnicówki — wcześniej nie
+  // dało się ich odróżnić na schemacie (przegląd 15.11.2026, pkt 4).
+  if (device.kind === "rcbo") return { spec: GLYPHS.rcbo, labelDx: RCBO_LABEL_DX };
+  if (device.kind === "stycznik") return { spec: GLYPHS.stycznik, labelDx: POMOCNICZE_LABEL_DX.stycznik };
+  if (device.kind === "przekaznik") return { spec: GLYPHS.przekaznik, labelDx: POMOCNICZE_LABEL_DX.przekaznik };
+  if (device.kind === "zasilacz") return { spec: GLYPHS.zasilacz, labelDx: POMOCNICZE_LABEL_DX.zasilacz };
+  if (device.kind === "ovr") return { spec: GLYPHS.czf, labelDx: POMOCNICZE_LABEL_DX.ovr };
   if (device.kind === "lampka") return { spec: GLYPHS.lampka, labelDx: LAMPKA_LABEL_DX };
   return { spec: GLYPHS.generic, labelDx: GENERIC_LABEL_DX };
 }
