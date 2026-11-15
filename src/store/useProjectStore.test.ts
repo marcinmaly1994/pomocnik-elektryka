@@ -962,3 +962,19 @@ describe("układ sieci wspólny dla protokołów i rozdzielnicy", () => {
     expect(useProjectStore.getState().panelConfig.ukladSieci).toBe("TT");
   });
 });
+
+describe("migracja oznaczeń przy wczytaniu projektu", () => {
+  it("projekt z SPD jako F1 wczytuje się z F0.1 i flagą informacji; zapis w nowej konwencji już jej nie podnosi", () => {
+    const payload = useProjectStore.getState().getProjectPayload();
+    const spd = { uid: "manual-1", kind: "spd", manual: true, tag: "F1", modules: 4, label: "T2", caption: "SPD", poles: "4P" };
+    useProjectStore.getState().loadProjectPayload({ ...payload, panelTryb: "zRzutu", panelDevices: [spd] });
+    expect(useProjectStore.getState().panelDevices[0].tag).toBe("F0.1");
+    expect(useProjectStore.getState().oznaczeniaZmigrowane).toBe(true);
+
+    useProjectStore.getState().zamknijInfoOMigracjiOznaczen();
+    expect(useProjectStore.getState().oznaczeniaZmigrowane).toBe(false);
+
+    useProjectStore.getState().loadProjectPayload(useProjectStore.getState().getProjectPayload());
+    expect(useProjectStore.getState().oznaczeniaZmigrowane).toBe(false);
+  });
+});
