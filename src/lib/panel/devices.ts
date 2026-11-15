@@ -88,7 +88,7 @@ export const MANUAL_DEVICE_TYPES: ManualDeviceType[] = [
   // zwarciowa SPD jest niższa od spodziewanego prądu zwarcia i nie pokrywa jej
   // zabezpieczenie nadrzędne — dane z karty katalogowej konkretnego ogranicznika.
   { key: "spdFuse", label: "Bezpiecznik pod SPD", prefix: "F", modules: 1, poles: "1P", defLabel: "gG 63A", accent: "#B98C2F", ratings: ["gG 25A", "gG 32A", "gG 40A", "gG 63A", "gG 80A"] },
-  { key: "ovr", label: "Czujnik zaniku / zaniku fazy (CZF)", prefix: "K", modules: 1, poles: "3P", defLabel: "CZF", accent: "#C6433A", ratings: ["CZF", "CZN", "OVR"] },
+  { key: "ovr", label: "Czujnik zaniku i asymetrii faz (CZF)", prefix: "K", modules: 1, poles: "3P", defLabel: "CZF", accent: "#C6433A", ratings: ["CZF", "CZN", "OVR"] },
   { key: "ppoz", label: "Rozłącznik przeciwpożarowy", prefix: "Q", modules: 2, poles: "4P", defLabel: "63A", accent: "#C6433A", ratings: ["40A", "63A", "80A", "100A"] },
   { key: "stycznik", label: "Stycznik modułowy", prefix: "K", modules: 2, poles: "2P", defLabel: "20A", accent: "#3B8C63", ratings: ["16A", "20A", "25A", "40A", "63A"] },
   { key: "przekaznik", label: "Przekaźnik bistabilny", prefix: "K", modules: 1, poles: "1P", defLabel: "16A", accent: "#3B8C63", ratings: ["10A", "16A"] },
@@ -403,6 +403,22 @@ export function czuloscITypRcd(d: Pick<PanelDevice, "label" | "caption">): strin
   const typ = tekst.match(/\btyp\s+(AC|A|F|B)\b/i)?.[1]?.toUpperCase();
   const czesci = [idn ? `${idn} mA` : null, typ ? `typ ${typ}` : null].filter(Boolean);
   return czesci.length ? czesci.join(" · ") : null;
+}
+
+/**
+ * Plakietka różnicówki na froncie: „FI2 · 30 mA", a przy typie innym niż A — z typem:
+ * „FI4 · 30 mA · B".
+ *
+ * Wcześniej stało tam na sztywno „30 mA" — także nad różnicówką 300 mA (audyt
+ * rozdzielnicy 15.11.2026, pkt 13). Typ A jest domyślny i najczęstszy, więc nie
+ * zajmuje miejsca; inny typ (B przy ładowarce, F przy falowniku) jest właśnie tym,
+ * co trzeba zobaczyć na froncie.
+ */
+export function plakietkaRcd(d: Pick<PanelDevice, "tag" | "label" | "caption">): string {
+  const opis = czuloscITypRcd(d);
+  const ma = opis?.match(/(\d+)\s*mA/)?.[1];
+  const typ = opis?.match(/typ\s+(\w+)/)?.[1];
+  return [d.tag, ma ? `${ma} mA` : null, typ && typ !== "A" ? typ : null].filter(Boolean).join(" · ");
 }
 
 export function daSieSkasowac(d: Pick<PanelDevice, "kind">): boolean {
@@ -764,6 +780,53 @@ function round1(v: number): number {
 export interface PanelSlot extends PanelDevice {
   index: number;
   slot: number;
+}
+
+/** Zalecana rezerwa miejsca na rozbudowę — dobra praktyka, nie wymóg normy. */
+export const ZALECANA_REZERWA = 0.2;
+
+/**
+ * Rezerwa modułów w obudowie i obudowa, która zostawia zalecane ~20% wolnego miejsca.
+ *
+ * Bez tej liczby rozdzielnica wychodzi „na styk": dołożenie jednego obwodu po latach
+ * znaczy wymianę obudowy (audyt rozdzielnicy 15.11.2026, pkt 14).
+ */
+export function rezerwaModulow(zajete: number, wszystkie: number, perRow: number): { wolne: number; procent: number; zalecaneRzedy: number } {
+  const wolne = Math.max(0, wszystkie - zajete);
+  return {
+    wolne,
+    procent: wszystkie > 0 ? Math.round((wolne / wszystkie) * 100) : 0,
+    zalecaneRzedy: Math.max(1, Math.ceil((zajete * (1 + ZALECANA_REZERWA)) / perRow)),
+  };
+}
+
+export interface KlamraRcd {
+  tag: string;
+  /** Różnicówka w TYM rzędzie — brak znaczy, że klamra jest kontynuacją z rzędu wyżej. */
+  rcd?: PanelSlot;
+  startSlot: number;
+  endSlot: number;
+}
+
+/**
+ * Klamry „zasięg różnicówki" w jednym rzędzie frontu.
+ *
+ * Wcześniej klamra powstawała tylko wtedy, gdy różnicówka i jej obwody stały w tym samym
+ * rzędzie. Różnicówka na końcu rzędu z obwodami w następnym nie miała więc klamry
+ * wcale, a obwody w drugim rzędzie wyglądały na niechronione (audyt rozdzielnicy
+ * 15.11.2026, pkt 13). Teraz rząd, w którym są obwody różnicówki stojącej wyżej,
+ * dostaje klamrę-kontynuację nad nimi.
+ */
+export function klamryRcdWRzedzie(row: PanelSlot[]): KlamraRcd[] {
+  const tagi = [...new Set([...row.filter((d) => d.kind === "rcd").map((d) => d.tag), ...row.flatMap((d) => (d.rcdTag ? [d.rcdTag] : []))])];
+  return tagi.flatMap((tag) => {
+    const rcd = row.find((d) => d.kind === "rcd" && d.tag === tag);
+    const czlonkowie = row.filter((d) => d.rcdTag === tag);
+    if (!czlonkowie.length) return [];
+    const startSlot = rcd ? rcd.slot : Math.min(...czlonkowie.map((m) => m.slot));
+    const endSlot = Math.max(...czlonkowie.map((m) => m.slot + m.modules), rcd ? rcd.slot + rcd.modules : 0);
+    return [{ tag, rcd, startSlot, endSlot }];
+  });
 }
 
 /** Rozkłada aparaty na rzędy szyny DIN — aparat nie może być „przecięty” między rzędami. */

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
-import { PHASE_COLORS, accentForDevice, daSieSkasowac, layoutPanel, opisBiegunow, podpisPrzewoduNaFroncie } from "@/lib/panel/devices";
+import { PHASE_COLORS, accentForDevice, daSieSkasowac, klamryRcdWRzedzie, layoutPanel, opisBiegunow, plakietkaRcd, podpisPrzewoduNaFroncie } from "@/lib/panel/devices";
 import { zawijNaDwieLinie } from "@/lib/tekst";
 import type { SizedCircuit } from "@/lib/panel/sizing";
 import type { PanelDevice } from "@/types";
@@ -374,33 +374,36 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
           // Klamry różnicówek: każda RCD obejmuje aparaty, które mają jej tag.
           // Rysowane raz na rząd, nad aparatami — to informacja o przynależności,
           // nie połączenie, więc celowo klamra, a nie linia zasilania.
-          const brackets = row
-            .filter((d) => d.kind === "rcd")
-            .map((rcd) => {
-              const members = row.filter((d) => d.rcdTag === rcd.tag);
-              if (members.length === 0) return null;
-              const startSlot = rcd.slot;
-              const endSlot = Math.max(...members.map((m) => m.slot + m.modules));
-              return {
-                tag: rcd.tag,
-                x1: PAD + startSlot * MODULE_W,
-                x2: PAD + endSlot * MODULE_W,
-                /** Środek SAMEJ różnicówki — tam stoi plakietka, patrz niżej. */
-                xRcd: PAD + (startSlot + rcd.modules / 2) * MODULE_W,
-              };
-            })
-            .filter((b): b is { tag: string; x1: number; x2: number; xRcd: number } => b !== null);
+          const brackets = klamryRcdWRzedzie(row).map((k) => ({
+            tag: k.tag,
+            x1: PAD + k.startSlot * MODULE_W,
+            x2: PAD + k.endSlot * MODULE_W,
+            /** Środek SAMEJ różnicówki — tam stoi plakietka; brak przy kontynuacji z rzędu wyżej. */
+            xRcd: k.rcd ? PAD + (k.rcd.slot + k.rcd.modules / 2) * MODULE_W : null,
+            plakietka: k.rcd ? plakietkaRcd(k.rcd) : "",
+            /** Szerokość plakietki z długości napisu — „FI4 · 30 mA · B" nie mieści się w 52 px. */
+            szer: k.rcd ? Math.max(52, plakietkaRcd(k.rcd).length * 4.4 + 8) : 0,
+          }));
           /** Różnicówki z klamrą — ich oznaczenie niesie plakietka, więc bez osobnego napisu. */
-          const zPlakietka = new Set(brackets.map((b) => b.tag));
+          const zPlakietka = new Set(brackets.filter((b) => b.xRcd !== null).map((b) => b.tag));
 
           return (
             <g key={ri}>
               {brackets.map((b) => {
                 const top = y - 15;
                 return (
-                  <g key={b.tag}>
+                  <g key={b.tag} data-klamra-rcd={b.tag} data-kontynuacja={b.xRcd === null ? "" : undefined}>
+                    {/* Kontynuacja z rzędu wyżej: bez lewego zaczepu, z przerywanym
+                        początkiem — klamra „przychodzi" z poprzedniego rzędu. */}
+                    {b.xRcd === null && (
+                      <line x1={b.x1 - 6} y1={top} x2={b.x1 + 2} y2={top} stroke="#C1793F" strokeWidth={1.3} strokeDasharray="2 2" />
+                    )}
                     <path
-                      d={`M ${b.x1 + 2} ${top + 7} L ${b.x1 + 2} ${top} L ${b.x2 - 2} ${top} L ${b.x2 - 2} ${top + 7}`}
+                      d={
+                        b.xRcd === null
+                          ? `M ${b.x1 + 2} ${top} L ${b.x2 - 2} ${top} L ${b.x2 - 2} ${top + 7}`
+                          : `M ${b.x1 + 2} ${top + 7} L ${b.x1 + 2} ${top} L ${b.x2 - 2} ${top} L ${b.x2 - 2} ${top + 7}`
+                      }
                       fill="none"
                       stroke="#C1793F"
                       strokeWidth={1.3}
@@ -411,10 +414,14 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                         (np. F7 obok FI2) i plakietka wchodziła na jego oznaczenie, bo
                         stoją na tej samej wysokości. Różnicówka ma co najmniej 2 moduły
                         (60 px), więc 52-pikselowa plakietka nie wychodzi poza nią. */}
-                    <rect x={b.xRcd - 26} y={top - 8} width={52} height={12} rx={6} fill="#FDF6EF" stroke="#C1793F" strokeWidth={0.8} />
-                    <text x={b.xRcd} y={top + 0.5} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#8A5526">
-                      {b.tag} · 30 mA
-                    </text>
+                    {b.xRcd !== null && (
+                      <>
+                        <rect x={b.xRcd - b.szer / 2} y={top - 8} width={b.szer} height={12} rx={6} fill="#FDF6EF" stroke="#C1793F" strokeWidth={0.8} />
+                        <text x={b.xRcd} y={top + 0.5} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#8A5526">
+                          {b.plakietka}
+                        </text>
+                      </>
+                    )}
                   </g>
                 );
               })}

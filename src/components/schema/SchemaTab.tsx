@@ -16,7 +16,7 @@ import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, pradyWgKluczaAparatu } from "@/lib/panel/project";
 import { aparatyDoWidoku, buildPanelDevices, czuloscITypRcd, dzieciAparatu, jestOdplywem, opisBiegunow, PHASE_COLORS, rodzicAparatu, zasilanieRozdzielnicy } from "@/lib/panel/devices";
 import { zLiczba } from "@/lib/liczby";
-import type { PanelDevice, UkladSieci } from "@/types";
+import type { PanelConfig, PanelDevice, UkladSieci } from "@/types";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
 
@@ -118,7 +118,7 @@ function siatka(ppoz: boolean, szeregowe: boolean) {
   const TABLE_BOTTOM = TABLE_PHASE_BOTTOM + TABLE_NAME_H;
   /** Uwaga o szynach N pod tabelą — patrz `UwagiSchematu`. */
   const Y_UWAGI = TABLE_BOTTOM + 18;
-  const SCHEMA_HEIGHT = Y_UWAGI + 36;
+  const SCHEMA_HEIGHT = Y_UWAGI + 48;
   return {
     Y_PPOZ_TOP, Y_PPOZ_BOT, Y_SPLIT, Y_SWITCH_TOP, Y_SWITCH_BOT, Y_BUS, Y_SUBBUS, Y_MCB_TOP, Y_MCB_BOTTOM,
     Y_SER_TOP, Y_SER_BOTTOM, Y_N_BUS, Y_PE_BUS, Y_WIRE_END, Y_TERMINAL_TEXT, Y_SPD_BOTTOM, Y_LAMPKA_BOTTOM,
@@ -437,7 +437,9 @@ function RcdBranch({ col, device, s }: { col: Column; device: PanelDevice; s: Si
         {device.tag}
       </text>
       <text x={x + dx} y={s.Y_BUS + 46} fontSize={9} fill={MUTED}>
-        {opisZBiegunami(device)}
+        {/* Bez czułości: ta stoi w linii niżej, razem z typem. Wcześniej czułość była
+            dwa razy — „4P · 63A/30mA” i pod spodem „30 mA · typ A”. */}
+        {opisZBiegunami({ ...device, label: device.label.replace(/\s*\/.*$/, "") })}
       </text>
       {czuloscITypRcd(device) && (
         <text x={x + dx} y={s.Y_BUS + 57} fontSize={9} fill={MUTED}>
@@ -504,8 +506,26 @@ function ProtectiveBuses({ width, columns, s }: { width: number; columns: Column
   );
 }
 
+/**
+ * Dane rozdzielnicy jako wyrobu w jednej linii — to, co trafia na tabliczkę według
+ * PN-EN 61439-3. Napięcie, układ i prąd z ustawień; IP, prąd zwarciowy i obudowa tylko
+ * wtedy, gdy je podano (z karty producenta), żeby rysunek nie udawał danych, których nie ma.
+ */
+function daneRozdzielnicy(c: PanelConfig, uklad: UkladSieci): string {
+  return [
+    `Rozdzielnica (PN-EN 61439-3): Un ${c.supply3f ? "400/230" : "230"} V`,
+    uklad,
+    `In ${c.mainRating} A (wg Q1)`,
+    c.iccKA ? `Icc ${c.iccKA} kA` : null,
+    c.stopienIP ?? null,
+    c.obudowa ? `obudowa: ${c.obudowa}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** Jedno zdanie pod tabelą — to, czego sam rysunek szyn N nie powie montującemu. */
-function UwagiSchematu({ uklad, s }: { uklad: UkladSieci; s: Siatka }) {
+function UwagiSchematu({ uklad, dane, s }: { uklad: UkladSieci; dane: string; s: Siatka }) {
   return (
     <g id="uwagi-schematu">
       <text x={MARGIN_X} y={s.Y_UWAGI} fontSize={8} fill={MUTED}>
@@ -521,6 +541,9 @@ function UwagiSchematu({ uklad, s }: { uklad: UkladSieci; s: Siatka }) {
       </text>
       <text data-legenda-oznaczen="" x={MARGIN_X} y={s.Y_UWAGI + 24} fontSize={8} fill={MUTED}>
         FI — wyłączniki różnicowoprądowe (klasa F wg IEC 81346-2) · K — styczniki, przekaźniki, czujniki · P — sygnalizacja · T — zasilacze
+      </text>
+      <text data-dane-rozdzielnicy="" x={MARGIN_X} y={s.Y_UWAGI + 36} fontSize={8} fill={STROKE}>
+        {dane}
       </text>
     </g>
   );
@@ -591,6 +614,7 @@ function CircuitBranch({
   dol,
   doY,
   zPrzewodem,
+  zacisk,
   s,
 }: {
   x: number;
@@ -600,6 +624,8 @@ function CircuitBranch({
   doY: number;
   /** Czy podpisać typ przewodu na końcu odejścia — tylko dla aparatu, z którego przewód wychodzi do obwodu. */
   zPrzewodem: boolean;
+  /** Oznaczenie zacisku odejścia na listwie (np. „X1:3”) — tylko tam, gdzie przewód wychodzi z rozdzielnicy. */
+  zacisk?: string;
   s: Siatka;
 }) {
   const { spec, labelDx } = symbolOdplywu(device);
@@ -626,6 +652,17 @@ function CircuitBranch({
           schematem, dokładnie w tej samej kolumnie. Wcześniej była w obu miejscach, w obu
           ucięta, więc zajmowała miejsce nic nie wnosząc. Przy gałęzi zostaje sam typ
           przewodu, czyli informacja, której w tabeli nie ma. */}
+      {/* Zacisk listwy odpływowej: kółko (symbol zacisku) i oznaczenie X1:n. Wcześniej
+          schemat kończył odejście w powietrzu — elektryk nie miał na rysunku, gdzie
+          podłączyć przewód obwodu ani jak opisać listwę (audyt rozdzielnicy, pkt 14). */}
+      {zacisk && (
+        <g data-zacisk={zacisk}>
+          <circle cx={x} cy={s.Y_WIRE_END} r={2.4} fill="#fff" stroke={STROKE} strokeWidth={LINE_W} />
+          <text x={x + 5} y={s.Y_WIRE_END + 3} fontSize={7} fill={MUTED}>
+            {zacisk}
+          </text>
+        </g>
+      )}
       {zPrzewodem && device.cable && (
         <text x={x} y={s.Y_TERMINAL_TEXT} fontSize={7.5} textAnchor="middle" fill={MUTED}>
           {truncate(device.cable, 20)}
@@ -669,17 +706,17 @@ function bezOdczepuPe(l: Lisc): boolean {
 }
 
 /** Rysunek jednego odejścia: wyłącznik (nad pierwszym), szynka, aparat szeregowy. */
-function Odejscie({ x, lisc, s }: { x: number; lisc: Lisc; s: Siatka }) {
+function Odejscie({ x, lisc, zacisk, s }: { x: number; lisc: Lisc; zacisk?: string; s: Siatka }) {
   const { aparat, szeregowy, pierwszy, ileOdejsc } = lisc;
   return (
     <>
       {pierwszy && (
-        <CircuitBranch x={x} device={aparat} gora={s.Y_SUBBUS} dol={s.Y_MCB_BOTTOM} doY={szeregowy ? s.Y_SER_TOP : s.Y_WIRE_END} zPrzewodem={!szeregowy} s={s} />
+        <CircuitBranch x={x} device={aparat} gora={s.Y_SUBBUS} dol={s.Y_MCB_BOTTOM} doY={szeregowy ? s.Y_SER_TOP : s.Y_WIRE_END} zPrzewodem={!szeregowy} zacisk={szeregowy ? undefined : zacisk} s={s} />
       )}
       {pierwszy && ileOdejsc > 1 && (
         <line data-szynka-szeregowa="" x1={x} y1={s.Y_SER_TOP} x2={x + (ileOdejsc - 1) * LEAF_W} y2={s.Y_SER_TOP} stroke={STROKE} strokeWidth={LINE_W} />
       )}
-      {szeregowy && <CircuitBranch x={x} device={szeregowy} gora={s.Y_SER_TOP} dol={s.Y_SER_BOTTOM} doY={s.Y_WIRE_END} zPrzewodem s={s} />}
+      {szeregowy && <CircuitBranch x={x} device={szeregowy} gora={s.Y_SER_TOP} dol={s.Y_SER_BOTTOM} doY={s.Y_WIRE_END} zPrzewodem zacisk={zacisk} s={s} />}
     </>
   );
 }
@@ -976,29 +1013,42 @@ export function SchemaTab() {
   // --- Layout: kolumny od lewej — SPD (jeśli skonfigurowany), potem każda grupa RCD
   //     z jej obwodami rozłożonymi równomiernie. Szerokość i wysokość liczone z danych,
   //     nie ze sztywnych stałych — schemat ma wyglądać dobrze przy 3 i przy 30 obwodach.
+  /*
+   * Kolumny w KOLEJNOŚCI Z FRONTU rozdzielnicy — po pozycji pierwszego aparatu kolumny
+   * na liście. Wcześniej schemat zawsze rysował SPD, lampki, różnicówki, a na końcu
+   * odejścia bez różnicówki, niezależnie od tego, jak stały na szynie — czujnik tuż za
+   * Q1 lądował na prawym końcu rysunku (audyt rozdzielnicy 15.11.2026, pkt 13).
+   */
+  const pozycja = (d: PanelDevice | undefined) => (d ? devices.indexOf(d) : Infinity);
+  const kandydaci: (Omit<Column, "x0" | "cx"> & { kotwica: number })[] = [];
+  if (spdDevice) kandydaci.push({ kind: "spd", width: SPD_COL_W, kotwica: Math.min(pozycja(spdDevice), pozycja(spdBezpiecznik)) });
+  lampkaDevices.forEach((device) => kandydaci.push({ kind: "lampka", width: LAMPKA_COL_W, device, kotwica: pozycja(device) }));
+  rcdBlocks.forEach((block) =>
+    kandydaci.push({
+      kind: "rcd",
+      width: Math.max(block.liscie.length * LEAF_W, RCD_MIN_W),
+      block,
+      kotwica: block.device ? pozycja(block.device) : Math.min(...block.liscie.map((l) => pozycja(l.aparat))),
+    })
+  );
   const columns: Column[] = [];
   let cursorX = LEFT_X;
-  if (spdDevice) {
-    columns.push({ kind: "spd", width: SPD_COL_W, x0: cursorX, cx: cursorX + SPD_COL_W / 2 });
-    cursorX += SPD_COL_W + GROUP_GAP;
-  }
-  // Lampki stoją obok SPD, w tym samym rzędzie (odejście wprost z szyny głównej) —
-  // przed grupami RCD, tak jak SPD, bo to też ochrona/sygnalizacja całej rozdzielnicy,
-  // nie pojedynczy obwód odbiorczy.
-  lampkaDevices.forEach((device) => {
-    columns.push({ kind: "lampka", width: LAMPKA_COL_W, x0: cursorX, cx: cursorX + LAMPKA_COL_W / 2, device });
-    cursorX += LAMPKA_COL_W + GROUP_GAP;
-  });
-  rcdBlocks.forEach((block) => {
-    const w = Math.max(block.liscie.length * LEAF_W, RCD_MIN_W);
-    columns.push({ kind: "rcd", width: w, x0: cursorX, cx: cursorX + w / 2, block });
-    cursorX += w + GROUP_GAP;
-  });
+  kandydaci
+    .sort((a, b) => a.kotwica - b.kotwica)
+    .forEach(({ kotwica: _k, ...k }) => {
+      void _k;
+      columns.push({ ...k, x0: cursorX, cx: cursorX + k.width / 2 });
+      cursorX += k.width + GROUP_GAP;
+    });
 
   const width = Math.max(760, cursorX - GROUP_GAP + MARGIN_X);
   const busX0 = columns[0].cx;
   const busX1 = columns[columns.length - 1].cx;
   const mainX = (busX0 + busX1) / 2;
+  /** Zaciski listwy X1 — kolejno w odejściach wychodzących z rozdzielnicy, od lewej.
+   *  Lampka i CZF pod wyłącznikiem zostają w rozdzielnicy, więc zacisku nie dostają. */
+  const zaciski = new Map<Lisc, string>();
+  columns.forEach((col) => col.block?.liscie.forEach((l) => !bezOdczepuPe(l) && zaciski.set(l, `X1:${zaciski.size + 1}`)));
   const s = siatka(!!ppozDevice, rcdBlocks.some((b) => b.liscie.some((l) => l.szeregowy)));
 
   return (
@@ -1085,7 +1135,7 @@ export function SchemaTab() {
                   return x2 > x1 ? <line x1={x1} y1={s.Y_SUBBUS} x2={x2} y2={s.Y_SUBBUS} stroke={STROKE} strokeWidth={LINE_W} /> : null;
                 })()}
                 {col.block.liscie.map((l, i) => (
-                  <Odejscie key={`${l.aparat.uid}-${l.szeregowy?.uid ?? ""}`} x={circuitX(col, i)} lisc={l} s={s} />
+                  <Odejscie key={`${l.aparat.uid}-${l.szeregowy?.uid ?? ""}`} x={circuitX(col, i)} lisc={l} zacisk={zaciski.get(l)} s={s} />
                 ))}
               </g>
             ) : null
@@ -1097,7 +1147,7 @@ export function SchemaTab() {
           <PeTaps columns={columns} s={s} />
 
           <FinalCircuitsTable columns={columns} s={s} />
-          <UwagiSchematu uklad={zasilanie.uklad} s={s} />
+          <UwagiSchematu uklad={zasilanie.uklad} dane={daneRozdzielnicy(panelConfig, zasilanie.uklad)} s={s} />
       </OknoRysunku>
     </div>
   );
