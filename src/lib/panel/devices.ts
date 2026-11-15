@@ -545,6 +545,27 @@ export function plakietkaRcd(d: Pick<PanelDevice, "tag" | "label" | "caption">):
   return [d.tag, ma ? `${ma} mA` : null, typ && typ !== "A" ? typ : null].filter(Boolean).join(" · ");
 }
 
+/**
+ * Czym aparat jest powiązany z resztą rozdzielnicy — jedna krótka wartość do tabel
+ * (legenda PDF): różnicówka nad obwodem z czułością („FI1 · 30 mA"), własny człon
+ * różnicowy („RCBO · 30 mA"), zasilanie szeregowe („z F0.1") albo jawny brak („bez RCD").
+ *
+ * Wcześniej legenda dopisywała „(za FI1)" na końcu opisu obwodu, gdzie przy dłuższej
+ * nazwie ucinało się jako pierwsze — a to akurat informacja, której szuka się na
+ * wydruku przy szukaniu, co wyłączyła różnicówka (przegląd 15.11.2026, pkt 2).
+ */
+export function powiazanieAparatu(d: PanelDevice, devices: readonly PanelDevice[]): string {
+  const ma = (x: Pick<PanelDevice, "label" | "caption">) => czuloscITypRcd(x)?.match(/\d+\s*mA/)?.[0];
+  if (d.kind === "rcd") return czuloscITypRcd(d) ?? "";
+  if (d.kind === "rcbo") return ["RCBO", ma(d) ?? "30 mA"].join(" · ");
+  const rodzic = rodzicAparatu(d, devices);
+  if (rodzic) return `z ${rodzic.tag}`;
+  if (d.kind !== "mcb") return "";
+  const rcd = devices.find((r) => r.kind === "rcd" && r.tag === d.rcdTag);
+  if (!rcd) return "bez RCD";
+  return [rcd.tag, ma(rcd)].filter(Boolean).join(" · ");
+}
+
 export function daSieSkasowac(d: Pick<PanelDevice, "kind">): boolean {
   return d.kind !== "main" && d.kind !== "blank";
 }
