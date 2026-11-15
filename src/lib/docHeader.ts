@@ -13,7 +13,7 @@ export function domyslnyNaglowek(): DocumentHeader {
     obiekt: "", adres: "", zleceniodawca: "", wykonawca: "", uprawnienia: "",
     przyrzad: "", nrFabryczny: "", swiadectwo: "",
     data: new Date().toISOString().slice(0, 10),
-    temperatura: "20", wilgotnosc: "55", uklad: "TN-S",
+    temperatura: "20", wilgotnosc: "55", uklad: "TN-C-S",
     drawingNo: "E-01", revision: "A",
   };
 }

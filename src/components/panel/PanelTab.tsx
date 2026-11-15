@@ -13,6 +13,8 @@ import {
   buildPanelDevices,
   dolozAparatReczny,
   przemianujAparat,
+  ujednolicOznaczenia,
+  zachowajKolejnosc,
   RODZAJE_ZABEZPIECZAJACE,
   computeSelectivity,
   layoutPanel,
@@ -240,7 +242,9 @@ export function PanelTab() {
         // Ręczne poprawki nakładane na świeżo policzony aparat — inaczej zmiana
         // nastawy albo opisu znikałaby po każdym elemencie postawionym na planie.
         .map((d) => (d.key && panelOverrides[d.key] ? { ...d, ...panelOverrides[d.key] } : d));
-      return [...rebuilt, ...manual];
+      // Kolejność ułożona przez użytkownika przeżywa odbudowę; ręczne aparaty, którym
+      // automat zajął oznaczenie, dostają następne wolne.
+      return ujednolicOznaczenia(zachowajKolejnosc(prev, [...rebuilt, ...manual]));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circuits, rcdGroups, supply3f, mainRating, przedlicznikowe, trybReczny, panelOverrides, pradyWgKlucza]);
@@ -335,7 +339,7 @@ export function PanelTab() {
     setPanelOverrides({});
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
-      return [...buildPanelDevices(rcdGroups, { supply3f, mainRating, przedlicznikowe }), ...manual];
+      return ujednolicOznaczenia([...buildPanelDevices(rcdGroups, { supply3f, mainRating, przedlicznikowe }), ...manual]);
     });
   }
 

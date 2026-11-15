@@ -24,6 +24,12 @@ export const DOMYSLNE_PRZEDLICZNIKOWE = 25;
 /** Najczęstszy przypadek przy przyłączu kablowym 4-żyłowym: PEN rozdzielany w rozdzielnicy. */
 export const DOMYSLNY_UKLAD_SIECI: UkladSieci = "TN-C-S";
 
+/** Układy sieci, które obsługuje rysunek rozdzielnicy. Protokoły znają jeszcze TN-C i IT. */
+export const UKLADY_SIECI_ROZDZIELNICY: readonly UkladSieci[] = ["TN-C-S", "TN-S", "TT"];
+export function jestUklademRozdzielnicy(u: string | undefined): u is UkladSieci {
+  return !!u && (UKLADY_SIECI_ROZDZIELNICY as readonly string[]).includes(u);
+}
+
 /** Ustawienia zasilania z uzupełnionymi domysłami — jedno miejsce dla wszystkich widoków. */
 export function zasilanieRozdzielnicy(c: Pick<PanelConfig, "przedlicznikowe" | "ukladSieci">): {
   przedlicznikowe: number;
@@ -60,8 +66,9 @@ export interface ManualDeviceType {
 }
 
 /** Katalog aparatów, które można dołożyć ręcznie — poza tymi wynikającymi z obwodów.
- *  Prefiks wg IEC 81346: F — zabezpieczenia, Q — łączniki, K — styczniki/przekaźniki,
- *  T — zasilacze/transformatory, P — sygnalizacja. */
+ *  Prefiks wg IEC 81346: F — zabezpieczenia, Q — łączniki, K — styczniki/przekaźniki/czujniki,
+ *  T — zasilacze/transformatory, P — sygnalizacja. SPD i jego bezpiecznik dostają osobną serię
+ *  sekcji zasilania (`PREFIKS_SEKCJI_ZASILANIA`), a nie prefiks z katalogu — patrz `prefiksAparatu`. */
 export const MANUAL_DEVICE_TYPES: ManualDeviceType[] = [
   { key: "mcb", label: "Wyłącznik nadprądowy", prefix: "F", modules: 1, poles: "1P", defLabel: "B16", accent: "#2D5A8C", ratings: ["B6", "B10", "B13", "B16", "B20", "B25", "C10", "C16", "C20", "C25", "C32"] },
   // Domyślnie 3P/3 moduły (wariant 3-fazowy) — przy zmianie na 1P w edycji aparatu
@@ -81,7 +88,7 @@ export const MANUAL_DEVICE_TYPES: ManualDeviceType[] = [
   // zwarciowa SPD jest niższa od spodziewanego prądu zwarcia i nie pokrywa jej
   // zabezpieczenie nadrzędne — dane z karty katalogowej konkretnego ogranicznika.
   { key: "spdFuse", label: "Bezpiecznik pod SPD", prefix: "F", modules: 1, poles: "1P", defLabel: "gG 63A", accent: "#B98C2F", ratings: ["gG 25A", "gG 32A", "gG 40A", "gG 63A", "gG 80A"] },
-  { key: "ovr", label: "Czujnik zaniku / zaniku fazy (CZF)", prefix: "F", modules: 1, poles: "3P", defLabel: "CZF", accent: "#C6433A", ratings: ["CZF", "CZN", "OVR"] },
+  { key: "ovr", label: "Czujnik zaniku / zaniku fazy (CZF)", prefix: "K", modules: 1, poles: "3P", defLabel: "CZF", accent: "#C6433A", ratings: ["CZF", "CZN", "OVR"] },
   { key: "ppoz", label: "Rozłącznik przeciwpożarowy", prefix: "Q", modules: 2, poles: "4P", defLabel: "63A", accent: "#C6433A", ratings: ["40A", "63A", "80A", "100A"] },
   { key: "stycznik", label: "Stycznik modułowy", prefix: "K", modules: 2, poles: "2P", defLabel: "20A", accent: "#3B8C63", ratings: ["16A", "20A", "25A", "40A", "63A"] },
   { key: "przekaznik", label: "Przekaźnik bistabilny", prefix: "K", modules: 1, poles: "1P", defLabel: "16A", accent: "#3B8C63", ratings: ["10A", "16A"] },
@@ -126,8 +133,8 @@ export function dolozAparatReczny(
     modules = supply3f ? 3 : 1;
   }
 
-  const used = prev.filter((d) => String(d.tag || "").startsWith(def.prefix)).length;
-  const tag = def.prefix ? `${def.prefix}${used + 1}` : "";
+  const prefiks = prefiksAparatu(def);
+  const tag = prefiks ? nastepneOznaczenie(prev, prefiks) : "";
   const nowy: PanelDevice = {
     uid: pola.uid,
     kind: def.key,
@@ -137,21 +144,144 @@ export function dolozAparatReczny(
     label: pola.label || def.defLabel,
     caption: pola.caption || def.label,
     poles,
-    phase: supply3f && poles === "1P" ? "L1" : supply3f ? "3F" : "L1",
+    phase: supply3f && jednofazowy(poles) ? "L1" : supply3f ? "3F" : "L1",
   };
 
   // Para SPD ↔ bezpiecznik: nowy aparat łączy się z pierwszym, który pary jeszcze nie ma.
+  let lista = prev;
   if (def.key === "spdFuse") {
     const spdBezBezpiecznika = prev.find((d) => d.kind === "spd" && !rodzicAparatu(d, prev));
-    if (spdBezBezpiecznika) {
-      return [...prev.map((d) => (d === spdBezBezpiecznika ? { ...d, zasilanyZ: tag } : d)), nowy];
-    }
+    if (spdBezBezpiecznika) lista = prev.map((d) => (d === spdBezBezpiecznika ? { ...d, zasilanyZ: tag } : d));
   }
   if (def.key === "spd") {
     const wolnyBezpiecznik = prev.find((d) => d.kind === "spdFuse" && !prev.some((s) => s.kind === "spd" && rodzicAparatu(s, prev) === d));
     if (wolnyBezpiecznik) nowy.zasilanyZ = wolnyBezpiecznik.tag;
   }
-  return [...prev, nowy];
+
+  /*
+   * SPD i jego bezpiecznik — od razu za rozłącznikiem głównym, nie na końcu szyny.
+   * Przewody przyłączeniowe SPD mają być jak najkrótsze (zalecenie ≤ 0,5 m), a aparat
+   * wstawiony na koniec ostatniego rzędu ciągnie je przez całą rozdzielnicę.
+   */
+  if (def.key === "spd" || def.key === "spdFuse") {
+    let i = lista[0]?.kind === "main" ? 1 : -1;
+    if (i > 0) {
+      while (i < lista.length && (lista[i].kind === "spd" || lista[i].kind === "spdFuse")) i++;
+      return [...lista.slice(0, i), nowy, ...lista.slice(i)];
+    }
+  }
+  return [...lista, nowy];
+}
+
+/** Seria oznaczeń sekcji zasilania: SPD i jego bezpiecznik jako F0.1, F0.2… */
+export const PREFIKS_SEKCJI_ZASILANIA = "F0.";
+
+/**
+ * Prefiks oznaczenia aparatu dokładanego ręcznie.
+ *
+ * Konwencja projektu (pakiet 3 audytu rozdzielnicy, 15.11.2026): F1…Fn to zabezpieczenia
+ * OBWODÓW — numer aparatu zgadza się z numerem obwodu. SPD i jego bezpiecznik należą do
+ * sekcji zasilania i mają osobną serię F0.x, żeby nie przesuwać numeracji obwodów.
+ * Różnicówki zostają FI (praktyka krajowa; w IEC 81346-2 to też klasa F), czujnik
+ * zaniku fazy — K, jak styczniki i przekaźniki.
+ */
+export function prefiksAparatu(def: Pick<ManualDeviceType, "key" | "prefix">): string {
+  return def.key === "spd" || def.key === "spdFuse" ? PREFIKS_SEKCJI_ZASILANIA : def.prefix;
+}
+
+/** „F12" → ["F", 12], „F0.3" → ["F0.", 3], „FI2" → ["FI", 2]; bez numeru na końcu — null. */
+function rozbiorOznaczenia(tag: string): [string, number] | null {
+  const m = String(tag ?? "").match(/^(.*?)(\d+)$/);
+  return m ? [m[1], Number(m[2])] : null;
+}
+
+/**
+ * Następne wolne oznaczenie w serii `prefix`: największy użyty numer + 1.
+ *
+ * Wcześniej numer brał się z LICZBY aparatów, których oznaczenie ZACZYNA SIĘ od prefiksu.
+ * „F" łapało więc także „FI1", „FI2" (luka w numeracji), a po skasowaniu aparatu licznik
+ * malał i następny dostawał numer już zajęty (audyt rozdzielnicy 15.11.2026, błąd 11).
+ */
+export function nastepneOznaczenie(devices: readonly Pick<PanelDevice, "tag">[], prefix: string): string {
+  const numery = devices.flatMap((d) => {
+    const r = rozbiorOznaczenia(d.tag);
+    return r && r[0] === prefix ? [r[1]] : [];
+  });
+  return `${prefix}${(numery.length ? Math.max(...numery) : 0) + 1}`;
+}
+
+/**
+ * Usuwa powtórzone oznaczenia: aparaty z automatu (z rzutu) zachowują swoje, a aparat
+ * ręczny, którego oznaczenie jest już zajęte, dostaje następne wolne w swojej serii.
+ *
+ * Kolizja powstaje sama: ręczny wyłącznik dostał „F12", a po dołożeniu obwodu na rzucie
+ * automat numeruje obwody F1…F12 od nowa. Odwołania innych aparatów ręcznych
+ * (`zasilanyZ`, `rcdTag`) idą za przemianowanym aparatem — wskazywały właśnie jego.
+ */
+export function ujednolicOznaczenia(devices: PanelDevice[]): PanelDevice[] {
+  const zajete = new Set(devices.filter((d) => !d.manual && d.tag).map((d) => d.tag));
+  const zmiany = new Map<string, string>();
+  const przemianowane = devices.map((d) => {
+    if (!d.manual || !d.tag) return d;
+    if (!zajete.has(d.tag)) {
+      zajete.add(d.tag);
+      return d;
+    }
+    const prefix = rozbiorOznaczenia(d.tag)?.[0] ?? d.tag;
+    const nowy = nastepneOznaczenie([...zajete].map((tag) => ({ tag })), prefix);
+    zajete.add(nowy);
+    zmiany.set(d.tag, nowy);
+    return { ...d, tag: nowy };
+  });
+  if (!zmiany.size) return devices;
+  return przemianowane.map((d) => {
+    if (!d.manual) return d;
+    const zasilanyZ = d.zasilanyZ && zmiany.get(d.zasilanyZ);
+    const rcdTag = d.rcdTag && zmiany.get(d.rcdTag);
+    return zasilanyZ || rcdTag ? { ...d, ...(zasilanyZ ? { zasilanyZ } : {}), ...(rcdTag ? { rcdTag } : {}) } : d;
+  });
+}
+
+/**
+ * Kolejność po odbudowie z rzutu — taka, jaką użytkownik ułożył.
+ *
+ * W trybie „z rzutu" lista aparatów jest liczona od nowa przy każdej zmianie planu, a
+ * aparaty ręczne doklejane na koniec. Każde przestawienie (strzałkami albo
+ * przeciągnięciem) ginęło więc przy następnym elemencie postawionym na rzucie, a SPD
+ * lądował z powrotem na końcu szyny (audyt rozdzielnicy 15.11.2026, błąd 12).
+ *
+ * Aparaty, które były już na liście, zostają w dotychczasowej kolejności; nowe wchodzą
+ * zaraz za aparatem, który poprzedza je w świeżo policzonej liście. Tożsamość: klucz
+ * obwodu dla aparatów z automatu, `uid` dla ręcznych.
+ */
+export function zachowajKolejnosc(poprzednie: PanelDevice[], swieze: PanelDevice[]): PanelDevice[] {
+  const id = (d: PanelDevice) => (d.manual || !d.key ? `u:${d.uid}` : `k:${d.key}`);
+  const pozycja = new Map(poprzednie.map((d, i) => [id(d), i]));
+  const znane = swieze.filter((d) => pozycja.has(id(d))).sort((a, b) => pozycja.get(id(a))! - pozycja.get(id(b))!);
+  const wynik = [...znane];
+  swieze.forEach((d, i) => {
+    if (pozycja.has(id(d))) return;
+    // Najbliższy poprzednik w świeżej liście, który już stoi w wyniku.
+    let j = i - 1;
+    while (j >= 0 && !wynik.includes(swieze[j])) j--;
+    const gdzie = j >= 0 ? wynik.indexOf(swieze[j]) + 1 : 0;
+    wynik.splice(gdzie, 0, d);
+  });
+  return wynik;
+}
+
+/** Biegunowość aparatu jednofazowego — z N albo bez. */
+function jednofazowy(poles: string): boolean {
+  return poles === "1P" || poles === "1P+N";
+}
+
+/**
+ * Zabezpieczenie obwodu jednofazowego, któremu przydziela się fazę L1/L2/L3.
+ * RCBO (1P+N) też — wcześniej pomijany, dostawał „3F" i na froncie trzy kropki faz
+ * (audyt rozdzielnicy 15.11.2026, błąd 10).
+ */
+export function jestJednofazowymZabezpieczeniem(d: Pick<PanelDevice, "kind" | "poles">): boolean {
+  return (d.kind === "mcb" || d.kind === "rcbo") && jednofazowy(d.poles);
 }
 
 /**
@@ -303,7 +433,7 @@ export function balancePhases(devices: PanelDevice[], pradyWgKlucza?: ReadonlyMa
   const load: Record<"L1" | "L2" | "L3", number> = { L1: 0, L2: 0, L3: 0 };
   const obciazenie = (d: PanelDevice) => (d.key !== undefined ? pradyWgKlucza?.get(d.key) : undefined) ?? ratedCurrent(d.label);
   return devices.map((d) => {
-    if (d.kind !== "mcb" || d.poles !== "1P") return d;
+    if (!jestJednofazowymZabezpieczeniem(d)) return d;
     const target = (["L1", "L2", "L3"] as const).reduce((a, b) => (load[a] <= load[b] ? a : b));
     load[target] += obciazenie(d);
     return { ...d, phase: target };
@@ -398,7 +528,7 @@ export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevices
 
   const withPhases = supply3f
     ? balancePhases(devices, pradyWgKlucza)
-    : devices.map((d) => (d.kind === "mcb" && d.poles === "1P" ? { ...d, phase: "L1" as const } : d));
+    : devices.map((d) => (jestJednofazowymZabezpieczeniem(d) ? { ...d, phase: "L1" as const } : d));
   return withPhases.map((d, i) => ({ ...d, uid: `${d.tag}-${i}` }));
 }
 
@@ -413,9 +543,9 @@ export interface PhaseLoad {
 export function computePhaseLoad(devices: PanelDevice[]): PhaseLoad {
   const load: PhaseLoad = { L1: 0, L2: 0, L3: 0 };
   devices.forEach((d) => {
-    if (d.kind !== "mcb") return;
+    if (d.kind !== "mcb" && d.kind !== "rcbo") return;
     const i = ratedCurrent(d.label);
-    if (d.poles === "3P") {
+    if (d.poles === "3P" || d.poles === "3P+N") {
       load.L1 += i;
       load.L2 += i;
       load.L3 += i;
@@ -511,7 +641,12 @@ export function computeSelectivity(
     const dzieci = dzieciAparatu(d, devices);
     return dzieci.length > 0 && dzieci.every((x) => ["lampka", "ovr", "zasilacz", "spd"].includes(x.kind));
   };
-  const bez30mA = mcbs.filter((d) => !czulosc30(rcds.find((r) => r.tag === d.rcdTag)) && !tylkoAparatyWRozdzielnicy(d));
+  const bez30mA = [
+    ...mcbs.filter((d) => !czulosc30(rcds.find((r) => r.tag === d.rcdTag)) && !tylkoAparatyWRozdzielnicy(d)),
+    // RCBO ma własny człon różnicowy — liczy się jego czułość, nie różnicówka nad nim.
+    // Bez czytelnej czułości w opisie zakładamy 30 mA, jak w katalogu.
+    ...devices.filter((d) => d.kind === "rcbo" && Number(czuloscITypRcd(d)?.match(/(\d+)\s*mA/)?.[1] ?? 30) > 30),
+  ];
   if (bez30mA.length) {
     out.push({
       level: uklad === "TT" ? "error" : "warn",
@@ -690,6 +825,6 @@ export function aparatyDoWidoku(
   zbudujZObwodow: () => PanelDevice[]
 ): PanelDevice[] {
   if (!zapisane.length) return zbudujZObwodow();
-  if (tryb === "zRzutu" && zapisane.every((d) => d.manual)) return [...zbudujZObwodow(), ...zapisane];
+  if (tryb === "zRzutu" && zapisane.every((d) => d.manual)) return ujednolicOznaczenia([...zbudujZObwodow(), ...zapisane]);
   return zapisane;
 }
