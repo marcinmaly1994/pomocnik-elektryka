@@ -13,6 +13,8 @@ import {
   buildPanelDevices,
   dolozAparatReczny,
   przemianujAparat,
+  rezerwaModulow,
+  ZALECANA_REZERWA,
   ujednolicOznaczenia,
   zachowajKolejnosc,
   RODZAJE_ZABEZPIECZAJACE,
@@ -252,6 +254,7 @@ export function PanelTab() {
   const rows = useMemo(() => layoutPanel(devices, perRow), [devices, perRow]);
   const usedModules = devices.reduce((a, d) => a + d.modules, 0);
   const totalModules = Math.max(rows.length, 1) * perRow;
+  const rezerwa = rezerwaModulow(usedModules, totalModules, perRow);
 
   /**
    * Zgłoszenie trzech dokumentów tej zakładki do kompletu dokumentacji.
@@ -416,6 +419,18 @@ export function PanelTab() {
         <p className="text-sm text-slate-500">
           Widok frontu rozdzielnicy — {rows.length}× rząd {perRow} modułów, zajęte {usedModules} z {totalModules}.
         </p>
+        {/* Rezerwa na rozbudowę — ok. 20% to dobra praktyka, nie wymóg normy; stąd
+            podpowiedź z konkretną obudową, a nie ostrzeżenie w kontroli doboru. */}
+        <p className="text-sm text-slate-500" data-testid="rezerwa-modulow">
+          Rezerwa: {rezerwa.wolne} mod. ({rezerwa.procent}%).{" "}
+          {rezerwa.procent < ZALECANA_REZERWA * 100 ? (
+            <span className="text-caution">
+              Na rozbudowę zaleca się ok. {ZALECANA_REZERWA * 100}% wolnego miejsca — przy tej obsadzie obudowa {rezerwa.zalecaneRzedy} × {perRow}.
+            </span>
+          ) : (
+            <>Wystarcza na rozbudowę.</>
+          )}
+        </p>
       </div>
 
       {unassignedCount > 0 && (
@@ -522,6 +537,54 @@ export function PanelTab() {
             rozdzielnicę zabezpieczenie przedlicznikowe.
           </span>
         </div>
+        {/* Dane rozdzielnicy jako wyrobu (PN-EN 61439-3) — z karty obudowy i warunków
+            przyłączenia. Aplikacja ich nie policzy; trafiają do tabliczki pod schematem. */}
+        <fieldset className="flex w-full flex-wrap items-end gap-3 border-t border-border pt-3">
+          <legend className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Dane rozdzielnicy (PN-EN 61439-3)</legend>
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Stopień ochrony</div>
+            <select
+              value={panelConfig.stopienIP ?? ""}
+              onChange={(e) => setPanelConfig({ stopienIP: e.target.value || undefined })}
+              className="pe-input pe-select text-base md:text-sm"
+              aria-label="Stopień ochrony obudowy"
+            >
+              <option value="">— nie podano</option>
+              {["IP30", "IP40", "IP41", "IP43", "IP44", "IP54", "IP65"].map((ip) => (
+                <option key={ip} value={ip}>
+                  {ip}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <div className="mb-1 text-xs text-slate-500">Warunkowy prąd zwarciowy</div>
+            <select
+              value={panelConfig.iccKA ?? ""}
+              onChange={(e) => setPanelConfig({ iccKA: e.target.value ? Number(e.target.value) : undefined })}
+              className="pe-input pe-select text-base md:text-sm"
+              aria-label="Warunkowy prąd zwarciowy rozdzielnicy"
+              title="Z karty katalogowej obudowy/rozdzielnicy — wartość, do której producent potwierdził jej wytrzymałość zwarciową."
+            >
+              <option value="">— nie podano</option>
+              {[6, 10, 16, 25].map((ka) => (
+                <option key={ka} value={ka}>
+                  {ka} kA
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block min-w-48 flex-1">
+            <div className="mb-1 text-xs text-slate-500">Obudowa (producent, typ)</div>
+            <input
+              value={panelConfig.obudowa ?? ""}
+              onChange={(e) => setPanelConfig({ obudowa: e.target.value || undefined })}
+              className="pe-input w-full text-sm"
+              aria-label="Obudowa — producent i typ"
+              placeholder="np. natynkowa 3 × 18"
+            />
+          </label>
+        </fieldset>
         {/* Jedyną drogą do cofnięcia ręcznej zmiany (kasowanie aparatu, przesunięcie,
             edycja) było wcześniej „Odbuduj z rzutu" — a to liczy WSZYSTKO od zera,
             więc cofnięcie jednego kasowania kosztowało utratę reszty pracy. Ta para

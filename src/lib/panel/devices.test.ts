@@ -10,6 +10,9 @@ import {
   dolozAparatReczny,
   dzieciAparatu,
   jestJednofazowymZabezpieczeniem,
+  klamryRcdWRzedzie,
+  plakietkaRcd,
+  rezerwaModulow,
   nastepneOznaczenie,
   ujednolicOznaczenia,
   zachowajKolejnosc,
@@ -607,5 +610,42 @@ describe("RCBO", () => {
     const tytul = "Obwody bez ochrony różnicowoprądowej 30 mA";
     expect(computeSelectivity([{ ...rcbo, label: "B16/300mA" }], 40, false, true).some((f) => f.title === tytul)).toBe(true);
     expect(computeSelectivity([rcbo], 40, false, true).some((f) => f.title === tytul)).toBe(false);
+  });
+});
+
+/* Pakiet 4 audytu rozdzielnicy (15.11.2026): czytelność frontu i tabliczka. */
+describe("plakietkaRcd", () => {
+  it("prawdziwa czułość zamiast stałego „30 mA”; typ tylko, gdy inny niż A", () => {
+    expect(plakietkaRcd({ tag: "FI1", label: "63A", caption: "Wyłącznik różnicowoprądowy 63A/30mA typ A" })).toBe("FI1 · 30 mA");
+    expect(plakietkaRcd({ tag: "FI2", label: "40A/300mA", caption: "Wyłącznik różnicowoprądowy" })).toBe("FI2 · 300 mA");
+    expect(plakietkaRcd({ tag: "FI4", label: "63A/30mA", caption: "Wyłącznik różnicowoprądowy 63A/30mA typ B" })).toBe("FI4 · 30 mA · B");
+  });
+});
+
+describe("klamryRcdWRzedzie", () => {
+  const slot = (tag: string, s: number, p: Partial<PanelDevice> = {}) =>
+    ({ uid: tag, kind: "mcb", tag, modules: 1, label: "B16", caption: tag, poles: "1P", index: s, slot: s, ...p }) as PanelDevice & { index: number; slot: number };
+
+  it("różnicówka i jej obwody w jednym rzędzie — jedna klamra od różnicówki do ostatniego obwodu", () => {
+    const rzad = [slot("FI1", 0, { kind: "rcd", modules: 4 }), slot("F1", 4, { rcdTag: "FI1" }), slot("F2", 5, { rcdTag: "FI1" })];
+    expect(klamryRcdWRzedzie(rzad)).toEqual([expect.objectContaining({ tag: "FI1", startSlot: 0, endSlot: 6, rcd: rzad[0] })]);
+  });
+
+  it("obwody różnicówki z rzędu wyżej dostają klamrę-kontynuację (bez różnicówki w rzędzie)", () => {
+    const rzad = [slot("F7", 0, { rcdTag: "FI2" }), slot("F8", 1, { rcdTag: "FI2" }), slot("F9", 2)];
+    const [k] = klamryRcdWRzedzie(rzad);
+    expect(k).toMatchObject({ tag: "FI2", startSlot: 0, endSlot: 2 });
+    expect(k.rcd).toBeUndefined();
+  });
+
+  it("różnicówka na końcu rzędu bez obwodów w nim — bez klamry (oznaczenie zostaje nad aparatem)", () => {
+    expect(klamryRcdWRzedzie([slot("F1", 0), slot("FI2", 1, { kind: "rcd", modules: 4 })])).toEqual([]);
+  });
+});
+
+describe("rezerwaModulow", () => {
+  it("liczy wolne miejsce i obudowę z ok. 20% rezerwy", () => {
+    expect(rezerwaModulow(34, 36, 18)).toEqual({ wolne: 2, procent: 6, zalecaneRzedy: 3 });
+    expect(rezerwaModulow(20, 36, 18)).toEqual({ wolne: 16, procent: 44, zalecaneRzedy: 2 });
   });
 });

@@ -194,7 +194,8 @@ test("rozłącznik izolacyjny bezpiecznikowy: własny symbol, wariant wg liczby 
   // Prawdziwy symbol, nie zastępczy placeholder: bez przerywanej ramki, za to z
   // pierścieniem przegubu ostrza.
   await expect(galaz.locator("rect")).toHaveCount(0);
-  await expect(galaz.locator("circle")).toHaveCount(1);
+  // Bez kółka zacisku listwy X1 na końcu odejścia — to nie część symbolu aparatu.
+  await expect(galaz.locator(":not([data-zacisk]) > circle")).toHaveCount(1);
   const sciezek3f = await galaz.locator("path").count();
   // Tag NIE jest "Q1" — ten ma już rozłącznik główny, więc ręcznie dodany aparat
   // z tym samym prefiksem dostaje kolejny wolny numer (patrz `addManualDevice`).

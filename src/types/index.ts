@@ -342,6 +342,17 @@ export interface PanelConfig {
   przedlicznikowe?: number;
   /** Brak = `DOMYSLNY_UKLAD_SIECI` (projekty sprzed wprowadzenia pola). */
   ukladSieci?: UkladSieci;
+  /*
+   * Dane rozdzielnicy jako wyrobu (PN-EN 61439-3) — z karty obudowy i warunków
+   * przyłączenia, nie do policzenia przez aplikację. Opcjonalne: brak = nie podano,
+   * i wtedy nie trafiają na rysunek.
+   */
+  /** Stopień ochrony obudowy, np. „IP40". */
+  stopienIP?: string;
+  /** Warunkowy prąd zwarciowy rozdzielnicy [kA] — z karty producenta. */
+  iccKA?: number;
+  /** Producent i typ obudowy. */
+  obudowa?: string;
   /**
    * Liczba modulow w rzedzie obudowy.
    *
