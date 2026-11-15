@@ -48,6 +48,8 @@ export interface EditDeviceModalProps {
    * być zasilany szeregowo — patrz `PanelDevice.zasilanyZ`.
    */
   zabezpieczenia?: Pick<PanelDevice, "tag" | "label" | "caption" | "kind">[];
+  /** Styczniki w rozdzielnicy — do wyboru, którym steruje czujnik zaniku fazy. */
+  styczniki?: Pick<PanelDevice, "tag" | "label" | "caption">[];
 }
 
 const BIEGUNY = ["1P", "1P+N", "2P", "3P", "3P+N", "4P", "—"];
@@ -65,7 +67,7 @@ const SUGEROWANE_MODULY: Partial<Record<string, number>> = {
 };
 const FAZY = ["L1", "L2", "L3", "3F"] as const;
 
-export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, roznicowki = [], zabezpieczenia = [] }: EditDeviceModalProps) {
+export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, roznicowki = [], zabezpieczenia = [], styczniki = [] }: EditDeviceModalProps) {
   const [tag, setTag] = useState("");
   const [caption, setCaption] = useState("");
   const [label, setLabel] = useState("");
@@ -74,6 +76,7 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, r
   const [phase, setPhase] = useState<string>("");
   const [rcdTag, setRcdTag] = useState("");
   const [zasilanyZ, setZasilanyZ] = useState("");
+  const [steruje, setSteruje] = useState("");
 
   // Formularz zasilany od nowa przy KAŻDYM otwarciu — inaczej po zamknięciu bez zapisu
   // i otwarciu innego aparatu w polach siedziałyby dane poprzedniego.
@@ -87,6 +90,7 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, r
     setPhase(device.phase ?? "");
     setRcdTag(device.rcdTag ?? "");
     setZasilanyZ(device.zasilanyZ ?? "");
+    setSteruje(device.steruje ?? "");
   }, [device]);
 
   if (!device) return null;
@@ -115,6 +119,7 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, r
       // odświeżeniu obwód wróciłby pod różnicówkę, z której go zdjęto.
       ...(wyborRcd ? { rcdTag } : {}),
       ...(wyborZasilania ? { zasilanyZ } : {}),
+      ...(device.kind === "ovr" ? { steruje } : {}),
     });
     onClose();
   };
@@ -231,6 +236,24 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, r
                   ? "Wyłącznik obwodu, który ten aparat łączy — stoi szeregowo za nim."
                   : "Własne zabezpieczenie aparatu, np. wyłącznik B6 albo bezpiecznik."}
             </p>
+          </label>
+        )}
+
+        {/* Czujnik zaniku fazy odłącza obwód dopiero przez stycznik — bez wskazania,
+            którym, nie wiadomo, co chroni (przegląd 15.11.2026, pkt 5). */}
+        {device.kind === "ovr" && (
+          <label className="mt-3 block">
+            <div className="mb-1 text-xs text-slate-500">Steruje</div>
+            <select value={steruje} onChange={(e) => setSteruje(e.target.value)} className="pe-input pe-select w-full text-base md:text-sm" aria-label="Steruje stycznikiem">
+              {steruje && !styczniki.some((st) => st.tag === steruje) && <option value={steruje}>{steruje} — nie ma go już w rozdzielnicy</option>}
+              {styczniki.map((st) => (
+                <option key={st.tag} value={st.tag}>
+                  {st.tag} — {st.label} {st.caption}
+                </option>
+              ))}
+              <option value="">nie steruje żadnym stycznikiem</option>
+            </select>
+            {!styczniki.length && <p className="mt-1 text-xs text-slate-500">W rozdzielnicy nie ma stycznika — dołóż go z katalogu, żeby czujnik mógł odłączać obwód.</p>}
           </label>
         )}
 

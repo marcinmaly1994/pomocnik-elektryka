@@ -385,6 +385,11 @@ export interface PanelDevice {
    * aparatów pomocniczych (`RODZAJE_POMOCNICZE`); pusty napis = wprost z szyny głównej.
    */
   zasilanyZ?: string;
+  /**
+   * Oznaczenie stycznika, którym ten aparat STERUJE — dotyczy czujnika zaniku fazy:
+   * jego przekaźnik wyjściowy odłącza obwód dopiero przez stycznik. Pusty = nie podano.
+   */
+  steruje?: string;
   manual?: boolean;
 }
 

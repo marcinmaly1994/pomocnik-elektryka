@@ -260,3 +260,29 @@ test("stycznik, przekaźnik, zasilacz, CZF i RCBO — własne symbole, bez ramki
   const rcd = await svg.locator('[id^="rcd-FI"]').first().locator("path").count();
   expect(rcbo).not.toBe(rcd);
 });
+
+/**
+ * Przegląd 15.11.2026, pkt 5: czujnik zaniku fazy wskazuje stycznik, którym steruje,
+ * a front i schemat to pokazują — front także „Zasilany z", dotąd widoczne tylko na schemacie.
+ */
+test("czujnik zaniku fazy steruje stycznikiem — widać to na froncie i na schemacie", async ({ page }) => {
+  await zbudujReczniePustaRozdzielnice(page);
+  await dodajReczny(page, "mcb"); // F1 — zasilanie czujnika
+  await dodajReczny(page, "stycznik"); // K1
+  await dodajReczny(page, "ovr"); // K2
+
+  await page.getByRole("button", { name: "Edytuj aparat K2", exact: true }).click();
+  await page.getByLabel("Zasilany z").selectOption("F1");
+  await page.getByLabel("Steruje stycznikiem").selectOption("K1");
+  await page.getByRole("button", { name: "Zapisz zmiany" }).click();
+
+  const front = page.getByRole("img", { name: "Widok czołowy rozdzielnicy" });
+  await expect(front.locator("text[data-powiazania]").filter({ hasText: "→ K1" })).toHaveCount(1);
+  await expect(front.locator("text[data-powiazania]").filter({ hasText: "← K2" })).toHaveCount(1);
+  await expect(front.locator("text[data-powiazania]").filter({ hasText: "z F1" })).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
+  const svg = page.locator("svg:has(#incoming-supply)");
+  await expect(svg.locator("[data-powiazanie-sterujace]").filter({ hasText: "steruje K1" })).toHaveCount(1);
+  await expect(svg.locator("[data-powiazanie-sterujace]").filter({ hasText: "sterowany z K2" })).toHaveCount(1);
+});

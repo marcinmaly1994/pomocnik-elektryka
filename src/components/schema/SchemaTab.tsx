@@ -14,7 +14,7 @@ import { GLYPHS, labelOffset, type GlyphSpec } from "./deviceGlyphs";
 import { LINE_W, STROKE } from "./glyphyOprawa";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, pradyWgKluczaAparatu } from "@/lib/panel/project";
-import { aparatyDoWidoku, buildPanelDevices, czuloscITypRcd, dzieciAparatu, jestOdplywem, opisBiegunow, PHASE_COLORS, rodzicAparatu, zasilanieRozdzielnicy } from "@/lib/panel/devices";
+import { aparatyDoWidoku, buildPanelDevices, czuloscITypRcd, dzieciAparatu, jestOdplywem, opisBiegunow, opisPowiazanAparatu, PHASE_COLORS, rodzicAparatu, zasilanieRozdzielnicy } from "@/lib/panel/devices";
 import { zLiczba } from "@/lib/liczby";
 import type { PanelConfig, PanelDevice, UkladSieci } from "@/types";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
@@ -626,6 +626,7 @@ function CircuitBranch({
   doY,
   zPrzewodem,
   zacisk,
+  dopisek,
   s,
 }: {
   x: number;
@@ -637,6 +638,8 @@ function CircuitBranch({
   zPrzewodem: boolean;
   /** Oznaczenie zacisku odejścia na listwie (np. „X1:3”) — tylko tam, gdzie przewód wychodzi z rozdzielnicy. */
   zacisk?: string;
+  /** Powiązanie sterujące („steruje K1”, „sterowany z K3”) — linia pod nastawą. */
+  dopisek?: string;
   s: Siatka;
 }) {
   const { spec, labelDx } = symbolOdplywu(device);
@@ -659,6 +662,11 @@ function CircuitBranch({
       <text x={x + labelDx} y={yOpisu + 8} fontSize={8.5} fontWeight={700} textAnchor="start" fill={MUTED}>
         {opisZBiegunami(device)}
       </text>
+      {dopisek && (
+        <text data-powiazanie-sterujace="" x={x + labelDx} y={yOpisu + 19} fontSize={8} textAnchor="start" fill={MUTED}>
+          {dopisek}
+        </text>
+      )}
       {/* Nazwa odbiornika celowo NIE jest powtarzana tutaj — stoi w tabeli odpływów pod
           schematem, dokładnie w tej samej kolumnie. Wcześniej była w obu miejscach, w obu
           ucięta, więc zajmowała miejsce nic nie wnosząc. Przy gałęzi zostaje sam typ
@@ -717,17 +725,17 @@ function bezOdczepuPe(l: Lisc): boolean {
 }
 
 /** Rysunek jednego odejścia: wyłącznik (nad pierwszym), szynka, aparat szeregowy. */
-function Odejscie({ x, lisc, zacisk, s }: { x: number; lisc: Lisc; zacisk?: string; s: Siatka }) {
+function Odejscie({ x, lisc, zacisk, dopiski, s }: { x: number; lisc: Lisc; zacisk?: string; dopiski: ReadonlyMap<string, string>; s: Siatka }) {
   const { aparat, szeregowy, pierwszy, ileOdejsc } = lisc;
   return (
     <>
       {pierwszy && (
-        <CircuitBranch x={x} device={aparat} gora={s.Y_SUBBUS} dol={s.Y_MCB_BOTTOM} doY={szeregowy ? s.Y_SER_TOP : s.Y_WIRE_END} zPrzewodem={!szeregowy} zacisk={szeregowy ? undefined : zacisk} s={s} />
+        <CircuitBranch x={x} device={aparat} gora={s.Y_SUBBUS} dol={s.Y_MCB_BOTTOM} doY={szeregowy ? s.Y_SER_TOP : s.Y_WIRE_END} zPrzewodem={!szeregowy} zacisk={szeregowy ? undefined : zacisk} dopisek={dopiski.get(aparat.uid)} s={s} />
       )}
       {pierwszy && ileOdejsc > 1 && (
         <line data-szynka-szeregowa="" x1={x} y1={s.Y_SER_TOP} x2={x + (ileOdejsc - 1) * LEAF_W} y2={s.Y_SER_TOP} stroke={STROKE} strokeWidth={LINE_W} />
       )}
-      {szeregowy && <CircuitBranch x={x} device={szeregowy} gora={s.Y_SER_TOP} dol={s.Y_SER_BOTTOM} doY={s.Y_WIRE_END} zPrzewodem zacisk={zacisk} s={s} />}
+      {szeregowy && <CircuitBranch x={x} device={szeregowy} gora={s.Y_SER_TOP} dol={s.Y_SER_BOTTOM} doY={s.Y_WIRE_END} zPrzewodem zacisk={zacisk} dopisek={dopiski.get(szeregowy.uid)} s={s} />}
     </>
   );
 }
@@ -1060,6 +1068,14 @@ export function SchemaTab() {
    *  Lampka i CZF pod wyłącznikiem zostają w rozdzielnicy, więc zacisku nie dostają. */
   const zaciski = new Map<Lisc, string>();
   columns.forEach((col) => col.block?.liscie.forEach((l) => !bezOdczepuPe(l) && zaciski.set(l, `X1:${zaciski.size + 1}`)));
+  /** Powiązania sterujące (czujnik ↔ stycznik). „Zasilany z” pomijamy — schemat rysuje
+   *  je sam, stawiając aparat szeregowo pod jego zabezpieczeniem. */
+  const dopiski = new Map(
+    devices.flatMap((d) => {
+      const t = opisPowiazanAparatu(d, devices).filter((x) => !x.startsWith("z "));
+      return t.length ? [[d.uid, t.join(" · ")] as const] : [];
+    })
+  );
   const s = siatka(!!ppozDevice, rcdBlocks.some((b) => b.liscie.some((l) => l.szeregowy)));
 
   return (
@@ -1146,7 +1162,7 @@ export function SchemaTab() {
                   return x2 > x1 ? <line x1={x1} y1={s.Y_SUBBUS} x2={x2} y2={s.Y_SUBBUS} stroke={STROKE} strokeWidth={LINE_W} /> : null;
                 })()}
                 {col.block.liscie.map((l, i) => (
-                  <Odejscie key={`${l.aparat.uid}-${l.szeregowy?.uid ?? ""}`} x={circuitX(col, i)} lisc={l} zacisk={zaciski.get(l)} s={s} />
+                  <Odejscie key={`${l.aparat.uid}-${l.szeregowy?.uid ?? ""}`} x={circuitX(col, i)} lisc={l} zacisk={zaciski.get(l)} dopiski={dopiski} s={s} />
                 ))}
               </g>
             ) : null
