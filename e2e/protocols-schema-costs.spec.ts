@@ -144,37 +144,43 @@ test("Schemat: renderuje rozłącznik główny i wygenerowane obwody po dodaniu 
 
   const svg = page.locator("svg:has(#incoming-supply)");
   await expect(svg.locator("#main-switch text").filter({ hasText: "Rozłącznik izolacyjny główny" })).toBeVisible();
-  // fazy zasilania nad grotem — domyślna konfiguracja rozdzielnicy jest 3-fazowa
-  await expect(svg.locator("#incoming-supply text")).toHaveText("L1, L2, L3");
+  // dopływ w zapisie dokumentacji — domyślnie 3-fazowy, TN-C-S, przedlicznikowe 25 A
+  await expect(svg.locator("#incoming-supply text").first()).toHaveText("3/PEN ~ 400/230 V · TN-C-S");
+  await expect(svg.locator("#incoming-supply text").nth(1)).toHaveText("zabezpieczenie przedlicznikowe 25 A (w złączu)");
+  // rozdział PEN przed rozłącznikiem i GSU z pionem do szyny PE
+  await expect(svg.locator("#rozdzial-pen")).toHaveCount(1);
+  await expect(svg.locator("#zrodlo-pe text").filter({ hasText: "GSU" })).toBeVisible();
   await expect(svg.locator("#final-circuits-table text").filter({ hasText: /Obwód gniazd/ }).first()).toBeVisible();
 
-  // szyny ochronna i neutralna muszą przecinać wszystkie odejścia obwodowe
+  // N osobno pod KAŻDĄ różnicówką i tylko pod jej obwodami; PE wspólne pod wszystkimi
   const buses = await svg.evaluate((el: SVGSVGElement) => {
-    const lines = [...el.querySelectorAll("#pe-n-buses line")].map((l) => ({
-      x1: +l.getAttribute("x1")!,
-      x2: +l.getAttribute("x2")!,
-      dash: l.getAttribute("stroke-dasharray"),
-    }));
-    const circuits = [...el.querySelectorAll('[id^="circuit-"]')].map((g) => (g as SVGGraphicsElement).getBBox());
+    const linia = (g: Element) => {
+      const l = g.querySelector("line")!;
+      return { x1: +l.getAttribute("x1")!, x2: +l.getAttribute("x2")!, dash: l.getAttribute("stroke-dasharray"), label: g.querySelector("text")!.textContent };
+    };
+    const branchXs = [...el.querySelectorAll('[id^="circuit-"] > line')].map((l) => +l.getAttribute("x1")!);
     return {
-      labels: [...el.querySelectorAll("#pe-n-buses text")].map((t) => t.textContent),
-      lines,
-      left: Math.min(...circuits.map((b) => b.x)),
-      right: Math.max(...circuits.map((b) => b.x + b.width)),
+      n: [...el.querySelectorAll('#pe-n-buses [data-szyna="N"]')].map(linia),
+      pe: linia(el.querySelector('#pe-n-buses [data-szyna="PE"]')!),
+      branchXs,
     };
   });
-  expect(buses.labels).toEqual(["N", "PE"]);
-  buses.lines.forEach((l) => {
-    expect(l.x1).toBeLessThanOrEqual(buses.left);
-    expect(l.x2).toBeGreaterThanOrEqual(buses.right);
+  expect(buses.n.map((b) => b.label)).toEqual(buses.n.map((_, i) => `N${i + 1}`));
+  // każde odejście przecina dokładnie jedną szynę N, a szyny N na siebie nie zachodzą
+  buses.branchXs.forEach((x) => expect(buses.n.filter((b) => b.x1 <= x && x <= b.x2)).toHaveLength(1));
+  buses.n.slice(1).forEach((b, i) => expect(b.x1).toBeGreaterThan(buses.n[i].x2));
+  buses.branchXs.forEach((x) => {
+    expect(buses.pe.x1).toBeLessThanOrEqual(x);
+    expect(buses.pe.x2).toBeGreaterThanOrEqual(x);
   });
+  expect(buses.pe.label).toBe("PE");
   // PE kreską przerywaną, N ciągłą — na wydruku czarno-białym to jedyne, co je odróżnia
-  expect(buses.lines[0].dash).toBeNull();
-  expect(buses.lines[1].dash).toBeTruthy();
+  buses.n.forEach((b) => expect(b.dash).toBeNull());
+  expect(buses.pe.dash).toBeTruthy();
 
   // każdy obwód ma odczep PE: kropkę połączeniową na szynie i kreskę pod 30° do odpływu
   const taps = await svg.evaluate((el: SVGSVGElement) => {
-    const peY = +el.querySelectorAll("#pe-n-buses line")[1].getAttribute("y1")!;
+    const peY = +el.querySelector('#pe-n-buses [data-szyna="PE"] line')!.getAttribute("y1")!;
     const branchXs = [...el.querySelectorAll('[id^="circuit-"] > line')].map((l) => +l.getAttribute("x1")!);
     return {
       peY,

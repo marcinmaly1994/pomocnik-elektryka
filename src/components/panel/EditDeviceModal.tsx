@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MANUAL_DEVICE_TYPES, daSieSkasowac } from "@/lib/panel/devices";
+import { MANUAL_DEVICE_TYPES, daSieSkasowac, jestOdplywem } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
 
 /**
@@ -35,6 +35,14 @@ export interface EditDeviceModalProps {
   onDelete: (uid: string) => void;
   /** Czy zasilanie jest 3-fazowe — decyduje, czy fazę w ogóle da się wybrać. */
   supply3f: boolean;
+  /**
+   * Różnicówki w rozdzielnicy — do wyboru, za którą stoi obwód.
+   *
+   * Bez tego aparat dołożony ręcznie nie dawał się przypisać do żadnej różnicówki: każdy
+   * ręczny wyłącznik, także gniazdowy, lądował na schemacie BEZ ochrony 30 mA i nikt
+   * o tym nie mówił (audyt rozdzielnicy 15.11.2026, błąd 6).
+   */
+  roznicowki?: Pick<PanelDevice, "tag" | "label" | "caption">[];
 }
 
 const BIEGUNY = ["1P", "1P+N", "2P", "3P", "3P+N", "4P", "—"];
@@ -52,13 +60,14 @@ const SUGEROWANE_MODULY: Partial<Record<string, number>> = {
 };
 const FAZY = ["L1", "L2", "L3", "3F"] as const;
 
-export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f }: EditDeviceModalProps) {
+export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, roznicowki = [] }: EditDeviceModalProps) {
   const [tag, setTag] = useState("");
   const [caption, setCaption] = useState("");
   const [label, setLabel] = useState("");
   const [poles, setPoles] = useState("");
   const [modules, setModules] = useState(1);
   const [phase, setPhase] = useState<string>("");
+  const [rcdTag, setRcdTag] = useState("");
 
   // Formularz zasilany od nowa przy KAŻDYM otwarciu — inaczej po zamknięciu bez zapisu
   // i otwarciu innego aparatu w polach siedziałyby dane poprzedniego.
@@ -70,12 +79,17 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f }:
     setPoles(device.poles ?? "");
     setModules(device.modules ?? 1);
     setPhase(device.phase ?? "");
+    setRcdTag(device.rcdTag ?? "");
   }, [device]);
 
   if (!device) return null;
 
   const katalog = MANUAL_DEVICE_TYPES.find((t) => t.key === device.kind);
   const podpowiedzi = katalog?.ratings.filter(Boolean) ?? [];
+  /** RCBO ma własny człon różnicowy — nie stoi za różnicówką, więc wyboru nie dostaje. */
+  const wyborRcd = jestOdplywem(device) && device.kind !== "rcbo";
+  /** Wskazanie różnicówki, której już nie ma (skasowana) — pokazujemy je jako takie. */
+  const rcdZniknal = !!device.rcdTag && !roznicowki.some((r) => r.tag === device.rcdTag);
   const zapisz = () => {
     onSave(device.uid, {
       tag: tag.trim() || device.tag,
@@ -84,6 +98,10 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f }:
       poles,
       modules: Math.min(12, Math.max(1, Math.round(modules) || 1)),
       phase: (phase || "") as PanelDevice["phase"],
+      // Pusty napis, nie `undefined`: dla aparatu z automatu zmiana idzie do trwałego
+      // nadpisania zapisywanego w JSON-ie, a `undefined` by z niego wypadło — po
+      // odświeżeniu obwód wróciłby pod różnicówkę, z której go zdjęto.
+      ...(wyborRcd ? { rcdTag } : {}),
     });
     onClose();
   };
@@ -180,6 +198,27 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f }:
             </label>
           )}
         </div>
+
+        {wyborRcd && (
+          <label className="mt-3 block">
+            <div className="mb-1 text-xs text-slate-500">Za różnicówką</div>
+            <select value={rcdTag} onChange={(e) => setRcdTag(e.target.value)} className="pe-input pe-select w-full text-base md:text-sm" aria-label="Za różnicówką">
+              {rcdZniknal && <option value={device.rcdTag}>{device.rcdTag} — nie ma jej już w rozdzielnicy</option>}
+              {roznicowki.map((r) => (
+                <option key={r.tag} value={r.tag}>
+                  {r.tag} — {r.caption || r.label}
+                </option>
+              ))}
+              <option value="">bez różnicówki — wprost z szyny głównej</option>
+            </select>
+            {!roznicowki.some((r) => r.tag === rcdTag) && (
+              <p className="mt-1 text-xs text-caution">
+                Obwód bez ochrony różnicowoprądowej 30 mA — dopuszczalne tylko dla odbiornika stałego, jeśli pozwala na to
+                jego instrukcja. Gniazda i oświetlenie w mieszkaniu muszą mieć różnicówkę albo RCBO.
+              </p>
+            )}
+          </label>
+        )}
 
         {/* Zmiana fazy ręcznie rozjeżdża bilans policzony przez „Wyrównaj fazy" —
             lepiej powiedzieć to wprost, niż zostawić użytkownika ze zdziwieniem. */}

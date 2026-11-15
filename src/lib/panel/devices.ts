@@ -1,4 +1,4 @@
-import type { PanelDevice, RcdGroup } from "@/types";
+import type { PanelConfig, PanelDevice, RcdGroup, UkladSieci } from "@/types";
 import { colorForCircuit } from "./circuits";
 import { slowoLiczby, zLiczba } from "@/lib/liczby";
 
@@ -17,6 +17,36 @@ export const PHASE_COLORS: Record<string, string> = {
 };
 
 export const MOD_W = 34; // szerokość 1 modułu (px) ~ 17,5 mm
+
+/** Zabezpieczenie przedlicznikowe przyjmowane, gdy projekt go nie podaje — najczęstsze
+ *  w domach i mieszkaniach. To DOMYSŁ, stąd ostrzeżenie w Rozdzielnicy, żeby go sprawdzić. */
+export const DOMYSLNE_PRZEDLICZNIKOWE = 25;
+/** Najczęstszy przypadek przy przyłączu kablowym 4-żyłowym: PEN rozdzielany w rozdzielnicy. */
+export const DOMYSLNY_UKLAD_SIECI: UkladSieci = "TN-C-S";
+
+/** Ustawienia zasilania z uzupełnionymi domysłami — jedno miejsce dla wszystkich widoków. */
+export function zasilanieRozdzielnicy(c: Pick<PanelConfig, "przedlicznikowe" | "ukladSieci">): {
+  przedlicznikowe: number;
+  uklad: UkladSieci;
+} {
+  return { przedlicznikowe: c.przedlicznikowe ?? DOMYSLNE_PRZEDLICZNIKOWE, uklad: c.ukladSieci ?? DOMYSLNY_UKLAD_SIECI };
+}
+
+/**
+ * Liczba biegunów do OPISU aparatu.
+ *
+ * Przy ograniczniku przepięć „4P" nie mówi tego, co istotne: czy między N a PE stoi
+ * iskiernik (3+1), czy warystor (4+0). SPD w tej aplikacji stoi zawsze ZA rozdziałem
+ * PEN (patrz schemat), więc wariant 3+1 / 1+1 jest poprawny w TN-S, TN-C-S i TT —
+ * a w TT jest wręcz jedynym właściwym.
+ */
+export function opisBiegunow(d: Pick<PanelDevice, "kind" | "poles">): string {
+  if (d.kind === "spd") {
+    if (d.poles === "4P") return "3+1";
+    if (d.poles === "2P") return "1+1";
+  }
+  return d.poles;
+}
 
 export interface ManualDeviceType {
   key: string;
@@ -173,6 +203,8 @@ export interface BuildPanelDevicesOptions {
   mainRating?: number;
   /** Prąd obliczeniowy obwodu wg klucza aparatu (`mcb-<id>`) — waga bilansu faz. */
   pradyWgKlucza?: ReadonlyMap<string, number>;
+  /** Zabezpieczenie przedlicznikowe [A] — różnicówka nie może być od niego słabsza. */
+  przedlicznikowe?: number;
 }
 
 /** Szereg prądów znamionowych, w jakich faktycznie produkuje się wyłączniki
@@ -189,9 +221,9 @@ const RCD_RATINGS = [25, 40, 63, 80, 100];
  * Dolny próg (63 A dla 3-fazowego zasilania, 40 A dla 1-fazowego) to najmniejszy
  * rozmiar typowo dostępny w tej klasie aparatu — mniejszy rozłącznik główny nie
  * schodzi poniżej niego. */
-function rcdRatingFor(mainRating: number, supply3f: boolean): number {
+function rcdRatingFor(mainRating: number, supply3f: boolean, przedlicznikowe: number): number {
   const floor = supply3f ? 63 : 40;
-  const need = Math.max(mainRating, floor);
+  const need = Math.max(mainRating, przedlicznikowe, floor);
   return RCD_RATINGS.find((r) => r >= need) ?? RCD_RATINGS[RCD_RATINGS.length - 1];
 }
 
@@ -206,7 +238,7 @@ function rcdRatingFor(mainRating: number, supply3f: boolean): number {
  * zabezpieczenie, kiedy jest faktycznie potrzebny. Ostrzeżenie o jego braku
  * (patrz `computeSelectivity`) i tak zostaje, bo dotyczy każdej instalacji. */
 export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevicesOptions = {}): PanelDevice[] {
-  const { supply3f = true, mainRating = 40, pradyWgKlucza } = opts;
+  const { supply3f = true, mainRating = 40, pradyWgKlucza, przedlicznikowe = DOMYSLNE_PRZEDLICZNIKOWE } = opts;
   const devices: PanelDevice[] = [];
   const p = supply3f ? "4P" : "2P";
   const mod = supply3f ? 4 : 2;
@@ -214,7 +246,7 @@ export function buildPanelDevices(rcdGroups: RcdGroup[], opts: BuildPanelDevices
   devices.push({ uid: "", kind: "main", tag: "Q1", modules: mod, label: `${mainRating}A`, caption: "Rozłącznik izolacyjny główny", poles: p, phase: supply3f ? "3F" : "L1", key: "main" });
 
   let mcbNo = 0;
-  const rcdRating = rcdRatingFor(mainRating, supply3f);
+  const rcdRating = rcdRatingFor(mainRating, supply3f, przedlicznikowe);
   rcdGroups.forEach((r, gi) => {
     devices.push({
       uid: "",
@@ -302,43 +334,74 @@ export function computeSelectivity(
   /** Rzeczywiste obciążenie faz [A] policzone z prądów obliczeniowych. Bez tego
    *  bilans liczy się z prądów ZNAMIONOWYCH zabezpieczeń, co rozkłada równo
    *  aparaty, a nie obciążenie — patrz `phaseBalance` w `project.ts`. */
-  phaseLoadOverride?: PhaseLoad
+  phaseLoadOverride?: PhaseLoad,
+  /** Zabezpieczenie przedlicznikowe i układ sieci — brak = domysły (patrz `zasilanieRozdzielnicy`). */
+  zasilanie: Pick<PanelConfig, "przedlicznikowe" | "ukladSieci"> = {}
 ): SelectivityFinding[] {
   const out: SelectivityFinding[] = [];
+  const { przedlicznikowe, uklad } = zasilanieRozdzielnicy(zasilanie);
   const mcbs = devices.filter((d) => d.kind === "mcb" && ratedCurrent(d.label) > 0);
+  /** Aparaty obwodowe z członem nadprądowym — RCBO też zabezpiecza obwód. */
+  const zabezpieczeniaObwodow = devices.filter((d) => (d.kind === "mcb" || d.kind === "rcbo") && ratedCurrent(d.label) > 0);
   const rcds = devices.filter((d) => d.kind === "rcd");
 
-  // 1. żaden obwód nie może mieć zabezpieczenia większego niż rozłącznik główny
-  const tooBig = mcbs.filter((d) => ratedCurrent(d.label) > mainRating);
-  if (tooBig.length) {
+  /*
+   * Aparatem nadrzędnym jest ZABEZPIECZENIE PRZEDLICZNIKOWE, nie rozłącznik główny.
+   *
+   * Rozłącznik izolacyjny nie ma wyzwalaczy: niczego nie wyłączy ani przy przeciążeniu,
+   * ani przy zwarciu. Wcześniej reguły 1–3 liczyły się względem niego — „przy zwarciu
+   * zadziała aparat główny", stopniowanie 1,6 × rozłącznik, różnicówka ≥ rozłącznik —
+   * czyli sprawdzały koordynację z aparatem, który nie chroni, a pomijały ten, który
+   * chroni naprawdę (audyt rozdzielnicy 15.11.2026, błąd 1).
+   */
+
+  // 1. rozłącznik główny nie może być słabszy od zabezpieczenia, które go chroni
+  const glowny = devices.find((d) => d.kind === "main");
+  if (glowny && mainRating < przedlicznikowe) {
     out.push({
       level: "error",
-      title: "Zabezpieczenie obwodu większe niż rozłącznik główny",
-      detail: `${tooBig.map((d) => `${d.tag} (${d.label})`).join(", ")} — przy zwarciu zadziała aparat główny i pozbawi zasilania cały budynek. Zwiększ rozłącznik główny (obecnie ${mainRating} A) albo zmniejsz zabezpieczenie obwodu.`,
+      title: "Rozłącznik główny słabszy niż zabezpieczenie przedlicznikowe",
+      detail: `${glowny.tag} ma ${mainRating} A, a zabezpieczenie przedlicznikowe ${przedlicznikowe} A. Rozłącznik nie ma wyzwalaczy — przed przeciążeniem chroni go dopiero zabezpieczenie w złączu, więc prąd do ${przedlicznikowe} A popłynie przez aparat na ${mainRating} A. Dobierz rozłącznik o prądzie ≥ ${przedlicznikowe} A.`,
     });
   }
 
-  // 2. stopniowanie prądów — dla selektywności przeciążeniowej przyjmuje się krotność ok. 1,6
-  const weak = mcbs.filter((d) => {
-    const i = ratedCurrent(d.label);
-    return i <= mainRating && mainRating / i < 1.6;
-  });
-  if (weak.length) {
+  // 2. obwód nie może mieć zabezpieczenia równego lub większego od przedlicznikowego
+  const bezSelektywnosci = zabezpieczeniaObwodow.filter((d) => ratedCurrent(d.label) >= przedlicznikowe);
+  if (bezSelektywnosci.length) {
     out.push({
       level: "warn",
-      title: "Zbyt małe stopniowanie względem aparatu głównego",
-      detail: `${weak.map((d) => `${d.tag} (${d.label})`).join(", ")} — stosunek prądów poniżej 1,6. Przy przeciążeniu może zadziałać aparat główny zamiast obwodowego. Zalecane In(główny) ≥ 1,6 × In(obwodu).`,
+      title: "Zabezpieczenie obwodu nie mniejsze niż przedlicznikowe",
+      detail: `${bezSelektywnosci.map((d) => `${d.tag} (${d.label})`).join(", ")} — przy zabezpieczeniu przedlicznikowym ${przedlicznikowe} A nie ma selektywności: przy przeciążeniu lub zwarciu w tym obwodzie może zadziałać zabezpieczenie w złączu i odciąć cały budynek. Zmniejsz zabezpieczenie obwodu albo wystąp do operatora o większą moc przyłączeniową.`,
     });
   }
 
-  // 3. różnicówka musi być zabezpieczona nadprądowo — jej prąd znamionowy nie może być
-  //    mniejszy niż prąd aparatu, który ją chroni
-  const weakRcd = rcds.filter((d) => ratedCurrent(d.label) > 0 && ratedCurrent(d.label) < mainRating);
+  // 3. różnicówka (bez członu nadprądowego) nie może być słabsza od aparatu nadrzędnego
+  const weakRcd = rcds.filter((d) => ratedCurrent(d.label) > 0 && ratedCurrent(d.label) < przedlicznikowe);
   if (weakRcd.length) {
     out.push({
       level: "error",
       title: "Różnicówka niezabezpieczona przed przeciążeniem",
-      detail: `${weakRcd.map((d) => `${d.tag} (${d.label})`).join(", ")} — prąd znamionowy mniejszy od rozłącznika głównego (${mainRating} A). Wyłącznik różnicowoprądowy nie ma własnego zabezpieczenia zwarciowego: dobierz go na prąd ≥ ${mainRating} A albo poprzedź osobnym wyłącznikiem nadprądowym.`,
+      detail: `${weakRcd.map((d) => `${d.tag} (${d.label})`).join(", ")} — prąd znamionowy mniejszy od zabezpieczenia przedlicznikowego (${przedlicznikowe} A). Wyłącznik różnicowoprądowy nie ma własnego członu nadprądowego, a rozłącznik główny niczego nie wyłącza. Dobierz różnicówkę na ≥ ${przedlicznikowe} A albo potwierdź w karcie producenta jej koordynację z wyłącznikami za nią.`,
+    });
+  }
+
+  // 3a. obwody bez dodatkowej ochrony różnicowoprądowej 30 mA
+  const czulosc30 = (rcd: PanelDevice | undefined) => {
+    const ma = Number(czuloscITypRcd(rcd ?? { label: "", caption: "" })?.match(/(\d+)\s*mA/)?.[1] ?? NaN);
+    // Różnicówka bez czytelnej czułości (stary opis „63A") pochodzi z automatu, który
+    // daje wyłącznie 30 mA — nie podnosimy alarmu o czymś, czego nie da się odczytać.
+    return rcd !== undefined && (Number.isNaN(ma) || ma <= 30);
+  };
+  const bez30mA = mcbs.filter((d) => !czulosc30(rcds.find((r) => r.tag === d.rcdTag)));
+  if (bez30mA.length) {
+    out.push({
+      level: uklad === "TT" ? "error" : "warn",
+      title: "Obwody bez ochrony różnicowoprądowej 30 mA",
+      detail:
+        `${bez30mA.map((d) => `${d.tag} (${d.caption})`).join(", ")} — gniazda do 32 A i oświetlenie w mieszkaniach wymagają dodatkowej ochrony wyłącznikiem różnicowoprądowym ≤ 30 mA (PN-HD 60364-4-41). Bez niej zostaw tylko odbiornik stały, jeśli dopuszcza to jego instrukcja (np. falownik PV). Przypisz obwód do różnicówki w edycji aparatu albo zastosuj RCBO.` +
+        (uklad === "TT"
+          ? " W układzie TT samoczynne wyłączenie zasilania praktycznie zawsze wymaga wyłącznika różnicowoprądowego — wyłącznik nadprądowy sam nie zadziała przy dużej rezystancji uziomu."
+          : ""),
     });
   }
 

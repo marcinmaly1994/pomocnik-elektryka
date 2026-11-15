@@ -46,7 +46,7 @@ export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
     id: "mieszkanie",
     nazwa: "Mieszkanie",
     opis: "3-fazowe 40 A, 2 różnicówki: pokoje oraz kuchnia z łazienką; płyta indukcyjna 3-fazowa.",
-    config: { supply3f: true, mainRating: 40, perRow: 18 },
+    config: { supply3f: true, mainRating: 40, perRow: 18, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
     naPoczatku: [{ kind: "spd", label: "T1+T2" }],
     grupy: [
       {
@@ -76,7 +76,7 @@ export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
     id: "dom",
     nazwa: "Dom jednorodzinny",
     opis: "3-fazowe 63 A, SPD, czujnik zaniku fazy, 3 różnicówki: oświetlenie, gniazda, kuchnia i łazienki.",
-    config: { supply3f: true, mainRating: 63, perRow: 18 },
+    config: { supply3f: true, mainRating: 63, perRow: 18, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
     naPoczatku: [{ kind: "spd", label: "T1+T2" }, { kind: "ovr", label: "CZF" }],
     grupy: domGrupy(),
   },
@@ -84,7 +84,7 @@ export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
     id: "dom-pv",
     nazwa: "Dom z fotowoltaiką",
     opis: "Jak dom jednorodzinny plus obwód falownika PV 3-fazowego, bez różnicówki po stronie AC (wg instrukcji falownika).",
-    config: { supply3f: true, mainRating: 63, perRow: 18 },
+    config: { supply3f: true, mainRating: 63, perRow: 18, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
     naPoczatku: [{ kind: "spd", label: "T1+T2" }, { kind: "ovr", label: "CZF" }],
     grupy: [...domGrupy(), { obwody: [g("C20", "Falownik PV", { poles: "3P", cable: "YDYp 5×4" })] }],
   },
@@ -92,13 +92,14 @@ export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
     id: "dom-pv-ev",
     nazwa: "Dom z fotowoltaiką i ładowarką EV",
     opis: "Jak dom z PV plus ładowarka 11 kW na osobnej różnicówce typu B (typ A wystarczy tylko przy ładowarce z detekcją 6 mA DC).",
-    config: { supply3f: true, mainRating: 63, perRow: 24 },
+    config: { supply3f: true, mainRating: 63, perRow: 24, przedlicznikowe: 32, ukladSieci: "TN-C-S" },
     naPoczatku: [{ kind: "spd", label: "T1+T2" }, { kind: "ovr", label: "CZF" }],
     grupy: [
       ...domGrupy(),
       { obwody: [g("C20", "Falownik PV", { poles: "3P", cable: "YDYp 5×4" })] },
-      // 63 A, nie 40: różnicówka nie ma własnej ochrony przed przeciążeniem, więc jej prąd
-      // nie może być mniejszy od rozłącznika głównego (reguła 3 w `computeSelectivity`).
+      // Różnicówka nie ma własnej ochrony przed przeciążeniem, więc jej prąd nie może być
+      // mniejszy od zabezpieczenia przedlicznikowego (reguła 3 w `computeSelectivity`) —
+      // 63 A z zapasem, tak samo jak różnicówki w `domGrupy`.
       { rcd: { prad: 63, czulosc: 30, typ: "B" }, obwody: [g("C20", "Ładowarka EV 11 kW", { poles: "3P", cable: "YDY 5×6" })] },
     ],
   },

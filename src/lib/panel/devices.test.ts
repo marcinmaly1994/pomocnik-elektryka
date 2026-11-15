@@ -197,22 +197,75 @@ describe("computeSelectivity", () => {
     expect(findings).toEqual([{ level: "ok", title: "Nie wykryto problemów", detail: expect.any(String) }]);
   });
 
-  it("zabezpieczenie obwodu większe niż główne -> error", () => {
-    const bigMcb: PanelDevice = { ...okMcb, label: "B63" };
-    const findings = computeSelectivity([bigMcb, okRcd], 40, false, true);
-    expect(findings.some((f) => f.level === "error" && f.title.includes("większe niż rozłącznik"))).toBe(true);
+  /*
+   * Aparatem nadrzędnym jest zabezpieczenie PRZEDLICZNIKOWE — rozłącznik główny nie ma
+   * wyzwalaczy (audyt rozdzielnicy 15.11.2026, błąd 1). Domyślnie 25 A.
+   */
+  const glowny: PanelDevice = { uid: "q1", kind: "main", tag: "Q1", modules: 2, label: "40A", caption: "główny", poles: "2P" };
+
+  it("rozłącznik główny słabszy niż przedlicznikowe -> error; równy lub mocniejszy -> nic", () => {
+    const tytul = "Rozłącznik główny słabszy niż zabezpieczenie przedlicznikowe";
+    const przy = (main: number, przedl: number) =>
+      computeSelectivity([glowny, okMcb, okRcd], main, false, true, undefined, { przedlicznikowe: przedl }).some(
+        (f) => f.level === "error" && f.title === tytul
+      );
+    expect(przy(32, 40)).toBe(true);
+    expect(przy(40, 40)).toBe(false);
+    expect(przy(63, 25)).toBe(false);
   });
 
-  it("zbyt małe stopniowanie (krotność < 1,6) -> warn", () => {
-    // 40/32 = 1.25 < 1.6
-    const findings = computeSelectivity([{ ...okMcb, label: "B32" }, okRcd], 40, false, true);
-    expect(findings.some((f) => f.level === "warn" && f.title.includes("stopniowanie"))).toBe(true);
+  it("zabezpieczenie obwodu nie mniejsze niż przedlicznikowe -> warn, niezależnie od rozłącznika", () => {
+    const tytul = "Zabezpieczenie obwodu nie mniejsze niż przedlicznikowe";
+    const przy = (mcb: string, przedl: number) =>
+      computeSelectivity([{ ...okMcb, label: mcb }, okRcd], 80, false, true, undefined, { przedlicznikowe: przedl }).some(
+        (f) => f.level === "warn" && f.title === tytul
+      );
+    expect(przy("B25", 25)).toBe(true);
+    expect(przy("C32", 25)).toBe(true);
+    expect(przy("B20", 25)).toBe(false);
   });
 
-  it("różnicówka o prądzie mniejszym niż główny -> error", () => {
-    const weakRcd: PanelDevice = { ...okRcd, label: "25A/30mA" };
-    const findings = computeSelectivity([okMcb, weakRcd], 40, false, true);
-    expect(findings.some((f) => f.level === "error" && f.title.includes("Różnicówka niezabezpieczona"))).toBe(true);
+  it("dawne reguły względem rozłącznika zniknęły — B32 przy rozłączniku 40 A i przedlicznikowym 50 A jest w porządku", () => {
+    const findings = computeSelectivity([{ ...okMcb, label: "B32" }, { ...okRcd, label: "63A/30mA" }], 40, false, true, undefined, { przedlicznikowe: 50 });
+    expect(findings.filter((f) => f.level === "error" || f.level === "warn")).toEqual([]);
+  });
+
+  it("różnicówka słabsza od przedlicznikowego -> error; słabsza tylko od rozłącznika -> nic", () => {
+    const tytul = "Różnicówka niezabezpieczona przed przeciążeniem";
+    const rcd25: PanelDevice = { ...okRcd, label: "25A/30mA" };
+    const zle = computeSelectivity([okMcb, rcd25], 40, false, true, undefined, { przedlicznikowe: 32 });
+    expect(zle.some((f) => f.level === "error" && f.title === tytul)).toBe(true);
+    const dobrze = computeSelectivity([okMcb, rcd25], 63, false, true, undefined, { przedlicznikowe: 25 });
+    expect(dobrze.some((f) => f.title === tytul)).toBe(false);
+  });
+
+  describe("obwody bez ochrony różnicowoprądowej 30 mA", () => {
+    const tytul = "Obwody bez ochrony różnicowoprądowej 30 mA";
+    const znajdz = (devices: PanelDevice[], uklad?: "TN-C-S" | "TT") =>
+      computeSelectivity(devices, 40, false, true, undefined, { ukladSieci: uklad }).find((f) => f.title === tytul);
+
+    it("MCB bez różnicówki -> warn z nazwą obwodu", () => {
+      const f = znajdz([{ ...okMcb, rcdTag: undefined, caption: "Gniazda — garaż" }, okRcd]);
+      expect(f?.level).toBe("warn");
+      expect(f?.detail).toContain("F1 (Gniazda — garaż)");
+    });
+
+    it("MCB wskazujący nieistniejącą różnicówkę (skasowaną) liczy się jako bez RCD", () => {
+      expect(znajdz([{ ...okMcb, rcdTag: "FI9" }, okRcd])).toBeDefined();
+    });
+
+    it("MCB pod różnicówką 300 mA nie ma ochrony 30 mA", () => {
+      expect(znajdz([okMcb, { ...okRcd, label: "40A/300mA" }])).toBeDefined();
+    });
+
+    it("MCB pod różnicówką 30 mA (także starym opisem bez czułości) -> nic", () => {
+      expect(znajdz([okMcb, okRcd])).toBeUndefined();
+      expect(znajdz([okMcb, { ...okRcd, label: "63A", caption: "Wyłącznik różnicowoprądowy" }])).toBeUndefined();
+    });
+
+    it("w układzie TT brak RCD to błąd, nie ostrzeżenie", () => {
+      expect(znajdz([{ ...okMcb, rcdTag: undefined }], "TT")?.level).toBe("error");
+    });
   });
 
   it("więcej niż 6 obwodów pod jednym RCD -> warn", () => {

@@ -319,9 +319,29 @@ export interface CableRoute {
  *  (MANUAL_DEVICE_TYPES, `kind: "spd"`), dokładanym świadomie jak każde inne
  *  zabezpieczenie, a nie osobną flagą konfiguracji wymuszającą go w każdej
  *  rozdzielnicy z automatu. */
+/**
+ * Układ sieci zasilającej rozdzielnicę — z punktu widzenia TEJ rozdzielnicy.
+ *
+ * „TN-C-S" znaczy: dochodzi PEN i rozdział na PE i N odbywa się tutaj, PRZED
+ * rozłącznikiem głównym (PEN-u nie wolno rozłączać). „TN-S": PE i N dochodzą osobno,
+ * bo PEN rozdzielono wcześniej (np. w złączu). „TT": PE z własnego uziomu odbiorcy.
+ */
+export type UkladSieci = "TN-C-S" | "TN-S" | "TT";
+
 export interface PanelConfig {
   supply3f: boolean;
+  /** Prąd znamionowy ROZŁĄCZNIKA głównego (Ie) — łącznika bez wyzwalaczy, nie zabezpieczenia. */
   mainRating: number;
+  /**
+   * Prąd znamionowy zabezpieczenia przedlicznikowego [A] — w złączu, należy do operatora.
+   *
+   * To ONO, a nie rozłącznik główny, chroni rozdzielnicę przed przeciążeniem i zwarciem,
+   * więc względem niego liczą się reguły doboru (patrz `computeSelectivity`). Opcjonalne,
+   * bo projekty zapisane wcześniej go nie mają — brak znaczy `DOMYSLNE_PRZEDLICZNIKOWE`.
+   */
+  przedlicznikowe?: number;
+  /** Brak = `DOMYSLNY_UKLAD_SIECI` (projekty sprzed wprowadzenia pola). */
+  ukladSieci?: UkladSieci;
   /**
    * Liczba modulow w rzedzie obudowy.
    *
