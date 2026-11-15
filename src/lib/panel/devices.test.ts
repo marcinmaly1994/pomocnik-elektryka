@@ -19,6 +19,7 @@ import {
   przemianujAparat,
   rodzicAparatu,
   layoutPanel,
+  migrujOznaczenia,
   MANUAL_DEVICE_TYPES,
   podpisPrzewoduNaFroncie,
   przeniesAparat,
@@ -647,5 +648,50 @@ describe("rezerwaModulow", () => {
   it("liczy wolne miejsce i obudowę z ok. 20% rezerwy", () => {
     expect(rezerwaModulow(34, 36, 18)).toEqual({ wolne: 2, procent: 6, zalecaneRzedy: 3 });
     expect(rezerwaModulow(20, 36, 18)).toEqual({ wolne: 16, procent: 44, zalecaneRzedy: 2 });
+  });
+});
+
+describe("migrujOznaczenia — projekty sprzed konwencji F1…/F0.x", () => {
+  const a = (tag: string, p: Partial<PanelDevice> = {}): PanelDevice => ({ uid: tag, kind: "mcb", tag, modules: 1, label: "B16", caption: tag, poles: "1P", manual: true, ...p });
+  // Tak wyglądał gotowy układ „Dom" przed pakietem 3: SPD = F1, CZF = F2, obwody od F3.
+  const staryDom = [
+    a("Q1", { kind: "main" }),
+    a("F1", { kind: "spd", poles: "4P" }),
+    a("F2", { kind: "ovr" }),
+    a("FI1", { kind: "rcd" }),
+    a("F3", { rcdTag: "FI1" }),
+    a("F4", { rcdTag: "FI1" }),
+    a("P1", { kind: "lampka", zasilanyZ: "F4" }),
+  ];
+
+  it("tryb ręczny: SPD → F0.1, CZF → K1, obwody od F1, odwołania za nimi", () => {
+    const { devices, zmienione } = migrujOznaczenia(staryDom, "reczny");
+    expect(zmienione).toBe(true);
+    expect(devices.map((d) => d.tag)).toEqual(["Q1", "F0.1", "K1", "FI1", "F1", "F2", "P1"]);
+    expect(devices[6].zasilanyZ).toBe("F2");
+    expect(devices[4].rcdTag).toBe("FI1");
+  });
+
+  it("tryb z rzutu: obwodów nie rusza (numeruje je automat), tylko SPD i CZF", () => {
+    const { devices } = migrujOznaczenia(staryDom, "zRzutu");
+    expect(devices.map((d) => d.tag)).toEqual(["Q1", "F0.1", "K1", "FI1", "F3", "F4", "P1"]);
+  });
+
+  it("bezpiecznik pod SPD też trafia do F0.x, a SPD dalej go wskazuje", () => {
+    const { devices } = migrujOznaczenia([a("Q1", { kind: "main" }), a("F5", { kind: "spdFuse" }), a("F6", { kind: "spd", zasilanyZ: "F5" })], "zRzutu");
+    expect(devices.map((d) => d.tag)).toEqual(["Q1", "F0.1", "F0.2"]);
+    expect(devices[2].zasilanyZ).toBe("F0.1");
+  });
+
+  it("projekt już w nowej konwencji zostaje bez zmian — migracja się nie powtarza", () => {
+    const nowy = migrujOznaczenia(staryDom, "reczny").devices;
+    const drugi = migrujOznaczenia(nowy, "reczny");
+    expect(drugi.zmienione).toBe(false);
+    expect(drugi.devices).toBe(nowy);
+  });
+
+  it("bez SPD i CZF nic nie robi — numeracja obwodów i tak jest już ciągła", () => {
+    const lista = [a("Q1", { kind: "main" }), a("F1"), a("F2")];
+    expect(migrujOznaczenia(lista, "reczny")).toEqual({ devices: lista, zmienione: false });
   });
 });

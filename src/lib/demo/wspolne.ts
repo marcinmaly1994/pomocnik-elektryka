@@ -172,9 +172,9 @@ function ogranicznikPrzepiec(klasa: "T1+T2" | "T2"): PanelDevice {
     uid: "manual-1",
     kind: "spd",
     manual: true,
-    // „F0": przed wyłącznikami obwodów F1…Fn, bo SPD stoi zaraz za rozłącznikiem
-    // głównym — i nie koliduje z numeracją, którą automat nadaje obwodom.
-    tag: "F0",
+    // „F0.1": seria sekcji zasilania (konwencja z pakietu 3 audytu rozdzielnicy) — SPD
+    // stoi zaraz za rozłącznikiem głównym i nie koliduje z numeracją obwodów F1…Fn.
+    tag: "F0.1",
     modules: 4,
     label: klasa,
     caption: "Ogranicznik przepięć (SPD)",

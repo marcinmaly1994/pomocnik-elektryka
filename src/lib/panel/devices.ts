@@ -243,6 +243,60 @@ export function ujednolicOznaczenia(devices: PanelDevice[]): PanelDevice[] {
 }
 
 /**
+ * Jednorazowa migracja oznaczeń zapisanych przed konwencją F1…Fn / F0.x (pakiet 3
+ * audytu rozdzielnicy, 15.11.2026). Wywoływana przy wczytaniu projektu.
+ *
+ * - SPD i jego bezpiecznik → F0.1, F0.2… w kolejności na szynie,
+ * - czujnik zaniku fazy z prefiksem F → K (następny wolny),
+ * - w trybie „Składam ręcznie" wyłączniki obwodów (MCB, RCBO) z serii F → F1…Fn po
+ *   kolei na szynie, bo dotąd SPD i CZF wchodziły w środek tej serii (gotowy układ
+ *   „Dom" dawał SPD = F1, CZF = F2, a pierwszy obwód F3). W trybie „z rzutu" obwody
+ *   numeruje automat przy każdej odbudowie, więc tych nie ruszamy.
+ *
+ * Odwołania (`zasilanyZ`, `rcdTag`) idą za nowymi oznaczeniami — mapowane ze STARYCH
+ * oznaczeń jednym krokiem, nie łańcuchowo. Projekt już w nowej konwencji zostaje bez
+ * zmian (`zmienione: false`), więc migracja nie powtarza się przy kolejnych wczytaniach.
+ */
+export function migrujOznaczenia(
+  devices: PanelDevice[],
+  tryb: "zRzutu" | "reczny"
+): { devices: PanelDevice[]; zmienione: boolean } {
+  const sekcjaZasilania = (d: PanelDevice) => d.kind === "spd" || d.kind === "spdFuse";
+  const staraKonwencja =
+    devices.some((d) => sekcjaZasilania(d) && d.tag && !d.tag.startsWith(PREFIKS_SEKCJI_ZASILANIA)) ||
+    devices.some((d) => d.kind === "ovr" && /^F/.test(d.tag));
+  if (!staraKonwencja) return { devices, zmienione: false };
+
+  const mapa = new Map<string, string>();
+  const zmien = (d: PanelDevice, nowy: string): PanelDevice => {
+    if (nowy !== d.tag) mapa.set(d.tag, nowy);
+    return { ...d, tag: nowy };
+  };
+
+  let nrZasilania = 0;
+  let nrObwodu = 0;
+  let out = devices.map((d) => {
+    if (sekcjaZasilania(d) && d.tag) return zmien(d, `${PREFIKS_SEKCJI_ZASILANIA}${++nrZasilania}`);
+    if (tryb === "reczny" && (d.kind === "mcb" || d.kind === "rcbo") && /^F\d+$/.test(d.tag)) return zmien(d, `F${++nrObwodu}`);
+    return d;
+  });
+  // Czujniki osobno, po reszcie — następny wolny K liczy się z oznaczeń już po zmianach.
+  out = out.reduce<PanelDevice[]>((acc, d, i) => {
+    const nowy = d.kind === "ovr" && /^F/.test(d.tag) ? zmien(d, nastepneOznaczenie([...acc, ...out.slice(i + 1)], "K")) : d;
+    return [...acc, nowy];
+  }, []);
+
+  return {
+    devices: out.map((d) => {
+      const zasilanyZ = d.zasilanyZ ? mapa.get(d.zasilanyZ) : undefined;
+      const rcdTag = d.rcdTag ? mapa.get(d.rcdTag) : undefined;
+      return zasilanyZ || rcdTag ? { ...d, ...(zasilanyZ ? { zasilanyZ } : {}), ...(rcdTag ? { rcdTag } : {}) } : d;
+    }),
+    zmienione: true,
+  };
+}
+
+/**
  * Kolejność po odbudowie z rzutu — taka, jaką użytkownik ułożył.
  *
  * W trybie „z rzutu" lista aparatów jest liczona od nowa przy każdej zmianie planu, a

@@ -143,6 +143,8 @@ export function PanelTab() {
   // `buildPanelDevices` na tych samych parametrach zasila też zakładkę Schemat —
   // inaczej zmiana zasilania tutaj nie byłaby widoczna na schemacie jednokreskowym.
   const panelConfig = useProjectStore((s) => s.panelConfig);
+  const oznaczeniaZmigrowane = useProjectStore((s) => s.oznaczeniaZmigrowane);
+  const zamknijInfoOMigracji = useProjectStore((s) => s.zamknijInfoOMigracjiOznaczen);
   const setPanelConfig = useProjectStore((s) => s.setPanelConfig);
   const { supply3f, mainRating, perRow } = panelConfig;
   const { przedlicznikowe, uklad: ukladSieci } = zasilanieRozdzielnicy(panelConfig);
@@ -432,6 +434,26 @@ export function PanelTab() {
           )}
         </p>
       </div>
+
+      {/* Raz po wczytaniu projektu sprzed konwencji oznaczeń — patrz `migrujOznaczenia`.
+          Paski opisowe drukuje się i wsuwa w tabliczki aparatów, więc te sprzed zmiany
+          mają już inne numery niż rysunek; lepiej powiedzieć to wprost. */}
+      {oznaczeniaZmigrowane && (
+        <div
+          className="flex items-start gap-2.5 py-1 text-xs text-slate-600"
+          style={{ borderLeft: `3px solid ${KOLORY.blueprint}`, paddingLeft: 12 }}
+          data-testid="info-migracja-oznaczen"
+        >
+          <Info size={15} className="mt-0.5 shrink-0 text-blueprint" />
+          <span className="flex-1">
+            Oznaczenia aparatów zaktualizowano do konwencji projektu: wyłączniki obwodów F1…Fn, ogranicznik przepięć
+            i jego bezpiecznik F0.x, czujnik zaniku fazy K. Jeśli paski opisowe były już wydrukowane, wydrukuj je ponownie.
+          </span>
+          <button onClick={zamknijInfoOMigracji} className="shrink-0 text-slate-400 hover:text-ink" aria-label="Zamknij informację o zmianie oznaczeń">
+            ×
+          </button>
+        </div>
+      )}
 
       {unassignedCount > 0 && (
         <div className="flex items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: `3px solid ${KOLORY.copper}`, paddingLeft: 12 }}>

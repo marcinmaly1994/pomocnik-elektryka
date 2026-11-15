@@ -17,7 +17,7 @@ import {
 import { zapiszWersje } from "@/lib/wersjeProjektu";
 import { czytajKopie } from "@/lib/kopiaProjektu";
 import { WARUNKI_DOBORU_DOMYSLNE, type WarunkiDoboru } from "@/lib/panel/norms";
-import { jestUklademRozdzielnicy } from "@/lib/panel/devices";
+import { jestUklademRozdzielnicy, migrujOznaczenia } from "@/lib/panel/devices";
 import type { ProjectSizingOptions } from "@/lib/panel/project";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -458,6 +458,13 @@ interface ProjectState {
   panelHidden: string[];
   panelTryb: "zRzutu" | "reczny";
   panelOverrides: Record<string, Partial<PanelDevice>>;
+  /**
+   * Czy przy ostatnim wczytaniu projektu przemianowano aparaty na konwencję F1…Fn / F0.x
+   * (`migrujOznaczenia`). Tylko w pamięci, poza zapisem: Rozdzielnica pokazuje raz
+   * informację, że wydrukowane wcześniej paski opisowe są nieaktualne.
+   */
+  oznaczeniaZmigrowane: boolean;
+  zamknijInfoOMigracjiOznaczen: () => void;
   /** Obszar roboczy planu w jednostkach logicznych. Zapisywany w projekcie, bo
    *  dopasowuje się do proporcji wgranego rzutu — patrz planSizeForImage. */
   planSize: PlanSize;
@@ -757,6 +764,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   future: [],
   panelPast: [],
   panelFuture: [],
+  oznaczeniaZmigrowane: false,
 
   setDraft: (updater, opts) => {
     const commit = opts?.commit !== false;
@@ -904,6 +912,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       panelConfig: { supply3f: true, mainRating: 40, perRow: 12, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
   warunkiDoboru: WARUNKI_DOBORU_DOMYSLNE,
       panelDevices: [],
+      oznaczeniaZmigrowane: false,
       panelHidden: [],
       panelTryb: "zRzutu",
       panelOverrides: {},
@@ -1012,7 +1021,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Projekty zapisane przed wprowadzeniem trwałej rozdzielnicy nie mają tych pól —
       // wracają wtedy do trybu „z rzutu" i odbudowują aparaty z obwodów, czyli
       // dokładnie tak, jak działały do tej pory.
-      panelDevices: payload.panelDevices || [],
+      // Oznaczenia sprzed konwencji F1…Fn / F0.x — przemianowane raz, przy wczytaniu.
+      ...(() => {
+        const { devices, zmienione } = migrujOznaczenia(payload.panelDevices || [], payload.panelTryb === "reczny" ? "reczny" : "zRzutu");
+        return { panelDevices: devices, oznaczeniaZmigrowane: zmienione };
+      })(),
       panelHidden: payload.panelHidden || [],
       panelTryb: payload.panelTryb === "reczny" ? "reczny" : "zRzutu",
       panelOverrides: payload.panelOverrides || {},
@@ -1289,6 +1302,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     })),
 
   setPanelDevices: (devices) => set({ panelDevices: devices }),
+  zamknijInfoOMigracjiOznaczen: () => set({ oznaczeniaZmigrowane: false }),
   setPanelHidden: (keys) => set({ panelHidden: keys }),
   setPanelTryb: (tryb) => set({ panelTryb: tryb }),
   setPanelOverrides: (o) => set({ panelOverrides: o }),
