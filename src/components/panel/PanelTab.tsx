@@ -711,6 +711,7 @@ export function PanelTab() {
           supply3f={supply3f}
           roznicowki={devices.filter((d) => d.kind === "rcd")}
           zabezpieczenia={devices.filter((d) => RODZAJE_ZABEZPIECZAJACE.includes(d.kind))}
+          styczniki={devices.filter((d) => d.kind === "stycznik")}
         />
 
         <PdfPreview

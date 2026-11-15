@@ -20,6 +20,9 @@ import {
   przemianujAparat,
   rodzicAparatu,
   layoutPanel,
+  opisPowiazanAparatu,
+  POLA_ODWOLAN,
+  stycznikSterowany,
   mapaKluczyStarych,
   mapaOznaczenAutomatu,
   przepnijNadpisania,
@@ -532,7 +535,10 @@ describe("aparaty zasilane szeregowo", () => {
 
     it("CZF bez stycznika -> informacja", () => {
       expect(tytuly([q1, f0, czf])).toContain("Czujnik zaniku fazy bez stycznika");
-      expect(tytuly([q1, f0, czf, ap({ kind: "stycznik", tag: "K2", zasilanyZ: "F0" })])).not.toContain("Czujnik zaniku fazy bez stycznika");
+      // Liczy się WSKAZANY stycznik (pole „Steruje”), nie sama obecność stycznika w rozdzielnicy.
+      const k2 = ap({ kind: "stycznik", tag: "K2", zasilanyZ: "F0" });
+      expect(tytuly([q1, f0, czf, k2])).toContain("Czujnik zaniku fazy bez stycznika");
+      expect(tytuly([q1, f0, { ...czf, steruje: "K2" }, k2])).not.toContain("Czujnik zaniku fazy bez stycznika");
     });
 
     it("ppoż. 4P przy TN-C-S rozłączałby PEN -> ostrzeżenie; przy TN-S nie", () => {
@@ -786,5 +792,34 @@ describe("powiazanieAparatu (legenda PDF, przegląd 15.11.2026 pkt 2)", () => {
     expect(p("P1")).toBe("z F0");
     expect(p("F2")).toBe("bez RCD");
     expect(p("FI1")).toBe("30 mA · typ A");
+  });
+});
+
+describe("powiązanie czujnika zaniku fazy ze stycznikiem (przegląd 15.11.2026 pkt 5)", () => {
+  const a = (tag: string, p: Partial<PanelDevice> = {}): PanelDevice => ({ uid: tag, kind: "mcb", tag, modules: 1, label: "B6", caption: tag, poles: "1P", manual: true, ...p });
+  const f0 = a("F0");
+  const czf = a("K3", { kind: "ovr", zasilanyZ: "F0", steruje: "K1" });
+  const k1 = a("K1", { kind: "stycznik", zasilanyZ: "F5" });
+  const f5 = a("F5", { label: "B16" });
+  const lista = [f0, czf, f5, k1];
+
+  it("opis powiązań: zasilanie szeregowe, steruje, sterowany z", () => {
+    expect(opisPowiazanAparatu(czf, lista)).toEqual(["z F0", "steruje K1"]);
+    expect(opisPowiazanAparatu(k1, lista)).toEqual(["z F5", "sterowany z K3"]);
+    expect(opisPowiazanAparatu(f5, lista)).toEqual([]);
+  });
+
+  it("wskazanie skasowanego stycznika liczy się jak brak", () => {
+    expect(stycznikSterowany(czf, [f0, czf])).toBeUndefined();
+  });
+
+  it("„steruje” idzie za stycznikiem przy zmianie jego oznaczenia i przy ujednolicaniu", () => {
+    expect(POLA_ODWOLAN).toContain("steruje");
+    expect(przemianujAparat(lista, "K1", { tag: "K9" }).find((d) => d.tag === "K3")!.steruje).toBe("K9");
+    const kolizja = [a("K1", { manual: false, key: "x", kind: "stycznik" }), { ...k1, uid: "manual-k1" }, czf];
+    const wynik = ujednolicOznaczenia(kolizja);
+    const nowyK = wynik.find((d) => d.uid === "manual-k1")!.tag;
+    expect(nowyK).not.toBe("K1");
+    expect(wynik.find((d) => d.tag === "K3")!.steruje).toBe(nowyK);
   });
 });

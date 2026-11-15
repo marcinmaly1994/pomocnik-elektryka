@@ -236,9 +236,7 @@ export function ujednolicOznaczenia(devices: PanelDevice[]): PanelDevice[] {
   if (!zmiany.size) return devices;
   return przemianowane.map((d) => {
     if (!d.manual) return d;
-    const zasilanyZ = d.zasilanyZ && zmiany.get(d.zasilanyZ);
-    const rcdTag = d.rcdTag && zmiany.get(d.rcdTag);
-    return zasilanyZ || rcdTag ? { ...d, ...(zasilanyZ ? { zasilanyZ } : {}), ...(rcdTag ? { rcdTag } : {}) } : d;
+    return zamienOdwolania(d, (tag) => zmiany.get(tag));
   });
 }
 
@@ -287,12 +285,33 @@ export function mapaKluczyStarych(circuits: readonly Pick<Circuit, "id">[], rcdG
   return mapa;
 }
 
-/** Odwołania jednego aparatu (`zasilanyZ`, `rcdTag`) po zmianie oznaczeń — jednym krokiem. */
-export function przepnijOdwolania<T extends Pick<PanelDevice, "zasilanyZ" | "rcdTag">>(d: T, mapa: ReadonlyMap<string, string>): T {
-  const zasilanyZ = d.zasilanyZ !== undefined && mapa.has(d.zasilanyZ) ? mapa.get(d.zasilanyZ) : undefined;
-  const rcdTag = d.rcdTag !== undefined && mapa.has(d.rcdTag) ? mapa.get(d.rcdTag) : undefined;
-  if (zasilanyZ === undefined && rcdTag === undefined) return d;
-  return { ...d, ...(zasilanyZ !== undefined ? { zasilanyZ } : {}), ...(rcdTag !== undefined ? { rcdTag } : {}) };
+/**
+ * Pola, w których aparat wskazuje INNY aparat jego oznaczeniem. Jedna lista dla
+ * wszystkich miejsc, które zmieniają oznaczenia (ujednolicanie, przepinanie po
+ * odbudowie, migracja, ręczna zmiana) — dopisanie pola tutaj obejmuje je wszystkie.
+ */
+export const POLA_ODWOLAN = ["zasilanyZ", "rcdTag", "steruje"] as const;
+type Odwolania = Pick<PanelDevice, (typeof POLA_ODWOLAN)[number]>;
+
+/**
+ * Podmienia odwołania aparatu: `nowe(tag)` zwraca nowe oznaczenie albo `undefined`, gdy
+ * to odwołanie zostaje bez zmian („" to też zmiana — odwołanie wyczyszczone). Bez żadnej
+ * zmiany zwraca ten sam obiekt.
+ */
+function zamienOdwolania<T extends Odwolania>(d: T, nowe: (tag: string) => string | undefined): T {
+  let wynik: T | null = null;
+  for (const pole of POLA_ODWOLAN) {
+    const tag = d[pole];
+    if (tag === undefined) continue;
+    const n = nowe(tag);
+    if (n !== undefined && n !== tag) (wynik ??= { ...d })[pole] = n;
+  }
+  return wynik ?? d;
+}
+
+/** Odwołania jednego aparatu po zmianie oznaczeń — jednym krokiem, ze STARYCH oznaczeń. */
+export function przepnijOdwolania<T extends Odwolania>(d: T, mapa: ReadonlyMap<string, string>): T {
+  return zamienOdwolania(d, (tag) => mapa.get(tag));
 }
 
 /** To samo dla zapisanych nadpisań aparatów z automatu; bez zmian zwraca ten sam obiekt. */
@@ -357,11 +376,7 @@ export function migrujOznaczenia(
   }, []);
 
   return {
-    devices: out.map((d) => {
-      const zasilanyZ = d.zasilanyZ ? mapa.get(d.zasilanyZ) : undefined;
-      const rcdTag = d.rcdTag ? mapa.get(d.rcdTag) : undefined;
-      return zasilanyZ || rcdTag ? { ...d, ...(zasilanyZ ? { zasilanyZ } : {}), ...(rcdTag ? { rcdTag } : {}) } : d;
-    }),
+    devices: out.map((d) => zamienOdwolania(d, (tag) => mapa.get(tag))),
     zmienione: true,
   };
 }
@@ -422,9 +437,7 @@ export function przemianujAparat(devices: PanelDevice[], uid: string, zmiany: Pa
   return devices.map((d) => {
     if (d.uid === uid) return { ...d, ...zmiany };
     if (!zmianaTagu) return d;
-    const pod = d.zasilanyZ === stary ? { zasilanyZ: nowy } : {};
-    const rcd = d.rcdTag === stary ? { rcdTag: nowy } : {};
-    return Object.keys(pod).length || Object.keys(rcd).length ? { ...d, ...pod, ...rcd } : d;
+    return zamienOdwolania(d, (tag) => (tag === stary ? nowy : undefined));
   });
 }
 
@@ -490,6 +503,37 @@ export const RODZAJE_POMOCNICZE: readonly string[] = ["spd", "stycznik", "przeka
 export function rodzicAparatu(d: Pick<PanelDevice, "kind" | "zasilanyZ">, devices: readonly PanelDevice[]): PanelDevice | undefined {
   if (!d.zasilanyZ || !RODZAJE_POMOCNICZE.includes(d.kind)) return undefined;
   return devices.find((x) => x.tag === d.zasilanyZ && RODZAJE_ZABEZPIECZAJACE.includes(x.kind));
+}
+
+/** Stycznik, którym steruje czujnik zaniku fazy — albo `undefined` (nie wskazano / skasowany). */
+export function stycznikSterowany(d: Pick<PanelDevice, "kind" | "steruje">, devices: readonly PanelDevice[]): PanelDevice | undefined {
+  if (d.kind !== "ovr" || !d.steruje) return undefined;
+  return devices.find((x) => x.kind === "stycznik" && x.tag === d.steruje);
+}
+
+/** Czujniki sterujące stycznikiem `d` — do opisu „sterowany z” przy styczniku. */
+export function sterujacyStycznikiem(d: PanelDevice, devices: readonly PanelDevice[]): PanelDevice[] {
+  // Po `uid`, nie po tożsamości obiektu: front podaje kopię aparatu z pozycją na szynie.
+  return d.kind === "stycznik" ? devices.filter((x) => stycznikSterowany(x, devices)?.uid === d.uid) : [];
+}
+
+/**
+ * Krótki opis powiązań aparatu do frontu i schematu: „z F12" (zasilany szeregowo),
+ * „steruje K1" (czujnik → stycznik), „sterowany z K3" (stycznik ← czujnik).
+ *
+ * Dotąd „Zasilany z" widać było tylko na schemacie, a powiązania czujnika ze stycznikiem
+ * nie było wcale (przegląd 15.11.2026, pkt 5) — na froncie lampka i CZF wyglądały
+ * jak aparaty wiszące na szynie.
+ */
+export function opisPowiazanAparatu(d: PanelDevice, devices: readonly PanelDevice[]): string[] {
+  const out: string[] = [];
+  const rodzic = rodzicAparatu(d, devices);
+  if (rodzic) out.push(`z ${rodzic.tag}`);
+  const stycznik = stycznikSterowany(d, devices);
+  if (stycznik) out.push(`steruje ${stycznik.tag}`);
+  const czujniki = sterujacyStycznikiem(d, devices);
+  if (czujniki.length) out.push(`sterowany z ${czujniki.map((c) => c.tag).join(", ")}`);
+  return out;
 }
 
 /** Aparaty zasilane szeregowo z `rodzic`, w kolejności listy. */
@@ -843,12 +887,18 @@ export function computeSelectivity(
   }
 
   // 3d. CZF tylko sygnalizuje — odłącza dopiero stycznik albo wyzwalacz, którym steruje
-  const czf = devices.filter((d) => d.kind === "ovr");
-  if (czf.length && !devices.some((d) => d.kind === "stycznik")) {
+  //     Liczy się WSKAZANY stycznik (`steruje`), nie sama jego obecność w rozdzielnicy —
+  //     stycznik oświetlenia obok nie robi z czujnika zabezpieczenia pompy ciepła.
+  const czfBezStycznika = devices.filter((d) => d.kind === "ovr" && !stycznikSterowany(d, devices));
+  if (czfBezStycznika.length) {
+    const sa = devices.some((d) => d.kind === "stycznik");
     out.push({
       level: "info",
       title: "Czujnik zaniku fazy bez stycznika",
-      detail: `${czf.map((d) => d.tag).join(", ")} — czujnik zaniku i asymetrii faz sam niczego nie odłącza: jego przekaźnik wyjściowy steruje stycznikiem albo wyzwalaczem. Bez nich chroni najwyżej sygnalizacją. Dołóż stycznik dla odbiorników 3-fazowych (silniki, pompa ciepła) albo zrezygnuj z czujnika.`,
+      detail: `${czfBezStycznika.map((d) => d.tag).join(", ")} — czujnik zaniku i asymetrii faz sam niczego nie odłącza: jego przekaźnik wyjściowy steruje stycznikiem albo wyzwalaczem. Bez nich chroni najwyżej sygnalizacją. ` +
+        (sa
+          ? "Wskaż stycznik, którym steruje, w polu „Steruje” w edycji czujnika."
+          : "Dołóż stycznik dla odbiorników 3-fazowych (silniki, pompa ciepła) albo zrezygnuj z czujnika."),
     });
   }
 

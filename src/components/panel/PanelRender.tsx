@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
-import { PHASE_COLORS, accentForDevice, daSieSkasowac, klamryRcdWRzedzie, layoutPanel, opisBiegunow, plakietkaRcd, podpisPrzewoduNaFroncie } from "@/lib/panel/devices";
+import { PHASE_COLORS, accentForDevice, daSieSkasowac, klamryRcdWRzedzie, layoutPanel, opisBiegunow, opisPowiazanAparatu, plakietkaRcd, podpisPrzewoduNaFroncie } from "@/lib/panel/devices";
 import { zawijNaDwieLinie } from "@/lib/tekst";
 import type { SizedCircuit } from "@/lib/panel/sizing";
 import type { PanelDevice } from "@/types";
@@ -559,6 +559,24 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
                           {podpisPrzewoduNaFroncie(sized.kabel, d.modules)}
                         </text>
                       )}
+                      {/* Powiązania aparatu pomocniczego — w miejscu podpisu przewodu, którego
+                          taki aparat nie ma. Strzałki zamiast słów, bo pod aparatem na jeden
+                          moduł jest 30 px; pełny opis w dymku. Wcześniej „Zasilany z" było
+                          widać tylko na schemacie (przegląd 15.11.2026, pkt 5). */}
+                      {!sized?.kabel &&
+                        (() => {
+                          const pow = opisPowiazanAparatu(d, devices);
+                          if (!pow.length) return null;
+                          const krotko = pow
+                            .map((t) => t.replace(/^steruje /, "→ ").replace(/^sterowany z /, "← "))
+                            .join(" ");
+                          return (
+                            <text x={w / 2} y={7} textAnchor="middle" fontSize={6.8} fill="#5B6B7E" data-powiazania="">
+                              <title>{pow.join(", ")}</title>
+                              {krotko}
+                            </text>
+                          );
+                        })()}
                       {phase === "3F" ? (
                         // Trzy kropki zamiast jednej: aparat trójfazowy zajmuje wszystkie
                         // fazy, więc pokazujemy komplet kolorów zamiast koloru zbiorczego.
