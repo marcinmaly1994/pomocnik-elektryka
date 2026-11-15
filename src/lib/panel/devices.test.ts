@@ -19,6 +19,10 @@ import {
   przemianujAparat,
   rodzicAparatu,
   layoutPanel,
+  mapaKluczyStarych,
+  mapaOznaczenAutomatu,
+  przepnijNadpisania,
+  przepnijOdwolania,
   migrujOznaczenia,
   MANUAL_DEVICE_TYPES,
   podpisPrzewoduNaFroncie,
@@ -26,6 +30,7 @@ import {
   ratedCurrent,
 } from "./devices";
 import type { Circuit, PanelDevice, RcdGroup } from "@/types";
+import { computeRcdGroups } from "./circuits";
 
 describe("podpisPrzewoduNaFroncie", () => {
   it("wąski aparat (1 moduł) dostaje sam przekrój — pełny podpis zlewał się z sąsiednimi", () => {
@@ -693,5 +698,76 @@ describe("migrujOznaczenia — projekty sprzed konwencji F1…/F0.x", () => {
   it("bez SPD i CZF nic nie robi — numeracja obwodów i tak jest już ciągła", () => {
     const lista = [a("Q1", { kind: "main" }), a("F1"), a("F2")];
     expect(migrujOznaczenia(lista, "reczny")).toEqual({ devices: lista, zmienione: false });
+  });
+});
+
+/*
+ * Przegląd 15.11.2026, pkt 1: aparaty ręczne i nadpisania wskazują aparat z automatu
+ * OZNACZENIEM, a automat numeruje od nowa przy każdej zmianie rzutu.
+ */
+describe("odwołania do aparatów z automatu po odbudowie z rzutu", () => {
+  const obw = (id: string, extra: Partial<Circuit> = {}): Circuit => ({ id, name: id, type: "gniazdko", elements: [], cable: "YDYp 3x2,5 mm²", breaker: "B16", rcd: true, ...extra });
+  const zbuduj = (obwody: Circuit[]) => buildPanelDevices(computeRcdGroups(obwody));
+  const tagObwodu = (lista: PanelDevice[], id: string) => lista.find((d) => d.key === `mcb-${id}`)!.tag;
+
+  it("obwód dołożony przed „F2” — lampka zasilana z niego idzie za SWOIM wyłącznikiem, nie za numerem", () => {
+    const przed = zbuduj([obw("a"), obw("b"), obw("c")]);
+    expect(tagObwodu(przed, "b")).toBe("F2");
+    const lampka: PanelDevice = { uid: "manual-1", manual: true, kind: "lampka", tag: "P1", modules: 1, label: "", caption: "Lampka", poles: "1P", zasilanyZ: "F2" };
+
+    const po = zbuduj([obw("a"), obw("nowy"), obw("b"), obw("c")]);
+    expect(tagObwodu(po, "b")).toBe("F3");
+    const wynik = przepnijOdwolania(lampka, mapaOznaczenAutomatu(przed, po));
+    expect(wynik.zasilanyZ).toBe("F3");
+  });
+
+  it("obwód usunięty z rzutu — odwołanie znika, zamiast przejść na aparat, który przejął numer", () => {
+    const przed = zbuduj([obw("a"), obw("b"), obw("c")]);
+    const po = zbuduj([obw("a"), obw("c")]);
+    const mapa = mapaOznaczenAutomatu(przed, po);
+    expect(przepnijOdwolania({ zasilanyZ: "F2" }, mapa).zasilanyZ).toBe("");
+    expect(przepnijOdwolania({ zasilanyZ: "F3" }, mapa).zasilanyZ).toBe("F2");
+  });
+
+  it("różnicówka typu B ma klucz od obwodu ładowarki — nowa szóstka obwodów nie zmienia jej tożsamości", () => {
+    const ev = obw("ev", { wlasnyRcdTypB: true, breaker: "C20 3-faz." });
+    const szesc = ["a", "b", "c", "d", "e", "f"].map((id) => obw(id));
+    const przed = zbuduj([...szesc, ev]);
+    const po = zbuduj([...szesc, obw("g"), ev]);
+    const rcdEvPrzed = przed.find((d) => d.key === "rcd-rcdB-ev")!;
+    const rcdEvPo = po.find((d) => d.key === "rcd-rcdB-ev")!;
+    expect([rcdEvPrzed.tag, rcdEvPo.tag]).toEqual(["FI2", "FI3"]);
+    // Ręczny obwód „za różnicówką ładowarki” zostaje za nią.
+    expect(przepnijOdwolania({ rcdTag: "FI2" }, mapaOznaczenAutomatu(przed, po)).rcdTag).toBe("FI3");
+  });
+
+  it("nadpisania aparatów z automatu przepinane tak samo; bez zmian — ten sam obiekt", () => {
+    const nadpisania = { "mcb-x": { rcdTag: "FI2" }, "mcb-y": { label: "B10" } };
+    const wynik = przepnijNadpisania(nadpisania, new Map([["FI2", "FI3"]]));
+    expect(wynik).toEqual({ "mcb-x": { rcdTag: "FI3" }, "mcb-y": { label: "B10" } });
+    expect(przepnijNadpisania(nadpisania, new Map([["F9", "F10"]]))).toBe(nadpisania);
+  });
+
+  it("aparaty ręczne nie trafiają do mapy — ich oznaczeń automat nie zmienia", () => {
+    const reczny: PanelDevice = { uid: "manual-1", manual: true, key: "mcb-r", kind: "mcb", tag: "F9", modules: 1, label: "B6", caption: "", poles: "1P" };
+    expect(mapaOznaczenAutomatu([reczny], []).size).toBe(0);
+  });
+});
+
+describe("klucze obwodów — stałe i tłumaczone ze starego formatu", () => {
+  it("mapaKluczyStarych: pozycja N starego `mcb-obwN` → klucz N-tego obwodu; RCD typu B tak samo", () => {
+    const mapa = mapaKluczyStarych(
+      [{ id: "obw-e7" }, { id: "obw-e2" }],
+      [
+        { id: "rcd1", typ: "A" },
+        { id: "rcdB-obw-e9", typ: "B" },
+      ]
+    );
+    expect(Object.fromEntries(mapa)).toEqual({ "mcb-obw1": "mcb-obw-e7", "mcb-obw2": "mcb-obw-e2", "rcd-rcd2": "rcd-rcdB-obw-e9" });
+  });
+
+  it("nowe klucze nie wpadają w stary wzór — tłumaczenie po jednym przejściu się nie powtarza", () => {
+    const mapa = mapaKluczyStarych([{ id: "obw-e7" }], []);
+    expect(mapa.has("mcb-obw-e7")).toBe(false);
   });
 });

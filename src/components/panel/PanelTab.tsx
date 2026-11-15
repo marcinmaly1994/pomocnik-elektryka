@@ -13,6 +13,10 @@ import {
   buildPanelDevices,
   dolozAparatReczny,
   przemianujAparat,
+  mapaKluczyStarych,
+  mapaOznaczenAutomatu,
+  przepnijNadpisania,
+  przepnijOdwolania,
   rezerwaModulow,
   ZALECANA_REZERWA,
   ujednolicOznaczenia,
@@ -239,17 +243,37 @@ export function PanelTab() {
   // z obwodów dotyczy wyłącznie trybu „z rzutu".
   useEffect(() => {
     if (trybReczny) return;
-    setDevices((prev) => {
-      const manual = prev.filter((d) => d.manual);
-      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, mainRating, pradyWgKlucza, przedlicznikowe })
-        .filter((d) => !d.key || !hiddenKeys.includes(d.key))
-        // Ręczne poprawki nakładane na świeżo policzony aparat — inaczej zmiana
-        // nastawy albo opisu znikałaby po każdym elemencie postawionym na planie.
-        .map((d) => (d.key && panelOverrides[d.key] ? { ...d, ...panelOverrides[d.key] } : d));
-      // Kolejność ułożona przez użytkownika przeżywa odbudowę; ręczne aparaty, którym
-      // automat zajął oznaczenie, dostają następne wolne.
-      return ujednolicOznaczenia(zachowajKolejnosc(prev, [...rebuilt, ...manual]));
-    });
+    // Lista sprzed odbudowy wprost ze store, nie z aktualizatora `setDevices`: obok
+    // aparatów trzeba tu zapisać też nadpisania, a efekt uboczny w aktualizatorze
+    // stanu to proszenie się o kłopoty.
+    // Klucze ze starego formatu (`mcb-obw3`) tłumaczone raz, przed czymkolwiek innym —
+    // inaczej poniższe łączenie po kluczu uznałoby każdy stary aparat za usunięty.
+    const stare = mapaKluczyStarych(circuits, rcdGroups);
+    const naNowy = (k: string) => stare.get(k) ?? k;
+    const prev = useProjectStore.getState().panelDevices.map((d) => (d.key && stare.has(d.key) ? { ...d, key: naNowy(d.key) } : d));
+    const ukryte = hiddenKeys.some((k) => stare.has(k)) ? hiddenKeys.map(naNowy) : hiddenKeys;
+    const nadpisaniaWejsciowe = Object.keys(panelOverrides).some((k) => stare.has(k))
+      ? Object.fromEntries(Object.entries(panelOverrides).map(([k, v]) => [naNowy(k), v]))
+      : panelOverrides;
+    const nadpisz = (lista: PanelDevice[], nadpisania: typeof panelOverrides) =>
+      // Ręczne poprawki nakładane na świeżo policzony aparat — inaczej zmiana
+      // nastawy albo opisu znikałaby po każdym elemencie postawionym na planie.
+      lista.map((d) => (d.key && nadpisania[d.key] ? { ...d, ...nadpisania[d.key] } : d));
+    const zbudowane = buildPanelDevices(rcdGroups, { supply3f, mainRating, pradyWgKlucza, przedlicznikowe }).filter(
+      (d) => !d.key || !ukryte.includes(d.key)
+    );
+    // Automat numeruje obwody i różnicówki od nowa — odwołania aparatów ręcznych
+    // i nadpisań idą za aparatem (po kluczu), a nie za numerem, który przejął inny.
+    const mapa = mapaOznaczenAutomatu(prev, nadpisz(zbudowane, nadpisaniaWejsciowe));
+    const nadpisania = przepnijNadpisania(nadpisaniaWejsciowe, mapa);
+    const reczne = prev.filter((d) => d.manual).map((d) => przepnijOdwolania(d, mapa));
+    // Kolejność ułożona przez użytkownika przeżywa odbudowę; ręczne aparaty, którym
+    // automat zajął oznaczenie, dostają następne wolne.
+    setDevices(ujednolicOznaczenia(zachowajKolejnosc(prev, [...nadpisz(zbudowane, nadpisania), ...reczne])));
+    // Zmienione nadpisania uruchomią efekt jeszcze raz — wtedy oznaczenia już się
+    // zgadzają, mapa jest pusta i nic się nie zmienia.
+    if (nadpisania !== panelOverrides) setPanelOverrides(nadpisania);
+    if (ukryte !== hiddenKeys) setHiddenKeys(ukryte);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [circuits, rcdGroups, supply3f, mainRating, przedlicznikowe, trybReczny, panelOverrides, pradyWgKlucza]);
 
@@ -343,8 +367,11 @@ export function PanelTab() {
     // a gdyby to jednak była pomyłka, „Cofnij” przywraca stan sprzed odbudowy.
     setPanelOverrides({});
     setDevices((prev) => {
-      const manual = prev.filter((d) => d.manual);
-      return ujednolicOznaczenia([...buildPanelDevices(rcdGroups, { supply3f, mainRating, przedlicznikowe }), ...manual]);
+      const zbudowane = buildPanelDevices(rcdGroups, { supply3f, mainRating, przedlicznikowe });
+      // Odwołania aparatów ręcznych do aparatów z automatu — po kluczu, jak przy odbudowie.
+      const mapa = mapaOznaczenAutomatu(prev, zbudowane);
+      const manual = prev.filter((d) => d.manual).map((d) => przepnijOdwolania(d, mapa));
+      return ujednolicOznaczenia([...zbudowane, ...manual]);
     });
   }
 

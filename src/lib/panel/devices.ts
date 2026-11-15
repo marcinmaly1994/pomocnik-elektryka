@@ -1,4 +1,4 @@
-import type { PanelConfig, PanelDevice, RcdGroup, UkladSieci } from "@/types";
+import type { Circuit, PanelConfig, PanelDevice, RcdGroup, UkladSieci } from "@/types";
 import { colorForCircuit } from "./circuits";
 import { slowoLiczby, zLiczba } from "@/lib/liczby";
 
@@ -240,6 +240,76 @@ export function ujednolicOznaczenia(devices: PanelDevice[]): PanelDevice[] {
     const rcdTag = d.rcdTag && zmiany.get(d.rcdTag);
     return zasilanyZ || rcdTag ? { ...d, ...(zasilanyZ ? { zasilanyZ } : {}), ...(rcdTag ? { rcdTag } : {}) } : d;
   });
+}
+
+/**
+ * Jak zmieniły się oznaczenia aparatów z automatu przy odbudowie z rzutu: stare → nowe.
+ *
+ * Automat numeruje obwody F1…Fn i różnicówki FI1… od nowa przy każdej zmianie planu,
+ * a aparaty ręczne (`zasilanyZ`, `rcdTag`) i nadpisania wskazują aparat OZNACZENIEM.
+ * Dołożenie obwodu przed F4 sprawiało, że lampka zasilana z „F4" po cichu przechodziła
+ * pod inny wyłącznik (przegląd 15.11.2026, pkt 1). Tożsamość aparatu z automatu to jego
+ * klucz (`mcb-<id obwodu>`, `rcd-<id grupy>`) — po nim łączymy starą listę z nową.
+ *
+ * Aparat, którego już nie ma (obwód usunięty z rzutu, pozycja ukryta), dostaje „" —
+ * odwołanie do niego ma zniknąć, a nie przejść na aparat, który przejął jego numer.
+ */
+export function mapaOznaczenAutomatu(poprzednie: PanelDevice[], nowe: PanelDevice[]): Map<string, string> {
+  const mapa = new Map<string, string>();
+  const nowyPoKluczu = new Map(nowe.filter((d) => !d.manual && d.key).map((d) => [d.key!, d.tag]));
+  for (const d of poprzednie) {
+    if (d.manual || !d.key || !d.tag) continue;
+    const nowy = nowyPoKluczu.get(d.key);
+    if (nowy === undefined) mapa.set(d.tag, "");
+    else if (nowy !== d.tag) mapa.set(d.tag, nowy);
+  }
+  return mapa;
+}
+
+/**
+ * Klucze aparatów zapisane w starym formacie → nowe.
+ *
+ * Do przeglądu 15.11.2026 id obwodu było kolejnym numerem (`obw3`), a id grupy RCD
+ * typu B — kolejnym numerem grupy (`rcd4`). Projekty zapisane wtedy trzymają klucze
+ * `mcb-obw3` i `rcd-rcd4` w liście aparatów, nadpisaniach i ukrytych pozycjach. Rzut się
+ * od zapisu nie zmienił, więc pozycja N wskazuje nadal ten sam obwód — po niej
+ * tłumaczymy. Nowe id (`obw-<element>`, `rcdB-<obwód>`) w stary wzór nie wpadają,
+ * więc mapa po jednym przejściu jest pusta i tłumaczenie się nie powtarza.
+ */
+export function mapaKluczyStarych(circuits: readonly Pick<Circuit, "id">[], rcdGroups: readonly Pick<RcdGroup, "id" | "typ">[]): Map<string, string> {
+  const mapa = new Map<string, string>();
+  circuits.forEach((c, i) => {
+    if (c.id !== `obw${i + 1}`) mapa.set(`mcb-obw${i + 1}`, `mcb-${c.id}`);
+  });
+  rcdGroups.forEach((g, i) => {
+    if (g.typ === "B" && g.id !== `rcd${i + 1}`) mapa.set(`rcd-rcd${i + 1}`, `rcd-${g.id}`);
+  });
+  return mapa;
+}
+
+/** Odwołania jednego aparatu (`zasilanyZ`, `rcdTag`) po zmianie oznaczeń — jednym krokiem. */
+export function przepnijOdwolania<T extends Pick<PanelDevice, "zasilanyZ" | "rcdTag">>(d: T, mapa: ReadonlyMap<string, string>): T {
+  const zasilanyZ = d.zasilanyZ !== undefined && mapa.has(d.zasilanyZ) ? mapa.get(d.zasilanyZ) : undefined;
+  const rcdTag = d.rcdTag !== undefined && mapa.has(d.rcdTag) ? mapa.get(d.rcdTag) : undefined;
+  if (zasilanyZ === undefined && rcdTag === undefined) return d;
+  return { ...d, ...(zasilanyZ !== undefined ? { zasilanyZ } : {}), ...(rcdTag !== undefined ? { rcdTag } : {}) };
+}
+
+/** To samo dla zapisanych nadpisań aparatów z automatu; bez zmian zwraca ten sam obiekt. */
+export function przepnijNadpisania(
+  nadpisania: Record<string, Partial<PanelDevice>>,
+  mapa: ReadonlyMap<string, string>
+): Record<string, Partial<PanelDevice>> {
+  if (!mapa.size) return nadpisania;
+  let zmiana = false;
+  const wynik = Object.fromEntries(
+    Object.entries(nadpisania).map(([k, v]) => {
+      const nowe = przepnijOdwolania(v, mapa);
+      if (nowe !== v) zmiana = true;
+      return [k, nowe];
+    })
+  );
+  return zmiana ? wynik : nadpisania;
 }
 
 /**
