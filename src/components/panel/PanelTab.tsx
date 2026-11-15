@@ -11,6 +11,9 @@ import { ELEMENT_TYPES, NO_ROOM } from "@/lib/elements";
 import {
   balancePhases,
   buildPanelDevices,
+  dolozAparatReczny,
+  przemianujAparat,
+  RODZAJE_ZABEZPIECZAJACE,
   computeSelectivity,
   layoutPanel,
   MANUAL_DEVICE_TYPES,
@@ -347,49 +350,16 @@ export function PanelTab() {
     if (cel && !cel.manual && cel.key) {
       setPanelOverrides({ ...panelOverrides, [cel.key]: { ...panelOverrides[cel.key], ...zmiany } });
     }
-    setDevices((ds) => ds.map((d) => (d.uid === uid ? { ...d, ...zmiany } : d)));
+    setDevices((ds) => przemianujAparat(ds, uid, zmiany));
   }
 
   function addManualDevice() {
     const def = MANUAL_DEVICE_TYPES.find((t) => t.key === addForm.kind);
     if (!def) return;
     commitPanelSnapshot();
-    // SPD, RCD i rozłącznik przeciwpożarowy rozłączają WSZYSTKIE przewody robocze
-    // dochodzące do rozdzielnicy (L+N albo L1L2L3+N) — ich liczba biegunów wynika
-    // z zasilania CAŁEJ rozdzielnicy, dokładnie tym samym wzorem, którym
-    // `buildPanelDevices` liczy rozłącznik główny i automatycznie generowaną
-    // różnicówkę. Katalog trzyma 4P jako domyślny (typowy) wariant 3-fazowy; przy
-    // zasilaniu 1-fazowym trzeba to przeliczyć, inaczej aparat 2-biegunowy dostałby
-    // oznaczenie 4-biegunowego. Reszta katalogu tego nie potrzebuje: pozostałe
-    // zabezpieczenia mają liczbę biegunów wynikającą z SAMEGO OBWODU, który
-    // zabezpieczają (np. RCBO zawsze 1P+N), a nie z zasilania całej rozdzielnicy.
-    const skalowaneBiegunyZeZasilania = def.key === "spd" || def.key === "rcd" || def.key === "ppoz";
-    // Szerokość rośnie razem z biegunami TYLKO tam, gdzie 1 biegun realnie = 1 moduł
-    // (SPD, RCD). Rozłącznik przeciwpożarowy ma kompaktowe warianty 4-biegunowe,
-    // które mieszczą się w tych samych modułach co warianty 2-biegunowe (patrz
-    // komentarz o „SUGEROWANE_MODULY" w EditDeviceModal.tsx) — jego szerokość
-    // zostaje więc katalogową wartością niezależnie od liczby biegunów.
-    const skalowanaSzerokosc = def.key === "spd" || def.key === "rcd";
-    const poles = skalowaneBiegunyZeZasilania ? (supply3f ? "4P" : "2P") : def.poles;
-    const modules = skalowanaSzerokosc ? (supply3f ? 4 : 2) : def.modules;
-    setDevices((prev) => {
-      const used = prev.filter((d) => String(d.tag || "").startsWith(def.prefix)).length;
-      const tag = def.prefix ? `${def.prefix}${used + 1}` : "";
-      return [
-        ...prev,
-        {
-          uid: nextManualUid(prev),
-          kind: def.key,
-          manual: true,
-          tag,
-          modules,
-          label: addForm.label || def.defLabel,
-          caption: addForm.caption || def.label,
-          poles,
-          phase: supply3f && poles === "1P" ? "L1" : supply3f ? "3F" : "L1",
-        },
-      ];
-    });
+    setDevices((prev) =>
+      dolozAparatReczny(prev, def, { uid: nextManualUid(prev), label: addForm.label, caption: addForm.caption }, { supply3f, uklad: ukladSieci })
+    );
   }
 
   /** Wchodzi w tryb ręczny, zaczynając od rozłącznika głównego — pusta szyna
@@ -624,6 +594,7 @@ export function PanelTab() {
           onDelete={removeDevice}
           supply3f={supply3f}
           roznicowki={devices.filter((d) => d.kind === "rcd")}
+          zabezpieczenia={devices.filter((d) => RODZAJE_ZABEZPIECZAJACE.includes(d.kind))}
         />
 
         <PdfPreview

@@ -57,10 +57,32 @@ test("wyłącznik nadprądowy nadal rysuje pełny glif MCB, bez przerywanej ramk
   expect(rects).toBe(0); // glif MCB nie ma prostokątów — same ścieżki i okręgi
 });
 
+/**
+ * Rozłącznik przeciwpożarowy NIE jest odpływem — odcina cały budynek, więc stoi na
+ * dopływie, przed rozdziałem PEN i rozłącznikiem głównym (audyt rozdzielnicy
+ * 15.11.2026, błąd 9). Wcześniej ten test pilnował, żeby trafiał do rzędu obwodów.
+ */
+test("„ppoz” dodany ręcznie trafia na dopływ, nad rozłącznik główny — nie do rzędu obwodów", async ({ page }) => {
+  await zbudujReczniePustaRozdzielnice(page);
+  await dodajReczny(page, "mcb"); // bez odejścia nie ma czego rysować pod szyną
+  await dodajReczny(page, "ppoz");
+
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
+  const svg = page.locator("svg:has(#incoming-supply)");
+  await expect(svg.locator('[id^="circuit-Q"]')).toHaveCount(0);
+  const ppoz = svg.locator("#rozlacznik-ppoz");
+  await expect(ppoz).toHaveCount(1);
+  await expect(ppoz.locator("text").first()).toHaveText("Q2");
+  // Domyślnie TN-C-S: rozłącznik stoi przed rozdziałem PEN, więc rozłącza tylko fazy.
+  await expect(ppoz.locator("text").nth(1)).toHaveText("3P · 63A");
+  const ppozBox = await ppoz.boundingBox();
+  const glownyBox = await svg.locator("#main-switch").boundingBox();
+  expect(ppozBox!.y).toBeLessThan(glownyBox!.y);
+});
+
 for (const [kind, prefix] of [
   ["rcbo", "F"],
   ["ovr", "F"],
-  ["ppoz", "Q"],
   ["przekaznik", "K"],
   ["zasilacz", "T"],
 ]) {
@@ -198,4 +220,23 @@ test("rozłącznik izolacyjny bezpiecznikowy: własny symbol, wariant wg liczby 
   // Reszta geometrii identyczna w obu wariantach — różnica to dokładnie dwie
   // kreski wkładki (3 -> 1).
   expect(sciezek3f - sciezek1f).toBe(2);
+});
+
+/**
+ * Bezpiecznik pod SPD stoi SZEREGOWO nad ogranicznikiem, w jego kolumnie — nie jako
+ * osobny obwód obok, równolegle, gdzie nie chroniłby niczego (audyt rozdzielnicy
+ * 15.11.2026, błąd 5). Dołożony przy SPD bez pary łączy się z nim sam.
+ */
+test("bezpiecznik pod SPD rysuje się nad ogranicznikiem, nie jako osobny obwód", async ({ page }) => {
+  await zbudujReczniePustaRozdzielnice(page);
+  await dodajReczny(page, "spd");
+  await dodajReczny(page, "spdFuse");
+
+  await page.getByRole("button", { name: "Schemat", exact: true }).click();
+  const svg = page.locator("svg:has(#incoming-supply)");
+  await expect(svg.locator('[id^="circuit-"]')).toHaveCount(0);
+  const bezpiecznik = svg.locator("#spd #spd-bezpiecznik");
+  await expect(bezpiecznik).toHaveCount(1);
+  // 3 tory przy zasilaniu 3-fazowym, nie jedna wkładka.
+  await expect(bezpiecznik.locator("text").nth(1)).toHaveText("3P · gG 63A");
 });

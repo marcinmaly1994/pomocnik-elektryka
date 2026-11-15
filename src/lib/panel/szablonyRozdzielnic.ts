@@ -34,38 +34,50 @@ export interface SzablonRozdzielnicy {
   nazwa: string;
   opis: string;
   config: PanelConfig;
-  /** Aparaty zaraz za rozłącznikiem głównym (SPD, CZF…) — klucze `MANUAL_DEVICE_TYPES`. */
+  /** Aparaty zaraz za rozłącznikiem głównym (SPD…) — klucze `MANUAL_DEVICE_TYPES`. */
   naPoczatku: { kind: string; label?: string }[];
   grupy: GrupaSzablonu[];
 }
 
 const g = (label: string, caption: string, extra: Partial<ObwodSzablonu> = {}): ObwodSzablonu => ({ label, caption, ...extra });
 
+/*
+ * Podział obwodów na różnicówki: oświetlenie i gniazda TEGO SAMEGO pomieszczenia stoją
+ * pod RÓŻNYMI różnicówkami. Zadziałanie jednej nie zostawia wtedy pokoju bez prądu
+ * i bez światła naraz — jest czym poświecić, szukając przyczyny (audyt rozdzielnicy
+ * 15.11.2026, pkt 8). Wcześniej całe oświetlenie domu stało za jedną różnicówką.
+ *
+ * Bez czujnika zaniku fazy: sam niczego nie odłącza, a typowy dom nie ma stycznika,
+ * którym mógłby sterować. Dokłada się go razem ze stycznikiem dla odbiorników
+ * 3-fazowych, kiedy jest potrzebny.
+ */
 export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
   {
     id: "mieszkanie",
     nazwa: "Mieszkanie",
-    opis: "3-fazowe 40 A, 2 różnicówki: pokoje oraz kuchnia z łazienką; płyta indukcyjna 3-fazowa.",
+    opis: "3-fazowe, 2 różnicówki — światło i gniazda tych samych pomieszczeń na różnych; SPD typu 2; płyta indukcyjna 3-fazowa.",
     config: { supply3f: true, mainRating: 40, perRow: 18, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
-    naPoczatku: [{ kind: "spd", label: "T1+T2" }],
+    // Typ 2, nie 1+2: ogranicznik typu 1 stoi zwykle w rozdzielnicy głównej budynku
+    // (przy złączu), a w mieszkaniu wystarcza drugi stopień ochrony.
+    naPoczatku: [{ kind: "spd", label: "T2" }],
     grupy: [
       {
         rcd: { prad: 40, czulosc: 30, typ: "A" },
         obwody: [
-          g("B10", "Oświetlenie — pokoje", { cable: "YDYp 3×1,5" }),
           g("B10", "Oświetlenie — kuchnia, łazienka, przedpokój", { cable: "YDYp 3×1,5" }),
           g("B16", "Gniazda — salon", { cable: "YDYp 3×2,5" }),
           g("B16", "Gniazda — sypialnia, pokój", { cable: "YDYp 3×2,5" }),
-          g("B16", "Gniazda — przedpokój", { cable: "YDYp 3×2,5" }),
+          g("B16", "Pralka", { cable: "YDYp 3×2,5" }),
+          g("B16", "Zmywarka", { cable: "YDYp 3×2,5" }),
         ],
       },
       {
         rcd: { prad: 40, czulosc: 30, typ: "A" },
         obwody: [
+          g("B10", "Oświetlenie — pokoje", { cable: "YDYp 3×1,5" }),
+          g("B16", "Gniazda — przedpokój", { cable: "YDYp 3×2,5" }),
           g("B16", "Gniazda — kuchnia, blat", { cable: "YDYp 3×2,5" }),
           g("B16", "Gniazda — łazienka", { cable: "YDYp 3×2,5" }),
-          g("B16", "Pralka", { cable: "YDYp 3×2,5" }),
-          g("B16", "Zmywarka", { cable: "YDYp 3×2,5" }),
           g("B16", "Piekarnik", { cable: "YDYp 3×2,5" }),
           g("B16", "Płyta indukcyjna", { poles: "3P", cable: "YDYp 5×2,5" }),
         ],
@@ -75,9 +87,9 @@ export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
   {
     id: "dom",
     nazwa: "Dom jednorodzinny",
-    opis: "3-fazowe 63 A, SPD, czujnik zaniku fazy, 3 różnicówki: oświetlenie, gniazda, kuchnia i łazienki.",
+    opis: "3-fazowe, SPD, 3 różnicówki — światło i gniazda tego samego piętra na różnych; osobna dla kuchni i łazienek.",
     config: { supply3f: true, mainRating: 63, perRow: 18, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
-    naPoczatku: [{ kind: "spd", label: "T1+T2" }, { kind: "ovr", label: "CZF" }],
+    naPoczatku: [{ kind: "spd", label: "T1+T2" }],
     grupy: domGrupy(),
   },
   {
@@ -85,7 +97,7 @@ export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
     nazwa: "Dom z fotowoltaiką",
     opis: "Jak dom jednorodzinny plus obwód falownika PV 3-fazowego, bez różnicówki po stronie AC (wg instrukcji falownika).",
     config: { supply3f: true, mainRating: 63, perRow: 18, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
-    naPoczatku: [{ kind: "spd", label: "T1+T2" }, { kind: "ovr", label: "CZF" }],
+    naPoczatku: [{ kind: "spd", label: "T1+T2" }],
     grupy: [...domGrupy(), { obwody: [g("C20", "Falownik PV", { poles: "3P", cable: "YDYp 5×4" })] }],
   },
   {
@@ -93,7 +105,7 @@ export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
     nazwa: "Dom z fotowoltaiką i ładowarką EV",
     opis: "Jak dom z PV plus ładowarka 11 kW na osobnej różnicówce typu B (typ A wystarczy tylko przy ładowarce z detekcją 6 mA DC).",
     config: { supply3f: true, mainRating: 63, perRow: 24, przedlicznikowe: 32, ukladSieci: "TN-C-S" },
-    naPoczatku: [{ kind: "spd", label: "T1+T2" }, { kind: "ovr", label: "CZF" }],
+    naPoczatku: [{ kind: "spd", label: "T1+T2" }],
     grupy: [
       ...domGrupy(),
       { obwody: [g("C20", "Falownik PV", { poles: "3P", cable: "YDYp 5×4" })] },
@@ -108,26 +120,26 @@ export const SZABLONY_ROZDZIELNIC: SzablonRozdzielnicy[] = [
 function domGrupy(): GrupaSzablonu[] {
   return [
     {
+      // Gniazda parteru + światło piętra.
       rcd: { prad: 63, czulosc: 30, typ: "A" },
       obwody: [
-        g("B10", "Oświetlenie — parter", { cable: "YDYp 3×1,5" }),
         g("B10", "Oświetlenie — piętro", { cable: "YDYp 3×1,5" }),
-        g("B10", "Oświetlenie zewnętrzne", { cable: "YDYp 3×1,5" }),
+        g("B16", "Gniazda — salon", { cable: "YDYp 3×2,5" }),
+        g("B16", "Gniazda — pokoje parter", { cable: "YDYp 3×2,5" }),
+        g("B16", "Gniazda — garaż", { cable: "YDYp 3×2,5" }),
+        g("B16", "Gniazdo 400 V — garaż", { poles: "3P", cable: "YDYp 5×2,5" }),
         g("B10", "Rolety", { cable: "YDYp 3×1,5" }),
-        // Tu, nie przy kuchni: tam byłby siódmy obwód za jedną różnicówką, a od siedmiu
-        // `computeSelectivity` ostrzega o zbyt wielu obwodach wyłączanych naraz.
-        g("B16", "Kocioł / pompa ciepła — sterowanie", { cable: "YDYp 3×2,5" }),
       ],
     },
     {
+      // Gniazda piętra + światło parteru i zewnętrzne.
       rcd: { prad: 63, czulosc: 30, typ: "A" },
       obwody: [
-        g("B16", "Gniazda — salon", { cable: "YDYp 3×2,5" }),
-        g("B16", "Gniazda — pokoje parter", { cable: "YDYp 3×2,5" }),
+        g("B10", "Oświetlenie — parter", { cable: "YDYp 3×1,5" }),
+        g("B10", "Oświetlenie zewnętrzne", { cable: "YDYp 3×1,5" }),
         g("B16", "Gniazda — pokoje piętro", { cable: "YDYp 3×2,5" }),
-        g("B16", "Gniazda — garaż", { cable: "YDYp 3×2,5" }),
         g("B16", "Gniazda zewnętrzne", { cable: "YDYp 3×2,5" }),
-        g("B16", "Gniazdo 400 V — garaż", { poles: "3P", cable: "YDYp 5×2,5" }),
+        g("B16", "Kocioł / pompa ciepła — sterowanie", { cable: "YDYp 3×2,5" }),
       ],
     },
     {

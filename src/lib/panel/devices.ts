@@ -90,6 +90,90 @@ export const MANUAL_DEVICE_TYPES: ManualDeviceType[] = [
   { key: "blank", label: "Rezerwa (zaślepka)", prefix: "", modules: 1, poles: "—", defLabel: "", accent: "#94A3B8", ratings: [""] },
 ];
 
+/**
+ * Dokłada aparat z katalogu na koniec listy — liczba biegunów, szerokość, faza i
+ * połączenie szeregowe tam, gdzie wynikają z reszty rozdzielnicy.
+ *
+ * SPD i RCD rozłączają / obejmują WSZYSTKIE przewody robocze dochodzące do rozdzielnicy
+ * (L+N albo L1L2L3+N), więc ich bieguny i szerokość idą z zasilania, tym samym wzorem,
+ * którym `buildPanelDevices` liczy rozłącznik główny i różnicówki z automatu.
+ *
+ * Rozłącznik przeciwpożarowy stoi na dopływie: przy TN-C-S przed rozdziałem PEN, więc
+ * rozłącza tylko fazy (PEN-u rozłączać nie wolno); w TN-S i TT — fazy i N. Szerokość
+ * zostaje katalogowa — kompaktowe warianty 4P mieszczą się w 2 modułach.
+ *
+ * Bezpiecznik pod SPD musi mieć tyle torów, ile SPD ma przewodów fazowych — przy
+ * zasilaniu 3-fazowym trzy wkładki, nie jedna (audyt rozdzielnicy 15.11.2026, błąd 5).
+ * Bezpiecznik i SPD bez pary łączą się ze sobą od razu: obok siebie, równolegle,
+ * bezpiecznik nie chroniłby niczego.
+ */
+export function dolozAparatReczny(
+  prev: PanelDevice[],
+  def: ManualDeviceType,
+  pola: { uid: string; label?: string; caption?: string },
+  zasilanie: { supply3f: boolean; uklad: UkladSieci }
+): PanelDevice[] {
+  const { supply3f, uklad } = zasilanie;
+  let poles = def.poles;
+  let modules = def.modules;
+  if (def.key === "spd" || def.key === "rcd") {
+    poles = supply3f ? "4P" : "2P";
+    modules = supply3f ? 4 : 2;
+  } else if (def.key === "ppoz") {
+    poles = uklad === "TN-C-S" ? (supply3f ? "3P" : "1P") : supply3f ? "4P" : "2P";
+  } else if (def.key === "spdFuse") {
+    poles = supply3f ? "3P" : "1P";
+    modules = supply3f ? 3 : 1;
+  }
+
+  const used = prev.filter((d) => String(d.tag || "").startsWith(def.prefix)).length;
+  const tag = def.prefix ? `${def.prefix}${used + 1}` : "";
+  const nowy: PanelDevice = {
+    uid: pola.uid,
+    kind: def.key,
+    manual: true,
+    tag,
+    modules,
+    label: pola.label || def.defLabel,
+    caption: pola.caption || def.label,
+    poles,
+    phase: supply3f && poles === "1P" ? "L1" : supply3f ? "3F" : "L1",
+  };
+
+  // Para SPD ↔ bezpiecznik: nowy aparat łączy się z pierwszym, który pary jeszcze nie ma.
+  if (def.key === "spdFuse") {
+    const spdBezBezpiecznika = prev.find((d) => d.kind === "spd" && !rodzicAparatu(d, prev));
+    if (spdBezBezpiecznika) {
+      return [...prev.map((d) => (d === spdBezBezpiecznika ? { ...d, zasilanyZ: tag } : d)), nowy];
+    }
+  }
+  if (def.key === "spd") {
+    const wolnyBezpiecznik = prev.find((d) => d.kind === "spdFuse" && !prev.some((s) => s.kind === "spd" && rodzicAparatu(s, prev) === d));
+    if (wolnyBezpiecznik) nowy.zasilanyZ = wolnyBezpiecznik.tag;
+  }
+  return [...prev, nowy];
+}
+
+/**
+ * Zapisuje zmiany jednego aparatu — a gdy zmienia się jego OZNACZENIE, przenosi na nowe
+ * wszystkie odwołania innych aparatów: `zasilanyZ` (aparaty szeregowo pod nim) i `rcdTag`
+ * (obwody pod różnicówką). Bez tego zmiana „F12" na „F0" odpinała lampkę od wyłącznika,
+ * a „FI1" na „FI-1" wyrzucała obwody spod różnicówki — po cichu, bo oba pola trzymają
+ * oznaczenie, nie identyfikator.
+ */
+export function przemianujAparat(devices: PanelDevice[], uid: string, zmiany: Partial<PanelDevice>): PanelDevice[] {
+  const stary = devices.find((d) => d.uid === uid)?.tag;
+  const nowy = zmiany.tag;
+  const zmianaTagu = !!stary && !!nowy && nowy !== stary;
+  return devices.map((d) => {
+    if (d.uid === uid) return { ...d, ...zmiany };
+    if (!zmianaTagu) return d;
+    const pod = d.zasilanyZ === stary ? { zasilanyZ: nowy } : {};
+    const rcd = d.rcdTag === stary ? { rcdTag: nowy } : {};
+    return Object.keys(pod).length || Object.keys(rcd).length ? { ...d, ...pod, ...rcd } : d;
+  });
+}
+
 /** Kolor akcentu na widoku czołowym — dla auto-generowanych MCB wg typu obwodu
  *  (ten sam kolor co na schemacie jednokreskowym), dla reszty aparatów wg rodzaju.
  *  Przeniesione z logiki wyliczania `accent` w komponencie `PanelDevice` w wersji JS. */
@@ -128,7 +212,35 @@ export function accentForDevice(d: PanelDevice): string {
  * gdy jest co narysować — sam rozłącznik główny to jeszcze nie schemat.
  */
 export function jestOdplywem(d: Pick<PanelDevice, "kind">): boolean {
-  return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank" && d.kind !== "lampka";
+  // Rozłącznik przeciwpożarowy też nie: odcina CAŁY budynek, więc stoi na dopływie przed
+  // rozłącznikiem głównym (patrz `RozlacznikPpoz` w SchemaTab), a nie jako jeden z odpływów.
+  return d.kind !== "main" && d.kind !== "spd" && d.kind !== "rcd" && d.kind !== "blank" && d.kind !== "lampka" && d.kind !== "ppoz";
+}
+
+/** Aparaty, które mogą zasilać inny aparat szeregowo — mają człon zabezpieczający. */
+export const RODZAJE_ZABEZPIECZAJACE: readonly string[] = ["mcb", "rcbo", "spdFuse", "rozBezp"];
+/**
+ * Aparaty, które same nie zabezpieczają obwodu i powinny stać ZA zabezpieczeniem:
+ * SPD za bezpiecznikiem (gdy jego wytrzymałość zwarciowa tego wymaga), stycznik
+ * i przekaźnik za wyłącznikiem obwodu, który łączą, zasilacz, lampka i CZF za
+ * własnym wyłącznikiem lub bezpiecznikiem (audyt rozdzielnicy 15.11.2026, błędy 5 i 7).
+ */
+export const RODZAJE_POMOCNICZE: readonly string[] = ["spd", "stycznik", "przekaznik", "zasilacz", "lampka", "ovr"];
+
+/**
+ * Aparat, z którego `d` jest zasilany szeregowo — albo `undefined`, gdy stoi wprost na
+ * szynie głównej. Wskazanie aparatu, którego już nie ma (skasowany) albo który niczego
+ * nie zabezpiecza, liczy się jak brak: rysunek nie może podpiąć aparatu pod coś, co
+ * nie istnieje, a reguły mają to zgłosić.
+ */
+export function rodzicAparatu(d: Pick<PanelDevice, "kind" | "zasilanyZ">, devices: readonly PanelDevice[]): PanelDevice | undefined {
+  if (!d.zasilanyZ || !RODZAJE_POMOCNICZE.includes(d.kind)) return undefined;
+  return devices.find((x) => x.tag === d.zasilanyZ && RODZAJE_ZABEZPIECZAJACE.includes(x.kind));
+}
+
+/** Aparaty zasilane szeregowo z `rodzic`, w kolejności listy. */
+export function dzieciAparatu(rodzic: PanelDevice, devices: readonly PanelDevice[]): PanelDevice[] {
+  return devices.filter((d) => rodzicAparatu(d, devices) === rodzic);
 }
 
 /**
@@ -392,7 +504,14 @@ export function computeSelectivity(
     // daje wyłącznie 30 mA — nie podnosimy alarmu o czymś, czego nie da się odczytać.
     return rcd !== undefined && (Number.isNaN(ma) || ma <= 30);
   };
-  const bez30mA = mcbs.filter((d) => !czulosc30(rcds.find((r) => r.tag === d.rcdTag)));
+  /** Wyłącznik, który zasila wyłącznie aparaty w rozdzielnicy (lampka, CZF, zasilacz,
+   *  SPD) — nie ma obwodu odbiorczego, więc wymóg 30 mA go nie dotyczy. Stycznik czy
+   *  przekaźnik pod nim to już obwód odbiorczy, tylko łączony. */
+  const tylkoAparatyWRozdzielnicy = (d: PanelDevice) => {
+    const dzieci = dzieciAparatu(d, devices);
+    return dzieci.length > 0 && dzieci.every((x) => ["lampka", "ovr", "zasilacz", "spd"].includes(x.kind));
+  };
+  const bez30mA = mcbs.filter((d) => !czulosc30(rcds.find((r) => r.tag === d.rcdTag)) && !tylkoAparatyWRozdzielnicy(d));
   if (bez30mA.length) {
     out.push({
       level: uklad === "TT" ? "error" : "warn",
@@ -402,6 +521,48 @@ export function computeSelectivity(
         (uklad === "TT"
           ? " W układzie TT samoczynne wyłączenie zasilania praktycznie zawsze wymaga wyłącznika różnicowoprądowego — wyłącznik nadprądowy sam nie zadziała przy dużej rezystancji uziomu."
           : ""),
+    });
+  }
+
+  // 3b. aparaty pomocnicze muszą stać za zabezpieczeniem — inaczej przewody sterownicze
+  //     (zwykle 1–1,5 mm²) wiszą wprost na szynie chronionej dopiero przedlicznikowym
+  const bezZabezpieczenia = devices.filter((d) => RODZAJE_POMOCNICZE.includes(d.kind) && d.kind !== "spd" && !rodzicAparatu(d, devices));
+  if (bezZabezpieczenia.length) {
+    out.push({
+      level: "warn",
+      title: "Aparaty pomocnicze bez zabezpieczenia",
+      detail: `${bezZabezpieczenia.map((d) => `${d.tag} (${d.caption})`).join(", ")} — stoją wprost na szynie głównej, a jedynym zabezpieczeniem ich przewodów jest przedlicznikowe ${przedlicznikowe} A. Lampkę, czujnik zaniku fazy i zasilacz zasil przez własny wyłącznik (np. B6) albo bezpiecznik; stycznik i przekaźnik stoją za wyłącznikiem obwodu, który łączą. Wskaż to w polu „Zasilany z” w edycji aparatu.`,
+    });
+  }
+
+  // 3c. bezpiecznik pod SPD ma sens tylko szeregowo PRZED ogranicznikiem
+  const spdy = devices.filter((d) => d.kind === "spd");
+  const bezpiecznikiBezSpd = devices.filter((d) => d.kind === "spdFuse" && !spdy.some((s) => rodzicAparatu(s, devices) === d));
+  if (bezpiecznikiBezSpd.length) {
+    out.push({
+      level: "warn",
+      title: "Bezpiecznik pod SPD nie jest połączony z ogranicznikiem",
+      detail: `${bezpiecznikiBezSpd.map((d) => d.tag).join(", ")} — bezpiecznik ogranicznika przepięć stoi szeregowo przed SPD i chroni jego przewody przy zwarciu wewnątrz ogranicznika. Obok SPD, równolegle, nie chroni niczego. ${spdy.length ? "Wskaż go w polu „Zasilany z” w edycji ogranicznika." : "W rozdzielnicy nie ma ogranicznika przepięć."}`,
+    });
+  }
+
+  // 3d. CZF tylko sygnalizuje — odłącza dopiero stycznik albo wyzwalacz, którym steruje
+  const czf = devices.filter((d) => d.kind === "ovr");
+  if (czf.length && !devices.some((d) => d.kind === "stycznik")) {
+    out.push({
+      level: "info",
+      title: "Czujnik zaniku fazy bez stycznika",
+      detail: `${czf.map((d) => d.tag).join(", ")} — czujnik zaniku i asymetrii faz sam niczego nie odłącza: jego przekaźnik wyjściowy steruje stycznikiem albo wyzwalaczem. Bez nich chroni najwyżej sygnalizacją. Dołóż stycznik dla odbiorników 3-fazowych (silniki, pompa ciepła) albo zrezygnuj z czujnika.`,
+    });
+  }
+
+  // 3e. rozłącznik ppoż. przed rozdziałem PEN nie może rozłączać PEN
+  const ppozZPen = uklad === "TN-C-S" ? devices.filter((d) => d.kind === "ppoz" && (d.poles === "4P" || d.poles === "2P")) : [];
+  if (ppozZPen.length) {
+    out.push({
+      level: "warn",
+      title: "Rozłącznik przeciwpożarowy rozłączałby PEN",
+      detail: `${ppozZPen.map((d) => `${d.tag} (${d.poles})`).join(", ")} — rozłącznik przeciwpożarowy stoi na dopływie, przed rozdziałem PEN, a przewodu PEN nie wolno rozłączać. Przy układzie TN-C-S zastosuj wariant ${supply3f ? "3P" : "1P"} (tylko przewody fazowe) albo przenieś rozdział PEN przed rozłącznik.`,
     });
   }
 

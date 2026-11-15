@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MANUAL_DEVICE_TYPES, daSieSkasowac, jestOdplywem } from "@/lib/panel/devices";
+import { MANUAL_DEVICE_TYPES, RODZAJE_POMOCNICZE, daSieSkasowac, jestOdplywem } from "@/lib/panel/devices";
 import type { PanelDevice } from "@/types";
 
 /**
@@ -43,6 +43,11 @@ export interface EditDeviceModalProps {
    * o tym nie mówił (audyt rozdzielnicy 15.11.2026, błąd 6).
    */
   roznicowki?: Pick<PanelDevice, "tag" | "label" | "caption">[];
+  /**
+   * Aparaty zabezpieczające (wyłączniki, bezpieczniki), z których aparat pomocniczy może
+   * być zasilany szeregowo — patrz `PanelDevice.zasilanyZ`.
+   */
+  zabezpieczenia?: Pick<PanelDevice, "tag" | "label" | "caption" | "kind">[];
 }
 
 const BIEGUNY = ["1P", "1P+N", "2P", "3P", "3P+N", "4P", "—"];
@@ -60,7 +65,7 @@ const SUGEROWANE_MODULY: Partial<Record<string, number>> = {
 };
 const FAZY = ["L1", "L2", "L3", "3F"] as const;
 
-export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, roznicowki = [] }: EditDeviceModalProps) {
+export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, roznicowki = [], zabezpieczenia = [] }: EditDeviceModalProps) {
   const [tag, setTag] = useState("");
   const [caption, setCaption] = useState("");
   const [label, setLabel] = useState("");
@@ -68,6 +73,7 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, r
   const [modules, setModules] = useState(1);
   const [phase, setPhase] = useState<string>("");
   const [rcdTag, setRcdTag] = useState("");
+  const [zasilanyZ, setZasilanyZ] = useState("");
 
   // Formularz zasilany od nowa przy KAŻDYM otwarciu — inaczej po zamknięciu bez zapisu
   // i otwarciu innego aparatu w polach siedziałyby dane poprzedniego.
@@ -80,14 +86,20 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, r
     setModules(device.modules ?? 1);
     setPhase(device.phase ?? "");
     setRcdTag(device.rcdTag ?? "");
+    setZasilanyZ(device.zasilanyZ ?? "");
   }, [device]);
 
   if (!device) return null;
 
   const katalog = MANUAL_DEVICE_TYPES.find((t) => t.key === device.kind);
   const podpowiedzi = katalog?.ratings.filter(Boolean) ?? [];
-  /** RCBO ma własny człon różnicowy — nie stoi za różnicówką, więc wyboru nie dostaje. */
-  const wyborRcd = jestOdplywem(device) && device.kind !== "rcbo";
+  /** Aparat pomocniczy (SPD, stycznik, lampka, CZF…) — wybiera, spod czego jest zasilany. */
+  const wyborZasilania = RODZAJE_POMOCNICZE.includes(device.kind);
+  const mozliweZrodla = zabezpieczenia.filter((z) => z.tag !== device.tag);
+  const zasilanyZIstnieje = mozliweZrodla.some((z) => z.tag === zasilanyZ);
+  /** RCBO ma własny człon różnicowy — nie stoi za różnicówką, więc wyboru nie dostaje.
+   *  Aparat zasilany szeregowo też nie: stoi tam, gdzie jego zabezpieczenie. */
+  const wyborRcd = jestOdplywem(device) && device.kind !== "rcbo" && !(wyborZasilania && zasilanyZIstnieje);
   /** Wskazanie różnicówki, której już nie ma (skasowana) — pokazujemy je jako takie. */
   const rcdZniknal = !!device.rcdTag && !roznicowki.some((r) => r.tag === device.rcdTag);
   const zapisz = () => {
@@ -102,6 +114,7 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, r
       // nadpisania zapisywanego w JSON-ie, a `undefined` by z niego wypadło — po
       // odświeżeniu obwód wróciłby pod różnicówkę, z której go zdjęto.
       ...(wyborRcd ? { rcdTag } : {}),
+      ...(wyborZasilania ? { zasilanyZ } : {}),
     });
     onClose();
   };
@@ -198,6 +211,28 @@ export function EditDeviceModal({ device, onClose, onSave, onDelete, supply3f, r
             </label>
           )}
         </div>
+
+        {wyborZasilania && (
+          <label className="mt-3 block">
+            <div className="mb-1 text-xs text-slate-500">Zasilany z</div>
+            <select value={zasilanyZ} onChange={(e) => setZasilanyZ(e.target.value)} className="pe-input pe-select w-full text-base md:text-sm" aria-label="Zasilany z">
+              {zasilanyZ && !zasilanyZIstnieje && <option value={zasilanyZ}>{zasilanyZ} — nie ma go już w rozdzielnicy</option>}
+              {mozliweZrodla.map((z) => (
+                <option key={z.tag} value={z.tag}>
+                  {z.tag} — {z.label} {z.caption}
+                </option>
+              ))}
+              <option value="">{device.kind === "spd" ? "bez bezpiecznika — wprost z szyny głównej" : "wprost z szyny głównej (bez zabezpieczenia)"}</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              {device.kind === "spd"
+                ? "Bezpiecznik pod SPD stoi szeregowo przed ogranicznikiem — potrzebny, gdy zabezpieczenie nadrzędne przekracza wartość dopuszczoną w karcie katalogowej SPD."
+                : device.kind === "stycznik" || device.kind === "przekaznik"
+                  ? "Wyłącznik obwodu, który ten aparat łączy — stoi szeregowo za nim."
+                  : "Własne zabezpieczenie aparatu, np. wyłącznik B6 albo bezpiecznik."}
+            </p>
+          </label>
+        )}
 
         {wyborRcd && (
           <label className="mt-3 block">

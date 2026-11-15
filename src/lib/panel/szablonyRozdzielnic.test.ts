@@ -60,3 +60,24 @@ describe("gotowe układy rozdzielnic", () => {
     expect(aparaty.find((a) => a.caption === "Falownik PV")!.rcdTag).toBeUndefined();
   });
 });
+
+describe("gotowe układy — podział na różnicówki", () => {
+  it("żaden nie ma czujnika zaniku fazy bez stycznika", () => {
+    for (const s of SZABLONY_ROZDZIELNIC) {
+      const aparaty = aparatyZSzablonu(s);
+      if (aparaty.some((a) => a.kind === "ovr")) expect(aparaty.some((a) => a.kind === "stycznik"), s.nazwa).toBe(true);
+    }
+  });
+
+  it("oświetlenie nie stoi w całości za jedną różnicówką", () => {
+    for (const s of SZABLONY_ROZDZIELNIC) {
+      const swiatlo = aparatyZSzablonu(s).filter((a) => a.caption.startsWith("Oświetlenie"));
+      expect(new Set(swiatlo.map((a) => a.rcdTag)).size, s.nazwa).toBeGreaterThan(1);
+    }
+  });
+
+  it("mieszkanie ma SPD typu 2 — typ 1 stoi w rozdzielnicy głównej budynku", () => {
+    const spd = aparatyZSzablonu(SZABLONY_ROZDZIELNIC.find((s) => s.id === "mieszkanie")!).find((a) => a.kind === "spd")!;
+    expect(spd.label).toBe("T2");
+  });
+});
