@@ -271,8 +271,130 @@ const BEZPIECZNIK: GlyphSpec = {
   ),
 };
 
+/*
+ * Symbole aparatów pomocniczych — rysowane wprost w siatce 0–100 (jak bezpiecznik
+ * i lampka), wg konwencji IEC 60617: styk zwierny w pozycji otwartej z kwalifikatorem
+ * funkcji na styku stałym albo prostokąt z oznaczeniem wielkości. Wcześniej wszystkie
+ * dostawały zastępczą przerywaną ramkę (przegląd 15.11.2026, pkt 3).
+ *
+ * Wspólny styk: doprowadzenie 0–34, ruchome ostrze od dołu (50,70) odchylone w lewo
+ * do (36,36), wyprowadzenie 70–100 — ta sama geometria co ostrze rozłącznika głównego.
+ */
+const styk = () => (
+  <>
+    <path d="M50 0L50 34" />
+    <path d="M50 70L35 37" />
+    <path d="M50 70L50 100" />
+  </>
+);
+
+/** Stycznik — styk z półokręgiem na styku stałym (kwalifikator funkcji stycznika). */
+const STYCZNIK: GlyphSpec = {
+  axisX: 50,
+  topY: 0,
+  bottomY: 100,
+  rightX: 58,
+  Paths: () => (
+    <GlyphGroup>
+      {styk()}
+      <path d="M42 34A8 8 0 0 0 58 34" />
+    </GlyphGroup>
+  ),
+};
+
+/**
+ * Przekaźnik (bistabilny) — styk sterowany cewką: prostokąt cewki z boku, połączony
+ * z ostrzem linią przerywaną (sprzężenie mechaniczne), jak wyzwalacz przy RCD.
+ */
+const PRZEKAZNIK: GlyphSpec = {
+  axisX: 50,
+  topY: 0,
+  bottomY: 100,
+  rightX: 50,
+  Paths: () => (
+    <GlyphGroup>
+      {styk()}
+      <rect x="6" y="44" width="18" height="12" />
+      <path d="M24 50L41 50" strokeDasharray="3 3" />
+    </GlyphGroup>
+  ),
+};
+
+/** Zasilacz (przekształtnik AC/DC) — kwadrat z przekątną, „~" na wejściu i „=" na wyjściu. */
+const ZASILACZ: GlyphSpec = {
+  axisX: 50,
+  topY: 0,
+  bottomY: 100,
+  rightX: 70,
+  Paths: () => (
+    <GlyphGroup>
+      <path d="M50 0L50 30" />
+      <rect x="30" y="30" width="40" height="40" />
+      <path d="M30 70L70 30" />
+      <path d="M35 41Q38.5 36 42 41T49 41" />
+      <path d="M53 59L64 59" />
+      <path d="M53 64L64 64" />
+      <path d="M50 70L50 100" />
+    </GlyphGroup>
+  ),
+};
+
+/**
+ * Czujnik zaniku i asymetrii faz — przekaźnik pomiarowy: prostokąt z wielkością
+ * mierzoną „U<" (zanik napięcia). Nie łączy obwodu, więc bez styku na torze.
+ */
+const CZF: GlyphSpec = {
+  axisX: 50,
+  topY: 0,
+  bottomY: 100,
+  rightX: 70,
+  Paths: () => (
+    <GlyphGroup>
+      <path d="M50 0L50 30" />
+      <rect x="30" y="30" width="40" height="40" />
+      <text x="50" y="56" textAnchor="middle" fontSize="17" fontWeight={700} fill={STROKE} stroke="none">
+        U&lt;
+      </text>
+      <path d="M50 70L50 100" />
+    </GlyphGroup>
+  ),
+};
+
+/**
+ * RCBO — wyłącznik nadprądowy (symbol MCB z jego wyzwalaczem) z członem różnicowym:
+ * przekładnik toroidalny na wyprowadzeniu i sprzężenie przerywane do wyzwalacza.
+ *
+ * Wcześniej RCBO dostawał symbol różnicówki i na schemacie nie dało się go odróżnić od
+ * RCD (przegląd 15.11.2026, pkt 4). Geometria MCB bez zmian; dochodzi wyprowadzenie
+ * w dół z przekładnikiem, więc `bottomY` sięga niżej niż w MCB.
+ */
+const RCBO: GlyphSpec = {
+  axisX: 281.47,
+  topY: 253.58,
+  bottomY: 392,
+  rightX: 325.08,
+  Paths: () => (
+    <GlyphGroup>
+      <MCB.Paths />
+      <path d="M281.47 354.99L281.47 392" />
+      {/* przekładnik toroidalny — owal na wyprowadzeniu */}
+      <path d="M267 366L296 366" />
+      <path d="M267 378L296 378" />
+      <path d="M267 366A6 6 0 0 0 267 378" />
+      <path d="M296 378A6 6 0 0 0 296 366" />
+      {/* sprzężenie przekładnika z wyzwalaczem — linia przerywana */}
+      <path d="M302 372L312 372L312 352" strokeDasharray="4 3" />
+    </GlyphGroup>
+  ),
+};
+
 export const GLYPHS = {
   bezpiecznik: BEZPIECZNIK,
+  stycznik: STYCZNIK,
+  przekaznik: PRZEKAZNIK,
+  zasilacz: ZASILACZ,
+  czf: CZF,
+  rcbo: RCBO,
   mcb: MCB,
   main: MAIN_SWITCH,
   spd: SPD,
