@@ -253,7 +253,26 @@ const LAMPKA: GlyphSpec = {
   ),
 };
 
+/**
+ * Bezpiecznik — prostokąt z przewodem przechodzącym przez całą jego długość (IEC 60617,
+ * symbol bezpiecznika topikowego). Do bezpiecznika pod ogranicznikiem przepięć; siatka
+ * 0–100 jak `GENERIC` i `LAMPKA`, rysowana wprost, nie z pliku CAD.
+ */
+const BEZPIECZNIK: GlyphSpec = {
+  axisX: 50,
+  topY: 0,
+  bottomY: 100,
+  rightX: 58,
+  Paths: () => (
+    <GlyphGroup>
+      <path d="M50 0L50 100" />
+      <rect x="42" y="30" width="16" height="40" />
+    </GlyphGroup>
+  ),
+};
+
 export const GLYPHS = {
+  bezpiecznik: BEZPIECZNIK,
   mcb: MCB,
   main: MAIN_SWITCH,
   spd: SPD,

@@ -10,11 +10,11 @@ import { resolveDocHeader } from "@/lib/docHeader";
 import { PdfPreview } from "@/components/ui/PdfPreview";
 import { Button } from "@/components/ui/button";
 import { CadGlyph } from "./CadGlyph";
-import { GLYPHS, labelOffset } from "./deviceGlyphs";
+import { GLYPHS, labelOffset, type GlyphSpec } from "./deviceGlyphs";
 import { LINE_W, STROKE } from "./glyphyOprawa";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, pradyWgKluczaAparatu } from "@/lib/panel/project";
-import { aparatyDoWidoku, buildPanelDevices, czuloscITypRcd, jestOdplywem, opisBiegunow, PHASE_COLORS, zasilanieRozdzielnicy } from "@/lib/panel/devices";
+import { aparatyDoWidoku, buildPanelDevices, czuloscITypRcd, dzieciAparatu, jestOdplywem, opisBiegunow, PHASE_COLORS, rodzicAparatu, zasilanieRozdzielnicy } from "@/lib/panel/devices";
 import { zLiczba } from "@/lib/liczby";
 import type { PanelDevice, UkladSieci } from "@/types";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
@@ -34,65 +34,34 @@ const RISER_X = 46;
  *  biegnie pion PE z symbolem uziemienia. */
 const LEFT_X = MARGIN_X + 40;
 
-// Siatka pionowa schematu — jedna wspólna skala dla wszystkich gałęzi, żeby aparaty
-// tego samego rzędu (np. wszystkie RCD, wszystkie wyłączniki obwodów) leżały na tej
-// samej wysokości niezależnie od tego, ile mają obwodów czy jak długie mają opisy.
-//
-// Wysokości gniazd na aparaty (MAIN_H/BRANCH_H/MCB_H) są dobrane pod symbole CAD
-// użytkownika: to one, a nie odwrotnie, wyznaczają skalę rysunku, bo rozciągnięte na
-// zbyt małą wysokość gubiłyby czytelność detali (przekładnik RCD, strzałka SPD).
-// Oznaczenie faz stoi nad grotem zasilania, więc siatka zaczyna się od niego,
+// Opis zasilania stoi nad grotem zasilania, więc siatka zaczyna się od niego,
 // a nie od samej strzałki — inaczej napis wychodziłby poza górną krawędź rysunku.
 const Y_PHASES = 11;
 /** Druga linia opisu zasilania: zabezpieczenie przedlicznikowe w złączu. */
 const Y_PRZEDL = 23;
 const Y_ARROW = 30;
-/** Wysokość rozdziału PEN i głównej szyny uziemiającej — PRZED rozłącznikiem głównym. */
-const Y_SPLIT = Y_ARROW + 24;
-const Y_SWITCH_TOP = Y_ARROW + 42;
 const MAIN_H = 60;
-const Y_SWITCH_BOT = Y_SWITCH_TOP + MAIN_H;
-const Y_BUS = Y_SWITCH_BOT + 26;
 const BRANCH_H = 110;
 const SPD_H = 84;
-const Y_SUBBUS = Y_BUS + BRANCH_H;
-const Y_MCB_TOP = Y_SUBBUS + 20;
 const MCB_H = 26;
-const Y_MCB_BOTTOM = Y_MCB_TOP + MCB_H;
-// Szyny ochronna i neutralna — poziome przewody wspólne dla wszystkich odejść,
-// przecinające je pod wyłącznikami (jak na rysunku referencyjnym od użytkownika).
-// Przewód obwodu musi kończyć się PONIŻEJ obu, inaczej wyglądałby na urwany nad nimi.
-const Y_N_BUS = Y_MCB_BOTTOM + 26;
-const Y_PE_BUS = Y_N_BUS + 12;
-const Y_WIRE_END = Y_PE_BUS + 10;
-const Y_TERMINAL_TEXT = Y_WIRE_END + 14;
-// Pod symbolem SPD schodzi przewód do szyny PE — nie jest częścią pliku użytkownika,
-// bo należy do topologii schematu, a nie do samego aparatu.
-const Y_SPD_BOTTOM = Y_BUS + SPD_H;
-// Lampka sygnalizacyjna stoi w TYM SAMYM rzędzie co RCD/SPD (odejście wprost z szyny
-// głównej), nie w rzędzie wyłączników obwodowych — stąd własna wysokość zaczepiona o
-// Y_BUS, a nie o Y_SUBBUS. W odróżnieniu od SPD i zwykłych obwodów układ KOŃCZY SIĘ
-// na symbolu — bez przewodu do szyn N/PE i bez odczepu PE (patrz `circuitXs`): to sam
-// obwód zasilający lampkę ma je zapewnić, nie schemat rozdzielnicy. Wysokość liczona
-// tak, żeby okrąg wyszedł tej samej wielkości co przy pudełku SPD (`SPD_H`), ale bez
-// pustego marginesu pod nim — glif lampki (patrz `GLYPHS.lampka`) kończy się na
-// dolnej krawędzi okręgu (66/100 wysokości źródłowej), nie na umownej siatce 0–100.
+/** Gniazdo aparatu odpływowego — od szyny podrzędnej (doprowadzenie) do dołu symbolu. */
+const LEAF_GLYPH_H = 20 + MCB_H;
+/** Bezpiecznik nad ogranicznikiem przepięć — patrz `SpdBranch`. */
+const SPD_FUSE_H = 40;
+// Lampka sygnalizacyjna stojąca wprost na szynie głównej ma własną wysokość — tak, żeby
+// okrąg wyszedł tej samej wielkości co przy pudełku SPD (`SPD_H`), ale bez pustego
+// marginesu pod nim: glif lampki (patrz `GLYPHS.lampka`) kończy się na dolnej krawędzi
+// okręgu (66/100 wysokości źródłowej), nie na umownej siatce 0–100.
 const LAMPKA_H = Math.round((SPD_H * 66) / 100);
-const Y_LAMPKA_BOTTOM = Y_BUS + LAMPKA_H;
 
-const MCB_LABEL_DX = labelOffset(GLYPHS.mcb, Y_SUBBUS, Y_MCB_BOTTOM);
-// Odsunięcie etykiety przy symbolu zastępczym (GLYPHS.generic) — liczone osobno, bo ta
-// ramka jest węższa niż glif MCB, więc ten sam MCB_LABEL_DX zostawiałby zbędną pustkę.
-const GENERIC_LABEL_DX = labelOffset(GLYPHS.generic, Y_SUBBUS, Y_MCB_BOTTOM);
-// Rozłącznik izolacyjny bezpiecznikowy — jeden wspólny odsuw dla obu wariantów
-// (3-fazowego i 1-fazowego): różni je tylko liczba kresek wkładki wewnątrz, oś i
-// najdalej wysunięty w prawo punkt (`rightX`) są identyczne w obu plikach źródłowych.
-const ROZBEZP_LABEL_DX = labelOffset(GLYPHS.rozBezp3f, Y_SUBBUS, Y_MCB_BOTTOM);
+/** O ile rośnie rysunek, gdy na dopływie stoi rozłącznik przeciwpożarowy. */
+const DY_PPOZ = 60;
+/** O ile rośnie rysunek, gdy pod którymś zabezpieczeniem stoi aparat szeregowo. */
+const DY_SZEREG = 8 + LEAF_GLYPH_H;
 
-// Tabela odpływów końcowych pod schematem — tylko obwody (nie W1/SPD/RCD), każda
-// komórka dokładnie pod swoją gałęzią powyżej (te same współrzędne x co CircuitBranch).
+// Tabela odpływów końcowych pod schematem — każda komórka dokładnie pod swoją gałęzią
+// powyżej (te same współrzędne x co CircuitBranch).
 const TABLE_GAP = 24;
-const TABLE_TOP = Y_TERMINAL_TEXT + TABLE_GAP;
 const TABLE_TAG_H = 18;
 // Wiersz nazwy jest wyższy, bo mieści dwie linie — nazwy obwodów bywają długie
 // („Obwód dedykowany — Kuchnia (zmywarka)”), a przy jednej linii ucięcie zjadało
@@ -104,12 +73,70 @@ const TABLE_NAME_H = 26;
 // się szuka. Rozdziałem 1-fazowych na L1/L2/L3 zajmuje się `balancePhases`, więc bez
 // tego wiersza wynik bilansowania nie był na schemacie widoczny w ogóle.
 const TABLE_PHASE_H = 15;
-const TABLE_MID = TABLE_TOP + TABLE_TAG_H;
-const TABLE_PHASE_BOTTOM = TABLE_MID + TABLE_PHASE_H;
-const TABLE_BOTTOM = TABLE_PHASE_BOTTOM + TABLE_NAME_H;
-/** Uwaga o szynach N pod tabelą — patrz `UwagiSchematu`. */
-const Y_UWAGI = TABLE_BOTTOM + 18;
-const SCHEMA_HEIGHT = Y_UWAGI + 12;
+
+/**
+ * Siatka pionowa schematu — jedna wspólna skala dla wszystkich gałęzi, żeby aparaty
+ * tego samego rzędu (np. wszystkie RCD, wszystkie wyłączniki obwodów) leżały na tej
+ * samej wysokości niezależnie od tego, ile mają obwodów czy jak długie mają opisy.
+ *
+ * Wysokości gniazd na aparaty (MAIN_H/BRANCH_H/MCB_H) są dobrane pod symbole CAD
+ * użytkownika: to one, a nie odwrotnie, wyznaczają skalę rysunku, bo rozciągnięte na
+ * zbyt małą wysokość gubiłyby czytelność detali (przekładnik RCD, strzałka SPD).
+ *
+ * Funkcja, nie stałe: dwa rzędy pojawiają się tylko wtedy, gdy jest co w nich narysować —
+ * rozłącznik przeciwpożarowy na dopływie (`ppoz`) i aparaty zasilane szeregowo spod
+ * wyłącznika obwodu (`szeregowe`, np. stycznik, lampka za B6). Bez nich rysunek ma
+ * dokładnie tę samą geometrię co wcześniej.
+ */
+function siatka(ppoz: boolean, szeregowe: boolean) {
+  const g = ppoz ? DY_PPOZ : 0;
+  const sz = szeregowe ? DY_SZEREG : 0;
+  const Y_PPOZ_TOP = Y_ARROW + 14;
+  const Y_PPOZ_BOT = Y_PPOZ_TOP + 42;
+  /** Rozdział PEN i główna szyna uziemiająca — PRZED rozłącznikiem głównym. */
+  const Y_SPLIT = Y_ARROW + 24 + g;
+  const Y_SWITCH_TOP = Y_ARROW + 42 + g;
+  const Y_SWITCH_BOT = Y_SWITCH_TOP + MAIN_H;
+  const Y_BUS = Y_SWITCH_BOT + 26;
+  const Y_SUBBUS = Y_BUS + BRANCH_H;
+  const Y_MCB_TOP = Y_SUBBUS + 20;
+  const Y_MCB_BOTTOM = Y_MCB_TOP + MCB_H;
+  /** Rząd aparatów szeregowych: szynka pod zabezpieczeniem i dół symbolu aparatu. */
+  const Y_SER_TOP = Y_MCB_BOTTOM + 8;
+  const Y_SER_BOTTOM = Y_SER_TOP + LEAF_GLYPH_H;
+  // Szyny ochronna i neutralna — poziome przewody przecinające odejścia pod aparatami.
+  // Przewód obwodu musi kończyć się PONIŻEJ obu, inaczej wyglądałby na urwany nad nimi.
+  const Y_N_BUS = Y_MCB_BOTTOM + 26 + sz;
+  const Y_PE_BUS = Y_N_BUS + 12;
+  const Y_WIRE_END = Y_PE_BUS + 10;
+  const Y_TERMINAL_TEXT = Y_WIRE_END + 14;
+  const Y_SPD_BOTTOM = Y_BUS + SPD_H;
+  const Y_LAMPKA_BOTTOM = Y_BUS + LAMPKA_H;
+  const TABLE_TOP = Y_TERMINAL_TEXT + TABLE_GAP;
+  const TABLE_MID = TABLE_TOP + TABLE_TAG_H;
+  const TABLE_PHASE_BOTTOM = TABLE_MID + TABLE_PHASE_H;
+  const TABLE_BOTTOM = TABLE_PHASE_BOTTOM + TABLE_NAME_H;
+  /** Uwaga o szynach N pod tabelą — patrz `UwagiSchematu`. */
+  const Y_UWAGI = TABLE_BOTTOM + 18;
+  const SCHEMA_HEIGHT = Y_UWAGI + 12;
+  return {
+    Y_PPOZ_TOP, Y_PPOZ_BOT, Y_SPLIT, Y_SWITCH_TOP, Y_SWITCH_BOT, Y_BUS, Y_SUBBUS, Y_MCB_TOP, Y_MCB_BOTTOM,
+    Y_SER_TOP, Y_SER_BOTTOM, Y_N_BUS, Y_PE_BUS, Y_WIRE_END, Y_TERMINAL_TEXT, Y_SPD_BOTTOM, Y_LAMPKA_BOTTOM,
+    TABLE_TOP, TABLE_MID, TABLE_PHASE_BOTTOM, TABLE_BOTTOM, Y_UWAGI, SCHEMA_HEIGHT,
+  };
+}
+type Siatka = ReturnType<typeof siatka>;
+
+const MCB_LABEL_DX = labelOffset(GLYPHS.mcb, 0, LEAF_GLYPH_H);
+// Odsunięcie etykiety przy symbolu zastępczym (GLYPHS.generic) — liczone osobno, bo ta
+// ramka jest węższa niż glif MCB, więc ten sam MCB_LABEL_DX zostawiałby zbędną pustkę.
+const GENERIC_LABEL_DX = labelOffset(GLYPHS.generic, 0, LEAF_GLYPH_H);
+// Rozłącznik izolacyjny bezpiecznikowy — jeden wspólny odsuw dla obu wariantów
+// (3-fazowego i 1-fazowego): różni je tylko liczba kresek wkładki wewnątrz, oś i
+// najdalej wysunięty w prawo punkt (`rightX`) są identyczne w obu plikach źródłowych.
+const ROZBEZP_LABEL_DX = labelOffset(GLYPHS.rozBezp3f, 0, LEAF_GLYPH_H);
+const LAMPKA_LABEL_DX = labelOffset(GLYPHS.lampka, 0, LEAF_GLYPH_H);
+const BEZPIECZNIK_LABEL_DX = labelOffset(GLYPHS.bezpiecznik, 0, LEAF_GLYPH_H);
 
 /** Ile znaków mieści się w jednej linii komórki tabeli. Szerokość znaku (4,3 px dla
  *  `fontSize=8`) zmierzona przez `getComputedTextLength()` na realnych nazwach obwodów —
@@ -172,7 +199,30 @@ function opisDoplywu(supply3f: boolean, uklad: UkladSieci): string {
  * rozłącznika. Zabezpieczenie przedlicznikowe stoi w złączu, poza rozdzielnicą — ale to
  * ono chroni wszystko poniżej, więc schemat bez niego nie mówi, co chroni Q1 i różnicówki.
  */
-function IncomingSupply({ x, supply3f, uklad, przedlicznikowe }: { x: number; supply3f: boolean; uklad: UkladSieci; przedlicznikowe: number }) {
+function IncomingSupply({
+  x,
+  supply3f,
+  uklad,
+  przedlicznikowe,
+  ppoz,
+  s,
+}: {
+  x: number;
+  supply3f: boolean;
+  uklad: UkladSieci;
+  przedlicznikowe: number;
+  /** Czy na dopływie stoi rozłącznik przeciwpożarowy — wtedy przewód ma w nim przerwę. */
+  ppoz: boolean;
+  s: Siatka;
+}) {
+  // Przewód przerwany na wysokości rozłącznika ppoż.: jego symbol rysuje własne
+  // doprowadzenia, a ciągła kreska pod otwartym stykiem czytałaby się jak styk zwarty.
+  const odcinki = ppoz
+    ? [
+        [Y_ARROW + 9, s.Y_PPOZ_TOP],
+        [s.Y_PPOZ_BOT, s.Y_SWITCH_TOP],
+      ]
+    : [[Y_ARROW + 9, s.Y_SWITCH_TOP]];
   return (
     <g id="incoming-supply">
       <text x={x} y={Y_PHASES} fontSize={9.5} textAnchor="middle" fill={STROKE}>
@@ -182,7 +232,36 @@ function IncomingSupply({ x, supply3f, uklad, przedlicznikowe }: { x: number; su
         {`zabezpieczenie przedlicznikowe ${przedlicznikowe} A (w złączu)`}
       </text>
       <polygon points={`${x - 4},${Y_ARROW} ${x + 4},${Y_ARROW} ${x},${Y_ARROW + 9}`} fill={STROKE} />
-      <line x1={x} y1={Y_ARROW + 9} x2={x} y2={Y_SWITCH_TOP} stroke={STROKE} strokeWidth={LINE_W} />
+      {odcinki.map(([y1, y2]) => (
+        <line key={y1} x1={x} y1={y1} x2={x} y2={y2} stroke={STROKE} strokeWidth={LINE_W} />
+      ))}
+    </g>
+  );
+}
+
+/**
+ * Rozłącznik przeciwpożarowy (przeciwpożarowy wyłącznik prądu) — NA DOPŁYWIE, przed
+ * rozdziałem PEN i rozłącznikiem głównym.
+ *
+ * Odcina zasilanie całego budynku, więc nie jest odpływem rozdzielnicy. Wcześniej stał
+ * w rzędzie wyłączników obwodów, jak jeden z odbiorników (audyt rozdzielnicy
+ * 15.11.2026, błąd 9). W praktyce siedzi zwykle w złączu albo tuż przy wejściu
+ * przewodu do budynku — stąd dopisek pod opisem.
+ */
+function RozlacznikPpoz({ x, device, s }: { x: number; device: PanelDevice; s: Siatka }) {
+  const dx = labelOffset(GLYPHS.main, s.Y_PPOZ_TOP, s.Y_PPOZ_BOT, 16);
+  return (
+    <g id="rozlacznik-ppoz">
+      <CadGlyph spec={GLYPHS.main} x={x} top={s.Y_PPOZ_TOP} bottom={s.Y_PPOZ_BOT} />
+      <text x={x + dx} y={s.Y_PPOZ_TOP + 12} fontSize={10.5} fontWeight={700} fill={STROKE}>
+        {device.tag}
+      </text>
+      <text x={x + dx} y={s.Y_PPOZ_TOP + 24} fontSize={9} fill={STROKE}>
+        {opisZBiegunami(device)}
+      </text>
+      <text x={x + dx} y={s.Y_PPOZ_TOP + 35} fontSize={8} fill={MUTED}>
+        przeciwpożarowy wyłącznik prądu (złącze / wejście do budynku)
+      </text>
     </g>
   );
 }
@@ -208,16 +287,16 @@ function Uziemienie({ x, y }: { x: number; y: number }) {
  * - TN-S: PE dochodzi osobnym przewodem (PEN rozdzielono wcześniej, np. w złączu).
  * - TT: PE wyłącznie z własnego uziomu — bez żadnego połączenia z przewodem zasilającym.
  */
-function ZrodloPe({ mainX, uklad }: { mainX: number; uklad: UkladSieci }) {
+function ZrodloPe({ mainX, uklad, s }: { mainX: number; uklad: UkladSieci; s: Siatka }) {
   const xZiemi = RISER_X - 18;
   return (
     <g id="zrodlo-pe" data-uklad={uklad}>
       {uklad === "TN-C-S" && (
         <g id="rozdzial-pen">
-          <line x1={mainX} y1={Y_SPLIT} x2={RISER_X} y2={Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} />
-          <circle cx={mainX} cy={Y_SPLIT} r={2.4} fill={STROKE} />
+          <line x1={mainX} y1={s.Y_SPLIT} x2={RISER_X} y2={s.Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} />
+          <circle cx={mainX} cy={s.Y_SPLIT} r={2.4} fill={STROKE} />
           {/* Opis przy KROPCE rozdziału, nie przy GSU — tam, gdzie PEN przestaje być PEN-em. */}
-          <text x={mainX - 6} y={Y_SPLIT - 4} fontSize={8} textAnchor="end" fill={MUTED}>
+          <text x={mainX - 6} y={s.Y_SPLIT - 4} fontSize={8} textAnchor="end" fill={MUTED}>
             rozdział PEN → PE + N
           </text>
         </g>
@@ -228,38 +307,38 @@ function ZrodloPe({ mainX, uklad }: { mainX: number; uklad: UkladSieci }) {
             PE
           </text>
           <polygon points={`${RISER_X - 4},${Y_ARROW} ${RISER_X + 4},${Y_ARROW} ${RISER_X},${Y_ARROW + 9}`} fill={STROKE} />
-          <line x1={RISER_X} y1={Y_ARROW + 9} x2={RISER_X} y2={Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
+          <line x1={RISER_X} y1={Y_ARROW + 9} x2={RISER_X} y2={s.Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
         </g>
       )}
       {/* GSU z uziomem — kropka węzła, odejście w lewo do symbolu uziemienia. */}
-      <circle cx={RISER_X} cy={Y_SPLIT} r={2.4} fill={STROKE} />
-      <line x1={RISER_X} y1={Y_SPLIT} x2={xZiemi} y2={Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} />
-      <Uziemienie x={xZiemi} y={Y_SPLIT} />
-      <text x={RISER_X + 5} y={Y_SPLIT + 12} fontSize={8.5} fontWeight={700} fill={STROKE}>
+      <circle cx={RISER_X} cy={s.Y_SPLIT} r={2.4} fill={STROKE} />
+      <line x1={RISER_X} y1={s.Y_SPLIT} x2={xZiemi} y2={s.Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} />
+      <Uziemienie x={xZiemi} y={s.Y_SPLIT} />
+      <text x={RISER_X + 5} y={s.Y_SPLIT + 12} fontSize={8.5} fontWeight={700} fill={STROKE}>
         GSU
       </text>
-      <text x={RISER_X + 5} y={Y_SPLIT + 22} fontSize={7.5} fill={MUTED}>
+      <text x={RISER_X + 5} y={s.Y_SPLIT + 22} fontSize={7.5} fill={MUTED}>
         {uklad === "TT" ? "uziom odbiorcy" : "uziom, połączenia wyrównawcze"}
       </text>
       {/* Pion PE do szyny PE na dole — kreską przerywaną jak sama szyna. */}
-      <line x1={RISER_X} y1={Y_SPLIT} x2={RISER_X} y2={Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
+      <line x1={RISER_X} y1={s.Y_SPLIT} x2={RISER_X} y2={s.Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
     </g>
   );
 }
 
 /** Rozłącznik izolacyjny główny — symbol wgrany przez użytkownika (Q1.svg), z opisem obok. */
-function MainSwitch({ x, device }: { x: number; device: PanelDevice }) {
-  const dx = labelOffset(GLYPHS.main, Y_SWITCH_TOP, Y_SWITCH_BOT, 16);
+function MainSwitch({ x, device, s }: { x: number; device: PanelDevice; s: Siatka }) {
+  const dx = labelOffset(GLYPHS.main, s.Y_SWITCH_TOP, s.Y_SWITCH_BOT, 16);
   return (
     <g id="main-switch">
-      <CadGlyph spec={GLYPHS.main} x={x} top={Y_SWITCH_TOP} bottom={Y_SWITCH_BOT} />
-      <text x={x + dx} y={Y_SWITCH_TOP + 9} fontSize={11.5} fontWeight={700} fill={STROKE}>
+      <CadGlyph spec={GLYPHS.main} x={x} top={s.Y_SWITCH_TOP} bottom={s.Y_SWITCH_BOT} />
+      <text x={x + dx} y={s.Y_SWITCH_TOP + 9} fontSize={11.5} fontWeight={700} fill={STROKE}>
         {device.tag}
       </text>
-      <text x={x + dx} y={Y_SWITCH_TOP + 22} fontSize={10} fill={STROKE}>
+      <text x={x + dx} y={s.Y_SWITCH_TOP + 22} fontSize={10} fill={STROKE}>
         {opisZBiegunami(device)}
       </text>
-      <text x={x + dx} y={Y_SWITCH_TOP + 34} fontSize={8.5} fill={MUTED}>
+      <text x={x + dx} y={s.Y_SWITCH_TOP + 34} fontSize={8.5} fill={MUTED}>
         {truncate(device.caption, 28)}
       </text>
     </g>
@@ -273,27 +352,49 @@ function MainSwitch({ x, device }: { x: number; device: PanelDevice }) {
  * się jak osobny uziom pod ogranicznik. SPD łączy się z PE/GSU tej samej instalacji,
  * możliwie najkrócej (audyt rozdzielnicy 15.11.2026, błąd 4).
  */
-function SpdBranch({ col, device }: { col: Column; device: PanelDevice }) {
+function SpdBranch({ col, device, bezpiecznik, s }: { col: Column; device: PanelDevice; bezpiecznik?: PanelDevice; s: Siatka }) {
   const x = col.cx;
-  const dx = labelOffset(GLYPHS.spd, Y_BUS, Y_SPD_BOTTOM);
+  /**
+   * Bezpiecznik pod SPD — SZEREGOWO nad ogranicznikiem, na tym samym przewodzie.
+   * Wcześniej stał w rzędzie obwodów, obok SPD, czyli równolegle — tam nie chroni
+   * niczego (audyt rozdzielnicy 15.11.2026, błąd 5). Ogranicznik schodzi wtedy niżej
+   * o wysokość bezpiecznika; szyna PE jest daleko pod nim, więc miejsca nie brakuje.
+   */
+  const dy = bezpiecznik ? SPD_FUSE_H : 0;
+  const top = s.Y_BUS + dy;
+  const bottom = s.Y_SPD_BOTTOM + dy;
+  const dx = labelOffset(GLYPHS.spd, top, bottom);
+  const specB = bezpiecznik?.kind === "rozBezp" ? (bezpiecznik.poles === "3P" ? GLYPHS.rozBezp3f : GLYPHS.rozBezp1f) : GLYPHS.bezpiecznik;
+  const dxB = labelOffset(specB, s.Y_BUS, s.Y_BUS + SPD_FUSE_H, 8);
   return (
     <g id="spd">
-      <CadGlyph spec={GLYPHS.spd} x={x} top={Y_BUS} bottom={Y_SPD_BOTTOM} />
-      <line data-spd-pe="" x1={x} y1={Y_SPD_BOTTOM} x2={x} y2={Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
-      <circle cx={x} cy={Y_PE_BUS} r={2} fill={STROKE} />
+      {bezpiecznik && (
+        <g id="spd-bezpiecznik">
+          <CadGlyph spec={specB} x={x} top={s.Y_BUS} bottom={s.Y_BUS + SPD_FUSE_H} />
+          <text x={x + dxB} y={s.Y_BUS + 18} fontSize={9.5} fontWeight={700} fill={STROKE}>
+            {bezpiecznik.tag}
+          </text>
+          <text x={x + dxB} y={s.Y_BUS + 29} fontSize={8.5} fill={MUTED}>
+            {opisZBiegunami(bezpiecznik)}
+          </text>
+        </g>
+      )}
+      <CadGlyph spec={GLYPHS.spd} x={x} top={top} bottom={bottom} />
+      <line data-spd-pe="" x1={x} y1={bottom} x2={x} y2={s.Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
+      <circle cx={x} cy={s.Y_PE_BUS} r={2} fill={STROKE} />
 
-      <text x={x + dx} y={Y_BUS + 44} fontSize={10.5} fontWeight={700} fill={STROKE}>
+      <text x={x + dx} y={top + 44} fontSize={10.5} fontWeight={700} fill={STROKE}>
         {device.tag}
       </text>
-      <text x={x + dx} y={Y_BUS + 56} fontSize={9} fill={MUTED}>
+      <text x={x + dx} y={top + 56} fontSize={9} fill={MUTED}>
         {opisZBiegunami(device)}
       </text>
       {/* Długość przewodów przyłączeniowych SPD — zalecenie PN-HD 60364-5-53: im dłuższe,
           tym wyższy poziom ochrony, jaki realnie dociera do instalacji. */}
-      <text x={x + dx} y={Y_BUS + 68} fontSize={8} fill={MUTED}>
+      <text x={x + dx} y={top + 68} fontSize={8} fill={MUTED}>
         do PE
       </text>
-      <text x={x + dx} y={Y_BUS + 78} fontSize={8} fill={MUTED}>
+      <text x={x + dx} y={top + 78} fontSize={8} fill={MUTED}>
         przewody ≤ 0,5 m
       </text>
     </g>
@@ -306,16 +407,16 @@ function SpdBranch({ col, device }: { col: Column; device: PanelDevice }) {
  * Układ KOŃCZY SIĘ na symbolu — bez przewodu do szyn N/PE (w odróżnieniu od zwykłego
  * odbiornika jednofazowego czy SPD, które mają swoje uziemienie narysowane wprost).
  */
-function LampkaBranch({ col, device }: { col: Column; device: PanelDevice }) {
+function LampkaBranch({ col, device, s }: { col: Column; device: PanelDevice; s: Siatka }) {
   const x = col.cx;
-  const dx = labelOffset(GLYPHS.lampka, Y_BUS, Y_LAMPKA_BOTTOM);
+  const dx = labelOffset(GLYPHS.lampka, s.Y_BUS, s.Y_LAMPKA_BOTTOM);
   return (
     <g id={`lampka-${device.tag}`}>
-      <CadGlyph spec={GLYPHS.lampka} x={x} top={Y_BUS} bottom={Y_LAMPKA_BOTTOM} />
-      <text x={x + dx} y={Y_BUS + 34} fontSize={10.5} fontWeight={700} fill={STROKE}>
+      <CadGlyph spec={GLYPHS.lampka} x={x} top={s.Y_BUS} bottom={s.Y_LAMPKA_BOTTOM} />
+      <text x={x + dx} y={s.Y_BUS + 34} fontSize={10.5} fontWeight={700} fill={STROKE}>
         {device.tag}
       </text>
-      <text x={x + dx} y={Y_BUS + 46} fontSize={9} fill={MUTED}>
+      <text x={x + dx} y={s.Y_BUS + 46} fontSize={9} fill={MUTED}>
         {opisZBiegunami(device)}
       </text>
     </g>
@@ -323,20 +424,20 @@ function LampkaBranch({ col, device }: { col: Column; device: PanelDevice }) {
 }
 
 /** Wyłącznik różnicowoprądowy — symbol wgrany przez użytkownika (RCD.svg). */
-function RcdBranch({ col, device }: { col: Column; device: PanelDevice }) {
+function RcdBranch({ col, device, s }: { col: Column; device: PanelDevice; s: Siatka }) {
   const x = col.cx;
-  const dx = labelOffset(GLYPHS.rcd, Y_BUS, Y_SUBBUS);
+  const dx = labelOffset(GLYPHS.rcd, s.Y_BUS, s.Y_SUBBUS);
   return (
     <g id={`rcd-${device.tag}`}>
-      <CadGlyph spec={GLYPHS.rcd} x={x} top={Y_BUS} bottom={Y_SUBBUS} />
-      <text x={x + dx} y={Y_BUS + 34} fontSize={10.5} fontWeight={700} fill={STROKE}>
+      <CadGlyph spec={GLYPHS.rcd} x={x} top={s.Y_BUS} bottom={s.Y_SUBBUS} />
+      <text x={x + dx} y={s.Y_BUS + 34} fontSize={10.5} fontWeight={700} fill={STROKE}>
         {device.tag}
       </text>
-      <text x={x + dx} y={Y_BUS + 46} fontSize={9} fill={MUTED}>
+      <text x={x + dx} y={s.Y_BUS + 46} fontSize={9} fill={MUTED}>
         {opisZBiegunami(device)}
       </text>
       {czuloscITypRcd(device) && (
-        <text x={x + dx} y={Y_BUS + 57} fontSize={9} fill={MUTED}>
+        <text x={x + dx} y={s.Y_BUS + 57} fontSize={9} fill={MUTED}>
           {czuloscITypRcd(device)}
         </text>
       )}
@@ -369,19 +470,19 @@ function nazwaSzynyN(rcd: PanelDevice | undefined): string {
  * Na schemacie jednokreskowym pojedyncza kreska obwodu reprezentuje komplet żył, więc
  * szyny przecinają odejścia bez kropek połączeniowych — kropki ma tylko PE (`PeTaps`).
  */
-function ProtectiveBuses({ width, columns }: { width: number; columns: Column[] }) {
+function ProtectiveBuses({ width, columns, s }: { width: number; columns: Column[]; s: Siatka }) {
   return (
     <g id="pe-n-buses">
       {columns.map((col) => {
-        if (col.kind !== "rcd" || !col.block || col.block.mcbs.length === 0) return null;
-        const n = col.block.mcbs.length;
+        if (col.kind !== "rcd" || !col.block || col.block.liscie.length === 0) return null;
+        const n = col.block.liscie.length;
         const x1 = circuitX(col, 0) - LEAF_W / 2 + 6;
         const x2 = circuitX(col, n - 1) + LEAF_W / 2 - 6;
         const nazwa = nazwaSzynyN(col.block.device);
         return (
           <g key={col.block.device?.uid ?? `bez-rcd-${col.x0}`} data-szyna="N">
-            <line x1={x1} y1={Y_N_BUS} x2={x2} y2={Y_N_BUS} stroke={STROKE} strokeWidth={LINE_W} />
-            <text x={x1 - 4} y={Y_N_BUS + 3.5} fontSize={9} fontWeight={700} textAnchor="end" fill={STROKE}>
+            <line x1={x1} y1={s.Y_N_BUS} x2={x2} y2={s.Y_N_BUS} stroke={STROKE} strokeWidth={LINE_W} />
+            <text x={x1 - 4} y={s.Y_N_BUS + 3.5} fontSize={9} fontWeight={700} textAnchor="end" fill={STROKE}>
               {nazwa}
             </text>
           </g>
@@ -391,8 +492,8 @@ function ProtectiveBuses({ width, columns }: { width: number; columns: Column[] 
           czarno-białym, gdzie kolor nie niesie żadnej informacji. Od pionu z GSU po
           prawą krawędź; opis z prawej, bo z lewej stoi pion. */}
       <g data-szyna="PE">
-        <line x1={RISER_X} y1={Y_PE_BUS} x2={width - MARGIN_X} y2={Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
-        <text x={width - MARGIN_X + 6} y={Y_PE_BUS + 3.5} fontSize={9} fontWeight={700} textAnchor="start" fill={STROKE}>
+        <line x1={RISER_X} y1={s.Y_PE_BUS} x2={width - MARGIN_X} y2={s.Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
+        <text x={width - MARGIN_X + 6} y={s.Y_PE_BUS + 3.5} fontSize={9} fontWeight={700} textAnchor="start" fill={STROKE}>
           PE
         </text>
       </g>
@@ -401,9 +502,9 @@ function ProtectiveBuses({ width, columns }: { width: number; columns: Column[] 
 }
 
 /** Jedno zdanie pod tabelą — to, czego sam rysunek szyn N nie powie montującemu. */
-function UwagiSchematu({ uklad }: { uklad: UkladSieci }) {
+function UwagiSchematu({ uklad, s }: { uklad: UkladSieci; s: Siatka }) {
   return (
-    <text id="uwagi-schematu" x={MARGIN_X} y={Y_UWAGI} fontSize={8} fill={MUTED}>
+    <text id="uwagi-schematu" x={MARGIN_X} y={s.Y_UWAGI} fontSize={8} fill={MUTED}>
       {"N1, N2… — osobna szyna N za każdą różnicówką; szyn N różnych różnicówek nie łączyć ze sobą. "}
       {uklad === "TN-C-S"
         ? "N i PE łączą się wyłącznie w miejscu rozdziału PEN."
@@ -424,20 +525,20 @@ const PE_TAP_DY = PE_TAP_DX * Math.tan(Math.PI / 6);
  * (w odróżnieniu od zwykłego skrzyżowania, które połączeniem nie jest), a ukośna kreska
  * schodzi od niej do pionowego odpływu poniżej szyny.
  */
-function PeTaps({ columns }: { columns: Column[] }) {
+function PeTaps({ columns, s }: { columns: Column[]; s: Siatka }) {
   return (
     <g id="pe-taps">
       {circuitXs(columns).map((cx) => (
         <g key={cx}>
           <line
             x1={cx - PE_TAP_DX}
-            y1={Y_PE_BUS}
+            y1={s.Y_PE_BUS}
             x2={cx}
-            y2={Y_PE_BUS + PE_TAP_DY}
+            y2={s.Y_PE_BUS + PE_TAP_DY}
             stroke={STROKE}
             strokeWidth={LINE_W}
           />
-          <circle cx={cx - PE_TAP_DX} cy={Y_PE_BUS} r={2} fill={STROKE} />
+          <circle cx={cx - PE_TAP_DX} cy={s.Y_PE_BUS} r={2} fill={STROKE} />
         </g>
       ))}
     </g>
@@ -445,23 +546,52 @@ function PeTaps({ columns }: { columns: Column[] }) {
 }
 
 
-/** Jeden obwód odbiorczy: wyłącznik nadprądowy (symbol MCB użytkownika), znacznik przewodu i nazwa odbiornika. */
-function CircuitBranch({ x, device }: { x: number; device: PanelDevice }) {
-  // Wyłącznik nadprądowy i rozłącznik izolacyjny bezpiecznikowy mają symbol
-  // odwzorowany z pliku CAD — reszta katalogu (stycznik, przekaźnik, zasilacz,
-  // CZF, rozłącznik ppoż…) dostaje na razie symbol zastępczy (patrz komentarz przy
-  // GLYPHS.generic w deviceGlyphs.tsx), żeby nic już nie znikało po cichu ze
-  // schematu, tak jak wcześniej. Rozłącznik bezpiecznikowy ma DWA warianty symbolu
-  // (liczba kresek wkładki) — wybrane po liczbie biegunów aparatu, nie po zasilaniu
-  // całej rozdzielnicy, bo to jego WŁASNA nastawa (tak jak przy MCB).
-  const isMcb = device.kind === "mcb";
-  const isRozBezp = device.kind === "rozBezp";
-  const spec = isMcb ? GLYPHS.mcb : isRozBezp ? (device.poles === "3P" ? GLYPHS.rozBezp3f : GLYPHS.rozBezp1f) : GLYPHS.generic;
-  const labelDx = isMcb ? MCB_LABEL_DX : isRozBezp ? ROZBEZP_LABEL_DX : GENERIC_LABEL_DX;
+/**
+ * Symbol aparatu w rzędzie odpływów. Wyłącznik nadprądowy i rozłącznik izolacyjny
+ * bezpiecznikowy mają symbol odwzorowany z pliku CAD, bezpiecznik i lampka — rysowany
+ * wg normy; reszta katalogu (stycznik, przekaźnik, zasilacz, CZF…) dostaje na razie
+ * symbol zastępczy (patrz `GLYPHS.generic`), żeby nic nie znikało po cichu ze schematu.
+ * Rozłącznik bezpiecznikowy ma DWA warianty (liczba kresek wkładki) — po liczbie
+ * biegunów aparatu, bo to jego WŁASNA nastawa (tak jak przy MCB).
+ */
+function symbolOdplywu(device: PanelDevice): { spec: GlyphSpec; labelDx: number } {
+  if (device.kind === "mcb") return { spec: GLYPHS.mcb, labelDx: MCB_LABEL_DX };
+  if (device.kind === "rozBezp") return { spec: device.poles === "3P" ? GLYPHS.rozBezp3f : GLYPHS.rozBezp1f, labelDx: ROZBEZP_LABEL_DX };
+  if (device.kind === "spdFuse") return { spec: GLYPHS.bezpiecznik, labelDx: BEZPIECZNIK_LABEL_DX };
+  if (device.kind === "lampka") return { spec: GLYPHS.lampka, labelDx: LAMPKA_LABEL_DX };
+  return { spec: GLYPHS.generic, labelDx: GENERIC_LABEL_DX };
+}
+
+/**
+ * Jeden aparat w rzędzie odpływów: symbol między `gora` a `dol`, oznaczenie i nastawa
+ * obok, a pod nim przewód do `doY` (do końca odejścia albo do szynki aparatów
+ * szeregowych). Ten sam komponent rysuje wyłącznik obwodu i aparat stojący szeregowo
+ * pod nim (stycznik, lampkę…) — różnią się tylko wysokością.
+ */
+function CircuitBranch({
+  x,
+  device,
+  gora,
+  dol,
+  doY,
+  zPrzewodem,
+  s,
+}: {
+  x: number;
+  device: PanelDevice;
+  gora: number;
+  dol: number;
+  doY: number;
+  /** Czy podpisać typ przewodu na końcu odejścia — tylko dla aparatu, z którego przewód wychodzi do obwodu. */
+  zPrzewodem: boolean;
+  s: Siatka;
+}) {
+  const { spec, labelDx } = symbolOdplywu(device);
+  const yOpisu = gora + 20 + MCB_H / 2;
   return (
     <g id={`circuit-${device.tag}`}>
-      <CadGlyph spec={spec} x={x} top={Y_SUBBUS} bottom={Y_MCB_BOTTOM} />
-      <line x1={x} y1={Y_MCB_BOTTOM} x2={x} y2={Y_WIRE_END} stroke={STROKE} strokeWidth={LINE_W} />
+      <CadGlyph spec={spec} x={x} top={gora} bottom={dol} />
+      <line x1={x} y1={dol} x2={x} y2={doY} stroke={STROKE} strokeWidth={LINE_W} />
 
       {/* Tag i wartość zabezpieczenia (B10/B16…) stoją RAZEM z prawej strony symbolu —
           tag nad wartością, tak jak przy pozostałych aparatach (RcdBranch, SpdBranch,
@@ -470,18 +600,18 @@ function CircuitBranch({ x, device }: { x: number; device: PanelDevice }) {
           przewodu, żeby ominąć najszerszy punkt glifu (strzałka wyzwalacza sięga ok.
           +20px od osi na tej wysokości) — żadna już nie leży na przewodzie, więc bez
           białej „poświaty" pod spodem (była potrzebna tylko, gdy tag siedział na kresce). */}
-      <text x={x + labelDx} y={Y_MCB_TOP + MCB_H / 2 - 4} fontSize={9.5} fontWeight={700} textAnchor="start" fill={STROKE}>
+      <text x={x + labelDx} y={yOpisu - 4} fontSize={9.5} fontWeight={700} textAnchor="start" fill={STROKE}>
         {device.tag}
       </text>
-      <text x={x + labelDx} y={Y_MCB_TOP + MCB_H / 2 + 8} fontSize={8.5} fontWeight={700} textAnchor="start" fill={MUTED}>
+      <text x={x + labelDx} y={yOpisu + 8} fontSize={8.5} fontWeight={700} textAnchor="start" fill={MUTED}>
         {opisZBiegunami(device)}
       </text>
       {/* Nazwa odbiornika celowo NIE jest powtarzana tutaj — stoi w tabeli odpływów pod
           schematem, dokładnie w tej samej kolumnie. Wcześniej była w obu miejscach, w obu
           ucięta, więc zajmowała miejsce nic nie wnosząc. Przy gałęzi zostaje sam typ
           przewodu, czyli informacja, której w tabeli nie ma. */}
-      {device.cable && (
-        <text x={x} y={Y_TERMINAL_TEXT} fontSize={7.5} textAnchor="middle" fill={MUTED}>
+      {zPrzewodem && device.cable && (
+        <text x={x} y={s.Y_TERMINAL_TEXT} fontSize={7.5} textAnchor="middle" fill={MUTED}>
           {truncate(device.cable, 20)}
         </text>
       )}
@@ -489,11 +619,60 @@ function CircuitBranch({ x, device }: { x: number; device: PanelDevice }) {
   );
 }
 
+/**
+ * Jedno odejście na dole schematu — jedna kolumna tabeli, jeden odczep PE.
+ *
+ * Zwykle to po prostu wyłącznik obwodu. Gdy pod wyłącznikiem stoją aparaty zasilane
+ * z niego szeregowo (np. B6 → lampka i CZF), każdy z nich dostaje WŁASNE odejście:
+ * wyłącznik rysuje się raz, nad pierwszym z nich, a szynka pod nim rozprowadza
+ * zasilanie do wszystkich (audyt rozdzielnicy 15.11.2026, błąd 7).
+ */
+interface Lisc {
+  /** Aparat zabezpieczający odejście (wyłącznik, bezpiecznik…). */
+  aparat: PanelDevice;
+  /** Aparat zasilany szeregowo spod `aparat` — jeśli jest. */
+  szeregowy?: PanelDevice;
+  /** Pierwsze odejście danego aparatu — tylko nad nim rysuje się jego symbol. */
+  pierwszy: boolean;
+  /** Ile odejść ma `aparat` (długość szynki pod nim). */
+  ileOdejsc: number;
+}
+
+/** Odejścia spod jednej różnicówki (albo wprost z szyny), w kolejności aparatów. */
+function liscieOdejsc(aparaty: PanelDevice[], wszystkie: PanelDevice[]): Lisc[] {
+  return aparaty.flatMap((aparat): Lisc[] => {
+    const dzieci = dzieciAparatu(aparat, wszystkie).filter((d) => d.kind !== "spd");
+    if (!dzieci.length) return [{ aparat, pierwszy: true, ileOdejsc: 1 }];
+    return dzieci.map((szeregowy, i) => ({ aparat, szeregowy, pierwszy: i === 0, ileOdejsc: dzieci.length }));
+  });
+}
+
+/** Lampka i czujnik zaniku fazy nie mają części przewodzących dostępnych — bez odczepu PE. */
+function bezOdczepuPe(l: Lisc): boolean {
+  return l.szeregowy?.kind === "lampka" || l.szeregowy?.kind === "ovr" || l.aparat.kind === "ovr";
+}
+
+/** Rysunek jednego odejścia: wyłącznik (nad pierwszym), szynka, aparat szeregowy. */
+function Odejscie({ x, lisc, s }: { x: number; lisc: Lisc; s: Siatka }) {
+  const { aparat, szeregowy, pierwszy, ileOdejsc } = lisc;
+  return (
+    <>
+      {pierwszy && (
+        <CircuitBranch x={x} device={aparat} gora={s.Y_SUBBUS} dol={s.Y_MCB_BOTTOM} doY={szeregowy ? s.Y_SER_TOP : s.Y_WIRE_END} zPrzewodem={!szeregowy} s={s} />
+      )}
+      {pierwszy && ileOdejsc > 1 && (
+        <line data-szynka-szeregowa="" x1={x} y1={s.Y_SER_TOP} x2={x + (ileOdejsc - 1) * LEAF_W} y2={s.Y_SER_TOP} stroke={STROKE} strokeWidth={LINE_W} />
+      )}
+      {szeregowy && <CircuitBranch x={x} device={szeregowy} gora={s.Y_SER_TOP} dol={s.Y_SER_BOTTOM} doY={s.Y_WIRE_END} zPrzewodem s={s} />}
+    </>
+  );
+}
+
 interface RcdBlock {
   /** Różnicówka nad grupą. `undefined` dla wyłączników wychodzących wprost z szyny
    *  głównej — układ normalny, np. obwód przeciwpożarowy poza zasięgiem RCD. */
   device?: PanelDevice;
-  mcbs: PanelDevice[];
+  liscie: Lisc[];
 }
 
 interface Column {
@@ -513,17 +692,19 @@ interface Column {
  * więc każda zmiana układu groziła rozjechaniem się warstw względem siebie.
  */
 function circuitX(col: Column, i: number): number {
-  const n = col.block?.mcbs.length ?? 0;
+  const n = col.block?.liscie.length ?? 0;
   return col.x0 + (col.width - n * LEAF_W) / 2 + LEAF_W * (i + 0.5);
 }
 
+/** Odejścia z odczepem PE. Lampka na szynie głównej ma własną kolumnę i nie trafia
+ *  tutaj; lampka i CZF zasilane spod wyłącznika — patrz `bezOdczepuPe`. */
 function circuitXs(columns: Column[]): number[] {
   const out: number[] = [];
   columns.forEach((col) => {
-    // Lampka NIE dostaje odczepu PE — układ kończy się na jej symbolu, nie ciągnie
-    // się do szyn N/PE (patrz `LampkaBranch`), więc nie ma czego odczepiać.
     if (col.kind !== "rcd" || !col.block) return;
-    col.block.mcbs.forEach((_, i) => out.push(circuitX(col, i)));
+    col.block.liscie.forEach((l, i) => {
+      if (!bezOdczepuPe(l)) out.push(circuitX(col, i));
+    });
   });
   return out;
 }
@@ -534,30 +715,33 @@ function circuitXs(columns: Column[]): number[] {
  * każda komórka wypada dokładnie pod swoim wyłącznikiem — nie osobny HTML-owy
  * `<table>`, którego szerokości kolumn musiałyby być ręcznie zsynchronizowane z SVG.
  */
-function FinalCircuitsTable({ columns }: { columns: Column[] }) {
+function FinalCircuitsTable({ columns, s }: { columns: Column[]; s: Siatka }) {
   return (
     <g id="final-circuits-table">
       {columns.map((col) => {
-        if (col.kind !== "rcd" || !col.block || col.block.mcbs.length === 0) return null;
-        const { mcbs } = col.block;
+        if (col.kind !== "rcd" || !col.block || col.block.liscie.length === 0) return null;
+        // Komórka opisuje to, co faktycznie wychodzi z odejścia: aparat szeregowy, jeśli
+        // jest (lampka, stycznik…), inaczej sam wyłącznik. Faza zawsze z wyłącznika —
+        // aparat szeregowy siedzi na tej samej.
+        const mcbs = col.block.liscie.map((l) => ({ ...(l.szeregowy ?? l.aparat), phase: l.aparat.phase }));
         // Komórki wychodzą od tej samej funkcji co gałęzie powyżej, więc każda wypada
         // dokładnie pod swoim wyłącznikiem bez osobnego przeliczania układu.
         const left = circuitX(col, 0) - LEAF_W / 2;
         const right = left + mcbs.length * LEAF_W;
         return (
           <g key={col.block.device?.uid ?? `bez-rcd-${col.x0}`}>
-            <line x1={left} y1={TABLE_TOP} x2={right} y2={TABLE_TOP} stroke={STROKE} strokeWidth={LINE_W} />
-            <line x1={left} y1={TABLE_MID} x2={right} y2={TABLE_MID} stroke={STROKE} strokeWidth={LINE_W} />
-            <line x1={left} y1={TABLE_PHASE_BOTTOM} x2={right} y2={TABLE_PHASE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
-            <line x1={left} y1={TABLE_BOTTOM} x2={right} y2={TABLE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
-            <line x1={right} y1={TABLE_TOP} x2={right} y2={TABLE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
+            <line x1={left} y1={s.TABLE_TOP} x2={right} y2={s.TABLE_TOP} stroke={STROKE} strokeWidth={LINE_W} />
+            <line x1={left} y1={s.TABLE_MID} x2={right} y2={s.TABLE_MID} stroke={STROKE} strokeWidth={LINE_W} />
+            <line x1={left} y1={s.TABLE_PHASE_BOTTOM} x2={right} y2={s.TABLE_PHASE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
+            <line x1={left} y1={s.TABLE_BOTTOM} x2={right} y2={s.TABLE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
+            <line x1={right} y1={s.TABLE_TOP} x2={right} y2={s.TABLE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
             {mcbs.map((mcb, i) => {
               const cellLeft = left + LEAF_W * i;
               const cx = cellLeft + LEAF_W / 2;
               return (
                 <g key={mcb.uid}>
-                  <line x1={cellLeft} y1={TABLE_TOP} x2={cellLeft} y2={TABLE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
-                  <text x={cx} y={TABLE_TOP + 13} fontSize={9.5} fontWeight={700} textAnchor="middle" fill={STROKE}>
+                  <line x1={cellLeft} y1={s.TABLE_TOP} x2={cellLeft} y2={s.TABLE_BOTTOM} stroke={STROKE} strokeWidth={LINE_W} />
+                  <text x={cx} y={s.TABLE_TOP + 13} fontSize={9.5} fontWeight={700} textAnchor="middle" fill={STROKE}>
                     {mcb.tag}
                   </text>
                   {/* Faza obwodu. „3F" dla odbiorników trójfazowych, L1/L2/L3 dla
@@ -566,7 +750,7 @@ function FinalCircuitsTable({ columns }: { columns: Column[] }) {
                       czytało się jako jedno i to samo. */}
                   <text
                     x={cx}
-                    y={TABLE_MID + 11}
+                    y={s.TABLE_MID + 11}
                     fontSize={8.5}
                     fontWeight={700}
                     textAnchor="middle"
@@ -579,11 +763,11 @@ function FinalCircuitsTable({ columns }: { columns: Column[] }) {
                     return (
                       <text fontSize={8} textAnchor="middle" fill={STROKE}>
                         <title>{mcb.caption}</title>
-                        <tspan x={cx} y={l2 ? TABLE_PHASE_BOTTOM + 11 : TABLE_PHASE_BOTTOM + 16}>
+                        <tspan x={cx} y={l2 ? s.TABLE_PHASE_BOTTOM + 11 : s.TABLE_PHASE_BOTTOM + 16}>
                           {l1}
                         </tspan>
                         {l2 && (
-                          <tspan x={cx} y={TABLE_PHASE_BOTTOM + 21}>
+                          <tspan x={cx} y={s.TABLE_PHASE_BOTTOM + 21}>
                             {l2}
                           </tspan>
                         )}
@@ -722,9 +906,20 @@ export function SchemaTab() {
   const zasilanie = zasilanieRozdzielnicy(panelConfig);
   const mainDevice = devices.find((d) => d.kind === "main");
   const spdDevice = devices.find((d) => d.kind === "spd");
+  /** Bezpiecznik stojący szeregowo nad SPD — rysowany w kolumnie SPD, nie jako odejście. */
+  const spdBezpiecznik = spdDevice ? rodzicAparatu(spdDevice, devices) : undefined;
+  const ppozDevice = devices.find((d) => d.kind === "ppoz");
   const rcdDevices = devices.filter((d) => d.kind === "rcd");
-  const lampkaDevices = devices.filter((d) => d.kind === "lampka");
-  const liczbaObwodow = devices.filter(jestOdplywem).length;
+  // Lampka zasilana spod wyłącznika stoi w rzędzie odejść (patrz `Odejscie`); własną
+  // kolumnę na szynie głównej ma tylko ta, która nie ma zabezpieczenia.
+  const lampkaDevices = devices.filter((d) => d.kind === "lampka" && !rodzicAparatu(d, devices));
+  /**
+   * Aparaty, które zaczynają odejście: odpływy bez aparatu nad sobą. Aparat zasilany
+   * szeregowo (stycznik, CZF…) rysuje się pod swoim zabezpieczeniem, a zabezpieczenie
+   * SPD — w kolumnie SPD; żaden z nich nie jest osobnym odejściem z szyny.
+   */
+  const poczatkiOdejsc = devices.filter((d) => jestOdplywem(d) && !rodzicAparatu(d, devices) && d !== spdBezpiecznik);
+  const liczbaObwodow = poczatkiOdejsc.length;
 
   /**
    * Grupy różnicówek wyprowadzone z SAMYCH APARATÓW (po `rcdTag`), a nie z obwodów
@@ -736,18 +931,20 @@ export function SchemaTab() {
    */
   const rcdBlocks: RcdBlock[] = rcdDevices.map((rcd) => ({
     device: rcd,
-    mcbs: devices.filter((d) => jestOdplywem(d) && d.rcdTag === rcd.tag),
+    liscie: liscieOdejsc(
+      poczatkiOdejsc.filter((d) => d.rcdTag === rcd.tag),
+      devices
+    ),
   }));
 
   // Wyłączniki spoza zasięgu jakiejkolwiek różnicówki idą wprost z szyny głównej —
   // to normalny układ (np. obwód przeciwpożarowy), a wcześniej takie aparaty po
   // prostu znikały ze schematu.
-  const pozaRcd = devices.filter(
-    (d) => jestOdplywem(d) && !rcdDevices.some((r) => r.tag === d.rcdTag)
-  );
-  if (pozaRcd.length) rcdBlocks.push({ device: undefined, mcbs: pozaRcd });
+  const pozaRcd = poczatkiOdejsc.filter((d) => !rcdDevices.some((r) => r.tag === d.rcdTag));
+  if (pozaRcd.length) rcdBlocks.push({ device: undefined, liscie: liscieOdejsc(pozaRcd, devices) });
 
-  const pusty = !mainDevice || (rcdBlocks.every((b) => b.mcbs.length === 0) && lampkaDevices.length === 0);
+  // Sam ogranicznik przepięć też jest czym zacząć rysunek — ma własną kolumnę pod szyną.
+  const pusty = !mainDevice || (rcdBlocks.every((b) => b.liscie.length === 0) && lampkaDevices.length === 0 && !spdDevice);
   if (pusty) {
     return (
       <div className="pe-card p-8 text-center">
@@ -777,7 +974,7 @@ export function SchemaTab() {
     cursorX += LAMPKA_COL_W + GROUP_GAP;
   });
   rcdBlocks.forEach((block) => {
-    const w = Math.max(block.mcbs.length * LEAF_W, RCD_MIN_W);
+    const w = Math.max(block.liscie.length * LEAF_W, RCD_MIN_W);
     columns.push({ kind: "rcd", width: w, x0: cursorX, cx: cursorX + w / 2, block });
     cursorX += w + GROUP_GAP;
   });
@@ -786,6 +983,7 @@ export function SchemaTab() {
   const busX0 = columns[0].cx;
   const busX1 = columns[columns.length - 1].cx;
   const mainX = (busX0 + busX1) / 2;
+  const s = siatka(!!ppozDevice, rcdBlocks.some((b) => b.liscie.some((l) => l.szeregowy)));
 
   return (
     <div className="space-y-5">
@@ -827,43 +1025,51 @@ export function SchemaTab() {
         />
       </div>
 
-      <OknoRysunku szerokosc={width} wysokosc={SCHEMA_HEIGHT} svgRef={svgRef} srodekStartowyX={mainX}>
-          <IncomingSupply x={mainX} supply3f={panelConfig.supply3f} uklad={zasilanie.uklad} przedlicznikowe={zasilanie.przedlicznikowe} />
-          <ZrodloPe mainX={mainX} uklad={zasilanie.uklad} />
-          <MainSwitch x={mainX} device={mainDevice} />
+      <OknoRysunku szerokosc={width} wysokosc={s.SCHEMA_HEIGHT} svgRef={svgRef} srodekStartowyX={mainX}>
+          <IncomingSupply
+            x={mainX}
+            supply3f={panelConfig.supply3f}
+            uklad={zasilanie.uklad}
+            przedlicznikowe={zasilanie.przedlicznikowe}
+            ppoz={!!ppozDevice}
+            s={s}
+          />
+          {ppozDevice && <RozlacznikPpoz x={mainX} device={ppozDevice} s={s} />}
+          <ZrodloPe mainX={mainX} uklad={zasilanie.uklad} s={s} />
+          <MainSwitch x={mainX} device={mainDevice} s={s} />
 
-          <line x1={mainX} y1={Y_SWITCH_BOT} x2={mainX} y2={Y_BUS} stroke={STROKE} strokeWidth={LINE_W} />
-          <line x1={busX0} y1={Y_BUS} x2={busX1} y2={Y_BUS} stroke={STROKE} strokeWidth={LINE_W} />
+          <line x1={mainX} y1={s.Y_SWITCH_BOT} x2={mainX} y2={s.Y_BUS} stroke={STROKE} strokeWidth={LINE_W} />
+          <line x1={busX0} y1={s.Y_BUS} x2={busX1} y2={s.Y_BUS} stroke={STROKE} strokeWidth={LINE_W} />
 
           {columns.map((col) =>
             col.kind === "spd" && spdDevice ? (
-              <SpdBranch key="spd" col={col} device={spdDevice} />
+              <SpdBranch key="spd" col={col} device={spdDevice} bezpiecznik={spdBezpiecznik} s={s} />
             ) : col.kind === "lampka" && col.device ? (
-              <LampkaBranch key={col.device.uid} col={col} device={col.device} />
+              <LampkaBranch key={col.device.uid} col={col} device={col.device} s={s} />
             ) : col.block ? (
               <g key={col.block.device?.uid ?? `bez-rcd-${col.x0}`}>
                 {col.block.device ? (
-                  <RcdBranch col={col} device={col.block.device} />
+                  <RcdBranch col={col} device={col.block.device} s={s} />
                 ) : (
                   // Odejścia spoza zasięgu różnicówki (np. obwód przeciwpożarowy) idą
                   // WPROST z szyny głównej — bez RCD nie ma tu żadnego symbolu, który
                   // sam narysowałby ten odcinek (RCD/SPD robią to jako część własnego
                   // glifu), więc bez tej kreski wyłącznik wisiałby w powietrzu,
                   // odcięty od szyny głównej powyżej.
-                  <line x1={col.cx} y1={Y_BUS} x2={col.cx} y2={Y_SUBBUS} stroke={STROKE} strokeWidth={LINE_W} />
+                  <line x1={col.cx} y1={s.Y_BUS} x2={col.cx} y2={s.Y_SUBBUS} stroke={STROKE} strokeWidth={LINE_W} />
                 )}
-                {col.block.mcbs.length > 1 && (
-                  <line
-                    x1={col.x0 + (col.width - col.block.mcbs.length * LEAF_W) / 2 + LEAF_W / 2}
-                    y1={Y_SUBBUS}
-                    x2={col.x0 + col.width - (col.width - col.block.mcbs.length * LEAF_W) / 2 - LEAF_W / 2}
-                    y2={Y_SUBBUS}
-                    stroke={STROKE}
-                    strokeWidth={LINE_W}
-                  />
-                )}
-                {col.block.mcbs.map((mcb, i) => (
-                  <CircuitBranch key={mcb.uid} x={circuitX(col, i)} device={mcb} />
+                {(() => {
+                  // Szyna podrzędna łączy wyjście różnicówki (oś kolumny) z WYŁĄCZNIKAMI —
+                  // nie z każdym odejściem: aparaty szeregowe dostają zasilanie spod swojego
+                  // wyłącznika, nie stąd. Przy jednym wyłączniku z kilkoma odejściami stoi on
+                  // nad pierwszym z nich, czyli z boku osi — szyna musi do niego dojść.
+                  const xs = col.block.liscie.flatMap((l, i) => (l.pierwszy ? [circuitX(col, i)] : []));
+                  const x1 = Math.min(col.cx, ...xs);
+                  const x2 = Math.max(col.cx, ...xs);
+                  return x2 > x1 ? <line x1={x1} y1={s.Y_SUBBUS} x2={x2} y2={s.Y_SUBBUS} stroke={STROKE} strokeWidth={LINE_W} /> : null;
+                })()}
+                {col.block.liscie.map((l, i) => (
+                  <Odejscie key={`${l.aparat.uid}-${l.szeregowy?.uid ?? ""}`} x={circuitX(col, i)} lisc={l} s={s} />
                 ))}
               </g>
             ) : null
@@ -871,11 +1077,11 @@ export function SchemaTab() {
 
           {/* Rysowane po odejściach, żeby poziome szyny biegły ciągłą kreską po ich wierzchu,
               a kropki połączeniowe PE leżały na wierzchu szyny, nie pod nią. */}
-          <ProtectiveBuses width={width} columns={columns} />
-          <PeTaps columns={columns} />
+          <ProtectiveBuses width={width} columns={columns} s={s} />
+          <PeTaps columns={columns} s={s} />
 
-          <FinalCircuitsTable columns={columns} />
-          <UwagiSchematu uklad={zasilanie.uklad} />
+          <FinalCircuitsTable columns={columns} s={s} />
+          <UwagiSchematu uklad={zasilanie.uklad} s={s} />
       </OknoRysunku>
     </div>
   );

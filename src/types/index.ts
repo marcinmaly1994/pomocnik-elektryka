@@ -368,6 +368,12 @@ export interface PanelDevice {
   type?: ElementType;
   cable?: string;
   rcdTag?: string;
+  /**
+   * Oznaczenie aparatu, z którego ten jest zasilany SZEREGOWO — np. SPD za bezpiecznikiem,
+   * stycznik za wyłącznikiem obwodu, lampka i CZF za wyłącznikiem B6. Dotyczy tylko
+   * aparatów pomocniczych (`RODZAJE_POMOCNICZE`); pusty napis = wprost z szyny głównej.
+   */
+  zasilanyZ?: string;
   manual?: boolean;
 }
 

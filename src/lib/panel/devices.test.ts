@@ -7,6 +7,10 @@ import {
   computeSelectivity,
   czuloscITypRcd,
   daSieSkasowac,
+  dolozAparatReczny,
+  dzieciAparatu,
+  przemianujAparat,
+  rodzicAparatu,
   layoutPanel,
   MANUAL_DEVICE_TYPES,
   podpisPrzewoduNaFroncie,
@@ -413,5 +417,114 @@ describe("aparatyDoWidoku", () => {
   it("lista już odbudowana albo tryb ręczny → bez zmian", () => {
     expect(aparatyDoWidoku([...zbudowane, spd], "zRzutu", () => [])).toEqual([...zbudowane, spd]);
     expect(aparatyDoWidoku([spd], "reczny", () => zbudowane)).toEqual([spd]);
+  });
+});
+
+/*
+ * Aparaty zasilane szeregowo (audyt rozdzielnicy 15.11.2026, pakiet 2): SPD za
+ * bezpiecznikiem, lampka/CZF/zasilacz za własnym wyłącznikiem, stycznik za wyłącznikiem
+ * obwodu, rozłącznik ppoż. na dopływie.
+ */
+describe("aparaty zasilane szeregowo", () => {
+  const ap = (p: Partial<PanelDevice> & Pick<PanelDevice, "kind" | "tag">): PanelDevice => ({
+    uid: p.tag,
+    modules: 1,
+    label: "",
+    caption: p.tag,
+    poles: "1P",
+    ...p,
+  });
+  const q1 = ap({ kind: "main", tag: "Q1", label: "40A", poles: "4P" });
+  const f0 = ap({ kind: "mcb", tag: "F0", label: "B6" });
+  const lampka = ap({ kind: "lampka", tag: "P1", zasilanyZ: "F0" });
+  const czf = ap({ kind: "ovr", tag: "K1", zasilanyZ: "F0" });
+  const bezp = ap({ kind: "spdFuse", tag: "F01", label: "gG 63A", poles: "3P" });
+  const spd = ap({ kind: "spd", tag: "F02", poles: "4P", zasilanyZ: "F01" });
+  const def = (key: string) => MANUAL_DEVICE_TYPES.find((t) => t.key === key)!;
+
+  describe("rodzicAparatu / dzieciAparatu", () => {
+    it("aparat pomocniczy wskazuje swoje zabezpieczenie; zabezpieczenie zna swoje dzieci", () => {
+      const lista = [q1, f0, lampka, czf, bezp, spd];
+      expect(rodzicAparatu(lampka, lista)).toBe(f0);
+      expect(rodzicAparatu(spd, lista)).toBe(bezp);
+      expect(dzieciAparatu(f0, lista)).toEqual([lampka, czf]);
+    });
+
+    it("wskazanie skasowanego aparatu albo aparatu bez członu zabezpieczającego liczy się jak brak", () => {
+      expect(rodzicAparatu(lampka, [q1, lampka])).toBeUndefined();
+      expect(rodzicAparatu({ ...lampka, zasilanyZ: "Q1" }, [q1, lampka])).toBeUndefined();
+    });
+
+    it("zwykły wyłącznik obwodu nie bywa „zasilany z” — pole dotyczy tylko aparatów pomocniczych", () => {
+      const zwyklyObwod: PanelDevice = { ...f0, tag: "F5", zasilanyZ: "F0" };
+      expect(rodzicAparatu(zwyklyObwod, [f0])).toBeUndefined();
+    });
+  });
+
+  describe("dolozAparatReczny", () => {
+    const z3f = { supply3f: true, uklad: "TN-C-S" as const };
+
+    it("bezpiecznik pod SPD przy 3 fazach ma 3 tory i od razu łączy się z SPD bez pary", () => {
+      const bezSpd = { ...spd, zasilanyZ: undefined };
+      const wynik = dolozAparatReczny([q1, bezSpd], def("spdFuse"), { uid: "m1" }, z3f);
+      const nowy = wynik[wynik.length - 1];
+      expect(nowy).toMatchObject({ kind: "spdFuse", poles: "3P", modules: 3, phase: "3F" });
+      expect(wynik.find((d) => d.kind === "spd")!.zasilanyZ).toBe(nowy.tag);
+    });
+
+    it("SPD dokładany przy wolnym bezpieczniku łączy się z nim", () => {
+      const wynik = dolozAparatReczny([q1, bezp], def("spd"), { uid: "m1" }, z3f);
+      expect(wynik[wynik.length - 1].zasilanyZ).toBe("F01");
+    });
+
+    it("rozłącznik ppoż. przy TN-C-S nie rozłącza PEN (3P/1P), przy TN-S i TT rozłącza też N", () => {
+      const bieguny = (supply3f: boolean, uklad: "TN-C-S" | "TN-S" | "TT") =>
+        dolozAparatReczny([q1], def("ppoz"), { uid: "m1" }, { supply3f, uklad }).slice(-1)[0].poles;
+      expect(bieguny(true, "TN-C-S")).toBe("3P");
+      expect(bieguny(false, "TN-C-S")).toBe("1P");
+      expect(bieguny(true, "TN-S")).toBe("4P");
+      expect(bieguny(false, "TT")).toBe("2P");
+    });
+  });
+
+  it("przemianujAparat przenosi na nowe oznaczenie odwołania „zasilany z” i „za różnicówką”", () => {
+    const rcd = ap({ kind: "rcd", tag: "FI1", poles: "4P" });
+    const obwod = ap({ kind: "mcb", tag: "F3", label: "B16", rcdTag: "FI1" });
+    const wynik = przemianujAparat([f0, lampka, rcd, obwod], "F0", { tag: "F00" });
+    expect(wynik.find((d) => d.tag === "P1")!.zasilanyZ).toBe("F00");
+    const wynik2 = przemianujAparat([rcd, obwod], "FI1", { tag: "FI-A" });
+    expect(wynik2.find((d) => d.tag === "F3")!.rcdTag).toBe("FI-A");
+  });
+
+  describe("reguły", () => {
+    const tytuly = (lista: PanelDevice[], uklad: "TN-C-S" | "TN-S" = "TN-C-S") =>
+      computeSelectivity(lista, 40, true, true, undefined, { ukladSieci: uklad }).map((f) => f.title);
+
+    it("aparat pomocniczy bez zabezpieczenia -> ostrzeżenie; z zabezpieczeniem -> nic", () => {
+      expect(tytuly([q1, { ...lampka, zasilanyZ: undefined }])).toContain("Aparaty pomocnicze bez zabezpieczenia");
+      expect(tytuly([q1, f0, lampka])).not.toContain("Aparaty pomocnicze bez zabezpieczenia");
+    });
+
+    it("wyłącznik zasilający tylko lampkę i CZF nie potrzebuje 30 mA; zasilający stycznik — tak", () => {
+      expect(tytuly([q1, f0, lampka, czf])).not.toContain("Obwody bez ochrony różnicowoprądowej 30 mA");
+      const stycznik = ap({ kind: "stycznik", tag: "K2", zasilanyZ: "F0" });
+      expect(tytuly([q1, f0, stycznik])).toContain("Obwody bez ochrony różnicowoprądowej 30 mA");
+    });
+
+    it("bezpiecznik pod SPD niepołączony z ogranicznikiem -> ostrzeżenie", () => {
+      expect(tytuly([q1, bezp, { ...spd, zasilanyZ: undefined }])).toContain("Bezpiecznik pod SPD nie jest połączony z ogranicznikiem");
+      expect(tytuly([q1, bezp, spd])).not.toContain("Bezpiecznik pod SPD nie jest połączony z ogranicznikiem");
+    });
+
+    it("CZF bez stycznika -> informacja", () => {
+      expect(tytuly([q1, f0, czf])).toContain("Czujnik zaniku fazy bez stycznika");
+      expect(tytuly([q1, f0, czf, ap({ kind: "stycznik", tag: "K2", zasilanyZ: "F0" })])).not.toContain("Czujnik zaniku fazy bez stycznika");
+    });
+
+    it("ppoż. 4P przy TN-C-S rozłączałby PEN -> ostrzeżenie; przy TN-S nie", () => {
+      const ppoz = ap({ kind: "ppoz", tag: "Q2", poles: "4P" });
+      expect(tytuly([q1, ppoz])).toContain("Rozłącznik przeciwpożarowy rozłączałby PEN");
+      expect(tytuly([q1, ppoz], "TN-S")).not.toContain("Rozłącznik przeciwpożarowy rozłączałby PEN");
+    });
   });
 });
