@@ -14,9 +14,9 @@ import { GLYPHS, labelOffset } from "./deviceGlyphs";
 import { LINE_W, STROKE } from "./glyphyOprawa";
 import { computeRcdGroups } from "@/lib/panel/circuits";
 import { computeSizedCircuits, pradyWgKluczaAparatu } from "@/lib/panel/project";
-import { aparatyDoWidoku, buildPanelDevices, czuloscITypRcd, jestOdplywem, PHASE_COLORS } from "@/lib/panel/devices";
+import { aparatyDoWidoku, buildPanelDevices, czuloscITypRcd, jestOdplywem, opisBiegunow, PHASE_COLORS, zasilanieRozdzielnicy } from "@/lib/panel/devices";
 import { zLiczba } from "@/lib/liczby";
-import type { PanelDevice } from "@/types";
+import type { PanelDevice, UkladSieci } from "@/types";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
 
@@ -28,6 +28,11 @@ const SPD_COL_W = 108;
 const LAMPKA_COL_W = 90;
 const GROUP_GAP = 50;
 const MARGIN_X = 50;
+/** Pionowy przewód PE od głównej szyny uziemiającej do szyny PE — w lewym marginesie. */
+const RISER_X = 46;
+/** Pierwsza kolumna aparatów — dalej od lewej krawędzi niż `MARGIN_X`, bo przed nią
+ *  biegnie pion PE z symbolem uziemienia. */
+const LEFT_X = MARGIN_X + 40;
 
 // Siatka pionowa schematu — jedna wspólna skala dla wszystkich gałęzi, żeby aparaty
 // tego samego rzędu (np. wszystkie RCD, wszystkie wyłączniki obwodów) leżały na tej
@@ -39,8 +44,12 @@ const MARGIN_X = 50;
 // Oznaczenie faz stoi nad grotem zasilania, więc siatka zaczyna się od niego,
 // a nie od samej strzałki — inaczej napis wychodziłby poza górną krawędź rysunku.
 const Y_PHASES = 11;
-const Y_ARROW = 20;
-const Y_SWITCH_TOP = Y_ARROW + 22;
+/** Druga linia opisu zasilania: zabezpieczenie przedlicznikowe w złączu. */
+const Y_PRZEDL = 23;
+const Y_ARROW = 30;
+/** Wysokość rozdziału PEN i głównej szyny uziemiającej — PRZED rozłącznikiem głównym. */
+const Y_SPLIT = Y_ARROW + 24;
+const Y_SWITCH_TOP = Y_ARROW + 42;
 const MAIN_H = 60;
 const Y_SWITCH_BOT = Y_SWITCH_TOP + MAIN_H;
 const Y_BUS = Y_SWITCH_BOT + 26;
@@ -57,10 +66,9 @@ const Y_N_BUS = Y_MCB_BOTTOM + 26;
 const Y_PE_BUS = Y_N_BUS + 12;
 const Y_WIRE_END = Y_PE_BUS + 10;
 const Y_TERMINAL_TEXT = Y_WIRE_END + 14;
-// Uziemienie SPD zaczyna się pod symbolem — nie jest częścią pliku użytkownika,
+// Pod symbolem SPD schodzi przewód do szyny PE — nie jest częścią pliku użytkownika,
 // bo należy do topologii schematu, a nie do samego aparatu.
 const Y_SPD_BOTTOM = Y_BUS + SPD_H;
-const Y_SPD_GROUND = Y_SPD_BOTTOM + 12;
 // Lampka sygnalizacyjna stoi w TYM SAMYM rzędzie co RCD/SPD (odejście wprost z szyny
 // głównej), nie w rzędzie wyłączników obwodowych — stąd własna wysokość zaczepiona o
 // Y_BUS, a nie o Y_SUBBUS. W odróżnieniu od SPD i zwykłych obwodów układ KOŃCZY SIĘ
@@ -99,7 +107,9 @@ const TABLE_PHASE_H = 15;
 const TABLE_MID = TABLE_TOP + TABLE_TAG_H;
 const TABLE_PHASE_BOTTOM = TABLE_MID + TABLE_PHASE_H;
 const TABLE_BOTTOM = TABLE_PHASE_BOTTOM + TABLE_NAME_H;
-const SCHEMA_HEIGHT = TABLE_BOTTOM + 14;
+/** Uwaga o szynach N pod tabelą — patrz `UwagiSchematu`. */
+const Y_UWAGI = TABLE_BOTTOM + 18;
+const SCHEMA_HEIGHT = Y_UWAGI + 12;
 
 /** Ile znaków mieści się w jednej linii komórki tabeli. Szerokość znaku (4,3 px dla
  *  `fontSize=8`) zmierzona przez `getComputedTextLength()` na realnych nazwach obwodów —
@@ -120,7 +130,7 @@ const TABLE_CHARS_PER_LINE = Math.floor((LEAF_W - TABLE_CELL_PAD) / 4.3);
  * dla nich zostaje sam opis, bo „— · 12V DC” niczego nie wnosi.
  */
 function opisZBiegunami(device: PanelDevice): string {
-  const bieguny = device.poles?.trim();
+  const bieguny = opisBiegunow(device)?.trim();
   return bieguny && bieguny !== "—" ? `${bieguny} · ${device.label}` : device.label;
 }
 
@@ -145,18 +155,94 @@ function wrapTwoLines(text: string, maxChars: number): [string, string] {
 }
 
 /**
- * Wejście zasilania: oznaczenie faz, grot i przewód do rozłącznika. Fazy wypisane z
- * nazwy, a nie jako „3-fazowe" — na schemacie liczy się, KTÓRE przewody dochodzą, bo
- * to one są potem rozdzielane na obwody jednofazowe (patrz bilans faz w Rozdzielnicy).
+ * Opis dopływu w zapisie przyjętym w dokumentacji: liczba faz, przewody, napięcie, układ.
+ *
+ * Wcześniej było tu samo „L1, L2, L3" — bez N i PEN, więc ze schematu nie dało się
+ * odczytać, czy rozdzielnica dostaje PEN (i gdzie go rozdzielić), ani skąd biorą się
+ * szyny N i PE na dole rysunku (audyt rozdzielnicy 15.11.2026, błąd 3).
  */
-function IncomingSupply({ x, supply3f }: { x: number; supply3f: boolean }) {
+function opisDoplywu(supply3f: boolean, uklad: UkladSieci): string {
+  const fazy = supply3f ? "3" : "1";
+  const przewody = uklad === "TN-C-S" ? "PEN" : uklad === "TN-S" ? "N/PE" : "N";
+  return `${fazy}/${przewody} ~ ${supply3f ? "400/230" : "230"} V · ${uklad}`;
+}
+
+/**
+ * Wejście zasilania: opis dopływu, zabezpieczenie przedlicznikowe, grot i przewód do
+ * rozłącznika. Zabezpieczenie przedlicznikowe stoi w złączu, poza rozdzielnicą — ale to
+ * ono chroni wszystko poniżej, więc schemat bez niego nie mówi, co chroni Q1 i różnicówki.
+ */
+function IncomingSupply({ x, supply3f, uklad, przedlicznikowe }: { x: number; supply3f: boolean; uklad: UkladSieci; przedlicznikowe: number }) {
   return (
     <g id="incoming-supply">
       <text x={x} y={Y_PHASES} fontSize={9.5} textAnchor="middle" fill={STROKE}>
-        {supply3f ? "L1, L2, L3" : "L1"}
+        {opisDoplywu(supply3f, uklad)}
+      </text>
+      <text x={x} y={Y_PRZEDL} fontSize={8.5} textAnchor="middle" fill={MUTED}>
+        {`zabezpieczenie przedlicznikowe ${przedlicznikowe} A (w złączu)`}
       </text>
       <polygon points={`${x - 4},${Y_ARROW} ${x + 4},${Y_ARROW} ${x},${Y_ARROW + 9}`} fill={STROKE} />
       <line x1={x} y1={Y_ARROW + 9} x2={x} y2={Y_SWITCH_TOP} stroke={STROKE} strokeWidth={LINE_W} />
+    </g>
+  );
+}
+
+/** Symbol uziemienia: trzy malejące kreski pod pionowym odcinkiem zaczynającym się w (x, y). */
+function Uziemienie({ x, y }: { x: number; y: number }) {
+  return (
+    <>
+      <line x1={x} y1={y} x2={x} y2={y + 8} stroke={STROKE} strokeWidth={LINE_W} />
+      <line x1={x - 9} y1={y + 8} x2={x + 9} y2={y + 8} stroke={STROKE} strokeWidth={LINE_W} />
+      <line x1={x - 6} y1={y + 12} x2={x + 6} y2={y + 12} stroke={STROKE} strokeWidth={LINE_W} />
+      <line x1={x - 3} y1={y + 16} x2={x + 3} y2={y + 16} stroke={STROKE} strokeWidth={LINE_W} />
+    </>
+  );
+}
+
+/**
+ * Skąd bierze się PE: główna szyna uziemiająca (GSU) z uziomem i pion do szyny PE.
+ *
+ * - TN-C-S: PEN rozdzielony NA DOPŁYWIE, przed rozłącznikiem — kropka na przewodzie
+ *   zasilającym i odejście do GSU. Rozłącznik 4P/2P łączy już tylko L i N; PEN-u nie
+ *   wolno rozłączać, więc rozdział za rozłącznikiem byłby błędem.
+ * - TN-S: PE dochodzi osobnym przewodem (PEN rozdzielono wcześniej, np. w złączu).
+ * - TT: PE wyłącznie z własnego uziomu — bez żadnego połączenia z przewodem zasilającym.
+ */
+function ZrodloPe({ mainX, uklad }: { mainX: number; uklad: UkladSieci }) {
+  const xZiemi = RISER_X - 18;
+  return (
+    <g id="zrodlo-pe" data-uklad={uklad}>
+      {uklad === "TN-C-S" && (
+        <g id="rozdzial-pen">
+          <line x1={mainX} y1={Y_SPLIT} x2={RISER_X} y2={Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} />
+          <circle cx={mainX} cy={Y_SPLIT} r={2.4} fill={STROKE} />
+          {/* Opis przy KROPCE rozdziału, nie przy GSU — tam, gdzie PEN przestaje być PEN-em. */}
+          <text x={mainX - 6} y={Y_SPLIT - 4} fontSize={8} textAnchor="end" fill={MUTED}>
+            rozdział PEN → PE + N
+          </text>
+        </g>
+      )}
+      {uklad === "TN-S" && (
+        <g id="doplyw-pe">
+          <text x={RISER_X} y={Y_PHASES} fontSize={9.5} textAnchor="middle" fill={STROKE}>
+            PE
+          </text>
+          <polygon points={`${RISER_X - 4},${Y_ARROW} ${RISER_X + 4},${Y_ARROW} ${RISER_X},${Y_ARROW + 9}`} fill={STROKE} />
+          <line x1={RISER_X} y1={Y_ARROW + 9} x2={RISER_X} y2={Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
+        </g>
+      )}
+      {/* GSU z uziomem — kropka węzła, odejście w lewo do symbolu uziemienia. */}
+      <circle cx={RISER_X} cy={Y_SPLIT} r={2.4} fill={STROKE} />
+      <line x1={RISER_X} y1={Y_SPLIT} x2={xZiemi} y2={Y_SPLIT} stroke={STROKE} strokeWidth={LINE_W} />
+      <Uziemienie x={xZiemi} y={Y_SPLIT} />
+      <text x={RISER_X + 5} y={Y_SPLIT + 12} fontSize={8.5} fontWeight={700} fill={STROKE}>
+        GSU
+      </text>
+      <text x={RISER_X + 5} y={Y_SPLIT + 22} fontSize={7.5} fill={MUTED}>
+        {uklad === "TT" ? "uziom odbiorcy" : "uziom, połączenia wyrównawcze"}
+      </text>
+      {/* Pion PE do szyny PE na dole — kreską przerywaną jak sama szyna. */}
+      <line x1={RISER_X} y1={Y_SPLIT} x2={RISER_X} y2={Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
     </g>
   );
 }
@@ -180,23 +266,35 @@ function MainSwitch({ x, device }: { x: number; device: PanelDevice }) {
   );
 }
 
-/** Ogranicznik przepięć — symbol wgrany przez użytkownika (SPD.svg) plus uziemienie. */
+/**
+ * Ogranicznik przepięć — symbol wgrany przez użytkownika (SPD.svg), połączony z SZYNĄ PE.
+ *
+ * Wcześniej kończył się własnym symbolem uziemienia, niepołączonym z niczym — co czytało
+ * się jak osobny uziom pod ogranicznik. SPD łączy się z PE/GSU tej samej instalacji,
+ * możliwie najkrócej (audyt rozdzielnicy 15.11.2026, błąd 4).
+ */
 function SpdBranch({ col, device }: { col: Column; device: PanelDevice }) {
   const x = col.cx;
   const dx = labelOffset(GLYPHS.spd, Y_BUS, Y_SPD_BOTTOM);
   return (
     <g id="spd">
       <CadGlyph spec={GLYPHS.spd} x={x} top={Y_BUS} bottom={Y_SPD_BOTTOM} />
-      <line x1={x} y1={Y_SPD_BOTTOM} x2={x} y2={Y_SPD_GROUND} stroke={STROKE} strokeWidth={LINE_W} />
-      <line x1={x - 9} y1={Y_SPD_GROUND} x2={x + 9} y2={Y_SPD_GROUND} stroke={STROKE} strokeWidth={LINE_W} />
-      <line x1={x - 6} y1={Y_SPD_GROUND + 4} x2={x + 6} y2={Y_SPD_GROUND + 4} stroke={STROKE} strokeWidth={LINE_W} />
-      <line x1={x - 3} y1={Y_SPD_GROUND + 8} x2={x + 3} y2={Y_SPD_GROUND + 8} stroke={STROKE} strokeWidth={LINE_W} />
+      <line data-spd-pe="" x1={x} y1={Y_SPD_BOTTOM} x2={x} y2={Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
+      <circle cx={x} cy={Y_PE_BUS} r={2} fill={STROKE} />
 
       <text x={x + dx} y={Y_BUS + 44} fontSize={10.5} fontWeight={700} fill={STROKE}>
         {device.tag}
       </text>
       <text x={x + dx} y={Y_BUS + 56} fontSize={9} fill={MUTED}>
         {opisZBiegunami(device)}
+      </text>
+      {/* Długość przewodów przyłączeniowych SPD — zalecenie PN-HD 60364-5-53: im dłuższe,
+          tym wyższy poziom ochrony, jaki realnie dociera do instalacji. */}
+      <text x={x + dx} y={Y_BUS + 68} fontSize={8} fill={MUTED}>
+        do PE
+      </text>
+      <text x={x + dx} y={Y_BUS + 78} fontSize={8} fill={MUTED}>
+        przewody ≤ 0,5 m
       </text>
     </g>
   );
@@ -247,30 +345,70 @@ function RcdBranch({ col, device }: { col: Column; device: PanelDevice }) {
 }
 
 /**
- * Szyny PE i N — poziome przewód ochronny i neutralny, wspólne dla wszystkich odejść.
- * Na schemacie jednokreskowym pojedyncza kreska obwodu reprezentuje komplet żył, więc
- * szyny przecinają odejścia bez kropek połączeniowych (tak jak na rysunku referencyjnym).
- * Opisy stoją z lewej strony, w marginesie rysunku, żeby nie wchodziły na żaden obwód.
+ * Nazwa szyny N za różnicówką: „N1" dla FI1, „N2" dla FI2… Przewód N obwodu wraca
+ * przez TĘ różnicówkę, przez którą wyszedł L — stąd numer z oznaczenia różnicówki.
+ * Odejścia bez różnicówki korzystają ze zwykłej szyny „N" (przed różnicówkami).
  */
-function ProtectiveBuses({ width }: { width: number }) {
-  const x1 = MARGIN_X;
-  const x2 = width - MARGIN_X;
+function nazwaSzynyN(rcd: PanelDevice | undefined): string {
+  if (!rcd) return "N";
+  const nr = rcd.tag.match(/(\d+)$/)?.[1];
+  return nr ? `N${nr}` : `N (${rcd.tag})`;
+}
+
+/**
+ * Szyny N i PE.
+ *
+ * PE — jedna, wspólna dla całej rozdzielnicy, zasilana pionem z GSU (patrz `ZrodloPe`).
+ *
+ * N — OSOBNA pod każdą różnicówką. Wcześniej jedna szyna N biegła pod wszystkimi
+ * grupami, co na rysunku wykonawczym podpowiada najczęstszy błąd montażowy: wspólne N
+ * za kilkoma różnicówkami. Prąd wraca wtedy przez inną różnicówkę niż ta, którą płynął
+ * L, i obie wyzwalają bez powodu albo przestają chronić (audyt rozdzielnicy
+ * 15.11.2026, błąd 2).
+ *
+ * Na schemacie jednokreskowym pojedyncza kreska obwodu reprezentuje komplet żył, więc
+ * szyny przecinają odejścia bez kropek połączeniowych — kropki ma tylko PE (`PeTaps`).
+ */
+function ProtectiveBuses({ width, columns }: { width: number; columns: Column[] }) {
   return (
     <g id="pe-n-buses">
-      {[
-        { y: Y_N_BUS, label: "N", dash: undefined },
-        // PE kreską przerywaną — odróżnia przewód ochronny od neutralnego na wydruku
-        // czarno-białym, gdzie kolor nie niesie żadnej informacji.
-        { y: Y_PE_BUS, label: "PE", dash: "6 3" },
-      ].map(({ y, label, dash }) => (
-        <g key={label}>
-          <line x1={x1} y1={y} x2={x2} y2={y} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray={dash} />
-          <text x={x1 - 6} y={y + 3.5} fontSize={9} fontWeight={700} textAnchor="end" fill={STROKE}>
-            {label}
-          </text>
-        </g>
-      ))}
+      {columns.map((col) => {
+        if (col.kind !== "rcd" || !col.block || col.block.mcbs.length === 0) return null;
+        const n = col.block.mcbs.length;
+        const x1 = circuitX(col, 0) - LEAF_W / 2 + 6;
+        const x2 = circuitX(col, n - 1) + LEAF_W / 2 - 6;
+        const nazwa = nazwaSzynyN(col.block.device);
+        return (
+          <g key={col.block.device?.uid ?? `bez-rcd-${col.x0}`} data-szyna="N">
+            <line x1={x1} y1={Y_N_BUS} x2={x2} y2={Y_N_BUS} stroke={STROKE} strokeWidth={LINE_W} />
+            <text x={x1 - 4} y={Y_N_BUS + 3.5} fontSize={9} fontWeight={700} textAnchor="end" fill={STROKE}>
+              {nazwa}
+            </text>
+          </g>
+        );
+      })}
+      {/* PE kreską przerywaną — odróżnia przewód ochronny od neutralnego na wydruku
+          czarno-białym, gdzie kolor nie niesie żadnej informacji. Od pionu z GSU po
+          prawą krawędź; opis z prawej, bo z lewej stoi pion. */}
+      <g data-szyna="PE">
+        <line x1={RISER_X} y1={Y_PE_BUS} x2={width - MARGIN_X} y2={Y_PE_BUS} stroke={STROKE} strokeWidth={LINE_W} strokeDasharray="6 3" />
+        <text x={width - MARGIN_X + 6} y={Y_PE_BUS + 3.5} fontSize={9} fontWeight={700} textAnchor="start" fill={STROKE}>
+          PE
+        </text>
+      </g>
     </g>
+  );
+}
+
+/** Jedno zdanie pod tabelą — to, czego sam rysunek szyn N nie powie montującemu. */
+function UwagiSchematu({ uklad }: { uklad: UkladSieci }) {
+  return (
+    <text id="uwagi-schematu" x={MARGIN_X} y={Y_UWAGI} fontSize={8} fill={MUTED}>
+      {"N1, N2… — osobna szyna N za każdą różnicówką; szyn N różnych różnicówek nie łączyć ze sobą. "}
+      {uklad === "TN-C-S"
+        ? "N i PE łączą się wyłącznie w miejscu rozdziału PEN."
+        : "N i PE nie łączyć w tej rozdzielnicy."}
+    </text>
   );
 }
 
@@ -581,6 +719,7 @@ export function SchemaTab() {
     [panelDevices, panelTryb, rcdGroups, panelConfig, pradyWgKlucza]
   );
 
+  const zasilanie = zasilanieRozdzielnicy(panelConfig);
   const mainDevice = devices.find((d) => d.kind === "main");
   const spdDevice = devices.find((d) => d.kind === "spd");
   const rcdDevices = devices.filter((d) => d.kind === "rcd");
@@ -625,7 +764,7 @@ export function SchemaTab() {
   //     z jej obwodami rozłożonymi równomiernie. Szerokość i wysokość liczone z danych,
   //     nie ze sztywnych stałych — schemat ma wyglądać dobrze przy 3 i przy 30 obwodach.
   const columns: Column[] = [];
-  let cursorX = MARGIN_X;
+  let cursorX = LEFT_X;
   if (spdDevice) {
     columns.push({ kind: "spd", width: SPD_COL_W, x0: cursorX, cx: cursorX + SPD_COL_W / 2 });
     cursorX += SPD_COL_W + GROUP_GAP;
@@ -689,7 +828,8 @@ export function SchemaTab() {
       </div>
 
       <OknoRysunku szerokosc={width} wysokosc={SCHEMA_HEIGHT} svgRef={svgRef} srodekStartowyX={mainX}>
-          <IncomingSupply x={mainX} supply3f={panelConfig.supply3f} />
+          <IncomingSupply x={mainX} supply3f={panelConfig.supply3f} uklad={zasilanie.uklad} przedlicznikowe={zasilanie.przedlicznikowe} />
+          <ZrodloPe mainX={mainX} uklad={zasilanie.uklad} />
           <MainSwitch x={mainX} device={mainDevice} />
 
           <line x1={mainX} y1={Y_SWITCH_BOT} x2={mainX} y2={Y_BUS} stroke={STROKE} strokeWidth={LINE_W} />
@@ -731,10 +871,11 @@ export function SchemaTab() {
 
           {/* Rysowane po odejściach, żeby poziome szyny biegły ciągłą kreską po ich wierzchu,
               a kropki połączeniowe PE leżały na wierzchu szyny, nie pod nią. */}
-          <ProtectiveBuses width={width} />
+          <ProtectiveBuses width={width} columns={columns} />
           <PeTaps columns={columns} />
 
           <FinalCircuitsTable columns={columns} />
+          <UwagiSchematu uklad={zasilanie.uklad} />
       </OknoRysunku>
     </div>
   );

@@ -16,6 +16,7 @@ import {
   MANUAL_DEVICE_TYPES,
   PHASE_COLORS,
   przeniesAparat,
+  zasilanieRozdzielnicy,
   type SelectivityLevel,
 } from "@/lib/panel/devices";
 import { computeSizedCircuits, dlugosciDoboru, fazyZRozdzielnicy, phaseBalance, pradyWgKluczaAparatu } from "@/lib/panel/project";
@@ -31,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { PanelRender } from "./PanelRender";
 import { EditDeviceModal } from "./EditDeviceModal";
 import { useSzerokieOkno } from "@/components/design/pasekMenuKontekst";
-import type { PanelDevice } from "@/types";
+import type { PanelDevice, UkladSieci } from "@/types";
 import { GotoweUkladyPrzycisk, ListaUkladow } from "@/components/panel/GotoweUklady";
 import { useWczytajUklad } from "@/hooks/useWczytajUklad";
 
@@ -44,6 +45,8 @@ const SELECTIVITY_STYLE: Record<SelectivityLevel, { bg: string; fg: string; Icon
 
 const PER_ROW_OPTIONS = [8, 12, 18, 24];
 const MAIN_RATING_OPTIONS = [25, 32, 40, 63, 80];
+/** Typowe prądy zabezpieczeń przedlicznikowych w przyłączach nN. */
+const PRZEDLICZNIKOWE_OPTIONS = [16, 20, 25, 32, 40, 50, 63, 80];
 
 /** Kolejny wolny `uid` dla ręcznie dodawanego aparatu, wyliczony z AKTUALNEJ listy —
  *  nie z licznika modułowego. Licznik przeżywał tylko do przeładowania strony: aparaty
@@ -135,6 +138,7 @@ export function PanelTab() {
   const panelConfig = useProjectStore((s) => s.panelConfig);
   const setPanelConfig = useProjectStore((s) => s.setPanelConfig);
   const { supply3f, mainRating, perRow } = panelConfig;
+  const { przedlicznikowe, uklad: ukladSieci } = zasilanieRozdzielnicy(panelConfig);
   // Warunki doboru mieszkają w PROJEKCIE z tego samego powodu co zasilanie: to
   // założenia o instalacji, nie preferencja widoku, i decydują o doborze przewodu
   // w każdej zakładce, która go pokazuje.
@@ -228,7 +232,7 @@ export function PanelTab() {
     if (trybReczny) return;
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
-      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, mainRating, pradyWgKlucza })
+      const rebuilt = buildPanelDevices(rcdGroups, { supply3f, mainRating, pradyWgKlucza, przedlicznikowe })
         .filter((d) => !d.key || !hiddenKeys.includes(d.key))
         // Ręczne poprawki nakładane na świeżo policzony aparat — inaczej zmiana
         // nastawy albo opisu znikałaby po każdym elemencie postawionym na planie.
@@ -236,7 +240,7 @@ export function PanelTab() {
       return [...rebuilt, ...manual];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [circuits, rcdGroups, supply3f, mainRating, trybReczny, panelOverrides, pradyWgKlucza]);
+  }, [circuits, rcdGroups, supply3f, mainRating, przedlicznikowe, trybReczny, panelOverrides, pradyWgKlucza]);
 
   const rows = useMemo(() => layoutPanel(devices, perRow), [devices, perRow]);
   const usedModules = devices.reduce((a, d) => a + d.modules, 0);
@@ -266,8 +270,8 @@ export function PanelTab() {
   // ręcznym skasowaniu aparatu) i ostrzeżenie kłamałoby, że ochrona jest.
   const maSpd = devices.some((d) => d.kind === "spd");
   const selectivity = useMemo(
-    () => computeSelectivity(devices, mainRating, supply3f, maSpd, balance.amps),
-    [devices, mainRating, supply3f, maSpd, balance]
+    () => computeSelectivity(devices, mainRating, supply3f, maSpd, balance.amps, panelConfig),
+    [devices, mainRating, supply3f, maSpd, balance, panelConfig]
   );
   // Dolny próg 1 A tylko dla SKALI pasków (bez niego pusta rozdzielnica dzieliłaby
   // przez zero) — rozrzut idzie z bilansu, z prawdziwych prądów.
@@ -328,7 +332,7 @@ export function PanelTab() {
     setPanelOverrides({});
     setDevices((prev) => {
       const manual = prev.filter((d) => d.manual);
-      return [...buildPanelDevices(rcdGroups, { supply3f, mainRating }), ...manual];
+      return [...buildPanelDevices(rcdGroups, { supply3f, mainRating, przedlicznikowe }), ...manual];
     });
   }
 
@@ -395,7 +399,7 @@ export function PanelTab() {
   const wczytajUklad = useWczytajUklad();
 
   function zacznijRecznie() {
-    if (devices.length === 0) setDevices(buildPanelDevices([], { supply3f, mainRating }));
+    if (devices.length === 0) setDevices(buildPanelDevices([], { supply3f, mainRating, przedlicznikowe }));
     setPanelTryb("reczny");
   }
 
@@ -475,6 +479,40 @@ export function PanelTab() {
             <option value="1">1-fazowe 230 V</option>
           </select>
         </label>
+        {/* Układ sieci decyduje o tym, jak na schemacie rozchodzą się N i PE (rozdział
+            PEN przed rozłącznikiem, osobny PE z uziomu w TT), o wariancie SPD i o tym,
+            czy obwód bez różnicówki jest tylko odstępstwem, czy błędem (TT). */}
+        <label className="block">
+          <div className="mb-1 text-xs text-slate-500">Układ sieci</div>
+          <select
+            value={ukladSieci}
+            onChange={(e) => setPanelConfig({ ukladSieci: e.target.value as UkladSieci })}
+            className="pe-input pe-select text-base md:text-sm"
+            aria-label="Układ sieci"
+            title="TN-C-S: dochodzi PEN i rozdziela się go w tej rozdzielnicy. TN-S: PE i N dochodzą osobno. TT: PE z własnego uziomu."
+          >
+            <option value="TN-C-S">TN-C-S (rozdział PEN tutaj)</option>
+            <option value="TN-S">TN-S (PE i N osobno)</option>
+            <option value="TT">TT (własny uziom)</option>
+          </select>
+        </label>
+        {/* Aparat, który NAPRAWDĘ chroni rozdzielnicę — rozłącznik obok niczego nie
+            wyłącza. Względem niego liczą się reguły doboru niżej. */}
+        <label className="block">
+          <div className="mb-1 text-xs text-slate-500">Zabezp. przedlicznikowe</div>
+          <select
+            value={przedlicznikowe}
+            onChange={(e) => setPanelConfig({ przedlicznikowe: Number(e.target.value) })}
+            className="pe-input pe-select text-base md:text-sm"
+            aria-label="Zabezpieczenie przedlicznikowe"
+          >
+            {PRZEDLICZNIKOWE_OPTIONS.map((a) => (
+              <option key={a} value={a}>
+                {a} A
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block">
           <div className="mb-1 text-xs text-slate-500">Rozłącznik główny</div>
           <select value={mainRating} onChange={(e) => setPanelConfig({ mainRating: Number(e.target.value) })} className="pe-input pe-select text-base md:text-sm">
@@ -504,8 +542,10 @@ export function PanelTab() {
         <div className="flex w-full items-start gap-2.5 py-1 text-xs text-slate-600" style={{ borderLeft: `3px solid ${KOLORY.copper}`, paddingLeft: 12 }}>
           <AlertTriangle size={15} className="mt-0.5 shrink-0 text-copper" />
           <span>
-            „Zasilanie" i „Rozłącznik główny" aplikacja przyjmuje jako domysł — sprawdź je w umowie z zakładem
-            energetycznym albo na tabliczce licznika, zanim zaufasz doborowi zabezpieczeń poniżej.
+            „Zasilanie", „Układ sieci" i „Zabezpieczenie przedlicznikowe" aplikacja przyjmuje jako domysł —
+            sprawdź je w warunkach przyłączenia lub umowie z operatorem albo w złączu, zanim zaufasz doborowi
+            zabezpieczeń poniżej. Rozłącznik główny niczego nie wyłącza: przed przeciążeniem i zwarciem chroni
+            rozdzielnicę zabezpieczenie przedlicznikowe.
           </span>
         </div>
         {/* Jedyną drogą do cofnięcia ręcznej zmiany (kasowanie aparatu, przesunięcie,
@@ -583,6 +623,7 @@ export function PanelTab() {
           onSave={zapiszEdycje}
           onDelete={removeDevice}
           supply3f={supply3f}
+          roznicowki={devices.filter((d) => d.kind === "rcd")}
         />
 
         <PdfPreview

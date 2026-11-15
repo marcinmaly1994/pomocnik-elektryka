@@ -32,9 +32,15 @@ describe("gotowe układy rozdzielnic", () => {
       }
     });
 
-    it("analiza selektywności nie zgłasza błędów ani ostrzeżeń", () => {
-      const bledy = computeSelectivity(aparaty, s.config.mainRating, s.config.supply3f, true).filter((f) => f.level === "error" || f.level === "warn");
-      expect(bledy.map((b) => b.title)).toEqual([]);
+    it("analiza selektywności nie zgłasza błędów, a ostrzega tylko o falowniku PV bez 30 mA", () => {
+      const uwagi = computeSelectivity(aparaty, s.config.mainRating, s.config.supply3f, true, undefined, s.config).filter(
+        (f) => f.level === "error" || f.level === "warn"
+      );
+      const maPv = aparaty.some((a) => a.caption === "Falownik PV");
+      // Falownik PV stoi bez różnicówki świadomie (wg instrukcji producenta) — i właśnie
+      // dlatego analiza ma to powiedzieć, a nie przemilczeć.
+      expect(uwagi.map((b) => b.title)).toEqual(maPv ? ["Obwody bez ochrony różnicowoprądowej 30 mA"] : []);
+      if (maPv) expect(uwagi[0].detail).toMatch(/^F\d+ \(Falownik PV\) —/);
     });
 
     it("mieści się w obudowie, którą proponuje", () => {

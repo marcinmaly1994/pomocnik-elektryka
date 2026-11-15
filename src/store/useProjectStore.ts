@@ -723,7 +723,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   stawkaVat: VAT_RATE,
   projectName: "Mój dom",
   protocols: {},
-  panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
+  panelConfig: { supply3f: true, mainRating: 40, perRow: 12, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
   warunkiDoboru: WARUNKI_DOBORU_DOMYSLNE,
   panelDevices: [],
   panelHidden: [],
@@ -900,7 +900,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       floors: [{ id: "f1", name: "Parter" }],
       activeFloorId: "f1",
       projectName: "Mój dom",
-      panelConfig: { supply3f: true, mainRating: 40, perRow: 12 },
+      panelConfig: { supply3f: true, mainRating: 40, perRow: 12, przedlicznikowe: 25, ukladSieci: "TN-C-S" },
   warunkiDoboru: WARUNKI_DOBORU_DOMYSLNE,
       panelDevices: [],
       panelHidden: [],
@@ -993,7 +993,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // później niż sam `panelConfig`, więc brakuje go także w migawkach, które
       // `panelConfig` już mają. Bez tego rozdzielnica wczytana ze starego projektu
       // miałaby rząd o szerokości `undefined` i nie policzyłaby modułów.
-      panelConfig: { supply3f: true, mainRating: 40, perRow: 12, ...((payload.panelConfig ?? {}) as Partial<PanelConfig>) },
+      panelConfig: { supply3f: true, mainRating: 40, perRow: 12, przedlicznikowe: 25, ukladSieci: "TN-C-S", ...((payload.panelConfig ?? {}) as Partial<PanelConfig>) },
       // Warunki doboru doszły po pierwszych zapisach — starsze migawki ich nie mają, a
       // wartości domyślne to dokładnie to, co dobór zakładał wtedy milcząco (30 °C,
       // jeden obwód w wiązce, układanie w ścianie, zero spadku na WLZ). Nakładane NA

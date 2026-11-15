@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { usePowiekszanieRysunku } from "@/hooks/usePowiekszanieRysunku";
 import { PrzyciskiPowiekszenia } from "@/components/ui/PrzyciskiPowiekszenia";
-import { PHASE_COLORS, accentForDevice, daSieSkasowac, layoutPanel, podpisPrzewoduNaFroncie } from "@/lib/panel/devices";
+import { PHASE_COLORS, accentForDevice, daSieSkasowac, layoutPanel, opisBiegunow, podpisPrzewoduNaFroncie } from "@/lib/panel/devices";
 import { zawijNaDwieLinie } from "@/lib/tekst";
 import type { SizedCircuit } from "@/lib/panel/sizing";
 import type { PanelDevice } from "@/types";
@@ -536,7 +536,7 @@ export function PanelRender({ devices, perRow, onDelete, onMove, onEdit, sizing 
 
                       {/* liczba biegunów — drobny nadruk przy krawędzi */}
                       <text x={w / 2} y={DEVICE_H - 30} textAnchor="middle" fontSize={6.5} fill="#8494A5">
-                        {d.poles}
+                        {opisBiegunow(d)}
                       </text>
                       <rect x={2} y={DEVICE_H - 27} width={w - 4} height={3.5} rx={1} fill={accent} opacity={0.85} />
                     </g>
