@@ -42,10 +42,25 @@ describe("buildPanelLegendPdf", () => {
     expect(out).toContain("Gniazda salon");
   });
 
-  it("dopisuje informację o obwodzie nadrzędnym RCD w opisie", async () => {
-    const bytes = await buildPanelLegendPdf(devices, 1, 6, 12, 12, header);
-    const out = bytesToAscii(bytes);
-    expect(out).toMatch(/za F1/);
+  /*
+   * Przegląd 15.11.2026, pkt 2: faza i powiązanie we własnych kolumnach — dotąd „(za F1)"
+   * stało na końcu opisu i ucinało się jako pierwsze; fazy nie było wcale, a SPD miał
+   * „4P" zamiast „3+1" z frontu i schematu.
+   */
+  it("ma kolumny fazy i powiązania; SPD opisany jako 3+1, obwód bez różnicówki — jawnie", async () => {
+    const lista: PanelDevice[] = [
+      ...devices.map((d) => (d.kind === "mcb" ? { ...d, phase: "L2" as const } : d)),
+      { uid: "4", kind: "spd", tag: "F0.1", modules: 4, label: "T2", caption: "Ogranicznik przepięć", poles: "4P" },
+      { uid: "5", kind: "mcb", tag: "F9", modules: 1, label: "B16", caption: "Gniazdo zewnętrzne", poles: "1P", phase: "L3" },
+    ];
+    const out = bytesToAscii(await buildPanelLegendPdf(lista, 1, 11, 12, 12, header));
+    expect(out).toContain("Faza");
+    expect(out).toContain("Powi");
+    expect(out).toContain("L2");
+    expect(out).toContain("3+1");
+    expect(out).not.toMatch(/\b4P\b/);
+    expect(out).toContain("bez RCD");
+    expect(out).not.toMatch(/za F1/);
   });
 
   it("działa poprawnie dla pustej listy aparatów (bez wyjątków)", async () => {

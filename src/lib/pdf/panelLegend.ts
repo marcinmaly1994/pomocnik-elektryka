@@ -1,5 +1,6 @@
 import type { DocumentHeader, PanelDevice } from "@/types";
 import { createPdfDoc, pdfFitText, type PdfDoc } from "./engine";
+import { opisBiegunow, powiazanieAparatu } from "@/lib/panel/devices";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
 
@@ -14,17 +15,26 @@ interface LegendRow {
   label: string;
   poles: string;
   modules: string;
+  faza: string;
+  powiazanie: string;
   caption: string;
   cable: string;
 }
 
+/*
+ * Faza i powiązanie (różnicówka / zasilanie szeregowe) we WŁASNYCH kolumnach — te same
+ * informacje, które front i schemat pokazują przy aparacie (przegląd 15.11.2026, pkt 2).
+ * Suma szerokości = szerokość pola strony A4 (511 pt).
+ */
 const COLS: LegendColumn[] = [
-  { key: "tag", label: "Ozn.", w: 44 },
+  { key: "tag", label: "Ozn.", w: 40 },
   { key: "label", label: "Aparat", w: 60 },
-  { key: "poles", label: "Bieg.", w: 38 },
-  { key: "modules", label: "Mod.", w: 36 },
-  { key: "caption", label: "Opis obwodu", w: 215 },
-  { key: "cable", label: "Przewód", w: 118 },
+  { key: "poles", label: "Bieg.", w: 34 },
+  { key: "modules", label: "Mod.", w: 30 },
+  { key: "faza", label: "Faza", w: 30 },
+  { key: "powiazanie", label: "Powiązanie", w: 72 },
+  { key: "caption", label: "Opis obwodu", w: 143 },
+  { key: "cable", label: "Przewód", w: 102 },
 ];
 const ROW_H = 19;
 const HEAD_H = 22;
@@ -72,9 +82,12 @@ export function buildPanelLegendDoc(
     const row: LegendRow = {
       tag: d.tag || "",
       label: d.label || "",
-      poles: d.poles || "",
+      // Opis biegunów jak na froncie i schemacie: SPD jako „3+1", nie „4P".
+      poles: opisBiegunow(d) || "",
       modules: String(d.modules || ""),
-      caption: (d.caption || "") + (d.rcdTag ? ` (za ${d.rcdTag})` : ""),
+      faza: d.phase || "-",
+      powiazanie: powiazanieAparatu(d, devices) || "-",
+      caption: d.caption || "",
       cable: d.cable || "-",
     };
     let cx = M + 5;

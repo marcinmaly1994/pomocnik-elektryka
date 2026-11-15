@@ -12,6 +12,7 @@ import {
   jestJednofazowymZabezpieczeniem,
   klamryRcdWRzedzie,
   plakietkaRcd,
+  powiazanieAparatu,
   rezerwaModulow,
   nastepneOznaczenie,
   ujednolicOznaczenia,
@@ -769,5 +770,21 @@ describe("klucze obwodów — stałe i tłumaczone ze starego formatu", () => {
   it("nowe klucze nie wpadają w stary wzór — tłumaczenie po jednym przejściu się nie powtarza", () => {
     const mapa = mapaKluczyStarych([{ id: "obw-e7" }], []);
     expect(mapa.has("mcb-obw-e7")).toBe(false);
+  });
+});
+
+describe("powiazanieAparatu (legenda PDF, przegląd 15.11.2026 pkt 2)", () => {
+  const a = (tag: string, p: Partial<PanelDevice> = {}): PanelDevice => ({ uid: tag, kind: "mcb", tag, modules: 1, label: "B16", caption: tag, poles: "1P", ...p });
+  const rcd = a("FI1", { kind: "rcd", label: "40A/30mA", caption: "Wyłącznik różnicowoprądowy 40A/30mA typ A" });
+  const f0 = a("F0", { label: "B6" });
+  const lista = [rcd, a("F1", { rcdTag: "FI1" }), a("F2"), a("F3", { kind: "rcbo", label: "B16/30mA", poles: "1P+N" }), f0, a("P1", { kind: "lampka", zasilanyZ: "F0" })];
+
+  it("obwód za różnicówką, RCBO, aparat szeregowy, obwód bez RCD, sama różnicówka", () => {
+    const p = (tag: string) => powiazanieAparatu(lista.find((d) => d.tag === tag)!, lista);
+    expect(p("F1")).toBe("FI1 · 30 mA");
+    expect(p("F3")).toBe("RCBO · 30 mA");
+    expect(p("P1")).toBe("z F0");
+    expect(p("F2")).toBe("bez RCD");
+    expect(p("FI1")).toBe("30 mA · typ A");
   });
 });
