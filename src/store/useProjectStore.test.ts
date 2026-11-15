@@ -603,7 +603,7 @@ describe("wczytanie projektu z niepełnym nagłówkiem dokumentów", () => {
 
     const { docHeader } = useProjectStore.getState();
     expect(docHeader.obiekt).toBe("");
-    expect(docHeader.uklad).toBe("TN-S");
+    expect(docHeader.uklad).toBe("TN-C-S");
     // To, co w zapisie BYŁO, musi przetrwać uzupełnianie.
     expect(docHeader.wykonawca).toBe("Jan Kowalski");
   });
@@ -614,7 +614,7 @@ describe("wczytanie projektu z niepełnym nagłówkiem dokumentów", () => {
     const bezNaglowka = { ...payload, docHeader: undefined as never };
 
     expect(() => loadProjectPayload(bezNaglowka)).not.toThrow();
-    expect(useProjectStore.getState().docHeader.uklad).toBe("TN-S");
+    expect(useProjectStore.getState().docHeader.uklad).toBe("TN-C-S");
   });
 });
 
@@ -933,5 +933,32 @@ describe("automatyczna wersja przed operacją nieodwracalną", () => {
     useProjectStore.getState().removeFloor("f1");
     expect(wersje()).toHaveLength(0);
     expect(useProjectStore.getState().floors).toHaveLength(1);
+  });
+});
+
+/*
+ * Układ sieci jest jeden dla projektu — nagłówek protokołów i rozdzielnica (audyt
+ * rozdzielnicy 15.11.2026, pakiet 3). TN-C i IT zna tylko protokół.
+ */
+describe("układ sieci wspólny dla protokołów i rozdzielnicy", () => {
+  it("zmiana w rozdzielnicy przenosi się do nagłówka protokołów i odwrotnie", () => {
+    useProjectStore.getState().setPanelConfig({ ukladSieci: "TT" });
+    expect(useProjectStore.getState().docHeader.uklad).toBe("TT");
+    useProjectStore.getState().setDocHeader({ uklad: "TN-S" });
+    expect(useProjectStore.getState().panelConfig.ukladSieci).toBe("TN-S");
+  });
+
+  it("TN-C w protokole nie zmienia rozdzielnicy", () => {
+    useProjectStore.getState().setPanelConfig({ ukladSieci: "TN-C-S" });
+    useProjectStore.getState().setDocHeader({ uklad: "TN-C" });
+    expect(useProjectStore.getState().panelConfig.ukladSieci).toBe("TN-C-S");
+  });
+
+  it("projekt bez układu w rozdzielnicy bierze go z nagłówka protokołów", () => {
+    const payload = useProjectStore.getState().getProjectPayload();
+    const { ukladSieci: _pominiety, ...bezUkladu } = payload.panelConfig;
+    void _pominiety;
+    useProjectStore.getState().loadProjectPayload({ ...payload, panelConfig: bezUkladu, docHeader: { ...payload.docHeader, uklad: "TT" } });
+    expect(useProjectStore.getState().panelConfig.ukladSieci).toBe("TT");
   });
 });

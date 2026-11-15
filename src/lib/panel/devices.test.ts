@@ -9,6 +9,10 @@ import {
   daSieSkasowac,
   dolozAparatReczny,
   dzieciAparatu,
+  jestJednofazowymZabezpieczeniem,
+  nastepneOznaczenie,
+  ujednolicOznaczenia,
+  zachowajKolejnosc,
   przemianujAparat,
   rodzicAparatu,
   layoutPanel,
@@ -526,5 +530,82 @@ describe("aparaty zasilane szeregowo", () => {
       expect(tytuly([q1, ppoz])).toContain("Rozłącznik przeciwpożarowy rozłączałby PEN");
       expect(tytuly([q1, ppoz], "TN-S")).not.toContain("Rozłącznik przeciwpożarowy rozłączałby PEN");
     });
+  });
+});
+
+/* Pakiet 3 audytu rozdzielnicy (15.11.2026): oznaczenia, RCBO, kolejność. */
+describe("oznaczenia aparatów", () => {
+  const a = (tag: string, p: Partial<PanelDevice> = {}): PanelDevice => ({ uid: tag, kind: "mcb", tag, modules: 1, label: "B16", caption: tag, poles: "1P", ...p });
+
+  it("następne oznaczenie = największy numer + 1, z dokładnym prefiksem (FI nie liczy się do F)", () => {
+    expect(nastepneOznaczenie([a("F1"), a("F7"), a("FI1"), a("FI2")], "F")).toBe("F8");
+    expect(nastepneOznaczenie([a("F1"), a("FI1")], "FI")).toBe("FI2");
+    expect(nastepneOznaczenie([a("F3")], "F0.")).toBe("F0.1");
+    expect(nastepneOznaczenie([a("F0.1"), a("F0.2")], "F0.")).toBe("F0.3");
+  });
+
+  it("po skasowaniu aparatu numer się nie powtarza (wcześniej liczono aparaty, nie numery)", () => {
+    // F1, F3 — F2 skasowany; stary licznik dawał „F3" po raz drugi.
+    expect(nastepneOznaczenie([a("F1"), a("F3")], "F")).toBe("F4");
+  });
+
+  it("SPD i jego bezpiecznik dostają serię F0.x i stają za rozłącznikiem głównym; CZF — K", () => {
+    const q1 = a("Q1", { kind: "main", poles: "4P" });
+    const z = { supply3f: true, uklad: "TN-C-S" as const };
+    const def = (key: string) => MANUAL_DEVICE_TYPES.find((t) => t.key === key)!;
+    let lista = [q1, a("FI1", { kind: "rcd" }), a("F1", { rcdTag: "FI1" })];
+    lista = dolozAparatReczny(lista, def("spd"), { uid: "m1" }, z);
+    lista = dolozAparatReczny(lista, def("spdFuse"), { uid: "m2" }, z);
+    lista = dolozAparatReczny(lista, def("ovr"), { uid: "m3" }, z);
+    expect(lista.map((d) => d.tag)).toEqual(["Q1", "F0.1", "F0.2", "FI1", "F1", "K1"]);
+    expect(lista[1].zasilanyZ).toBe("F0.2");
+  });
+
+  it("ujednolicOznaczenia: automat zachowuje swoje, ręczny dostaje następne wolne, a odwołania idą za nim", () => {
+    const auto = [a("F1", { key: "mcb-1" }), a("F2", { key: "mcb-2" })];
+    const reczne = [a("F2", { uid: "manual-1", manual: true, label: "B6" }), a("P1", { uid: "manual-2", manual: true, kind: "lampka", zasilanyZ: "F2" })];
+    const wynik = ujednolicOznaczenia([...auto, ...reczne]);
+    expect(wynik.map((d) => d.tag)).toEqual(["F1", "F2", "F3", "P1"]);
+    expect(wynik[3].zasilanyZ).toBe("F3");
+    expect(ujednolicOznaczenia(auto)).toBe(auto);
+  });
+
+  it("zachowajKolejnosc: ułożenie użytkownika przeżywa odbudowę, nowe aparaty wchodzą za poprzednikiem", () => {
+    const q1 = a("Q1", { key: "main", kind: "main" });
+    const f1 = a("F1", { key: "mcb-1" });
+    const f2 = a("F2", { key: "mcb-2" });
+    const f3 = a("F3", { key: "mcb-3" });
+    const spd = a("F0.1", { uid: "manual-1", manual: true, kind: "spd" });
+    // Użytkownik przestawił SPD za Q1 i F2 przed F1.
+    const poprzednie = [q1, spd, f2, f1];
+    // Po zmianie rzutu automat liczy od nowa (doszedł F3), ręczne doklejone na koniec.
+    const swieze = [q1, f1, f2, f3, spd];
+    // F3 wchodzi zaraz za F2 — tak jak stoi za nim w świeżo policzonej liście.
+    expect(zachowajKolejnosc(poprzednie, swieze).map((d) => d.tag)).toEqual(["Q1", "F0.1", "F2", "F3", "F1"]);
+  });
+});
+
+describe("RCBO", () => {
+  const rcbo: PanelDevice = { uid: "r", kind: "rcbo", tag: "F5", modules: 2, label: "B16/30mA", caption: "Lodówka", poles: "1P+N" };
+
+  it("jest zabezpieczeniem jednofazowym — dostaje fazę z bilansu, nie „3F”", () => {
+    expect(jestJednofazowymZabezpieczeniem(rcbo)).toBe(true);
+    expect(["L1", "L2", "L3"]).toContain(balancePhases([rcbo])[0].phase);
+  });
+
+  it("dokładany ręcznie przy 3 fazach dostaje L1, nie 3F", () => {
+    const def = MANUAL_DEVICE_TYPES.find((t) => t.key === "rcbo")!;
+    const wynik = dolozAparatReczny([], def, { uid: "m1" }, { supply3f: true, uklad: "TN-C-S" });
+    expect(wynik[0].phase).toBe("L1");
+  });
+
+  it("liczy się do bilansu faz", () => {
+    expect(computePhaseLoad([{ ...rcbo, phase: "L2" }])).toEqual({ L1: 0, L2: 16, L3: 0 });
+  });
+
+  it("RCBO 300 mA nie daje ochrony 30 mA — reguła to zgłasza; 30 mA nie", () => {
+    const tytul = "Obwody bez ochrony różnicowoprądowej 30 mA";
+    expect(computeSelectivity([{ ...rcbo, label: "B16/300mA" }], 40, false, true).some((f) => f.title === tytul)).toBe(true);
+    expect(computeSelectivity([rcbo], 40, false, true).some((f) => f.title === tytul)).toBe(false);
   });
 });

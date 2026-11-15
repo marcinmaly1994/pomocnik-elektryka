@@ -1,5 +1,5 @@
 import type { PanelConfig, PanelDevice } from "@/types";
-import { balancePhases, MANUAL_DEVICE_TYPES } from "./devices";
+import { balancePhases, jestJednofazowymZabezpieczeniem, MANUAL_DEVICE_TYPES, prefiksAparatu } from "./devices";
 
 /**
  * Biblioteka gotowych układów rozdzielnic (F17 z audytu 5.11.2026).
@@ -197,7 +197,7 @@ export function aparatyZSzablonu(s: SzablonRozdzielnicy): PanelDevice[] {
     out.push(
       reczny({
         kind: def.key,
-        tag: tag(def.prefix),
+        tag: tag(prefiksAparatu(def)),
         modules: zZasilania ? (supply3f ? 4 : 2) : def.modules,
         label: a.label ?? def.defLabel,
         caption: def.label,
@@ -242,7 +242,7 @@ export function aparatyZSzablonu(s: SzablonRozdzielnicy): PanelDevice[] {
     }
   }
 
-  return supply3f ? balancePhases(out) : out.map((d) => (d.kind === "mcb" && d.poles === "1P" ? { ...d, phase: "L1" as const } : d));
+  return supply3f ? balancePhases(out) : out.map((d) => (jestJednofazowymZabezpieczeniem(d) ? { ...d, phase: "L1" as const } : d));
 }
 
 /** Ile modułów zajmie układ — do pokazania przy wyborze („36 mod., 2 × 18"). */

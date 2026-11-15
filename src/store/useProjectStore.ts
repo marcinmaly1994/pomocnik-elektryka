@@ -17,6 +17,7 @@ import {
 import { zapiszWersje } from "@/lib/wersjeProjektu";
 import { czytajKopie } from "@/lib/kopiaProjektu";
 import { WARUNKI_DOBORU_DOMYSLNE, type WarunkiDoboru } from "@/lib/panel/norms";
+import { jestUklademRozdzielnicy } from "@/lib/panel/devices";
 import type { ProjectSizingOptions } from "@/lib/panel/project";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -993,7 +994,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // później niż sam `panelConfig`, więc brakuje go także w migawkach, które
       // `panelConfig` już mają. Bez tego rozdzielnica wczytana ze starego projektu
       // miałaby rząd o szerokości `undefined` i nie policzyłaby modułów.
-      panelConfig: { supply3f: true, mainRating: 40, perRow: 12, przedlicznikowe: 25, ukladSieci: "TN-C-S", ...((payload.panelConfig ?? {}) as Partial<PanelConfig>) },
+      // Układ sieci: projekt sprzed pola w rozdzielnicy bierze go z nagłówka protokołów,
+      // jeśli ten podaje układ, który rozdzielnica umie narysować — patrz `setDocHeader`.
+      panelConfig: {
+        supply3f: true,
+        mainRating: 40,
+        perRow: 12,
+        przedlicznikowe: 25,
+        ukladSieci: ((u) => (jestUklademRozdzielnicy(u) ? u : "TN-C-S"))(payload.docHeader?.uklad),
+        ...((payload.panelConfig ?? {}) as Partial<PanelConfig>),
+      },
       // Warunki doboru doszły po pierwszych zapisach — starsze migawki ich nie mają, a
       // wartości domyślne to dokładnie to, co dobór zakładał wtedy milcząco (30 °C,
       // jeden obwód w wiązce, układanie w ścianie, zero spadku na WLZ). Nakładane NA
@@ -1257,12 +1267,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return { qtyOverrides: next };
     }),
 
+  /*
+   * Układ sieci jest JEDEN dla projektu: wpisany w nagłówku protokołów i wybrany
+   * w Rozdzielnicy to ta sama instalacja. Wcześniej żyły osobno i potrafiły się
+   * rozjechać — protokół z „TN-S" przy schemacie z rozdziałem PEN. Zmiana w jednym
+   * miejscu przenosi się do drugiego; TN-C i IT zna tylko nagłówek protokołu, więc
+   * rozdzielnica zostaje wtedy przy swoim.
+   */
   setDocHeader: (patch) =>
-    set((state) => ({ docHeader: { ...state.docHeader, ...patch } })),
+    set((state) => ({
+      docHeader: { ...state.docHeader, ...patch },
+      ...(jestUklademRozdzielnicy(patch.uklad) ? { panelConfig: { ...state.panelConfig, ukladSieci: patch.uklad } } : {}),
+    })),
 
   setProjectName: (name) => set({ projectName: name }),
 
-  setPanelConfig: (patch) => set((state) => ({ panelConfig: { ...state.panelConfig, ...patch } })),
+  setPanelConfig: (patch) =>
+    set((state) => ({
+      panelConfig: { ...state.panelConfig, ...patch },
+      ...(patch.ukladSieci ? { docHeader: { ...state.docHeader, uklad: patch.ukladSieci } } : {}),
+    })),
 
   setPanelDevices: (devices) => set({ panelDevices: devices }),
   setPanelHidden: (keys) => set({ panelHidden: keys }),

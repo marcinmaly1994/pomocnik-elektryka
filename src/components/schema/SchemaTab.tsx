@@ -118,7 +118,7 @@ function siatka(ppoz: boolean, szeregowe: boolean) {
   const TABLE_BOTTOM = TABLE_PHASE_BOTTOM + TABLE_NAME_H;
   /** Uwaga o szynach N pod tabelą — patrz `UwagiSchematu`. */
   const Y_UWAGI = TABLE_BOTTOM + 18;
-  const SCHEMA_HEIGHT = Y_UWAGI + 12;
+  const SCHEMA_HEIGHT = Y_UWAGI + 36;
   return {
     Y_PPOZ_TOP, Y_PPOZ_BOT, Y_SPLIT, Y_SWITCH_TOP, Y_SWITCH_BOT, Y_BUS, Y_SUBBUS, Y_MCB_TOP, Y_MCB_BOTTOM,
     Y_SER_TOP, Y_SER_BOTTOM, Y_N_BUS, Y_PE_BUS, Y_WIRE_END, Y_TERMINAL_TEXT, Y_SPD_BOTTOM, Y_LAMPKA_BOTTOM,
@@ -137,6 +137,9 @@ const GENERIC_LABEL_DX = labelOffset(GLYPHS.generic, 0, LEAF_GLYPH_H);
 const ROZBEZP_LABEL_DX = labelOffset(GLYPHS.rozBezp3f, 0, LEAF_GLYPH_H);
 const LAMPKA_LABEL_DX = labelOffset(GLYPHS.lampka, 0, LEAF_GLYPH_H);
 const BEZPIECZNIK_LABEL_DX = labelOffset(GLYPHS.bezpiecznik, 0, LEAF_GLYPH_H);
+/** RCBO — ten sam symbol co różnicówka (styk z członem wyłącznika, przekładnik,
+ *  wyzwalacz), wpisany w gniazdo wyłącznika obwodu. */
+const RCBO_LABEL_DX = labelOffset(GLYPHS.rcd, 0, LEAF_GLYPH_H);
 
 /** Ile znaków mieści się w jednej linii komórki tabeli. Szerokość znaku (4,3 px dla
  *  `fontSize=8`) zmierzona przez `getComputedTextLength()` na realnych nazwach obwodów —
@@ -504,12 +507,22 @@ function ProtectiveBuses({ width, columns, s }: { width: number; columns: Column
 /** Jedno zdanie pod tabelą — to, czego sam rysunek szyn N nie powie montującemu. */
 function UwagiSchematu({ uklad, s }: { uklad: UkladSieci; s: Siatka }) {
   return (
-    <text id="uwagi-schematu" x={MARGIN_X} y={s.Y_UWAGI} fontSize={8} fill={MUTED}>
-      {"N1, N2… — osobna szyna N za każdą różnicówką; szyn N różnych różnicówek nie łączyć ze sobą. "}
-      {uklad === "TN-C-S"
-        ? "N i PE łączą się wyłącznie w miejscu rozdziału PEN."
-        : "N i PE nie łączyć w tej rozdzielnicy."}
-    </text>
+    <g id="uwagi-schematu">
+      <text x={MARGIN_X} y={s.Y_UWAGI} fontSize={8} fill={MUTED}>
+        {"N1, N2… — osobna szyna N za każdą różnicówką; szyn N różnych różnicówek nie łączyć ze sobą. "}
+        {uklad === "TN-C-S"
+          ? "N i PE łączą się wyłącznie w miejscu rozdziału PEN."
+          : "N i PE nie łączyć w tej rozdzielnicy."}
+      </text>
+      {/* Konwencja oznaczeń projektu — „FI" nie jest kodem klasy z IEC 81346-2, więc
+          rysunek mówi wprost, co znaczy, zamiast zakładać, że czytający zna zwyczaj. */}
+      <text data-legenda-oznaczen="" x={MARGIN_X} y={s.Y_UWAGI + 12} fontSize={8} fill={MUTED}>
+        Oznaczenia: Q — łączniki · F1…Fn — zabezpieczenia obwodów (numer = numer obwodu) · F0.x — sekcja zasilania (SPD i jego bezpiecznik)
+      </text>
+      <text data-legenda-oznaczen="" x={MARGIN_X} y={s.Y_UWAGI + 24} fontSize={8} fill={MUTED}>
+        FI — wyłączniki różnicowoprądowe (klasa F wg IEC 81346-2) · K — styczniki, przekaźniki, czujniki · P — sygnalizacja · T — zasilacze
+      </text>
+    </g>
   );
 }
 
@@ -558,6 +571,9 @@ function symbolOdplywu(device: PanelDevice): { spec: GlyphSpec; labelDx: number 
   if (device.kind === "mcb") return { spec: GLYPHS.mcb, labelDx: MCB_LABEL_DX };
   if (device.kind === "rozBezp") return { spec: device.poles === "3P" ? GLYPHS.rozBezp3f : GLYPHS.rozBezp1f, labelDx: ROZBEZP_LABEL_DX };
   if (device.kind === "spdFuse") return { spec: GLYPHS.bezpiecznik, labelDx: BEZPIECZNIK_LABEL_DX };
+  // RCBO dostawał symbol zastępczy (przerywaną ramkę), choć to jeden z najczęstszych
+  // aparatów (audyt rozdzielnicy 15.11.2026, błąd 10).
+  if (device.kind === "rcbo") return { spec: GLYPHS.rcd, labelDx: RCBO_LABEL_DX };
   if (device.kind === "lampka") return { spec: GLYPHS.lampka, labelDx: LAMPKA_LABEL_DX };
   return { spec: GLYPHS.generic, labelDx: GENERIC_LABEL_DX };
 }

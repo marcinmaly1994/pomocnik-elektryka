@@ -82,7 +82,7 @@ test("„ppoz” dodany ręcznie trafia na dopływ, nad rozłącznik główny �
 
 for (const [kind, prefix] of [
   ["rcbo", "F"],
-  ["ovr", "F"],
+  ["ovr", "K"], // czujnik zaniku fazy — K jak przekaźniki (pakiet 3 audytu rozdzielnicy)
   ["przekaznik", "K"],
   ["zasilacz", "T"],
 ]) {
