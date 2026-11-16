@@ -73,7 +73,7 @@ test("pętla zwarcia: pomiar zgodny z normą, ale bez zapasu 0,8 — pozytywna z
   await zs.fill("2.5");
 
   await expect(page.getByText("Wynik pozytywny")).toBeVisible();
-  await expect(page.getByTestId("uwaga-wiersza")).toHaveText("bez zapasu (zalecane ≤ 2,18 Ω)");
+  await expect(page.getByTestId("uwaga-wiersza")).toHaveText("bez zapasu (zalecane ≤\u00a02,18\u00a0Ω)");
 
   await zs.fill("1.8");
   await expect(page.getByTestId("uwaga-wiersza")).toHaveCount(0);

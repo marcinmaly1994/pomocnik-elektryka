@@ -264,7 +264,7 @@ describe("uwaga „bez zapasu” w protokole pętli zwarcia", () => {
   it("pomiar zgodny z normą, ale powyżej 0,8·Zs max: pozytywna z uwagą i progiem", () => {
     const wiersz: ProtocolRow = { curve: "B", in: 16, zs: 2.5 };
     expect(ocenWiersz(def, wiersz, 1)).toBe(true);
-    expect(uwagaWiersza(def, wiersz, 1)).toBe("bez zapasu (zalecane ≤ 2,18 Ω)");
+    expect(uwagaWiersza(def, wiersz, 1)).toBe("bez zapasu (zalecane ≤\u00a02,18\u00a0Ω)");
     // werdykt protokołu nadal pozytywny — uwaga go nie zmienia
     expect(protocolVerdict(def, [wiersz], 1)).toBe(true);
   });

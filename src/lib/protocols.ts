@@ -183,7 +183,7 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
       // Próg w dół do 0,01 Ω: zaokrąglony w górę (2,185 → 2,19) pokazywałby „zalecane ≤ 2,19"
       // przy pomiarze 2,19 oznaczonym jako bez zapasu.
       const zalecana = Math.floor(zsMax * ZAPAS_POMIAROWY * 100) / 100;
-      return Math.max(...zmierzone) > zalecana ? `bez zapasu (zalecane ≤ ${formatLiczba(zalecana, 2)} Ω)` : null;
+      return Math.max(...zmierzone) > zalecana ? `bez zapasu (zalecane ≤\u00a0${formatLiczba(zalecana, 2)}\u00a0Ω)` : null;
     },
   },
 
