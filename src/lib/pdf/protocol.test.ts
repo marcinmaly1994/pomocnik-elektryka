@@ -255,6 +255,13 @@ describe("buildProtocolPdf — nic nie jest ucinane", () => {
     expect(out).toContain("0,8");
   });
 
+  it("pętla: wkładka gG na wydruku — typ w kolumnie Char., Ia z charakterystyki", async () => {
+    const out = bytesToAscii(await buildProtocolPdf("petla", header, [{ obwod: "WLZ", curve: "gG WT", in: 32, zs: 0.4 }], 1));
+    expect(out).toContain("(gG WT) Tj");
+    expect(out).toContain("(250) Tj");
+    expect(out).toContain("(pozytywna) Tj");
+  });
+
   it("długa nazwa obwodu zawija się do kolejnych linii, a każde jej słowo trafia do dokumentu", async () => {
     const nazwa = "F8 Obwod gniazd - pomieszczenia gospodarcze 1 (parter, strefa techniczna)";
     const out = bytesToAscii(await buildProtocolPdf("izolacja", header, [{ obwod: nazwa, l1n: 250 }], 500));
