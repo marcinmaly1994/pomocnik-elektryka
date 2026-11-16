@@ -35,6 +35,9 @@ export interface ProtocolDef {
   /** Uwaga do wiersza z oceną POZYTYWNĄ — wynik zgodny z normą, ale bez zalecanego zapasu.
    *  Nie zmienia werdyktu; wywoływać przez `uwagaWiersza`, nie wprost. */
   uwaga?: (row: ProtocolRow, limit: number) => string | null;
+  /** Wiersz, którego nie da się ocenić z powodu sprzecznych danych (np. RCD typu AC badany
+   *  prądem stałym) — opis do pokazania ZAMIAST oceny. Wywoływać przez `bladWiersza`. */
+  bladDanych?: (row: ProtocolRow) => string | null;
   checklist?: boolean;
   items?: string[];
   /** Kryteria, które NIE są jedną edytowalną liczbą — np. czasy zadziałania RCD
@@ -63,6 +66,26 @@ export function minRezystancjaIzolacji(napiecieProby: number): number {
  * 5·IΔn. Ocenianie selektywnego progiem 300 ms dawało werdykt negatywny dla
  * poprawnie działającego aparatu.
  */
+/** Kształt prądu próbnego RCD — wartości kolumny „Prąd prób.": sinusoidalny, pulsujący
+ *  jednokierunkowy, stały. Skróty, bo pełne „pulsujący" nie mieści się w wąskiej liście. */
+export const KSZTALTY_PRADU_RCD = ["sinus.", "puls.", "stały"] as const;
+
+/**
+ * Dopuszczalny prąd zadziałania RCD jako krotność IΔn — zależy od KSZTAŁTU prądu próbnego,
+ * nie od samego typu wyłącznika: PN-EN 61008/61009 — sinusoidalny 0,5–1,0·IΔn (każdy typ),
+ * pulsujący jednokierunkowy 0,35–1,4·IΔn (A, F, B); PN-EN 62423 — stały 0,5–2,0·IΔn (B).
+ *
+ * Dotąd każdy pomiar oceniano zakresem sinusoidalnym, więc poprawny wyłącznik typu A
+ * zbadany prądem pulsującym i zadziałały przy 1,2·IΔn dostawał ocenę negatywną.
+ * `null` = ten typ nie musi wykrywać takiego prądu (AC — pulsującego, A/F — stałego):
+ * pomiar nie ma kryterium, więc nie jest ani zgodny, ani niezgodny.
+ */
+export function zakresPraduRcd(typ: string, ksztalt: string): [number, number] | null {
+  if (ksztalt === "puls.") return typ === "AC" ? null : [0.35, 1.4];
+  if (ksztalt === "stały") return typ === "B" ? [0.5, 2.0] : null;
+  return [0.5, 1.0];
+}
+
 export function dopuszczalneCzasyRcd(selektywny: boolean): { t1: [number, number]; t5: [number, number] } {
   return selektywny ? { t1: [130, 500], t5: [50, 150] } : { t1: [0, 300], t5: [0, 40] };
 }
@@ -263,6 +286,8 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
       { key: "idn", label: "IΔn [mA]", w: 50, type: "number", default: 30 },
       { key: "typ", label: "Typ", w: 38, type: "select", options: ["AC", "A", "B", "F"], default: "A" },
       { key: "sel", label: "Selekt. (S)", w: 52, type: "select", options: ["nie", "tak"], default: "nie" },
+      // Kształt prądu ustawiony w mierniku — od niego zależy zakres prądu zadziałania.
+      { key: "ksztalt", label: "Prąd prób.", w: 56, type: "select", options: [...KSZTALTY_PRADU_RCD], default: "sinus." },
       { key: "id", label: "IΔ zadz. [mA]", w: 62, type: "number" },
       { key: "t1", label: "t przy IΔn [ms]", w: 68, type: "number" },
       { key: "t5", label: "t przy 5·IΔn [ms]", w: 74, type: "number" },
@@ -275,7 +300,7 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     limitDefault: 50,
     limitUnit: "V",
     extraCriterion:
-      "Czasy wg PN-EN 61008/61009 — zwykły: ≤300 ms przy IΔn, ≤40 ms przy 5·IΔn; selektywny (S): 130–500 ms przy IΔn, 50–150 ms przy 5·IΔn. Prąd zadziałania: 0,5·IΔn ≤ IΔ ≤ IΔn.",
+      "Czasy wg PN-EN 61008/61009 — zwykły: ≤300 ms przy IΔn, ≤40 ms przy 5·IΔn; selektywny (S): 130–500 ms przy IΔn, 50–150 ms przy 5·IΔn. Prąd zadziałania wg kształtu prądu próbnego: sinusoidalny („sinus.”) 0,5–1,0·IΔn (każdy typ), pulsujący („puls.”) 0,35–1,4·IΔn (A, F, B), stały 0,5–2,0·IΔn (B, PN-EN 62423). Typ AC nie musi wykrywać prądu pulsującego, a A i F — stałego; taki pomiar nie podlega ocenie.",
     evaluate: (r, limit) => {
       const idn = Number(r.idn);
       const id = Number(r.id);
@@ -286,13 +311,21 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
       if (!idn || !id || (!t1 && !t5)) return null;
       const { t1: zakres1, t5: zakres5 } = dopuszczalneCzasyRcd(String(r.sel ?? "nie") === "tak");
       const wZakresie = (v: number, [min, max]: [number, number]) => v >= min && v <= max;
-      const okPrad = id >= 0.5 * idn && id <= idn;
+      const zakres = zakresPraduRcd(String(r.typ ?? "A"), String(r.ksztalt ?? "sinus."));
+      if (!zakres) return null;
+      const okPrad = id >= zakres[0] * idn && id <= zakres[1] * idn;
       // Czas niewpisany nie psuje oceny — pomiar mógł jeszcze nie zostać wykonany.
       // Wpisany musi się zmieścić w zakresie właściwym dla typu wyłącznika.
       const okT1 = !t1 || wZakresie(t1, zakres1);
       const okT5 = !t5 || wZakresie(t5, zakres5);
       const okUb = isNaN(ub) || ub <= Number(limit);
       return okPrad && okT1 && okT5 && okUb;
+    },
+    bladDanych: (r) => {
+      const typ = String(r.typ ?? "A");
+      const ksztalt = String(r.ksztalt ?? "sinus.");
+      if (zakresPraduRcd(typ, ksztalt)) return null;
+      return `typ ${typ} nie wykrywa prądu ${ksztalt === "stały" ? "stałego" : "pulsującego"}`;
     },
   },
 
@@ -512,7 +545,13 @@ export function ujemneWProtokole(def: ProtocolDef, rows: ProtocolRow[]): { wiers
  */
 export function ocenWiersz(def: ProtocolDef, row: ProtocolRow, limit: number): boolean | null {
   if (ujemneWWierszu(def, row).length > 0) return null;
+  if (bladWiersza(def, row)) return null;
   return def.evaluate!(row, limit);
+}
+
+/** Sprzeczność danych wiersza, przez którą nie ma kryterium oceny — patrz `bladDanych`. */
+export function bladWiersza(def: ProtocolDef, row: ProtocolRow): string | null {
+  return def.bladDanych?.(row) ?? null;
 }
 
 /**

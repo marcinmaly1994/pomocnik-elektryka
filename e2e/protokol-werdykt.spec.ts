@@ -121,3 +121,23 @@ test("układ TT z nagłówka: pętla opisuje TT, uziemienie dostaje IΔn i warun
   await expect(page.getByTestId("wiersz-pomiaru").first()).toContainText("100,0");
   await expect(page.getByText("Wynik negatywny")).toBeVisible();
 });
+
+test("RCD: typ A badany prądem pulsującym przy 1,2·IΔn — pozytywna; typ AC z prądem pulsującym — bez kryterium", async ({ page }) => {
+  // Przegląd 15.11.2026 (b), pkt 4: zakres prądu zadziałania był zawsze sinusoidalny (0,5–1,0·IΔn).
+  await otworz(page);
+  await page.getByRole("button", { name: /^Badanie wyłączników różnicowoprądowych/ }).first().click();
+  await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+  await page.getByLabel("IΔ zadz. [mA], pozycja 1").fill("36");
+  await page.getByLabel("t przy IΔn [ms], pozycja 1").fill("25");
+  await expect(page.getByText("Wynik negatywny")).toBeVisible(); // sinusoidalny: 36 > 30 mA
+
+  await page.getByLabel("Prąd prób., pozycja 1").selectOption("puls.");
+  await expect(page.getByText("Wynik pozytywny")).toBeVisible(); // pulsujący: do 1,4·30 = 42 mA
+
+  await page.getByLabel("Typ, pozycja 1").selectOption("AC");
+  await expect(page.getByTestId("blad-wiersza")).toHaveText("typ AC nie wykrywa prądu pulsującego");
+  await expect(page.getByText("Wynik negatywny")).toHaveCount(0);
+  // wiersz ma wyniki — komunikat nie każe „uzupełnić pomiarów”, tylko mówi o braku kryterium
+  await expect(page.getByTestId("protokol-niekompletny")).toContainText("1 wiersz bez kryterium oceny");
+  await expect(page.getByTestId("protokol-niekompletny")).not.toContainText("Uzupełnij pomiary");
+});

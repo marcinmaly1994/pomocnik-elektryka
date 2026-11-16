@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PROTOCOL_DEFS, definicjaProtokolu, rodzajUkladu, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, zabezpieczeniePetli, type ProtocolRow } from "./protocols";
+import { PROTOCOL_DEFS, bladWiersza, zakresPraduRcd, definicjaProtokolu, rodzajUkladu, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, zabezpieczeniePetli, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
@@ -301,6 +301,54 @@ describe("uwaga „bez zapasu” w protokole pętli zwarcia", () => {
  * Przegląd 15.11.2026 (b), pkt 3: protokoły nie reagowały na układ sieci z nagłówka —
  * pętla pisała „(układ TN)”, a uziemienie miało jedną liczbę niezależnie od układu.
  */
+/*
+ * Przegląd 15.11.2026 (b), pkt 4: zakres prądu zadziałania RCD był zawsze sinusoidalny
+ * (0,5–1,0·IΔn), więc poprawny typ A zbadany prądem pulsującym dostawał „negatywna”.
+ */
+describe("protokół RCD: zakres prądu zadziałania wg kształtu prądu próbnego", () => {
+  const def = PROTOCOL_DEFS.rcd;
+  const wiersz = (typ: string, ksztalt: string | undefined, id: number): ProtocolRow => ({ idn: 30, typ, ksztalt, sel: "nie", id, t1: 25, t5: 12, ub: 2 });
+
+  it("zakresy wg normy: sinus 0,5–1,0, pulsujący 0,35–1,4 (A, F, B), stały 0,5–2,0 (B)", () => {
+    for (const t of ["AC", "A", "F", "B"]) expect(zakresPraduRcd(t, "sinus.")).toEqual([0.5, 1.0]);
+    for (const t of ["A", "F", "B"]) expect(zakresPraduRcd(t, "puls.")).toEqual([0.35, 1.4]);
+    expect(zakresPraduRcd("B", "stały")).toEqual([0.5, 2.0]);
+    expect(zakresPraduRcd("AC", "puls.")).toBeNull();
+    for (const t of ["AC", "A", "F"]) expect(zakresPraduRcd(t, "stały")).toBeNull();
+  });
+
+  it("typ A badany prądem pulsującym, zadziałał przy 1,2·IΔn — pozytywna (dotąd negatywna)", () => {
+    expect(ocenWiersz(def, wiersz("A", "puls.", 36), 50)).toBe(true);
+    expect(ocenWiersz(def, wiersz("A", "sinus.", 36), 50)).toBe(false);
+    // dolna granica pulsującego: 0,35·30 = 10,5 mA
+    expect(ocenWiersz(def, wiersz("A", "puls.", 11), 50)).toBe(true);
+    expect(ocenWiersz(def, wiersz("A", "puls.", 10), 50)).toBe(false);
+    expect(ocenWiersz(def, wiersz("A", "puls.", 43), 50)).toBe(false);
+  });
+
+  it("typ B prądem stałym: do 2·IΔn", () => {
+    expect(ocenWiersz(def, wiersz("B", "stały", 55), 50)).toBe(true);
+    expect(ocenWiersz(def, wiersz("B", "stały", 61), 50)).toBe(false);
+  });
+
+  it("stary wiersz bez kształtu liczy się jak sinusoidalny", () => {
+    expect(ocenWiersz(def, wiersz("A", undefined, 25), 50)).toBe(true);
+    expect(ocenWiersz(def, wiersz("A", undefined, 36), 50)).toBe(false);
+    expect(def.columns!.find((c) => c.key === "ksztalt")!.default).toBe("sinus.");
+  });
+
+  it("typ, który nie musi wykrywać danego prądu: bez oceny, z opisem zamiast „negatywna”", () => {
+    const ac = wiersz("AC", "puls.", 20);
+    expect(ocenWiersz(def, ac, 50)).toBeNull();
+    expect(bladWiersza(def, ac)).toBe("typ AC nie wykrywa prądu pulsującego");
+    expect(bladWiersza(def, wiersz("A", "stały", 20))).toBe("typ A nie wykrywa prądu stałego");
+    expect(bladWiersza(def, wiersz("A", "sinus.", 20))).toBeNull();
+    // werdykt protokołu: nie ma oceny tego wiersza → niekompletny, nie pozytywny
+    expect(protocolVerdict(def, [ac], 50)).toBeNull();
+    expect(bladWiersza(PROTOCOL_DEFS.izolacja, { l1n: 1 })).toBeNull();
+  });
+});
+
 describe("protokoły zależne od układu sieci", () => {
   const ocen = (uklad: string, row: ProtocolRow, limit = 1) => ocenWiersz(definicjaProtokolu("petla", uklad), row, limit);
 

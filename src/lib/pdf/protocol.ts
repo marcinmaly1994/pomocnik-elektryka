@@ -2,7 +2,7 @@ import type { DocumentHeader } from "@/types";
 import { createPdfDoc, pdfDopasujRozmiar, pdfFitText, pdfTextWidth, pdfZawinDoLinii, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
-import { definicjaProtokolu, limitOceny, ocenWiersz, protocolVerdict, uwagaWiersza, type ProtocolRow } from "@/lib/protocols";
+import { bladWiersza, definicjaProtokolu, limitOceny, ocenWiersz, protocolVerdict, uwagaWiersza, type ProtocolRow } from "@/lib/protocols";
 import type { ProtocolKey } from "@/types";
 
 /** Łamie tekst na linie mieszczące się w `maxWidth`. Wydzielone z bloku „Uwagi",
@@ -225,6 +225,9 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
         const ok = ocenWiersz(def, r, limit);
         // Uwaga „bez zapasu" jako druga linia komórki — pełny tekst z progiem jest
         // w kryterium pod tabelą, w wąskiej kolumnie zmieści się tylko sedno.
+        // Sprzeczne dane (np. RCD typu AC badany prądem stałym): pomiar bez kryterium — na
+        // wydruku mówimy to wprost, a nie samą kreską jak przy brakującym wyniku.
+        if (bladWiersza(def, r)) return { linie: ["brak", "kryterium"], size: 8, bold: false };
         const linie = [ok === null ? "—" : ok ? "pozytywna" : "NEGATYWNA"];
         if (uwagaWiersza(def, r, limit)) linie.push("bez zapasu");
         return { linie, size: 8.5, bold: true };
