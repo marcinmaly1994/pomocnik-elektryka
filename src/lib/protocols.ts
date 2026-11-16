@@ -81,18 +81,123 @@ const WKLADKI_GG: Record<string, TypWkladkiGG> = { "gG D0": "D0gG", "gG WT": "WT
  *
  * Wyłącznik: Ia = krotność·In (PN-EN 60898-1). Wkładka: charakterystyka nie jest liniowa,
  * więc Ia = Imax dla t ≤ 0,4 s wprost z tablicy (ta sama co w kalkulatorze wkładek gG).
- * Czas 0,4 s, a nie 5 s: protokół nie wie, czy obwód jest rozdzielczy, więc ocenia
- * ostrzej. Prąd znamionowy spoza tablicy wkładek → brak Ia, a nie wartość zgadnięta.
+ * Czas 0,4 s (w TT 0,2 s), a nie 5 s (1 s): protokół nie wie, czy obwód jest rozdzielczy,
+ * więc ocenia ostrzej. Prąd znamionowy spoza tablicy wkładek → brak Ia, a nie wartość zgadnięta.
  * Zs max zawsze przez `zsMaxDlaIa` (Cmin = 0,95) — jak w doborze i w kalkulatorach.
  */
-export function zabezpieczeniePetli(row: ProtocolRow): { ia: number; zsMax: number } {
+export function zabezpieczeniePetli(row: ProtocolRow, rodzaj: RodzajUkladu = "TN"): { ia: number; zsMax: number } {
   const ch = String(row.curve ?? "B");
   const typ = WKLADKI_GG[ch];
-  if (!typ) return zsMaxForBreaker(ch, Number(row.in ?? 0));
-  const w = wierszGG(typ, Number(row.in ?? 0));
-  if (!w) return { ia: 0, zsMax: 0 };
-  const ia = punktCzasowy(w, "0.4").Imax_A;
-  return { ia, zsMax: zsMaxDlaIa(ia) };
+  let ia: number;
+  if (!typ) {
+    ia = zsMaxForBreaker(ch, Number(row.in ?? 0)).ia;
+  } else {
+    const w = wierszGG(typ, Number(row.in ?? 0));
+    if (!w) return { ia: 0, zsMax: 0 };
+    // TT: tabl. 41.1 wymaga 0,2 s w obwodach odbiorczych — wkładka musi przepalić się
+    // szybciej, więc Ia jest większy (D0gG 16 A: 132,8 A zamiast 120 A).
+    ia = punktCzasowy(w, rodzaj === "TT" ? "0.2" : "0.4").Imax_A;
+  }
+  if (!ia) return { ia: 0, zsMax: 0 };
+  // IT, drugie zwarcie: prąd płynie przez dwie pętle naraz, stąd U0/(2·Ia) (411.6.4).
+  return { ia, zsMax: zsMaxDlaIa(ia) / (rodzaj === "IT" ? 2 : 1) };
+}
+
+/**
+ * Rodzaj układu sieci z nagłówka protokołu. TN-C, TN-S i TN-C-S ocenia się tak samo —
+ * różnią się prowadzeniem przewodu PEN, nie warunkiem samoczynnego wyłączenia.
+ */
+export type RodzajUkladu = "TN" | "TT" | "IT";
+
+export function rodzajUkladu(uklad: string | undefined): RodzajUkladu {
+  return uklad === "TT" ? "TT" : uklad === "IT" ? "IT" : "TN";
+}
+
+const INTRO_PETLI: Record<RodzajUkladu, string> = {
+  TN: "Sprawdzenie skuteczności ochrony przeciwporażeniowej przez samoczynne wyłączenie zasilania (układ TN).",
+  TT: "Sprawdzenie skuteczności ochrony przeciwporażeniowej przez samoczynne wyłączenie zasilania w układzie TT, gdy zapewnia je zabezpieczenie nadprądowe (PN-HD 60364-4-41, 411.5.4: Zs·Ia ≤ U0). Obwody chronione wyłącznikiem różnicowoprądowym ocenia się warunkiem RA·IΔn ≤ 50 V — w protokole uziemienia.",
+  IT: "Sprawdzenie skuteczności ochrony przeciwporażeniowej przy drugim zwarciu w układzie IT (PN-HD 60364-4-41, 411.6.4), gdy części przewodzące dostępne są połączone wspólnym przewodem ochronnym.",
+};
+
+const KRYTERIUM_UKLADU_PETLI: Record<RodzajUkladu, string> = {
+  TN: "",
+  TT: " Układ TT: czasy wyłączenia wg tabl. 41.1 dla TT (0,2 s w obwodach odbiorczych).",
+  IT: " Układ IT, drugie zwarcie: Zs max = U0/(2·Ia) — warunek dla sieci z rozprowadzonym przewodem N, ostrzejszy z dwóch w 411.6.4 (bez N norma dopuszcza napięcie międzyfazowe zamiast U0), więc ocena jest tu ostrzejsza albo równa wymaganej.",
+};
+
+/**
+ * Protokół pętli dla danego rodzaju układu. Definicja jest jedna, zmieniają się: opis,
+ * czas, dla którego czyta się charakterystykę wkładki gG (TT: 0,2 s), i dzielnik Zs max
+ * przy drugim zwarciu w IT. Dotąd protokół pisał „(układ TN)" niezależnie od tego, jaki
+ * układ wybrano w nagłówku tego samego dokumentu.
+ */
+function defPetli(rodzaj: RodzajUkladu): ProtocolDef {
+  return {
+    title: "Pomiar impedancji pętli zwarcia",
+    norm: "PN-HD 60364-4-41 — ochrona przez samoczynne wyłączenie zasilania",
+    intro: INTRO_PETLI[rodzaj],
+    columns: [
+      { key: "obwod", label: "Obwód", w: 106, type: "text" },
+      // „Układ", nie „Obwód": druga kolumna o tej samej nazwie robiła z nagłówka tabeli (i z nazw
+      // pól w formularzu) dwa nierozróżnialne „Obwód".
+      { key: "uklad", label: "Układ", w: 50, type: "select", options: ["1-faz", "3-faz"], default: "1-faz" },
+      // Wkładki gG obok wyłączników: przy badaniach okresowych starszych instalacji obwody
+      // bywają zabezpieczone topikowo, a protokołu nie dało się dla nich wypełnić.
+      { key: "curve", label: "Char.", w: 38, type: "select", options: ["B", "C", "D", "gG D0", "gG WT"], default: "B" },
+      { key: "in", label: "In [A]", w: 42, type: "number", default: 16 },
+      // W obwodzie 3-fazowym mierzy się pętlę L-PE dla KAŻDEJ fazy — o ocenie
+      // decyduje najgorsza. W jednofazowym wypełnia się tylko L1.
+      { key: "zs", label: "Zs L1 [Ω]", w: 58, type: "number" },
+      { key: "zs2", label: "Zs L2 [Ω]", w: 58, type: "number" },
+      { key: "zs3", label: "Zs L3 [Ω]", w: 58, type: "number" },
+      { key: "ia", label: "Ia [A]", w: 48, type: "computed", compute: (r) => { const { ia } = zabezpieczeniePetli(r, rodzaj); return ia ? formatLiczba(ia, 0) : "—"; } },
+      {
+        key: "zsmax",
+        label: "Zs max [Ω]",
+        w: 62,
+        type: "computed",
+        compute: (r) => {
+          const z = zabezpieczeniePetli(r, rodzaj).zsMax;
+          return z ? formatLiczba(z, 2) : "—";
+        },
+      },
+    ],
+    // Próg to Zs max × ta liczba, więc WIĘKSZA znaczy LUŹNIEJSZA ocena. Dawna etykieta
+    // „Współczynnik bezpieczeństwa" sugerowała odwrotnie, a pole przyjmowało dowolną
+    // wartość: wpisane 2 dawało wynik pozytywny dla pętli dwa razy za długiej. Zakres
+    // kończy się na 1,0 (bez zapasu); poniżej to zapas pomiarowy, czyli ocena ostrzejsza.
+    limitLabel: "Zapas pomiarowy",
+    limitDefault: 1.0,
+    limitUnit: "× Zs max (1,0 = bez zapasu; mniej = ostrzej)",
+    limitZakres: [0.1, 1.0],
+    extraCriterion:
+      "Zs max liczone dla U0 = 230 V — zwarcie L-PE ma to samo napięcie w obwodzie 1- i 3-fazowym, więc próg jest wspólny. W obwodzie 3-fazowym mierzy się pętlę dla każdej fazy, a o ocenie decyduje NAJGORSZA z nich. " +
+      "Zalecany zapas odbiorczy: Zs ≤ 0,8·Zs max — pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję. Wiersz zgodny z normą, ale powyżej tego progu, ma ocenę pozytywną z uwagą „bez zapasu”. " +
+      `Wkładki gG: Ia = prąd wyłączający w czasie ≤ ${rodzaj === "TT" ? "0,2" : "0,4"} s z charakterystyki wkładki (D0: In ${dostepneInGG("D0gG").join(", ")} A; WT00/WT1: In ${dostepneInGG("WT00gG_WT1gG").join(", ")} A) — obwód rozdzielczy (${rodzaj === "TT" ? "1" : "5"} s) oceniany jest tu ostrzej niż wymaga norma.` +
+      KRYTERIUM_UKLADU_PETLI[rodzaj],
+    evaluate: (r, limit) => {
+      // Najgorsza (największa) zmierzona impedancja z wypełnionych faz. W obwodzie
+      // jednofazowym wypełniona jest tylko L1 i sprowadza się to do niej samej.
+      const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
+      const { zsMax } = zabezpieczeniePetli(r, rodzaj);
+      if (!zmierzone.length || !zsMax) return null;
+      // Przycięcie także tutaj, a nie tylko w wywołującym: ocena nie może zależeć od tego,
+      // czy ktoś o nim pamiętał.
+      return Math.max(...zmierzone) <= zsMax * Math.min(Number(limit), 1);
+    },
+    // Kalkulator pętli zaleca przy odbiorze Zs ≤ 0,8·Zs max, a protokół — czyli właśnie
+    // dokument odbioru — tego progu nie pokazywał: obwód zmierzony tuż pod granicą normy
+    // dostawał czyste „pozytywna". Werdykt zostaje normowy; uwaga mówi, że zapasu brak.
+    uwaga: (r) => {
+      const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
+      const { zsMax } = zabezpieczeniePetli(r, rodzaj);
+      if (!zmierzone.length || !zsMax) return null;
+      // Próg w dół do 0,01 Ω: zaokrąglony w górę (2,185 → 2,19) pokazywałby „zalecane ≤ 2,19"
+      // przy pomiarze 2,19 oznaczonym jako bez zapasu.
+      const zalecana = Math.floor(zsMax * ZAPAS_POMIAROWY * 100) / 100;
+      return Math.max(...zmierzone) > zalecana ? `bez zapasu (zalecane ≤\u00a0${formatLiczba(zalecana, 2)}\u00a0Ω)` : null;
+    },
+  };
 }
 
 export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
@@ -147,71 +252,7 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     },
   },
 
-  petla: {
-    title: "Pomiar impedancji pętli zwarcia",
-    norm: "PN-HD 60364-4-41 — ochrona przez samoczynne wyłączenie zasilania",
-    intro: "Sprawdzenie skuteczności ochrony przeciwporażeniowej przez samoczynne wyłączenie zasilania (układ TN).",
-    columns: [
-      { key: "obwod", label: "Obwód", w: 106, type: "text" },
-      // „Układ", nie „Obwód": druga kolumna o tej samej nazwie robiła z nagłówka tabeli (i z nazw
-      // pól w formularzu) dwa nierozróżnialne „Obwód".
-      { key: "uklad", label: "Układ", w: 50, type: "select", options: ["1-faz", "3-faz"], default: "1-faz" },
-      // Wkładki gG obok wyłączników: przy badaniach okresowych starszych instalacji obwody
-      // bywają zabezpieczone topikowo, a protokołu nie dało się dla nich wypełnić.
-      { key: "curve", label: "Char.", w: 38, type: "select", options: ["B", "C", "D", "gG D0", "gG WT"], default: "B" },
-      { key: "in", label: "In [A]", w: 42, type: "number", default: 16 },
-      // W obwodzie 3-fazowym mierzy się pętlę L-PE dla KAŻDEJ fazy — o ocenie
-      // decyduje najgorsza. W jednofazowym wypełnia się tylko L1.
-      { key: "zs", label: "Zs L1 [Ω]", w: 58, type: "number" },
-      { key: "zs2", label: "Zs L2 [Ω]", w: 58, type: "number" },
-      { key: "zs3", label: "Zs L3 [Ω]", w: 58, type: "number" },
-      { key: "ia", label: "Ia [A]", w: 48, type: "computed", compute: (r) => { const { ia } = zabezpieczeniePetli(r); return ia ? formatLiczba(ia, 0) : "—"; } },
-      {
-        key: "zsmax",
-        label: "Zs max [Ω]",
-        w: 62,
-        type: "computed",
-        compute: (r) => {
-          const z = zabezpieczeniePetli(r).zsMax;
-          return z ? formatLiczba(z, 2) : "—";
-        },
-      },
-    ],
-    // Próg to Zs max × ta liczba, więc WIĘKSZA znaczy LUŹNIEJSZA ocena. Dawna etykieta
-    // „Współczynnik bezpieczeństwa" sugerowała odwrotnie, a pole przyjmowało dowolną
-    // wartość: wpisane 2 dawało wynik pozytywny dla pętli dwa razy za długiej. Zakres
-    // kończy się na 1,0 (bez zapasu); poniżej to zapas pomiarowy, czyli ocena ostrzejsza.
-    limitLabel: "Zapas pomiarowy",
-    limitDefault: 1.0,
-    limitUnit: "× Zs max (1,0 = bez zapasu; mniej = ostrzej)",
-    limitZakres: [0.1, 1.0],
-    extraCriterion:
-      "Zs max liczone dla U0 = 230 V — zwarcie L-PE ma to samo napięcie w obwodzie 1- i 3-fazowym, więc próg jest wspólny. W obwodzie 3-fazowym mierzy się pętlę dla każdej fazy, a o ocenie decyduje NAJGORSZA z nich. " +
-      "Zalecany zapas odbiorczy: Zs ≤ 0,8·Zs max — pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję. Wiersz zgodny z normą, ale powyżej tego progu, ma ocenę pozytywną z uwagą „bez zapasu”. " +
-      `Wkładki gG: Ia = prąd wyłączający w czasie ≤ 0,4 s z charakterystyki wkładki (D0: In ${dostepneInGG("D0gG").join(", ")} A; WT00/WT1: In ${dostepneInGG("WT00gG_WT1gG").join(", ")} A) — obwód rozdzielczy z czasem 5 s oceniany jest tu ostrzej niż wymaga norma.`,
-    evaluate: (r, limit) => {
-      // Najgorsza (największa) zmierzona impedancja z wypełnionych faz. W obwodzie
-      // jednofazowym wypełniona jest tylko L1 i sprowadza się to do niej samej.
-      const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
-      const { zsMax } = zabezpieczeniePetli(r);
-      if (!zmierzone.length || !zsMax) return null;
-      // Przycięcie także tutaj, a nie tylko w wywołującym: ocena nie może zależeć od tego,
-      // czy ktoś o nim pamiętał.
-      return Math.max(...zmierzone) <= zsMax * Math.min(Number(limit), 1);
-    },
-    // Kalkulator pętli zaleca przy odbiorze Zs ≤ 0,8·Zs max, a protokół — czyli właśnie
-    // dokument odbioru — tego progu nie pokazywał: obwód zmierzony tuż pod granicą normy
-    // dostawał czyste „pozytywna". Werdykt zostaje normowy; uwaga mówi, że zapasu brak.
-    uwaga: (r) => {
-      const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
-      const { zsMax } = zabezpieczeniePetli(r);
-      if (!zmierzone.length || !zsMax) return null;
-      // Próg w dół do 0,01 Ω: zaokrąglony w górę (2,185 → 2,19) pokazywałby „zalecane ≤ 2,19"
-      // przy pomiarze 2,19 oznaczonym jako bez zapasu.
-      const zalecana = Math.floor(zsMax * ZAPAS_POMIAROWY * 100) / 100;
-      return Math.max(...zmierzone) > zalecana ? `bez zapasu (zalecane ≤\u00a0${formatLiczba(zalecana, 2)}\u00a0Ω)` : null;
-    },
-  },
+  petla: defPetli("TN"),
 
   rcd: {
     title: "Badanie wyłączników różnicowoprądowych",
@@ -351,8 +392,59 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
   },
 };
 
+/** Dopuszczalne napięcie dotykowe dla warunku RA·IΔn ≤ UL w układzie TT [V]. */
+const UL_TT = 50;
+
+/** R dopuszczalna uziomu w TT: mniejsza z rezystancji maksymalnej obiektu i UL/IΔn. */
+function rDopTT(row: ProtocolRow, limit: number): number {
+  const idnA = Number(row.idn) / 1000;
+  return idnA > 0 ? Math.min(limit, UL_TT / idnA) : limit;
+}
+
+/**
+ * Uziemienie w układzie TT: warunek samoczynnego wyłączenia przez RCD to RA·IΔn ≤ 50 V
+ * (PN-HD 60364-4-41, 411.5.3). Dotąd protokół znał tylko jedną liczbę — rezystancję
+ * maksymalną — niezależnie od układu. Teraz w TT wiersz może podać IΔn największego RCD
+ * chronionego tym uziomem, a R dopuszczalna to mniejsza z dwóch wartości. Rezystancja
+ * maksymalna zostaje, bo bywa wymaganiem obiektu ostrzejszym niż norma.
+ */
+function uziemienieTT(def: ProtocolDef): ProtocolDef {
+  const [miejsce, r] = def.columns!;
+  return {
+    ...def,
+    columns: [
+      miejsce,
+      r,
+      { key: "idn", label: "IΔn RCD [mA]", w: 64, type: "number" },
+      { key: "rdop", label: "R dopuszczalna [Ω]", w: 76, type: "computed", compute: (row, limit) => formatLiczba(rDopTT(row, Number(limit)), 1) },
+    ],
+    extraCriterion: `Układ TT (PN-HD 60364-4-41, 411.5.3): RA·IΔn ≤ ${UL_TT} V. Przy podanym IΔn największego wyłącznika różnicowoprądowego chronionego tym uziomem R dopuszczalna = mniejsza z: rezystancji maksymalnej i ${UL_TT} V / IΔn.`,
+    evaluate: (row, limit) => {
+      const v = Number(row.r);
+      if (!v) return null;
+      return v <= rDopTT(row, Number(limit));
+    },
+  };
+}
+
+/**
+ * Definicja protokołu dla układu sieci z nagłówka — JEDYNE miejsce, z którego ekran, PDF
+ * i werdykty biorą definicję. Bez układu (albo w TN) to po prostu `PROTOCOL_DEFS[key]`.
+ */
+export function definicjaProtokolu(key: ProtocolKey, uklad?: string): ProtocolDef {
+  const rodzaj = rodzajUkladu(uklad);
+  if (rodzaj === "TN") return PROTOCOL_DEFS[key];
+  if (key === "petla") return rodzaj === "TT" ? PETLA_TT : PETLA_IT;
+  if (key === "uziemienie" && rodzaj === "TT") return UZIEMIENIE_TT;
+  return PROTOCOL_DEFS[key];
+}
+
 /** Próg ciągłości połączeń urządzenia piorunochronnego [Ω] — patrz `extraCriterion`. */
 const CIAGLOSC_LPS_MAX = 1;
+
+const PETLA_TT = defPetli("TT");
+const PETLA_IT = defPetli("IT");
+const UZIEMIENIE_TT = uziemienieTT(PROTOCOL_DEFS.uziemienie);
 
 /**
  * Kolejność zakładek odpowiada przebiegowi kontroli okresowej: najpierw to, co

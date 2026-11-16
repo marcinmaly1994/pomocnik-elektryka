@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, zabezpieczeniePetli, type ProtocolRow } from "./protocols";
+import { PROTOCOL_DEFS, definicjaProtokolu, rodzajUkladu, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, zabezpieczeniePetli, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
@@ -297,6 +297,70 @@ describe("uwaga „bez zapasu” w protokole pętli zwarcia", () => {
  * Przegląd 15.11.2026 (b), pkt 2: protokół pętli znał tylko wyłączniki B/C/D, a przy
  * badaniach okresowych starszych instalacji obwody bywają zabezpieczone wkładkami gG.
  */
+/*
+ * Przegląd 15.11.2026 (b), pkt 3: protokoły nie reagowały na układ sieci z nagłówka —
+ * pętla pisała „(układ TN)”, a uziemienie miało jedną liczbę niezależnie od układu.
+ */
+describe("protokoły zależne od układu sieci", () => {
+  const ocen = (uklad: string, row: ProtocolRow, limit = 1) => ocenWiersz(definicjaProtokolu("petla", uklad), row, limit);
+
+  it("TN-C, TN-S i TN-C-S to ten sam rodzaj; bez układu — TN", () => {
+    expect(["TN-C", "TN-S", "TN-C-S", undefined].map(rodzajUkladu)).toEqual(["TN", "TN", "TN", "TN"]);
+    expect(rodzajUkladu("TT")).toBe("TT");
+    expect(rodzajUkladu("IT")).toBe("IT");
+    for (const k of ["petla", "uziemienie", "rcd", "izolacja"] as const) expect(definicjaProtokolu(k, "TN-C-S")).toBe(PROTOCOL_DEFS[k]);
+  });
+
+  it("pętla w TT: opis mówi o TT i 411.5.4, a nie „(układ TN)”", () => {
+    const tt = definicjaProtokolu("petla", "TT");
+    expect(tt.intro).toContain("układzie TT");
+    expect(tt.intro).toContain("411.5.4");
+    expect(tt.intro).not.toContain("(układ TN)");
+    expect(tt.extraCriterion).toContain("0,2 s");
+    expect(PROTOCOL_DEFS.petla.intro).toContain("(układ TN)");
+  });
+
+  it("pętla w TT: wkładka gG czytana dla 0,2 s (większy Ia), wyłącznik bez zmian", () => {
+    expect(zabezpieczeniePetli({ curve: "gG D0", in: 16 }, "TT").ia).toBe(132.8);
+    expect(zabezpieczeniePetli({ curve: "gG D0", in: 16 }, "TN").ia).toBe(120);
+    expect(zabezpieczeniePetli({ curve: "B", in: 16 }, "TT")).toEqual(zabezpieczeniePetli({ curve: "B", in: 16 }, "TN"));
+    // 1,7 Ω: D0gG 16 przechodzi w TN (Zs max ≈ 1,82), nie w TT (≈ 1,65)
+    expect(ocen("TN-S", { curve: "gG D0", in: 16, zs: 1.7 })).toBe(true);
+    expect(ocen("TT", { curve: "gG D0", in: 16, zs: 1.7 })).toBe(false);
+  });
+
+  it("pętla w IT (drugie zwarcie): Zs max = U0/(2·Ia)", () => {
+    const tn = zabezpieczeniePetli({ curve: "B", in: 16 }, "TN").zsMax;
+    expect(zabezpieczeniePetli({ curve: "B", in: 16 }, "IT").zsMax).toBeCloseTo(tn / 2, 9);
+    expect(ocen("TN-C-S", { curve: "B", in: 16, zs: 2.0 })).toBe(true);
+    expect(ocen("IT", { curve: "B", in: 16, zs: 2.0 })).toBe(false);
+    expect(ocen("IT", { curve: "B", in: 16, zs: 1.0 })).toBe(true);
+    expect(definicjaProtokolu("petla", "IT").intro).toContain("411.6.4");
+    // kolumna Zs max pokazuje próg dla IT
+    const zsmax = definicjaProtokolu("petla", "IT").columns!.find((c) => c.key === "zsmax")!;
+    expect(zsmax.compute!({ curve: "B", in: 16 })).toBe("1,37");
+  });
+
+  it("uziemienie w TT: R dopuszczalna = mniejsza z rezystancji maksymalnej i 50 V / IΔn", () => {
+    const tt = definicjaProtokolu("uziemienie", "TT");
+    expect(tt.columns!.map((c) => c.key)).toEqual(["miejsce", "r", "idn", "rdop"]);
+    const rdop = tt.columns!.find((c) => c.key === "rdop")!;
+    // 500 mA → 50/0,5 = 100 Ω; limit 200 → wiąże warunek normy
+    expect(rdop.compute!({ idn: 500 }, 200)).toBe("100,0");
+    expect(ocenWiersz(tt, { r: 120, idn: 500 }, 200)).toBe(false);
+    expect(ocenWiersz(tt, { r: 90, idn: 500 }, 200)).toBe(true);
+    // 30 mA → 1666 Ω; wiąże rezystancja maksymalna obiektu (30 Ω)
+    expect(rdop.compute!({ idn: 30 }, 30)).toBe("30,0");
+    // bez IΔn — sama rezystancja maksymalna, jak dotąd
+    expect(ocenWiersz(tt, { r: 120 }, 200)).toBe(true);
+    expect(tt.extraCriterion).toContain("RA·IΔn ≤ 50 V");
+  });
+
+  it("uziemienie poza TT bez zmian", () => {
+    expect(definicjaProtokolu("uziemienie", "IT")).toBe(PROTOCOL_DEFS.uziemienie);
+  });
+});
+
 describe("wkładki gG w protokole pętli zwarcia", () => {
   const def = PROTOCOL_DEFS.petla;
   const kolumna = (k: string) => def.columns!.find((c) => c.key === k)!;

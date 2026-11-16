@@ -2,7 +2,7 @@ import type { DocumentHeader } from "@/types";
 import { createPdfDoc, pdfDopasujRozmiar, pdfFitText, pdfTextWidth, pdfZawinDoLinii, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
-import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, uwagaWiersza, type ProtocolRow } from "@/lib/protocols";
+import { definicjaProtokolu, limitOceny, ocenWiersz, protocolVerdict, uwagaWiersza, type ProtocolRow } from "@/lib/protocols";
 import type { ProtocolKey } from "@/types";
 
 /** Łamie tekst na linie mieszczące się w `maxWidth`. Wydzielone z bloku „Uwagi",
@@ -25,7 +25,7 @@ function zawijajTekst(tekst: string, maxWidth: number, size: number): string[] {
 
 /** Składa protokół pomiarowy i zwraca gotowe bajty PDF (bez pobierania — testowalne bez DOM-u). */
 export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows: ProtocolRow[], zapisanyLimit: number): PdfDoc {
-  const def = PROTOCOL_DEFS[key];
+  const def = definicjaProtokolu(key, header.uklad);
   // Stary zapis mógł mieć wartość spoza dzisiejszego zakresu; na wydruku ma stać ta,
   // wobec której FAKTYCZNIE oceniono wiersze.
   const limit = limitOceny(def, zapisanyLimit);

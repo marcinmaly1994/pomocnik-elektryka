@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { PROTOCOL_DEFS, PROTOCOL_ORDER, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_ORDER, definicjaProtokolu, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
 import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
@@ -194,13 +194,15 @@ export function ProtocolsTab() {
   useEffect(() => {
     const sprzataczki = PROTOCOL_ORDER.filter((k) => (protocols[k]?.rows.length ?? 0) > 0).map((k) => {
       const st = protocols[k]!;
-      const limitK = limitOceny(PROTOCOL_DEFS[k], st.limit ?? PROTOCOL_DEFS[k].limitDefault ?? 0);
+      const defK = definicjaProtokolu(k, header.uklad);
+      const limitK = limitOceny(defK, st.limit ?? defK.limitDefault ?? 0);
       return zarejestrujProducenta(`protokol:${k}`, async () => buildProtocolDoc(k, header, st.rows, limitK));
     });
     return () => sprzataczki.forEach((f) => f());
   });
 
-  const def = PROTOCOL_DEFS[active];
+  // Definicja zależy od układu sieci z nagłówka (TT/IT zmieniają kryterium pętli i uziemienia).
+  const def = definicjaProtokolu(active, header.uklad);
   const state = protocols[active] ?? { rows: [] };
   const rows = state.rows;
   // `wpisany` to to, co stoi w polu; `limit` — wobec czego naprawdę oceniamy (przycięte do
@@ -369,7 +371,7 @@ export function ProtocolsTab() {
           ostatni rząd wygląda normalnie — także gdyby kiedyś doszedł ósmy protokół. */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {PROTOCOL_ORDER.map((k) => {
-          const d = PROTOCOL_DEFS[k];
+          const d = definicjaProtokolu(k, header.uklad);
           const st = protocols[k];
           const v = st ? protocolVerdict(d, st.rows, limitOceny(d, st.limit ?? d.limitDefault ?? 0)) : null;
           return (
