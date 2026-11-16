@@ -79,3 +79,22 @@ test("pętla zwarcia: pomiar zgodny z normą, ale bez zapasu 0,8 — pozytywna z
   await expect(page.getByTestId("uwaga-wiersza")).toHaveCount(0);
   await expect(page.getByText("Wynik pozytywny")).toBeVisible();
 });
+
+test("pętla zwarcia: wkładka gG — Ia i Zs max z charakterystyki wkładki, ocena ostrzejsza niż dla B16", async ({ page }) => {
+  // Przegląd 15.11.2026 (b), pkt 2: obwodów zabezpieczonych wkładkami gG nie dało się ocenić.
+  await otworz(page);
+  await page.getByRole("button", { name: /^Pomiar impedancji pętli zwarcia/ }).first().click();
+  await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+  await page.getByLabel("Zs L1 [Ω], pozycja 1").fill("2");
+  await expect(page.getByText("Wynik pozytywny")).toBeVisible(); // B16: Zs max ≈ 2,73 Ω
+
+  await page.getByLabel("Char., pozycja 1").selectOption("gG D0");
+  const wiersz = page.getByTestId("wiersz-pomiaru").first();
+  await expect(wiersz).toContainText("120"); // Ia = Imax(0,4 s) dla D0gG 16 A
+  await expect(wiersz).toContainText("1,82");
+  await expect(page.getByText("Wynik negatywny")).toBeVisible();
+
+  // D0 nie ma 32 A — brak oceny zamiast zgadniętej wartości
+  await page.getByLabel("In [A], pozycja 1").fill("32");
+  await expect(page.getByTestId("protokol-niekompletny")).toBeVisible();
+});

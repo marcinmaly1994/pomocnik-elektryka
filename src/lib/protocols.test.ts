@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, type ProtocolRow } from "./protocols";
+import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, zabezpieczeniePetli, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
@@ -290,6 +290,52 @@ describe("uwaga „bez zapasu” w protokole pętli zwarcia", () => {
 
   it("inne protokoły nie mają uwag", () => {
     expect(uwagaWiersza(PROTOCOL_DEFS.izolacja, { l1n: 1.1 }, 500)).toBeNull();
+  });
+});
+
+/*
+ * Przegląd 15.11.2026 (b), pkt 2: protokół pętli znał tylko wyłączniki B/C/D, a przy
+ * badaniach okresowych starszych instalacji obwody bywają zabezpieczone wkładkami gG.
+ */
+describe("wkładki gG w protokole pętli zwarcia", () => {
+  const def = PROTOCOL_DEFS.petla;
+  const kolumna = (k: string) => def.columns!.find((c) => c.key === k)!;
+
+  it("wybór „Char.” ma wkładki obok wyłączników", () => {
+    expect(kolumna("curve").options).toEqual(["B", "C", "D", "gG D0", "gG WT"]);
+  });
+
+  it("Ia wkładki to Imax dla 0,4 s z tablicy, a Zs max z tym samym Cmin = 0,95 co wyłączniki", () => {
+    // D0gG 16 A: Imax(0,4 s) = 120 A → Zs max = 0,95·230/120 ≈ 1,82 Ω
+    const d0 = zabezpieczeniePetli({ curve: "gG D0", in: 16 });
+    expect(d0.ia).toBe(120);
+    expect(d0.zsMax).toBeCloseTo((0.95 * 230) / 120, 6);
+    // WT00/WT1 16 A ma INNĄ charakterystykę: 99,2 A
+    expect(zabezpieczeniePetli({ curve: "gG WT", in: 16 }).ia).toBe(99.2);
+    expect(kolumna("ia").compute!({ curve: "gG D0", in: 16 })).toBe("120");
+    expect(kolumna("zsmax").compute!({ curve: "gG D0", in: 16 })).toBe("1,82");
+  });
+
+  it("ocena i uwaga liczą się z charakterystyki wkładki", () => {
+    // Ten sam pomiar 2,0 Ω: B16 (Zs max ≈ 2,73) przechodzi, D0gG 16 (≈ 1,82) — nie.
+    expect(ocenWiersz(def, { curve: "B", in: 16, zs: 2.0 }, 1)).toBe(true);
+    expect(ocenWiersz(def, { curve: "gG D0", in: 16, zs: 2.0 }, 1)).toBe(false);
+    expect(ocenWiersz(def, { curve: "gG D0", in: 16, zs: 1.0 }, 1)).toBe(true);
+    // 0,8·1,82 ≈ 1,45 → 1,6 Ω zgodne, ale bez zapasu
+    expect(uwagaWiersza(def, { curve: "gG D0", in: 16, zs: 1.6 }, 1)).toBe("bez zapasu (zalecane ≤\u00a01,45\u00a0Ω)");
+  });
+
+  it("prąd znamionowy spoza tablicy wkładek: brak oceny, a nie wartość zgadnięta", () => {
+    // D0 nie ma 32 A, WT ma — interpolacja dałaby liczbę bez pokrycia w charakterystyce
+    expect(zabezpieczeniePetli({ curve: "gG D0", in: 32 })).toEqual({ ia: 0, zsMax: 0 });
+    expect(ocenWiersz(def, { curve: "gG D0", in: 32, zs: 0.5 }, 1)).toBeNull();
+    expect(kolumna("ia").compute!({ curve: "gG D0", in: 32 })).toBe("—");
+    expect(zabezpieczeniePetli({ curve: "gG WT", in: 32 }).ia).toBe(249.6);
+  });
+
+  it("kryterium na wydruku mówi o 0,4 s i dostępnych prądach wkładek", () => {
+    expect(def.extraCriterion).toContain("0,4 s");
+    expect(def.extraCriterion).toContain("D0: In 2, 4, 6, 10, 16, 20, 25, 35, 50, 63 A");
   });
 });
 

@@ -1,6 +1,7 @@
 import type { ProtocolKey } from "@/types";
 import { formatLiczba } from "@/lib/liczby";
-import { ZAPAS_POMIAROWY, zsMaxForBreaker } from "@/lib/panel/sizing";
+import { ZAPAS_POMIAROWY, zsMaxDlaIa, zsMaxForBreaker } from "@/lib/panel/sizing";
+import { dostepneInGG, punktCzasowy, wierszGG, type TypWkladkiGG } from "@/lib/norms/gGFuses";
 
 export type ProtocolRow = Record<string, string | number | undefined>;
 
@@ -72,6 +73,28 @@ export function dopuszczalneCzasyRcd(selektywny: boolean): { t1: [number, number
  * Każdy protokół deklaruje własne kolumny/kryterium oceny — narzędzie tylko
  * liczy i pilnuje formy, ocenę merytoryczną zawsze podejmuje osoba z uprawnieniami.
  */
+/** Wkładki topikowe gG w protokole pętli — wartość kolumny „Char.” → system wkładek. */
+const WKLADKI_GG: Record<string, TypWkladkiGG> = { "gG D0": "D0gG", "gG WT": "WT00gG_WT1gG" };
+
+/**
+ * Ia i Zs max zabezpieczenia z wiersza protokołu pętli — wyłącznik B/C/D albo wkładka gG.
+ *
+ * Wyłącznik: Ia = krotność·In (PN-EN 60898-1). Wkładka: charakterystyka nie jest liniowa,
+ * więc Ia = Imax dla t ≤ 0,4 s wprost z tablicy (ta sama co w kalkulatorze wkładek gG).
+ * Czas 0,4 s, a nie 5 s: protokół nie wie, czy obwód jest rozdzielczy, więc ocenia
+ * ostrzej. Prąd znamionowy spoza tablicy wkładek → brak Ia, a nie wartość zgadnięta.
+ * Zs max zawsze przez `zsMaxDlaIa` (Cmin = 0,95) — jak w doborze i w kalkulatorach.
+ */
+export function zabezpieczeniePetli(row: ProtocolRow): { ia: number; zsMax: number } {
+  const ch = String(row.curve ?? "B");
+  const typ = WKLADKI_GG[ch];
+  if (!typ) return zsMaxForBreaker(ch, Number(row.in ?? 0));
+  const w = wierszGG(typ, Number(row.in ?? 0));
+  if (!w) return { ia: 0, zsMax: 0 };
+  const ia = punktCzasowy(w, "0.4").Imax_A;
+  return { ia, zsMax: zsMaxDlaIa(ia) };
+}
+
 export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
   izolacja: {
     title: "Pomiar rezystancji izolacji",
@@ -133,21 +156,23 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
       // „Układ", nie „Obwód": druga kolumna o tej samej nazwie robiła z nagłówka tabeli (i z nazw
       // pól w formularzu) dwa nierozróżnialne „Obwód".
       { key: "uklad", label: "Układ", w: 50, type: "select", options: ["1-faz", "3-faz"], default: "1-faz" },
-      { key: "curve", label: "Char.", w: 38, type: "select", options: ["B", "C", "D"], default: "B" },
+      // Wkładki gG obok wyłączników: przy badaniach okresowych starszych instalacji obwody
+      // bywają zabezpieczone topikowo, a protokołu nie dało się dla nich wypełnić.
+      { key: "curve", label: "Char.", w: 38, type: "select", options: ["B", "C", "D", "gG D0", "gG WT"], default: "B" },
       { key: "in", label: "In [A]", w: 42, type: "number", default: 16 },
       // W obwodzie 3-fazowym mierzy się pętlę L-PE dla KAŻDEJ fazy — o ocenie
       // decyduje najgorsza. W jednofazowym wypełnia się tylko L1.
       { key: "zs", label: "Zs L1 [Ω]", w: 58, type: "number" },
       { key: "zs2", label: "Zs L2 [Ω]", w: 58, type: "number" },
       { key: "zs3", label: "Zs L3 [Ω]", w: 58, type: "number" },
-      { key: "ia", label: "Ia [A]", w: 48, type: "computed", compute: (r) => formatLiczba(zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0)).ia, 0) },
+      { key: "ia", label: "Ia [A]", w: 48, type: "computed", compute: (r) => { const { ia } = zabezpieczeniePetli(r); return ia ? formatLiczba(ia, 0) : "—"; } },
       {
         key: "zsmax",
         label: "Zs max [Ω]",
         w: 62,
         type: "computed",
         compute: (r) => {
-          const z = zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0)).zsMax;
+          const z = zabezpieczeniePetli(r).zsMax;
           return z ? formatLiczba(z, 2) : "—";
         },
       },
@@ -162,12 +187,13 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     limitZakres: [0.1, 1.0],
     extraCriterion:
       "Zs max liczone dla U0 = 230 V — zwarcie L-PE ma to samo napięcie w obwodzie 1- i 3-fazowym, więc próg jest wspólny. W obwodzie 3-fazowym mierzy się pętlę dla każdej fazy, a o ocenie decyduje NAJGORSZA z nich. " +
-      "Zalecany zapas odbiorczy: Zs ≤ 0,8·Zs max — pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję. Wiersz zgodny z normą, ale powyżej tego progu, ma ocenę pozytywną z uwagą „bez zapasu”.",
+      "Zalecany zapas odbiorczy: Zs ≤ 0,8·Zs max — pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję. Wiersz zgodny z normą, ale powyżej tego progu, ma ocenę pozytywną z uwagą „bez zapasu”. " +
+      `Wkładki gG: Ia = prąd wyłączający w czasie ≤ 0,4 s z charakterystyki wkładki (D0: In ${dostepneInGG("D0gG").join(", ")} A; WT00/WT1: In ${dostepneInGG("WT00gG_WT1gG").join(", ")} A) — obwód rozdzielczy z czasem 5 s oceniany jest tu ostrzej niż wymaga norma.`,
     evaluate: (r, limit) => {
       // Najgorsza (największa) zmierzona impedancja z wypełnionych faz. W obwodzie
       // jednofazowym wypełniona jest tylko L1 i sprowadza się to do niej samej.
       const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
-      const { zsMax } = zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0));
+      const { zsMax } = zabezpieczeniePetli(r);
       if (!zmierzone.length || !zsMax) return null;
       // Przycięcie także tutaj, a nie tylko w wywołującym: ocena nie może zależeć od tego,
       // czy ktoś o nim pamiętał.
@@ -178,7 +204,7 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     // dostawał czyste „pozytywna". Werdykt zostaje normowy; uwaga mówi, że zapasu brak.
     uwaga: (r) => {
       const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
-      const { zsMax } = zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0));
+      const { zsMax } = zabezpieczeniePetli(r);
       if (!zmierzone.length || !zsMax) return null;
       // Próg w dół do 0,01 Ω: zaokrąglony w górę (2,185 → 2,19) pokazywałby „zalecane ≤ 2,19"
       // przy pomiarze 2,19 oznaczonym jako bez zapasu.
