@@ -262,6 +262,15 @@ describe("buildProtocolPdf — nic nie jest ucinane", () => {
     expect(out).toContain("(pozytywna) Tj");
   });
 
+  it("układ TT z nagłówka: pętla opisuje TT, uziemienie ma kolumnę IΔn i warunek RA·IΔn", async () => {
+    const tt = { ...header, uklad: "TT" as const };
+    const petla = bytesToAscii(await buildProtocolPdf("petla", tt, [{ obwod: "A", curve: "B", in: 16, zs: 1 }], 1));
+    expect(petla).toContain("411.5.4");
+    const uz = bytesToAscii(await buildProtocolPdf("uziemienie", tt, [{ miejsce: "Uziom", r: 90, idn: 500 }], 200));
+    expect(uz).toContain("411.5.3");
+    expect(uz).toContain("(100,0) Tj");
+  });
+
   it("długa nazwa obwodu zawija się do kolejnych linii, a każde jej słowo trafia do dokumentu", async () => {
     const nazwa = "F8 Obwod gniazd - pomieszczenia gospodarcze 1 (parter, strefa techniczna)";
     const out = bytesToAscii(await buildProtocolPdf("izolacja", header, [{ obwod: nazwa, l1n: 250 }], 500));

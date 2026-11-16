@@ -98,3 +98,26 @@ test("pętla zwarcia: wkładka gG — Ia i Zs max z charakterystyki wkładki, oc
   await page.getByLabel("In [A], pozycja 1").fill("32");
   await expect(page.getByTestId("protokol-niekompletny")).toBeVisible();
 });
+
+test("układ TT z nagłówka: pętla opisuje TT, uziemienie dostaje IΔn i warunek RA·IΔn ≤ 50 V", async ({ page }) => {
+  // Przegląd 15.11.2026 (b), pkt 3: protokoły pisały „(układ TN)” i liczyły uziemienie jedną
+  // liczbą, choć w nagłówku tego samego dokumentu wybrano TT.
+  await otworz(page);
+  await page.getByRole("button", { name: /^Pomiar impedancji pętli zwarcia/ }).first().click();
+  const karta = page.getByTestId("karta-protokolu");
+  await expect(karta).toContainText("(układ TN)");
+
+  await page.locator("label", { hasText: "Układ sieci" }).locator("select").selectOption("TT");
+  await expect(karta).toContainText("w układzie TT");
+  await expect(karta).not.toContainText("(układ TN)");
+
+  await page.getByRole("button", { name: /^Pomiar rezystancji uziemienia/ }).first().click();
+  await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+  await page.locator('input[type="number"]').first().fill("200"); // rezystancja maksymalna obiektu
+  await page.getByLabel("R zmierzona [Ω], pozycja 1").fill("120");
+  await expect(page.getByText("Wynik pozytywny")).toBeVisible();
+  // RCD 500 mA → RA ≤ 100 Ω: ten sam uziom przestaje spełniać warunek
+  await page.getByLabel("IΔn RCD [mA], pozycja 1").fill("500");
+  await expect(page.getByTestId("wiersz-pomiaru").first()).toContainText("100,0");
+  await expect(page.getByText("Wynik negatywny")).toBeVisible();
+});
