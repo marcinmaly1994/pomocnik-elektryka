@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { PROTOCOL_DEFS, PROTOCOL_ORDER, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_DEFS, PROTOCOL_ORDER, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
 import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
@@ -548,6 +548,7 @@ export function ProtocolsTab() {
                 <tbody className="block lg:table-row-group">
                   {rows.map((r, i) => {
                     const ok = ocenWiersz(def, r, limit);
+                    const uwaga = uwagaWiersza(def, r, limit);
                     return (
                       <tr
                         key={i}
@@ -596,7 +597,14 @@ export function ProtocolsTab() {
                           ) : ok === null ? (
                             <span className="text-xs text-slate-400">—</span>
                           ) : (
-                            <Badge variant={ok ? "success" : "danger"}>{ok ? "pozytywna" : "negatywna"}</Badge>
+                            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 lg:flex-col lg:items-start">
+                              <Badge variant={ok ? "success" : "danger"}>{ok ? "pozytywna" : "negatywna"}</Badge>
+                              {uwaga && (
+                                <span className="text-xs text-caution" data-testid="uwaga-wiersza">
+                                  {uwaga}
+                                </span>
+                              )}
+                            </span>
                           )}
                         </td>
                         <td className="col-span-2 flex justify-end lg:table-cell lg:py-1.5">

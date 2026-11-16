@@ -183,22 +183,23 @@ export function currentFromPower(powerW: number, phases: PhaseCount, cosPhi: num
 }
 
 /**
+ * Zapas pomiarowy dla ODBIORU: zmierzona Zs powinna zmieścić się w 0,8 limitu normy.
+ *
+ * Pomiar robi się na zimnym przewodzie i przy takim napięciu, jakie akurat jest
+ * w sieci. Nagrzany przewód ma większą rezystancję, więc obwód zmierzony dokładnie
+ * na granicy wypada poza nią przy pierwszym dłuższym obciążeniu. Ten próg nie
+ * zastępuje limitu normy — pokazywany jest OBOK niego (kalkulator pętli, uwaga
+ * „bez zapasu" w protokole pętli).
+ */
+export const ZAPAS_POMIAROWY = 0.8;
+
+/**
  * Zs_max z prądu zadziałania — jedno miejsce dla całej aplikacji.
  *
  * Dobór w Rozdzielnicy, kalkulator pętli zwarcia i protokół pomiarowy muszą podawać
  * TĘ SAMĄ liczbę: gdyby dobór dopuszczał 2,88 Ω, a protokół wymagał 2,73 Ω, ten sam
  * obwód przechodziłby projekt i oblewał odbiór.
  */
-/**
- * Zapas pomiarowy dla ODBIORU: zmierzona Zs powinna zmieścić się w 0,8 limitu normy.
- *
- * Pomiar robi się na zimnym przewodzie i przy takim napięciu, jakie akurat jest
- * w sieci. Nagrzany przewód ma większą rezystancję, więc obwód zmierzony dokładnie
- * na granicy wypada poza nią przy pierwszym dłuższym obciążeniu. Ten próg nie
- * zastępuje limitu normy — pokazywany jest OBOK niego.
- */
-export const ZAPAS_POMIAROWY = 0.8;
-
 export function zsMaxDlaIa(ia: number): number {
   return ia > 0 ? (C_NAPIECIOWE.min * U0) / ia : 0;
 }

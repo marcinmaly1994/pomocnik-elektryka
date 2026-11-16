@@ -2,7 +2,7 @@ import type { DocumentHeader } from "@/types";
 import { createPdfDoc, pdfDopasujRozmiar, pdfFitText, pdfTextWidth, pdfZawinDoLinii, type PdfDoc } from "./engine";
 import { drawTitleBlock } from "./titleBlock";
 import { downloadPdfBytes, projectFileName } from "./download";
-import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, uwagaWiersza, type ProtocolRow } from "@/lib/protocols";
 import type { ProtocolKey } from "@/types";
 
 /** Łamie tekst na linie mieszczące się w `maxWidth`. Wydzielone z bloku „Uwagi",
@@ -223,7 +223,11 @@ export function buildProtocolDoc(key: ProtocolKey, header: DocumentHeader, rows:
     const komorka = (r: ProtocolRow, i: number, c: (typeof cols)[number]) => {
       if (c.key === "__ocena") {
         const ok = ocenWiersz(def, r, limit);
-        return { linie: [ok === null ? "—" : ok ? "pozytywna" : "NEGATYWNA"], size: 8.5, bold: true };
+        // Uwaga „bez zapasu" jako druga linia komórki — pełny tekst z progiem jest
+        // w kryterium pod tabelą, w wąskiej kolumnie zmieści się tylko sedno.
+        const linie = [ok === null ? "—" : ok ? "pozytywna" : "NEGATYWNA"];
+        if (uwagaWiersza(def, r, limit)) linie.push("bez zapasu");
+        return { linie, size: 8.5, bold: true };
       }
       let v: string;
       if (c.key === "__lp") {

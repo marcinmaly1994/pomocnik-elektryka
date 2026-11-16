@@ -1,6 +1,6 @@
 import type { ProtocolKey } from "@/types";
 import { formatLiczba } from "@/lib/liczby";
-import { zsMaxForBreaker } from "@/lib/panel/sizing";
+import { ZAPAS_POMIAROWY, zsMaxForBreaker } from "@/lib/panel/sizing";
 
 export type ProtocolRow = Record<string, string | number | undefined>;
 
@@ -31,6 +31,9 @@ export interface ProtocolDef {
    *  werdykt. Brak = dowolna wartość (napięcie probiercze, rezystancje maksymalne). */
   limitZakres?: [number, number];
   evaluate?: (row: ProtocolRow, limit: number) => boolean | null;
+  /** Uwaga do wiersza z oceną POZYTYWNĄ — wynik zgodny z normą, ale bez zalecanego zapasu.
+   *  Nie zmienia werdyktu; wywoływać przez `uwagaWiersza`, nie wprost. */
+  uwaga?: (row: ProtocolRow, limit: number) => string | null;
   checklist?: boolean;
   items?: string[];
   /** Kryteria, które NIE są jedną edytowalną liczbą — np. czasy zadziałania RCD
@@ -158,7 +161,8 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
     limitUnit: "× Zs max (1,0 = bez zapasu; mniej = ostrzej)",
     limitZakres: [0.1, 1.0],
     extraCriterion:
-      "Zs max liczone dla U0 = 230 V — zwarcie L-PE ma to samo napięcie w obwodzie 1- i 3-fazowym, więc próg jest wspólny. W obwodzie 3-fazowym mierzy się pętlę dla każdej fazy, a o ocenie decyduje NAJGORSZA z nich.",
+      "Zs max liczone dla U0 = 230 V — zwarcie L-PE ma to samo napięcie w obwodzie 1- i 3-fazowym, więc próg jest wspólny. W obwodzie 3-fazowym mierzy się pętlę dla każdej fazy, a o ocenie decyduje NAJGORSZA z nich. " +
+      "Zalecany zapas odbiorczy: Zs ≤ 0,8·Zs max — pomiar wykonuje się na zimnym przewodzie, a nagrzany ma większą rezystancję. Wiersz zgodny z normą, ale powyżej tego progu, ma ocenę pozytywną z uwagą „bez zapasu”.",
     evaluate: (r, limit) => {
       // Najgorsza (największa) zmierzona impedancja z wypełnionych faz. W obwodzie
       // jednofazowym wypełniona jest tylko L1 i sprowadza się to do niej samej.
@@ -168,6 +172,18 @@ export const PROTOCOL_DEFS: Record<ProtocolKey, ProtocolDef> = {
       // Przycięcie także tutaj, a nie tylko w wywołującym: ocena nie może zależeć od tego,
       // czy ktoś o nim pamiętał.
       return Math.max(...zmierzone) <= zsMax * Math.min(Number(limit), 1);
+    },
+    // Kalkulator pętli zaleca przy odbiorze Zs ≤ 0,8·Zs max, a protokół — czyli właśnie
+    // dokument odbioru — tego progu nie pokazywał: obwód zmierzony tuż pod granicą normy
+    // dostawał czyste „pozytywna". Werdykt zostaje normowy; uwaga mówi, że zapasu brak.
+    uwaga: (r) => {
+      const zmierzone = [r.zs, r.zs2, r.zs3].map(Number).filter((v) => !isNaN(v) && v > 0);
+      const { zsMax } = zsMaxForBreaker(String(r.curve ?? "B"), Number(r.in ?? 0));
+      if (!zmierzone.length || !zsMax) return null;
+      // Próg w dół do 0,01 Ω: zaokrąglony w górę (2,185 → 2,19) pokazywałby „zalecane ≤ 2,19"
+      // przy pomiarze 2,19 oznaczonym jako bez zapasu.
+      const zalecana = Math.floor(zsMax * ZAPAS_POMIAROWY * 100) / 100;
+      return Math.max(...zmierzone) > zalecana ? `bez zapasu (zalecane ≤ ${formatLiczba(zalecana, 2)} Ω)` : null;
     },
   },
 
@@ -379,6 +395,15 @@ export function ujemneWProtokole(def: ProtocolDef, rows: ProtocolRow[]): { wiers
 export function ocenWiersz(def: ProtocolDef, row: ProtocolRow, limit: number): boolean | null {
   if (ujemneWWierszu(def, row).length > 0) return null;
   return def.evaluate!(row, limit);
+}
+
+/**
+ * Uwaga do wiersza — tylko przy ocenie pozytywnej. Wiersz negatywny albo bez oceny nie
+ * potrzebuje dopisku o zapasie: tam mówi już sama ocena.
+ */
+export function uwagaWiersza(def: ProtocolDef, row: ProtocolRow, limit: number): string | null {
+  if (!def.uwaga || ocenWiersz(def, row, limit) !== true) return null;
+  return def.uwaga(row, limit);
 }
 
 export function protocolVerdict(def: ProtocolDef, rows: ProtocolRow[], limit: number): boolean | null {
