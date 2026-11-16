@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, wierszeBezOceny, type ProtocolRow } from "./protocols";
+import { PROTOCOL_DEFS, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, type ProtocolRow } from "./protocols";
 
 describe("PROTOCOL_DEFS.izolacja.evaluate", () => {
   const def = PROTOCOL_DEFS.izolacja;
@@ -250,6 +250,46 @@ describe("zapas pomiarowy w protokole pętli zwarcia", () => {
 
   it("werdykt protokołu liczy się z przyciętej wartości, także ze starego zapisu", () => {
     expect(protocolVerdict(def, [zaDuza], limitOceny(def, 2))).toBe(false);
+  });
+});
+
+/*
+ * Przegląd 15.11.2026 (b), pkt 1: kalkulator pętli zaleca przy odbiorze Zs ≤ 0,8·Zs max,
+ * a protokół — dokument odbioru — tego nie pokazywał. Werdykt zostaje normowy, dochodzi uwaga.
+ * B16: Zs max = 0,95·230/80 ≈ 2,73 Ω, zalecane 0,8·Zs max ≈ 2,18 Ω.
+ */
+describe("uwaga „bez zapasu” w protokole pętli zwarcia", () => {
+  const def = PROTOCOL_DEFS.petla;
+
+  it("pomiar zgodny z normą, ale powyżej 0,8·Zs max: pozytywna z uwagą i progiem", () => {
+    const wiersz: ProtocolRow = { curve: "B", in: 16, zs: 2.5 };
+    expect(ocenWiersz(def, wiersz, 1)).toBe(true);
+    expect(uwagaWiersza(def, wiersz, 1)).toBe("bez zapasu (zalecane ≤\u00a02,18\u00a0Ω)");
+    // werdykt protokołu nadal pozytywny — uwaga go nie zmienia
+    expect(protocolVerdict(def, [wiersz], 1)).toBe(true);
+  });
+
+  it("pomiar z zapasem: bez uwagi", () => {
+    expect(uwagaWiersza(def, { curve: "B", in: 16, zs: 1.8 }, 1)).toBeNull();
+  });
+
+  it("wiersz negatywny albo bez oceny nie dostaje uwagi — mówi już sama ocena", () => {
+    expect(uwagaWiersza(def, { curve: "B", in: 16, zs: 4.0 }, 1)).toBeNull();
+    expect(uwagaWiersza(def, { curve: "B", in: 16 }, 1)).toBeNull();
+  });
+
+  it("o uwadze decyduje najgorsza faza obwodu 3-fazowego", () => {
+    expect(uwagaWiersza(def, { uklad: "3-faz", curve: "B", in: 16, zs: 1.2, zs2: 2.4, zs3: 1.3 }, 1)).not.toBeNull();
+  });
+
+  it("zapas pomiarowy ustawiony na 0,8 lub mniej: pozytywny wiersz ma zapas z definicji", () => {
+    const wiersz: ProtocolRow = { curve: "B", in: 16, zs: 2.1 };
+    expect(ocenWiersz(def, wiersz, 0.8)).toBe(true);
+    expect(uwagaWiersza(def, wiersz, 0.8)).toBeNull();
+  });
+
+  it("inne protokoły nie mają uwag", () => {
+    expect(uwagaWiersza(PROTOCOL_DEFS.izolacja, { l1n: 1.1 }, 500)).toBeNull();
   });
 });
 

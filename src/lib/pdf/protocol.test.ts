@@ -248,6 +248,13 @@ describe("buildProtocolPdf — nic nie jest ucinane", () => {
     }
   });
 
+  it("pętla: wiersz pozytywny bez zalecanego zapasu ma na wydruku „bez zapasu”, a kryterium podaje próg 0,8", async () => {
+    const rows = [{ obwod: "A", curve: "B", in: 16, zs: 2.5 }, { obwod: "B", curve: "B", in: 16, zs: 1.5 }];
+    const out = bytesToAscii(await buildProtocolPdf("petla", header, rows, 1));
+    expect((out.match(/\(bez zapasu\) Tj/g) || []).length).toBe(1);
+    expect(out).toContain("0,8");
+  });
+
   it("długa nazwa obwodu zawija się do kolejnych linii, a każde jej słowo trafia do dokumentu", async () => {
     const nazwa = "F8 Obwod gniazd - pomieszczenia gospodarcze 1 (parter, strefa techniczna)";
     const out = bytesToAscii(await buildProtocolPdf("izolacja", header, [{ obwod: nazwa, l1n: 250 }], 500));

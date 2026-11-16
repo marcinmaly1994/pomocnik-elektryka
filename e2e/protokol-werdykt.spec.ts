@@ -61,3 +61,21 @@ test("pętla zwarcia: zapas powyżej 1,0 nie rozluźnia oceny — pomiar niezgod
   await expect(page.getByText("Wynik negatywny")).toBeVisible();
   await expect(page.getByText("Wynik pozytywny")).toHaveCount(0);
 });
+
+test("pętla zwarcia: pomiar zgodny z normą, ale bez zapasu 0,8 — pozytywna z uwagą, która znika przy zapasie", async ({ page }) => {
+  // Przegląd 15.11.2026 (b), pkt 1: kalkulator zalecał przy odbiorze Zs ≤ 0,8·Zs max, a protokół
+  // odbioru dawał czyste „pozytywna” obwodowi zmierzonemu tuż pod granicą normy.
+  // B16: Zs max ≈ 2,73 Ω, zalecane ≤ 2,18 Ω.
+  await otworz(page);
+  await page.getByRole("button", { name: /^Pomiar impedancji pętli zwarcia/ }).first().click();
+  await page.getByRole("button", { name: /Dodaj wiersz/ }).click();
+  const zs = page.getByLabel("Zs L1 [Ω], pozycja 1");
+  await zs.fill("2.5");
+
+  await expect(page.getByText("Wynik pozytywny")).toBeVisible();
+  await expect(page.getByTestId("uwaga-wiersza")).toHaveText("bez zapasu (zalecane ≤\u00a02,18\u00a0Ω)");
+
+  await zs.fill("1.8");
+  await expect(page.getByTestId("uwaga-wiersza")).toHaveCount(0);
+  await expect(page.getByText("Wynik pozytywny")).toBeVisible();
+});
