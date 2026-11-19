@@ -47,7 +47,7 @@ import {
   PRZEKROJE_3ZYLY_CU,
   type MetodaOdniesienia3,
 } from "@/lib/norms/ampacity3";
-import { maksCzasWylaczenia_s, type UkladSieci } from "@/lib/norms/conductors";
+import { czyObwodOdbiorczy, maksCzasWylaczenia_s, type RodzajObwoduCzasu, type UkladSieci } from "@/lib/norms/conductors";
 import { CURVE_MULTIPLIER, groupingFactor, temperatureFactor, type Curve } from "@/lib/panel/norms";
 import { bladWyniku, formatLiczba, type CalcError, type CalcResult, type Krok } from "./result";
 import { wStrefieElektromagnetycznej } from "./warunekCieplny";
@@ -83,7 +83,8 @@ export interface PelnyDoborWejscie {
   /** Impedancja źródła i reszty obwodu PRZED tym odcinkiem [Ω] — do kryterium (3). */
   impedancjaZrodla_ohm?: number;
   uklad?: UkladSieci;
-  obwodOdbiorczy?: boolean;
+  /** Rodzaj obwodu — z dobranym In wyznacza czas wyłączenia (tabl. 41.1). Domyślnie gniazda. */
+  rodzajObwodu?: RodzajObwoduCzasu;
 
   /** Prąd zwarciowy w tym miejscu [A] — do kryterium (4). */
   Ik_A?: number;
@@ -124,6 +125,14 @@ function kandydaci(material: Material, metoda: MetodaOdniesienia3): number[] {
 
 /** Prąd zadziałania wyzwalacza magnetycznego przy GÓRNEJ granicy pasma —
  *  spec pkt 7 zakazuje przyjmowania dolnej krotności do sprawdzeń ochronnych. */
+/**
+ * Największy prąd znamionowy, dla którego krotności B/C/D mają sens. Wyłączniki nadprądowe
+ * (PN-EN 60898-1) kończą się na 125 A; wyżej są aparaty kompaktowe (PN-EN 60947-2), których
+ * prąd zadziałania wynika z NASTAWY wyzwalacza zwarciowego, a nie z krotności. Dotąd kalkulator
+ * pisał „B250" i liczył Ia = 5·250 A — aparat, który nie istnieje (audyt Kalkulatorów, K4).
+ */
+export const MAKS_IN_WYLACZNIKA_NADPRADOWEGO = 125;
+
 function pradZadzialania(curve: Curve, In: number): number {
   return CURVE_MULTIPLIER[curve] * In;
 }
@@ -168,11 +177,16 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
       break;
     }
   }
+  const kompaktowy = In > MAKS_IN_WYLACZNIKA_NADPRADOWEGO;
+  if (kompaktowy)
+    zalozenia.push(
+      `In ${In} A > ${MAKS_IN_WYLACZNIKA_NADPRADOWEGO} A — to zakres wyłączników kompaktowych (PN-EN 60947-2), nie nadprądowych B/C/D. Prąd zadziałania zależy od nastawy wyzwalacza zwarciowego; kryterium ochrony przeciwporażeniowej sprawdź z tą nastawą (np. w kalkulatorze „Maksymalna długość” albo „Impedancja pętli”).`
+    );
   kroki.push({
     opis: "Kryterium 1 — obciążalność: najmniejszy przekrój z dobieralnym In (Ib ≤ In ≤ Iz)",
     wzor: "Iz = Iz,tab · k1 · k2;  Ib ≤ In ≤ Iz",
     podstawienie: `Ib = ${formatLiczba(w.Ib_A, 2)} A, przeszukano ${candidates.length} przekrojów tablicy`,
-    wynik: S1 !== null ? `${formatLiczba(S1, 1)} mm² (In = ${curve}${In} A, Iz = ${formatLiczba(IzWybrany, 1)} A)` : "brak przekroju spełniającego warunek",
+    wynik: S1 !== null ? `${formatLiczba(S1, 1)} mm² (In = ${kompaktowy ? "" : curve}${In} A, Iz = ${formatLiczba(IzWybrany, 1)} A)` : "brak przekroju spełniającego warunek",
   });
   if (S1 === null) {
     return {
@@ -218,7 +232,10 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
   let S3: number | null = null;
   let ocenioneS3 = false;
   let powodPominiecia3: string | undefined;
-  if (w.impedancjaZrodla_ohm !== undefined && w.impedancjaZrodla_ohm >= 0) {
+  if (kompaktowy && w.impedancjaZrodla_ohm !== undefined && w.impedancjaZrodla_ohm >= 0) {
+    powodPominiecia3 = `In ${In} A to aparat kompaktowy — prąd zadziałania z nastawy wyzwalacza, nie z krotności B/C. Kryterium NIE zostało sprawdzone.`;
+    zalozenia.push(powodPominiecia3);
+  } else if (w.impedancjaZrodla_ohm !== undefined && w.impedancjaZrodla_ohm >= 0) {
     ocenioneS3 = true;
     const U0 = w.napiecie_V / Math.sqrt(3);
     const Ia = pradZadzialania(curve, In);
@@ -253,8 +270,10 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
   let S4: number | null = null;
   let ocenioneS4 = false;
   let powodPominiecia4: string | undefined;
+  // Aparat kompaktowy: Ia nieznane, więc nie wiadomo, czy zadziała elektromagnetycznie —
+  // zostaje wzór z czasem dopuszczalnym (większy przekrój, strona bezpieczna).
   const IaS4 = pradZadzialania(curve, In);
-  if (w.Ik_A !== undefined && w.Ik_A > 0 && wStrefieElektromagnetycznej(w.Ik_A, IaS4)) {
+  if (!kompaktowy && w.Ik_A !== undefined && w.Ik_A > 0 && wStrefieElektromagnetycznej(w.Ik_A, IaS4)) {
     // Ik ≥ Ia: wyłącznik zadziała elektromagnetycznie w czasie < 0,1 s. Wzór z czasem
     // DOPUSZCZALNYM (0,4/5 s) kazałby tu dobierać przekrój kilkukrotnie za duży — przy
     // 6 kA i B16 wychodziło ponad 30 mm². Norma każe wtedy porównać k²S² z I²t aparatu,
@@ -266,7 +285,7 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
     zalozenia.push(powodPominiecia4);
   } else if (w.Ik_A !== undefined && w.Ik_A > 0) {
     ocenioneS4 = true;
-    const czas = maksCzasWylaczenia_s(w.uklad ?? "TN", w.obwodOdbiorczy ?? true);
+    const czas = maksCzasWylaczenia_s(w.uklad ?? "TN", czyObwodOdbiorczy(w.rodzajObwodu ?? "gniazda", In));
     const k = K_ZYLA[w.material][w.izolacja];
     const minAnaliczny = (w.Ik_A * Math.sqrt(czas)) / k;
     S4 = candidates.find((s) => s >= minAnaliczny) ?? null;

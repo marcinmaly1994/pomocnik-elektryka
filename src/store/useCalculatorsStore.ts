@@ -7,7 +7,7 @@ import type { Faza } from "@/lib/calc/loadBalance";
 import type { SposobRozruchu } from "@/lib/calc/motor";
 import type { TypSPD } from "@/lib/calc/spd";
 import type { MetodaOdniesienia3 } from "@/lib/norms/ampacity3";
-import type { Izolacja, Material, ModelRezystywnosci, RodzajLinii } from "@/lib/norms/conductors";
+import type { Izolacja, Material, ModelRezystywnosci, RodzajLinii, RodzajObwoduCzasu } from "@/lib/norms/conductors";
 import type { TypWkladkiGG } from "@/lib/norms/gGFuses";
 import type { LayingMethod } from "@/lib/panel/norms";
 import type { CircuitKind } from "@/lib/panel/sizing";
@@ -252,7 +252,10 @@ interface CalculatorsState {
   pdSprawdzOchrone: boolean;
   pdImpedancjaZrodla: number;
   pdUklad: "TN" | "TT";
-  pdObwodOdbiorczy: boolean;
+  /** Rodzaj obwodu dla czasu wyłączenia (gniazda ≤ 63 A / stałe ≤ 32 A → 0,4 s). Zastąpił
+   *  dawne `pdObwodOdbiorczy` (≤ 32 A) — stary zapis wraca do domyślnych gniazd, czyli
+   *  do ostrzejszego czasu. */
+  pdRodzajObwodu: RodzajObwoduCzasu;
   pdSprawdzZwarcie: boolean;
   pdIk: number;
 
@@ -260,7 +263,7 @@ interface CalculatorsState {
   ggTyp: TypWkladkiGG;
   ggIb: number;
   ggUklad: "TN" | "TT";
-  ggObwodOdbiorczy: boolean;
+  ggRodzajObwodu: RodzajObwoduCzasu;
   ggSprawdzZs: boolean;
   ggZmierzonaZs: number;
   /** Obciążalność przewodu za wkładką [A] — warunek I₂ ≤ 1,45·Iz. 0 = nie sprawdzaj. */
@@ -489,14 +492,14 @@ export const useCalculatorsStore = create<CalculatorsState & CalculatorsActions>
       pdSprawdzOchrone: false,
       pdImpedancjaZrodla: 0.3,
       pdUklad: "TN",
-      pdObwodOdbiorczy: true,
+      pdRodzajObwodu: "gniazda",
       pdSprawdzZwarcie: false,
       pdIk: 3000,
 
       ggTyp: "D0gG",
       ggIb: 16,
       ggUklad: "TN",
-      ggObwodOdbiorczy: true,
+      ggRodzajObwodu: "gniazda",
       ggSprawdzZs: false,
       ggZmierzonaZs: 1.5,
       ggIz: 0,
