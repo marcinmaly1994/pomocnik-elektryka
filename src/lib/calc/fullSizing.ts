@@ -31,8 +31,10 @@
  */
 
 import {
+  C_NAPIECIOWE,
   K_ZYLA,
   TEMP_PRACY,
+  X_JEDNOSTKOWA_OHM_KM,
   minPrzekrojPE,
   rezystywnoscRobocza,
   type Izolacja,
@@ -189,20 +191,26 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
   }
 
   // --- kryterium 2: spadek napięcia ------------------------------------------
-  const gamma = 1 / rezystywnoscRobocza(w.material, "annexG", TEMP_PRACY[w.izolacja]);
+  // Metoda pełna (R i X), jak w kalkulatorze „Spadek napięcia". Dotąd liczyła się sama
+  // rezystancja, a wejście cosφ było walidowane i nigdzie nieużyte: przy dużych przekrojach,
+  // gdzie reaktancja przestaje być pomijalna, spadek wychodził zaniżony (240 mm² Cu,
+  // cosφ 0,8: ok. 30%) — czyli w stronę za cienkiego kabla (audyt Kalkulatorów, K2).
+  const rhoS2 = rezystywnoscRobocza(w.material, "annexG", TEMP_PRACY[w.izolacja]);
+  const xJedn = X_JEDNOSTKOWA_OHM_KM.kabel_wielozylowy / 1000; // [Ω/m]
+  const sinfi = Math.sqrt(Math.max(0, 1 - w.cosfi * w.cosfi));
+  const spadekV = (S: number) => Math.sqrt(3) * w.Ib_A * w.dlugosc_m * ((rhoS2 / S) * w.cosfi + xJedn * sinfi);
   let S2: number | null = null;
   for (const S of candidates) {
-    const dU = (Math.sqrt(3) * w.Ib_A * w.dlugosc_m) / (gamma * S);
-    if ((dU / w.napiecie_V) * 100 <= w.limitSpadku_pct) {
+    if ((spadekV(S) / w.napiecie_V) * 100 <= w.limitSpadku_pct) {
       S2 = S;
       break;
     }
   }
-  const dUatS2 = S2 !== null ? (Math.sqrt(3) * w.Ib_A * w.dlugosc_m) / (gamma * S2) : null;
+  const dUatS2 = S2 !== null ? spadekV(S2) : null;
   kroki.push({
-    opis: "Kryterium 2 — spadek napięcia w limicie",
-    wzor: "ΔU = √3 · Ib · L / (γ · S);  ΔU% ≤ limit",
-    podstawienie: `√3 · ${formatLiczba(w.Ib_A, 2)} · ${formatLiczba(w.dlugosc_m, 1)} / (${formatLiczba(gamma, 1)} · S)`,
+    opis: "Kryterium 2 — spadek napięcia w limicie (metoda pełna: R i X)",
+    wzor: "ΔU = √3 · Ib · L · (ρ/S · cosφ + X' · sinφ);  ΔU% ≤ limit",
+    podstawienie: `√3 · ${formatLiczba(w.Ib_A, 2)} · ${formatLiczba(w.dlugosc_m, 1)} · (${formatLiczba(rhoS2, 5)}/S · ${formatLiczba(w.cosfi, 2)} + ${formatLiczba(xJedn, 5)} · ${formatLiczba(sinfi, 3)})`,
     wynik: S2 !== null ? `${formatLiczba(S2, 1)} mm² (ΔU = ${formatLiczba(dUatS2!, 2)} V = ${formatLiczba((dUatS2! / w.napiecie_V) * 100, 2)}%)` : "żaden przekrój nie mieści się w limicie",
   });
 
@@ -214,7 +222,10 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
     ocenioneS3 = true;
     const U0 = w.napiecie_V / Math.sqrt(3);
     const Ia = pradZadzialania(curve, In);
-    const ZsMax = U0 / Ia;
+    // Cmin = 0,95 (PN-EN 60909-0) jak wszędzie indziej w aplikacji (`zsMaxDlaIa`): ochronę
+    // sprawdza się przy NAJMNIEJSZYM prądzie zwarcia. Bez niego próg był o 5% łagodniejszy
+    // niż w kalkulatorze pętli i w protokole (audyt Kalkulatorów, K1).
+    const ZsMax = (C_NAPIECIOWE.min * U0) / Ia;
     const rho = rezystywnoscRobocza(w.material, "annexG", TEMP_PRACY[w.izolacja]);
     for (const S of candidates) {
       const Spe = minPrzekrojPE(S);
@@ -226,11 +237,12 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
       }
     }
     kroki.push({
-      opis: "Kryterium 3 — ochrona przeciwporażeniowa (Zs · Ia ≤ U₀)",
+      opis: "Kryterium 3 — ochrona przeciwporażeniowa (Zs · Ia ≤ Cmin · U₀)",
       wzor: "Zs = Z_źródła + R_L(S) + R_PE(S);  Ia = k · In (górna granica pasma)",
-      podstawienie: `Ia = ${CURVE_MULTIPLIER[curve]} · ${In} = ${formatLiczba(Ia, 0)} A;  Zs max = ${formatLiczba(U0, 0)} / ${formatLiczba(Ia, 0)} = ${formatLiczba(ZsMax, 3)} Ω`,
+      podstawienie: `Ia = ${CURVE_MULTIPLIER[curve]} · ${In} = ${formatLiczba(Ia, 0)} A;  Zs max = 0,95 · ${formatLiczba(U0, 0)} / ${formatLiczba(Ia, 0)} = ${formatLiczba(ZsMax, 3)} Ω`,
       wynik: S3 !== null ? `${formatLiczba(S3, 1)} mm²` : "żaden przekrój nie spełnia warunku — sprawdź impedancję źródła albo charakterystykę",
     });
+    zalozenia.push("Współczynnik napięciowy Cmin = 0,95 (PN-EN 60909-0): ochronę sprawdza się przy najmniejszym prądzie zwarcia.");
     zalozenia.push(`Przekrój PE dobrany z reguły wg przekroju fazowego (PN-HD 60364-5-54), z tego samego materiału co żyła robocza.`);
   } else {
     powodPominiecia3 = "Nie podano impedancji źródła i reszty obwodu — kryterium NIE zostało sprawdzone.";
@@ -291,6 +303,9 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
     { kryterium: "obciazalnosc", S: S1 },
     { kryterium: "spadek_napiecia", S: S2! },
   ];
+  zalozenia.push(
+    `Spadek napięcia metodą pełną z reaktancją jednostkową kabla wielożyłowego X' = ${formatLiczba(X_JEDNOSTKOWA_OHM_KM.kabel_wielozylowy, 2)} Ω/km. Dla kabli jednożyłowych i linii napowietrznych reaktancja jest większa — sprawdź w kalkulatorze „Spadek napięcia".`
+  );
   if (ocenioneS3) wartosci.push({ kryterium: "ochrona_przeciwporazeniowa", S: S3! });
   if (ocenioneS4) wartosci.push({ kryterium: "wytrzymalosc_zwarciowa", S: S4! });
 
