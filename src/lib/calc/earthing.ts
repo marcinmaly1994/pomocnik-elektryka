@@ -217,6 +217,13 @@ export function obliczUziom(w: UziomWejscie): CalcResult<UziomWynik> {
     );
   if (w.typ === "otokowy")
     zalozenia.push("Wzór R ≈ 2ρ/L dla otoku to przybliżenie — dokładny wynik zależy od kształtu obrysu i głębokości ułożenia.");
+  // Audyt Kalkulatorów 16.11.2026, K7: wzór ze specyfikacji daje mniej więcej dwa razy więcej
+  // niż Dwight i wzory podręcznikowe (ρ/(2πL)·…). Właściciel zdecydował: wartość zostaje (strona
+  // bezpieczna — zawyżone R to więcej bednarki, nie za mało), ale wynik mówi o tym wprost.
+  if (w.typ === "poziomy")
+    zalozenia.push(
+      "Wzór na bednarkę daje wynik ok. dwa razy wyższy niż wzór Dwighta i wzory podręcznikowe z mianownikiem 2πL — szacunek jest po bezpiecznej stronie (wskaże więcej bednarki niż potrzeba). Rozstrzyga pomiar rezystancji uziomu po wykonaniu."
+    );
 
   return {
     wartosci: { R_pojedynczy_ohm: R1, R_wypadkowa_ohm: Rwyp, potrzebnaDlugosc_m: potrzebna },
