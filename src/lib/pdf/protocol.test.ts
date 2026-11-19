@@ -271,6 +271,17 @@ describe("buildProtocolPdf — nic nie jest ucinane", () => {
     expect(uz).toContain("(100,0) Tj");
   });
 
+  it("RCD: kolumna kształtu prądu, a sprzeczny wiersz drukuje „brak kryterium”, nie kreskę", async () => {
+    const rows = [
+      { ozn: "FI1", idn: 30, typ: "A", sel: "nie", ksztalt: "puls.", id: 36, t1: 25, t5: 12, ub: 2 },
+      { ozn: "FI2", idn: 30, typ: "AC", sel: "nie", ksztalt: "stały", id: 20, t1: 25, t5: 12, ub: 2 },
+    ];
+    const out = bytesToAscii(await buildProtocolPdf("rcd", header, rows, 50));
+    expect(out).toContain("(pozytywna) Tj");
+    expect(out).toContain("(kryterium) Tj");
+    expect(out).toContain("0,35");
+  });
+
   it("długa nazwa obwodu zawija się do kolejnych linii, a każde jej słowo trafia do dokumentu", async () => {
     const nazwa = "F8 Obwod gniazd - pomieszczenia gospodarcze 1 (parter, strefa techniczna)";
     const out = bytesToAscii(await buildProtocolPdf("izolacja", header, [{ obwod: nazwa, l1n: 250 }], 500));

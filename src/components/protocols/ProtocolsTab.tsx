@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Download, Eye, FilePlus2, FolderOpen, Plus, Save, Trash2 } from "lucide-react";
 import { useProjectStore } from "@/store/useProjectStore";
-import { PROTOCOL_ORDER, definicjaProtokolu, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
+import { PROTOCOL_ORDER, bladWiersza, definicjaProtokolu, limitOceny, ocenWiersz, protocolVerdict, ujemneWProtokole, uwagaWiersza, wierszeBezOceny, type ProtocolRow } from "@/lib/protocols";
 import { buildProtocolDoc, buildProtocolPdf, downloadProtocolPdf } from "@/lib/pdf/protocol";
 import { zarejestrujProducenta } from "@/lib/pdf/rejestr";
 import { projectFileName } from "@/lib/pdf/download";
@@ -113,10 +113,12 @@ function TrescPozycji({ value, onChange, etykieta }: { value: string; onChange: 
 }
 
 /** „1 wiersz bez wyników", „3 wiersze…", „12 wierszy…" — albo pozycje oględzin. */
-function brakOpis(n: number, checklist: boolean): string {
+function brakOpis(n: number, checklist: boolean, bezKryterium = false): string {
   const formy = checklist
     ? ["pozycja bez oceny", "pozycje bez oceny", "pozycji bez oceny"]
-    : ["wiersz bez wyników", "wiersze bez wyników", "wierszy bez wyników"];
+    : bezKryterium
+      ? ["wiersz bez kryterium oceny", "wiersze bez kryterium oceny", "wierszy bez kryterium oceny"]
+      : ["wiersz bez wyników", "wiersze bez wyników", "wierszy bez wyników"];
   const kilka = n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14);
   return `${n} ${n === 1 ? formy[0] : kilka ? formy[1] : formy[2]}`;
 }
@@ -551,6 +553,7 @@ export function ProtocolsTab() {
                   {rows.map((r, i) => {
                     const ok = ocenWiersz(def, r, limit);
                     const uwaga = uwagaWiersza(def, r, limit);
+                    const blad = bladWiersza(def, r);
                     return (
                       <tr
                         key={i}
@@ -596,6 +599,10 @@ export function ProtocolsTab() {
                         <td className="col-span-4 flex items-center sm:col-span-10 lg:table-cell lg:py-1.5">
                           {ujemne.some((u) => u.wiersz === i + 1) ? (
                             <span className="text-xs font-medium text-red-700">wartość ujemna</span>
+                          ) : blad ? (
+                            <span className="text-xs text-caution" data-testid="blad-wiersza">
+                              {blad}
+                            </span>
                           ) : ok === null ? (
                             <span className="text-xs text-slate-400">—</span>
                           ) : (
@@ -636,11 +643,22 @@ export function ProtocolsTab() {
             nie sprawdził (patrz `protocolVerdict`). Na wydruku stoi wtedy „Brak kompletu
             danych", więc tu mówimy to samo i od razu, czego brakuje. */}
         {verdict === null && rows.length > 0 && (() => {
-          const brak = wierszeBezOceny(def, rows, limit);
+          // Wiersze ze sprzecznymi danymi (np. RCD typu AC badany prądem pulsującym) mają
+          // wyniki — „uzupełnij pomiary" wprowadzałoby w błąd. Mówimy o nich osobno.
+          const bezKryterium = def.checklist ? 0 : rows.filter((r) => bladWiersza(def, r)).length;
+          const brak = wierszeBezOceny(def, rows, limit) - bezKryterium;
+          const czesci = [
+            brak > 0 && brakOpis(brak, !!def.checklist),
+            bezKryterium > 0 && brakOpis(bezKryterium, false, true),
+          ].filter(Boolean);
           return (
             <div className="mt-4 rounded-md bg-caution-tlo p-3 text-sm text-caution" data-testid="protokol-niekompletny">
-              Niekompletny — {brakOpis(brak, !!def.checklist)}.
-              {def.checklist ? " Oceń każdą pozycję albo usuń te, które nie dotyczą obiektu." : " Uzupełnij pomiary albo usuń puste wiersze."}
+              Niekompletny — {czesci.join(", ")}.
+              {def.checklist
+                ? " Oceń każdą pozycję albo usuń te, które nie dotyczą obiektu."
+                : brak > 0
+                  ? " Uzupełnij pomiary albo usuń puste wiersze."
+                  : " Popraw typ wyłącznika albo prąd próbny — opis stoi w kolumnie „Ocena”."}
             </div>
           );
         })()}
