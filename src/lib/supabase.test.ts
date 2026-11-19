@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { isSupabaseConfigured, polskiKomunikatBledu, sesjaZOdpowiedzi, supaDeleteAccount, supaSignIn, supaUpdateProject, wymagaOdswiezenia } from "./supabase";
+import {
+  isSupabaseConfigured,
+  polskiKomunikatBledu,
+  sesjaZOdpowiedzi,
+  supaDeleteAccount,
+  supaSignIn,
+  supaUpdateProject,
+  supaUsunWszystkieUdostepnienia,
+  wymagaOdswiezenia,
+} from "./supabase";
 
 describe("isSupabaseConfigured", () => {
   it("puste wartości -> nieskonfigurowane", () => {
@@ -206,5 +215,51 @@ describe("sbFetch — błędy sieci i odpowiedzi niebędące JSON-em", () => {
     const blad = await supaSignIn("a@b.pl", "zle").catch((e) => e);
     expect(blad.message).toBe("Nieprawidłowy e-mail lub hasło.");
     expect(blad.status).toBe(400);
+  });
+});
+
+/*
+ * Usunięcie konta kasuje najpierw linki udostępnień (pliki w Storage są publiczne po
+ * ścieżce). Lista w Storage oddaje najwyżej 100 plików naraz, a udostępnień może być
+ * więcej — jedno zapytanie zostawiało resztę publiczną po skasowaniu konta.
+ */
+describe("supaUsunWszystkieUdostepnienia", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Udaje koszyk z `ile` plikami: lista oddaje do 100, DELETE usuwa jeden. */
+  function koszyk(ile: number) {
+    const pliki = Array.from({ length: ile }, (_, i) => `plik-${i}.pdf`);
+    const usuniete: string[] = [];
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+      if (String(url).includes("/object/list/")) {
+        const paczka = pliki.filter((p) => !usuniete.includes(p)).slice(0, 100).map((name) => ({ name, created_at: "" }));
+        return Promise.resolve(new Response(JSON.stringify(paczka), { status: 200 }));
+      }
+      if (init.method === "DELETE") usuniete.push(String(url).split("/").pop()!);
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    });
+    return usuniete;
+  }
+
+  it("kasuje WSZYSTKIE pliki, także ponad pierwszą paczkę stu", async () => {
+    const usuniete = koszyk(250);
+    expect(await supaUsunWszystkieUdostepnienia("t", "uid")).toBe(250);
+    expect(new Set(usuniete).size).toBe(250);
+  });
+
+  it("pusty koszyk — nic do skasowania, bez błędu", async () => {
+    koszyk(0);
+    expect(await supaUsunWszystkieUdostepnienia("t", "uid")).toBe(0);
+  });
+
+  it("kasowanie, które po cichu nie działa, kończy się błędem, a nie pętlą bez końca", async () => {
+    vi.stubGlobal("fetch", (url: string) =>
+      Promise.resolve(
+        String(url).includes("/object/list/")
+          ? new Response(JSON.stringify([{ name: "a.pdf", created_at: "" }]), { status: 200 })
+          : new Response("{}", { status: 200 })
+      )
+    );
+    await expect(supaUsunWszystkieUdostepnienia("t", "uid", 5)).rejects.toThrow(/konto nie zostało usunięte/);
   });
 });

@@ -181,6 +181,8 @@ test("„Usuń konto” otwiera osobne okno z ostrzeżeniem, co dokładnie znikn
   // Musi być jasne, że lokalna praca w tej przeglądarce zostaje — inaczej ludzie
   // boją się kliknąć albo są zaskoczeni tym, co zostało.
   await expect(page.getByText(/bieżący projekt w tej przeglądarce/i)).toBeVisible();
+  // Linki udostępnień też znikają — ktoś, komu je wysłano, przestanie widzieć dokumentację.
+  await expect(page.getByText(/linki do udostępnionej dokumentacji — przestaną działać/)).toBeVisible();
 });
 
 test("usunięcia konta nie da się potwierdzić bez podania hasła", async ({ page }) => {
