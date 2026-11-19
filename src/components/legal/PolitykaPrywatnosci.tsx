@@ -1,4 +1,4 @@
-import { Cookie, Database, HardDrive, Mail, ShieldCheck, Trash2 } from "lucide-react";
+import { Cookie, Database, HardDrive, Link2, Mail, ShieldCheck, Trash2 } from "lucide-react";
 import { AdresKontaktowy, BanerSzkicu, DoUzupelnienia, MetryczkaDokumentu, Sekcja } from "./wspolne";
 import { USLUGODAWCA } from "./daneUslugodawcy";
 
@@ -76,6 +76,10 @@ export function PolitykaPrywatnosci() {
               na serwerze, żebyś miał do tego dostęp z każdego urządzenia;
             </li>
             <li>
+              <strong className="text-ink">udostępnioną dokumentację</strong> — tylko jeśli użyjesz „Udostępnij linkiem”:
+              plik PDF z kompletem dokumentacji w stanie z chwili udostępnienia (opis niżej);
+            </li>
+            <li>
               <strong className="text-ink">techniczne dane połączenia</strong> — adres IP i czas zapytania,
               zapisywane automatycznie w logach serwera i potrzebne do jego bezpieczeństwa.
             </li>
@@ -101,12 +105,32 @@ export function PolitykaPrywatnosci() {
           </p>
         </Sekcja>
 
+        <Sekcja ikona={Link2} tytul="Udostępnianie dokumentacji linkiem">
+          <p>
+            Z kontem możesz udostępnić komplet dokumentacji — na przykład inwestorowi — przyciskiem{" "}
+            <strong className="text-ink">„Udostępnij linkiem (tylko do odczytu)”</strong> w podglądzie dokumentacji.
+            Na serwer trafia wtedy plik PDF w stanie z tej chwili; późniejsze zmiany w projekcie go nie zmieniają.
+          </p>
+          <p>
+            <strong className="text-ink">
+              Link jest publiczny: każdy, kto go ma, otworzy dokumentację bez logowania.
+            </strong>{" "}
+            Adresu nie da się zgadnąć, ale po wysłaniu nie mamy wpływu na to, komu zostanie przekazany. Jeśli w
+            nagłówku dokumentów są dane twojego klienta (zleceniodawca, adres obiektu), są też w udostępnionym pliku —
+            to ty decydujesz, czy i komu go wysyłasz.
+          </p>
+          <p>
+            Link wyłączysz w każdej chwili przyciskiem „Wyłącz link” na liście udostępnień — plik jest wtedy
+            kasowany. Usunięcie konta kasuje wszystkie twoje udostępnienia.
+          </p>
+        </Sekcja>
+
         <Sekcja ikona={Database} tytul="Komu powierzamy dane">
           <p>Aplikacja korzysta z trzech usług zewnętrznych, każdej w wąskim zakresie:</p>
           <ul className="ml-4 list-disc space-y-1">
             <li>
-              <strong className="text-ink">Supabase</strong> — baza danych i obsługa kont. Tu leżą twój adres e-mail
-              i zapisane projekty. Serwery: <DoUzupelnienia>{USLUGODAWCA.regionDanych}</DoUzupelnienia>.
+              <strong className="text-ink">Supabase</strong> — baza danych i obsługa kont. Tu leżą twój adres e-mail,
+              zapisane projekty i udostępnione pliki PDF. Serwery: <DoUzupelnienia>{USLUGODAWCA.regionDanych}</DoUzupelnienia>.
             </li>
             <li>
               <strong className="text-ink">Cloudflare</strong> — hosting strony i jej dostarczanie. Przetwarza
@@ -129,9 +153,10 @@ export function PolitykaPrywatnosci() {
 
         <Sekcja ikona={Trash2} tytul="Jak długo i jak to skasować">
           <p>
-            Dane konta i projekty trzymamy tak długo, jak istnieje konto. Możesz je skasować sam i natychmiast: menu
+            Dane konta i projekty trzymamy tak długo, jak istnieje konto, a udostępnione pliki PDF — dopóki nie
+            wyłączysz linku albo nie usuniesz konta. Możesz je skasować sam i natychmiast: menu
             konta → <strong className="text-ink">Ustawienia konta</strong> →{" "}
-            <strong className="text-ink">Usuń konto</strong>. Kasowane są wtedy zarówno projekty, jak i samo konto —
+            <strong className="text-ink">Usuń konto</strong>. Kasowane są wtedy projekty, udostępnione pliki i samo konto —
             bezpowrotnie i bez pytania nas o zgodę. Dane z przeglądarki usuwa wyczyszczenie danych witryny. Logi
             serwera zacierają się automatycznie po kilkudziesięciu dniach.
           </p>

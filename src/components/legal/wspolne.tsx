@@ -19,7 +19,7 @@ import { SZKIC, USLUGODAWCA } from "./daneUslugodawcy";
  * pokazywałby dzisiejszą datę przy dokumencie nietkniętym od roku, czyli kłamałby
  * w jedynym polu, które czytelnik bierze za dowód aktualności.
  */
-export const OSTATNIA_ZMIANA = "19 września 2026";
+export const OSTATNIA_ZMIANA = "19 listopada 2026";
 
 /** Nagłówek sekcji z ikoną — wspólny rytm obu dokumentów. */
 export function Sekcja({

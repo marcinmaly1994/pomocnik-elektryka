@@ -87,6 +87,11 @@ export function Regulamin() {
             pozycji wymaga usunięcia którejś z poprzednich; nadpisanie już zapisanej pozycji jest zawsze możliwe.
             Limit wynika z kosztów utrzymania bezpłatnej usługi i może się zmienić.
           </p>
+          <p>
+            Z kontem możesz udostępnić komplet dokumentacji linkiem tylko do odczytu. Link jest publiczny — otworzy go
+            każdy, kto go otrzyma — dlatego to ty decydujesz, komu go przekazujesz. Wyłączysz go w każdej chwili;
+            usunięcie konta wyłącza wszystkie twoje linki.
+          </p>
         </Sekcja>
 
         <Sekcja ikona={Scale} tytul="Twoje obowiązki i odpowiedzialność">
@@ -96,7 +101,7 @@ export function Regulamin() {
           </p>
           <p>
             Jeśli wpisujesz w dokumentach dane innych osób — na przykład zleceniodawcy w protokole pomiarowym —
-            odpowiadasz za to, że masz do tego podstawę. Sposób przechowywania tych danych opisuje polityka
+            odpowiadasz za to, że masz do tego podstawę — także wtedy, gdy udostępniasz dokumentację linkiem. Sposób przechowywania tych danych opisuje polityka
             prywatności.
           </p>
           <p>

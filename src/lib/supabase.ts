@@ -480,13 +480,16 @@ export interface PlikUdostepnienia {
   created_at: string;
 }
 
-/** Udostępnienia właściciela, od najnowszego. */
+/** Ile plików zwraca jedno zapytanie o listę w Storage — patrz `supaUsunWszystkieUdostepnienia`. */
+const PACZKA_LISTY = 100;
+
+/** Udostępnienia właściciela, od najnowszego — najwyżej `PACZKA_LISTY` naraz. */
 export async function supaListaUdostepnien(token: string, userId: string): Promise<PlikUdostepnienia[]> {
   const res = await storageFetch(`/object/list/${KOSZYK_UDOSTEPNIEN}`, {
     method: "POST",
     token,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prefix: `${userId}/`, limit: 100, sortBy: { column: "created_at", order: "desc" } }),
+    body: JSON.stringify({ prefix: `${userId}/`, limit: PACZKA_LISTY, sortBy: { column: "created_at", order: "desc" } }),
   });
   return (await res.json()) as PlikUdostepnienia[];
 }
@@ -494,6 +497,26 @@ export async function supaListaUdostepnien(token: string, userId: string): Promi
 /** Wyłącza link — kasuje plik migawki. */
 export async function supaUsunUdostepnienie(token: string, sciezka: string): Promise<void> {
   await storageFetch(`/object/${KOSZYK_UDOSTEPNIEN}/${sciezka}`, { method: "DELETE", token });
+}
+
+/**
+ * Kasuje WSZYSTKIE udostępnienia właściciela — przed usunięciem konta.
+ *
+ * Lista w Storage zwraca najwyżej jedną paczkę (`PACZKA_LISTY`), a liczba udostępnień nie
+ * ma limitu. Jedno zapytanie zostawiało więc przy ponad stu linkach resztę plików publiczną
+ * już po skasowaniu konta — bez właściciela, który mógłby je wyłączyć, a z danymi
+ * zleceniodawcy w środku. Tu kasujemy paczkami, aż lista będzie pusta. Ogranicznik rund to
+ * bezpiecznik przed pętlą bez końca, gdyby kasowanie po cichu nie zadziałało.
+ */
+export async function supaUsunWszystkieUdostepnienia(token: string, userId: string, maksRund = 100): Promise<number> {
+  let usuniete = 0;
+  for (let runda = 0; runda < maksRund; runda++) {
+    const pliki = await supaListaUdostepnien(token, userId);
+    if (!pliki.length) return usuniete;
+    for (const p of pliki) await supaUsunUdostepnienie(token, `${userId}/${p.name}`);
+    usuniete += pliki.length;
+  }
+  throw new Error("Nie udało się wyłączyć wszystkich linków udostępnień — konto nie zostało usunięte. Spróbuj ponownie.");
 }
 
 export function supaDeleteAccount(token: string) {

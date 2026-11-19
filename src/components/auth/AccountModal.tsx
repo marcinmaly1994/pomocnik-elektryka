@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/useProjectStore";
 import {
   supaDeleteAccount,
-  supaListaUdostepnien,
-  supaUsunUdostepnienie,
+  supaUsunWszystkieUdostepnienia,
   supaDeleteProject,
   supaListProjects,
   supaLogout,
@@ -292,8 +291,7 @@ function UsunKontoDialog({ open, session, onClose, onUsuniete }: {
       // Kasowanie z SQL-a nie wchodzi w grę — Storage nie pozwala ruszać plików
       // z poziomu tabel. Nieskonfigurowany koszyk to brak udostępnień, nie przeszkoda.
       try {
-        const pliki = await supaListaUdostepnien(swieza.access_token, swieza.user.id);
-        for (const p of pliki) await supaUsunUdostepnienie(swieza.access_token, `${swieza.user.id}/${p.name}`);
+        await supaUsunWszystkieUdostepnienia(swieza.access_token, swieza.user.id);
       } catch (blad) {
         if (!/nie jest jeszcze skonfigurowane/.test(String((blad as Error).message))) throw blad;
       }
@@ -321,7 +319,8 @@ function UsunKontoDialog({ open, session, onClose, onUsuniete }: {
             <p className="mb-1">Bezpowrotnie znikną:</p>
             <ul className="mb-3 list-disc space-y-0.5 ps-5">
               <li>konto <span className="font-medium">{session.user.email}</span> — nie zalogujesz się nim ponownie,</li>
-              <li>wszystkie projekty i zestawy protokołów zapisane w chmurze.</li>
+              <li>wszystkie projekty i zestawy protokołów zapisane w chmurze,</li>
+              <li>linki do udostępnionej dokumentacji — przestaną działać u wszystkich, którym je wysłałeś.</li>
             </ul>
             <p>
               Zostaje bieżący projekt w tej przeglądarce (autozapis lokalny). Jeśli chcesz zachować resztę pracy,
