@@ -148,14 +148,39 @@ export function minPrzekrojPE(przekrojFazowy_mm2: number): number {
   return przekrojFazowy_mm2 / 2;
 }
 
-/**
- * Maksymalne czasy wyłączenia wg PN-HD 60364-4-41 tabl. 41.1 dla U₀ = 230 V.
- * `obwodOdbiorczy` = obwód końcowy o prądzie znamionowym ≤ 32 A (nie 63 A —
- * tabl. 41.1 rozróżnia dokładnie tę granicę; obwód końcowy > 32 A traktuje się
- * jak rozdzielczy, czyli dłuższy dopuszczalny czas wyłączenia).
- */
 export type UkladSieci = "TN" | "TT" | "IT";
 
+/**
+ * Rodzaj obwodu dla czasu wyłączenia — PN-HD 60364-4-41:2017, 411.3.2.2. Czasy z tabl. 41.1
+ * (0,4 s w TN, 0,2 s w TT) obowiązują obwody odbiorcze o prądzie znamionowym:
+ *  - do 63 A z jednym lub wieloma GNIAZDAMI wtyczkowymi,
+ *  - do 32 A zasilające wyłącznie odbiorniki przyłączone NA STAŁE.
+ * Pozostałe (rozdzielcze i odbiorcze ponad te granice) — 5 s w TN, 1 s w TT (411.3.2.3/4).
+ *
+ * Dotąd kalkulatory pytały o „obwód odbiorczy ≤ 32 A", więc obwód gniazda 40–63 A lądował
+ * w rozdzielczych (5 s) — ocena łagodniejsza niż wymaga norma (audyt Kalkulatorów, K3).
+ */
+export type RodzajObwoduCzasu = "gniazda" | "stale" | "rozdzielczy";
+
+/** Krótkie, bo stoją w liście wyboru na telefonie (~260 px); szczegóły daje podpowiedź pola. */
+export const RODZAJ_OBWODU_CZASU_LABELS: Record<RodzajObwoduCzasu, string> = {
+  gniazda: "z gniazdami (0,4 s do 63 A)",
+  stale: "odbiorniki stałe (0,4 s do 32 A)",
+  rozdzielczy: "rozdzielczy (WLZ)",
+};
+
+/** Czy obwód podlega czasom tabl. 41.1 dla obwodów odbiorczych — patrz `RodzajObwoduCzasu`. */
+export function czyObwodOdbiorczy(rodzaj: RodzajObwoduCzasu, In_A: number): boolean {
+  if (rodzaj === "gniazda") return In_A <= 63;
+  if (rodzaj === "stale") return In_A <= 32;
+  return false;
+}
+
+/**
+ * Maksymalne czasy wyłączenia wg PN-HD 60364-4-41 tabl. 41.1 dla U₀ = 230 V.
+ * `obwodOdbiorczy` — czy obwód podlega czasom z tabl. 41.1; wyznacza to
+ * `czyObwodOdbiorczy` z rodzaju obwodu i prądu znamionowego zabezpieczenia.
+ */
 export function maksCzasWylaczenia_s(uklad: UkladSieci, obwodOdbiorczy: boolean): number {
   if (uklad === "TT") return obwodOdbiorczy ? 0.2 : 1;
   return obwodOdbiorczy ? 0.4 : 5; // TN oraz IT (drugie zwarcie) — tak samo

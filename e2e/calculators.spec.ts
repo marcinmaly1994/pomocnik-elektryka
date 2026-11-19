@@ -605,9 +605,23 @@ test("dobór wkładki gG: zmiana układu na TT-rozdzielczy zwraca błąd zamiast
   await wybierzKalkulator(page, /^Dobór wkładki gG/);
 
   await page.getByLabel("Układ sieci").selectOption("TT");
-  await page.getByLabel(/Obwód odbiorczy/).uncheck();
+  await page.getByLabel("Rodzaj obwodu").selectOption("rozdzielczy");
 
   await expect(page.getByText(/nie zawiera tego czasu/)).toBeVisible();
+});
+
+test("dobór wkładki gG: gniazdo 50 A ma czas 0,4 s, odbiornik stały 50 A — 5 s (audyt Kalkulatorów, K3)", async ({ page }) => {
+  // Pole mówiło „obwód odbiorczy (≤ 32 A)", więc gniazdo 40–63 A trzeba było oznaczyć jako
+  // rozdzielczy i dostawało 5 s. Norma: gniazda do 63 A, odbiorniki stałe do 32 A.
+  await openCalculators(page);
+  await wybierzKalkulator(page, /^Dobór wkładki gG/);
+  await page.getByLabel("Prąd obliczeniowy", { exact: false }).first().fill("45");
+  const result = page.locator(".pe-result").first();
+  await expect(result.locator("dd")).toHaveText("In 50 A");
+  await expect(result).toContainText("505,0 A"); // Imax dla 0,4 s
+
+  await page.getByLabel("Rodzaj obwodu").selectOption("stale");
+  await expect(result).toContainText("260,0 A"); // Imax dla 5 s
 });
 
 test("dobór wkładki gG: ocena warunku ochronnego wg zmierzonej Zs", async ({ page }) => {

@@ -14,7 +14,14 @@
  * pośrednią interpolacją.
  */
 
-import { C_NAPIECIOWE, maksCzasWylaczenia_s, type UkladSieci } from "@/lib/norms/conductors";
+import {
+  C_NAPIECIOWE,
+  czyObwodOdbiorczy,
+  maksCzasWylaczenia_s,
+  RODZAJ_OBWODU_CZASU_LABELS,
+  type RodzajObwoduCzasu,
+  type UkladSieci,
+} from "@/lib/norms/conductors";
 import { zsMaxDlaIa } from "@/lib/panel/sizing";
 import {
   CZAS_GG_LABELS,
@@ -47,7 +54,8 @@ export interface WkladkaGGWejscie {
   /** Prąd obliczeniowy obwodu [A] — do doboru najmniejszej wystarczającej wkładki. */
   Ib_A: number;
   uklad: UkladSieci;
-  obwodOdbiorczy: boolean;
+  /** Rodzaj obwodu — z prądem znamionowym wkładki wyznacza czas wyłączenia (tabl. 41.1). */
+  rodzajObwodu: RodzajObwoduCzasu;
   /** Zmierzona/obliczona impedancja pętli zwarcia Zs [Ω] — opcjonalnie, do oceny warunku. */
   zmierzonaZs_ohm?: number;
   /**
@@ -79,21 +87,6 @@ export function dobierzWkladkeGGOchrona(w: WkladkaGGWejscie): CalcResult<Wkladka
   if (bledy.length > 0) return bladWyniku(bledy);
 
   const U0 = 230;
-  const czasWymagany = maksCzasWylaczenia_s(w.uklad, w.obwodOdbiorczy);
-  if (czasWymagany !== 0.2 && czasWymagany !== 0.4 && czasWymagany !== 5) {
-    return bladWyniku([
-      {
-        code: "CZAS_BRAK_W_TABLICY",
-        pole: "uklad",
-        message: `Dla układu ${w.uklad}, obwód ${w.obwodOdbiorczy ? "odbiorczy" : "rozdzielczy"} wymagany czas wyłączenia to ${formatLiczba(
-          czasWymagany,
-          1
-        )} s. Wbudowana tablica charakterystyk wkładek gG (Poradnik Projektanta Elektryka, tabl. Z.10.3/Z.10.4) podaje wyłącznie punkty 0,2 s / 0,4 s / 5 s — nie zawiera tego czasu. Kalkulator nie interpoluje ani nie ekstrapoluje.`,
-      },
-    ]);
-  }
-  const czas: CzasGG = czasWymagany === 0.2 ? "0.2" : czasWymagany === 0.4 ? "0.4" : "5";
-
   const wiersz = dobierzWkladkeGG(w.typ, w.Ib_A);
   if (!wiersz) {
     return bladWyniku([
@@ -107,6 +100,24 @@ export function dobierzWkladkeGGOchrona(w: WkladkaGGWejscie): CalcResult<Wkladka
       },
     ]);
   }
+
+  // Czas zależy od In wkładki: obwód gniazd do 63 A i odbiorników stałych do 32 A ma 0,4 s
+  // (TN), powyżej — 5 s. Dlatego najpierw dobór wkładki, potem czas.
+  const odbiorczy = czyObwodOdbiorczy(w.rodzajObwodu, wiersz.In_A);
+  const czasWymagany = maksCzasWylaczenia_s(w.uklad, odbiorczy);
+  if (czasWymagany !== 0.2 && czasWymagany !== 0.4 && czasWymagany !== 5) {
+    return bladWyniku([
+      {
+        code: "CZAS_BRAK_W_TABLICY",
+        pole: "uklad",
+        message: `Dla układu ${w.uklad}, obwód ${odbiorczy ? "odbiorczy" : "rozdzielczy"} (In ${wiersz.In_A} A) wymagany czas wyłączenia to ${formatLiczba(
+          czasWymagany,
+          1
+        )} s. Wbudowana tablica charakterystyk wkładek gG (Poradnik Projektanta Elektryka, tabl. Z.10.3/Z.10.4) podaje wyłącznie punkty 0,2 s / 0,4 s / 5 s — nie zawiera tego czasu. Kalkulator nie interpoluje ani nie ekstrapoluje.`,
+      },
+    ]);
+  }
+  const czas: CzasGG = czasWymagany === 0.2 ? "0.2" : czasWymagany === 0.4 ? "0.4" : "5";
 
   const punkt = punktCzasowy(wiersz, czas);
   // Zs max z TYM SAMYM współczynnikiem Cmin = 0,95 co dla wyłączników (`zsMaxDlaIa`),
@@ -175,7 +186,7 @@ export function dobierzWkladkeGGOchrona(w: WkladkaGGWejscie): CalcResult<Wkladka
     `Czas ${formatLiczba(czasWymagany, 1)} s to MAKSYMALNY dopuszczalny czas wyłączenia wg PN-HD 60364-4-41 tabl. 41.1 dla układu ${w.uklad}, U₀=${formatLiczba(
       U0,
       0
-    )} V.`,
+    )} V — obwód ${RODZAJ_OBWODU_CZASU_LABELS[w.rodzajObwodu]}, In ${wiersz.In_A} A${odbiorczy ? "" : " (poza granicą obwodu odbiorczego → czas jak dla rozdzielczego)"}.`,
     `Zs max liczone z Cmin = ${formatLiczba(C_NAPIECIOWE.min, 2)} (PN-EN 60909-0) — tak samo jak dla wyłączników nadprądowych, więc oba rodzaje zabezpieczeń ocenia ta sama miara. Gotowe Zkdop z tablicy źródłowej (= 230 V / Imax) jest o 5% łagodniejsze.`,
   ];
   if (w.zmierzonaZs_ohm === undefined)

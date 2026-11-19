@@ -108,6 +108,35 @@ describe("pełny dobór — pakiet A audytu Kalkulatorów", () => {
   });
 });
 
+describe("pełny dobór — pakiet B audytu Kalkulatorów", () => {
+  it("K3: czas do warunku cieplnego zależy od rodzaju obwodu i In (gniazda ≤ 63 A → 0,4 s)", () => {
+    // Ib 50 A → B50, Ia = 250 A. Ik 240 A < Ia — strefa przeciążeniowa, więc kryterium liczy
+    // się wzorem z czasem dopuszczalnym, a ten zależy od rodzaju obwodu i In.
+    const czas = (rodzajObwodu: "gniazda" | "stale" | "rozdzielczy") =>
+      pelnyDoborPrzekroju(wejscie({ Ib_A: 50, dlugosc_m: 5, Ik_A: 240, rodzajObwodu })).kroki.find((k) => k.opis.startsWith("Kryterium 4"))!.podstawienie;
+    expect(czas("gniazda")).toContain("√0,4");
+    expect(czas("stale")).toContain("√5");
+    expect(czas("rozdzielczy")).toContain("√5");
+  });
+
+  it("K4: In > 125 A — bez krotności B/C: kryterium ochrony nieocenione z powodem, etykieta bez „B”", () => {
+    const r = pelnyDoborPrzekroju(wejscie({ Ib_A: 180, dlugosc_m: 10, metoda: "C", impedancjaZrodla_ohm: 0.05 }));
+    expect(r.wartosci!.In_A).toBeGreaterThan(125);
+    expect(r.wartosci!.kryteria.ochrona_przeciwporazeniowa.ocenione).toBe(false);
+    expect(r.wartosci!.kryteria.ochrona_przeciwporazeniowa.powod_pominiecia).toMatch(/kompaktowy/);
+    const krok1 = r.kroki.find((k) => k.opis.startsWith("Kryterium 1"))!.wynik;
+    expect(krok1).not.toMatch(/In = [BC]\d/);
+    expect(r.zalozenia.join(" ")).toMatch(/60947-2/);
+  });
+
+  it("K4: do 125 A bez zmian — krotność B/C i kryterium ochrony liczone", () => {
+    const r = pelnyDoborPrzekroju(wejscie({ Ib_A: 100, dlugosc_m: 10, metoda: "C", impedancjaZrodla_ohm: 0.05 }));
+    expect(r.wartosci!.In_A).toBeLessThanOrEqual(125);
+    expect(r.wartosci!.kryteria.ochrona_przeciwporazeniowa.ocenione).toBe(true);
+    expect(r.kroki.find((k) => k.opis.startsWith("Kryterium 1"))!.wynik).toMatch(/In = B\d/);
+  });
+});
+
 describe("pełny dobór — kryterium 4 (wytrzymałość zwarciowa), opcjonalne", () => {
   it("bez podanego prądu zwarciowego kryterium jest pominięte z jawnym komunikatem", () => {
     const r = pelnyDoborPrzekroju(wejscie());

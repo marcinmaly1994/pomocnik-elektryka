@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dobierzWkladkeGGOchrona, type WkladkaGGWejscie } from "./gGFuse";
 
 function wejscie(over: Partial<WkladkaGGWejscie> = {}): WkladkaGGWejscie {
-  return { typ: "D0gG", Ib_A: 16, uklad: "TN", obwodOdbiorczy: true, ...over };
+  return { typ: "D0gG", Ib_A: 16, uklad: "TN", rodzajObwodu: "gniazda", ...over };
 }
 
 describe("dobierzWkladkeGGOchrona", () => {
@@ -17,20 +17,44 @@ describe("dobierzWkladkeGGOchrona", () => {
     expect(r.ocena).toBeNull();
   });
 
+  /*
+   * Audyt Kalkulatorów 16.11.2026, K3: granica 0,4 s to 63 A dla obwodów z gniazdami
+   * i 32 A dla odbiorników stałych (PN-HD 60364-4-41:2017, 411.3.2.2). Dotąd pole mówiło
+   * „obwód odbiorczy (≤ 32 A)", więc gniazdo 40–63 A oceniano jak rozdzielczy (5 s).
+   */
+  it("K3: gniazda do 63 A — 0,4 s; odbiorniki stałe ponad 32 A — 5 s", () => {
+    // D0gG 50 A: Imax(0,4 s) = 505 A, Imax(5 s) = 260 A
+    const gniazdo = dobierzWkladkeGGOchrona(wejscie({ Ib_A: 45, rodzajObwodu: "gniazda" }));
+    expect(gniazdo.wartosci!.In_A).toBe(50);
+    expect(gniazdo.wartosci!.czas_s).toBe(0.4);
+    expect(gniazdo.wartosci!.Imax_A).toBe(505);
+    const stale = dobierzWkladkeGGOchrona(wejscie({ Ib_A: 45, rodzajObwodu: "stale" }));
+    expect(stale.wartosci!.czas_s).toBe(5);
+    // odbiorniki stałe do 32 A — dalej 0,4 s
+    expect(dobierzWkladkeGGOchrona(wejscie({ Ib_A: 30, typ: "WT00gG_WT1gG", rodzajObwodu: "stale" })).wartosci!.czas_s).toBe(0.4);
+  });
+
+  it("K3: gniazda powyżej 63 A — czas jak dla rozdzielczego, a założenia mówią dlaczego", () => {
+    const r = dobierzWkladkeGGOchrona(wejscie({ typ: "WT00gG_WT1gG", Ib_A: 70, rodzajObwodu: "gniazda" }));
+    expect(r.wartosci!.In_A).toBe(80);
+    expect(r.wartosci!.czas_s).toBe(5);
+    expect(r.zalozenia.join(" ")).toMatch(/poza granicą obwodu odbiorczego/);
+  });
+
   it("TN-rozdzielczy używa czasu 5s", () => {
-    const r = dobierzWkladkeGGOchrona(wejscie({ obwodOdbiorczy: false }));
+    const r = dobierzWkladkeGGOchrona(wejscie({ rodzajObwodu: "rozdzielczy" }));
     expect(r.wartosci!.czas_s).toBe(5);
     expect(r.wartosci!.Imax_A).toBe(70.4);
   });
 
   it("TT-odbiorczy używa czasu 0,2s", () => {
-    const r = dobierzWkladkeGGOchrona(wejscie({ uklad: "TT", obwodOdbiorczy: true }));
+    const r = dobierzWkladkeGGOchrona(wejscie({ uklad: "TT", rodzajObwodu: "gniazda" }));
     expect(r.wartosci!.czas_s).toBe(0.2);
     expect(r.wartosci!.Imax_A).toBe(132.8);
   });
 
   it("TT-rozdzielczy (1s) nie ma pokrycia w tablicy — błąd, nie interpolacja", () => {
-    const r = dobierzWkladkeGGOchrona(wejscie({ uklad: "TT", obwodOdbiorczy: false }));
+    const r = dobierzWkladkeGGOchrona(wejscie({ uklad: "TT", rodzajObwodu: "rozdzielczy" }));
     expect(r.wartosci).toBeNull();
     expect(r.bledy.map((b) => b.code)).toContain("CZAS_BRAK_W_TABLICY");
   });

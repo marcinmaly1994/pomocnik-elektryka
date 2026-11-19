@@ -269,7 +269,7 @@ export const RHO_CU_70C = rezystywnoscRobocza("Cu", "annexG", TEMP_PRACY.PVC);
 /**
  * Maksymalna impedancja pętli zwarcia Zs [Ω] wynika z warunku samoczynnego
  * wyłączenia (PN-HD 60364-4-41): Zs ≤ U0 / Ia. W układzie TN czas wyłączenia
- * ≤ 0,4 s dla obwodów końcowych ≤ 32 A i ≤ 5 s dla rozdzielczych — w obu
+ * ≤ 0,4 s dla obwodów odbiorczych (gniazda ≤ 63 A, odbiorniki stałe ≤ 32 A) i ≤ 5 s dla rozdzielczych — w obu
  * przypadkach o zadziałaniu decyduje wyzwalacz magnetyczny, więc wzór jest ten sam.
  */
 export const U0 = 230;

@@ -25,6 +25,8 @@ import {
 import {
   C_NAPIECIOWE,
   MODEL_REZYSTYWNOSCI_LABELS,
+  RODZAJ_OBWODU_CZASU_LABELS,
+  type RodzajObwoduCzasu,
   type Izolacja,
   type Material,
   type ModelRezystywnosci,
@@ -207,6 +209,16 @@ const UKLAD_OPTIONS = [
   { value: "TT", label: "TT" },
 ];
 
+// Rodzaj obwodu zamiast pola „obwód odbiorczy (≤ 32 A)": norma ma DWIE granice — gniazda do
+// 63 A, odbiorniki stałe do 32 A — więc gniazdo 40–63 A trafiało do rozdzielczych (5 s).
+// Granicę sprawdza kalkulator sam, z dobranego In (audyt Kalkulatorów, K3).
+const RODZAJ_OBWODU_OPTIONS = (Object.entries(RODZAJ_OBWODU_CZASU_LABELS) as [RodzajObwoduCzasu, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
+const RODZAJ_OBWODU_HINT =
+  "Czas wyłączenia wg PN-HD 60364-4-41 (411.3.2): 0,4 s w TN (0,2 s w TT) dla obwodów z gniazdami do 63 A i odbiorników przyłączonych na stałe do 32 A; powyżej tych granic i w obwodach rozdzielczych — 5 s (1 s). Granicę prądu kalkulator sprawdza sam z dobranego In.";
+
 const MODEL_REZ_OPTIONS =(Object.entries(MODEL_REZYSTYWNOSCI_LABELS) as [ModelRezystywnosci, string][]).map(([value, label]) => ({
   value,
   label,
@@ -319,13 +331,13 @@ export function CalculatorsTab() {
   const pdSprawdzOchrone = useCalculatorsStore((s) => s.pdSprawdzOchrone);
   const pdImpedancjaZrodla = useCalculatorsStore((s) => s.pdImpedancjaZrodla);
   const pdUklad = useCalculatorsStore((s) => s.pdUklad);
-  const pdObwodOdbiorczy = useCalculatorsStore((s) => s.pdObwodOdbiorczy);
+  const pdRodzajObwodu = useCalculatorsStore((s) => s.pdRodzajObwodu);
   const pdSprawdzZwarcie = useCalculatorsStore((s) => s.pdSprawdzZwarcie);
   const pdIk = useCalculatorsStore((s) => s.pdIk);
   const ggTyp = useCalculatorsStore((s) => s.ggTyp);
   const ggIb = useCalculatorsStore((s) => s.ggIb);
   const ggUklad = useCalculatorsStore((s) => s.ggUklad);
-  const ggObwodOdbiorczy = useCalculatorsStore((s) => s.ggObwodOdbiorczy);
+  const ggRodzajObwodu = useCalculatorsStore((s) => s.ggRodzajObwodu);
   const ggSprawdzZs = useCalculatorsStore((s) => s.ggSprawdzZs);
   const ggZmierzonaZs = useCalculatorsStore((s) => s.ggZmierzonaZs);
   const ggIz = useCalculatorsStore((s) => s.ggIz);
@@ -750,7 +762,7 @@ export function CalculatorsTab() {
         limitSpadku_pct: pdLimitSpadku,
         impedancjaZrodla_ohm: pdSprawdzOchrone ? pdImpedancjaZrodla : undefined,
         uklad: pdUklad,
-        obwodOdbiorczy: pdObwodOdbiorczy,
+        rodzajObwodu: pdRodzajObwodu,
         Ik_A: pdSprawdzZwarcie ? pdIk : undefined,
       }),
     [
@@ -768,7 +780,7 @@ export function CalculatorsTab() {
       pdSprawdzOchrone,
       pdImpedancjaZrodla,
       pdUklad,
-      pdObwodOdbiorczy,
+      pdRodzajObwodu,
       pdSprawdzZwarcie,
       pdIk,
     ]
@@ -781,11 +793,11 @@ export function CalculatorsTab() {
         typ: ggTyp,
         Ib_A: ggIb,
         uklad: ggUklad,
-        obwodOdbiorczy: ggObwodOdbiorczy,
+        rodzajObwodu: ggRodzajObwodu,
         zmierzonaZs_ohm: ggSprawdzZs ? ggZmierzonaZs : undefined,
         Iz_A: ggIz > 0 ? ggIz : undefined,
       }),
-    [ggTyp, ggIb, ggUklad, ggObwodOdbiorczy, ggSprawdzZs, ggZmierzonaZs, ggIz]
+    [ggTyp, ggIb, ggUklad, ggRodzajObwodu, ggSprawdzZs, ggZmierzonaZs, ggIz]
   );
 
   // --- fotowoltaika ---
@@ -1731,7 +1743,7 @@ export function CalculatorsTab() {
                   {pdSprawdzZwarcie && (
                     <>
                       {/* Czas wyłączenia (kryterium 4) zależy od układu sieci i od tego, czy to
-                          obwód KOŃCOWY (≤ 32 A) czy rozdzielczy — inaczej niż przy kryterium 3
+                          obwód odbiorczy (gniazda ≤ 63 A, odbiorniki stałe ≤ 32 A) czy rozdzielczy — inaczej niż przy kryterium 3
                           (ochrona przeciwporażeniowa), które go nie potrzebuje. Bez tych dwóch pól
                           kalkulator MILCZĄCO zakładał TN + obwód odbiorczy (0,4 s) — dla realnego
                           obwodu rozdzielczego (5 s) to zaniża wymagany przekrój z kryterium 4,
@@ -1753,15 +1765,13 @@ export function CalculatorsTab() {
                           hint="Prąd zwarcia jednofazowego (L-PE) w tym miejscu instalacji — z pomiaru, z kalkulatora „Prądy zwarciowe” albo z dokumentacji projektowej."
                         />
                       </div>
-                      <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
-                        <input
-                          type="checkbox"
-                          checked={pdObwodOdbiorczy}
-                          onChange={(e) => patch({ pdObwodOdbiorczy: e.target.checked })}
-                          className="h-4 w-4 rounded border-border"
-                        />
-                        Obwód odbiorczy (≤ 32 A) — inaczej rozdzielczy
-                      </label>
+                      <Field
+                        label="Rodzaj obwodu"
+                        value={pdRodzajObwodu}
+                        onChange={(v) => patch({ pdRodzajObwodu: v as RodzajObwoduCzasu })}
+                        options={RODZAJ_OBWODU_OPTIONS}
+                        hint={RODZAJ_OBWODU_HINT}
+                      />
                     </>
                   )}
 
@@ -1827,15 +1837,13 @@ export function CalculatorsTab() {
                   options={UKLAD_OPTIONS}
                   hint="TN — przewód PE połączony z uziemionym punktem sieci (najczęstszy w Polsce). TT — własny uziom budynku, niezależny od sieci."
                 />
-                <label className="flex items-center gap-2 text-sm text-slate-600 mt-1">
-                  <input
-                    type="checkbox"
-                    checked={ggObwodOdbiorczy}
-                    onChange={(e) => patch({ ggObwodOdbiorczy: e.target.checked })}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  Obwód odbiorczy (≤ 32 A) — inaczej rozdzielczy
-                </label>
+                <Field
+                  label="Rodzaj obwodu"
+                  value={ggRodzajObwodu}
+                  onChange={(v) => patch({ ggRodzajObwodu: v as RodzajObwoduCzasu })}
+                  options={RODZAJ_OBWODU_OPTIONS}
+                  hint={RODZAJ_OBWODU_HINT}
+                />
               </div>
 
               <label className="mb-2 flex items-center gap-2 text-sm text-slate-600">
@@ -3267,7 +3275,7 @@ export function CalculatorsTab() {
                   { label: "Spodziewany prąd zwarcia", eq: "Ik = Cmin × U₀ / Zs", where: "najmniejszy prąd, jaki popłynie przy zwarciu L-PE" },
                 ]}
                 notes={[
-                  "Wymagany czas wyłączenia w układzie TN dla obwodów odbiorczych do 32 A wynosi 0,4 s, a dla obwodów rozdzielczych — 5 s.",
+                  "Wymagany czas wyłączenia w układzie TN dla obwodów odbiorczych — z gniazdami do 63 A i z odbiornikami przyłączonymi na stałe do 32 A — wynosi 0,4 s, a dla obwodów rozdzielczych i odbiorczych powyżej tych granic — 5 s.",
                   "Przyjęto górną granicę pasma wyzwalania magnetycznego, co jest podejściem bezpiecznym — rzeczywisty wyłącznik zadziała przy prądzie nie większym niż ta wartość.",
                   "W praktyce pomiarowej często stosuje się dodatkowy zapas (np. mnożnik 0,8 dla Zs max), uwzględniający wzrost rezystancji przewodów przy nagrzaniu.",
                   "Jeśli warunek nie jest spełniony, ochronę można też zapewnić wyłącznikiem różnicowoprądowym — dla RCD 30 mA warunek Zs jest znacznie łagodniejszy.",
