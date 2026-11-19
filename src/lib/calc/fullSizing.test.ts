@@ -57,10 +57,10 @@ describe("pełny dobór — kryterium 3 (ochrona przeciwporażeniowa), opcjonaln
   });
 
   it("rozruch silnikowy (charakterystyka C) ZAOSTRZA warunek ochrony — wyższe Ia niż B", () => {
-    // Z = 0,56 Ω: dla B (Ia=5×In) wciąż wystarcza najmniejszy przekrój (10 mm²),
-    // ale C (Ia=10×In, dwa razy ostrzejsze Zs max) wymusza już 16 mm²
-    const B = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5, impedancjaZrodla_ohm: 0.56 }));
-    const C = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5, impedancjaZrodla_ohm: 0.56, rozruch_silnikowy: true }));
+    // Z = 0,53 Ω: dla B (Ia=5×In) wciąż wystarcza najmniejszy przekrój (10 mm²),
+    // ale C (Ia=10×In, Zs max = 0,95·231/400 ≈ 0,548 Ω) wymusza już 16 mm²
+    const B = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5, impedancjaZrodla_ohm: 0.53 }));
+    const C = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 5, impedancjaZrodla_ohm: 0.53, rozruch_silnikowy: true }));
     expect(B.wartosci!.przekroj_mm2).toBe(10);
     expect(C.wartosci!.przekroj_mm2).toBe(16);
     expect(C.wartosci!.decydujace).toContain("ochrona_przeciwporazeniowa");
@@ -71,6 +71,40 @@ describe("pełny dobór — kryterium 3 (ochrona przeciwporażeniowa), opcjonaln
     expect(r.wartosci).toBeNull();
     expect(r.bledy.map((b) => b.code)).toContain("KRYTERIUM_NIE_DO_SPELNIENIA");
     expect(r.bledy[0].message).toMatch(/ochrona przeciwporażeniowa/);
+  });
+});
+
+/*
+ * Audyt Kalkulatorów 16.11.2026, pakiet A. K1: Zs max bez Cmin = 0,95 było o 5% łagodniejsze
+ * niż w kalkulatorze pętli i w protokole. K2: spadek napięcia bez cosφ i reaktancji — wejście
+ * cosφ było martwe, a przy dużych przekrojach spadek wychodził zaniżony.
+ */
+describe("pełny dobór — pakiet A audytu Kalkulatorów", () => {
+  it("K1: Zs max z Cmin = 0,95 — impedancja tuż pod U0/Ia, ale ponad 0,95·U0/Ia, nie przechodzi", () => {
+    // B40: Ia = 200 A; U0/Ia ≈ 1,155 Ω, 0,95·U0/Ia ≈ 1,097 Ω. Źródło 1,12 Ω mieściło się dotąd w progu.
+    const r = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 1, impedancjaZrodla_ohm: 1.12 }));
+    expect(r.wartosci).toBeNull();
+    expect(r.bledy[0].message).toMatch(/ochrona przeciwporażeniowa/);
+    const ok = pelnyDoborPrzekroju(wejscie({ dlugosc_m: 1, impedancjaZrodla_ohm: 1.05 }));
+    expect(ok.wartosci).not.toBeNull();
+    expect(ok.kroki.find((k) => k.opis.startsWith("Kryterium 3"))!.podstawienie).toContain("0,95 ·");
+  });
+
+  it("K2: cosφ wpływa na spadek napięcia (dotąd wejście było martwe)", () => {
+    const krok = (cosfi: number) =>
+      pelnyDoborPrzekroju(wejscie({ cosfi, dlugosc_m: 60 })).kroki.find((k) => k.opis.startsWith("Kryterium 2"))!.wynik;
+    expect(krok(1)).not.toBe(krok(0.6));
+  });
+
+  it("K2: przy dużym przekroju i niskim cosφ reaktancja podnosi przekrój ponad wynik samej rezystancji", () => {
+    // Ib 300 A, 200 m, Cu XLPE, metoda C, cosφ 0,7, limit 3% (12 V).
+    // Sama rezystancja (dawny wzór): ΔU = 2319/S V → 240 mm² (9,7 V).
+    // Z reaktancją 0,08 Ω/km: ΔU = 1624/S + 5,94 V → 240 mm² daje 12,7 V (3,2%) → 300 mm².
+    const r = pelnyDoborPrzekroju(
+      wejscie({ Ib_A: 300, dlugosc_m: 200, izolacja: "XLPE", metoda: "C", cosfi: 0.7, limitSpadku_pct: 3 })
+    );
+    expect(r.wartosci!.kryteria.spadek_napiecia.minPrzekroj_mm2).toBe(300);
+    expect(r.zalozenia.some((z) => z.includes("reaktancją"))).toBe(true);
   });
 });
 
