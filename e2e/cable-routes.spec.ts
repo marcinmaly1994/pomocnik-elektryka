@@ -1066,9 +1066,17 @@ async function dwaPokoje(page: import("@playwright/test").Page, zDrzwiami: boole
   if (zDrzwiami) {
     await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
     const box = await planBox(page);
-    // Dwa piksele od linii styku: klik DOKLADNIE w nia trafia w martwa strefe miedzy
-    // obszarami klikalnymi obu pomieszczen i nie stawia nic.
-    await page.mouse.click(box.x + 268, box.y + 200);
+    // Klik W PRAWDZIWA krawedz styku, odczytana ze sceny — rysowanie przyciaga do siatki,
+    // wiec styk nie lezy tam, gdzie przeciagnieto mysz (x = 270), tylko np. na 261. Dawny
+    // klik „na 268" trafial tylko dlatego, ze pas trafienia krawedzi rosl z powiekszeniem
+    // (14 jedn. = 28 px); od kiedy jest w pikselach ekranu, 7 px obok krawedzi to juz obok.
+    const styk = await page.evaluate(() => {
+      const st = (window as unknown as { Konva: { stages: { container(): HTMLElement; find(s: string): { closed(): boolean; listening(): boolean; hitStrokeWidth(): number | "auto"; points(): number[]; getAbsoluteTransform(): { point(p: { x: number; y: number }): { x: number } } }[] }[] } }).Konva.stages[0];
+      const krawedzie = st.find("Line").filter((l) => l.closed() && l.listening() && l.hitStrokeWidth() !== "auto");
+      const xs = krawedzie.map((l) => { const t = l.getAbsoluteTransform(); const pts = l.points(); return Math.max(...pts.filter((_, i) => i % 2 === 0).map((x) => t.point({ x, y: 0 }).x)); });
+      return Math.min(...xs) + st.container().getBoundingClientRect().left; // prawa krawedz pokoju 1 = styk
+    });
+    await page.mouse.click(styk + 1, box.y + 200);
     await page.waitForTimeout(900);
   }
 
