@@ -137,6 +137,15 @@ describe("pełny dobór — pakiet B audytu Kalkulatorów", () => {
   });
 });
 
+describe("pełny dobór — K8 (przekrój PE)", () => {
+  it("kroki pokazują przyjęty PE, a założenia mówią, że to minimum z tabl. 54.2", () => {
+    const r = pelnyDoborPrzekroju(wejscie({ Ib_A: 80, dlugosc_m: 10, metoda: "C", impedancjaZrodla_ohm: 0.1 }));
+    const k3 = r.kroki.find((k) => k.opis.startsWith("Kryterium 3"))!.wynik;
+    expect(k3).toMatch(/PE przyjęty \d/);
+    expect(r.zalozenia.join(" ")).toContain("MINIMUM wg PN-HD 60364-5-54 tabl. 54.2");
+  });
+});
+
 describe("pełny dobór — kryterium 4 (wytrzymałość zwarciowa), opcjonalne", () => {
   it("bez podanego prądu zwarciowego kryterium jest pominięte z jawnym komunikatem", () => {
     const r = pelnyDoborPrzekroju(wejscie());

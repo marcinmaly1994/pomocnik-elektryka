@@ -2,7 +2,7 @@ import { K_ZYLA, type Izolacja, type Material } from "@/lib/norms/conductors";
 import { formatLiczba } from "@/lib/liczby";
 import { KRYTERIUM_LABELS, type Kryterium } from "./fullSizing";
 import { OCENA_GRANICZNA_PCT, type Ocena } from "./result";
-import { ikZImpedancjiPetli, ocenWarunekCieplny, TOLERANCJA_IK_ZS } from "./warunekCieplny";
+import { ikMaxZImpedancjiPetli, ikZImpedancjiPetli, ocenWarunekCieplny, TOLERANCJA_IK_ZS } from "./warunekCieplny";
 
 /**
  * Cztery kryteria doboru obwodu, oceniane na gotowym wyniku doboru.
@@ -159,6 +159,10 @@ function ocenKryteriumCieplne(w: WejscieKryteriow): OcenaKryterium {
   }
 
   const zrodloIk = ikPodany ? "" : ` (z Zs: 0,95·230/${liczba(w.Zs_Ohm!)} Ω)`;
+  // Gdzie odczytać I²t z karty aparatu: przy NAJWIĘKSZYM prądzie zwarcia (K5).
+  const gdzieI2t = zsPodana
+    ? ` Odczytaj I²t z karty przy prądzie zwarcia ${liczba(ikMaxZImpedancjiPetli(w.Zs_Ohm!), 0)} A (1,05·230/Zs) — energia przenoszona rośnie z prądem, więc liczy się największy spodziewany.`
+    : " Odczytaj I²t z karty przy największym spodziewanym prądzie zwarcia — energia przenoszona rośnie z prądem.";
   const sprzecznosc =
     ikPodany && ikZZs !== null && Math.abs(Ik - ikZZs) / ikZZs > TOLERANCJA_IK_ZS
       ? ` Uwaga: podany Ik ${liczba(Ik, 0)} A nie zgadza się z Zs ${liczba(w.Zs_Ohm!)} Ω (z niej wychodzi ${liczba(ikZZs, 0)} A) — sprawdź, czy obie wartości dotyczą tego samego punktu.`
@@ -183,13 +187,13 @@ function ocenKryteriumCieplne(w: WejscieKryteriow): OcenaKryterium {
         opis:
           `Ik ${liczba(Ik, 0)} A${zrodloIk} ≥ Ia ${liczba(w.Ia_A!, 0)} A — wyłącznik zadziała elektromagnetycznie w czasie poniżej 0,1 s, ` +
           `więc wzór Ik·√t/k z czasem dopuszczalnym nie ma tu zastosowania. Porównaj k²S² = ${liczba(wynik.k2S2_A2s, 0)} A²s ` +
-          `z energią przenoszoną I²t z karty katalogowej aparatu (pole „I²t aparatu").${sprzecznosc}`,
+          `z energią przenoszoną I²t z karty katalogowej aparatu (pole „I²t aparatu").${gdzieI2t}${sprzecznosc}`,
       };
     case "energia":
       return {
         ...baza,
         stan: wynik.ok ? "ok" : "blad",
-        opis: `k²S² ${liczba(wynik.k2S2_A2s, 0)} A²s ${wynik.ok ? "≥" : "<"} I²t aparatu ${liczba(wynik.I2t_A2s, 0)} A²s (Ik ${liczba(Ik, 0)} A${zrodloIk} ≥ Ia — wyłączenie elektromagnetyczne).${sprzecznosc}`,
+        opis: `k²S² ${liczba(wynik.k2S2_A2s, 0)} A²s ${wynik.ok ? "≥" : "<"} I²t aparatu ${liczba(wynik.I2t_A2s, 0)} A²s (Ik ${liczba(Ik, 0)} A${zrodloIk} ≥ Ia — wyłączenie elektromagnetyczne).${gdzieI2t}${sprzecznosc}`,
         margines_pct: margines(wynik.I2t_A2s, wynik.k2S2_A2s),
       };
     case "adiabatyczny":

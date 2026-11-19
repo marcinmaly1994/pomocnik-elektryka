@@ -481,7 +481,9 @@ test("PV: prąd projektowy stringu (1,25×Isc) i napięcie w zimnie liczą się 
 
   const result = page.locator(".pe-result").first();
   await expect(result).toContainText("551,8 V");
-  await expect(result).toContainText("I projektowy (1,25×Isc) 13,13 A");
+  await expect(result).toContainText("I projektowy przewodu (1,25×Isc) 13,13 A");
+  // K6 (audyt Kalkulatorów): bezpiecznik stringu osobno, 1,5–2,4 × Isc
+  await expect(result).toContainText("Bezpiecznik stringu 15,8–25,2 A");
   // domyślny falownik (Voc max 600 V) daje zapas ~8% — to wynik GRANICZNY
   await expect(page.getByText(/Wynik graniczny/)).toBeVisible();
 });

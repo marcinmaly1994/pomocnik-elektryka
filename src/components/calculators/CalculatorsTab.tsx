@@ -2755,7 +2755,10 @@ export function CalculatorsTab() {
                   ]}
                 >
                   <div className="flex gap-2 flex-wrap">
-                    <Badge variant="accent">I projektowy (1,25×Isc) {formatLiczba(stringPV.wartosci.IprojektowyA, 2)} A</Badge>
+                    <Badge variant="accent">I projektowy przewodu (1,25×Isc) {formatLiczba(stringPV.wartosci.IprojektowyA, 2)} A</Badge>
+                    <Badge variant="neutral">
+                      Bezpiecznik stringu {formatLiczba(stringPV.wartosci.bezpiecznikMin_A, 1)}–{formatLiczba(stringPV.wartosci.bezpiecznikMax_A, 1)} A
+                    </Badge>
                     <Badge variant="info">spadek DC {formatLiczba(stringPV.wartosci.spadekDC_pct, 2)}%</Badge>
                     {stringPV.wartosci.VmppGoracy_V !== null && (
                       <Badge variant="success">Vmpp w upale {formatLiczba(stringPV.wartosci.VmppGoracy_V, 1)} V</Badge>

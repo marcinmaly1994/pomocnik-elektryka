@@ -69,5 +69,17 @@ export function ikZImpedancjiPetli(Zs_Ohm: number): number {
   return Zs_Ohm > 0 ? (C_NAPIECIOWE.min * U0) / Zs_Ohm : 0;
 }
 
+/**
+ * Największy spodziewany prąd zwarcia z Zs — Cmax = 1,05 (PN-EN 60909-0).
+ *
+ * Do porównania k²S² z I²t aparatu w strefie elektromagnetycznej gorszy jest prąd
+ * NAJWIĘKSZY: energia przenoszona przez wyłącznik rośnie z prądem zwarcia, więc I²t
+ * odczytane z karty przy prądzie z Cmin = 0,95 jest zaniżone (audyt Kalkulatorów, K5).
+ * Do pytania „czy zadziała elektromagnetycznie" zostaje Cmin — tam gorszy jest najmniejszy.
+ */
+export function ikMaxZImpedancjiPetli(Zs_Ohm: number): number {
+  return Zs_Ohm > 0 ? (C_NAPIECIOWE.max * U0) / Zs_Ohm : 0;
+}
+
 /** Względna rozbieżność, powyżej której podany Ik i podana Zs przeczą sobie nawzajem. */
 export const TOLERANCJA_IK_ZS = 0.2;

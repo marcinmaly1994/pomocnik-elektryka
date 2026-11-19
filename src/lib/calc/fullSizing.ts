@@ -257,10 +257,18 @@ export function pelnyDoborPrzekroju(w: PelnyDoborWejscie): CalcResult<PelnyDobor
       opis: "Kryterium 3 — ochrona przeciwporażeniowa (Zs · Ia ≤ Cmin · U₀)",
       wzor: "Zs = Z_źródła + R_L(S) + R_PE(S);  Ia = k · In (górna granica pasma)",
       podstawienie: `Ia = ${CURVE_MULTIPLIER[curve]} · ${In} = ${formatLiczba(Ia, 0)} A;  Zs max = 0,95 · ${formatLiczba(U0, 0)} / ${formatLiczba(Ia, 0)} = ${formatLiczba(ZsMax, 3)} Ω`,
-      wynik: S3 !== null ? `${formatLiczba(S3, 1)} mm²` : "żaden przekrój nie spełnia warunku — sprawdź impedancję źródła albo charakterystykę",
+      wynik:
+        S3 !== null
+          ? `${formatLiczba(S3, 1)} mm² (PE przyjęty ${formatLiczba(minPrzekrojPE(S3), 1)} mm²)`
+          : "żaden przekrój nie spełnia warunku — sprawdź impedancję źródła albo charakterystykę",
     });
     zalozenia.push("Współczynnik napięciowy Cmin = 0,95 (PN-EN 60909-0): ochronę sprawdza się przy najmniejszym prądzie zwarcia.");
-    zalozenia.push(`Przekrój PE dobrany z reguły wg przekroju fazowego (PN-HD 60364-5-54), z tego samego materiału co żyła robocza.`);
+    // Reguła tabl. 54.2 to MINIMUM: dla 25–35 mm² daje 16 mm², a kabel 5-żyłowy ma PE pełnego
+    // przekroju. Pętla liczona z minimum jest dłuższa niż rzeczywista — wynik po bezpiecznej
+    // stronie, ale użytkownik powinien wiedzieć, skąd ten zapas (audyt Kalkulatorów, K8).
+    zalozenia.push(
+      `Przekrój PE przyjęty jako MINIMUM wg PN-HD 60364-5-54 tabl. 54.2 (≤ 16 mm² — jak faza; 25–35 mm² — 16 mm²; powyżej — połowa fazy), z tego samego materiału co żyła robocza. Kabel z PE pełnego przekroju (np. 5-żyłowy) ma krótszą pętlę — wtedy wynik jest z zapasem.`
+    );
   } else {
     powodPominiecia3 = "Nie podano impedancji źródła i reszty obwodu — kryterium NIE zostało sprawdzone.";
     zalozenia.push(powodPominiecia3);

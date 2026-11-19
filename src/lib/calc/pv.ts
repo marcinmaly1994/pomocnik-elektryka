@@ -36,6 +36,16 @@ import { bladWyniku, formatLiczba, type CalcError, type CalcResult, type Krok, t
 /** Mnożnik bezpieczeństwa na prąd zwarciowy stringu — PN-HD 60364-7-712. */
 export const WSP_ISC_STRING = 1.25;
 
+/**
+ * Zakres prądu znamionowego bezpiecznika stringu: 1,5·Isc ≤ In ≤ 2,4·Isc (Isc modułu w STC),
+ * i nie więcej niż maksymalne zabezpieczenie szeregowe z karty modułu — PN-HD 60364-7-712.
+ *
+ * Dotąd kalkulator podawał tylko 1,25·Isc, opisany jako „do doboru bezpiecznika/przewodu".
+ * 1,25·Isc to kryterium PRZEWODU; bezpiecznik dobrany na nie zadziała przy pierwszym
+ * jasnym, zimnym dniu (audyt Kalkulatorów, K6).
+ */
+export const BEZPIECZNIK_STRINGU_ISC: [number, number] = [1.5, 2.4];
+
 export interface StringPVWejscie {
   Isc_A: number;
   Voc_V: number;
@@ -62,8 +72,11 @@ export interface StringPVWejscie {
 }
 
 export interface StringPVWynik {
-  /** Prąd projektowy stringu (1,25×Isc) — do doboru bezpiecznika/przewodu [A]. */
+  /** Prąd projektowy stringu (1,25×Isc) — do doboru PRZEWODU DC (Iz ≥ I_proj) [A]. */
   IprojektowyA: number;
+  /** Zakres prądu znamionowego bezpiecznika stringu [A] — 1,5–2,4 × Isc. */
+  bezpiecznikMin_A: number;
+  bezpiecznikMax_A: number;
   VocZimny_V: number;
   VmppGoracy_V: number | null;
   spadekDC_pct: number;
@@ -100,10 +113,16 @@ export function obliczStringPV(w: StringPVWejscie): CalcResult<StringPVWynik> {
   const Iprojektowy = WSP_ISC_STRING * w.Isc_A;
   const kroki: Krok[] = [
     {
-      opis: "Prąd projektowy stringu (dobór przewodu i zabezpieczenia DC)",
+      opis: "Prąd projektowy stringu (dobór przewodu DC: Iz ≥ I_proj)",
       wzor: "I_proj = 1,25 · Isc",
       podstawienie: `1,25 · ${formatLiczba(w.Isc_A, 2)}`,
       wynik: `${formatLiczba(Iprojektowy, 2)} A`,
+    },
+    {
+      opis: "Zakres prądu znamionowego bezpiecznika stringu",
+      wzor: "1,5 · Isc ≤ In ≤ 2,4 · Isc",
+      podstawienie: `1,5 · ${formatLiczba(w.Isc_A, 2)} … 2,4 · ${formatLiczba(w.Isc_A, 2)}`,
+      wynik: `${formatLiczba(BEZPIECZNIK_STRINGU_ISC[0] * w.Isc_A, 1)} – ${formatLiczba(BEZPIECZNIK_STRINGU_ISC[1] * w.Isc_A, 1)} A`,
     },
   ];
 
@@ -142,6 +161,7 @@ export function obliczStringPV(w: StringPVWejscie): CalcResult<StringPVWynik> {
   const zalozenia: string[] = [
     "Współczynnik temperaturowy napięcia zastosowany JEDNAKOWO do Voc i do Vmpp — uproszczenie, karty katalogowe rzadko podają je osobno.",
     `Rezystywność kabla DC liczona jak dla warunków ruchowych wg PN-HD 60364-5-52 zał. G (ta sama wartość co reszta aplikacji) — γ = ${formatLiczba(gamma, 1)} m/(Ω·mm²).`,
+    "Bezpieczniki stringów są potrzebne dopiero przy co najmniej trzech stringach połączonych równolegle — przy jednym lub dwóch prąd wsteczny w uszkodzonym stringu nie przekroczy obciążalności modułów. Prąd znamionowy bezpiecznika nie może przekraczać maksymalnego zabezpieczenia szeregowego z karty modułu.",
   ];
   if (w.Impp_A === undefined)
     zalozenia.push("Nie podano prądu Impp — spadek napięcia policzony prądem Isc, co go ZAWYŻA (bezpieczna strona, ale mniej dokładna).");
@@ -187,7 +207,11 @@ export function obliczStringPV(w: StringPVWejscie): CalcResult<StringPVWynik> {
   }
 
   return {
-    wartosci: { IprojektowyA: Iprojektowy, VocZimny_V: VocZimny, VmppGoracy_V: VmppGoracy, spadekDC_pct: spadekPct, spadekDC_V: spadekV },
+    wartosci: {
+      IprojektowyA: Iprojektowy,
+      bezpiecznikMin_A: BEZPIECZNIK_STRINGU_ISC[0] * w.Isc_A,
+      bezpiecznikMax_A: BEZPIECZNIK_STRINGU_ISC[1] * w.Isc_A,
+      VocZimny_V: VocZimny, VmppGoracy_V: VmppGoracy, spadekDC_pct: spadekPct, spadekDC_V: spadekV },
     kroki,
     ocena,
     zalozenia,

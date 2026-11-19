@@ -106,6 +106,16 @@ describe("ocenKryteria", () => {
     expect(o.opis).toMatch(/Ik 146 A \(z Zs/);
   });
 
+  // Audyt Kalkulatorow 16.11.2026, K5: o strefie decyduje Ik z Cmin (najmniejszy), ale I2t
+  // czyta sie z karty przy NAJWIEKSZYM pradzie — 1,05·230/Zs.
+  it("K5: przy Zs wskazuje prad z Cmax = 1,05 do odczytu I2t z karty", () => {
+    const o = stan(ocenKryteria(wejscie({ Zs_Ohm: 1.5, Ia_A: 100 })), "wytrzymalosc_zwarciowa");
+    // 1,05·230/1,5 = 161 A
+    expect(o.opis).toContain("Odczytaj I²t z karty przy prądzie zwarcia 161 A (1,05·230/Zs)");
+    const bezZs = stan(ocenKryteria(wejscie({ Ik_A: 1000, Ia_A: 100 })), "wytrzymalosc_zwarciowa");
+    expect(bezZs.opis).toMatch(/przy największym spodziewanym prądzie zwarcia/);
+  });
+
   it("sprzeczne Ik i Zs sa zglaszane", () => {
     const o = stan(ocenKryteria(wejscie({ Zs_Ohm: 1.5, Ik_A: 1000, Ia_A: 100, I2t_A2s: 20000 })), "wytrzymalosc_zwarciowa");
     expect(o.opis).toMatch(/nie zgadza się z Zs/);

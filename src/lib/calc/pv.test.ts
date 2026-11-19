@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dobierzPrzewodACFalownika, obliczStringPV, WSP_ISC_STRING, type StringPVWejscie } from "./pv";
+import { BEZPIECZNIK_STRINGU_ISC, dobierzPrzewodACFalownika, obliczStringPV, WSP_ISC_STRING, type StringPVWejscie } from "./pv";
 
 /** Moduł typowy 400 Wp: Isc 10,5 A, Voc 41,5 V, Vmpp 34,5 V, Impp 9,9 A, β = −0,27 %/°C. */
 function string(over: Partial<StringPVWejscie> = {}): StringPVWejscie {
@@ -54,6 +54,22 @@ describe("string PV — prąd projektowy i napięcie w zimnie", () => {
   it("dodatni współczynnik temperaturowy to błąd danych (powinien być ujemny)", () => {
     const r = obliczStringPV(string({ betaNapiecia_pct_na_C: 0.27 }));
     expect(r.bledy.map((b) => b.code)).toContain("BETA_DODATNIE");
+  });
+});
+
+/*
+ * Audyt Kalkulatorów 16.11.2026, K6: 1,25·Isc to kryterium PRZEWODU; bezpiecznik stringu
+ * ma zakres 1,5–2,4·Isc (PN-HD 60364-7-712) i jest potrzebny od trzech stringów równolegle.
+ */
+describe("string PV — bezpiecznik stringu (K6)", () => {
+  it("zakres 1,5–2,4 × Isc, osobno od prądu projektowego przewodu", () => {
+    const r = obliczStringPV(string());
+    expect(BEZPIECZNIK_STRINGU_ISC).toEqual([1.5, 2.4]);
+    expect(r.wartosci!.bezpiecznikMin_A).toBeCloseTo(15.75, 6);
+    expect(r.wartosci!.bezpiecznikMax_A).toBeCloseTo(25.2, 6);
+    expect(r.kroki[0].opis).toMatch(/przewodu DC/);
+    expect(r.kroki.some((k) => k.wzor === "1,5 · Isc ≤ In ≤ 2,4 · Isc")).toBe(true);
+    expect(r.zalozenia.join(" ")).toMatch(/co najmniej trzech stringach/);
   });
 });
 

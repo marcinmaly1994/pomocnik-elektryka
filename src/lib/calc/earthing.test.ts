@@ -62,6 +62,8 @@ describe("uziom poziomy i otokowy", () => {
     // 100/(π·20)·ln(2·400/(0,03·0,8)) = 1,5915·ln(33333) = 1,5915·10,414 = 16,58 Ω
     const r = obliczUziom({ typ: "poziomy", rho_ohm_m: 100, dlugosc_m: 20, szerokosc_m: 0.03, glebokosc_m: 0.8 });
     expect(r.wartosci!.R_pojedynczy_ohm).toBeCloseTo(16.58, 1);
+    // K7 (audyt Kalkulatorów): wartość bez zmian, ale wynik mówi, że to ok. 2× Dwighta
+    expect(r.zalozenia.join(" ")).toMatch(/dwa razy wyższy niż wzór Dwighta/);
   });
 
   it("otok: R ≈ 2ρ/L, a potrzebna długość wynika wprost z odwrócenia wzoru", () => {
