@@ -9,7 +9,7 @@ import {
 } from "@/lib/podpowiedziNawigacji";
 
 /** Trzy okazje do dymka — linijka (skala), ściany, nawigacja po rzucie — ten sam popover. */
-export type DymekRzutu = "skala" | "sciany" | "nawigacja";
+export type DymekRzutu = "skala" | "pomieszczenie" | "nawigacja";
 
 /**
  * Podpowiedzi przewodnika na rzucie: który dymek stoi, co czeka w kolejce, co

@@ -72,7 +72,7 @@ test("menu „Plan” otwiera się w całości, a nie przycięte do paska", asyn
   await start(page);
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).first().click();
   await pomiar(page);
-  // Dymek wprowadzający („Dotykaj kolejnych narożników…”) leży nad wszystkim, także nad
+  // Dymek wprowadzający („Przeciągnij palcem po siatce…”) leży nad wszystkim, także nad
   // menu — to jego zamierzona rola. Zamykamy go jak użytkownik, zanim sięgniemy do menu.
   const rozumiem = page.getByRole("button", { name: "Rozumiem" });
   if (await rozumiem.count()) await rozumiem.click();
@@ -136,6 +136,7 @@ test("ściana rysowana palcem: każdy narożnik trafia, „Zakończ” w kadrze"
   await pomiar(page);
   const rozumiem = page.getByRole("button", { name: "Rozumiem" });
   if (await rozumiem.count()) await rozumiem.click();
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).tap();
 
   const okno = page.locator("[data-plan-okno]");
   const start0 = (await okno.boundingBox())!;
@@ -213,16 +214,17 @@ test("wybór elementu zwija bibliotekę, pigułka przejmuje jej opcje", async ({
 /**
  * Dymek przy ścianach mówi językiem dotyku.
  *
- * Mówił o Enterze i prawym przycisku myszy, których telefon nie ma — na nim ścianę
- * kończy przytrzymanie palca na rzucie albo „Zakończ" w nakładce na dole rzutu.
+ * Mówił o Enterze i prawym przycisku myszy, których telefon nie ma. Od startu od
+ * pomieszczenia (przegląd Instalacji 21.11.2026, pkt 7) pierwszy dymek mówi o
+ * przeciąganiu PALCEM po siatce.
  */
-test("dymek przy ścianach na telefonie mówi o dotyku, nie o Enter i PPM", async ({ page }) => {
+test("dymek startowy na telefonie mówi o dotyku, nie o Enter i PPM", async ({ page }) => {
   await start(page);
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).first().click();
   await pomiar(page);
-  const dymek = page.getByText(/kolejnych narożników/);
+  const dymek = page.getByText(/obrysować pomieszczenie/);
   await expect(dymek).toBeVisible();
-  await expect(dymek).toContainText("Przytrzymaj palec");
+  await expect(dymek).toContainText("Przeciągnij palcem");
   await expect(dymek).not.toContainText("PPM");
   await expect(dymek).not.toContainText("Enter");
 });

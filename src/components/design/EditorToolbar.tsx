@@ -269,6 +269,20 @@ export function EditorToolbar({
    */
   return (
     <div className="pe-bez-suwaka flex flex-nowrap items-center gap-x-1.5 gap-y-1.5 overflow-x-auto md:gap-x-2.5 rounded-card border border-border bg-white px-2.5 py-1.5 *:shrink-0 md:flex-wrap md:overflow-visible">
+      {/* Cofnij/ponów NA POCZĄTKU paska, jak w każdym edytorze (przegląd Instalacji
+          21.11.2026, pkt 8) — stały w środku, między przełącznikami widoku a powiększeniem,
+          czyli tam, gdzie nikt ich nie szuka. */}
+      <div className="flex items-center">
+        <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title="Cofnij">
+          <Undo2 size={15} />
+        </Button>
+        <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} title="Ponów">
+          <Redo2 size={15} />
+        </Button>
+      </div>
+
+      <Separator />
+
       {szerokieOkno && <FloorTabs />}
 
       <PasekMenu etykieta="Plan" ikona={<SlidersHorizontal size={14} />} szerokosc={320}>
@@ -547,14 +561,6 @@ export function EditorToolbar({
         </PasekMenu>
       )}
 
-      <div className="flex items-center">
-        <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} title="Cofnij">
-          <Undo2 size={15} />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} title="Ponów">
-          <Redo2 size={15} />
-        </Button>
-      </div>
 
       {/* Powiększenie WIDOKU. Wcześniej dostępne tylko przez Ctrl+scroll, czyli
           praktycznie niewykrywalne — teraz ma jawną kontrolkę z wartością.

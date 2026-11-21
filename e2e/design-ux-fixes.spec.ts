@@ -25,6 +25,8 @@ async function zacznijRysowacRecznie(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).first().click();
   const rozumiem = page.getByRole("button", { name: "Rozumiem" });
   if (await rozumiem.count()) await rozumiem.click();
+  // Start rysuje pomieszczenia (przegląd Instalacji 21.11.2026, pkt 7) — te testy rysują ściany.
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
 }
 
 test.describe("Cofnij w trakcie rysowania", () => {

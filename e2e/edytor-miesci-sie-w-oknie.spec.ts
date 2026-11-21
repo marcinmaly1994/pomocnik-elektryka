@@ -90,6 +90,9 @@ test("pasek stanu mieści się w oknie razem z rysunkiem", async ({ page }) => {
 test("przycisk kolejnego kroku nie leży na płótnie — także przy widocznym banerze", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await otworzEdytor(page);
+  const rozumiem = page.getByRole("button", { name: "Rozumiem" });
+  if (await rozumiem.count()) await rozumiem.click();
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
 
   const box = (await oknoRysunku(page).boundingBox())!;
   await page.mouse.click(box.x + 100, box.y + 100);
