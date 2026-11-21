@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { KATEGORIE_OSPRZETU } from "@/lib/elements";
-import { ArrowUpFromLine, Cable, DraftingCompass, Eye, EyeOff, FileText, Grid3x3, Image as ImageIcon, Layers2, Maximize2, Minimize2, Minus, MoreHorizontal, Plus, Redo2, Ruler, Save, Scan, SlidersHorizontal, Undo2 } from "lucide-react";
+import { ArrowUpFromLine, Cable, DraftingCompass, FileText, Grid3x3, Image as ImageIcon, Layers2, Magnet, Maximize2, Minimize2, Minus, MoreHorizontal, Plus, Redo2, Save, Scan, ShowerHead, SlidersHorizontal, Tags, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { FloorManagement, FloorTabs } from "./FloorBar";
@@ -307,7 +307,7 @@ export function EditorToolbar({
           warstw); checkbox — czy elementy się do niej PRZYCIĄGAJĄ (to ustawienie
           rysowania, więc siedzi tutaj). Można wyłączyć samą kratkę, bo przeszkadza na
           wgranym rzucie, i dalej rysować z przyciąganiem. */}
-      <PasekMenu etykieta="Rysunek" ikona={<Ruler size={14} />} szerokosc={300}>
+      <PasekMenu etykieta="Rysunek" ikona={<Magnet size={14} />} szerokosc={300}>
       <label
         className="flex items-center gap-1.5 text-xs text-slate-500"
         title={
@@ -412,7 +412,9 @@ export function EditorToolbar({
         aria-label={showZones ? "Ukryj strefy ochronne w łazience" : "Pokaż strefy ochronne w łazience"}
         aria-pressed={showZones}
       >
-        {showZones ? <Eye size={15} className="text-copper" /> : <EyeOff size={15} />}
+        {/* Słuchawka prysznica, nie oko: oko czytało się jako „widoczność w ogóle", a ta
+            ikona przełącza wyłącznie strefy łazienki (przegląd Instalacji 21.11, pkt 6). */}
+        <ShowerHead size={15} className={showZones ? "text-copper" : undefined} />
       </Button>
 
       {/* Trasy przewodów są poglądowe (linia prosta, nie prawdziwy przebieg wzdłuż
@@ -439,7 +441,7 @@ export function EditorToolbar({
           Menu, a nie druga ikona w rzędzie: przełączników warstw jest już pięć i
           żaden nie ma podpisu. Szósty byłby kolejnym symbolem do odgadnięcia, a tak
           obie opcje dostają wreszcie pełne nazwy. */}
-      <PasekMenu etykieta="Opisy" ikona={<Ruler size={14} />} szerokosc={260}>
+      <PasekMenu etykieta="Opisy" ikona={<Tags size={14} />} szerokosc={260}>
         <label className="flex items-center gap-1.5 text-xs text-slate-500">
           <input
             type="checkbox"
