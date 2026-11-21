@@ -1,4 +1,5 @@
-import { Fragment } from "react";
+import { ChevronRight } from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { ToolMode } from "./DesignCanvas";
 import { RAIL_TOOLS } from "./railTools";
 
@@ -38,8 +39,38 @@ export function ToolRail({
    */
   pionowo?: boolean;
 }) {
+  /**
+   * Czy za prawą krawędzią poziomego paska (telefon) są jeszcze narzędzia.
+   *
+   * Pasek przewija się w bok bez suwaka (`pe-bez-suwaka`), więc ostatnie narzędzia
+   * — po #316 Przewód, Notatka i Kalibracja skali — stały za krawędzią bez żadnego
+   * sygnału, że istnieją (przegląd Instalacji 21.11.2026, pkt 2). Liczone z przewinięcia,
+   * a nie z szerokości okna: na szerszym telefonie mieści się więcej.
+   */
+  const navRef = useRef<HTMLElement>(null);
+  const [wiecej, setWiecej] = useState(false);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || pionowo) {
+      setWiecej(false);
+      return;
+    }
+    const sprawdz = () => setWiecej(nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 2);
+    sprawdz();
+    nav.addEventListener("scroll", sprawdz, { passive: true });
+    window.addEventListener("resize", sprawdz);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sprawdz);
+    ro?.observe(nav);
+    return () => {
+      nav.removeEventListener("scroll", sprawdz);
+      window.removeEventListener("resize", sprawdz);
+      ro?.disconnect();
+    };
+  }, [pionowo]);
+
   return (
     <nav
+      ref={navRef}
       aria-label="Narzędzia rysowania"
       // Bez własnej ramki i tła: pasek jest LEWĄ KRAWĘDZIĄ wspólnej karty z panelem,
       // a nie osobnym kafelkiem. Delikatne tło odróżnia go od zawartości panelu tak,
@@ -90,6 +121,22 @@ export function ToolRail({
           </Fragment>
         );
       })}
+      {/* Strzałka „więcej" przyklejona do prawej krawędzi przewijanego rzędu (`sticky`,
+          więc bez opakowania, które zmieniałoby układ karty). Kliknięcie przewija do
+          końca; po dojechaniu znika. Tylko w układzie poziomym (telefon). */}
+      {wiecej && (
+        <button
+          type="button"
+          onClick={() => navRef.current?.scrollTo({ left: navRef.current.scrollWidth, behavior: "smooth" })}
+          aria-label="Więcej narzędzi"
+          title="Więcej narzędzi — przewiń pasek"
+          data-testid="wiecej-narzedzi"
+          className="sticky right-0 -ml-1 flex h-11 w-8 shrink-0 items-center justify-center text-slate-500 md:hidden"
+          style={{ background: "linear-gradient(to right, rgba(247,249,251,0), #F7F9FB 45%)" }}
+        >
+          <ChevronRight size={18} />
+        </button>
+      )}
     </nav>
   );
 }
