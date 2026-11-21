@@ -809,6 +809,25 @@ export function DesignCanvas({
    */
   const px = useCallback((wPikselach: number) => wPikselach / zoom, [zoom]);
 
+  /**
+   * Zapas trafienia ściany i krawędzi pomieszczenia — w PIKSELACH EKRANU, łącznie na obie
+   * strony linii (połowa z każdej).
+   *
+   * Używany przez wszystko, w co trafia się „w linię": ścianę, krawędź pomieszczenia, otwór
+   * w ścianie i trasę przewodu. Dotąd `hitStrokeWidth` był stałą w jednostkach rysunku (20 dla ściany, 14 dla krawędzi),
+   * więc rósł z powiększeniem: zmierzone przy 100% — ściana 10 px grubości zaznaczała się
+   * kliknięciem 20 px od środka, czyli 15 px OBOK niej; przy 190% już 27 px obok. Przy
+   * grubej ścianie było odwrotnie — pas trafienia węższy od tego, co widać. Teraz trafienie
+   * to widoczna grubość plus stały zapas na ekranie, niezależnie od powiększenia.
+   *
+   * Na dotyku zapas jest większy (palec jest mniej dokładny niż kursor), ale nadal liczony
+   * w pikselach — tak samo jak dla przewodów ręcznych (`px(12)` niżej).
+   */
+  const zapasTrafienia = useMemo(
+    () => px(typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches ? 20 : 12),
+    [px]
+  );
+
   const siatka = useMemo(() => {
     const lewo = widok.x;
     const gora = widok.y;
@@ -1887,11 +1906,11 @@ export function DesignCanvas({
                   listening={roomInteractive}
                   stroke="transparent"
                   strokeWidth={1}
-                  hitStrokeWidth={14}
+                  hitStrokeWidth={zapasTrafienia}
                   {...klikAlboDotyk((e) => {
                     /**
                      * W trybie „pomieszczenie" LEWY klik należy do rysunku, nie do
-                     * sąsiada. `hitStrokeWidth` (14 jedn.) ciągnie się wzdłuż całego
+                     * sąsiada. `hitStrokeWidth` (`zapasTrafienia`) ciągnie się wzdłuż całego
                      * obrysu, więc rysując pokój PRZY istniejącym każdy punkt stawiany
                      * na wspólnej ścianie lądował tutaj i znikał — zmierzone: z pięciu
                      * kliknięć wzdłuż wspólnej krawędzi rejestrowały się dwa, a figury
@@ -2054,14 +2073,14 @@ export function DesignCanvas({
                   points={pts}
                   stroke={isSel ? "#C1793F" : "#16202B"}
                   strokeWidth={(w.thickness ?? DEFAULT_WALL_THICKNESS) + (isSel ? 2 : 0)}
-                  // Hit-test SZERSZY niż to, co widać — cienka ściana (typowo kilka-kilkanaście
-                  // jednostek) jest przy zwykłym powiększeniu grubości pojedynczych pikseli,
-                  // a właśnie w nią trzeba trafić, żeby zaznaczyć ścianę albo dostawić drzwi
-                  // (tryb „otwory"). Bezpieczne odkąd klik w innych trybach i tak przechodzi
+                  // Hit-test SZERSZY niż to, co widać — o `zapasTrafienia` (stałe piksele ekranu,
+                  // patrz definicja): cienką ścianę przy małym powiększeniu trzeba trafić, żeby
+                  // ją zaznaczyć albo dostawić drzwi (tryb „otwory"), ale klik obok niej ma
+                  // trafiać w to, co obok, przy każdym powiększeniu. Bezpieczne odkąd klik w innych trybach i tak przechodzi
                   // na wylot do sceny (patrz `onClick` niżej) — szerszy hit nie kradnie już
                   // kliknięć narzędziu „Wstaw Element". Ten sam wzorzec co `hitStrokeWidth`
                   // przy krawędzi pomieszczenia, niżej w tym pliku.
-                  hitStrokeWidth={20}
+                  hitStrokeWidth={(w.thickness ?? DEFAULT_WALL_THICKNESS) + zapasTrafienia}
                   lineCap="round"
                   lineJoin="round"
                   {...klikAlboDotyk((e) => {
@@ -2226,14 +2245,16 @@ export function DesignCanvas({
                   listening={false}
                 />
                 {/* Szerszy niewidoczny obszar klikalny — sam glif (łuk/dwie cienkie
-                    linie) byłby zbyt wąski do wygodnego zaznaczenia/PPM. */}
+                    linie) byłby zbyt wąski do wygodnego zaznaczenia/PPM. Zapas w pikselach
+                    ekranu (`zapasTrafienia`), nie w jednostkach rysunku — dawne „+ 12" rosło
+                    z powiększeniem tak samo jak pas trafienia ściany. */}
                 <Rect
                   x={o.x}
                   y={o.y}
                   width={o.width}
-                  height={wallThickness + 12}
+                  height={wallThickness + zapasTrafienia}
                   offsetX={halfW}
-                  offsetY={(wallThickness + 12) / 2}
+                  offsetY={(wallThickness + zapasTrafienia) / 2}
                   rotation={angleDeg}
                   fill="transparent"
                 />
@@ -2400,7 +2421,9 @@ export function DesignCanvas({
                   opacity={0.9}
                   lineJoin="round"
                   listening={routeInteractive}
-                  hitStrokeWidth={10}
+                  // Widoczna grubość + zapas w pikselach ekranu — dawne 10 jednostek rysunku
+                  // rosło z powiększeniem (przy 4× klik ~20 px obok trasy ją zaznaczał).
+                  hitStrokeWidth={(isControl ? 1 : 1.5) + (isSelRoute ? 1 : 0) + zapasTrafienia}
                   {...klikAlboDotyk((e) => {
                     e.cancelBubble = true;
                     onSelectRoute(r.id);
