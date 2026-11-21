@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { ToolMode } from "./DesignCanvas";
 import { RAIL_TOOLS } from "./railTools";
 
@@ -53,25 +54,40 @@ export function ToolRail({
       }
       style={{ background: "#F7F9FB" }}
     >
-      {RAIL_TOOLS.map(({ id, label, icon: Icon, hint, shortcut }) => {
+      {RAIL_TOOLS.map(({ id, label, icon: Icon, hint, shortcut, grupa }, i) => {
         const active = value === id;
+        // Odstęp z kreską między grupami (przebieg pracy, patrz `RAIL_TOOLS`). Kreska idzie
+        // w poprzek paska: pozioma w pionowym, pionowa w poziomym (telefon).
+        const nowaGrupa = i > 0 && RAIL_TOOLS[i - 1].grupa !== grupa;
         return (
-          <button
-            key={id}
-            ref={(el) => onToolRef?.(id, el)}
-            onClick={() => onChange(id)}
-            // Nazwa NA POCZATKU dymka, bo Pomoc odsyla do narzedzi wlasnie po niej
-            // („narzedziem «Narysuj Sciane»"), a wczesniej byla wylacznie `aria-label` —
-            // czyli widzialna tylko dla czytnikow ekranu. Widzacy uzytkownik czytal
-            // w Pomocy o narzedziu, ktorego nazwy nie znajdowal nigdzie na ekranie:
-            // ikony sa swiadomie bez podpisow, a dymek pokazywal sama wskazowke.
-            title={`${label} — ${hint} (${shortcut})`}
-            aria-label={label}
-            aria-pressed={active}
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors ${active ? "bg-copper-tlo text-caution" : "text-slate-500"}`}
-          >
-            <Icon size={19} strokeWidth={active ? 2.2 : 1.8} />
-          </button>
+          <Fragment key={id}>
+            {nowaGrupa && (
+              <span
+                aria-hidden="true"
+                data-separator-grup
+                className={
+                  pionowo
+                    ? "mx-auto my-0.5 h-px w-6 shrink-0 bg-slate-300"
+                    : "my-auto h-6 w-px shrink-0 bg-slate-300 md:mx-auto md:my-0.5 md:h-px md:w-6"
+                }
+              />
+            )}
+            <button
+              ref={(el) => onToolRef?.(id, el)}
+              onClick={() => onChange(id)}
+              // Nazwa NA POCZATKU dymka, bo Pomoc odsyla do narzedzi wlasnie po niej
+              // („narzedziem «Narysuj Sciane»"), a wczesniej byla wylacznie `aria-label` —
+              // czyli widzialna tylko dla czytnikow ekranu. Widzacy uzytkownik czytal
+              // w Pomocy o narzedziu, ktorego nazwy nie znajdowal nigdzie na ekranie:
+              // ikony sa swiadomie bez podpisow, a dymek pokazywal sama wskazowke.
+              title={`${label} — ${hint} (${shortcut})`}
+              aria-label={label}
+              aria-pressed={active}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors ${active ? "bg-copper-tlo text-caution" : "text-slate-500"}`}
+            >
+              <Icon size={19} strokeWidth={active ? 2.2 : 1.8} />
+            </button>
+          </Fragment>
         );
       })}
     </nav>
