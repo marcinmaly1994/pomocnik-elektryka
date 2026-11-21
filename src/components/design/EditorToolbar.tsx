@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { formatLiczba } from "@/lib/liczby";
 import { KATEGORIE_OSPRZETU } from "@/lib/elements";
-import { ArrowUpFromLine, Cable, DraftingCompass, FileText, Grid3x3, Image as ImageIcon, Layers2, Magnet, Maximize2, Minimize2, Minus, MoreHorizontal, Plus, Redo2, Save, Scan, ShowerHead, SlidersHorizontal, Tags, Undo2 } from "lucide-react";
+import { Cable, DraftingCompass, FileText, Grid3x3, Image as ImageIcon, Layers2, Magnet, Maximize2, Minimize2, Minus, MoreHorizontal, Plus, Redo2, Save, Scan, ShowerHead, SlidersHorizontal, Tags, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_ZOOM, minZoom } from "./zoomPlanu";
 import { FloorManagement, FloorTabs } from "./FloorBar";
@@ -441,7 +441,13 @@ export function EditorToolbar({
           Menu, a nie druga ikona w rzędzie: przełączników warstw jest już pięć i
           żaden nie ma podpisu. Szósty byłby kolejnym symbolem do odgadnięcia, a tak
           obie opcje dostają wreszcie pełne nazwy. */}
-      <PasekMenu etykieta="Opisy" ikona={<Tags size={14} />} szerokosc={260}>
+      {/* „Pokaż", nie „Opisy" (przegląd Instalacji 21.11.2026, pkt 5): menu trzymało też
+          filtry osprzętu („Gniazda", „Łączniki"…), które opisami nie są, a wysokości
+          montażu — opis jak najbardziej — miały osobną ikonę obok. Teraz wszystko, co się
+          podpisuje albo filtruje na rysunku, jest tutaj; jednoklikowe warstwy (siatka,
+          strefy, trasy, kondygnacja poniżej) zostają ikonami w pasku. */}
+      <PasekMenu etykieta="Pokaż" ikona={<Tags size={14} />} szerokosc={260}>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Opisy na rzucie</p>
         <label className="flex items-center gap-1.5 text-xs text-slate-500">
           <input
             type="checkbox"
@@ -467,6 +473,21 @@ export function EditorToolbar({
           Powierzchnia pomieszczeń
         </label>
 
+        {/* Wysokości montażu przy osprzęcie. Osobne pole od wymiarów ścian: tamte opisują
+            BUDYNEK, te INSTALACJĘ — na jednym wydruku chce się zwykle albo jedno, albo
+            drugie. Domyślnie wyłączone: przy rysowaniu przeszkadzają, przy wydruku są
+            niezbędne. */}
+        <label className="flex items-center gap-1.5 text-xs text-slate-500" title="Wysokości montażu przy osprzęcie (+30, +110…)">
+          <input
+            type="checkbox"
+            checked={showHeights}
+            onChange={onToggleHeights}
+            aria-label="Wysokości montażu"
+            className="accent-copper"
+          />
+          Wysokości montażu (+30, +110…)
+        </label>
+
         {/* Filtry widoku osprzętu (F8 z audytu 5.11.2026) — w tym samym menu, bo to ta
             sama kategoria pytania: co ma być na rysunku i na wydruku. Nazwy jak sekcje
             katalogu przy wstawianiu. */}
@@ -488,21 +509,6 @@ export function EditorToolbar({
           </fieldset>
         )}
       </PasekMenu>
-
-      {/* Wysokości montażu przy osprzęcie. Osobny przełącznik od wymiarów ścian: tamte
-          opisują BUDYNEK, te INSTALACJĘ — na jednym wydruku chce się zwykle albo jedno,
-          albo drugie, a razem robi się gęsto. Domyślnie wyłączone z tego samego powodu
-          co wymiary: przy rysowaniu przeszkadzają, a przy wydruku są niezbędne. */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onToggleHeights}
-        title={showHeights ? "Ukryj wysokości montażu" : "Pokaż wysokości montażu przy osprzęcie (+30, +110…)"}
-        aria-label={showHeights ? "Ukryj wysokości montażu" : "Pokaż wysokości montażu"}
-        aria-pressed={showHeights}
-      >
-        <ArrowUpFromLine size={15} className={showHeights ? "text-copper" : undefined} />
-      </Button>
 
       {/* Podgląd kondygnacji poniżej — bez niego piętro rysuje się w ciemno i nie da
           się trafić pionem rozdzielnicy ani wypustu nad tym z parteru. */}
