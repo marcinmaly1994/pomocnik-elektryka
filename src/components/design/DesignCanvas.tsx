@@ -813,7 +813,8 @@ export function DesignCanvas({
    * Zapas trafienia ściany i krawędzi pomieszczenia — w PIKSELACH EKRANU, łącznie na obie
    * strony linii (połowa z każdej).
    *
-   * Dotąd `hitStrokeWidth` był stałą w jednostkach rysunku (20 dla ściany, 14 dla krawędzi),
+   * Używany przez wszystko, w co trafia się „w linię": ścianę, krawędź pomieszczenia, otwór
+   * w ścianie i trasę przewodu. Dotąd `hitStrokeWidth` był stałą w jednostkach rysunku (20 dla ściany, 14 dla krawędzi),
    * więc rósł z powiększeniem: zmierzone przy 100% — ściana 10 px grubości zaznaczała się
    * kliknięciem 20 px od środka, czyli 15 px OBOK niej; przy 190% już 27 px obok. Przy
    * grubej ścianie było odwrotnie — pas trafienia węższy od tego, co widać. Teraz trafienie
@@ -2244,14 +2245,16 @@ export function DesignCanvas({
                   listening={false}
                 />
                 {/* Szerszy niewidoczny obszar klikalny — sam glif (łuk/dwie cienkie
-                    linie) byłby zbyt wąski do wygodnego zaznaczenia/PPM. */}
+                    linie) byłby zbyt wąski do wygodnego zaznaczenia/PPM. Zapas w pikselach
+                    ekranu (`zapasTrafienia`), nie w jednostkach rysunku — dawne „+ 12" rosło
+                    z powiększeniem tak samo jak pas trafienia ściany. */}
                 <Rect
                   x={o.x}
                   y={o.y}
                   width={o.width}
-                  height={wallThickness + 12}
+                  height={wallThickness + zapasTrafienia}
                   offsetX={halfW}
-                  offsetY={(wallThickness + 12) / 2}
+                  offsetY={(wallThickness + zapasTrafienia) / 2}
                   rotation={angleDeg}
                   fill="transparent"
                 />
@@ -2418,7 +2421,9 @@ export function DesignCanvas({
                   opacity={0.9}
                   lineJoin="round"
                   listening={routeInteractive}
-                  hitStrokeWidth={10}
+                  // Widoczna grubość + zapas w pikselach ekranu — dawne 10 jednostek rysunku
+                  // rosło z powiększeniem (przy 4× klik ~20 px obok trasy ją zaznaczał).
+                  hitStrokeWidth={(isControl ? 1 : 1.5) + (isSelRoute ? 1 : 0) + zapasTrafienia}
                   {...klikAlboDotyk((e) => {
                     e.cancelBubble = true;
                     onSelectRoute(r.id);

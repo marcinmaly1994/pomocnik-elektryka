@@ -85,3 +85,45 @@ test("klik 20 px obok krawędzi ściany jej nie zaznacza — przy każdym powię
     expect(await zaznaczonaPoKliknieciu(page, x, s!.srodek - s!.polowa - 20)).toBe(false);
   }
 });
+
+/**
+ * Drzwi w ścianie miały pas trafienia „grubość otworu + 12" w jednostkach rysunku — ten sam
+ * błąd co sama ściana. Otwór rysuje się o 4 jednostki grubszy niż mur, więc przy powiększeniu
+ * startowym (2 px na jednostkę) jego obrys wystaje ~4 px poza mur, a dawny pas — kolejne
+ * 12 px. Teraz zapas to ~6 px poza obrysem drzwi: klik 14 px od krawędzi MURU (~10 px poza
+ * drzwiami) nie zaznacza już niczego, a na starym kodzie zaznaczał drzwi.
+ */
+test("klik 14 px obok muru przy drzwiach nie zaznacza ani drzwi, ani ściany", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
+  const rozumiem = page.getByRole("button", { name: "Rozumiem" });
+  if (await rozumiem.count()) await rozumiem.click();
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
+  await klik(page, 100, 300);
+  await klik(page, 500, 300);
+  await page.getByRole("button", { name: "Zakończ" }).click();
+  await page.waitForTimeout(500);
+
+  const s = (await scianaWKolumnie(page, 150))!;
+  await page.getByRole("button", { name: "Drzwi i okna", exact: true }).click();
+  await klik(page, 300, s.srodek);
+  await page.waitForTimeout(700);
+  await page.getByRole("button", { name: "Zaznacz", exact: true }).click();
+
+  const drzwi = page.getByTestId("opening-width-input");
+  const sciana = page.getByTestId("selected-wall-thickness-input");
+  await page.keyboard.press("Escape");
+  await klik(page, 300, s.srodek);
+  await expect(drzwi).toBeVisible();
+
+  for (const y of [s.srodek + s.polowa + 14, s.srodek - s.polowa - 14]) {
+    await page.keyboard.press("Escape");
+    await klik(page, 300, y);
+    await page.waitForTimeout(200);
+    await expect(drzwi).toHaveCount(0);
+    await expect(sciana).toHaveCount(0);
+  }
+});
