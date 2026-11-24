@@ -55,7 +55,7 @@ test("wgrywanie planu: ekran startowy widoczny bez scrollowania, zwija się po w
   await expect(page.getByText(/Podkład: rzut.png/)).toBeVisible();
   await expect(cta).toHaveCount(0);
   await otworzMenuPaska(page, "Plan");
-  await expect(page.getByRole("button", { name: "Zmień" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Zmień", exact: true })).toBeVisible();
   // ekran startowy nie wraca — jest edytor z panelem bocznym (nagłówek bieżącego
   // narzędzia stoi w nim zawsze, niezależnie od tego, co jest na rzucie).
   await expect(page.getByTestId("naglowek-narzedzia")).toBeVisible();

@@ -64,6 +64,15 @@ async function wysokoscWProjekcie(page: Page) {
   });
 }
 
+/** Wysokości montażu siedzą w menu „Pokaż” (dawniej osobna ikona w pasku — przegląd
+ *  Instalacji 21.11.2026, pkt 5). Menu zamykamy, żeby nie przykrywało płótna. */
+async function wlaczWysokosci(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Pokaż", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Wysokości montażu" }).check();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+}
+
 test("wysokość montażu zapisuje się na elemencie i przeżywa odświeżenie", async ({ page }) => {
   await pustyProjekt(page);
   await postawGniazdko(page, 200, 200);
@@ -132,7 +141,7 @@ test("wysokosci montazu pojawiaja sie na rzucie dopiero po wlaczeniu i pomijaja 
   // Domyslnie wylaczone — na rysowanym wlasnie rzucie liczby przeszkadzaja.
   expect(await etykietyNaPlanie(page)).toEqual([]);
 
-  await page.getByRole("button", { name: "Pokaż wysokości montażu" }).click();
+  await wlaczWysokosci(page);
   // Gniazdko dostaje „+30". Punkt sufitowy NIE dostaje nic: jego wysokosc to po prostu
   // sufit, a „+280" przy kazdej oprawie to kilkanascie liczb bez tresci.
   expect(await etykietyNaPlanie(page)).toEqual(["+30"]);
@@ -141,7 +150,7 @@ test("wysokosci montazu pojawiaja sie na rzucie dopiero po wlaczeniu i pomijaja 
 test("wlasna wysokosc odzywa sie takze tam, gdzie typowa milczy", async ({ page }) => {
   await pustyProjekt(page);
   await postawZBiblioteki(page, "sufit", /Punkt sufitowy/, 200, 150);
-  await page.getByRole("button", { name: "Pokaż wysokości montażu" }).click();
+  await wlaczWysokosci(page);
   expect(await etykietyNaPlanie(page)).toEqual([]);
 
   // Sufit podwieszany albo skos to juz informacja, nie powtorzenie oczywistosci —

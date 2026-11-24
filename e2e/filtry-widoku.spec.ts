@@ -27,7 +27,7 @@ async function zaznaczono(page: Page): Promise<number> {
 }
 
 async function przelacz(page: Page, kategoria: string) {
-  await page.getByRole("button", { name: "Opisy" }).click();
+  await page.getByRole("button", { name: "Pokaż", exact: true }).click();
   await page.getByRole("checkbox", { name: kategoria }).click();
   await page.keyboard.press("Escape");
 }
