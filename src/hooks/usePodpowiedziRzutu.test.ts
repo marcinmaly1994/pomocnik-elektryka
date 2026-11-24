@@ -62,9 +62,9 @@ describe("usePodpowiedziRzutu", () => {
 
   it("przybliżenie przy INNYM dymku go nie rusza", () => {
     const { result } = renderHook(() => usePodpowiedziRzutu());
-    act(() => result.current.pokazDymek("sciany"));
+    act(() => result.current.pokazDymek("pomieszczenie"));
     act(() => result.current.oznaczUmiejetnoscNawigacji());
-    expect(result.current.dymek).toBe("sciany");
+    expect(result.current.dymek).toBe("pomieszczenie");
   });
 
   describe("kółko bez Ctrl", () => {

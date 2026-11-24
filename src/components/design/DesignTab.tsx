@@ -1373,7 +1373,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
   }, [dopasujKadr, dopasujPustaKartke, zoomReczny, wgrywanie.stan, showEntryScreen, activeFloorId, wysZmierzona]);
 
   const scaleToolRef = useRef<HTMLButtonElement | null>(null);
-  const wallToolRef = useRef<HTMLButtonElement | null>(null);
+  const roomToolRef = useRef<HTMLButtonElement | null>(null);
   /** Grupa przycisków powiększenia w pasku — kotwica dymka o nawigacji po rzucie. */
   const [grupaZoomu, setGrupaZoomu] = useState<HTMLDivElement | null>(null);
   /** Dymki przewodnika, kolejka dymków, stan nauki nawigacji i sygnał „kółko bez
@@ -1453,8 +1453,12 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
     // Włączamy je tu, a nie w domyślnym stanie `snapOn`, bo na wgranym podkładzie
     // przyciąganie przeszkadza: ściany na zdjęciu nie leżą na oczkach siatki.
     setSnapOn(true);
-    setToolMode("sciany");
-    setCoachMark("sciany");
+    // Start od POMIESZCZENIA, nie od ściany (przegląd Instalacji 21.11.2026, pkt 7): obwody,
+    // dobór gniazd i strefy łazienki liczą się z pomieszczeń, a prostokąt przeciągnięty po
+    // siatce daje je od razu, z nazwą i typem. Ściany zostają drugim krokiem — dorysowuje
+    // się je, gdy trzeba pokazać mur, drzwi czy okna.
+    setToolMode("pomieszczenie");
+    setCoachMark("pomieszczenie");
   }
   /** Zmiana narzędzia — wspólna dla kliknięcia w ToolRail I skrótu klawiszowego
    *  (patrz keydown handler niżej), żeby oba wejścia miały DOKŁADNIE te same
@@ -3469,7 +3473,7 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           value={toolMode}
           onToolRef={(id, el) => {
             if (id === "skala") scaleToolRef.current = el;
-            if (id === "sciany") wallToolRef.current = el;
+            if (id === "pomieszczenie") roomToolRef.current = el;
           }}
           onChange={selectTool}
           // W pełnym ekranie karta jest przyklejona do LEWEJ krawędzi okna, więc pasek
@@ -4193,16 +4197,13 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
         />
       )}
 
-      {coachMark === "sciany" && (
+      {coachMark === "pomieszczenie" && (
         <CoachMark
-          anchor={wallToolRef.current}
-          /* Na dotyku nie ma ani Entera, ani prawego przycisku — jest przytrzymanie palca
-             na płótnie (to samo menu co PPM) i „Zakończ" w nakładce nad dolną krawędzią
-             rzutu. Ten sam podział co w dymku nawigacji niżej. */
+          anchor={roomToolRef.current}
           text={
             szerokieOkno
-              ? "Klikaj kolejne narożniki, żeby postawić odcinki ściany. Enter, PPM → „Zatwierdź ścianę” albo przycisk „Zakończ” kończy bieżącą ścianę — możesz od razu zacząć kolejną."
-              : "Dotykaj kolejnych narożników, żeby postawić odcinki ściany. Przytrzymaj palec na rzucie → „Zatwierdź ścianę” albo „Zakończ” na dole rzutu kończy bieżącą ścianę — możesz od razu zacząć kolejną."
+              ? "Przeciągnij po siatce, żeby obrysować pomieszczenie prostokątem — jedna kratka to 1 m. Inny kształt wybierzesz w panelu obok, a mur, drzwi i okna dorysujesz później."
+              : "Przeciągnij palcem po siatce, żeby obrysować pomieszczenie prostokątem — jedna kratka to 1 m. Inny kształt wybierzesz w panelu, a mur, drzwi i okna dorysujesz później."
           }
           onDismiss={() => setCoachMark(null)}
         />

@@ -271,10 +271,11 @@ test("„Narysuj dom samodzielnie” z EKRANU STARTOWEGO ustawia standardową sk
 
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
 
-  // narzędzie ścian jest od razu aktywne, gotowe do klikania — bez ekranu kalibracji
-  await expect(page.getByRole("button", { name: "Narysuj Ścianę", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // narzędzie pomieszczenia jest od razu aktywne, gotowe do przeciągania — bez ekranu
+  // kalibracji (start od pomieszczenia, przegląd Instalacji 21.11.2026, pkt 7)
+  await expect(page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true })).toHaveAttribute("aria-pressed", "true");
 
-  // Rysowanie ścian tłumaczy dymek przy narzędziu, a karta „3 kroki" jest na ten
+  // Rysowanie pomieszczenia tłumaczy dymek przy narzędziu, a karta „3 kroki" jest na ten
   // czas zwinięta, żeby oba nie nakładały się w lewym dolnym rogu (patrz
   // `open={onboarding.showCard && !coachMark}` w DesignTab.tsx). Zamykamy dymek —
   // karta wraca sama i dopiero wtedy widać w niej stan kroków.
@@ -291,6 +292,7 @@ test("„Narysuj dom samodzielnie” z EKRANU STARTOWEGO ustawia standardową sk
 
   // narysowanie odcinka ściany od razu pokazuje wymiar w METRACH, nie jednostkach
   // planu — dowód, że skala naprawdę trafiła do projektu, nie tylko odhaczyła krok
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 100, box.y + 100);
   await page.mouse.move(box.x + 300, box.y + 100, { steps: 5 });
@@ -310,8 +312,11 @@ test("„Narysuj dom samodzielnie” z trwałego banera (po pominięciu ekranu s
   // z tym samym drugim przyciskiem — ten test sprawdza WŁAŚNIE jego, nie kartę
   // (którą i tak pominęliśmy) ani ekran startowy (już zamknięty)
   await page.getByRole("button", { name: "Narysuj dom samodzielnie" }).click();
-  await expect(page.getByRole("button", { name: "Narysuj Ścianę", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Narysuj Pomieszczenie", exact: true })).toHaveAttribute("aria-pressed", "true");
 
+  const rozumiem = page.getByRole("button", { name: "Rozumiem" });
+  if (await rozumiem.count()) await rozumiem.click();
+  await page.getByRole("button", { name: "Narysuj Ścianę", exact: true }).click();
   const box = await planBox(page);
   await page.mouse.click(box.x + 100, box.y + 100);
   await page.mouse.click(box.x + 300, box.y + 100);
