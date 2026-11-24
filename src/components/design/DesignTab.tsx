@@ -2814,6 +2814,10 @@ export function DesignTab({ onOpenAuth, onOpenPomoc, nastepnyKrok }: DesignTabPr
           }}
           onCancel={() => setCalibPoints([])}
           onClear={() => clearScale(activeFloorId)}
+          maPodklad={!!bgImageUrl}
+          bgName={bgName}
+          onPickBg={() => fileRef.current?.click()}
+          onClearBg={() => setBgImage(activeFloorId, null)}
         />
       )}
       {/* Znika po 4 s albo przy następnej akcji, która coś tu wstawi (patrz

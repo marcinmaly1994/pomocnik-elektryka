@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatLiczba } from "@/lib/liczby";
-import { Ruler } from "lucide-react";
+import { Image as ImageIcon, Ruler } from "lucide-react";
 import type { Point } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +32,15 @@ export interface ScaleCalibrationToolProps {
   onApply: (metersPerUnit: number) => void;
   onCancel: () => void;
   onClear: () => void;
+  /**
+   * Podkład kondygnacji — wgrywa się go po to, żeby na nim ustawić skalę, a dotąd był
+   * tylko w menu „Plan" na pasku nad płótnem, z dala od tego narzędzia (przegląd
+   * Instalacji 21.11.2026, pkt 4). Opcjonalne: bez nich panel wygląda jak dawniej.
+   */
+  bgName?: string | null;
+  maPodklad?: boolean;
+  onPickBg?: () => void;
+  onClearBg?: () => void;
 }
 
 export function ScaleCalibrationTool({
@@ -41,6 +50,10 @@ export function ScaleCalibrationTool({
   onApply,
   onCancel,
   onClear,
+  bgName,
+  maPodklad,
+  onPickBg,
+  onClearBg,
 }: ScaleCalibrationToolProps) {
   const [length, setLength] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +82,36 @@ export function ScaleCalibrationTool({
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
+      {onPickBg && (
+        <div className="flex w-full flex-wrap items-center gap-1.5" data-testid="kalibracja-podklad">
+          <ImageIcon size={14} className="shrink-0 text-blueprint" />
+          {maPodklad ? (
+            <>
+              <span className="max-w-[160px] truncate text-slate-600" title={bgName ?? undefined}>
+                Rzut: {bgName ?? "wgrany"}
+              </span>
+              {/* Pełne nazwy („Zmień rzut", nie „Zmień"): ten sam podkład ma też swoje
+                  „Zmień"/„Usuń" w menu „Plan", a dwa identyczne przyciski na ekranie
+                  nie mówią, który do czego. */}
+              <button onClick={onPickBg} className="text-blueprint hover:underline">
+                Zmień rzut
+              </button>
+              {onClearBg && (
+                <button onClick={onClearBg} className="text-red-500 hover:underline">
+                  Usuń rzut
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="text-slate-500">Rzut lub zdjęcie planu:</span>
+              <button onClick={onPickBg} className="text-blueprint hover:underline">
+                Wgraj podkład
+              </button>
+            </>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-0.5">
         {(["pomiar", "skala"] as const).map((m) => (
           <button

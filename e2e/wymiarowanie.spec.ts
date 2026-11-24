@@ -29,10 +29,10 @@ async function etykietyPowierzchni(page: Page): Promise<string[]> {
   });
 }
 
-/** Zaznacza albo odznacza pozycję w menu „Opisy" i zamyka je, żeby panel nie
+/** Zaznacza albo odznacza pozycję w menu „Pokaż" i zamyka je, żeby panel nie
  *  przykrywał płótna przy odczycie sceny. */
 async function przelaczOpis(page: Page, nazwa: string, wlacz: boolean) {
-  await page.getByRole("button", { name: "Opisy" }).click();
+  await page.getByRole("button", { name: "Pokaż", exact: true }).click();
   const pole = page.getByLabel(nazwa);
   if (wlacz) await pole.check();
   else await pole.uncheck();
