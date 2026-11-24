@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { otworzMenuPaska, skipEntryScreen, wczytajPrzyklad } from "./_flow";
+import { otworzMenuPaska, poczekajNaScene, skipEntryScreen, wczytajPrzyklad } from "./_flow";
 
 /**
  * Kadr, w którym otwiera się rysunek.
@@ -73,6 +73,8 @@ test("otwarty projekt pokazuje RYSUNEK, a nie arkusz z rysunkiem w rogu", async 
   expect(wTrakcie.wypelnienie).toBeLessThan(0.5);
 
   await page.reload();
+  // Najpierw scena (edytor jest lazy), potem chwila na dokadrowanie po ułożeniu strony.
+  await poczekajNaScene(page);
   await page.waitForTimeout(500);
 
   const poOtwarciu = await kadr(page);
