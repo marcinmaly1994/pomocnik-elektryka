@@ -16,13 +16,38 @@ export async function skipEntryScreen(page: Page): Promise<void> {
   // później i tak się pojawiał. Aktywne `waitFor` zamiast tego — krótkie, bo
   // większość wywołań i tak trafia na PRAWDZIWY brak ekranu (projekt nie jest
   // świeży) i ma się nie ociągać.
+  //
+  // Ale NIE z krótkim limitem na sam ekran: pod obciążeniem (pełny przebieg lokalnie,
+  // 8+ workerów) ładowanie `DesignTab` trwało dłużej niż dawne 3 s, pomocnik uznawał
+  // „ekranu nie ma", a ekran pojawiał się chwilę później i zasłaniał edytor — test
+  // padał dalej na niewidocznym `plan-okno` (design-panel.spec.ts, 2/2 przebiegi
+  // z `--workers=16`). Czekamy więc na KTÓRĄKOLWIEK z dwóch rzeczy, które mogą się
+  // pokazać po zamontowaniu zakładki: ekran startowy albo płótno edytora (renderowane
+  // tylko przy `!showEntryScreen`). Prawdziwy brak ekranu nie kosztuje dzięki temu nic
+  // — płótno jest widoczne od razu.
   const pomin = page.getByRole("button", { name: "Pomiń — zacznę na pustym planie" });
-  try {
-    await pomin.waitFor({ state: "visible", timeout: 3000 });
-    await pomin.click();
-  } catch {
-    // ekran startowy się nie pojawił — nic do pominięcia
-  }
+  const plotno = page.getByTestId("plan-okno");
+  await pomin.or(plotno).first().waitFor({ state: "visible", timeout: 15_000 });
+  if (await pomin.isVisible()) await pomin.click();
+}
+
+/**
+ * Czeka, aż scena Konvy istnieje i ma na sobie narysowany rzut.
+ *
+ * Testy, które czytają scenę wprost (`window.Konva.stages[0]`), robiły to po stałym
+ * `waitForTimeout(500)` od kliknięcia „Instalacja". Edytor jest `React.lazy()`, więc
+ * pod obciążeniem sceny jeszcze nie było: „Cannot read properties of undefined
+ * (reading 'stages')" (wymiarowanie.spec.ts, 2/2 przebiegi z `--workers=16`).
+ */
+export async function poczekajNaScene(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const k = (window as unknown as { Konva?: { stages?: { find(sel: string): unknown[] }[] } }).Konva;
+      return !!k?.stages?.length && k.stages[0].find("Shape").length > 0;
+    },
+    undefined,
+    { timeout: 15_000 }
+  );
 }
 
 /**
@@ -96,6 +121,12 @@ export async function wczytajPrzyklad(page: Page, id: "mieszkanie" | "dom"): Pro
   const nazwa = id === "mieszkanie" ? /Mieszkanie 70 m²/ : /Dom 136 m²/;
   await page.getByRole("button", { name: /Zobacz gotowy przykład/ }).click();
   await page.getByRole("button", { name: nazwa }).click();
+  // Przykład wczytuje się asynchronicznie — dopóki ekran startowy stoi, nic się nie
+  // przewija i `poczekajNaKoniecPrzewijania` meldowało „spokój", ZANIM przewijanie do
+  // edytora w ogóle ruszyło. Pod obciążeniem test robił wtedy `scrollTo(0, 0)`, a `dosun`
+  // cofał stronę w trakcie otwierania menu (pola-16px-telefon, „historia wersji").
+  // Płótno jest renderowane dopiero po zejściu z ekranu startowego.
+  await page.getByTestId("plan-okno").first().waitFor({ state: "visible", timeout: 15_000 });
 }
 
 /**

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { poczekajNaScene } from "./_flow";
 
 /**
  * Tryb wymiarowania: długości WSZYSTKICH ścian i wymiary prostokątnych pomieszczeń.
@@ -76,7 +77,7 @@ async function planZGeometria(page: Page) {
   });
   await page.reload();
   await page.getByRole("button", { name: "Instalacja" }).click();
-  await page.waitForTimeout(500);
+  await poczekajNaScene(page);
 }
 
 test("przełącznik odsłania wymiary wszystkich ścian i chowa je z powrotem", async ({ page }) => {
